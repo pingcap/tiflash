@@ -2,12 +2,14 @@
 #include <Core/TMTPKType.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/MutableSupport.h>
-#include <Storages/Transaction/Codec.h>
 #include <Storages/Transaction/Datum.h>
+#include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/PredecodeTiKVValue.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
+#include <Storages/Transaction/RowCodec.h>
 #include <Storages/Transaction/TiDB.h>
+
 #include <Storages/Transaction/RegionBlockReaderHelper.hpp>
 
 namespace DB
@@ -141,27 +143,28 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
     auto delmark_col = ColumnUInt8::create();
     auto version_col = ColumnUInt64::create();
 
-    ColumnID handle_col_id = InvalidColumnID;
+    ColumnID handle_col_id = TiDBPkColumnID;
 
     constexpr size_t MustHaveColCnt = 3; // pk, del, version
 
-    // column_map contains columns in column_names_to_read exclude del and version.
+    // column_map contains required columns except del and version.
     ColumnDataInfoMap column_map(column_names_to_read.size() - MustHaveColCnt + 1, EmptyColumnID);
 
-    // column_id_to_info_index contains columns in column_names_to_read exclude pk, del and version
-    ColumnIdToIndex column_id_to_info_index;
-    column_id_to_info_index.set_empty_key(EmptyColumnID);
+    // visible_column_to_read_lut contains required columns except pk, del and version.
+    ColumnIdToIndex visible_column_to_read_lut;
+    visible_column_to_read_lut.set_empty_key(EmptyColumnID);
 
-    ColumnIdToIndex schema_all_column_ids;
-    schema_all_column_ids.set_empty_key(EmptyColumnID);
-    schema_all_column_ids.set_deleted_key(DeleteColumnID);
+    // column_lut contains all columns in the table except pk, del and version.
+    ColumnIdToIndex column_lut;
+    column_lut.set_empty_key(EmptyColumnID);
+    column_lut.set_deleted_key(DeleteColumnID);
 
     for (size_t i = 0; i < table_info.columns.size(); i++)
     {
         auto & column_info = table_info.columns[i];
         ColumnID col_id = column_info.id;
         const String & col_name = column_info.name;
-        schema_all_column_ids.insert({col_id, i});
+        column_lut.insert({col_id, i});
         if (std::find(column_names_to_read.begin(), column_names_to_read.end(), col_name) == column_names_to_read.end())
         {
             continue;
@@ -176,10 +179,10 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
         if (table_info.pk_is_handle && column_info.hasPriKeyFlag())
             handle_col_id = col_id;
         else
-            column_id_to_info_index.insert(std::make_pair(col_id, i));
+            visible_column_to_read_lut.insert(std::make_pair(col_id, i));
     }
 
-    if (column_names_to_read.size() - MustHaveColCnt != column_id_to_info_index.size())
+    if (column_names_to_read.size() - MustHaveColCnt != visible_column_to_read_lut.size())
         throw Exception("schema doesn't contain needed columns.", ErrorCodes::LOGICAL_ERROR);
 
     if (!table_info.pk_is_handle)
@@ -191,7 +194,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
     else
     {
         // should not contain pk, which may lead to schema not match.
-        schema_all_column_ids.erase(handle_col_id);
+        column_lut.erase(handle_col_id);
     }
 
     const TMTPKType pk_type = getTMTPKType(*column_map.getNameAndTypePair(handle_col_id).type);
@@ -220,8 +223,8 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
     // optimize for only need handle, tso, delmark.
     if (column_names_to_read.size() > MustHaveColCnt)
     {
-        DecodedRecordData decoded_data(column_id_to_info_index.size());
-        ValueDecodeHelper helper{table_info, schema_all_column_ids};
+        DecodedRecordData decoded_data(visible_column_to_read_lut.size());
+        RowPreDecoder pre_decoder{table_info, column_lut};
 
         // TODO: optimize columns' insertion, use better implementation rather than Field, it's terrible.
 
@@ -237,7 +240,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
 
             if (write_type == Region::DelFlag)
             {
-                for (const auto & item : column_id_to_info_index)
+                for (const auto & item : visible_column_to_read_lut)
                 {
                     const auto & column = table_info.columns[item.second];
                     decoded_data.emplace_back(column.id, (column.hasNotNullFlag() ? GenDefaultField(column) : Field()));
@@ -249,51 +252,52 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                 const DecodedRow * row = value.getDecodedRow().load();
                 if (!row)
                 {
-                    helper.forceDecodeTiKVValue(value);
+                    pre_decoder.preDecodeRow(value);
                     row = value.getDecodedRow().load();
                 }
 
-                const DecodedFields & id_fields = row->decoded_fields;
-                const DecodedFields & unknown_col = row->unknown_fields.fields;
+                const DecodedFields & decoded_fields = row->decoded_fields;
+                const DecodedFields & unknown_fields = row->unknown_fields.fields;
 
                 if (!force_decode)
                 {
-                    if (row->has_missing_columns || !unknown_col.empty())
+                    if (row->has_missing_columns || !unknown_fields.empty())
                         return std::make_tuple(Block(), false);
                 }
 
-                for (const auto & item : column_id_to_info_index)
+                for (const auto & id_to_idx : visible_column_to_read_lut)
                 {
 
-                    if (auto it = findByColumnID(item.first, id_fields); it != id_fields.end())
+                    if (auto it = findByColumnID(id_to_idx.first, decoded_fields); it != decoded_fields.end())
                     {
                         decoded_data.push_back(it);
                         continue;
                     }
 
+                    const auto & column_info = table_info.columns[id_to_idx.second];
 
-                    if (auto it = findByColumnID(item.first, unknown_col); it != unknown_col.end())
+                    if (auto it = findByColumnID(id_to_idx.first, unknown_fields); it != unknown_fields.end())
                     {
-                        if (likely(row->unknown_fields.with_codec_flag))
-                            decoded_data.push_back(it);
+                        if (!row->unknown_fields.with_codec_flag)
+                        {
+                            // If without codec flag, this column is an unknown column in V2 format, re-decode it based on the column info.
+                            decoded_data.emplace_back(column_info.id, decodeUnknownColumnV2(it->field, column_info));
+                        }
                         else
                         {
-                            // TODO: if type is unknown, decode value from string.
-                            throw Exception("not support decode unknown type.", ErrorCodes::LOGICAL_ERROR);
+                            decoded_data.push_back(it);
                         }
                         continue;
                     }
 
-                    const auto & column = table_info.columns[item.second];
-
                     // not null or has no default value, tidb will fill with specific value.
-                    decoded_data.emplace_back(column.id,
-                        column.hasNoDefaultValueFlag() ? (column.hasNotNullFlag() ? GenDefaultField(column) : Field())
-                                                       : column.defaultValueToField());
+                    decoded_data.emplace_back(column_info.id,
+                        column_info.hasNoDefaultValueFlag() ? (column_info.hasNotNullFlag() ? GenDefaultField(column_info) : Field())
+                                                            : column_info.defaultValueToField());
                 }
             }
 
-            if (decoded_data.size() != column_id_to_info_index.size())
+            if (decoded_data.size() != visible_column_to_read_lut.size())
                 throw Exception("decode row error.", ErrorCodes::LOGICAL_ERROR);
 
             /// Transform `row` to columnar format.
@@ -350,11 +354,11 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
     {
         if (name == MutableSupport::delmark_column_name)
         {
-            block.insert({std::move(delmark_col), std::make_shared<DataTypeUInt8>(), MutableSupport::delmark_column_name});
+            block.insert({std::move(delmark_col), MutableSupport::delmark_column_type, MutableSupport::delmark_column_name});
         }
         else if (name == MutableSupport::version_column_name)
         {
-            block.insert({std::move(version_col), std::make_shared<DataTypeUInt64>(), MutableSupport::version_column_name});
+            block.insert({std::move(version_col), MutableSupport::version_column_type, MutableSupport::version_column_name});
         }
         else
         {

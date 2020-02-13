@@ -20,6 +20,7 @@ struct numeric_limits<__uint128_t>
 #endif
 
 #include <Common/FieldVisitors.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
 #include <DataStreams/AddingConstColumnBlockInputStream.h>
 #include <DataStreams/AggregatingSortedBlockInputStream.h>
@@ -348,9 +349,26 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                                 + std::to_string(region->getMappedTableID()) + ", got " + std::to_string(data.table_info->id),
                             ErrorCodes::LOGICAL_ERROR);
 
+                    GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_read_index_count).Increment();
+                    Stopwatch read_index_watch;
+
                     /// Blocking learner read. Note that learner read must be performed ahead of data read,
                     /// otherwise the desired index will be blocked by the lock of data read.
-                    region->waitIndex(region->learnerRead());
+                    auto [read_index, region_removed] = region->learnerRead();
+                    GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_read_index_duration_seconds).Observe(read_index_watch.elapsedSeconds());
+
+                    if(!region_removed)
+                    {
+                        Stopwatch wait_index_watch;
+                        region->waitIndex(read_index);
+                        GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_wait_index_duration_seconds).Observe(wait_index_watch.elapsedSeconds());
+                    }
+                    else
+                    {
+                        // client-c detect region removed. Set region_status and continue.
+                        region_status = RegionException::RegionReadStatus::NOT_FOUND;
+                        continue;
+                    }
 
                     auto [block, status] = RegionTable::readBlockByRegion(*data.table_info, data.getColumns(), tmt_column_names_to_read,
                         kvstore_region[region_query_info.region_id], region_query_info.version, region_query_info.conf_version,
@@ -952,6 +970,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
     if (parts_with_ranges.empty() && !is_txn_engine)
         return {};
+
+    GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_tmt_read_parts_count).Increment(parts_with_ranges.size());
 
     ProfileEvents::increment(ProfileEvents::SelectedParts, parts_with_ranges.size());
     ProfileEvents::increment(ProfileEvents::SelectedRanges, sum_ranges);

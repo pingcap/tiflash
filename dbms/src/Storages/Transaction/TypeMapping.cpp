@@ -1,7 +1,10 @@
 #include <type_traits>
 
 #include <Common/FieldVisitors.h>
+#include <Common/typeid_cast.h>
 #include <Core/NamesAndTypes.h>
+#include <DataTypes/DataTypeDate.h>
+#include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeMyDate.h>

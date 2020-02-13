@@ -1,10 +1,9 @@
-#include <Flash/Coprocessor/DAGStringConverter.h>
-
 #include <Core/QueryProcessingStage.h>
+#include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/StorageMergeTree.h>
-#include <Storages/Transaction/Codec.h>
+#include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TypeMapping.h>
@@ -38,10 +37,11 @@ void DAGStringConverter::buildTSString(const tipb::TableScan & ts, std::stringst
     {
         throw Exception("Table " + std::to_string(table_id) + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
     }
-    const auto * merge_tree = dynamic_cast<const StorageMergeTree *>(storage.get());
-    if (!merge_tree)
+
+    const auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
+    if (!managed_storage)
     {
-        throw Exception("Only MergeTree table is supported in DAG request", ErrorCodes::COP_BAD_DAG_REQUEST);
+        throw Exception("Only Manageable table is supported in DAG request", ErrorCodes::COP_BAD_DAG_REQUEST);
     }
 
     if (ts.columns_size() == 0)
@@ -61,8 +61,8 @@ void DAGStringConverter::buildTSString(const tipb::TableScan & ts, std::stringst
             columns_from_ts.push_back(pair);
             continue;
         }
-        auto name = storage->getTableInfo().getColumnName(cid);
-        auto pair = storage->getColumns().getPhysical(name);
+        auto name = managed_storage->getTableInfo().getColumnName(cid);
+        auto pair = managed_storage->getColumns().getPhysical(name);
         columns_from_ts.push_back(pair);
     }
     ss << "FROM " << storage->getDatabaseName() << "." << storage->getTableName() << " ";

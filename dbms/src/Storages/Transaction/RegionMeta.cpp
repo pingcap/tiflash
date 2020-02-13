@@ -97,16 +97,6 @@ UInt64 RegionMeta::appliedTerm() const
     return applied_term;
 }
 
-enginepb::CommandResponse RegionMeta::toCommandResponse() const
-{
-    std::lock_guard<std::mutex> lock(mutex);
-    enginepb::CommandResponse resp;
-    resp.mutable_header()->set_region_id(regionId());
-    resp.mutable_apply_state()->CopyFrom(apply_state);
-    resp.set_applied_term(applied_term);
-    return resp;
-}
-
 RegionMeta::RegionMeta(RegionMeta && rhs) : region_id(rhs.regionId())
 {
     std::lock_guard<std::mutex> lock(rhs.mutex);
@@ -234,19 +224,6 @@ void MetaRaftCommandDelegate::execChangePeer(
     doSetApplied(index, term);
 }
 
-void MetaRaftCommandDelegate::execCompactLog(
-    const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse &, const UInt64 index, const UInt64 term)
-{
-    const auto & compact_log_request = request.compact_log();
-
-    std::lock_guard<std::mutex> lock(mutex);
-
-    apply_state.mutable_truncated_state()->set_term(compact_log_request.compact_term());
-    apply_state.mutable_truncated_state()->set_index(compact_log_request.compact_index());
-
-    doSetApplied(index, term);
-}
-
 RegionMergeResult MetaRaftCommandDelegate::checkBeforeCommitMerge(
     const raft_cmdpb::AdminRequest & request, const MetaRaftCommandDelegate & source_meta) const
 {
@@ -265,9 +242,6 @@ RegionMergeResult MetaRaftCommandDelegate::checkBeforeCommitMerge(
                 ErrorCodes::LOGICAL_ERROR);
         }
     }
-
-    if (source_meta.apply_state.applied_index() < commit_merge_request.commit())
-        throw Exception(std::string(__PRETTY_FUNCTION__) + ": applied index of source region < commit index", ErrorCodes::LOGICAL_ERROR);
 
     if (!(source_region == source_meta.region_state.getRegion()))
         throw Exception(std::string(__PRETTY_FUNCTION__) + ": source_region not match exist region", ErrorCodes::LOGICAL_ERROR);
@@ -331,13 +305,6 @@ void MetaRaftCommandDelegate::execPrepareMerge(
     auto & target = prepare_merge_request.target();
 
     std::lock_guard<std::mutex> lock(mutex);
-    auto first_index = apply_state.truncated_state().index() + 1;
-    auto min_index = prepare_merge_request.min_index();
-    if (min_index < first_index)
-        throw Exception(std::string(__PRETTY_FUNCTION__) + ": [region " + DB::toString(regionId()) + "] first_index "
-                + DB::toString(first_index) + " > min_index " + DB::toString(min_index),
-            ErrorCodes::LOGICAL_ERROR);
-
     auto & region = region_state.getRegion();
     auto region_version = region.region_epoch().version() + 1;
     region_state.setVersion(region_version);
@@ -346,7 +313,7 @@ void MetaRaftCommandDelegate::execPrepareMerge(
     region_state.setConfVersion(conf_version);
 
     auto & merge_state = region_state.getMutMergeState();
-    merge_state.set_min_index(min_index);
+    merge_state.set_min_index(prepare_merge_request.min_index());
     *merge_state.mutable_target() = target;
     merge_state.set_commit(index);
 

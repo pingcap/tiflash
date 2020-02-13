@@ -1,30 +1,30 @@
-#include <Interpreters/AsynchronousMetrics.h>
+#include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/setThreadName.h>
-#include <Common/CurrentMetrics.h>
 #include <Common/typeid_cast.h>
+#include <Databases/IDatabase.h>
+#include <IO/UncompressedCache.h>
+#include <Interpreters/AsynchronousMetrics.h>
 #include <Storages/MarkCache.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/StorageReplicatedMergeTree.h>
-#include <IO/UncompressedCache.h>
-#include <Databases/IDatabase.h>
 #include <chrono>
 
 #include <common/config_common.h>
 
 #if USE_TCMALLOC
-    #include <gperftools/malloc_extension.h>
+#include <gperftools/malloc_extension.h>
 
-    /// Initializing malloc extension in global constructor as required.
-    struct MallocExtensionInitializer
-    {
-        MallocExtensionInitializer()
-        {
-            MallocExtension::Initialize();
-        }
-    } malloc_extension_initializer;
+/// Initializing malloc extension in global constructor as required.
+struct MallocExtensionInitializer
+{
+    MallocExtensionInitializer() { MallocExtension::Initialize(); }
+} malloc_extension_initializer;
 #endif
 
+#if USE_JEMALLOC
+#include <jemalloc/jemalloc.h>
+#endif
 
 namespace DB
 {
@@ -69,10 +69,10 @@ void AsynchronousMetrics::run()
     std::unique_lock<std::mutex> lock{wait_mutex};
 
     /// Next minute + 30 seconds. To be distant with moment of transmission of metrics, see MetricsTransmitter.
-    const auto get_next_minute = []
-    {
+    const auto get_next_minute = [] {
         return std::chrono::time_point_cast<std::chrono::minutes, std::chrono::system_clock>(
-            std::chrono::system_clock::now() + std::chrono::minutes(1)) + std::chrono::seconds(30);
+                   std::chrono::system_clock::now() + std::chrono::minutes(1))
+            + std::chrono::seconds(30);
     };
 
     while (true)
@@ -206,8 +206,7 @@ void AsynchronousMetrics::update()
 
         MallocExtension & malloc_extension = *MallocExtension::instance();
 
-        auto malloc_metrics =
-        {
+        auto malloc_metrics = {
             "generic.current_allocated_bytes",
             "generic.heap_size",
             "tcmalloc.current_total_thread_cache_bytes",
@@ -227,8 +226,39 @@ void AsynchronousMetrics::update()
     }
 #endif
 
+#if USE_JEMALLOC
+    {
+#define FOR_EACH_METRIC(M)                     \
+    M("allocated", size_t)                     \
+    M("active", size_t)                        \
+    M("metadata", size_t)                      \
+    M("metadata_thp", size_t)                  \
+    M("resident", size_t)                      \
+    M("mapped", size_t)                        \
+    M("retained", size_t)                      \
+    M("background_thread.num_threads", size_t) \
+    M("background_thread.num_runs", uint64_t)  \
+    M("background_thread.run_interval", uint64_t)
+
+#define GET_METRIC(NAME, TYPE)                             \
+    do                                                     \
+    {                                                      \
+        TYPE value{};                                      \
+        size_t size = sizeof(value);                       \
+        mallctl("stats." NAME, &value, &size, nullptr, 0); \
+        set("jemalloc." NAME, value);                      \
+    } while (0);
+
+        FOR_EACH_METRIC(GET_METRIC);
+
+#undef GET_METRIC
+#undef FOR_EACH_METRIC
+    }
+#endif
+
+
     /// Add more metrics as you wish.
 }
 
 
-}
+} // namespace DB

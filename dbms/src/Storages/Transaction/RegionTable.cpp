@@ -1,4 +1,6 @@
+#include <Storages/IManageableStorage.h>
 #include <Storages/MergeTree/TxnMergeTreeBlockOutputStream.h>
+#include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionTable.h>
@@ -69,6 +71,9 @@ void RegionTable::shrinkRegionRange(const Region & region)
     std::lock_guard<std::mutex> lock(mutex);
     auto & internal_region = getOrInsertRegion(region);
     internal_region.range_in_table = region.getHandleRangeByTable(region.getMappedTableID());
+    internal_region.cache_bytes = region.dataSize();
+    if (internal_region.cache_bytes)
+        dirty_regions.insert(internal_region.region_id);
 }
 
 bool RegionTable::shouldFlush(const InternalRegion & region) const
@@ -119,8 +124,6 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtr & region, bool t
         {
             if (try_persist)
                 tmt.getKVStore()->tryPersist(region->id());
-            else
-                region->incDirtyFlag();
         }
 
         LOG_INFO(log,
@@ -143,7 +146,7 @@ static const Seconds FTH_PERIOD_4(5);       // 5 seconds
 
 RegionTable::RegionTable(Context & context_)
     : flush_thresholds(RegionTable::FlushThresholds::FlushThresholdsData{
-          {FTH_BYTES_1, FTH_PERIOD_1}, {FTH_BYTES_2, FTH_PERIOD_2}, {FTH_BYTES_3, FTH_PERIOD_3}, {FTH_BYTES_4, FTH_PERIOD_4}}),
+        {FTH_BYTES_1, FTH_PERIOD_1}, {FTH_BYTES_2, FTH_PERIOD_2}, {FTH_BYTES_3, FTH_PERIOD_3}, {FTH_BYTES_4, FTH_PERIOD_4}}),
       context(&context_),
       log(&Logger::get("RegionTable"))
 {}
@@ -184,7 +187,7 @@ void RegionTable::updateRegion(const Region & region)
     auto & internal_region = getOrInsertRegion(region);
     internal_region.cache_bytes = region.dataSize();
     if (internal_region.cache_bytes)
-        dirty_regions.insert(internal_region.region_id);
+        incrDirtyFlag(internal_region.region_id);
 }
 
 TableID RegionTable::popOneTableToOptimize()
@@ -211,8 +214,28 @@ void RegionTable::removeRegion(const RegionID region_id)
     else
     {
         TableID table_id = it->second;
-        regions.erase(it);
         auto & table = tables.find(table_id)->second;
+
+        {
+            /// Now we assume that StorageDeltaMerge::deleteRange do not block for long time and do it in sync mode.
+            /// If this block for long time, consider to do this in background threads.
+            TMTContext & tmt = context->getTMTContext();
+            auto storage = tmt.getStorages().get(table_id);
+            if (storage && storage->engineType() == TiDB::StorageEngine::DM)
+            {
+                // acquire lock so that no other threads can change storage's structure
+                auto storage_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
+                auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+                auto region_it = table.regions.find(region_id);
+                if (region_it == table.regions.end())
+                    return;
+                HandleRange<HandleID> handle_range = region_it->second.range_in_table;
+                ::DB::DM::HandleRange dm_handle_range(handle_range.first.handle_id, handle_range.second.handle_id);
+                dm_storage->deleteRange(dm_handle_range, context->getSettingsRef());
+            }
+        }
+
+        regions.erase(it);
         table.regions.erase(region_id);
         if (table.regions.empty())
         {
@@ -280,9 +303,9 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtr & region, boo
         internal_region.pause_flush = false;
         internal_region.cache_bytes = region->dataSize();
         if (internal_region.cache_bytes)
-            dirty_regions.insert(region_id);
+            incrDirtyFlag(region_id);
         else
-            dirty_regions.erase(region_id);
+            clearDirtyFlag(region_id);
 
         internal_region.last_flush_time = Clock::now();
         return true;
@@ -297,6 +320,7 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtr & region, boo
 RegionID RegionTable::pickRegionToFlush()
 {
     std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard<std::mutex> dirty_regions_lock(dirty_regions_mutex);
 
     for (auto dirty_it = dirty_regions.begin(); dirty_it != dirty_regions.end();)
     {
@@ -304,17 +328,19 @@ RegionID RegionTable::pickRegionToFlush()
         if (auto it = regions.find(region_id); it != regions.end())
         {
             auto table_id = it->second;
-
             if (shouldFlush(doGetInternalRegion(table_id, region_id)))
             {
-                dirty_regions.erase(dirty_it);
+                // The dirty flag should only be removed after data is flush successfully.
                 return region_id;
             }
 
             dirty_it++;
         }
         else
-            dirty_it = dirty_regions.erase(dirty_it);
+        {
+            // Region{region_id} is removed, remove its dirty flag
+            dirty_it = clearDirtyFlag(dirty_it, dirty_regions_lock);
+        }
     }
     return InvalidRegionID;
 }
@@ -328,6 +354,37 @@ bool RegionTable::tryFlushRegions()
     }
 
     return false;
+}
+
+void RegionTable::incrDirtyFlag(RegionID region_id)
+{
+    std::lock_guard lock(dirty_regions_mutex);
+    dirty_regions.insert(region_id);
+}
+
+void RegionTable::clearDirtyFlag(RegionID region_id)
+{
+    std::lock_guard lock(dirty_regions_mutex);
+    if (auto iter = dirty_regions.find(region_id); iter != dirty_regions.end())
+        clearDirtyFlag(iter, lock);
+}
+
+RegionTable::DirtyRegions::iterator RegionTable::clearDirtyFlag(
+    const RegionTable::DirtyRegions::iterator & region_iter, std::lock_guard<std::mutex> &)
+{
+    // Removing invalid iterator will cause segment fault.
+    if (unlikely(region_iter == dirty_regions.end()))
+        return region_iter;
+
+    auto next_iter = dirty_regions.erase(region_iter);
+    dirty_regions_cv.notify_all();
+    return next_iter;
+}
+
+void RegionTable::waitTillRegionFlushed(const RegionID region_id)
+{
+    std::unique_lock lock(dirty_regions_mutex);
+    dirty_regions_cv.wait(lock, [this, region_id] { return dirty_regions.count(region_id) == 0; });
 }
 
 void RegionTable::handleInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegions &)> && callback) const

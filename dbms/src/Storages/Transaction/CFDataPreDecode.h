@@ -1,6 +1,7 @@
 #pragma once
 
 #include <deque>
+#include <optional>
 
 #include <Storages/Transaction/TiKVKeyValue.h>
 

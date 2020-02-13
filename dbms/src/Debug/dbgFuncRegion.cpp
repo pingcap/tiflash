@@ -8,10 +8,10 @@
 #include <Parsers/ASTLiteral.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/ProxyFFIType.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
-#include <Storages/Transaction/applySnapshot.h>
 #include <Storages/Transaction/tests/region_helper.h>
 
 namespace DB
@@ -42,8 +42,8 @@ TableID getTableID(Context & context, const std::string & database_name, const s
     }
 
     auto storage = context.getTable(database_name, table_name);
-    auto * merge_tree = dynamic_cast<StorageMergeTree *>(storage.get());
-    auto table_info = merge_tree->getTableInfo();
+    auto managed_storage = std::static_pointer_cast<IManageableStorage>(storage);
+    auto table_info = managed_storage->getTableInfo();
     return table_info.id;
 }
 
@@ -66,7 +66,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
 
     TMTContext & tmt = context.getTMTContext();
     RegionPtr region = RegionBench::createRegion(table_id, region_id, start, end);
-    tmt.getKVStore()->onSnapshot(region, &context);
+    tmt.getKVStore()->onSnapshot(region, tmt);
 
     std::stringstream ss;
     ss << "put region #" << region_id << ", range[" << start << ", " << end << ")"
@@ -127,7 +127,7 @@ void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvo
     for (auto it = args_begin; it != args_end; it += len)
     {
         HandleID handle_id = (HandleID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*it[0]).value);
-        Timestamp tso = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*it[1]).value);
+        Timestamp tso = (Timestamp)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*it[1]).value);
         UInt8 del = (UInt8)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*it[2]).value);
         {
             std::vector<Field> fields;
@@ -154,7 +154,7 @@ void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvo
         MockTiKV::instance().getRaftIndex(region_id);
     }
 
-    applySnapshot(tmt.getKVStore(), region, &context, false);
+    tmt.getKVStore()->tryApplySnapshot(region, context, false);
 
     std::stringstream ss;
     ss << "put region #" << region_id << ", range[" << start << ", " << end << ")"
@@ -181,33 +181,27 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
 
     TMTContext & tmt = context.getTMTContext();
 
-    enginepb::SnapshotRequest req;
-    bool is_readed = false;
-
-    *(req.mutable_state()->mutable_peer()) = createPeer(1, true);
-
     metapb::Region region_info;
+    SnapshotDataView lock_cf;
+    SnapshotDataView write_cf;
+    SnapshotDataView default_cf;
+
     region_info.set_id(region_id);
     region_info.set_start_key(RecordKVFormat::genKey(table_id, start).getStr());
     region_info.set_end_key(RecordKVFormat::genKey(table_id, end).getStr());
-    *(region_info.mutable_peers()->Add()) = createPeer(1, true);
-    *(region_info.mutable_peers()->Add()) = createPeer(2, false);
-    *(req.mutable_state()->mutable_region()) = region_info;
 
-    *(req.mutable_state()->mutable_apply_state()) = initialApplyState();
+    *region_info.add_peers() = createPeer(1, true);
+    *region_info.add_peers() = createPeer(2, true);
+    auto peer_id = 1;
 
-    (req.mutable_state()->mutable_apply_state())->set_applied_index(MockTiKV::instance().getRaftIndex(region_id));
-
-    // TODO: Put data into snapshot cmd
-
-    auto reader = [&](enginepb::SnapshotRequest * out) {
-        if (is_readed)
-            return false;
-        *out = req;
-        is_readed = true;
-        return true;
-    };
-    applySnapshot(tmt.getKVStore(), reader, &context);
+    tmt.getKVStore()->handleApplySnapshot(std::move(region_info),
+        peer_id,
+        (lock_cf),
+        (write_cf),
+        (default_cf),
+        MockTiKV::instance().getRaftIndex(region_id),
+        RAFT_INIT_LOG_TERM,
+        tmt);
 
     std::stringstream ss;
     ss << "put region #" << region_id << ", range[" << start << ", " << end << ")"
@@ -322,6 +316,23 @@ void dbgFuncDumpAllMockRegion(Context & context, const ASTs & args, DBGInvoker::
     auto table_id = table->id();
 
     dbgFuncDumpAllRegion(context, table_id, false, false, output);
+}
+
+void dbgFuncRemoveRegion(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() < 1)
+        throw Exception("Args not matched, should be: region_id", ErrorCodes::BAD_ARGUMENTS);
+
+    RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+
+    TMTContext & tmt = context.getTMTContext();
+    KVStorePtr & kvstore = tmt.getKVStore();
+    RegionTable & region_table = tmt.getRegionTable();
+    kvstore->mockRemoveRegion(region_id, region_table);
+
+    std::stringstream ss;
+    ss << "remove region #" << region_id;
+    output(ss.str());
 }
 
 } // namespace DB

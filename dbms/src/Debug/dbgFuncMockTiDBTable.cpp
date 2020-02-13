@@ -25,9 +25,8 @@ extern const int LOGICAL_ERROR;
 
 void MockTiDBTable::dbgFuncMockTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
-    if (args.size() != 3 && args.size() != 4)
-        throw Exception(
-            "Args not matched, should be: database-name, table-name, schema-string [, handle_pk_name]", ErrorCodes::BAD_ARGUMENTS);
+    if (args.size() != 3 && args.size() != 4 && args.size() != 5)
+        throw Exception("Args not matched, should be: database-name, table-name, schema-string [, handle_pk_name], [, engine-type(tmt|dm|buggy)]", ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
@@ -46,9 +45,14 @@ void MockTiDBTable::dbgFuncMockTiDBTable(Context & context, const ASTs & args, D
         throw Exception("Invalid TiDB table schema", ErrorCodes::LOGICAL_ERROR);
     ColumnsDescription columns
         = InterpreterCreateQuery::getColumnsDescription(typeid_cast<const ASTExpressionList &>(*columns_ast), context);
+
+    String engine_type("tmt");
+    if (args.size() == 5)
+        engine_type = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[4]).value);
+
     auto tso = context.getTMTContext().getPDClient()->getTS();
 
-    TableID table_id = MockTiDB::instance().newTable(database_name, table_name, columns, tso, handle_pk_name);
+    TableID table_id = MockTiDB::instance().newTable(database_name, table_name, columns, tso, handle_pk_name, engine_type);
 
     std::stringstream ss;
     ss << "mock table #" << table_id;
@@ -289,13 +293,11 @@ void MockTiDBTable::dbgFuncCleanUpRegions(DB::Context & context, const DB::ASTs 
     auto & kvstore = context.getTMTContext().getKVStore();
     auto & region_table = context.getTMTContext().getRegionTable();
     {
-        auto lock = kvstore->genTaskLock();
-
         for (const auto & e : kvstore->regions())
             regions.emplace_back(e.first);
 
         for (const auto & region_id : regions)
-            kvstore->removeRegion(region_id, &region_table, lock);
+            kvstore->mockRemoveRegion(region_id, region_table);
     }
     output("all regions have been cleaned");
 }

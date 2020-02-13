@@ -1,10 +1,9 @@
 #pragma once
 
-#include <common/logger_useful.h>
-
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Transaction/IndexReaderCreate.h>
 #include <Storages/Transaction/Types.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -20,10 +19,10 @@ class RegionPersister final : private boost::noncopyable
 {
 public:
     RegionPersister(const std::string & storage_path, const RegionManager & region_manager_, const PageStorage::Config & config = {})
-        : page_storage(storage_path, config), region_manager(region_manager_), log(&Logger::get("RegionPersister"))
+        : page_storage("RegionPersister", storage_path, config), region_manager(region_manager_), log(&Logger::get("RegionPersister"))
     {}
 
-    void drop(RegionID region_id);
+    void drop(RegionID region_id, const RegionTaskLock &);
     void persist(const Region & region);
     void persist(const Region & region, const RegionTaskLock & lock);
     RegionMap restore(IndexReaderCreateFunc * func = nullptr);
@@ -33,7 +32,7 @@ public:
     static void computeRegionWriteBuffer(const Region & region, RegionCacheWriteElement & region_write_buffer);
 
 private:
-    void doPersist(RegionCacheWriteElement & region_write_buffer, const RegionTaskLock & lock);
+    void doPersist(RegionCacheWriteElement & region_write_buffer, const RegionTaskLock & lock, const Region & region);
     void doPersist(const Region & region, const RegionTaskLock * lock);
 
 private:

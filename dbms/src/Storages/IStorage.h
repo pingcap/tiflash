@@ -103,6 +103,9 @@ public:
     /** Returns true if the storage replicates SELECT, INSERT and ALTER commands among replicas. */
     virtual bool supportsReplication() const { return false; }
 
+    /** Returns true if the storage supports UPSERT, DELETE or UPDATE. */
+    virtual bool supportsModification() const { return false; }
+
     /** Does not allow you to change the structure or name of the table.
       * If you change the data in the table, you will need to specify will_modify_data = true.
       * This will take an extra lock that does not allow starting ALTER MODIFY.
@@ -124,10 +127,10 @@ public:
     TableFullWriteLock lockForAlter(const std::string & who = "Alter")
     {
         /// The calculation order is important.
-        auto data_lock = lockDataForAlter(who);
-        auto structure_lock = lockStructureForAlter(who);
+        auto data_lock_ = lockDataForAlter(who);
+        auto structure_lock_ = lockStructureForAlter(who);
 
-        return {std::move(data_lock), std::move(structure_lock)};
+        return {std::move(data_lock_), std::move(structure_lock_)};
     }
 
     /** Does not allow changing the data in the table. (Moreover, does not give a look at the structure of the table with the intention to change the data).

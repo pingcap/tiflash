@@ -1,14 +1,14 @@
 #include "MetricsPrometheus.h"
 
-#include <Interpreters/AsynchronousMetrics.h>
-
 #include <Common/CurrentMetrics.h>
-
+#include <Common/FunctionTimerTask.h>
+#include <Common/ProfileEvents.h>
+#include <Common/TiFlashMetrics.h>
+#include <Interpreters/AsynchronousMetrics.h>
+#include <Interpreters/Context.h>
 #include <daemon/BaseDaemon.h>
 #include <prometheus/exposer.h>
 #include <prometheus/gauge.h>
-
-#include <Common/FunctionTimerTask.h>
 
 
 namespace DB
@@ -17,25 +17,8 @@ namespace DB
 constexpr long MILLISECOND = 1000;
 constexpr long INIT_DELAY = 5;
 
-std::shared_ptr<prometheus::Registry> MetricsPrometheus::registry_instance_ptr = nullptr;
-
-std::mutex MetricsPrometheus::registry_instance_mutex;
-
-std::shared_ptr<prometheus::Registry> MetricsPrometheus::getRegistry()
-{
-    if (registry_instance_ptr == nullptr)
-    {
-        std::lock_guard<std::mutex> lk(registry_instance_mutex);
-        if (registry_instance_ptr == nullptr)
-        {
-            registry_instance_ptr = std::make_shared<prometheus::Registry>();
-        }
-    }
-    return registry_instance_ptr;
-}
-
-MetricsPrometheus::MetricsPrometheus(Context & context_, const AsynchronousMetrics & async_metrics_)
-    : timer(), context(context_), async_metrics(async_metrics_), log(&Logger::get("Prometheus")), registry(MetricsPrometheus::getRegistry())
+MetricsPrometheus::MetricsPrometheus(Context & context, const AsynchronousMetrics & async_metrics_)
+    : timer(), tiflash_metrics(context.getTiFlashMetrics()), async_metrics(async_metrics_), log(&Logger::get("Prometheus"))
 {
     auto & conf = context.getConfigRef();
 
@@ -80,7 +63,7 @@ MetricsPrometheus::MetricsPrometheus(Context & context_, const AsynchronousMetri
             ::gethostname(hostname, sizeof(hostname));
 
             gateway = std::make_shared<prometheus::Gateway>(host, port, job_name, prometheus::Gateway::GetInstanceLabel(hostname));
-            gateway->RegisterCollectable(registry);
+            gateway->RegisterCollectable(tiflash_metrics->registry);
 
             LOG_INFO(log, "Enable sending metrics to prometheus; interval =" << metrics_interval << "; addr = " << metrics_addr);
         }
@@ -90,7 +73,7 @@ MetricsPrometheus::MetricsPrometheus(Context & context_, const AsynchronousMetri
     {
         auto metrics_port = conf.getString(status_metrics_port);
         exposer = std::make_shared<prometheus::Exposer>(metrics_port);
-        exposer->RegisterCollectable(registry);
+        exposer->RegisterCollectable(tiflash_metrics->registry);
         LOG_INFO(log, "Metrics Port = " << metrics_port);
     }
 
@@ -102,65 +85,37 @@ MetricsPrometheus::~MetricsPrometheus() { timer.cancel(true); }
 
 void MetricsPrometheus::run()
 {
-    std::vector<ProfileEvents::Count> prev_counters(ProfileEvents::end());
-    auto async_metrics_values = async_metrics.getValues();
-
-    GraphiteWriter::KeyValueVector<ssize_t> key_vals{};
-    key_vals.reserve(ProfileEvents::end() + CurrentMetrics::end() + async_metrics_values.size());
-
-    for (size_t i = 0, end = ProfileEvents::end(); i < end; ++i)
+    for (ProfileEvents::Event event = 0; event < ProfileEvents::end(); event++)
     {
-        const auto counter = ProfileEvents::counters[i].load(std::memory_order_relaxed);
-        const auto counter_increment = counter - prev_counters[i];
-        prev_counters[i] = counter;
-
-        std::string key{ProfileEvents::getDescription(static_cast<ProfileEvents::Event>(i))};
-        key_vals.emplace_back(profile_events_path_prefix + key, counter_increment);
+        const auto value = ProfileEvents::counters[event].load(std::memory_order_relaxed);
+        tiflash_metrics->registered_profile_events[event]->Set(value);
     }
 
-    for (size_t i = 0, end = CurrentMetrics::end(); i < end; ++i)
+    for (CurrentMetrics::Metric metric = 0; metric < CurrentMetrics::end(); metric++)
     {
-        const auto value = CurrentMetrics::values[i].load(std::memory_order_relaxed);
-
-        std::string key{CurrentMetrics::getDescription(static_cast<CurrentMetrics::Metric>(i))};
-        key_vals.emplace_back(current_metrics_path_prefix + key, value);
+        const auto value = CurrentMetrics::values[metric].load(std::memory_order_relaxed);
+        tiflash_metrics->registered_current_metrics[metric]->Set(value);
     }
 
-    for (const auto & name_value : async_metrics_values)
+    auto async_metric_values = async_metrics.getValues();
+    for (const auto & metric : async_metric_values)
     {
-        key_vals.emplace_back(asynchronous_metrics_path_prefix + name_value.first, name_value.second);
-    }
-
-    if (!key_vals.empty())
-        convertMetrics(key_vals);
-}
-
-void MetricsPrometheus::convertMetrics(const GraphiteWriter::KeyValueVector<ssize_t> & key_vals)
-{
-    using namespace prometheus;
-
-    for (const auto & key_val : key_vals)
-    {
-        auto key = key_val.first;
-        auto it = gauge_map.find(key);
-        if (it != gauge_map.end())
+        const auto & origin_name = metric.first;
+        const auto & value = metric.second;
+        if (!tiflash_metrics->registered_async_metrics.count(origin_name))
         {
-            auto & guage = it->second;
-            guage.Set(key_val.second);
+            // Register this async metric into registry on flight, as async metrics are not accumulated at once.
+            auto prometheus_name = TiFlashMetrics::async_metrics_prefix + metric.first;
+            // Prometheus doesn't allow metric name containing dot.
+            std::replace(prometheus_name.begin(), prometheus_name.end(), '.', '_');
+            auto & family = prometheus::BuildGauge()
+                                .Name(prometheus_name)
+                                .Help("System asynchronous metric " + prometheus_name)
+                                .Register(*tiflash_metrics->registry);
+            // Use original name as key for the sake of further accesses.
+            tiflash_metrics->registered_async_metrics.emplace(origin_name, &family.Add({}));
         }
-        else
-        {
-            auto & gauge_family = BuildGauge()
-                                      .Name(key_val.first)
-                                      .Help("Get from system.metrics, system.events and system.asynchronous_metrics tables")
-                                      .Register(*registry);
-
-            auto & guage = gauge_family.Add({});
-            guage.Set(key_val.second);
-
-            auto pair = std::pair<std::string, prometheus::Gauge &>(key, guage);
-            gauge_map.insert(pair);
-        }
+        tiflash_metrics->registered_async_metrics[origin_name]->Set(value);
     }
 
     if (gateway != nullptr)
@@ -172,4 +127,5 @@ void MetricsPrometheus::convertMetrics(const GraphiteWriter::KeyValueVector<ssiz
         }
     }
 }
+
 } // namespace DB

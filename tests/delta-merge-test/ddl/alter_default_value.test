@@ -1,0 +1,50 @@
+#TODO: enable ddl tests for DeltaMerge
+#RETURN
+
+# modify column default value
+
+>> drop table if exists dm_test
+## Prepare table
+>> create table dm_test (
+        pk Int8
+   ) engine = DeltaMerge(pk)
+
+>> insert into table dm_test values(1)
+
+## create new column without default value. the row which pk==1, will filled with 'zero' value
+>> alter table dm_test add column i0 Int32
+>> alter table dm_test add column f32_0 Float32
+>> alter table dm_test add column f64_0 Float64
+>> alter table dm_test add column dec0 Decimal(10,4)
+>> alter table dm_test add column s0 String
+>> alter table dm_test add column fs0 FixedString(4)
+>> alter table dm_test add column dt0 DateTime
+
+## create new column with default value. the row which pk==1, will filled with those default value
+## See FLASH-453
+#>> alter table dm_test add column s2 String default 'non-empty'
+
+## These alter command will throw exception now
+## See FLASH-453
+>> alter table dm_test add column i1 Int32 default 999
+>> alter table dm_test add column f32_1 Float32 default 1.234
+>> alter table dm_test add column f64_1 Float64 default 1.234
+>> alter table dm_test add column dec1 Decimal(10,4) default 3.1415
+>> alter table dm_test add column fs1 FixedString(4) default 'aaa'
+>> alter table dm_test add column dt1 DateTime default '1999-09-09 12:34:56'
+
+>> select * from dm_test where pk = 1
+┌─pk─┬─i0─┬─f32_0─┬─f64_0─┬─dec0───┬─s0─┬─fs0──────┬─────────────────dt0─┬──i1─┬─f32_1─┬─f64_1─┬─dec1───┬─fs1───┬─────────────────dt1─┐
+│  1 │  0 │     0 │     0 │ 0.0000 │    │ \0\0\0\0 │ 0000-00-00 00:00:00 │ 999 │ 1.234 │ 1.234 │ 3.1415 │ aaa\0 │ 1999-09-09 12:34:56 │
+└────┴────┴───────┴───────┴────────┴────┴──────────┴─────────────────────┴─────┴───────┴───────┴────────┴───────┴─────────────────────┘
+
+
+## insert a row, missing fields will be filled with default value
+>> insert into table dm_test(pk) values(3)
+>> select * from dm_test where pk = 3
+┌─pk─┬─i0─┬─f32_0─┬─f64_0─┬─dec0───┬─s0─┬─fs0──────┬─────────────────dt0─┬──i1─┬─f32_1─┬─f64_1─┬─dec1───┬─fs1───┬─────────────────dt1─┐
+│  3 │  0 │     0 │     0 │ 0.0000 │    │ \0\0\0\0 │ 0000-00-00 00:00:00 │ 999 │ 1.234 │ 1.234 │ 3.1415 │ aaa\0 │ 1999-09-09 12:34:56 │
+└────┴────┴───────┴───────┴────────┴────┴──────────┴─────────────────────┴─────┴───────┴───────┴────────┴───────┴─────────────────────┘
+
+## clean up
+>> drop table if exists dm_test

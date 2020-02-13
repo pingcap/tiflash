@@ -8,6 +8,8 @@
 
 #pragma GCC diagnostic pop
 
+#include <Core/Types.h>
+#include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
 
 // We define a shared ptr here, because TMTContext / SchemaSyncer / IndexReader all need to
@@ -19,22 +21,16 @@ namespace DB
 {
 
 
-struct IndexReader : public pingcap::kv::RegionClient
+struct IndexReader
 {
-    std::string suggested_ip;
-    UInt16 suggested_port;
-
+    pingcap::kv::RegionVerID region_id;
     KVClusterPtr cluster;
-
     Logger * log;
 
-    IndexReader(KVClusterPtr cluster_, const pingcap::kv::RegionVerID & id, const std::string & suggested_ip, UInt16 suggested_port);
+    IndexReader(KVClusterPtr cluster_, const pingcap::kv::RegionVerID & id);
 
-    int64_t getReadIndex();
-
-private:
-    std::shared_ptr<::kvrpcpb::ReadIndexResponse> getReadIndexFromLearners(
-        pingcap::kv::Backoffer & bo, const metapb::Region & meta, const std::vector<metapb::Peer> & learners);
+    // if region is merged and this region is removed, the second value returns true.
+    std::pair<UInt64, bool> getReadIndex();
 };
 
 using IndexReaderPtr = std::shared_ptr<IndexReader>;
@@ -44,14 +40,27 @@ struct PDClientHelper
 
     static constexpr int get_safepoint_maxtime = 120000; // 120s. waiting pd recover.
 
-    static uint64_t getGCSafePointWithRetry(pingcap::pd::ClientPtr pd_client)
+    static Timestamp getGCSafePointWithRetry(
+        const pingcap::pd::ClientPtr & pd_client, bool ignore_cache = true, Int64 safe_point_update_interval_seconds = 30)
     {
+        if (!ignore_cache)
+        {
+            // In case we cost too much to update safe point from PD.
+            std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
+            const auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - safe_point_last_update_time);
+            const auto min_interval = std::max(Int64(1), safe_point_update_interval_seconds); // at least one second
+            if (duration.count() < min_interval)
+                return cached_gc_safe_point;
+        }
+
         pingcap::kv::Backoffer bo(get_safepoint_maxtime);
         for (;;)
         {
             try
             {
                 auto safe_point = pd_client->getGCSafePoint();
+                cached_gc_safe_point = safe_point;
+                safe_point_last_update_time = std::chrono::system_clock::now();
                 return safe_point;
             }
             catch (pingcap::Exception & e)
@@ -60,6 +69,10 @@ struct PDClientHelper
             }
         }
     }
+
+private:
+    static Timestamp cached_gc_safe_point;
+    static std::chrono::time_point<std::chrono::system_clock> safe_point_last_update_time;
 };
 
 

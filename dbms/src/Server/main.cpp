@@ -1,6 +1,7 @@
 #include <common/config_common.h>
 #include <Common/config.h>
 #include <Common/ClickHouseRevision.h>
+#include <Common/TiFlashBuildInfo.h>
 #include <config_tools.h>
 #include <iostream>
 #include <vector>
@@ -53,13 +54,9 @@ extern "C" void print_tiflash_proxy_version();
 
 int mainEntryVersion(int , char **)
 {
-    std::cout << "TiFlash" << std::endl << std::endl
-              << "Release Version:   " << TiFlashBuildInfo::getVersionString() << std::endl
-              << "Git Commit Hash:   " << TiFlashBuildInfo::getGitHash() << std::endl
-              << "Git Commit Branch: " << TiFlashBuildInfo::getGitBranch() << std::endl
-              << "UTC Build Time:    " << TiFlashBuildInfo::getUTCBuildTime() << std::endl;
-
+    TiFlashBuildInfo::outputDetail(std::cout);
     std::cout << std::endl;
+
     std::cout << "Raft Proxy" << std::endl;
     print_tiflash_proxy_version();
     return 0;

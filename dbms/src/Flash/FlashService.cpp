@@ -1,11 +1,13 @@
-#include <Flash/FlashService.h>
-
+#include <Common/TiFlashMetrics.h>
 #include <Core/Types.h>
 #include <Flash/BatchCommandsHandler.h>
 #include <Flash/CoprocessorHandler.h>
-#include <Raft/RaftService.h>
+#include <Flash/FlashService.h>
+#include <Interpreters/Context.h>
 #include <Server/IServer.h>
 #include <grpcpp/server_builder.h>
+
+#include <ext/scope_guard.h>
 
 namespace DB
 {
@@ -15,11 +17,21 @@ namespace ErrorCodes
 extern const int NOT_IMPLEMENTED;
 }
 
-FlashService::FlashService(IServer & server_) : server(server_), log(&Logger::get("FlashService")) {}
+FlashService::FlashService(IServer & server_)
+    : server(server_), metrics(server.context().getTiFlashMetrics()), log(&Logger::get("FlashService"))
+{}
 
 grpc::Status FlashService::Coprocessor(
     grpc::ServerContext * grpc_context, const coprocessor::Request * request, coprocessor::Response * response)
 {
+    GET_METRIC(metrics, tiflash_coprocessor_request_count, type_cop).Increment();
+    auto start_time = std::chrono::system_clock::now();
+    SCOPE_EXIT({
+        std::chrono::duration<double> duration_sec = std::chrono::system_clock::now() - start_time;
+        GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_cop).Observe(duration_sec.count());
+        GET_METRIC(metrics, tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
+    });
+
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling coprocessor request: " << request->DebugString());
 
     auto [context, status] = createDBContext(grpc_context);
@@ -49,9 +61,17 @@ grpc::Status FlashService::BatchCommands(
     tikvpb::BatchCommandsRequest request;
     while (stream->Read(&request))
     {
+        tikvpb::BatchCommandsResponse response;
+        GET_METRIC(metrics, tiflash_coprocessor_request_count, type_batch).Increment();
+        auto start_time = std::chrono::system_clock::now();
+        SCOPE_EXIT({
+            std::chrono::duration<double> duration_sec = std::chrono::system_clock::now() - start_time;
+            GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_batch).Observe(duration_sec.count());
+            GET_METRIC(metrics, tiflash_coprocessor_response_bytes).Increment(response.ByteSizeLong());
+        });
+
         LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling batch commands: " << request.DebugString());
 
-        tikvpb::BatchCommandsResponse response;
         BatchCommandsContext batch_commands_context(
             context, [this](const grpc::ServerContext * grpc_server_context) { return createDBContext(grpc_server_context); },
             *grpc_context);

@@ -15,6 +15,7 @@
 #include <Interpreters/ClientInfo.h>
 #include <IO/CompressionSettings.h>
 #include <Storages/PartPathSelector.h>
+#include <Storages/Transaction/StorageEngineType.h>
 
 
 namespace Poco
@@ -77,12 +78,19 @@ struct SystemLogs;
 using SystemLogsPtr = std::shared_ptr<SystemLogs>;
 class SharedQueries;
 using SharedQueriesPtr = std::shared_ptr<SharedQueries>;
-class RaftService;
-using RaftServicePtr = std::shared_ptr<RaftService>;
 class TiDBService;
 using TiDBServicePtr = std::shared_ptr<TiDBService>;
 class SchemaSyncService;
 using SchemaSyncServicePtr = std::shared_ptr<SchemaSyncService>;
+class PathPool;
+
+namespace DM
+{
+class MinMaxIndexCache;
+}
+
+class TiFlashMetrics;
+using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 
 /// (database name, table name)
 using DatabaseAndTableName = std::pair<String, String>;
@@ -148,11 +156,13 @@ public:
     String getTemporaryPath() const;
     String getFlagsPath() const;
     String getUserFilesPath() const;
+    const PathPool & getExtraPaths() const;
 
     void setPath(const String & path);
     void setTemporaryPath(const String & path);
     void setFlagsPath(const String & path);
     void setUserFilesPath(const String & path);
+    void setExtraPaths(const std::vector<std::pair<UInt32, String>> & extra_paths);
 
     using ConfigurationPtr = Poco::AutoPtr<Poco::Util::AbstractConfiguration>;
 
@@ -342,6 +352,10 @@ public:
     std::shared_ptr<MarkCache> getMarkCache() const;
     void dropMarkCache() const;
 
+    void setMinMaxIndexCache(size_t cache_size_in_bytes);
+    std::shared_ptr<DM::MinMaxIndexCache> getMinMaxIndexCache() const;
+    void dropMinMaxIndexCache() const;
+
     /** Clear the caches of the uncompressed blocks and marks.
       * This is usually done when renaming tables, changing the type of columns, deleting a table.
       *  - since caches are linked to file names, and become incorrect.
@@ -358,21 +372,22 @@ public:
     void setDDLWorker(std::shared_ptr<DDLWorker> ddl_worker);
     DDLWorker & getDDLWorker() const;
 
-    void initializeRaftService();
-    void shutdownRaftService();
     void createTMTContext(const std::vector<std::string> & pd_addrs,
                           const std::string & learner_key,
                           const std::string & learner_value,
                           const std::unordered_set<std::string> & ignore_databases,
                           const std::string & kvstore_path,
-                          const std::string & flash_service_address);
-    RaftService & getRaftService();
+                          ::TiDB::StorageEngine engine,
+                          bool disable_bg_tasks);
 
     void initializeSchemaSyncService();
     SchemaSyncServicePtr & getSchemaSyncService();
 
     void initializePartPathSelector(std::vector<std::string> && all_path, std::vector<std::string> && all_fast_path);
     PartPathSelector & getPartPathSelector();
+
+    void initializeTiFlashMetrics();
+    TiFlashMetricsPtr getTiFlashMetrics();
 
     Clusters & getClusters() const;
     std::shared_ptr<Cluster> getCluster(const std::string & cluster_name) const;

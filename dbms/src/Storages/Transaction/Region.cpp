@@ -1,11 +1,11 @@
-#include <memory>
-
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/PDTiKVClient.h>
 #include <Storages/Transaction/RaftCommandResult.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TiKVRange.h>
+
+#include <memory>
 
 namespace DB
 {
@@ -34,16 +34,20 @@ LockInfoPtr Region::getLockInfo(UInt64 start_ts) const { return data.getLockInfo
 
 void Region::insert(const std::string & cf, TiKVKey && key, TiKVValue && value)
 {
-    std::unique_lock<std::shared_mutex> lock(mutex);
-    return doInsert(cf, std::move(key), std::move(value));
+    return insert(getCfType(cf), std::move(key), std::move(value));
 }
 
-void Region::doInsert(const std::string & cf, TiKVKey && key, TiKVValue && value)
+void Region::insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value)
+{
+    std::unique_lock<std::shared_mutex> lock(mutex);
+    return doInsert(type, std::move(key), std::move(value));
+}
+
+void Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value)
 {
     auto raw_key = RecordKVFormat::decodeTiKVKey(key);
     doCheckTable(raw_key);
 
-    auto type = getCf(cf);
     data.insert(type, std::move(key), raw_key, std::move(value));
 }
 
@@ -60,15 +64,14 @@ void Region::doCheckTable(const DB::DecodedTiKVKey & raw_key) const
 void Region::remove(const std::string & cf, const TiKVKey & key)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
-    doRemove(cf, key);
+    doRemove(getCfType(cf), key);
 }
 
-void Region::doRemove(const std::string & cf, const TiKVKey & key)
+void Region::doRemove(ColumnFamilyType type, const TiKVKey & key)
 {
     auto raw_key = RecordKVFormat::decodeTiKVKey(key);
     doCheckTable(raw_key);
 
-    auto type = getCf(cf);
     switch (type)
     {
         case Lock:
@@ -97,7 +100,7 @@ RegionPtr Region::splitInto(RegionMeta && meta)
     if (index_reader != nullptr)
     {
         new_region = std::make_shared<Region>(std::move(meta), [&](pingcap::kv::RegionVerID ver_id) {
-            return std::make_shared<IndexReader>(index_reader->cluster, ver_id, index_reader->suggested_ip, index_reader->suggested_port);
+            return std::make_shared<IndexReader>(index_reader->cluster, ver_id);
         });
     }
     else
@@ -119,7 +122,7 @@ void RegionRaftCommandDelegate::execChangePeer(
     meta.makeRaftCommandDelegate().execChangePeer(request, response, index, term);
 }
 
-inline const metapb::Peer & findPeer(const metapb::Region & region, UInt64 store_id)
+static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 store_id)
 {
     for (const auto & peer : region.peers())
     {
@@ -181,18 +184,6 @@ Regions RegionRaftCommandDelegate::execBatchSplit(
     return split_regions;
 }
 
-void RegionRaftCommandDelegate::execCompactLog(
-    const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term)
-{
-    const auto & compact_log_request = request.compact_log();
-    const auto compact_index = compact_log_request.compact_index();
-    const auto compact_term = compact_log_request.compact_term();
-
-    LOG_INFO(log, toString(false) << " execute compact log, compact_term: " << compact_term << ", compact_index: " << compact_index);
-
-    meta.makeRaftCommandDelegate().execCompactLog(request, response, index, term);
-}
-
 void RegionRaftCommandDelegate::execPrepareMerge(
     const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term)
 {
@@ -217,7 +208,7 @@ void RegionRaftCommandDelegate::execRollbackMerge(
 }
 
 RegionID RegionRaftCommandDelegate::execCommitMerge(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse &,
-    const UInt64 index, const UInt64 term, const KVStore & kvstore, RegionTable * region_table)
+    const UInt64 index, const UInt64 term, const KVStore & kvstore, RegionTable & region_table)
 {
     const auto & commit_merge_request = request.commit_merge();
     auto & meta_delegate = meta.makeRaftCommandDelegate();
@@ -238,14 +229,13 @@ RegionID RegionRaftCommandDelegate::execCommitMerge(const raft_cmdpb::AdminReque
     const auto & source_region_meta_delegate = source_region->meta.makeRaftCommandDelegate();
     const auto res = meta_delegate.checkBeforeCommitMerge(request, source_region_meta_delegate);
 
-    if (region_table)
     {
         const std::string & new_start_key = res.source_at_left ? source_region_meta_delegate.regionState().getRegion().start_key()
                                                                : meta_delegate.regionState().getRegion().start_key();
         const std::string & new_end_key = res.source_at_left ? meta_delegate.regionState().getRegion().end_key()
                                                              : source_region_meta_delegate.regionState().getRegion().end_key();
 
-        region_table->extendRegionRange(id(), RegionRangeKeys(TiKVKey::copyFrom(new_start_key), TiKVKey::copyFrom(new_end_key)));
+        region_table.extendRegionRange(id(), RegionRangeKeys(TiKVKey::copyFrom(new_start_key), TiKVKey::copyFrom(new_end_key)));
     }
 
     {
@@ -262,184 +252,78 @@ RegionID RegionRaftCommandDelegate::execCommitMerge(const raft_cmdpb::AdminReque
     return source_meta.id();
 }
 
-void RegionRaftCommandDelegate::onCommand(
-    enginepb::CommandRequest && cmd, const KVStore & kvstore, RegionTable * region_table, RaftCommandResult & result)
+void RegionRaftCommandDelegate::handleAdminRaftCmd(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response,
+    UInt64 index, UInt64 term, const KVStore & kvstore, RegionTable & region_table, RaftCommandResult & result)
 {
-    const auto & header = cmd.header();
-    UInt64 term = header.term();
-    UInt64 index = header.index();
-    bool sync_log = header.sync_log();
-
     result.type = RaftCommandResult::Type::Default;
-    result.sync_log = sync_log;
-
+    if (index <= appliedIndex())
     {
-        if (index <= appliedIndex())
-        {
-            result.type = RaftCommandResult::Type::IndexError;
-            if (term == 0 && index == 0)
-            {
-                // special cmd, used to heart beat and sync log, just ignore
-            }
-            else
-                LOG_WARNING(log, toString() << " ignore outdated raft log [term: " << term << ", index: " << index << "]");
-            return;
-        }
+        LOG_WARNING(log, toString() << " ignore outdated raft log [term: " << term << ", index: " << index << "]");
+        result.type = RaftCommandResult::Type::IndexError;
+        return;
     }
 
-    bool is_dirty = false;
+    auto type = request.cmd_type();
 
-    if (cmd.has_admin_request())
+    switch (type)
     {
-        const auto & request = cmd.admin_request();
-        const auto & response = cmd.admin_response();
-        auto type = request.cmd_type();
-
-        LOG_INFO(log,
-            toString() << " execute admin command " << raft_cmdpb::AdminCmdType_Name(type) << " at [term: " << term << ", index: " << index
-                       << "]");
-
-        switch (type)
-        {
-            case raft_cmdpb::AdminCmdType::ChangePeer:
-            {
-                execChangePeer(request, response, index, term);
-                result.type = RaftCommandResult::Type::ChangePeer;
-
-                break;
-            }
-            case raft_cmdpb::AdminCmdType::BatchSplit:
-            {
-                result.ori_region_range = meta.makeRaftCommandDelegate().regionState().getRange();
-                Regions split_regions = execBatchSplit(request, response, index, term);
-                for (auto & region : split_regions)
-                    region->last_persist_time.store(last_persist_time);
-
-                result.type = RaftCommandResult::Type::BatchSplit;
-                result.split_regions = std::move(split_regions);
-                break;
-            }
-            case raft_cmdpb::AdminCmdType::CompactLog:
-                execCompactLog(request, response, index, term);
-                result.type = RaftCommandResult::Type::CompactLog;
-                break;
-            case raft_cmdpb::AdminCmdType::ComputeHash:
-            case raft_cmdpb::AdminCmdType::VerifyHash:
-                // Ignore
-                meta.setApplied(index, term);
-                break;
-            case raft_cmdpb::AdminCmdType::PrepareMerge:
-                execPrepareMerge(request, response, index, term);
-                break;
-            case raft_cmdpb::AdminCmdType::CommitMerge:
-            {
-                result.ori_region_range = meta.makeRaftCommandDelegate().regionState().getRange();
-                result.type = RaftCommandResult::Type::CommitMerge;
-                result.source_region_id = execCommitMerge(request, response, index, term, kvstore, region_table);
-                break;
-            }
-            case raft_cmdpb::AdminCmdType::RollbackMerge:
-                execRollbackMerge(request, response, index, term);
-                break;
-            default:
-                throw Exception(
-                    std::string(__PRETTY_FUNCTION__) + ": unsupported admin command type " + raft_cmdpb::AdminCmdType_Name(type),
-                    ErrorCodes::LOGICAL_ERROR);
-                break;
-        }
+        case raft_cmdpb::AdminCmdType::ComputeHash:
+        case raft_cmdpb::AdminCmdType::VerifyHash:
+        case raft_cmdpb::AdminCmdType::CompactLog:
+            LOG_INFO(log,
+                toString(false) << " useless admin command " << raft_cmdpb::AdminCmdType_Name(type) << " at [term: " << term
+                                << ", index: " << index << "]");
+            break;
+        default:
+            LOG_INFO(log,
+                toString() << " execute admin command " << raft_cmdpb::AdminCmdType_Name(type) << " at [term: " << term
+                           << ", index: " << index << "]");
+            break;
     }
-    else
+
+    switch (type)
     {
-        std::unique_lock<std::shared_mutex> lock(mutex);
-        std::lock_guard<std::mutex> predecode_lock(predecode_mutex);
-
-        for (auto && req : *cmd.mutable_requests())
+        case raft_cmdpb::AdminCmdType::ChangePeer:
         {
-            auto type = req.cmd_type();
+            execChangePeer(request, response, index, term);
+            result.type = RaftCommandResult::Type::ChangePeer;
 
-            switch (type)
-            {
-                case raft_cmdpb::CmdType::Put:
-                {
-                    auto & put = *req.mutable_put();
-
-                    auto & key = *put.mutable_key();
-                    auto & value = *put.mutable_value();
-
-                    auto tikv_key = TiKVKey(std::move(key));
-                    auto tikv_value = TiKVValue(std::move(value));
-
-                    try
-                    {
-                        doInsert(put.cf(), std::move(tikv_key), std::move(tikv_value));
-                    }
-                    catch (Exception & e)
-                    {
-                        LOG_ERROR(log,
-                            toString() << " catch exception: " << e.message() << ", while applying CmdType::Put on [term: " << term
-                                       << ", index: " << index << "], CF: " << put.cf());
-                        e.rethrow();
-                    }
-
-                    is_dirty = true;
-                    break;
-                }
-                case raft_cmdpb::CmdType::Delete:
-                {
-                    auto & del = *req.mutable_delete_();
-
-                    auto & key = *del.mutable_key();
-                    auto tikv_key = TiKVKey(std::move(key));
-
-                    try
-                    {
-                        doRemove(del.cf(), tikv_key);
-                    }
-                    catch (Exception & e)
-                    {
-                        LOG_ERROR(log,
-                            toString() << " catch exception: " << e.message() << ", while applying CmdType::Delete on [term: " << term
-                                       << ", index: " << index << "], key in hex: " << tikv_key.toHex() << ", CF: " << del.cf());
-                        e.rethrow();
-                    }
-
-                    is_dirty = true;
-                    break;
-                }
-                case raft_cmdpb::CmdType::Snap:
-                case raft_cmdpb::CmdType::Get:
-                case raft_cmdpb::CmdType::ReadIndex:
-                    LOG_WARNING(log, toString(false) << " skip unsupported command: " << raft_cmdpb::CmdType_Name(type));
-                    break;
-                case raft_cmdpb::CmdType::DeleteRange:
-                {
-                    auto & delete_range = *req.mutable_delete_range();
-                    const auto & cf = delete_range.cf();
-                    auto start = TiKVKey(std::move(*delete_range.mutable_start_key()));
-                    auto end = TiKVKey(std::move(*delete_range.mutable_end_key()));
-
-                    LOG_INFO(log,
-                        toString(false) << " start to execute " << raft_cmdpb::CmdType_Name(type) << ", CF: " << cf
-                                        << ", start key in hex: " << start.toHex() << ", end key in hex: " << end.toHex());
-                    doDeleteRange(cf, RegionRangeKeys::makeComparableKeys(std::move(start), std::move(end)));
-                    break;
-                }
-                default:
-                {
-                    throw Exception(std::string(__PRETTY_FUNCTION__) + ": unsupported command type " + raft_cmdpb::CmdType_Name(type),
-                        ErrorCodes::LOGICAL_ERROR);
-                    break;
-                }
-            }
+            break;
         }
-        meta.setApplied(index, term);
-        result.type = RaftCommandResult::Type::UpdateTable;
+        case raft_cmdpb::AdminCmdType::BatchSplit:
+        {
+            result.ori_region_range = meta.makeRaftCommandDelegate().regionState().getRange();
+            Regions split_regions = execBatchSplit(request, response, index, term);
+            result.type = RaftCommandResult::Type::BatchSplit;
+            result.split_regions = std::move(split_regions);
+            break;
+        }
+        case raft_cmdpb::AdminCmdType::CompactLog:
+        case raft_cmdpb::AdminCmdType::ComputeHash:
+        case raft_cmdpb::AdminCmdType::VerifyHash:
+            // Ignore
+            meta.setApplied(index, term);
+            break;
+        case raft_cmdpb::AdminCmdType::PrepareMerge:
+            execPrepareMerge(request, response, index, term);
+            break;
+        case raft_cmdpb::AdminCmdType::CommitMerge:
+        {
+            result.ori_region_range = meta.makeRaftCommandDelegate().regionState().getRange();
+            result.type = RaftCommandResult::Type::CommitMerge;
+            result.source_region_id = execCommitMerge(request, response, index, term, kvstore, region_table);
+            break;
+        }
+        case raft_cmdpb::AdminCmdType::RollbackMerge:
+            execRollbackMerge(request, response, index, term);
+            break;
+        default:
+            throw Exception(std::string(__PRETTY_FUNCTION__) + ": unsupported admin command type " + raft_cmdpb::AdminCmdType_Name(type),
+                ErrorCodes::LOGICAL_ERROR);
+            break;
     }
 
     meta.notifyAll();
-
-    if (is_dirty)
-        incDirtyFlag();
 }
 
 std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
@@ -475,13 +359,10 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const IndexReaderCreateFunc * in
                                                  : std::make_shared<Region>(std::move(meta), *index_reader_create);
 
     RegionData::deserialize(buf, region->data);
-
-    region->dirty_flag = 0;
-
     return region;
 }
 
-ColumnFamilyType Region::getCf(const std::string & cf)
+ColumnFamilyType Region::getCfType(const std::string & cf)
 {
     if (cf.empty() || cf == default_cf_name)
         return ColumnFamilyType::Default;
@@ -534,11 +415,9 @@ void Region::markPersisted() const { last_persist_time = Clock::now(); }
 
 Timepoint Region::lastPersistTime() const { return last_persist_time; }
 
-size_t Region::dirtyFlag() const { return dirty_flag; }
+void Region::markCompactLog() const { last_compact_log_time = Clock::now(); }
 
-void Region::decDirtyFlag(size_t x) const { dirty_flag -= x; }
-
-void Region::incDirtyFlag() { dirty_flag++; }
+Timepoint Region::lastCompactLogTime() const { return last_compact_log_time; }
 
 Region::CommittedScanner Region::createCommittedScanner() { return Region::CommittedScanner(this->shared_from_this()); }
 
@@ -546,15 +425,13 @@ Region::CommittedRemover Region::createCommittedRemover() { return Region::Commi
 
 std::string Region::toString(bool dump_status) const { return meta.toString(dump_status); }
 
-enginepb::CommandResponse Region::toCommandResponse() const { return meta.toCommandResponse(); }
-
 ImutRegionRangePtr Region::getRange() const { return meta.getRange(); }
 
-UInt64 Region::learnerRead()
+std::pair<UInt64, bool> Region::learnerRead()
 {
     if (index_reader != nullptr)
         return index_reader->getReadIndex();
-    return 0;
+    return std::make_pair(0, false);
 }
 
 void Region::waitIndex(UInt64 index)
@@ -581,8 +458,6 @@ void Region::assignRegion(Region && new_region)
     std::unique_lock<std::shared_mutex> lock(mutex);
 
     data.assignRegionData(std::move(new_region.data));
-
-    incDirtyFlag();
 
     meta.assignRegionMeta(std::move(new_region.meta));
     meta.notifyAll();
@@ -656,6 +531,102 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const Timestamp 
         LOG_INFO(log, __FUNCTION__ << ": add deleted gc: " << deleted_gc_cnt);
 }
 
+void Region::handleWriteRaftCmd(raft_cmdpb::RaftCmdRequest && request, UInt64 index, UInt64 term)
+{
+
+    if (index <= appliedIndex())
+    {
+        LOG_WARNING(log, toString() << " ignore outdated raft log [term: " << term << ", index: " << index << "]");
+        return;
+    }
+
+    {
+        std::unique_lock<std::shared_mutex> lock(mutex);
+        std::lock_guard<std::mutex> predecode_lock(predecode_mutex);
+
+        for (auto && req : *request.mutable_requests())
+        {
+            auto type = req.cmd_type();
+
+            switch (type)
+            {
+                case raft_cmdpb::CmdType::Put:
+                {
+                    auto & put = *req.mutable_put();
+
+                    auto & key = *put.mutable_key();
+                    auto & value = *put.mutable_value();
+
+                    auto tikv_key = TiKVKey(std::move(key));
+                    auto tikv_value = TiKVValue(std::move(value));
+
+                    try
+                    {
+                        doInsert(getCfType(put.cf()), std::move(tikv_key), std::move(tikv_value));
+                    }
+                    catch (Exception & e)
+                    {
+                        LOG_ERROR(log,
+                            toString() << " catch exception: " << e.message() << ", while applying CmdType::Put on [term: " << term
+                                       << ", index: " << index << "], CF: " << put.cf());
+                        e.rethrow();
+                    }
+
+                    break;
+                }
+                case raft_cmdpb::CmdType::Delete:
+                {
+                    auto & del = *req.mutable_delete_();
+
+                    auto & key = *del.mutable_key();
+                    auto tikv_key = TiKVKey(std::move(key));
+
+                    try
+                    {
+                        doRemove(getCfType(del.cf()), tikv_key);
+                    }
+                    catch (Exception & e)
+                    {
+                        LOG_ERROR(log,
+                            toString() << " catch exception: " << e.message() << ", while applying CmdType::Delete on [term: " << term
+                                       << ", index: " << index << "], key in hex: " << tikv_key.toHex() << ", CF: " << del.cf());
+                        e.rethrow();
+                    }
+
+                    break;
+                }
+                case raft_cmdpb::CmdType::Snap:
+                case raft_cmdpb::CmdType::Get:
+                case raft_cmdpb::CmdType::ReadIndex:
+                    LOG_WARNING(log, toString(false) << " skip unsupported command: " << raft_cmdpb::CmdType_Name(type));
+                    break;
+                case raft_cmdpb::CmdType::DeleteRange:
+                {
+                    auto & delete_range = *req.mutable_delete_range();
+                    const auto & cf = delete_range.cf();
+                    auto start = TiKVKey(std::move(*delete_range.mutable_start_key()));
+                    auto end = TiKVKey(std::move(*delete_range.mutable_end_key()));
+
+                    LOG_INFO(log,
+                        toString(false) << " start to execute " << raft_cmdpb::CmdType_Name(type) << ", CF: " << cf
+                                        << ", start key in hex: " << start.toHex() << ", end key in hex: " << end.toHex());
+                    doDeleteRange(cf, RegionRangeKeys::makeComparableKeys(std::move(start), std::move(end)));
+                    break;
+                }
+                default:
+                {
+                    throw Exception(std::string(__PRETTY_FUNCTION__) + ": unsupported command type " + raft_cmdpb::CmdType_Name(type),
+                        ErrorCodes::LOGICAL_ERROR);
+                    break;
+                }
+            }
+        }
+        meta.setApplied(index, term);
+    }
+
+    meta.notifyAll();
+}
+
 RegionRaftCommandDelegate & Region::makeRaftCommandDelegate(const KVStoreTaskLock & lock)
 {
     static_assert(sizeof(RegionRaftCommandDelegate) == sizeof(Region));
@@ -700,7 +671,7 @@ void Region::compareAndUpdateHandleMaps(const Region & source_region, HandleMap 
 
 void Region::doDeleteRange(const std::string & cf, const RegionRange & range)
 {
-    auto type = getCf(cf);
+    auto type = getCfType(cf);
     return data.deleteRange(type, range);
 }
 

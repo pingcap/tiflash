@@ -23,10 +23,12 @@
 #include <Poco/Net/HTTPServer.h>
 #include <Poco/Net/NetException.h>
 #include <Poco/StringTokenizer.h>
-#include <Raft/RaftService.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/System/attachSystemTables.h>
+#include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/ProxyFFIType.h>
 #include <Storages/Transaction/SchemaSyncer.h>
+#include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/registerStorages.h>
 #include <TableFunctions/registerTableFunctions.h>
@@ -34,18 +36,23 @@
 #include <common/getMemoryAmount.h>
 #include <common/logger_useful.h>
 #include <sys/resource.h>
+
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/split.hpp>
 #include <ext/scope_guard.h>
 #include <memory>
+
 #include "ClusterManagerService.h"
 #include "HTTPHandlerFactory.h"
-#include "MetricsTransmitter.h"
 #include "MetricsPrometheus.h"
+#include "MetricsTransmitter.h"
 #include "StatusFile.h"
 #include "TCPHandlerFactory.h"
 
 #if Poco_NetSSL_FOUND
 #include <Poco/Net/Context.h>
 #include <Poco/Net/SecureServerSocket.h>
+#include <grpc++/grpc++.h>
 #endif
 
 namespace CurrentMetrics
@@ -61,17 +68,18 @@ namespace ErrorCodes
 extern const int NO_ELEMENTS_IN_CONFIG;
 extern const int SUPPORT_IS_DISABLED;
 extern const int ARGUMENT_OUT_OF_BOUND;
+extern const int INVALID_CONFIG_PARAMETER;
 } // namespace ErrorCodes
 
 
-static std::string getCanonicalPath(std::string && path)
+static std::string getCanonicalPath(std::string path)
 {
     Poco::trimInPlace(path);
     if (path.empty())
         throw Exception("path configuration parameter is empty");
     if (path.back() != '/')
         path += '/';
-    return std::move(path);
+    return path;
 }
 
 void Server::uninitialize()
@@ -88,16 +96,14 @@ void Server::initialize(Poco::Util::Application & self)
 
 std::string Server::getDefaultCorePath() const { return getCanonicalPath(config().getString("path")) + "cores"; }
 
-extern "C" void run_tiflash_proxy(int, const char **);
-
-struct TiFlashProxy
+struct TiFlashProxyConfig
 {
     static const std::string config_prefix;
     std::vector<const char *> args;
     std::unordered_map<std::string, std::string> val_map;
     bool inited = false;
 
-    TiFlashProxy(Poco::Util::LayeredConfiguration & config)
+    TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
     {
         if (!config.has(config_prefix))
             return;
@@ -122,7 +128,7 @@ struct TiFlashProxy
     }
 };
 
-const std::string TiFlashProxy::config_prefix = "flash.proxy";
+const std::string TiFlashProxyConfig::config_prefix = "flash.proxy";
 
 int Server::main(const std::vector<std::string> & /*args*/)
 {
@@ -159,22 +165,49 @@ int Server::main(const std::vector<std::string> & /*args*/)
             }
         }
     }
-    String paths = config().getString("path");
     std::vector<String> all_normal_path;
-    Poco::trimInPlace(paths);
-    if (paths.empty())
-        throw Exception("path configuration parameter is empty");
-    Poco::StringTokenizer string_tokens(paths, ",");
-    for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
     {
-        all_normal_path.emplace_back(getCanonicalPath(std::string(*it)));
-        LOG_DEBUG(log, "Data part candidate path: " << std::string(*it));
+        String paths = config().getString("path");
+        Poco::trimInPlace(paths);
+        if (paths.empty())
+            throw Exception("path configuration parameter is empty");
+        Poco::StringTokenizer string_tokens(paths, ",");
+        for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
+        {
+            all_normal_path.emplace_back(getCanonicalPath(std::string(*it)));
+            LOG_DEBUG(log, "Data part candidate path: " << std::string(*it));
+        }
+    }
+
+    std::vector<std::pair<UInt32, String>> extra_paths;
+    if (config().has("extra_path"))
+    {
+        String s = config().getString("extra_path");
+        Poco::trimInPlace(s);
+        if (s.empty())
+            throw Exception("Extra path configuration parameter is empty");
+
+        std::vector<std::string> id_path_list;
+        boost::split(id_path_list, s, boost::is_any_of(";"));
+        for (auto & id_path_s : id_path_list)
+        {
+            std::vector<String> id_path;
+            boost::split(id_path, id_path_s, boost::is_any_of(":"));
+            if (id_path.size() != 2)
+                throw Exception("Illegal id_path format: " + id_path_s);
+            UInt32 id = std::stoul(id_path[0]);
+            String path = id_path[1];
+            extra_paths.emplace_back(id, getCanonicalPath(path));
+            LOG_DEBUG(log, "Extra path add " + DB::toString(id) + ":" + path);
+        }
     }
 
     std::string path = all_normal_path[0];
     std::string default_database = config().getString("default_database", "default");
     global_context->setPath(path);
     global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
+    if (!extra_paths.empty())
+        global_context->setExtraPaths(extra_paths);
 
     /// Create directories for 'path' and for default database, if not exist.
     for (const String & candidate_path : global_context->getPartPathSelector().getAllPath())
@@ -287,7 +320,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->setMacros(std::make_unique<Macros>(config(), "macros"));
 
     /// Initialize main config reloader.
-    auto main_config_reloader = std::make_unique<ConfigReloader>(config_path,
+    auto main_config_reloader = std::make_unique<ConfigReloader>(
+        config_path,
         [&](ConfigurationPtr config) {
             buildLoggers(*config);
             global_context->setClustersConfig(config);
@@ -305,7 +339,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (Poco::File(config_dir + users_config_path).exists())
             users_config_path = config_dir + users_config_path;
     }
-    auto users_config_reloader = std::make_unique<ConfigReloader>(users_config_path,
+    auto users_config_reloader = std::make_unique<ConfigReloader>(
+        users_config_path,
         [&](ConfigurationPtr config) { global_context->setUsersConfig(config); },
         /* already_loaded = */ false);
 
@@ -346,6 +381,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (mark_cache_size)
         global_context->setMarkCache(mark_cache_size);
 
+    /// Size of cache for minmax index, used by DeltaMerge engine.
+    size_t minmax_index_cache_size
+        = config().has("minmax_index_cache_size") ? config().getUInt64("minmax_index_cache_size") : mark_cache_size;
+    if (minmax_index_cache_size)
+        global_context->setMinMaxIndexCache(minmax_index_cache_size);
+
+    /// Init TiFlash metrics.
+    global_context->initializeTiFlashMetrics();
+
     /// Set path for format schema files
     auto format_schema_path = Poco::File(config().getString("format_schema_path", path + "format_schemas/"));
     global_context->setFormatSchemaPath(format_schema_path.path() + "/");
@@ -358,7 +402,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// After the system database is created, attach virtual system tables (in addition to query_log and part_log)
     attachSystemTablesServer(*global_context->getDatabase("system"), has_zookeeper);
     /// Load raft related configs ahead of loading metadata, as TMT storage relies on TMT context, which needs these configs.
-    bool need_raft_service = false;
     std::vector<std::string> pd_addrs;
     const std::string learner_key = "engine";
     const std::string learner_value = "tiflash";
@@ -366,10 +409,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::string kvstore_path = path + "kvstore/";
     String flash_server_addr = config().getString("flash.service_addr", "0.0.0.0:3930");
 
+    bool disable_bg_flush = false;
+
+    ::TiDB::StorageEngine engine_if_empty = ::TiDB::StorageEngine::TMT;
+    ::TiDB::StorageEngine engine = engine_if_empty;
+
     if (config().has("raft"))
     {
-        need_raft_service = true;
-
         if (config().has("raft.pd_addr"))
         {
             String pd_service_addrs = config().getString("raft.pd_addr");
@@ -403,12 +449,41 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             kvstore_path = config().getString("raft.kvstore_path");
         }
+
+        if (config().has("raft.storage_engine"))
+        {
+            String s_engine = config().getString("raft.storage_engine");
+            std::transform(s_engine.begin(), s_engine.end(), s_engine.begin(), [](char ch) { return std::tolower(ch); });
+            if (s_engine == "tmt")
+                engine = ::TiDB::StorageEngine::TMT;
+            else if (s_engine == "dm")
+                engine = ::TiDB::StorageEngine::DM;
+            else
+                engine = engine_if_empty;
+        }
+
+        if (config().has("raft.disable_bg_flush"))
+        {
+            bool disable = config().getBool("raft.disable_bg_flush");
+            if (disable)
+            {
+                if (engine == ::TiDB::StorageEngine::TMT)
+                {
+                    throw Exception("Illegal arguments: disable background flush while using engine TxnMergeTree.",
+                        ErrorCodes::INVALID_CONFIG_PARAMETER);
+                }
+                disable_bg_flush = true;
+            }
+        }
     }
 
     {
+        LOG_DEBUG(log, "Default storage engine: " << static_cast<Int64>(engine));
         /// create TMTContext
-        global_context->createTMTContext(pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, flash_server_addr);
-        global_context->getTMTContext().getRegionTable().setTableCheckerThreshold(config().getDouble("flash.overlap_threshold", 0.9));
+        global_context->createTMTContext(pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, engine, disable_bg_flush);
+        global_context->getTMTContext().getRegionTable().setTableCheckerThreshold(config().getDouble("flash.overlap_threshold", 0.6));
+        global_context->getTMTContext().getKVStore()->setRegionCompactLogPeriod(
+            Seconds{config().getUInt64("flash.compact_log_min_period", 5 * 60)});
     }
 
     /// Then, load remaining databases
@@ -458,14 +533,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         grpc::ServerBuilder builder;
         builder.AddListeningPort(flash_server_addr, grpc::InsecureServerCredentials());
 
-        /// Init and register raft service if necessary.
-        if (need_raft_service)
-        {
-            global_context->initializeRaftService();
-            builder.RegisterService(&(global_context->getRaftService()));
-            LOG_INFO(log, "Raft service registered");
-        }
-
         /// Init and register flash service.
         flash_service = std::make_unique<FlashService>(*this);
         builder.RegisterService(flash_service.get());
@@ -493,24 +560,28 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_INFO(log, "Begin to shut down flash service");
         flash_service.reset();
         LOG_INFO(log, "Shut down flash service");
-
-        /// Close raft service if necessary.
-        if (need_raft_service)
-        {
-            LOG_INFO(log, "Begin to shut down raft service");
-            global_context->shutdownRaftService();
-            LOG_INFO(log, "Shut down raft service");
-        }
     });
 
-    TiFlashProxy proxy(config());
+    TiFlashProxyConfig proxy_conf(config());
+    TiFlashServer tiflash_instance_wrap{.tmt = global_context->getTMTContext()};
+    TiFlashServerHelper helper{.inner = &tiflash_instance_wrap,
+        .fn_gc_buff = GcBuff,
+        .fn_handle_write_raft_cmd = HandleWriteRaftCmd,
+        .fn_handle_admin_raft_cmd = HandleAdminRaftCmd,
+        .fn_handle_apply_snapshot = HandleApplySnapshot,
+        .fn_atomic_update_proxy = AtomicUpdateProxy,
+        .fn_handle_destroy = HandleDestroy,
 
-    auto proxy_runner = std::thread([&proxy, &log]() {
-        if (!proxy.inited)
+        // a special number, also defined in proxy
+        .magic_number = 0x13579BDF,
+        .version = 1};
+
+    auto proxy_runner = std::thread([&proxy_conf, &log, &helper]() {
+        if (!proxy_conf.inited)
             return;
 
         LOG_INFO(log, "Start tiflash proxy");
-        run_tiflash_proxy((int)proxy.args.size(), proxy.args.data());
+        run_tiflash_proxy_ffi((int)proxy_conf.args.size(), proxy_conf.args.data(), &helper);
         LOG_INFO(log, "End tiflash proxy");
     });
 

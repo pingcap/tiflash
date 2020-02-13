@@ -15,7 +15,8 @@ namespace DB
 {
 
 class Context;
-
+class TiFlashMetrics;
+using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 
 /// Query source of a DAG request via gRPC.
 /// This is also an IR of a DAG.
@@ -108,6 +109,8 @@ protected:
     const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges;
 
     const tipb::DAGRequest & dag_request;
+
+    TiFlashMetricsPtr metrics;
 
     Int32 ts_index = -1;
     Int32 sel_index = -1;

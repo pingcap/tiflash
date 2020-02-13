@@ -40,5 +40,10 @@ cmake "$SRCPATH" \
 
 make -j $NPROC
 
-cp -f "$build_dir/dbms/src/Server/theflash" "$install_dir/tiflash"
+cp -f "$build_dir/dbms/src/Server/tiflash" "$install_dir/tiflash"
 cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "$install_dir/libtiflash_proxy.so"
+
+ldd "$install_dir/tiflash"
+cd "$install_dir"
+chrpath -d libtiflash_proxy.so "$install_dir/tiflash"
+ldd "$install_dir/tiflash"

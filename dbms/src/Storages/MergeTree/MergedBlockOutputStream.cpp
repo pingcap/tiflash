@@ -342,6 +342,7 @@ void MergedBlockOutputStream::write(const Block & block)
 /** If the data is not sorted, but we pre-calculated the permutation, after which they will be sorted.
     * This method is used to save RAM, since you do not need to keep two blocks at once - the source and the sorted.
     */
+
 void MergedBlockOutputStream::writeWithPermutation(const Block & block, const IColumn::Permutation * permutation)
 {
     writeImpl(block, permutation);

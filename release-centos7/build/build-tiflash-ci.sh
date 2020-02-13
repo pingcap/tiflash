@@ -36,7 +36,10 @@ if [ -d "$SRCPATH/contrib/tipb" ]; then
 fi
 
 rm -rf ${SRCPATH}/libs/libtiflash-proxy
-ln -s /libtiflash-proxy ${SRCPATH}/libs/libtiflash-proxy
+# ln -s /libtiflash-proxy ${SRCPATH}/libs/libtiflash-proxy
+
+# hacked by solotzg. update bin of proxy after pr is merged.
+ln -s /libtiflash-proxy2 ${SRCPATH}/libs/libtiflash-proxy
 
 build_dir="$SRCPATH/release-centos7/build-release"
 mkdir -p $build_dir && cd $build_dir
@@ -46,7 +49,7 @@ cmake "$SRCPATH" \
     -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE
 make -j $NPROC
 
-cp -f "$build_dir/dbms/src/Server/theflash" "$install_dir/tiflash"
+cp -f "$build_dir/dbms/src/Server/tiflash" "$install_dir/tiflash"
 cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "$install_dir/libtiflash_proxy.so"
 
 # copy gtest binary under Debug mode
@@ -56,3 +59,8 @@ if [[ "${CMAKE_BUILD_TYPE}" = "Debug" && ${ENABLE_TEST} -ne 0 ]]; then
     cp -f "$build_dir/dbms/gtests_dbms" "$install_dir/"
     cp -f "$build_dir/libs/libcommon/src/tests/gtests_libcommon" "$install_dir/"
 fi
+
+ldd "$install_dir/tiflash"
+cd "$install_dir"
+chrpath -d libtiflash_proxy.so "$install_dir/tiflash"
+ldd "$install_dir/tiflash"

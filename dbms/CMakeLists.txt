@@ -29,6 +29,7 @@ endif ()
 
 find_package (Threads)
 
+include_directories (src)
 add_subdirectory (src)
 
 set(dbms_headers)
@@ -53,11 +54,16 @@ add_headers_and_sources(dbms src/Interpreters)
 add_headers_and_sources(dbms src/Interpreters/ClusterProxy)
 add_headers_and_sources(dbms src/Columns)
 add_headers_and_sources(dbms src/Storages)
+add_headers_and_sources(dbms src/Storages/DeltaMerge)
+add_headers_and_sources(dbms src/Storages/DeltaMerge/Index)
+add_headers_and_sources(dbms src/Storages/DeltaMerge/Filter)
+add_headers_and_sources(dbms src/Storages/DeltaMerge/FilterParser)
+add_headers_and_sources(dbms src/Storages/DeltaMerge/File)
 add_headers_and_sources(dbms src/Storages/Distributed)
 add_headers_and_sources(dbms src/Storages/MergeTree)
 add_headers_and_sources(dbms src/Storages/Transaction)
 add_headers_and_sources(dbms src/Storages/Page)
-add_headers_and_sources(dbms src/Raft)
+add_headers_and_sources(dbms src/Storages/Page/VersionSet)
 add_headers_and_sources(dbms src/TiDB)
 add_headers_and_sources(dbms src/Client)
 add_headers_only(dbms src/Flash/Coprocessor)
@@ -144,6 +150,9 @@ target_link_libraries (clickhouse_common_io
     ${EXECINFO_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
     ${CMAKE_DL_LIBS}
+    prometheus-cpp::core
+    prometheus-cpp::push
+    prometheus-cpp::pull
 )
 
 target_link_libraries (dbms
@@ -152,9 +161,6 @@ target_link_libraries (dbms
     clickhouse_common_io
     flash_service
     kvproto
-    prometheus-cpp::core
-    prometheus-cpp::push
-    prometheus-cpp::pull
     kv_client
     tipb
     ${Protobuf_LIBRARIES}
@@ -278,7 +284,33 @@ if (ENABLE_TESTS)
     # attach all dbms gtest sources
     grep_gtest_sources(${ClickHouse_SOURCE_DIR}/dbms dbms_gtest_sources)
     add_executable(gtests_dbms EXCLUDE_FROM_ALL ${dbms_gtest_sources})
+    target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
     target_link_libraries(gtests_dbms gtest_main dbms clickhouse_functions)
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas)
     add_check(gtests_dbms)
 endif ()
+
+if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(COVERAGE_LCOV_EXCLUDES
+            '/Library/Developer/CommandLineTools/usr/include/*'
+            '/usr/include/*'
+            '/usr/local/*'
+            '/usr/lib/*'
+            '${CMAKE_SOURCE_DIR}/cmake-build-*/*'
+            '${CMAKE_SOURCE_DIR}/contrib/*'
+            )
+    SETUP_TARGET_FOR_COVERAGE_LCOV(
+            NAME tiflash_lcov_coverage
+            DEPENDENCIES gtests_dbms
+            EXECUTABLE gtests_dbms
+    )
+    set(COVERAGE_GCOVR_EXCLUDES
+            'contrib'
+            'cmake-build-debugwithcov'
+    )
+    SETUP_TARGET_FOR_COVERAGE_GCOVR_HTML(
+            NAME tiflash_gcovr_coverage
+            DEPENDENCIES gtests_dbms
+            EXECUTABLE gtests_dbms
+    )
+endif()

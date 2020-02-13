@@ -1,6 +1,7 @@
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
-
 #include <Flash/Coprocessor/InterpreterDAG.h>
+#include <Interpreters/Context.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/parseQuery.h>
@@ -37,27 +38,33 @@ DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, Re
       region_version(region_version_),
       region_conf_version(region_conf_version_),
       key_ranges(key_ranges_),
-      dag_request(dag_request_)
+      dag_request(dag_request_),
+      metrics(context.getTiFlashMetrics())
 {
     for (int i = 0; i < dag_request.executors_size(); i++)
     {
         switch (dag_request.executors(i).tp())
         {
             case tipb::ExecType::TypeTableScan:
+                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_ts).Increment();
                 assignOrThrowException(ts_index, i, TS_NAME);
                 break;
             case tipb::ExecType::TypeSelection:
+                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_sel).Increment();
                 assignOrThrowException(sel_index, i, SEL_NAME);
                 break;
             case tipb::ExecType::TypeStreamAgg:
             case tipb::ExecType::TypeAggregation:
+                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_agg).Increment();
                 assignOrThrowException(agg_index, i, AGG_NAME);
                 break;
             case tipb::ExecType::TypeTopN:
+                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_topn).Increment();
                 assignOrThrowException(order_index, i, TOPN_NAME);
                 assignOrThrowException(limit_index, i, TOPN_NAME);
                 break;
             case tipb::ExecType::TypeLimit:
+                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_limit).Increment();
                 assignOrThrowException(limit_index, i, LIMIT_NAME);
                 break;
             default:

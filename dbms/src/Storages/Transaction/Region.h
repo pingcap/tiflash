@@ -1,12 +1,12 @@
 #pragma once
 
-#include <shared_mutex>
-
 #include <Storages/Transaction/IndexReaderCreate.h>
 #include <Storages/Transaction/RegionData.h>
 #include <Storages/Transaction/RegionMeta.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <common/logger_useful.h>
+
+#include <shared_mutex>
 
 namespace DB
 {
@@ -21,6 +21,7 @@ class RegionTable;
 class RegionRaftCommandDelegate;
 class KVStoreTaskLock;
 class Context;
+class TMTContext;
 
 /// Store all kv data of one region. Including 'write', 'data' and 'lock' column families.
 /// TODO: currently the synchronize mechanism is broken and need to fix.
@@ -88,6 +89,7 @@ public:
     explicit Region(RegionMeta && meta_, const IndexReaderCreateFunc & index_reader_create);
 
     void insert(const std::string & cf, TiKVKey && key, TiKVValue && value);
+    void insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value);
     void remove(const std::string & cf, const TiKVKey & key);
 
     CommittedScanner createCommittedScanner();
@@ -99,7 +101,6 @@ public:
     RegionID id() const;
     ImutRegionRangePtr getRange() const;
 
-    enginepb::CommandResponse toCommandResponse() const;
     std::string toString(bool dump_status = true) const;
 
     bool isPendingRemove() const;
@@ -113,9 +114,9 @@ public:
 
     void markPersisted() const;
     Timepoint lastPersistTime() const;
-    size_t dirtyFlag() const;
-    void decDirtyFlag(size_t x) const;
-    void incDirtyFlag();
+
+    void markCompactLog() const;
+    Timepoint lastCompactLogTime() const;
 
     friend bool operator==(const Region & region1, const Region & region2)
     {
@@ -125,7 +126,7 @@ public:
         return region1.meta == region2.meta && region1.data == region2.data;
     }
 
-    UInt64 learnerRead();
+    std::pair<UInt64, bool> learnerRead();
 
     void waitIndex(UInt64 index);
 
@@ -149,14 +150,15 @@ public:
     /// Traverse all data in source_region and get handle with largest version.
     void compareAndUpdateHandleMaps(const Region & source_region, HandleMap & handle_map);
 
-    static ColumnFamilyType getCf(const std::string & cf);
+    static ColumnFamilyType getCfType(const std::string & cf);
     RegionRaftCommandDelegate & makeRaftCommandDelegate(const KVStoreTaskLock &);
     metapb::Region getMetaRegion() const;
     raft_serverpb::MergeState getMergeState() const;
 
-    void tryPreDecodeTiKVValue(Context & context);
+    void tryPreDecodeTiKVValue(TMTContext & tmt);
 
     TableID getMappedTableID() const;
+    void handleWriteRaftCmd(raft_cmdpb::RaftCmdRequest && request, UInt64 index, UInt64 term);
 
 private:
     Region() = delete;
@@ -164,9 +166,9 @@ private:
 
     // Private methods no need to lock mutex, normally
 
-    void doInsert(const std::string & cf, TiKVKey && key, TiKVValue && value);
+    void doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value);
     void doCheckTable(const DecodedTiKVKey & key) const;
-    void doRemove(const std::string & cf, const TiKVKey & key);
+    void doRemove(ColumnFamilyType type, const TiKVKey & key);
     void doDeleteRange(const std::string & cf, const RegionRange & range);
 
     RegionDataReadInfo readDataByWriteIt(const RegionData::ConstWriteCFIter & write_it, bool need_value = true) const;
@@ -185,7 +187,8 @@ private:
 
     IndexReaderPtr index_reader;
 
-    mutable std::atomic<Timepoint> last_persist_time = Clock::now();
+    mutable std::atomic<Timepoint> last_persist_time = Timepoint::min();
+    mutable std::atomic<Timepoint> last_compact_log_time = Timepoint::min();
 
     // dirty_flag is used to present whether this region need to be persisted.
     mutable std::atomic<size_t> dirty_flag = 1;
@@ -199,7 +202,8 @@ class RegionRaftCommandDelegate : public Region, private boost::noncopyable
 {
 public:
     /// Only after the task mutex of KVStore is locked, region can apply raft command.
-    void onCommand(enginepb::CommandRequest &&, const KVStore &, RegionTable *, RaftCommandResult &);
+    void handleAdminRaftCmd(const raft_cmdpb::AdminRequest &, const raft_cmdpb::AdminResponse &, UInt64, UInt64, const KVStore &,
+        RegionTable &, RaftCommandResult &);
     const RegionRangeKeys & getRange();
     UInt64 appliedIndex();
 
@@ -210,12 +214,10 @@ private:
         const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
     void execChangePeer(
         const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
-    void execCompactLog(
-        const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
     void execPrepareMerge(
         const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
     RegionID execCommitMerge(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index,
-        const UInt64 term, const KVStore & kvstore, RegionTable * region_table);
+        const UInt64 term, const KVStore & kvstore, RegionTable & region_table);
     void execRollbackMerge(
         const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
 };

@@ -11,6 +11,7 @@
 #include <pcg_random.hpp>
 
 #include <Common/Macros.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/escapeForFileName.h>
 #include <Common/setThreadName.h>
 #include <Common/Stopwatch.h>
@@ -21,12 +22,15 @@
 #include <Storages/CompressionSettingsSelector.h>
 #include <Storages/IStorage.h>
 #include <Storages/MarkCache.h>
+#include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/MergeTree/MergeList.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
+#include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/SchemaSyncService.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/PartPathSelector.h>
+#include <Storages/PathPool.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/RuntimeComponentsFactory.h>
@@ -51,7 +55,6 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
-#include <Raft/RaftService.h>
 
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/ZooKeeper/ZooKeeper.h>
@@ -119,6 +122,7 @@ struct ContextShared
     String tmp_path;                                        /// The path to the temporary files that occur when processing the request.
     String flags_path;                                      /// Path to the directory with some control flags for server maintenance.
     String user_files_path;                                 /// Path to the directory with user provided files, usable by 'file' table function.
+    PathPool extra_paths;                                   /// The extra data directories. Some Storage Engine like DeltaMerge will store the main data in them if specified.
     ConfigurationPtr config;                                /// Global configuration settings.
 
     Databases databases;                                    /// List of databases and tables in them.
@@ -133,14 +137,15 @@ struct ContextShared
     mutable UncompressedCachePtr uncompressed_cache;        /// The cache of decompressed blocks.
     mutable PersistedCachePtr persisted_cache;              /// The persisted cache of compressed blocks written in fast(er) disk device.
     mutable DBGInvoker dbg_invoker;                         /// Execute inner functions, debug only.
-    mutable TMTContextPtr tmt_context;
     mutable MarkCachePtr mark_cache;                        /// Cache of marks in compressed files.
+    mutable DM::MinMaxIndexCachePtr minmax_index_cache;     /// Cache of minmax index in compressed files.
     ProcessList process_list;                               /// Executing queries at the moment.
     MergeList merge_list;                                   /// The list of executable merge (for (Replicated)?MergeTree)
     ViewDependencies view_dependencies;                     /// Current dependencies
     ConfigurationPtr users_config;                          /// Config with the users, profiles and quotas sections.
     InterserverIOHandler interserver_io_handler;            /// Handler for interserver communication.
     BackgroundProcessingPoolPtr background_pool;            /// The thread pool for the background work performed by the tables.
+    mutable TMTContextPtr tmt_context;                      /// Context of TiFlash. Note that this should be free before background_pool.
     MultiVersion<Macros> macros;                            /// Substitutions extracted from config.
     std::unique_ptr<Compiler> compiler;                     /// Used for dynamic compilation of queries' parts if it necessary.
     std::shared_ptr<DDLWorker> ddl_worker;                  /// Process ddl commands from zk.
@@ -151,9 +156,9 @@ struct ContextShared
     String format_schema_path;                              /// Path to a directory that contains schema files used by input formats.
 
     SharedQueriesPtr shared_queries;                        /// The cache of shared queries.
-    RaftServicePtr raft_service;                            /// Raft service instance.
     SchemaSyncServicePtr schema_sync_service;               /// Schema sync service instance.
     PartPathSelectorPtr part_path_selector_ptr;             /// PartPathSelector service instance.
+    TiFlashMetricsPtr tiflash_metrics;                      /// TiFlash metrics registry.
 
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
@@ -505,6 +510,12 @@ String Context::getUserFilesPath() const
     return shared->user_files_path;
 }
 
+const PathPool & Context::getExtraPaths() const
+{
+    auto lock = getLock();
+    return shared->extra_paths;
+}
+
 void Context::setPath(const String & path)
 {
     auto lock = getLock();
@@ -519,6 +530,9 @@ void Context::setPath(const String & path)
 
     if (shared->user_files_path.empty())
         shared->user_files_path = shared->path + "user_files/";
+
+    if (shared->extra_paths.listPaths().empty())
+        shared->extra_paths = PathPool({PathPool::IdAndPath(0, shared->path + "data/")});
 }
 
 void Context::setTemporaryPath(const String & path)
@@ -537,6 +551,12 @@ void Context::setUserFilesPath(const String & path)
 {
     auto lock = getLock();
     shared->user_files_path = path;
+}
+
+void Context::setExtraPaths(const std::vector<std::pair<UInt32, String>> & extra_paths_)
+{
+    auto lock = getLock();
+    shared->extra_paths = PathPool(extra_paths_);
 }
 
 void Context::setConfig(const ConfigurationPtr & config)
@@ -1354,6 +1374,30 @@ void Context::dropMarkCache() const
 }
 
 
+void Context::setMinMaxIndexCache(size_t cache_size_in_bytes)
+{
+    auto lock = getLock();
+
+    if (shared->minmax_index_cache)
+        throw Exception("Minmax index cache has been already created.", ErrorCodes::LOGICAL_ERROR);
+
+    shared->minmax_index_cache = std::make_shared<DM::MinMaxIndexCache>(cache_size_in_bytes, std::chrono::seconds(settings.mark_cache_min_lifetime));
+}
+
+DM::MinMaxIndexCachePtr Context::getMinMaxIndexCache() const
+{
+    auto lock = getLock();
+    return shared->minmax_index_cache;
+}
+
+void Context::dropMinMaxIndexCache() const
+{
+    auto lock = getLock();
+    if (shared->minmax_index_cache)
+        shared->minmax_index_cache->reset();
+}
+
+
 void Context::dropCaches() const
 {
     auto lock = getLock();
@@ -1389,33 +1433,18 @@ DDLWorker & Context::getDDLWorker() const
     return *shared->ddl_worker;
 }
 
-void Context::initializeRaftService()
-{
-    auto lock = getLock();
-    if (shared->raft_service)
-        throw Exception("Raft Service has already been initialized.", ErrorCodes::LOGICAL_ERROR);
-    shared->raft_service = std::make_shared<RaftService>(*this);
-}
-
-void Context::shutdownRaftService()
-{
-    auto lock = getLock();
-    if (!shared->raft_service)
-        return;
-    shared->raft_service.reset();
-}
-
 void Context::createTMTContext(const std::vector<std::string> & pd_addrs,
                                const std::string & learner_key,
                                const std::string & learner_value,
                                const std::unordered_set<std::string> & ignore_databases,
                                const std::string & kvstore_path,
-                               const std::string & flash_service_address)
+                               ::TiDB::StorageEngine engine,
+                               bool disable_bg_flush)
 {
     auto lock = getLock();
     if (shared->tmt_context)
         throw Exception("TMTContext has already existed", ErrorCodes::LOGICAL_ERROR);
-    shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, flash_service_address);
+    shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, engine, disable_bg_flush);
 }
 
 void Context::initializePartPathSelector(std::vector<std::string> && all_normal_path, std::vector<std::string> && all_fast_path)
@@ -1434,14 +1463,6 @@ PartPathSelector & Context::getPartPathSelector()
     return *shared->part_path_selector_ptr;
 }
 
-RaftService & Context::getRaftService()
-{
-    auto lock = getLock();
-    if (!shared->raft_service)
-        throw Exception("Raft Service is not initialized.", ErrorCodes::LOGICAL_ERROR);
-    return *shared->raft_service;
-}
-
 void Context::initializeSchemaSyncService()
 {
     auto lock = getLock();
@@ -1454,6 +1475,20 @@ SchemaSyncServicePtr & Context::getSchemaSyncService()
 {
     auto lock = getLock();
     return shared->schema_sync_service;
+}
+
+void Context::initializeTiFlashMetrics()
+{
+    auto lock = getLock();
+    if (shared->tiflash_metrics)
+        throw Exception("TiFlash metrics has already been initialized.", ErrorCodes::LOGICAL_ERROR);
+    shared->tiflash_metrics = std::make_shared<TiFlashMetrics>();
+}
+
+TiFlashMetricsPtr Context::getTiFlashMetrics()
+{
+    auto lock = getLock();
+    return shared->tiflash_metrics;
 }
 
 zkutil::ZooKeeperPtr Context::getZooKeeper() const

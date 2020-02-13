@@ -14,26 +14,26 @@ class StorageMergeTree;
 class Region;
 class TMTContext;
 
+class IManageableStorage;
+using ManageableStoragePtr = std::shared_ptr<IManageableStorage>;
+
 using ColumnIds = google::dense_hash_set<ColumnID>;
 using ColumnIdToIndex = google::dense_hash_map<ColumnID, size_t>;
-constexpr ColumnID EmptyColumnID = InvalidColumnID - 1;
+constexpr ColumnID EmptyColumnID = TiDBPkColumnID - 1;
 constexpr ColumnID DeleteColumnID = EmptyColumnID - 1;
 
 // should keep the same way tidb does.
 Field GenDefaultField(const TiDB::ColumnInfo & col_info);
 
-struct ValueDecodeHelper
+struct RowPreDecoder
 {
     const TiDB::TableInfo & table_info;
-    const ColumnIdToIndex & schema_all_column_ids;
-    void forceDecodeTiKVValue(const TiKVValue & value);
-
-private:
-    bool forceDecodeTiKVValue(DecodedFields & decoded_fields, DecodedFields & unknown);
+    const ColumnIdToIndex & column_lut;
+    void preDecodeRow(const TiKVValue & value);
 };
 
 using CFDataPreDecodeQueue = std::deque<std::shared_ptr<const TiKVValue>>;
-void tryPreDecodeTiKVValue(std::optional<CFDataPreDecodeQueue> && values, StorageMergeTree & storage);
+void tryPreDecodeTiKVValue(std::optional<CFDataPreDecodeQueue> && values, const ManageableStoragePtr & storage);
 DecodedFields::const_iterator findByColumnID(const Int64 col_id, const DecodedFields & row);
 
 } // namespace DB

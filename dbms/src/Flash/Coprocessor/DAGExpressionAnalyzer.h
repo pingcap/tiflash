@@ -38,7 +38,7 @@ private:
 
 public:
     DAGExpressionAnalyzer(std::vector<NameAndTypePair> && source_columns_, const Context & context_);
-    void appendWhere(ExpressionActionsChain & chain, const tipb::Selection & sel, String & filter_column_name);
+    void appendWhere(ExpressionActionsChain & chain, const std::vector<const tipb::Expr *> & conditions, String & filter_column_name);
     void appendOrderBy(ExpressionActionsChain & chain, const tipb::TopN & topN, Strings & order_column_names);
     void appendAggregation(ExpressionActionsChain & chain, const tipb::Aggregation & agg, Names & aggregate_keys,
         AggregateDescriptions & aggregate_descriptions);
@@ -63,7 +63,7 @@ public:
     String getActionsForInOperator(const tipb::Expr & expr, ExpressionActionsPtr & actions);
     const std::vector<NameAndTypePair> & getCurrentInputColumns();
     void makeExplicitSet(const tipb::Expr & expr, const Block & sample_block, bool create_ordered_set, const String & left_arg_name);
-    void makeExplicitSetForIndex(const tipb::Expr & expr, const TMTStoragePtr & storage);
+    void makeExplicitSetForIndex(const tipb::Expr & expr, const ManageableStoragePtr & storage);
     String applyFunction(const String & func_name, const Names & arg_names, ExpressionActionsPtr & actions);
     Int32 getImplicitCastCount() { return implicit_cast_count; };
     bool appendTimeZoneCastsAfterTS(ExpressionActionsChain & chain, std::vector<bool> is_ts_column, const tipb::DAGRequest & rqst);

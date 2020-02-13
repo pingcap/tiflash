@@ -22,7 +22,10 @@ using ColumnID = Int64;
 
 enum : ColumnID
 {
-    InvalidColumnID = -1
+    // Prevent conflict with TiDB.
+    TiDBPkColumnID = -1,
+    VersionColumnID = -1024,
+    DelMarkColumnID = -1025,
 };
 
 using HandleID = Int64;

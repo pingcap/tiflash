@@ -15,6 +15,8 @@ UNFINISHED_1_PREFIX = '\t'
 UNFINISHED_2_PREFIX = '   '
 WORD_PH = '{#WORD}'
 
+verbose = False
+
 class Executor:
     def __init__(self, dbc):
         self.dbc = dbc
@@ -82,6 +84,51 @@ def compare_line(line, template):
             template = template[i + len(WORD_PH):]
             line = line[i + j:]
 
+class MySQLCompare:
+    @staticmethod
+    def parse_output_line(line):
+        words = [w.strip() for w in line.split("\t") if w.strip() != ""]
+        return "@".join(words)
+    @staticmethod
+    def parse_mysql_line(line):
+        words = [w.strip() for w in line.split("|") if w.strip() != ""]
+        return "@".join(words)
+    @staticmethod
+    def parse_mysql_outputs(outputs):
+        results = set()
+        for output_line in outputs:
+            parsed_line = MySQLCompare.parse_output_line(output_line)
+            while parsed_line in results:
+                parsed_line += '-extra'
+            results.add(parsed_line)
+        return results
+    @staticmethod
+    def parse_excepted_outputs(outputs):
+        results = set()
+        for output_line in outputs:
+            if not output_line.startswith('+'):
+                parsed_line = MySQLCompare.parse_mysql_line(output_line)
+                while parsed_line in results:
+                    parsed_line += '-extra'
+                results.add(parsed_line)
+        return results
+    @staticmethod
+    def matched(outputs, matches):
+        if len(outputs) == 0 and len(matches) == 0:
+            return True
+        is_table_parts = len(matches) > 0 and matches[0].startswith('+')
+        if is_table_parts:
+            a = MySQLCompare.parse_mysql_outputs(outputs)
+            b = MySQLCompare.parse_excepted_outputs(matches)
+            return a == b
+        else:
+            if len(outputs) != len(matches):
+                return False
+            for i in range(0, len(outputs)):
+                if not compare_line(outputs[i], matches[i]):
+                    return False
+            return True
+
 def matched(outputs, matches, fuzz):
     if len(outputs) == 0 and len(matches) == 0:
         return True
@@ -107,15 +154,25 @@ class Matcher:
         self.query = None
         self.outputs = None
         self.matches = []
+        self.is_mysql = False
 
     def on_line(self, line):
         if line.startswith(SLEEP_PREFIX):
             time.sleep(float(line[len(SLEEP_PREFIX):]))
         elif line.startswith(CMD_PREFIX_TIDB):
-            self.executor_tidb.exe(line[len(CMD_PREFIX_TIDB):])
-        elif line.startswith(CMD_PREFIX) or line.startswith(CMD_PREFIX_ALTER):
-            if self.outputs != None and not matched(self.outputs, self.matches, self.fuzz):
+            if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False
+            self.is_mysql = True 
+            self.query = line[len(CMD_PREFIX_TIDB):]
+            self.outputs = self.executor_tidb.exe(self.query)
+            self.outputs = map(lambda x: x.strip(), self.outputs)
+            self.outputs = filter(lambda x: len(x) != 0, self.outputs)
+            self.matches = []
+        elif line.startswith(CMD_PREFIX) or line.startswith(CMD_PREFIX_ALTER):
+            if verbose: print 'running', line
+            if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
+                return False
+            self.is_mysql = False
             self.query = line[len(CMD_PREFIX):]
             self.outputs = self.executor.exe(self.query)
             self.outputs = map(lambda x: x.strip(), self.outputs)
@@ -157,14 +214,18 @@ def parse_exe_match(path, executor, executor_tidb, fuzz):
         return True, matcher, todos
 
 def run():
-    if len(sys.argv) != 5:
-        print 'usage: <bin> tiflash-client-cmd test-file-path fuzz-check tidb-client-cmd'
+    if len(sys.argv) not in (5, 6):
+        print 'usage: <bin> tiflash-client-cmd test-file-path fuzz-check tidb-client-cmd [verbose]'
         sys.exit(1)
 
     dbc = sys.argv[1]
     path = sys.argv[2]
     fuzz = (sys.argv[3] == 'true')
     mysql_client = sys.argv[4]
+    global verbose
+    if len(sys.argv) == 6:
+        verbose = (sys.argv[5] == 'true')
+    if verbose: print 'parsing file: `{}`'.format(path)
 
     matched, matcher, todos = parse_exe_match(path, Executor(dbc), Executor(mysql_client), fuzz)
 

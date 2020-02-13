@@ -1,5 +1,3 @@
-#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
-
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Columns/ColumnSet.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -7,6 +5,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/FieldToDataType.h>
 #include <Flash/Coprocessor/DAGCodec.h>
+#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
@@ -15,7 +14,7 @@
 #include <Interpreters/convertFieldToType.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/StorageMergeTree.h>
-#include <Storages/Transaction/Codec.h>
+#include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/TypeMapping.h>
 
 namespace DB
@@ -128,19 +127,15 @@ String DAGExpressionAnalyzer::applyFunction(const String & func_name, const Name
     return result_name;
 }
 
-void DAGExpressionAnalyzer::appendWhere(ExpressionActionsChain & chain, const tipb::Selection & sel, String & filter_column_name)
+void DAGExpressionAnalyzer::appendWhere(
+    ExpressionActionsChain & chain, const std::vector<const tipb::Expr *> & conditions, String & filter_column_name)
 {
-    if (sel.conditions_size() == 0)
-    {
-        throw Exception("Selection executor without condition exprs", ErrorCodes::COP_BAD_DAG_REQUEST);
-    }
-
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsChain::Step & last_step = chain.steps.back();
     Names arg_names;
-    for (auto & condition : sel.conditions())
+    for (const auto * condition : conditions)
     {
-        arg_names.push_back(getActions(condition, last_step.actions));
+        arg_names.push_back(getActions(*condition, last_step.actions));
     }
     if (arg_names.size() == 1)
     {
@@ -405,7 +400,7 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(const tipb::Expr & expr, Expres
     return expr_name;
 }
 
-void DAGExpressionAnalyzer::makeExplicitSetForIndex(const tipb::Expr & expr, const TMTStoragePtr & storage)
+void DAGExpressionAnalyzer::makeExplicitSetForIndex(const tipb::Expr & expr, const ManageableStoragePtr & storage)
 {
     for (auto & child : expr.children())
     {

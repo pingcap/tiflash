@@ -14,7 +14,7 @@ namespace DB
 {
 namespace ErrorCodes
 {
-extern const int THEFLASH_BAD_REQUEST;
+extern const int TIFLASH_BAD_REQUEST;
 }
 
 struct SharedQuery
@@ -98,7 +98,7 @@ public:
                 String msg = "SharedQueries: more clients than they claimed! expected " + toString(clients) + ", got "
                     + toString(query.connected_clients);
                 LOG_WARNING(log, msg);
-                throw Exception(msg, ErrorCodes::THEFLASH_BAD_REQUEST);
+                throw Exception(msg, ErrorCodes::TIFLASH_BAD_REQUEST);
             }
             query.connected_clients++;
 

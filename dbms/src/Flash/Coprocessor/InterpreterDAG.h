@@ -13,7 +13,6 @@
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/IInterpreter.h>
-#include <Raft/RaftService.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/TMTStorages.h>
@@ -22,6 +21,8 @@ namespace DB
 {
 
 class Context;
+class Region;
+using RegionPtr = std::shared_ptr<Region>;
 
 /** build ch plan from dag request: dag executors -> ch plan
   */
@@ -99,12 +100,17 @@ private:
     size_t max_streams = 1;
 
     /// Table from where to read data, if not subquery.
-    TMTStoragePtr storage;
+    ManageableStoragePtr storage;
     TableStructureReadLockPtr table_lock;
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
     const bool keep_session_timezone_info;
+
+    bool filter_on_handle = false;
+    tipb::Expr handle_filter_expr;
+    Int32 handle_col_id = -1;
+    std::vector<const tipb::Expr *> conditions;
 
     Poco::Logger * log;
 };
