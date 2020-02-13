@@ -422,7 +422,6 @@ void StorageMergeTree::alterInternal(
         }
     };
 
-    context.getDatabase(database_name)->alterTable(context, table_name, new_columns, storage_modifier);
     setColumns(std::move(new_columns));
     if (table_info)
         setTableInfo(table_info->get());
@@ -434,12 +433,15 @@ void StorageMergeTree::alterInternal(
     /// Reinitialize primary key because primary key column types might have changed.
     data.initPrimaryKey();
 
+
+    for (auto & transaction : transactions)
+        transaction->commit();
+
     // The process of data change and meta change is not atomic, so we must make sure change data firstly
     // and change meta secondly. If server crashes during or after changing data, we must fix the schema after restart.
     fiu_exit_on("crash_after_change_data");
 
-    for (auto & transaction : transactions)
-        transaction->commit();
+    context.getDatabase(database_name)->alterTable(context, table_name, new_columns, storage_modifier);
 
     /// Columns sizes could be changed
     data.recalculateColumnSizes();
