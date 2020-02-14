@@ -67,9 +67,9 @@ public:
     void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, const SnapshotDataView & lock_buff,
         const SnapshotDataView & write_buff, const SnapshotDataView & default_buff, uint64_t index, uint64_t term, TMTContext & tmt);
     bool tryApplySnapshot(RegionPtr new_region, Context & context, bool try_flush_region);
-    size_t totalSize();
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
     void setRegionCompactLogPeriod(Seconds period);
+    size_t totalSize();
 
 private:
     friend class MockTiDB;
