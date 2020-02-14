@@ -69,6 +69,7 @@ public:
     bool tryApplySnapshot(RegionPtr new_region, Context & context, bool try_flush_region);
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
     void setRegionCompactLogPeriod(Seconds period);
+    size_t totalSize();
 
 private:
     friend class MockTiDB;
