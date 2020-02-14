@@ -43,6 +43,7 @@ namespace ErrorCodes
     extern const int INCORRECT_DATA;
     extern const int INCORRECT_FILE_NAME;
     extern const int CANNOT_ASSIGN_OPTIMIZE;
+    extern const int FAIL_POINT_ERROR;
 }
 
 
@@ -438,7 +439,7 @@ void StorageMergeTree::alterInternal(
 
     // The process of data change and meta change is not atomic, so we must make sure change data firstly
     // and change meta secondly. If server crashes during or after changing data, we must fix the schema after restart.
-    fiu_exit_on(crash_between_alter_data_and_meta);
+    FAIL_POINT_THROW_ON(crash_between_alter_data_and_meta);
 
     context.getDatabase(database_name)->alterTable(context, table_name, new_columns, storage_modifier);
 
