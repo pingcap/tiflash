@@ -157,7 +157,7 @@ void KVStore::tryPersist(const RegionID region_id)
     }
 }
 
-size_t KVStore::storeSize() {
+size_t KVStore::totalSize() {
     size_t ret = 0;
     auto manage_lock = genRegionManageLock();
     for (auto it = regions().begin(); it != regions().end(); ++it)
