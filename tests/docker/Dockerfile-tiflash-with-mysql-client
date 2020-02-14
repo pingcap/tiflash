@@ -1,4 +1,0 @@
-ARG TAG=master
-FROM hub.pingcap.net/tiflash/tics:${TAG}
-RUN yum update -y
-RUN yum install mysql -y

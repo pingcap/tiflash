@@ -1,4 +1,4 @@
-FROM ubuntu:16.04
+FROM centos:centos7.6.1810
 
 USER root
 WORKDIR /root/
@@ -7,9 +7,6 @@ ENV HOME /root/
 ENV TZ Asia/Shanghai
 ENV LD_LIBRARY_PATH /tiflash
 
-RUN apt update && apt install -y tzdata python && rm -rf /var/lib/apt/lists/*
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-COPY tiflash /tiflash
-
-ENTRYPOINT ["/tiflash/tiflash", "server"]
+RUN yum install mysql -y && yum clean all
