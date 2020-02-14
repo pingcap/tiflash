@@ -1,4 +1,5 @@
 #include <optional>
+#include <Common/FailPoint.h>
 #include <Common/FieldVisitors.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/MergeTree/MergeTreeBlockOutputStream.h>
@@ -30,8 +31,6 @@
 #include <Poco/File.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
-
-#include <fiu-local.h>
 
 
 namespace DB
@@ -439,7 +438,7 @@ void StorageMergeTree::alterInternal(
 
     // The process of data change and meta change is not atomic, so we must make sure change data firstly
     // and change meta secondly. If server crashes during or after changing data, we must fix the schema after restart.
-    fiu_exit_on("crash_after_change_data");
+    fiu_exit_on(crash_between_alter_data_and_meta);
 
     context.getDatabase(database_name)->alterTable(context, table_name, new_columns, storage_modifier);
 

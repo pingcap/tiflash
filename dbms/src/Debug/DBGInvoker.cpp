@@ -10,7 +10,7 @@
 #include <Debug/dbgFuncMockTiDBTable.h>
 #include <Debug/dbgFuncRegion.h>
 #include <Debug/dbgFuncSchema.h>
-#include <Debug/dbgFuncInjectFault.h>
+#include <Debug/dbgFuncFailPoint.h>
 #include <Parsers/ASTLiteral.h>
 
 namespace DB
@@ -83,8 +83,8 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("region_commit_merge", MockRaftCommand::dbgFuncCommitMerge);
     regSchemalessFunc("region_rollback_merge", MockRaftCommand::dbgFuncRollbackMerge);
 
-    regSchemalessFunc("inject_fault_init", FaultInject::dbgFaultInjectInit);
-    regSchemalessFunc("inject_fault_enable", FaultInject::dbgFaultInjectEnable);
+    regSchemalessFunc("init_fail_point", DbgFailPointFunc::dbgInitFailPoint);
+    regSchemalessFunc("enable_fail_point", DbgFailPointFunc::dbgEnableFailPoint);
 
     regSchemafulFunc("dag", dbgFuncDAG);
     regSchemafulFunc("mock_dag", dbgFuncMockDAG);
