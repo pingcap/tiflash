@@ -13,11 +13,27 @@ SLEEP 15
 
 >> DBGInvoke __try_flush()
 >> DBGInvoke __init_fail_point()
->> DBGInvoke __enable_fail_point(crash_between_drop_data_and_meta)
+>> DBGInvoke __enable_fail_point(exception_between_drop_data_and_meta)
 
 mysql> truncate table test.t ;
 
-SLEEP 30
+SLEEP 15
+
+mysql> insert into test.t values (1, 1)
+mysql> insert into test.t values (1, 2)
+mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t;
+
++---+---+
+| a | b |
++---+---+
+| 1 | 1 |
+| 1 | 2 |
++---+---+
+
+>> DBGInvoke __enable_fail_point(exception_drop_table_remove_meta)
+mysql> truncate table test.t ;
+
+SLEEP 15
 
 mysql> insert into test.t values (1, 1)
 mysql> insert into test.t values (1, 2)

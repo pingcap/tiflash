@@ -7,6 +7,7 @@
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Parsers/ASTDropQuery.h>
 #include <Storages/IStorage.h>
+#include <Storages/StorageMergeTree.h>
 #include <Common/escapeForFileName.h>
 #include <Common/typeid_cast.h>
 
@@ -139,12 +140,16 @@ BlockIO InterpreterDropQuery::execute()
             /// Delete table metdata and table itself from memory
             database->removeTable(context, current_table_name);
 
-            FAIL_POINT_THROW_ON(crash_between_drop_data_and_meta);
+            FAIL_POINT_THROW_ON(exception_between_drop_data_and_meta);
 
             /// Delete table data
             table.first->drop();
 
             table.first->is_dropped = true;
+
+            // drop is complete, then clean tmt context;
+            if (auto* storage = static_cast<StorageMergeTree*>(table.first.get()))
+                storage->removeFromTMTContext();
 
             String database_data_path = database->getDataPath();
 

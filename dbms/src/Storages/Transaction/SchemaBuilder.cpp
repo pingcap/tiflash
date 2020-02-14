@@ -877,6 +877,7 @@ void SchemaBuilder<Getter>::syncAllSchema()
         std::vector<TableInfoPtr> tables = getter.listTables(db->id);
         for (const auto & table : tables)
         {
+            LOG_DEBUG(log, "collect table: " << table->name << " with id "<< table->id);
             all_tables.emplace_back(table, db);
             if (table->isLogicalPartitionTable())
             {

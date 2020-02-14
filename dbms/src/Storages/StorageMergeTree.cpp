@@ -112,15 +112,19 @@ void StorageMergeTree::shutdown()
     merger.merges_blocker.cancelForever();
     if (merge_task_handle)
         background_pool.removeTask(merge_task_handle);
+}
 
+void StorageMergeTree::removeFromTMTContext()
+{
+    // The drop table operation may be failed and retry.
+    // Before the storage is dropped successfully, we should not drop it from TMT.
     if (data.merging_params.mode == MergeTreeData::MergingParams::Txn)
     {
         TMTContext & tmt_context = context.getTMTContext();
         tmt_context.getStorages().remove(data.table_info->id);
         tmt_context.getRegionTable().removeTable(data.table_info->id);
     }
-}
-
+};
 
 StorageMergeTree::~StorageMergeTree()
 {
@@ -439,7 +443,7 @@ void StorageMergeTree::alterInternal(
 
     // The process of data change and meta change is not atomic, so we must make sure change data firstly
     // and change meta secondly. If server crashes during or after changing data, we must fix the schema after restart.
-    FAIL_POINT_THROW_ON(crash_between_alter_data_and_meta);
+    FAIL_POINT_THROW_ON(exception_between_alter_data_and_meta);
 
     context.getDatabase(database_name)->alterTable(context, table_name, new_columns, storage_modifier);
 

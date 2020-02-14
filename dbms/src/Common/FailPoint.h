@@ -15,13 +15,14 @@ extern const int FAIL_POINT_ERROR;
 
 #define FAIL_POINT_DEFINE(name) static constexpr char name[] = #name "";
 
-#define FAIL_POINT_ENABLE(trigger, name) else if (trigger == name) fiu_enable(name, 1, nullptr, 0);
+#define FAIL_POINT_ENABLE(trigger, name) else if (trigger == name) fiu_enable(name, 1, nullptr, FIU_ONETIME);
 
-FAIL_POINT_DEFINE(crash_between_drop_data_and_meta)
-FAIL_POINT_DEFINE(crash_between_alter_data_and_meta)
+FAIL_POINT_DEFINE(exception_between_drop_data_and_meta)
+FAIL_POINT_DEFINE(exception_between_alter_data_and_meta)
+FAIL_POINT_DEFINE(exception_drop_table_remove_meta)
 
 #define FAIL_POINT_THROW_ON(fail_point) \
-    fiu_do_on(fail_point, throw Exception("Fail point " #fail_point "is triggered.", ErrorCodes::FAIL_POINT_ERROR);)
+    fiu_do_on(fail_point, throw Exception("Fail point " #fail_point " is triggered.", ErrorCodes::FAIL_POINT_ERROR);)
 
 class FailPointHelper
 {
@@ -29,8 +30,9 @@ public:
     static void enableFailPoint(const String & fail_point_name)
     {
         if (false) {}
-        FAIL_POINT_ENABLE(fail_point_name, crash_between_alter_data_and_meta)
-        FAIL_POINT_ENABLE(fail_point_name, crash_between_drop_data_and_meta)
+        FAIL_POINT_ENABLE(fail_point_name, exception_between_alter_data_and_meta)
+        FAIL_POINT_ENABLE(fail_point_name, exception_between_drop_data_and_meta)
+        FAIL_POINT_ENABLE(fail_point_name, exception_drop_table_remove_meta)
         else throw Exception("Cannot find fail point " + fail_point_name, ErrorCodes::FAIL_POINT_ERROR);
     }
 };
