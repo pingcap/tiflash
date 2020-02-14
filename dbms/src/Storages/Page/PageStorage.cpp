@@ -121,27 +121,25 @@ PageStorage::PageStorage(String name, const String & storage_path_, const Config
 #ifdef DELTA_VERSION_SET
     // Remove old checkpoints and archieve obsolete PageFiles that have not been archieved yet during gc for some reason.
     auto checkpoint_file = PageStorage::tryGetCheckpoint(storage_path, page_file_log, true);
+    if (checkpoint_file)
     {
         std::set<PageFile, PageFile::Comparator> page_files_to_archieve;
-        if (checkpoint_file)
+        for (auto itr = page_files.begin(); itr != page_files.end();)
         {
-            for (auto itr = page_files.begin(); itr != page_files.end();)
+            if (itr->fileIdLevel() < checkpoint_file->fileIdLevel() //
+                || itr->fileIdLevel() == checkpoint_file->fileIdLevel())
             {
-                if (itr->fileIdLevel() < checkpoint_file->fileIdLevel() //
-                    || itr->fileIdLevel() == checkpoint_file->fileIdLevel())
-                {
-                    page_files_to_archieve.insert(*itr);
-                    itr = page_files.erase(itr);
-                }
-                else
-                {
-                    itr++;
-                }
+                page_files_to_archieve.insert(*itr);
+                itr = page_files.erase(itr);
             }
-
-            archievePageFiles(page_files_to_archieve);
-            page_files.insert(*checkpoint_file);
+            else
+            {
+                itr++;
+            }
         }
+
+        archievePageFiles(page_files_to_archieve);
+        page_files.insert(*checkpoint_file);
     }
 
     for (auto & page_file : page_files)
@@ -759,18 +757,23 @@ void PageStorage::prepareSnapshotWriteBatch(const SnapshotPtr snapshot, WriteBat
 
 void PageStorage::archievePageFiles(const std::set<PageFile, PageFile::Comparator> & page_files)
 {
-    Poco::File archieve_dir(".archieve");
+    if (page_files.empty())
+        return;
+
+    const String archieve_path = storage_path + "/.archieve/";
+    Poco::File   archieve_dir(archieve_path);
     if (!archieve_dir.exists())
         archieve_dir.createDirectory();
 
     for (auto & page_file : page_files)
     {
         Poco::Path path(page_file.folderPath());
-        auto       dest = ".archieve/" + path.getBaseName();
+        auto       dest = archieve_path + path.getBaseName();
         Poco::File file(path);
         if (file.exists())
             file.moveTo(dest);
     }
+    LOG_INFO(log, storage_name << " archieve " + DB::toString(page_files.size()) + " to " + archieve_path);
 }
 
 PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
