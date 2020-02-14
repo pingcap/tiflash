@@ -6,7 +6,7 @@ SLEEP 15
 
 mysql> insert into test.t values (1, 1, 1, 1, 1, 1);
 mysql> insert into test.t values (1, 2, 3, NULL, NULL, 1);
-mysql> alter table test.t add primary key new_pk(a,b,c) USING RTREE;
+mysql> alter table test.t add primary key new_pk(a,b,c);
 
 SLEEP 15
 
