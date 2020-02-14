@@ -20,6 +20,7 @@ public:
         static Context context = DB::Context::createGlobal();
         context.setPath(getTemporaryPath());
         context.setGlobalContext(context);
+        context.initializeTiFlashMetrics();
         try
         {
             context.getTMTContext();
