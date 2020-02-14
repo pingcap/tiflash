@@ -74,7 +74,7 @@ BackgroundService::BackgroundService(TMTContext & tmt_)
                 if (region)
                     tmt.getRegionTable().tryFlushRegion(region, true);
             }
-            GET_METRIC(tmt.getContext().getTiFlashMetrics(), tiflash_kvstore_size).Set(tmt.getKVStore()->totalSize());
+            GET_METRIC(tmt.getContext().getTiFlashMetrics(), tiflash_kvstore_bytes).Set(tmt.getKVStore()->totalSize());
             return ok;
         });
     }
