@@ -15,6 +15,7 @@ docker-compose down
 docker-compose up -d --scale tics0=0 --scale tics-gtest=0 --scale tiflash0=0
 sleep 60
 docker-compose up -d --scale tics0=0 --scale tics-gtest=0 --build
+sleep 10
 docker-compose exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test true'
 docker-compose down
 
