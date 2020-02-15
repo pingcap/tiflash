@@ -1,4 +1,3 @@
-#include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/KVStore.h>
@@ -74,7 +73,6 @@ BackgroundService::BackgroundService(TMTContext & tmt_)
                 if (region)
                     tmt.getRegionTable().tryFlushRegion(region, true);
             }
-            GET_METRIC(tmt.getContext().getTiFlashMetrics(), tiflash_kvstore_bytes).Set(tmt.getKVStore()->totalSize());
             return ok;
         });
     }
