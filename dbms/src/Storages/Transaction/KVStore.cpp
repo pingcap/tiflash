@@ -1,3 +1,5 @@
+#include <chrono>
+
 #include <Interpreters/Context.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/BackgroundService.h>
@@ -7,9 +9,6 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
-
-#include <chrono>
-#include <numeric>
 
 namespace DB
 {
@@ -156,13 +155,6 @@ void KVStore::tryPersist(const RegionID region_id)
         region_persister.persist(*region);
         LOG_INFO(log, "After persisted " << region->toString(false) << ", cache " << region->dataSize() << " bytes");
     }
-}
-
-size_t KVStore::totalSize()
-{
-    auto manage_lock = genRegionManageLock();
-    return std::accumulate(regions().begin(), regions().end(), (size_t)0,
-        [](size_t acc, const std::pair<const RegionID, RegionPtr> & p) { return acc + p.second->dataSize(); });
 }
 
 void KVStore::gcRegionCache(Seconds gc_persist_period)
