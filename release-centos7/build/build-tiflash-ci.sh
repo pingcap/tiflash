@@ -36,10 +36,10 @@ if [ -d "$SRCPATH/contrib/tipb" ]; then
 fi
 
 rm -rf ${SRCPATH}/libs/libtiflash-proxy
-# ln -s /libtiflash-proxy ${SRCPATH}/libs/libtiflash-proxy
-
-# hacked by solotzg. update bin of proxy after pr is merged.
-ln -s /libtiflash-proxy2 ${SRCPATH}/libs/libtiflash-proxy
+mkdir -p ${SRCPATH}/libs/libtiflash-proxy
+curl -o "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" \
+http://fileserver.pingcap.net/download/builds/pingcap/tiflash-proxy/old/libtiflash_proxy.so
+chmod 0731 "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so"
 
 build_dir="$SRCPATH/release-centos7/build-release"
 mkdir -p $build_dir && cd $build_dir
