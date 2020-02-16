@@ -148,7 +148,7 @@ BlockIO InterpreterDropQuery::execute()
             table.first->is_dropped = true;
 
             // drop is complete, then clean tmt context;
-            if (auto* storage = static_cast<StorageMergeTree*>(table.first.get()))
+            if (auto storage = std::static_pointer_cast<StorageMergeTree>(table.first))
                 storage->removeFromTMTContext();
 
             String database_data_path = database->getDataPath();
