@@ -30,7 +30,7 @@ services:
       - ./_env.sh:/tests/_env.sh
     entrypoint: sleep infinity # just wait
   pd0:
-    image: hub.pingcap.net/qa/pd:${TAG:-master}
+    image: hub.pingcap.net/qa/pd:${BRANCH:-master}
     ports:
       - "2379:2379"
     volumes:
@@ -49,7 +49,7 @@ services:
       - --log-file=/log/pd.log
     restart: on-failure
   tikv0:
-    image: hub.pingcap.net/qa/tikv:${TAG:-master}
+    image: hub.pingcap.net/qa/tikv:${BRANCH:-master}
     ports:
       - "20160:20160"
     volumes:
@@ -67,7 +67,7 @@ services:
       - "pd0"
     restart: on-failure
   tidb0:
-    image: hub.pingcap.net/qa/tidb:${TAG:-master}
+    image: hub.pingcap.net/qa/tidb:${BRANCH:-master}
     ports:
       - "4000:4000"
       - "10080:10080"
@@ -84,11 +84,7 @@ services:
     restart: on-failure
   # tiflash0 container is for tests under fullstack-test directory
   tiflash0:
-    build:
-      context: ./
-      dockerfile: Dockerfile-tiflash-with-mysql-client
-      args:
-        TAG: ${TAG:-master}
+    image: hub.pingcap.net/tiflash/tics:${TAG:-master}
     ports:
       - "3930:3930"
       - "9000:9000"
