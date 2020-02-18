@@ -33,6 +33,7 @@ RUN yum makecache \
           urllib3 \
           toml \
           setuptools \
+          etcd3 \
   && cd /prepare-environments \
   && ./install-openssl.sh \
   && ./install-cmake.sh \
