@@ -198,7 +198,7 @@ public:
     /// Get pages' metadata by this method. Will also update file pos.
     /// Call this method after a page file recovered.
     /// if check_page_map_complete is true, do del or ref on non-exist page will throw exception.
-    void readAndSetPageMetas(PageEntriesEdit & edit);
+    void readAndSetPageMetas(PageEntriesEdit & edit, WriteBatch::SequenceID & max_wb_sequence);
 
     /// Rename this page file into formal style.
     void setFormal();

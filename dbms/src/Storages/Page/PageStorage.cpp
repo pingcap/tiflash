@@ -934,8 +934,9 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
         {
             PageFile to_merge_file = PageFile::openPageFileForRead(
                 file_id_level.first, file_id_level.second, storage_path, PageFile::Type::Formal, page_file_log);
-            // Note: This file may not contain any valid page, but valid RefPages which we need to migrate
-            to_merge_file.readAndSetPageMetas(legacy_edit);
+
+            WriteBatch::SequenceID max_wb_sequence = 0;
+            to_merge_file.readAndSetPageMetas(legacy_edit, max_wb_sequence);
 
             auto it = file_valid_pages.find(file_id_level);
             if (it == file_valid_pages.end())
@@ -986,6 +987,7 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
                                   std::make_shared<ReadBufferFromMemory>(page.data.begin(), page.data.size()),
                                   page.data.size());
                 }
+                wb.setSequence(max_wb_sequence);
 
                 gc_file_writer->write(wb, gc_file_edit);
             }

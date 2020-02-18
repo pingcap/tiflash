@@ -148,14 +148,16 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 }
 
 /// Analyze meta file, and return <available meta size, available data size>.
+/// TODO: this is somehow duplicated with `PageFile::MetaMergingReader::moveNext`, we should find a better way.
 std::pair<UInt64, UInt64> analyzeMetaFile( //
-    const String &    path,
-    PageFileId        file_id,
-    UInt32            level,
-    const char *      meta_data,
-    const size_t      meta_data_size,
-    PageEntriesEdit & edit,
-    Logger *          log)
+    const String &           path,
+    PageFileId               file_id,
+    UInt32                   level,
+    const char *             meta_data,
+    const size_t             meta_data_size,
+    PageEntriesEdit &        edit,
+    WriteBatch::SequenceID & max_wb_sequence,
+    Logger *                 log)
 {
     const char * meta_data_end = meta_data + meta_data_size;
 
@@ -191,6 +193,7 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
             throw Exception("Binary version not match, version: " + DB::toString(binary_version) + ", path: " + path,
                             ErrorCodes::LOGICAL_ERROR);
         }
+        max_wb_sequence = std::max(max_wb_sequence, wb_sequence);
 
         // check the checksum of WriteBatch
         const auto wb_bytes_without_checksum = wb_bytes - sizeof(Checksum);
@@ -290,6 +293,7 @@ bool PageFile::MetaMergingReader::hasNext() const
     return (status == Status::Uninitialized) || (status == Status::Opened && meta_file_offset < meta_size);
 }
 
+/// TODO: this is somehow duplicated with `analyzeMetaFile`, we should find a better way.
 void PageFile::MetaMergingReader::moveNext()
 {
     curr_edit.clear();
@@ -668,7 +672,7 @@ PageFile PageFile::openPageFileForRead(PageFileId file_id, UInt32 level, const s
     return PageFile(file_id, level, parent_path, type, false, log);
 }
 
-void PageFile::readAndSetPageMetas(PageEntriesEdit & edit)
+void PageFile::readAndSetPageMetas(PageEntriesEdit & edit, WriteBatch::SequenceID & max_wb_sequence)
 {
     const auto path = metaPath();
     Poco::File file(path);
@@ -691,7 +695,7 @@ void PageFile::readAndSetPageMetas(PageEntriesEdit & edit)
 
     // analyze meta file and update page_entries
     std::tie(this->meta_file_pos, this->data_file_pos)
-        = PageMetaFormat::analyzeMetaFile(folderPath(), file_id, level, meta_data, file_size, edit, log);
+        = PageMetaFormat::analyzeMetaFile(folderPath(), file_id, level, meta_data, file_size, edit, max_wb_sequence, log);
 }
 
 void PageFile::setFormal()
