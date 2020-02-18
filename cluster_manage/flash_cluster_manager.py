@@ -97,9 +97,9 @@ class TiFlashClusterManager:
         elif res == EtcdClient.EtcdKeyNotFound:
             self.state = [TiFlashClusterManager.ROLE_INIT, 0]
             self.try_get_lock()
-        elif res == EtcdClient.EtcdKeyNotEqual:
+        elif res == EtcdClient.EtcdValueNotEqual:
             self.state = [TiFlashClusterManager.ROLE_SLAVE, time.time()]
-            self.logger.debug('Refresh ttl fail (key not equal), become slave, ')
+            self.logger.debug('Refresh ttl fail (key not equal), become slave')
         else:
             assert False
 

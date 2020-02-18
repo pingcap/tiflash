@@ -12,7 +12,7 @@ import util
 class EtcdClient:
     EtcdOK = 0
     EtcdKeyNotFound = 1
-    EtcdKeyNotEqual = 2
+    EtcdValueNotEqual = 2
 
     def try_init_mutex(self, cluster_mutex_value):
         val, meta = self.client.get(define.TIFLASH_CLUSTER_MUTEX_KEY)
@@ -30,7 +30,7 @@ class EtcdClient:
         if val is None:
             return self.EtcdKeyNotFound
         if cluster_mutex_value != str(val, encoding="utf8"):
-            return self.EtcdKeyNotEqual
+            return self.EtcdValueNotEqual
         list(self.client.refresh_lease(meta.lease_id))
         return self.EtcdOK
 
