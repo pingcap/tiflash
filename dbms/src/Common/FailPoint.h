@@ -17,7 +17,7 @@ extern const int FAIL_POINT_ERROR;
 
 #define FAIL_POINT_ENABLE(trigger, name) else if (trigger == name) fiu_enable(name, 1, nullptr, FIU_ONETIME);
 
-FAIL_POINT_REGISTER(exception_between_drop_data_and_meta)
+FAIL_POINT_REGISTER(exception_between_drop_meta_and_data)
 FAIL_POINT_REGISTER(exception_between_alter_data_and_meta)
 FAIL_POINT_REGISTER(exception_drop_table_during_remove_meta)
 
@@ -31,7 +31,7 @@ public:
     {
         if (false) {}
         FAIL_POINT_ENABLE(fail_point_name, exception_between_alter_data_and_meta)
-        FAIL_POINT_ENABLE(fail_point_name, exception_between_drop_data_and_meta)
+        FAIL_POINT_ENABLE(fail_point_name, exception_between_drop_meta_and_data)
         FAIL_POINT_ENABLE(fail_point_name, exception_drop_table_during_remove_meta)
         else throw Exception("Cannot find fail point " + fail_point_name, ErrorCodes::FAIL_POINT_ERROR);
     }

@@ -140,7 +140,7 @@ BlockIO InterpreterDropQuery::execute()
             /// Delete table metdata and table itself from memory
             database->removeTable(context, current_table_name);
 
-            FAIL_POINT_TRIGGER_EXCEPTION(exception_between_drop_data_and_meta);
+            FAIL_POINT_TRIGGER_EXCEPTION(exception_between_drop_meta_and_data);
 
             /// Delete table data
             table.first->drop();
