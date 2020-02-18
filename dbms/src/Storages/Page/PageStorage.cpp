@@ -128,7 +128,6 @@ void PageStorage::restore()
     PageFileSet page_files = PageStorage::listAllPageFiles(storage_path, page_file_log, opt);
     // recover current version from both formal and legacy page files
 
-#ifdef DELTA_VERSION_SET
     // Remove old checkpoints and archieve obsolete PageFiles that have not been archieved yet during gc for some reason.
     auto checkpoint_file = PageStorage::tryGetCheckpoint(storage_path, page_file_log, true);
     if (checkpoint_file)
@@ -195,26 +194,6 @@ void PageStorage::restore()
             reader->setPageFileOffsets();
         }
     }
-
-#else
-    auto snapshot = versioned_page_entries.getSnapshot();
-
-    typename PageEntriesVersionSet::BuilderType builder(snapshot->version(), true, log); // If there are invalid ref-pairs, just ignore that
-    for (auto & page_file : page_files)
-    {
-        PageEntriesEdit edit;
-        const_cast<PageFile &>(page_file).readAndSetPageMetas(edit);
-
-        // Only level 0 is writable.
-        if (page_file.getLevel() == 0)
-        {
-            write_file = page_file;
-        }
-        // apply edit to new version
-        builder.apply(edit);
-    }
-    versioned_page_entries.restore(builder.build());
-#endif
 
     // TODO: resuse some page_files
     // fill write_files
@@ -474,7 +453,6 @@ void PageStorage::traverse(const std::function<void(const Page & page)> & accept
     }
 
     std::map<PageFileIdAndLevel, PageIds> file_and_pages;
-#ifdef DELTA_VERSION_SET
     {
         auto valid_pages_ids = snapshot->version()->validPageIds();
         for (auto page_id : valid_pages_ids)
@@ -485,16 +463,6 @@ void PageStorage::traverse(const std::function<void(const Page & page)> & accept
             file_and_pages[page_entry->fileIdLevel()].emplace_back(page_id);
         }
     }
-#else
-    {
-        for (auto iter = snapshot->version()->cbegin(); iter != snapshot->version()->cend(); ++iter)
-        {
-            const PageId      page_id    = iter.pageId();
-            const PageEntry & page_entry = iter.pageEntry(); // this may throw an exception if ref to non-exist page
-            file_and_pages[page_entry.fileIdLevel()].emplace_back(page_id);
-        }
-    }
-#endif
 
     for (const auto & p : file_and_pages)
     {
@@ -516,7 +484,6 @@ void PageStorage::traversePageEntries( //
     }
 
     // traverse over all Pages or RefPages
-#ifdef DELTA_VERSION_SET
     auto valid_pages_ids = snapshot->version()->validPageIds();
     for (auto page_id : valid_pages_ids)
     {
@@ -526,14 +493,6 @@ void PageStorage::traversePageEntries( //
                             ErrorCodes::LOGICAL_ERROR);
         acceptor(page_id, *page_entry);
     }
-#else
-    for (auto iter = snapshot->version()->cbegin(); iter != snapshot->version()->cend(); ++iter)
-    {
-        const PageId      page_id    = iter.pageId();
-        const PageEntry & page_entry = iter.pageEntry(); // this may throw an exception if ref to non-exist page
-        acceptor(page_id, page_entry);
-    }
-#endif
 }
 
 void PageStorage::registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover)
@@ -602,7 +561,6 @@ bool PageStorage::gc()
         std::map<PageFileIdAndLevel, std::pair<size_t, PageIds>> file_valid_pages;
         {
             // Only scan over normal Pages, excluding RefPages
-#ifdef DELTA_VERSION_SET
             auto valid_normal_page_ids = snapshot->version()->validNormalPageIds();
             for (auto page_id : valid_normal_page_ids)
             {
@@ -615,16 +573,6 @@ bool PageStorage::gc()
                 valid_size += page_entry->size;
                 valid_page_ids_in_file.emplace_back(page_id);
             }
-#else
-            for (auto iter = snapshot->version()->pages_cbegin(); iter != snapshot->version()->pages_cend(); ++iter)
-            {
-                const PageId      page_id                    = iter->first;
-                const PageEntry & page_entry                 = iter->second;
-                auto && [valid_size, valid_page_ids_in_file] = file_valid_pages[page_entry.fileIdLevel()];
-                valid_size += page_entry.size;
-                valid_page_ids_in_file.emplace_back(page_id);
-            }
-#endif
         }
 
         // Select gc candidate files into `merge_files`
