@@ -115,6 +115,7 @@ UInt64 MyTimeBase::toPackedUInt() const
     return (ymd << 17 | hms) << 24 | micro_second;
 }
 
+// TODO this function will be revised once we changed MyTime to CoreTime in TiFlash.
 UInt64 MyTimeBase::toCoreTime() const
 {
     // copied from https://github.com/pingcap/tidb/blob/master/types/time.go

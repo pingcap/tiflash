@@ -32,7 +32,7 @@ public:
             return ret;
         }
         if (fsp > 0)
-            ret |= UInt64(fsp) << 1;
+            ret |= UInt64(fsp) << 1u;
         if (time_type == TiDB::TypeTimestamp)
             ret |= 1u;
         return ret;
