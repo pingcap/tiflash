@@ -432,7 +432,7 @@ void StorageMergeTree::alterInternal(
 
     // The process of data change and meta change is not atomic, so we must make sure change data firstly
     // and change meta secondly. If server crashes during or after changing data, we must fix the schema after restart.
-    FAIL_POINT_THROW_ON(exception_between_alter_data_and_meta);
+    FAIL_POINT_TRIGGER_EXCEPTION(exception_between_alter_data_and_meta);
 
     context.getDatabase(database_name)->alterTable(context, table_name, new_columns, storage_modifier);
     setColumns(std::move(new_columns));

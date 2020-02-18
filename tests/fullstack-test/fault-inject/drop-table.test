@@ -30,7 +30,7 @@ mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t;
 | 1 | 2 |
 +---+---+
 
->> DBGInvoke __enable_fail_point(exception_drop_table_remove_meta)
+>> DBGInvoke __enable_fail_point(exception_drop_table_during_remove_meta)
 mysql> truncate table test.t ;
 
 SLEEP 15

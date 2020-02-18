@@ -328,7 +328,7 @@ void DatabaseOrdinary::removeTable(
 
     try
     {
-        FAIL_POINT_THROW_ON(exception_drop_table_remove_meta);
+        FAIL_POINT_TRIGGER_EXCEPTION(exception_drop_table_during_remove_meta);
         Poco::File(table_metadata_path).remove();
     }
     catch (...)
