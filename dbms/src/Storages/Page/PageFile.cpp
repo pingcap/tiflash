@@ -53,7 +53,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
     WBSize meta_write_bytes = 0;
     size_t data_write_bytes = 0;
 
-    meta_write_bytes += sizeof(WBSize) + sizeof(PageFileVersion) + sizeof(WriteBatch::Version);
+    meta_write_bytes += sizeof(WBSize) + sizeof(PageFileVersion) + sizeof(WriteBatch::SequenceID);
 
     for (const auto & write : wb.getWrites())
     {
@@ -86,7 +86,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 
     PageUtil::put(meta_pos, meta_write_bytes);
     PageUtil::put(meta_pos, PageFile::CURRENT_VERSION);
-    PageUtil::put(meta_pos, wb.getVersion());
+    PageUtil::put(meta_pos, wb.getSequence());
 
     PageOffset page_data_file_off = page_file.getDataFileAppendPos();
     for (const auto & write : wb.getWrites())
@@ -176,19 +176,20 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
             break;
         }
 
-        WriteBatch::Version wb_version = 0;
-        const auto          version    = PageUtil::get<PageFileVersion>(pos);
-        if (version == 1)
+        WriteBatch::SequenceID wb_sequence    = 0;
+        const auto             binary_version = PageUtil::get<PageFileVersion>(pos);
+        if (binary_version == 1)
         {
-            wb_version = 0;
+            wb_sequence = 0;
         }
-        else if (version == PageFile::CURRENT_VERSION)
+        else if (binary_version == PageFile::CURRENT_VERSION)
         {
-            wb_version = PageUtil::get<WriteBatch::Version>(pos);
+            wb_sequence = PageUtil::get<WriteBatch::SequenceID>(pos);
         }
         else
         {
-            throw Exception("Version not match, version: " + DB::toString(version), ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Binary version not match, version: " + DB::toString(binary_version) + ", path: " + path,
+                            ErrorCodes::LOGICAL_ERROR);
         }
 
         // check the checksum of WriteBatch
@@ -292,7 +293,7 @@ bool PageFile::MetaMergingReader::hasNext() const
 void PageFile::MetaMergingReader::moveNext()
 {
     curr_edit.clear();
-    curr_wb_version = 0;
+    curr_write_batch_sequence = 0;
 
     if (status == Status::Uninitialized)
         initialize();
@@ -314,15 +315,15 @@ void PageFile::MetaMergingReader::moveNext()
         return;
     }
 
-    WriteBatch::Version wb_version     = 0;
-    const auto          binary_version = PageUtil::get<PageMetaFormat::PageFileVersion>(pos);
+    WriteBatch::SequenceID wb_sequence    = 0;
+    const auto             binary_version = PageUtil::get<PageMetaFormat::PageFileVersion>(pos);
     if (binary_version == 1)
     {
-        wb_version = 0;
+        wb_sequence = 0;
     }
     else if (binary_version == PageFile::CURRENT_VERSION)
     {
-        wb_version = PageUtil::get<WriteBatch::Version>(pos);
+        wb_sequence = PageUtil::get<WriteBatch::SequenceID>(pos);
     }
     else
     {
@@ -390,8 +391,8 @@ void PageFile::MetaMergingReader::moveNext()
     if (unlikely(pos != wb_start_pos + wb_bytes))
         throw Exception("pos not match", ErrorCodes::LOGICAL_ERROR);
 
-    curr_wb_version  = wb_version;
-    meta_file_offset = pos - meta_buffer;
+    curr_write_batch_sequence = wb_sequence;
+    meta_file_offset          = pos - meta_buffer;
     data_file_offset += curr_wb_data_offset;
 }
 

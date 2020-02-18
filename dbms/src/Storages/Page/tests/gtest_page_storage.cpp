@@ -430,6 +430,7 @@ TEST_F(PageStorage_test, DISABLED_GcMigrateValidRefPages)
 }
 
 TEST_F(PageStorage_test, GcMoveNormalPage)
+try
 {
     const size_t buf_sz = 256;
     char         c_buff[buf_sz];
@@ -500,6 +501,7 @@ TEST_F(PageStorage_test, GcMoveNormalPage)
     page = storage->read(2, s1);
     ASSERT_EQ(page.data.size(), buf_sz);
 }
+CATCH
 
 TEST_F(PageStorage_test, GcMoveRefPage)
 {
@@ -541,6 +543,7 @@ TEST_F(PageStorage_test, GcMoveRefPage)
 }
 
 TEST_F(PageStorage_test, GcMovePageDelMeta)
+try
 {
     const size_t buf_sz = 256;
     char         c_buff[buf_sz];
@@ -593,6 +596,7 @@ TEST_F(PageStorage_test, GcMovePageDelMeta)
     auto s1 = storage->getSnapshot();
     ASSERT_EQ(s1->version()->find(1), std::nullopt);
 }
+CATCH
 
 TEST_F(PageStorage_test, GcMigrateRefPageToRefPage)
 try
@@ -653,17 +657,7 @@ try
     EXPECT_NO_THROW(storage = reopenWithConfig(config));
     storage = reopenWithConfig(config);
 }
-catch (const Exception & e)
-{
-    std::string text = e.displayText();
-
-    auto embedded_stack_trace_pos = text.find("Stack trace");
-    std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
-    if (std::string::npos == embedded_stack_trace_pos)
-        std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl;
-
-    throw;
-}
+CATCH
 
 TEST_F(PageStorage_test, GcCompactLegacyLogicalCorrectness)
 try
@@ -694,7 +688,7 @@ try
     // Restore a new version set with snapshot WriteBatch
     {
         auto       snapshot = original_version.getSnapshot();
-        WriteBatch wb       = storage->prepareSnapshotWriteBatch(snapshot);
+        WriteBatch wb       = storage->prepareSnapshotWriteBatch(snapshot, 0);
 
         PageEntriesEdit edit;
 

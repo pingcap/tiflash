@@ -23,7 +23,7 @@ public:
         UPSERT = 3,
     };
 
-    using Version = UInt64;
+    using SequenceID = UInt64;
 
 private:
     struct Write
@@ -84,21 +84,26 @@ public:
         return count;
     }
 
-    void swap(WriteBatch & o) { writes.swap(o.writes); }
+    void swap(WriteBatch & o)
+    {
+        writes.swap(o.writes);
+        o.sequence = sequence;
+    }
 
     void clear()
     {
         Writes tmp;
         writes.swap(tmp);
+        sequence = 0;
     }
 
-    void setVersion(Version version_) { version = version_; }
+    void setSequence(SequenceID sequence_) { sequence = sequence_; }
 
-    Version getVersion() const { return version; }
+    SequenceID getSequence() const { return sequence; }
 
 private:
-    Writes  writes;
-    Version version = 0;
+    Writes     writes;
+    SequenceID sequence = 0;
 };
 
 } // namespace DB

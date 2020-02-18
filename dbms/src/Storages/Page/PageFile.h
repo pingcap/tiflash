@@ -96,10 +96,18 @@ public:
 
         bool operator<(const MetaMergingReader & rhs) const
         {
-            // priority_queue always pop the "biggest" elem
-            if (curr_wb_version == rhs.curr_wb_version)
-                return rhs.page_file.fileIdLevel() < page_file.fileIdLevel();
-            return rhs.curr_wb_version < curr_wb_version;
+            if (page_file.getType() != rhs.page_file.getType())
+            {
+                // If any PageFile's type is checkpoint, it is smaller
+                if (page_file.getType() == PageFile::Type::Checkpoint)
+                    return true;
+                else if (rhs.page_file.getType() == PageFile::Type::Checkpoint)
+                    return false;
+                // else fallback to later compare
+            }
+            if (curr_write_batch_sequence == rhs.curr_write_batch_sequence)
+                return page_file.fileIdLevel() < rhs.page_file.fileIdLevel();
+            return curr_write_batch_sequence < rhs.curr_write_batch_sequence;
         }
 
     public:
@@ -113,13 +121,13 @@ public:
 
         String toString() const
         {
-            return "MergingReader of " + page_file.toString() + ", sequence no: " + DB::toString(curr_wb_version)
+            return "MergingReader of " + page_file.toString() + ", sequence no: " + DB::toString(curr_write_batch_sequence)
                 + ", meta offset: " + DB::toString(meta_file_offset) + ", data offset: " + DB::toString(data_file_offset);
         }
 
-        WriteBatch::Version writeBatchVersion() const { return curr_wb_version; }
-        PageFileIdAndLevel  fileIdLevel() const { return page_file.fileIdLevel(); }
-        PageFile &          belongingPageFile() { return page_file; }
+        WriteBatch::SequenceID writeBatchSequence() const { return curr_write_batch_sequence; }
+        PageFileIdAndLevel     fileIdLevel() const { return page_file.fileIdLevel(); }
+        PageFile &             belongingPageFile() { return page_file; }
 
     private:
         void initialize();
@@ -129,8 +137,8 @@ public:
 
         Status status = Status::Uninitialized;
 
-        WriteBatch::Version curr_wb_version;
-        PageEntriesEdit     curr_edit;
+        WriteBatch::SequenceID curr_write_batch_sequence;
+        PageEntriesEdit        curr_edit;
 
         char * meta_buffer;
         size_t meta_size;
@@ -142,7 +150,11 @@ public:
 
     struct MergingPtrComparator
     {
-        bool operator()(const MetaMergingReaderPtr & lhs, const MetaMergingReaderPtr & rhs) const { return *lhs < *rhs; }
+        bool operator()(const MetaMergingReaderPtr & lhs, const MetaMergingReaderPtr & rhs) const
+        {
+            // priority_queue always pop the "biggest" elem
+            return *rhs < *lhs;
+        }
     };
 
 public:

@@ -67,6 +67,9 @@ public:
     using ReaderPtr     = std::shared_ptr<PageFile::Reader>;
     using OpenReadFiles = std::map<PageFileIdAndLevel, ReaderPtr>;
 
+    using MetaMergingQueue
+        = std::priority_queue<PageFile::MetaMergingReaderPtr, std::vector<PageFile::MetaMergingReaderPtr>, PageFile::MergingPtrComparator>;
+
     using PathAndIdsVec        = std::vector<std::pair<String, std::set<PageId>>>;
     using ExternalPagesScanner = std::function<PathAndIdsVec()>;
     using ExternalPagesRemover
@@ -102,9 +105,13 @@ public:
     static PageFileSet
     listAllPageFiles(const String & storage_path, Poco::Logger * page_file_log, ListPageFilesOption option = ListPageFilesOption());
 
-    static std::optional<PageFile> tryGetCheckpoint(const String & storage_path, Poco::Logger * page_file_log, bool remove_old = false);
-
 private:
+    static std::pair<std::optional<WriteBatch::SequenceID>, PageFileSet> //
+    restoreFromCheckpoints(PageStorage::MetaMergingQueue & merging_queue,
+                           VersionedPageEntries &          version_set,
+                           const String &                  storage_name,
+                           Poco::Logger *                  logger);
+
     WriterPtr getWriter(PageFile & page_file);
     ReaderPtr getReader(const PageFileIdAndLevel & file_id_level);
     // gc helper functions
@@ -116,10 +123,9 @@ private:
                                         UInt64 &                   candidate_total_size,
                                         size_t &                   migrate_page_count) const;
 
-    PageFileSet gcCompactLegacy(PageFileSet &&                       page_files,
-                                const std::set<PageFileIdAndLevel> & writing_file_id_levels);
+    PageFileSet gcCompactLegacy(PageFileSet && page_files, const std::set<PageFileIdAndLevel> & writing_file_id_levels);
 
-    WriteBatch prepareSnapshotWriteBatch(const SnapshotPtr snapshot, const WriteBatch::Version wb_version);
+    WriteBatch prepareSnapshotWriteBatch(const SnapshotPtr snapshot, const WriteBatch::SequenceID wb_sequence);
 
     void archievePageFiles(const PageFileSet & page_files_to_archieve);
 
