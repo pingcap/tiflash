@@ -820,6 +820,135 @@ try
 }
 CATCH
 
+/// Check if we can correctly do read / write after restore from disk.
+TEST_F(PageStorage_test, WriteReadRestore)
+try
+{
+    const UInt64 tag    = 0;
+    const size_t buf_sz = 1024;
+    char         c_buff[buf_sz];
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    PageStorage::Config tmp_config = config;
+    tmp_config.file_roll_size      = 128 * MB;
+    storage                        = reopenWithConfig(tmp_config);
+
+    {
+        WriteBatch    batch;
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(0, tag, buff, buf_sz);
+        buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, tag, buff, buf_sz);
+        storage->write(batch);
+    }
+
+    // Read
+    {
+        Page page0 = storage->read(0);
+        ASSERT_EQ(page0.data.size(), buf_sz);
+        ASSERT_EQ(page0.page_id, 0UL);
+        for (size_t i = 0; i < buf_sz; ++i)
+        {
+            EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
+        }
+        Page page1 = storage->read(1);
+        ASSERT_EQ(page1.data.size(), buf_sz);
+        ASSERT_EQ(page1.page_id, 1UL);
+        for (size_t i = 0; i < buf_sz; ++i)
+        {
+            EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
+        }
+    }
+
+    // restore
+    storage = reopenWithConfig(tmp_config);
+
+    // Read again
+    {
+        Page page0 = storage->read(0);
+        ASSERT_EQ(page0.data.size(), buf_sz);
+        ASSERT_EQ(page0.page_id, 0UL);
+        for (size_t i = 0; i < buf_sz; ++i)
+        {
+            EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
+        }
+        Page page1 = storage->read(1);
+        ASSERT_EQ(page1.data.size(), buf_sz);
+        ASSERT_EQ(page1.page_id, 1UL);
+        for (size_t i = 0; i < buf_sz; ++i)
+        {
+            EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
+        }
+    }
+
+    {
+        // Check whether write is correctly.
+        {
+            WriteBatch    batch;
+            ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+            batch.putPage(2, tag, buff, buf_sz);
+            storage->write(batch);
+        }
+        // Read to check
+        {
+            Page page0 = storage->read(0);
+            ASSERT_EQ(page0.data.size(), buf_sz);
+            ASSERT_EQ(page0.page_id, 0UL);
+            for (size_t i = 0; i < buf_sz; ++i)
+            {
+                EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
+            }
+            Page page1 = storage->read(1);
+            ASSERT_EQ(page1.data.size(), buf_sz);
+            ASSERT_EQ(page1.page_id, 1UL);
+            for (size_t i = 0; i < buf_sz; ++i)
+            {
+                EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
+            }
+            Page page2 = storage->read(2);
+            ASSERT_EQ(page2.data.size(), buf_sz);
+            ASSERT_EQ(page2.page_id, 2UL);
+            for (size_t i = 0; i < buf_sz; ++i)
+            {
+                EXPECT_EQ(*(page2.data.begin() + i), static_cast<char>(i % 0xff));
+            }
+        }
+    }
+
+    // Restore. This ensure last write is correct.
+    storage = reopenWithConfig(tmp_config);
+
+    // Read again to check all data.
+    {
+        Page page0 = storage->read(0);
+        ASSERT_EQ(page0.data.size(), buf_sz);
+        ASSERT_EQ(page0.page_id, 0UL);
+        for (size_t i = 0; i < buf_sz; ++i)
+        {
+            EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
+        }
+        Page page1 = storage->read(1);
+        ASSERT_EQ(page1.data.size(), buf_sz);
+        ASSERT_EQ(page1.page_id, 1UL);
+        for (size_t i = 0; i < buf_sz; ++i)
+        {
+            EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
+        }
+        Page page2 = storage->read(2);
+        ASSERT_EQ(page2.data.size(), buf_sz);
+        ASSERT_EQ(page2.page_id, 2UL);
+        for (size_t i = 0; i < buf_sz; ++i)
+        {
+            EXPECT_EQ(*(page2.data.begin() + i), static_cast<char>(i % 0xff));
+        }
+    }
+}
+CATCH
+
+
 /**
  * PageStorage tests with predefine Page1 && Page2
  */

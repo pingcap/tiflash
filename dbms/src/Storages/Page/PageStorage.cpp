@@ -88,7 +88,7 @@ void PageStorage::restore()
     opt.ignore_checkpoint  = false;
     PageFileSet page_files = PageStorage::listAllPageFiles(storage_path, page_file_log, opt);
 
-    /// recover current version from both formal and legacy page files
+    /// Restore current version from both formal and legacy page files
 
     MetaMergingQueue merging_queue;
     for (auto & page_file : page_files)
@@ -98,13 +98,9 @@ void PageStorage::restore()
             throw Exception("Try to recover from " + page_file.toString() + ", illegal type.", ErrorCodes::LOGICAL_ERROR);
 
         auto reader = const_cast<PageFile &>(page_file).createMetaMergingReader();
-        // Read one valid WriteBatch
+        // Read one WriteBatch
         reader->moveNext();
         merging_queue.push(std::move(reader));
-
-        // We need to keep a PageFile with largest FileID in write_files
-        if (page_file.getLevel() == 0)
-            write_files[0] = page_file;
     }
 
     auto [checkpoint_wb_sequence, page_files_to_archieve]
@@ -150,9 +146,20 @@ void PageStorage::restore()
     {
         // Remove old checkpoints and archieve obsolete PageFiles that have not been archieved yet during gc for some reason.
         archievePageFiles(page_files_to_archieve);
+        for (auto & pf : page_files_to_archieve)
+        {
+            if (auto iter = page_files.find(pf); iter != page_files.end())
+                page_files.erase(iter);
+        }
     }
 
-    // TODO: resuse some page_files
+    for (auto & page_file : page_files)
+    {
+        // We need to keep a PageFile with largest FileID in write_files
+        if (page_file.getLevel() == 0)
+            write_files[0] = page_file;
+    }
+    // TODO: reuse some page_files
     // fill write_files
     for (auto & page_file : write_files)
     {
@@ -360,6 +367,8 @@ void PageStorage::write(const WriteBatch & wb)
         }
 
         idle_writers.emplace_back(std::move(file_to_write));
+
+        write_mutex_cv.notify_one(); // wake up any paused thread for write
     }
 
     // Apply changes into versioned_page_entries(generate a new version)

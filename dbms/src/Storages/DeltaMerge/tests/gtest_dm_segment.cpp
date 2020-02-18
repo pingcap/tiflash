@@ -57,6 +57,7 @@ protected:
     {
         *db_context        = DMTestEnv::getContext(db_settings);
         storage_pool       = std::make_unique<StoragePool>("test.t1", path, db_context->getSettingsRef());
+        storage_pool->restore();
         ColumnDefines cols = pre_define_columns.empty() ? DMTestEnv::getDefaultColumns() : pre_define_columns;
         setColumns(cols);
 

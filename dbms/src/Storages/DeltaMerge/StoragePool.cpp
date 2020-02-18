@@ -28,6 +28,8 @@ PageStorage::Config extractConfig(const Settings & settings, UInt64 subtype)
     {
         throw Exception("Unknown subtype in extractConfig: " + DB::toString(subtype));
     }
+    // FIXME: remove this in FLASH-854
+    config.num_write_slots = 1;
     return config;
 }
 

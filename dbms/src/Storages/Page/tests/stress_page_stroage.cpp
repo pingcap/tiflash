@@ -29,15 +29,19 @@ const DB::PageId MAX_PAGE_ID = 1000;
 std::atomic<bool> running_without_exception = true;
 std::atomic<bool> running_without_timeout   = true;
 
+size_t                  num_writer_slots     = 1;
+std::atomic<DB::UInt64> write_batch_sequence = 0;
+
 class PSWriter : public Poco::Runnable
 {
+    DB::UInt32   index = 0;
     PSPtr        ps;
     std::mt19937 gen;
 
     static size_t approx_page_mb;
 
 public:
-    PSWriter(const PSPtr & ps_) : ps(ps_), gen(), bytes_written(0), pages_written(0) {}
+    PSWriter(const PSPtr & ps_, DB::UInt32 idx) : index(idx), ps(ps_), gen(), bytes_written(0), pages_written(0) {}
 
     static void setApproxPageSize(size_t size_mb)
     {
@@ -67,6 +71,8 @@ public:
 
             DB::WriteBatch wb;
             wb.putPage(pageId, 0, buff, buff->buffer().size());
+            if (num_writer_slots > 1)
+                wb.setSequence(++write_batch_sequence);
             ps->write(wb);
             if (pageId % 100 == 0)
                 LOG_INFO(&Logger::get("root"), "writer wrote page" + DB::toString(pageId));
@@ -90,12 +96,14 @@ public:
 
             DB::WriteBatch wb;
             wb.putPage(pageId, 0, buff, buff->buffer().size());
+            if (num_writer_slots > 1)
+                wb.setSequence(++write_batch_sequence);
             ps->write(wb);
             ++pages_written;
             bytes_written += buff->buffer().size();
-            //LOG_INFO(&Logger::get("root"), "writer wrote page" + DB::toString(pageId));
+            // LOG_INFO(&Logger::get("root"), "writer[" + DB::toString(index) + "] wrote page" + DB::toString(pageId));
         }
-        LOG_INFO(&Logger::get("root"), "writer exit");
+        LOG_INFO(&Logger::get("root"), "writer[" + DB::toString(index) + "] exit");
     }
 };
 
@@ -103,11 +111,15 @@ size_t PSWriter::approx_page_mb = 2;
 
 class PSReader : public Poco::Runnable
 {
+    DB::UInt32   index = 0;
     PSPtr        ps;
     const size_t heavy_read_delay_ms;
 
 public:
-    PSReader(const PSPtr & ps_, size_t delay_ms) : ps(ps_), heavy_read_delay_ms(delay_ms), pages_read(0), bytes_read(0) {}
+    PSReader(const PSPtr & ps_, DB::UInt32 idx, size_t delay_ms)
+        : index(idx), ps(ps_), heavy_read_delay_ms(delay_ms), pages_read(0), bytes_read(0)
+    {
+    }
 
     size_t pages_read;
     size_t bytes_read;
@@ -162,7 +174,7 @@ public:
             }
 #endif
         }
-        LOG_INFO(&Logger::get("root"), "reader exit");
+        LOG_INFO(&Logger::get("root"), "reader[" + DB::toString(index) + "] exit");
     }
 };
 
@@ -177,7 +189,6 @@ public:
         assert(ps != nullptr);
         try
         {
-            //throw DB::Exception("fake exception");
             ps->gc();
         }
         catch (DB::Exception & e)
@@ -215,6 +226,7 @@ int main(int argc, char ** argv)
     size_t num_writers         = 1;
     size_t num_readers         = 4;
     size_t heavy_read_delay_ms = 0;
+    num_writer_slots           = 1;
     if (argc >= 2)
     {
         DB::String drop_str = argv[1];
@@ -231,15 +243,23 @@ int main(int argc, char ** argv)
             num_readers = strtoul(argv[4], nullptr, 10);
         if (argc >= 6)
         {
+            // 2 by default.
             size_t page_mb = strtoul(argv[5], nullptr, 10);
             page_mb        = std::max(page_mb, 1UL);
             PSWriter::setApproxPageSize(page_mb);
         }
         if (argc >= 7)
         {
+            // 0 by default.
             heavy_read_delay_ms = strtoul(argv[6], nullptr, 10);
             heavy_read_delay_ms = std::max(heavy_read_delay_ms, 0);
             LOG_INFO(&Logger::get("root"), "read dealy: " + DB::toString(heavy_read_delay_ms) + "ms");
+        }
+        if (argc >= 8)
+        {
+            // 1 by default.
+            num_writer_slots = strtoul(argv[7], nullptr, 10);
+            num_writer_slots = std::max(num_writer_slots, 1UL);
         }
     }
     // set random seed
@@ -256,7 +276,9 @@ int main(int argc, char ** argv)
 
     // create PageStorage
     DB::PageStorage::Config config;
-    PSPtr                   ps = std::make_shared<DB::PageStorage>("stress_test", path, config);
+    config.num_write_slots = num_writer_slots;
+    PSPtr ps               = std::make_shared<DB::PageStorage>("stress_test", path, config);
+    ps->restore();
     {
         size_t num_of_pages = 0;
         auto   check        = [&num_of_pages](const DB::Page & page) {
@@ -275,15 +297,16 @@ int main(int argc, char ** argv)
 
     // create thread pool
     LOG_INFO(&Logger::get("root"),
-             "start running with these threads: W:" + DB::toString(num_writers) + ",R:" + DB::toString(num_readers) + ",Gc:1");
+             "start running with these threads: W:" + DB::toString(num_writers) + ",R:" + DB::toString(num_readers)
+                 + ",Gc:1, config.num_writer_slots:" + DB::toString(num_writer_slots));
     Poco::ThreadPool pool(/* minCapacity= */ 1 + num_writers + num_readers, 1 + num_writers + num_readers);
 
     // start one writer thread
     std::vector<std::shared_ptr<PSWriter>> writers(num_writers);
     for (size_t i = 0; i < num_writers; ++i)
     {
-        writers[i] = std::make_shared<PSWriter>(ps);
-        pool.start(*writers[i], "writer");
+        writers[i] = std::make_shared<PSWriter>(ps, i);
+        pool.start(*writers[i], "writer" + DB::toString(i));
     }
 
     // start one gc thread
@@ -297,8 +320,8 @@ int main(int argc, char ** argv)
     std::vector<std::shared_ptr<PSReader>> readers(num_readers);
     for (size_t i = 0; i < num_readers; ++i)
     {
-        readers[i] = std::make_shared<PSReader>(ps, heavy_read_delay_ms);
-        pool.start(*readers[i]);
+        readers[i] = std::make_shared<PSReader>(ps, i, heavy_read_delay_ms);
+        pool.start(*readers[i], "reader" + DB::toString(i));
     }
 
     // set timeout

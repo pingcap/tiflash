@@ -277,11 +277,18 @@ void PageFile::MetaMergingReader::initialize()
     if (unlikely(!file.exists()))
         throw Exception("Try to read meta of " + page_file.toString() + ", but not exists. Path: " + path, ErrorCodes::LOGICAL_ERROR);
 
-    meta_size    = file.getSize();
+    meta_size = file.getSize();
+    if (meta_size == 0) // Empty file
+    {
+        status = Status::Finished;
+        return;
+    }
+
     const int fd = PageUtil::openFile<true, false>(path);
     // File not exists.
     if (unlikely(!fd))
         throw Exception("Try to read meta of " + page_file.toString() + ", but open file error. Path: " + path, ErrorCodes::LOGICAL_ERROR);
+    SCOPE_EXIT({ ::close(fd); });
 
     meta_buffer = (char *)page_file.alloc(meta_size);
     PageUtil::readFile(fd, 0, meta_buffer, meta_size, path);
@@ -301,6 +308,9 @@ void PageFile::MetaMergingReader::moveNext()
 
     if (status == Status::Uninitialized)
         initialize();
+    // Note that we need to check if status is finished after initialize.
+    if (status == Status::Finished)
+        return;
 
     char * meta_data_end = meta_buffer + meta_size;
     char * pos           = meta_buffer + meta_file_offset;

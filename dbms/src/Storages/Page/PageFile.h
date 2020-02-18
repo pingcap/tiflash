@@ -137,11 +137,11 @@ public:
 
         Status status = Status::Uninitialized;
 
-        WriteBatch::SequenceID curr_write_batch_sequence;
+        WriteBatch::SequenceID curr_write_batch_sequence = 0;
         PageEntriesEdit        curr_edit;
 
-        char * meta_buffer;
-        size_t meta_size;
+        char * meta_buffer = nullptr;
+        size_t meta_size   = 0;
 
         size_t meta_file_offset = 0;
         size_t data_file_offset = 0;
