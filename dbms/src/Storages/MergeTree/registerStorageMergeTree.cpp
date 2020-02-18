@@ -775,7 +775,7 @@ void registerStorageMergeTree(StorageFactory & factory)
     factory.registerStorage("MergeTree", create);
     factory.registerStorage("CollapsingMergeTree", create);
     factory.registerStorage("ReplacingMergeTree", create);
-    factory.registerStorage(MutableSupport::storage_name, create);
+    factory.registerStorage(MutableSupport::mmt_storage_name, create);
     factory.registerStorage(MutableSupport::txn_storage_name, create);
     factory.registerStorage("AggregatingMergeTree", create);
     factory.registerStorage("SummingMergeTree", create);

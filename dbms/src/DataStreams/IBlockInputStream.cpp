@@ -12,7 +12,6 @@ namespace ErrorCodes
     extern const int TOO_DEEP_PIPELINE;
 }
 
-
 /** It's safe to access children without mutex as long as these methods are called before first call to read, readPrefix.
   */
 

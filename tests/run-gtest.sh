@@ -21,9 +21,10 @@ cd "$build_dir"
 tests=(
 	"gtests_dbms"
 	"gtests_libcommon"
-	"gtests_tmt"
+	#"gtests_tmt" # included in gtests_dbms
 )
 
 for test in ${tests[@]}; do
 	run_test "$test"
 done
+

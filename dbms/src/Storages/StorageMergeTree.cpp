@@ -61,7 +61,7 @@ StorageMergeTree::StorageMergeTree(
     const MergeTreeData::MergingParams & merging_params_,
     const MergeTreeSettings & settings_,
     bool has_force_restore_data_flag)
-    : path(path_), database_name(database_name_), table_name(table_name_), full_path(path + escapeForFileName(table_name) + '/'),
+    : IManageableStorage{}, path(path_), database_name(database_name_), table_name(table_name_), full_path(path + escapeForFileName(table_name) + '/'),
     context(context_), background_pool(context_.getBackgroundPool()),
     data(database_name, table_name,
          full_path, columns_,
@@ -153,7 +153,7 @@ BlockInputStreams StorageMergeTree::read(
     }
     else if (select_query && select_query->raw_for_mutable)
     {
-        throw Exception("Only " + MutableSupport::storage_name + " support SELRAW.", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception("Only " + MutableSupport::mmt_storage_name + " support SELRAW.", ErrorCodes::BAD_ARGUMENTS);
     }
     return res;
 }
@@ -261,7 +261,7 @@ BlockOutputStreamPtr StorageMergeTree::write(const ASTPtr & query, const Setting
     }
     else if ((insert_query && insert_query->is_import) || delete_query)
     {
-        throw Exception("Only " + MutableSupport::storage_name + " support IMPORT or DELETE.", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception("Only " + MutableSupport::mmt_storage_name + " support IMPORT or DELETE.", ErrorCodes::BAD_ARGUMENTS);
     }
 
     return res;
@@ -322,7 +322,7 @@ void StorageMergeTree::alter(
     alterInternal(params, database_name, table_name, std::nullopt, context);
 }
 
-void StorageMergeTree::alterForTMT(
+void StorageMergeTree::alterFromTiDB(
     const AlterCommands & params,
     const TiDB::TableInfo & table_info,
     const String & database_name,
@@ -792,6 +792,11 @@ void StorageMergeTree::attachPartition(const ASTPtr & partition, bool part, cons
 void StorageMergeTree::freezePartition(const ASTPtr & partition, const String & with_name, const Context & context)
 {
     data.freezePartition(partition, with_name, context);
+}
+
+DataTypePtr StorageMergeTree::getPKTypeImpl() const
+{
+    return data.primary_key_data_types[0];
 }
 
 }

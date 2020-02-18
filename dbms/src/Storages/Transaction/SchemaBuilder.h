@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Interpreters/Context.h>
-#include <Storages/StorageMergeTree.h>
+#include <Storages/Transaction/TMTStorages.h>
 #include <Storages/Transaction/SchemaGetter.h>
 
 namespace DB
@@ -46,7 +46,7 @@ private:
 
     void applyAlterTable(TiDB::DBInfoPtr db_info, Int64 table_id);
 
-    void applyAlterTableImpl(TiDB::TableInfoPtr table_info, const String & db_name, StorageMergeTree * storage);
+    void applyAlterTableImpl(TiDB::TableInfoPtr table_info, const String & db_name, ManageableStoragePtr storage);
 
     void applyAlterPartition(TiDB::DBInfoPtr db_info, Int64 table_id);
 

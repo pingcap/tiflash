@@ -8,6 +8,14 @@
 namespace DB
 {
 
+BatchCommandsContext::BatchCommandsContext(
+    Context & db_context_, DBContextCreationFunc && db_context_creation_func_, grpc::ServerContext & grpc_server_context_)
+    : db_context(db_context_),
+      db_context_creation_func(std::move(db_context_creation_func_)),
+      grpc_server_context(grpc_server_context_),
+      metrics(db_context.getTiFlashMetrics())
+{}
+
 BatchCommandsHandler::BatchCommandsHandler(BatchCommandsContext & batch_commands_context_, const tikvpb::BatchCommandsRequest & request_,
     tikvpb::BatchCommandsResponse & response_)
     : batch_commands_context(batch_commands_context_), request(request_), response(response_), log(&Logger::get("BatchCommandsHandler"))
@@ -17,11 +25,20 @@ ThreadPool::Job BatchCommandsHandler::handleCommandJob(
     const tikvpb::BatchCommandsRequest::Request & req, tikvpb::BatchCommandsResponse::Response & resp, grpc::Status & ret) const
 {
     return [&]() {
+        auto start_time = std::chrono::system_clock::now();
+        SCOPE_EXIT({
+            std::chrono::duration<double> duration_sec = std::chrono::system_clock::now() - start_time;
+            GET_METRIC(batch_commands_context.metrics, tiflash_coprocessor_request_handle_seconds, type_batch)
+                .Observe(duration_sec.count());
+        });
+
         if (!req.has_coprocessor())
         {
             ret = grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
             return;
         }
+
+        GET_METRIC(batch_commands_context.metrics, tiflash_coprocessor_request_count, type_batch_cop).Increment();
 
         const auto & cop_req = req.coprocessor();
         auto cop_resp = resp.mutable_coprocessor();
@@ -32,8 +49,6 @@ ThreadPool::Job BatchCommandsHandler::handleCommandJob(
             ret = status;
             return;
         }
-
-        context.getTiFlashMetrics()->tiflash_coprocessor_dag_request_count.get().Increment();
 
         CoprocessorContext cop_context(context, cop_req.context(), batch_commands_context.grpc_server_context);
         CoprocessorHandler cop_handler(cop_context, &cop_req, cop_resp);
@@ -46,15 +61,6 @@ grpc::Status BatchCommandsHandler::execute()
 {
     if (request.requests_size() == 0)
         return grpc::Status::OK;
-
-    auto start_time = std::chrono::system_clock::now();
-    SCOPE_EXIT({
-        std::chrono::duration<double> duration_sec = std::chrono::system_clock::now() - start_time;
-        // Observe `request size` times as duration.
-        auto tiflash_metrics = batch_commands_context.db_context.getTiFlashMetrics();
-        for (int i = 0; i < request.requests_size(); i++)
-            tiflash_metrics->tiflash_coprocessor_request_duration_seconds.get().Observe(duration_sec.count());
-    });
 
     // TODO: Fill transport_layer_load into BatchCommandsResponse.
 

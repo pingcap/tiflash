@@ -1,4 +1,4 @@
-#include <Storages/StorageMergeTree.h>
+#include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/PredecodeTiKVValue.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RowCodec.h>
@@ -21,8 +21,8 @@ void Region::tryPreDecodeTiKVValue(TMTContext & tmt)
         write_val = data.writeCF().getCFDataPreDecode().popAll();
     }
 
-    DB::tryPreDecodeTiKVValue(std::move(default_val), *storage);
-    DB::tryPreDecodeTiKVValue(std::move(write_val), *storage);
+    DB::tryPreDecodeTiKVValue(std::move(default_val), storage);
+    DB::tryPreDecodeTiKVValue(std::move(write_val), storage);
 }
 
 void RowPreDecoder::preDecodeRow(const TiKVValue & value)
@@ -36,14 +36,14 @@ void RowPreDecoder::preDecodeRow(const TiKVValue & value)
     decoded_row.atomicUpdate(decoded_row_ptr);
 }
 
-void tryPreDecodeTiKVValue(std::optional<CFDataPreDecodeQueue> && values, StorageMergeTree & storage)
+void tryPreDecodeTiKVValue(std::optional<CFDataPreDecodeQueue> && values, const ManageableStoragePtr & storage)
 {
     if (!values)
         return;
 
-    auto table_lock = storage.lockStructure(false, __PRETTY_FUNCTION__);
+    auto table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
 
-    const auto & table_info = storage.getTableInfo();
+    const auto & table_info = storage->getTableInfo();
     ColumnIdToIndex column_lut;
 
     {

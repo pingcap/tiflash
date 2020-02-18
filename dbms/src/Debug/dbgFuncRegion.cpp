@@ -42,8 +42,8 @@ TableID getTableID(Context & context, const std::string & database_name, const s
     }
 
     auto storage = context.getTable(database_name, table_name);
-    auto * merge_tree = dynamic_cast<StorageMergeTree *>(storage.get());
-    auto table_info = merge_tree->getTableInfo();
+    auto managed_storage = std::static_pointer_cast<IManageableStorage>(storage);
+    auto table_info = managed_storage->getTableInfo();
     return table_info.id;
 }
 
@@ -127,7 +127,7 @@ void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvo
     for (auto it = args_begin; it != args_end; it += len)
     {
         HandleID handle_id = (HandleID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*it[0]).value);
-        Timestamp tso = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*it[1]).value);
+        Timestamp tso = (Timestamp)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*it[1]).value);
         UInt8 del = (UInt8)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*it[2]).value);
         {
             std::vector<Field> fields;
@@ -316,6 +316,23 @@ void dbgFuncDumpAllMockRegion(Context & context, const ASTs & args, DBGInvoker::
     auto table_id = table->id();
 
     dbgFuncDumpAllRegion(context, table_id, false, false, output);
+}
+
+void dbgFuncRemoveRegion(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() < 1)
+        throw Exception("Args not matched, should be: region_id", ErrorCodes::BAD_ARGUMENTS);
+
+    RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+
+    TMTContext & tmt = context.getTMTContext();
+    KVStorePtr & kvstore = tmt.getKVStore();
+    RegionTable & region_table = tmt.getRegionTable();
+    kvstore->mockRemoveRegion(region_id, region_table);
+
+    std::stringstream ss;
+    ss << "remove region #" << region_id;
+    output(ss.str());
 }
 
 } // namespace DB

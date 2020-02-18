@@ -36,10 +36,10 @@ if [ -d "$SRCPATH/contrib/tipb" ]; then
 fi
 
 rm -rf ${SRCPATH}/libs/libtiflash-proxy
-# ln -s /libtiflash-proxy ${SRCPATH}/libs/libtiflash-proxy
-
-# hacked by solotzg. update bin of proxy after pr is merged.
-ln -s /libtiflash-proxy2 ${SRCPATH}/libs/libtiflash-proxy
+mkdir -p ${SRCPATH}/libs/libtiflash-proxy
+curl -o "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" \
+http://fileserver.pingcap.net/download/builds/pingcap/tiflash-proxy/7883f740756a1e07787b4c06a92f6057aeed39f9/libtiflash_proxy.so
+chmod 0731 "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so"
 
 build_dir="$SRCPATH/release-centos7/build-release"
 mkdir -p $build_dir && cd $build_dir
@@ -55,10 +55,9 @@ cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "$install_dir/libti
 # copy gtest binary under Debug mode
 if [[ "${CMAKE_BUILD_TYPE}" = "Debug" && ${ENABLE_TEST} -ne 0 ]]; then
     #ctest -V -j $(nproc || grep -c ^processor /proc/cpuinfo)
-    make -j ${NPROC} gtests_dbms gtests_libcommon gtests_tmt
+    make -j ${NPROC} gtests_dbms gtests_libcommon
     cp -f "$build_dir/dbms/gtests_dbms" "$install_dir/"
     cp -f "$build_dir/libs/libcommon/src/tests/gtests_libcommon" "$install_dir/"
-    cp -f "$build_dir/dbms/src/Storages/Transaction/tests/gtests_tmt" "$install_dir/"
 fi
 
 ldd "$install_dir/tiflash"

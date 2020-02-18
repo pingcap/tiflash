@@ -400,7 +400,7 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(const tipb::Expr & expr, Expres
     return expr_name;
 }
 
-void DAGExpressionAnalyzer::makeExplicitSetForIndex(const tipb::Expr & expr, const TMTStoragePtr & storage)
+void DAGExpressionAnalyzer::makeExplicitSetForIndex(const tipb::Expr & expr, const ManageableStoragePtr & storage)
 {
     for (auto & child : expr.children())
     {

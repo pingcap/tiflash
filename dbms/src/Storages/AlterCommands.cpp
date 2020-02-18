@@ -20,6 +20,16 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
+NamesAndTypesList::Iterator AlterCommand::findColumn(NamesAndTypesList &columns) const
+{
+    const auto it = std::find_if(columns.begin(), columns.end(),
+                                 std::bind(namesEqual, std::cref(column_name), std::placeholders::_1) );
+    if (it == columns.end())
+        throw Exception("Wrong column name. Cannot find column " + column_name + " to modify",
+                        ErrorCodes::ILLEGAL_COLUMN);
+
+    return it;
+}
 
 void AlterCommand::apply(ColumnsDescription & columns_description) const
 {
@@ -111,18 +121,6 @@ void AlterCommand::apply(ColumnsDescription & columns_description) const
             : default_kind == ColumnDefaultKind::Materialized ? columns_description.materialized
             : columns_description.aliases;
 
-        /// find column or throw exception
-        const auto find_column = [this] (NamesAndTypesList & columns)
-        {
-            const auto it = std::find_if(columns.begin(), columns.end(),
-                std::bind(namesEqual, std::cref(column_name), std::placeholders::_1) );
-            if (it == columns.end())
-                throw Exception("Wrong column name. Cannot find column " + column_name + " to modify",
-                                ErrorCodes::ILLEGAL_COLUMN);
-
-            return it;
-        };
-
         /// if default types differ, remove column from the old list, then add to the new list
         if (default_kind != old_default_kind)
         {
@@ -132,7 +130,7 @@ void AlterCommand::apply(ColumnsDescription & columns_description) const
                 : old_default_kind == ColumnDefaultKind::Materialized ? columns_description.materialized
                 : columns_description.aliases;
 
-            const auto old_column_it = find_column(old_columns);
+            const auto old_column_it = findColumn(old_columns);
             new_columns.emplace_back(*old_column_it);
             old_columns.erase(old_column_it);
 
@@ -142,7 +140,7 @@ void AlterCommand::apply(ColumnsDescription & columns_description) const
         }
 
         /// find column in one of three column lists
-        const auto column_it = find_column(new_columns);
+        const auto column_it = findColumn(new_columns);
         column_it->type = data_type;
 
         if (!default_expression && had_default_expr)
@@ -183,8 +181,9 @@ void AlterCommand::apply(ColumnsDescription & columns_description) const
         auto default_it = columns_description.defaults.find(old_column_name);
         if (default_it != columns_description.defaults.end())
         {
+            auto default_value = default_it->second;
             columns_description.defaults.erase(default_it->first);
-            columns_description.defaults.emplace(new_column_name, default_it->second);
+            columns_description.defaults.emplace(new_column_name, default_value);
         }
     }
     else
