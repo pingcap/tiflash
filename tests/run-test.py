@@ -183,7 +183,7 @@ class Matcher:
         return True
 
     def on_finish(self):
-        if self.outputs != None and not matched(self.outputs, self.matches, self.fuzz):
+        if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
             return False
         return True
 
