@@ -1,15 +1,41 @@
+#include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 
 namespace DB
 {
 namespace DM
 {
+static constexpr UInt64 STORAGE_LOG  = 1;
+static constexpr UInt64 STORAGE_DATA = 2;
+static constexpr UInt64 STORAGE_META = 3;
+
+PageStorage::Config extractConfig(const Settings & settings, UInt64 subtype)
+{
+    PageStorage::Config config;
+    if (subtype == STORAGE_LOG)
+    {
+        config.num_write_slots = settings.dm_storage_pool_log_write_slots;
+    }
+    else if (subtype == STORAGE_DATA)
+    {
+        config.num_write_slots = settings.dm_storage_pool_data_write_slots;
+    }
+    else if (subtype == STORAGE_META)
+    {
+        config.num_write_slots = settings.dm_storage_pool_meta_write_slots;
+    }
+    else
+    {
+        throw Exception("Unknown subtype in extractConfig: " + DB::toString(subtype));
+    }
+    return config;
+}
 
 // TODO: Load configs from settings.
-StoragePool::StoragePool(const String & name, const String & path)
-    : log_storage(name + ".log", path + "/log", {}),
-      data_storage(name + ".data", path + "/data", {}),
-      meta_storage(name + ".meta", path + "/meta", {}),
+StoragePool::StoragePool(const String & name, const String & path, const Settings & settings)
+    : log_storage(name + ".log", path + "/log", extractConfig(settings, STORAGE_LOG)),
+      data_storage(name + ".data", path + "/data", extractConfig(settings, STORAGE_DATA)),
+      meta_storage(name + ".meta", path + "/meta", extractConfig(settings, STORAGE_META)),
       max_log_page_id(0),
       max_data_page_id(0),
       max_meta_page_id(0)

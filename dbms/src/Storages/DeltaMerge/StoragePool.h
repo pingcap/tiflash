@@ -7,6 +7,8 @@
 
 namespace DB
 {
+struct Settings;
+
 namespace DM
 {
 
@@ -20,7 +22,7 @@ public:
     using Duration  = Clock::duration;
     using Seconds   = std::chrono::seconds;
 
-    StoragePool(const String & name, const String & path);
+    StoragePool(const String & name, const String & path, const Settings & settings);
 
     void restore();
 

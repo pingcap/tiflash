@@ -275,9 +275,9 @@ PageStorage::WriterPtr PageStorage::getWriter(PageFile & page_file)
 {
     WriterPtr write_file_writer;
 
-    // TODO: set meta roll size
     bool is_writable = page_file.isValid() && page_file.getType() == PageFile::Type::Formal //
-        && page_file.getDataFileAppendPos() < config.file_roll_size;
+        && page_file.getDataFileAppendPos() < config.file_roll_size                         //
+        && page_file.getMetaFileAppendPos() < config.file_meta_roll_size;
     if (is_writable)
     {
         write_file_writer = page_file.createWriter(config.sync_on_write);
@@ -287,7 +287,8 @@ PageStorage::WriterPtr PageStorage::getWriter(PageFile & page_file)
         PageFileIdAndLevel max_writing_id_lvl{0, 0};
         for (const auto & pf : write_files)
             max_writing_id_lvl = std::max(max_writing_id_lvl, pf.fileIdLevel());
-        page_file         = PageFile::newPageFile(max_writing_id_lvl.first + 1, 0, storage_path, PageFile::Type::Formal, page_file_log);
+        page_file = PageFile::newPageFile(max_writing_id_lvl.first + 1, 0, storage_path, PageFile::Type::Formal, page_file_log);
+        LOG_DEBUG(log, storage_name << " create new PageFile_" + DB::toString(max_writing_id_lvl.first + 1) + "_0 for write.");
         write_file_writer = page_file.createWriter(config.sync_on_write);
     }
     return write_file_writer;
@@ -344,7 +345,9 @@ void PageStorage::write(const WriteBatch & wb)
             }
         }
         auto & page_file   = write_files[index];
-        bool   is_writable = page_file.isValid() && page_file.getDataFileAppendPos() < config.file_roll_size;
+        bool   is_writable = page_file.isValid()                        //
+            && page_file.getDataFileAppendPos() < config.file_roll_size //
+            && page_file.getMetaFileAppendPos() < config.file_meta_roll_size;
         if (!is_writable)
         {
             file_to_write = nullptr; // reset writer first

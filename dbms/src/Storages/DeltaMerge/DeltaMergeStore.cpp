@@ -45,7 +45,7 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
                                  const ColumnDefine &  handle,
                                  const Settings &      settings_)
     : path(path_),
-      storage_pool(db_name_ + "." + table_name_, path),
+      storage_pool(db_name_ + "." + table_name_, path, db_context.getSettingsRef()),
       db_name(db_name_),
       table_name(table_name_),
       table_handle_define(handle),

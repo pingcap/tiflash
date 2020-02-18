@@ -34,8 +34,8 @@ protected:
     {
         dropDataInDisk();
 
-        storage_pool        = std::make_unique<StoragePool>("test.t1", path);
         Context & context   = DMTestEnv::getContext();
+        storage_pool        = std::make_unique<StoragePool>("test.t1", path, context.getSettingsRef());
         table_handle_define = ColumnDefine(EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_TYPE);
         table_columns.clear();
         table_columns.emplace_back(table_handle_define);

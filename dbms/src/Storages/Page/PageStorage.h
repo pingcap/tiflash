@@ -3,6 +3,7 @@
 #include <deque>
 #include <functional>
 #include <optional>
+#include <queue>
 #include <set>
 #include <shared_mutex>
 #include <type_traits>
@@ -38,6 +39,8 @@ public:
         size_t file_roll_size  = PAGE_FILE_ROLL_SIZE;
         size_t file_max_size   = PAGE_FILE_MAX_SIZE;
         size_t file_small_size = PAGE_FILE_SMALL_SIZE;
+
+        size_t file_meta_roll_size = PAGE_META_ROLL_SIZE;
 
         Float64 merge_hint_low_used_rate            = 0.35;
         size_t  merge_hint_low_used_file_total_size = PAGE_FILE_ROLL_SIZE;

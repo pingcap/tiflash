@@ -55,8 +55,8 @@ public:
 protected:
     SegmentPtr reload(ColumnDefines && pre_define_columns = {}, DB::Settings && db_settings = DB::Settings())
     {
-        storage_pool       = std::make_unique<StoragePool>("test.t1", path);
         *db_context        = DMTestEnv::getContext(db_settings);
+        storage_pool       = std::make_unique<StoragePool>("test.t1", path, db_context->getSettingsRef());
         ColumnDefines cols = pre_define_columns.empty() ? DMTestEnv::getDefaultColumns() : pre_define_columns;
         setColumns(cols);
 
