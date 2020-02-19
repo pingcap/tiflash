@@ -121,7 +121,19 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         catch (Exception & e)
         {
             GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_apply_count, type_failed).Increment();
-            LOG_ERROR(log, "apply diff meets exception : " << e.displayText() << " \n stack is " << e.getStackTrace().toString());
+            LOG_WARNING(log, "apply diff meets exception : " << e.displayText() << " \n stack is " << e.getStackTrace().toString());
+            return false;
+        }
+        catch (Poco::Exception & e)
+        {
+            GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_apply_count, type_failed).Increment();
+            LOG_WARNING(log, "apply diff meets exception : " << e.displayText() << " \n");
+            return false;
+        }
+        catch (std::exception & e)
+        {
+            GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_apply_count, type_failed).Increment();
+            LOG_WARNING(log, "apply diff meets exception : " << e.what() << " \n");
             return false;
         }
         return true;
