@@ -2,37 +2,44 @@
 import logging
 from typing import Optional
 
-import etcd
+import define
+import etcd3
 import uri
 import conf
 import util
 
 
 class EtcdClient:
-    FLASH_PREFIX = 'tiflash'
-    FLASH_CLUSTER_MUTEX_KEY = '{}/cluster/master'.format(FLASH_PREFIX)
+    EtcdOK = 0
+    EtcdKeyNotFound = 1
+    EtcdValueNotEqual = 2
 
     def try_init_mutex(self, cluster_mutex_value):
-        try:
-            res = self.client.write(EtcdClient.FLASH_CLUSTER_MUTEX_KEY,
-                                    cluster_mutex_value,
-                                    ttl=conf.flash_conf.cluster_master_ttl, prevExist=False)
-            self.logger.info('Try to init master success, ttl: %d, create new key: %s', res.ttl, res.key)
-            return True
-        except etcd.EtcdAlreadyExist as e:
-            self.logger.info('Try to init master fail, %s', e.payload['message'])
+        val, meta = self.client.get(define.TIFLASH_CLUSTER_MUTEX_KEY)
+        if val is None:
+            lease = self.client.lease(conf.flash_conf.cluster_master_ttl)
+            if self.client.put_if_not_exists(define.TIFLASH_CLUSTER_MUTEX_KEY, cluster_mutex_value, lease=lease):
+                self.logger.info('Try to init master success, ttl: %d, create new key: %s', lease.ttl,
+                                 define.TIFLASH_CLUSTER_MUTEX_KEY)
+                return True
+        self.logger.info('Try to init master fail, key exists')
         return False
 
     def refresh_ttl(self, cluster_mutex_value):
-        self.client.refresh(EtcdClient.FLASH_CLUSTER_MUTEX_KEY, conf.flash_conf.cluster_master_ttl,
-                            prevValue=cluster_mutex_value)
+        val, meta = self.client.get(define.TIFLASH_CLUSTER_MUTEX_KEY)
+        if val is None:
+            return self.EtcdKeyNotFound
+        if cluster_mutex_value != str(val, encoding="utf8"):
+            return self.EtcdValueNotEqual
+        list(self.client.refresh_lease(meta.lease_id))
+        return self.EtcdOK
 
-    def test_refresh_ttl_wrong_value(self, cluster_mutex_value):
-        self.refresh_ttl(cluster_mutex_value)
+    def get_by_prefix(self, prefix):
+        return self.client.get_prefix(prefix)
 
     def __init__(self, host, port):
         self.logger = logging.getLogger('etcd.client')
-        self.client = etcd.Client(host=host, port=port)
+        self.client = etcd3.client(host=host, port=port, timeout=conf.flash_conf.update_rule_interval)
 
 
 class PDClient:
@@ -89,6 +96,13 @@ class PDClient:
             '{}/{}/{}/config/rules'.format(self.leader, PDClient.PD_API_PREFIX, PDClient.PD_API_VERSION))
         res = r.json()
         return res if res is not None else {}
+
+    def get_rule(self, group, rule_id):
+        r = util.curl_http(
+            '{}/{}/{}/config/rule/{}/{}'.format(self.leader, PDClient.PD_API_PREFIX, PDClient.PD_API_VERSION, group,
+                                                rule_id))
+        res = r.json()
+        return res
 
     def set_rule(self, rule):
         r = util.post_http(
