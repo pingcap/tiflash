@@ -33,6 +33,7 @@ class StorageMergeTree : public ext::shared_ptr_helper<StorageMergeTree>, public
 public:
     void startup() override;
     void shutdown() override;
+    void removeFromTMTContext();
     ~StorageMergeTree() override;
 
     std::string getName() const override { return data.merging_params.getModeName() + "MergeTree"; }

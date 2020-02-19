@@ -1,4 +1,5 @@
 #include <optional>
+#include <Common/FailPoint.h>
 #include <Common/FieldVisitors.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/MergeTree/MergeTreeBlockOutputStream.h>
@@ -42,6 +43,7 @@ namespace ErrorCodes
     extern const int INCORRECT_DATA;
     extern const int INCORRECT_FILE_NAME;
     extern const int CANNOT_ASSIGN_OPTIMIZE;
+    extern const int FAIL_POINT_ERROR;
 }
 
 
@@ -110,15 +112,19 @@ void StorageMergeTree::shutdown()
     merger.merges_blocker.cancelForever();
     if (merge_task_handle)
         background_pool.removeTask(merge_task_handle);
+}
 
+void StorageMergeTree::removeFromTMTContext()
+{
+    // The drop table operation may be failed and retry.
+    // Before the storage is dropped successfully, we should not drop it from TMT.
     if (data.merging_params.mode == MergeTreeData::MergingParams::Txn)
     {
         TMTContext & tmt_context = context.getTMTContext();
         tmt_context.getStorages().remove(data.table_info->id);
         tmt_context.getRegionTable().removeTable(data.table_info->id);
     }
-}
-
+};
 
 StorageMergeTree::~StorageMergeTree()
 {
@@ -420,6 +426,14 @@ void StorageMergeTree::alterInternal(
         }
     };
 
+
+    for (auto & transaction : transactions)
+        transaction->commit();
+
+    // The process of data change and meta change is not atomic, so we must make sure change data firstly
+    // and change meta secondly. If server crashes during or after changing data, we must fix the schema after restart.
+    FAIL_POINT_TRIGGER_EXCEPTION(exception_between_alter_data_and_meta);
+
     context.getDatabase(database_name)->alterTable(context, table_name, new_columns, storage_modifier);
     setColumns(std::move(new_columns));
     if (table_info)
@@ -431,9 +445,6 @@ void StorageMergeTree::alterInternal(
     }
     /// Reinitialize primary key because primary key column types might have changed.
     data.initPrimaryKey();
-
-    for (auto & transaction : transactions)
-        transaction->commit();
 
     /// Columns sizes could be changed
     data.recalculateColumnSizes();
