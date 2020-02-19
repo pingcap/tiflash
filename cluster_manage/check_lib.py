@@ -7,6 +7,7 @@ if __name__ == '__main__':
         import toml
         import pybind11
         import setuptools
+        import etcd3
     except Exception as e:
         print(e)
         exit(-1)
