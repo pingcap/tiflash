@@ -354,20 +354,25 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
                     /// Blocking learner read. Note that learner read must be performed ahead of data read,
                     /// otherwise the desired index will be blocked by the lock of data read.
-                    auto [read_index, region_removed] = region->learnerRead();
+                    auto read_index_result = region->learnerRead();
                     GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_read_index_duration_seconds).Observe(read_index_watch.elapsedSeconds());
 
-                    if(!region_removed)
-                    {
-                        Stopwatch wait_index_watch;
-                        region->waitIndex(read_index);
-                        GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_wait_index_duration_seconds).Observe(wait_index_watch.elapsedSeconds());
-                    }
-                    else
+                    if (read_index_result.region_unavailable)
                     {
                         // client-c detect region removed. Set region_status and continue.
                         region_status = RegionException::RegionReadStatus::NOT_FOUND;
                         continue;
+                    }
+                    else if (read_index_result.region_epoch_not_match)
+                    {
+                        region_status = RegionException::RegionReadStatus::VERSION_ERROR;
+                        continue;
+                    }
+                    else
+                    {
+                        Stopwatch wait_index_watch;
+                        region->waitIndex(read_index_result.read_index);
+                        GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_wait_index_duration_seconds).Observe(wait_index_watch.elapsedSeconds());
                     }
 
                     auto [block, status] = RegionTable::readBlockByRegion(*data.table_info, data.getColumns(), tmt_column_names_to_read,
