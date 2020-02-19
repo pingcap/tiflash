@@ -18,6 +18,7 @@ class FlashConfig:
         host, port = [e.strip() for e in service_addr.split(':')]
         self.service_ip = socket.gethostbyname(host)
         self.service_addr = '{}:{}'.format(self.service_ip, port)
+        self.http_addr = '{}:{}'.format(self.service_ip, self.http_port)
         self.tidb_status_addr = util.compute_addr_list(p['tidb_status_addr'])
         flash_cluster = p['flash_cluster']
         self.cluster_master_ttl = flash_cluster['master_ttl']
