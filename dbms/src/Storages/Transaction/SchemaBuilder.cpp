@@ -212,7 +212,8 @@ void SchemaBuilder<Getter>::applyAlterTableImpl(TableInfoPtr table_info, const S
 
     // Call storage alter to apply schema changes.
     for (const auto & alter_commands : commands_vec)
-        storage->alterFromTiDB(alter_commands, *table_info, db_name, context);
+        if (!alter_commands.empty())
+            storage->alterFromTiDB(alter_commands, *table_info, db_name, context);
 
     auto & tmt_context = context.getTMTContext();
 
@@ -876,6 +877,7 @@ void SchemaBuilder<Getter>::syncAllSchema()
         std::vector<TableInfoPtr> tables = getter.listTables(db->id);
         for (const auto & table : tables)
         {
+            LOG_DEBUG(log, "collect table: " << table->name << " with id "<< table->id);
             all_tables.emplace_back(table, db);
             if (table->isLogicalPartitionTable())
             {

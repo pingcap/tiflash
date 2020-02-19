@@ -124,10 +124,9 @@ void TCPHandler::runImpl()
         if (!connection_context.isDatabaseExist(default_database))
         {
             Exception e("Database " + default_database + " doesn't exist", ErrorCodes::UNKNOWN_DATABASE);
-            LOG_ERROR(log, "Code: " << e.code() << ", e.displayText() = " << e.displayText()
+            LOG_WARNING(log, "Code: " << e.code() << ", e.displayText() = " << e.displayText()
                 << ", Stack trace:\n\n" << e.getStackTrace().toString());
-            sendException(e);
-            return;
+            default_database = "test";
         }
 
         connection_context.setCurrentDatabase(default_database);
