@@ -6,12 +6,12 @@ import time
 from logging.handlers import RotatingFileHandler
 
 import conf
-import etcd
 import flash_http_client
 import placement_rule
 import tidb_tools
 import util
-from pd_client import PDClient
+from pd_client import PDClient, EtcdClient
+import define
 
 terminal: bool = False
 
@@ -26,11 +26,6 @@ def get_host():
     return socket.gethostbyname(socket.gethostname())
 
 
-class TiFlashClusterNotMaster(Exception):
-    def __init__(self):
-        pass
-
-
 def wrap_try_get_lock(func):
     def wrap_func(manager, *args, **kwargs):
         manager.try_get_lock()
@@ -39,21 +34,6 @@ def wrap_try_get_lock(func):
             return func(manager, *args, **kwargs)
         else:
             pass
-
-    return wrap_func
-
-
-def wrap_add_task(interval_func):
-    def wrap_func(func):
-        def _wrap_func(manager, *args, **kwargs):
-            try:
-                func(manager, *args, **kwargs)
-            except TiFlashClusterNotMaster:
-                pass
-            except Exception as e:
-                manager.logger.exception(e)
-
-        return _wrap_func
 
     return wrap_func
 
@@ -95,7 +75,6 @@ class TiFlashClusterManager:
     ROLE_INIT = 0
     ROLE_SLAVE = 1
     ROLE_MASTER = 2
-    FLASH_LABEL = {'key': 'engine', 'value': 'tiflash'}
 
     @staticmethod
     def compute_cur_store(stores):
@@ -109,20 +88,20 @@ class TiFlashClusterManager:
             conf.flash_conf.service_addr, [store.inner for store in stores.values()]))
 
     def _try_refresh(self):
-        try:
-            ori_role = self.state[0]
-            self.pd_client.etcd_client.refresh_ttl(self.cur_store.address)
+        ori_role = self.state[0]
+        res = self.pd_client.etcd_client.refresh_ttl(self.cur_store.address)
+        if res == EtcdClient.EtcdOK:
             self.state = [TiFlashClusterManager.ROLE_MASTER, time.time()]
             if ori_role == TiFlashClusterManager.ROLE_INIT:
                 self.logger.debug('Continue become master')
-
-        except etcd.EtcdValueError as e:
-            self.state = [TiFlashClusterManager.ROLE_SLAVE, time.time()]
-            self.logger.info('Refresh ttl fail become slave, %s', e.payload['message'])
-
-        except etcd.EtcdKeyNotFound as e:
+        elif res == EtcdClient.EtcdKeyNotFound:
             self.state = [TiFlashClusterManager.ROLE_INIT, 0]
             self.try_get_lock()
+        elif res == EtcdClient.EtcdValueNotEqual:
+            self.state = [TiFlashClusterManager.ROLE_SLAVE, time.time()]
+            self.logger.debug('Refresh ttl fail (key not equal), become slave')
+        else:
+            assert False
 
     def try_get_lock(self):
         role, ts = self.state
@@ -159,7 +138,7 @@ class TiFlashClusterManager:
     def _update_cluster(self):
         prev_stores = self.stores
         self.stores = {store_id: Store(store) for store_id, store in
-                       self.pd_client.get_store_by_labels(self.FLASH_LABEL).items()}
+                       self.pd_client.get_store_by_labels(define.TIFLASH_LABEL).items()}
         if self.stores != prev_stores and prev_stores:
             self.logger.info('Update all tiflash stores: from {} to {}'.format([k.inner for k in prev_stores.values()],
                                                                                [k.inner for k in self.stores.values()]))
@@ -176,16 +155,14 @@ class TiFlashClusterManager:
         need_new_rule = True
         if rule_id in all_rules:
             rule = all_rules[rule_id]
-            if rule.override and rule.start_key == start_key and rule.end_key == end_key and rule.label_constraints == [
-                {"key": "engine", "op": "in", "values": ["tiflash"]}
-            ] and rule.location_labels == table["location_labels"] and rule.count == table[
-                "replica_count"
-            ] and rule.role == "learner":
+            if rule.override and rule.start_key == start_key and rule.end_key == end_key and rule.label_constraints == placement_rule.DEFAULT_LABEL_CONSTRAINTS and rule.location_labels == \
+                table[define.LOCATION_LABELS] and rule.count == table[
+                define.REPLICA_COUNT] and rule.role == define.LEARNER:
                 need_new_rule = False
 
         if need_new_rule:
-            rules_new = placement_rule.make_rule(rule_id, start_key, end_key, table["replica_count"],
-                                                 table["location_labels"])
+            rules_new = placement_rule.make_rule(rule_id, start_key, end_key, table[define.REPLICA_COUNT],
+                                                 table[define.LOCATION_LABELS])
             self.set_rule(util.obj_2_dict(rules_new))
 
         all_rules.pop(rule_id, None)
@@ -206,14 +183,17 @@ class TiFlashClusterManager:
 
     @wrap_try_get_lock
     def report_to_tidb(self, table, region_count, flash_region_count):
+        table_id = table['id']
         self.logger.info(
-            'report_to_tidb {} region_count: {} flash_region_count: {}'.format(table, region_count, flash_region_count))
+            'report_to_tidb: id {}, region_count {}, flash_region_count {}'.format(table_id, region_count,
+                                                                                   flash_region_count))
 
         for idx, address in enumerate(self.tidb_status_addr_list):
             try:
                 r = util.post_http(
                     '{}/tiflash/replica'.format(address, PDClient.PD_API_PREFIX, PDClient.PD_API_VERSION),
-                    {"id": table['id'], "region_count": region_count, "flash_region_count": flash_region_count})
+                    {'id': table_id, define.REGION_COUNT: region_count,
+                     define.TIFLASH_REGION_COUNT: flash_region_count})
                 if r.status_code == 200:
                     if idx != 0:
                         tmp = self.tidb_status_addr_list[0]
@@ -228,13 +208,13 @@ class TiFlashClusterManager:
 
     @wrap_try_get_lock
     def remove_rule(self, rule_id):
-        self.pd_client.remove_rule(placement_rule.PR_FLASH_GROUP, rule_id)
+        self.pd_client.remove_rule(placement_rule.TIFLASH_GROUP_ID, rule_id)
         self.logger.info('Remove placement rule {}'.format(rule_id))
 
     @wrap_try_get_lock
     def table_update(self):
         table_list = tidb_tools.db_flash_replica(self.tidb_status_addr_list)
-        all_rules = self.pd_client.get_group_rules(placement_rule.PR_FLASH_GROUP)
+        all_rules = self.pd_client.get_group_rules(placement_rule.TIFLASH_GROUP_ID)
         for table in table_list:
             from tikv_util import common
 
@@ -243,7 +223,7 @@ class TiFlashClusterManager:
             start_key, end_key = st.to_bytes(), ed.to_bytes()
             self._check_and_make_rule(table, st.to_pd_key(), ed.to_pd_key(), all_rules)
 
-            if not table['available']:
+            if not table[define.AVAILABLE]:
                 region_count, flash_region_count = self.compute_sync_data_process(table_id, start_key, end_key)
                 self.report_to_tidb(table, region_count, flash_region_count)
 
