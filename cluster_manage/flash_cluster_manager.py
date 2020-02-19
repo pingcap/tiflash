@@ -151,7 +151,6 @@ class TiFlashClusterManager:
                                                                                [k.inner for k in self.stores.values()]))
         self.cur_store = self.compute_cur_store(self.stores)
         self._update_http_port()
-        self._get_http_port_for_all_store()
 
     def deal_with_region(self, region):
         for peer in region.peers:
@@ -222,6 +221,8 @@ class TiFlashClusterManager:
 
     @wrap_try_get_lock
     def table_update(self):
+        self._get_http_port_for_all_store()
+
         table_list = tidb_tools.db_flash_replica(self.tidb_status_addr_list)
         all_rules = self.pd_client.get_group_rules(placement_rule.TIFLASH_GROUP_ID)
         for table in table_list:
