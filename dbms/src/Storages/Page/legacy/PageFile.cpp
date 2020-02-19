@@ -207,7 +207,8 @@ std::unique_ptr<C> readValuesFromFile(const std::string & path, Allocator<false>
 
     size_t file_size = file.getSize();
     int    file_fd   = openFile<true>(path);
-    char * data      = (char *)allocator.alloc(file_size);
+    SCOPE_EXIT({ ::close(file_fd); });
+    char * data = (char *)allocator.alloc(file_size);
     SCOPE_EXIT({ allocator.free(data, file_size); });
     char * pos = data;
 
@@ -236,10 +237,10 @@ namespace PageMetaFormat
 using WBSize          = UInt32;
 using PageFileVersion = PageFile::Version;
 // TODO we should align these alias with type in PageCache
-using PageTag         = UInt64;
-using IsPut           = UInt8;
-using PageOffset      = UInt64;
-using Checksum        = UInt64;
+using PageTag    = UInt64;
+using IsPut      = UInt8;
+using PageOffset = UInt64;
+using Checksum   = UInt64;
 
 static const size_t PAGE_META_SIZE = sizeof(PageId) + sizeof(PageTag) + sizeof(PageOffset) + sizeof(PageSize) + sizeof(Checksum);
 
@@ -638,6 +639,7 @@ void PageFile::readAndSetPageMetas(PageCacheMap & page_caches)
     // File not exists.
     if (!file_fd)
         return;
+    SCOPE_EXIT({ ::close(file_fd); });
     char * data = (char *)alloc(file_size);
     SCOPE_EXIT({ free(data, file_size); });
 
