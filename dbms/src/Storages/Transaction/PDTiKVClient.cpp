@@ -10,7 +10,8 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-constexpr int readIndexMaxBackoff = 5000;
+constexpr int readIndexMaxBackoff = 10000;
+constexpr int maxRetryTime = 3;
 Timestamp PDClientHelper::cached_gc_safe_point = 0;
 std::chrono::time_point<std::chrono::system_clock> PDClientHelper::safe_point_last_update_time;
 
@@ -21,7 +22,7 @@ ReadIndexResult IndexReader::getReadIndex(const pingcap::kv::RegionVerID & regio
 {
     pingcap::kv::Backoffer bo(readIndexMaxBackoff);
     auto request = std::make_shared<kvrpcpb::ReadIndexRequest>();
-
+    int retry_time = 0;
     for (;;)
     {
         pingcap::kv::RegionPtr region_ptr;
@@ -56,8 +57,15 @@ ReadIndexResult IndexReader::getReadIndex(const pingcap::kv::RegionVerID & regio
         }
         catch (pingcap::Exception & e)
         {
-            LOG_WARNING(
-                log, "Region " << region_id.toString() << " get index failed, error message is :" + e.displayText() + ", retry again.");
+            LOG_WARNING(log, "Region " << region_id.toString() << " get index failed, error message is :" + e.displayText());
+            retry_time++;
+            // We try few times, may be cost several seconds, if it still fails, we should not waste too much time and report to tidb as soon.
+            if (retry_time < maxRetryTime)
+            {
+                LOG_INFO(log, "read index retry");
+                bo.backoff(pingcap::kv::boTiKVRPC, e);
+                continue;
+            }
             return {0, false, true};
         }
     }
