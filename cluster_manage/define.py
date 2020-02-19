@@ -8,5 +8,6 @@ LOCATION_LABELS = 'location_labels'
 REPLICA_COUNT = 'replica_count'
 LEARNER = 'learner'
 AVAILABLE = 'available'
-TIFLASH_CLUSTER_MUTEX_KEY = '{}/cluster/leader'.format(TIFLASH)
+TIFLASH_CLUSTER_MUTEX_KEY = '/{}/cluster/leader'.format(TIFLASH)
+TIFLASH_CLUSTER_HTTP_PORT = '/{}/cluster/http_port/'.format(TIFLASH)
 LABEL_CONSTRAINTS = 'label_constraints'
