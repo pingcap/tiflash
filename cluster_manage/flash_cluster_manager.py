@@ -128,7 +128,7 @@ class TiFlashClusterManager:
     def _update_http_port(self):
         key = '{}{}'.format(define.TIFLASH_CLUSTER_HTTP_PORT, self.cur_store.address)
         val = conf.flash_conf.http_addr
-        self.pd_client.etcd_client.update(key, val)
+        self.pd_client.etcd_client.update(key, val, max(conf.flash_conf.cluster_master_ttl, 300))
 
     def __init__(self, pd_client: PDClient, tidb_status_addr_list):
         self.logger = logging.getLogger('TiFlashManager')
