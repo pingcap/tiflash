@@ -5,6 +5,7 @@
 #include <Databases/DatabaseMemory.h>
 #include <Databases/DatabasesCommon.h>
 #include <Common/escapeForFileName.h>
+#include <Common/FailPoint.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/Stopwatch.h>
 #include <common/ThreadPool.h>
@@ -327,6 +328,7 @@ void DatabaseOrdinary::removeTable(
 
     try
     {
+        FAIL_POINT_TRIGGER_EXCEPTION(exception_drop_table_during_remove_meta);
         Poco::File(table_metadata_path).remove();
     }
     catch (...)
