@@ -22,5 +22,20 @@ public:
     MyDateTime my_date_time;
     UInt8 time_type;
     Int8 fsp;
+    UInt64 toChunkTime() const
+    {
+        UInt64 ret = 0;
+        ret |= (my_date_time.toCoreTime() & MyTimeBase::CORE_TIME_BIT_FIELD_MASK);
+        if (time_type == TiDB::TypeDate)
+        {
+            ret |= MyTimeBase::FSPTT_FOR_DATE;
+            return ret;
+        }
+        if (fsp > 0)
+            ret |= UInt64(fsp) << 1u;
+        if (time_type == TiDB::TypeTimestamp)
+            ret |= 1u;
+        return ret;
+    }
 };
 } // namespace DB
