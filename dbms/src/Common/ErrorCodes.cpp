@@ -396,6 +396,7 @@ namespace ErrorCodes
     extern const int SCHEMA_VERSION_ERROR = 10004;
     extern const int DDL_ERROR = 10005;
     extern const int COP_BAD_DAG_REQUEST = 10006;
+    extern const int FAIL_POINT_ERROR = 10007;
 }
 
 }

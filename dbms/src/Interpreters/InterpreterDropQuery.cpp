@@ -1,4 +1,5 @@
 #include <Poco/File.h>
+#include <Common/FailPoint.h>
 
 #include <Databases/IDatabase.h>
 #include <Interpreters/Context.h>
@@ -6,6 +7,7 @@
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Parsers/ASTDropQuery.h>
 #include <Storages/IStorage.h>
+#include <Storages/StorageMergeTree.h>
 #include <Common/escapeForFileName.h>
 #include <Common/typeid_cast.h>
 
@@ -19,6 +21,7 @@ namespace ErrorCodes
     extern const int DATABASE_NOT_EMPTY;
     extern const int UNKNOWN_DATABASE;
     extern const int READONLY;
+    extern const int FAIL_POINT_ERROR;
 }
 
 
@@ -136,10 +139,17 @@ BlockIO InterpreterDropQuery::execute()
         {
             /// Delete table metdata and table itself from memory
             database->removeTable(context, current_table_name);
+
+            FAIL_POINT_TRIGGER_EXCEPTION(exception_between_drop_meta_and_data);
+
             /// Delete table data
             table.first->drop();
 
             table.first->is_dropped = true;
+
+            // drop is complete, then clean tmt context;
+            if (auto storage = std::static_pointer_cast<StorageMergeTree>(table.first))
+                storage->removeFromTMTContext();
 
             String database_data_path = database->getDataPath();
 
