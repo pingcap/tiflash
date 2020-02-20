@@ -217,23 +217,7 @@ def tidb_generate_result(names, dataset):
 
     lines.append(body_border.join(header))
 
-    topline2 = []
-    for i, name in enumerate(names):
-        topline2_cell = ""
-        if i == 0:
-            topline2_cell += left_top_corner
-        topline2_cell += border
-        j = 0
-        while cell_length[i] > j:
-            topline2_cell += border
-            j += 1
-        topline2_cell += border
-        if i == len(names) - 1:
-            topline2_cell += right_top_corner
-
-        topline2.append(topline2_cell)
-
-    lines.append(header_split.join(topline2))
+    lines.append(header_split.join(topline))
 
     for data in dataset:
         cur = []
