@@ -1,23 +1,17 @@
-#include <random>
-
 #include <common/ThreadPool.h>
 #include <common/config_common.h>
+
+#include <random>
 
 #if USE_TCMALLOC
 #include <gperftools/malloc_extension.h>
 #endif
 
+#include <Common/typeid_cast.h>
+#include <Core/Defines.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/isSupportedDataTypeCast.h>
-#include <Storages/AlterCommands.h>
-#include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/FilterParser/FilterParser.h>
-#include <Storages/StorageDeltaMerge-internal.h>
-#include <Storages/StorageDeltaMerge.h>
-
-#include <Common/typeid_cast.h>
-#include <Core/Defines.h>
 #include <Databases/IDatabase.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -27,6 +21,11 @@
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Storages/AlterCommands.h>
+#include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/FilterParser/FilterParser.h>
+#include <Storages/StorageDeltaMerge-internal.h>
+#include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionException.h>
@@ -319,7 +318,7 @@ RegionException::RegionReadStatus isValidRegion(const RegionQueryInfo & region_t
     return RegionException::RegionReadStatus::OK;
 }
 
-inline void doLearnerRead(const TiDB::TableID table_id,         //
+RegionMap doLearnerRead(const TiDB::TableID table_id,           //
     const MvccQueryInfo::RegionsQueryInfo & regions_query_info, //
     size_t concurrent_num,                                      //
     TMTContext & tmt, Poco::Logger * log)
@@ -472,6 +471,8 @@ inline void doLearnerRead(const TiDB::TableID table_id,         //
                                                 << " ms");
         }
     }
+
+    return kvstore_region;
 }
 
 } // namespace
@@ -524,18 +525,21 @@ BlockInputStreams StorageDeltaMerge::read( //
 
         const auto & mvcc_query_info = *query_info.mvcc_query_info;
 
-        // Read with specify tso, check if tso is smaller than TiDB GcSafePoint
-        auto pd_client = tmt.getPDClient();
-        if (likely(!pd_client->isMock()))
-        {
-            auto safe_point = PDClientHelper::getGCSafePointWithRetry(pd_client,
-                /* ignore_cache= */ false,
-                global_context.getSettingsRef().safe_point_update_interval_seconds);
-            if (mvcc_query_info.read_tso < safe_point)
-                throw Exception("query id: " + context.getCurrentQueryId() + ", read tso: " + toString(mvcc_query_info.read_tso)
-                        + " is smaller than tidb gc safe point: " + toString(safe_point),
-                    ErrorCodes::LOGICAL_ERROR);
-        }
+        const auto check_read_tso = [&tmt, &context, this](UInt64 read_tso) {
+            // Read with specify tso, check if tso is smaller than TiDB GcSafePoint
+            auto pd_client = tmt.getPDClient();
+            if (likely(!pd_client->isMock()))
+            {
+                auto safe_point = PDClientHelper::getGCSafePointWithRetry(pd_client,
+                    /* ignore_cache= */ false,
+                    global_context.getSettingsRef().safe_point_update_interval_seconds);
+                if (read_tso < safe_point)
+                    throw Exception("query id: " + context.getCurrentQueryId() + ", read tso: " + toString(read_tso)
+                            + " is smaller than tidb gc safe point: " + toString(safe_point),
+                        ErrorCodes::LOGICAL_ERROR);
+            }
+        };
+        check_read_tso(mvcc_query_info.read_tso);
 
         /// If request comes from TiDB/TiSpark, mvcc_query_info.concurrent is 0,
         /// and `concurrent_num` should be 1. Concurrency handled by TiDB/TiSpark.
@@ -543,10 +547,11 @@ BlockInputStreams StorageDeltaMerge::read( //
         size_t concurrent_num = std::max<size_t>(num_streams * mvcc_query_info.concurrent, 1);
 
         // With `no_kvstore` is true, we do not do learner read
+        RegionMap regions_in_learner_read;
         if (likely(!select_query.no_kvstore))
         {
             /// Learner read.
-            doLearnerRead(tidb_table_info.id, mvcc_query_info.regions_query_info, concurrent_num, tmt, log);
+            regions_in_learner_read = doLearnerRead(tidb_table_info.id, mvcc_query_info.regions_query_info, concurrent_num, tmt, log);
 
             if (likely(!mvcc_query_info.regions_query_info.empty()))
             {
@@ -566,16 +571,14 @@ BlockInputStreams StorageDeltaMerge::read( //
                     const auto & range = region.range_in_table;
                     ss << region.region_id << "[" << range.first.toString() << "," << range.second.toString() << "),";
                 }
-                LOG_TRACE(log, "reading ranges: orig: " << ss.str());
-            }
-            {
-                std::stringstream ss;
+                std::stringstream ss_merged_range;
                 for (const auto & range : ranges)
-                    ss << range.toString() << ",";
-                LOG_TRACE(log, "reading ranges: " << ss.str());
+                    ss_merged_range << range.toString() << ",";
+                LOG_TRACE(log, "reading ranges: orig, " << ss.str() << " merged, " << ss_merged_range.str());
             }
         }
 
+        /// Get Rough set filter from query
         DM::RSOperatorPtr rs_operator = DM::EMPTY_FILTER;
         const bool enable_rs_filter = context.getSettingsRef().dm_enable_rough_set_filter;
         if (enable_rs_filter)
@@ -617,8 +620,42 @@ BlockInputStreams StorageDeltaMerge::read( //
             LOG_DEBUG(log, "Rough set filter is disabled.");
 
 
-        return store->read(context, context.getSettingsRef(), columns_to_read, ranges, num_streams,
+        auto streams = store->read(context, context.getSettingsRef(), columns_to_read, ranges, num_streams,
             /*max_version=*/mvcc_query_info.read_tso, rs_operator, max_block_size);
+
+        {
+            /// Ensure read_tso and regions' info after read.
+
+            check_read_tso(mvcc_query_info.read_tso);
+
+            for (const auto & region_query_info : mvcc_query_info.regions_query_info)
+            {
+                RegionException::RegionReadStatus status = RegionException::RegionReadStatus::OK;
+                auto region = tmt.getKVStore()->getRegion(region_query_info.region_id);
+                if (region != regions_in_learner_read[region_query_info.region_id])
+                    status = RegionException::RegionReadStatus::NOT_FOUND;
+                else if (region->version() != region_query_info.version)
+                {
+                    // ABA problem may cause because one region is removed and inserted back.
+                    // if the version of region is changed, the `streams` may has less data because of compaction.
+                    status = RegionException::RegionReadStatus::VERSION_ERROR;
+                }
+
+                if (status != RegionException::RegionReadStatus::OK)
+                {
+                    LOG_WARNING(log,
+                        "Check after read from DeltaMergeStore, region "
+                            << region_query_info.region_id << ", version " << region_query_info.version //
+                            << ", handle range [" << region_query_info.range_in_table.first.toString() << ", "
+                            << region_query_info.range_in_table.second.toString() << "), status "
+                            << RegionException::RegionReadStatusString(status));
+                    // throw region exception and let TiDB retry
+                    throwRetryRegion(mvcc_query_info.regions_query_info, status);
+                }
+            }
+        }
+
+        return streams;
     }
 }
 
