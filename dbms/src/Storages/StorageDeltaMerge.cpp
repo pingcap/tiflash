@@ -393,15 +393,20 @@ inline void doLearnerRead(const TiDB::TableID table_id,         //
 
             /// Blocking learner read. Note that learner read must be performed ahead of data read,
             /// otherwise the desired index will be blocked by the lock of data read.
-            auto [read_index, region_removed] = region->learnerRead();
-            if (!region_removed)
-                region->waitIndex(read_index);
-            else
+            auto read_index_result = region->learnerRead();
+            if (read_index_result.region_unavailable)
             {
                 // client-c detect region removed. Set region_status and continue.
                 region_status = RegionException::RegionReadStatus::NOT_FOUND;
                 continue;
             }
+            else if (read_index_result.region_epoch_not_match)
+            {
+                region_status = RegionException::RegionReadStatus::VERSION_ERROR;
+                continue;
+            }
+            else
+                region->waitIndex(read_index_result.read_index);
         }
     };
     auto start_time = Clock::now();

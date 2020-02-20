@@ -51,7 +51,7 @@ public:
 
     pingcap::pd::ClientPtr getPDClient() const;
 
-    IndexReaderPtr createIndexReader(pingcap::kv::RegionVerID region_version_id) const;
+    IndexReaderPtr createIndexReader() const;
 
     void restore();
 
