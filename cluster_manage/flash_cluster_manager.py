@@ -39,8 +39,6 @@ def wrap_try_get_lock(func):
 
 
 class Store:
-    TIFLASH_HTTP_PORT_LABEL = 'tiflash_http_port'
-
     def __eq__(self, other):
         return self.inner == other
 
@@ -53,12 +51,7 @@ class Store:
         host, port = address.split(':')
         self.ip = socket.gethostbyname(host)
         self.address = '{}:{}'.format(self.ip, port)
-        self.tiflash_http_port = None
         self.tiflash_http_address = None
-        for label in self.inner['labels']:
-            if label['key'] == Store.TIFLASH_HTTP_PORT_LABEL:
-                self.tiflash_http_port = int(label['value'])
-                self.tiflash_http_address = '{}:{}'.format(self.ip, self.tiflash_http_port)
 
     @property
     def id(self):
@@ -79,9 +72,7 @@ class TiFlashClusterManager:
     @staticmethod
     def compute_cur_store(stores):
         for _, store in stores.items():
-            ok = store.ip == conf.flash_conf.service_ip
-            # ok = True
-            if ok and store.tiflash_http_port == conf.flash_conf.http_port:
+            if store.address == conf.flash_conf.service_addr:
                 return store
 
         raise Exception("Can not tell current store.\nservice_addr: {},\nall tiflash stores: {}".format(
@@ -123,6 +114,22 @@ class TiFlashClusterManager:
             if cur >= ts + conf.flash_conf.cluster_refresh_interval:
                 self._try_refresh()
 
+    def _get_http_port_for_all_store(self):
+        http_info_map = {}
+        for value, metadata in self.pd_client.etcd_client.get_by_prefix(define.TIFLASH_CLUSTER_HTTP_PORT):
+            key = str(metadata.key, encoding='utf-8')[len(define.TIFLASH_CLUSTER_HTTP_PORT):]
+            http_info_map[key] = str(value, encoding='utf-8')
+
+        for store in self.stores.values():
+            store.tiflash_http_address = http_info_map.get(store.address)
+
+        self.logger.debug('http port of all store: {}'.format(http_info_map))
+
+    def _update_http_port(self):
+        key = '{}{}'.format(define.TIFLASH_CLUSTER_HTTP_PORT, self.cur_store.address)
+        val = conf.flash_conf.http_addr
+        self.pd_client.etcd_client.update(key, val, max(conf.flash_conf.cluster_master_ttl, 300))
+
     def __init__(self, pd_client: PDClient, tidb_status_addr_list):
         self.logger = logging.getLogger('TiFlashManager')
         self.tidb_status_addr_list = tidb_status_addr_list
@@ -143,6 +150,7 @@ class TiFlashClusterManager:
             self.logger.info('Update all tiflash stores: from {} to {}'.format([k.inner for k in prev_stores.values()],
                                                                                [k.inner for k in self.stores.values()]))
         self.cur_store = self.compute_cur_store(self.stores)
+        self._update_http_port()
 
     def deal_with_region(self, region):
         for peer in region.peers:
@@ -213,6 +221,8 @@ class TiFlashClusterManager:
 
     @wrap_try_get_lock
     def table_update(self):
+        self._get_http_port_for_all_store()
+
         table_list = tidb_tools.db_flash_replica(self.tidb_status_addr_list)
         all_rules = self.pd_client.get_group_rules(placement_rule.TIFLASH_GROUP_ID)
         for table in table_list:
