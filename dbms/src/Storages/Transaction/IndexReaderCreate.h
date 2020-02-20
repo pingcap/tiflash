@@ -7,6 +7,6 @@
 namespace DB
 {
 
-using IndexReaderCreateFunc = std::function<IndexReaderPtr(pingcap::kv::RegionVerID)>;
+using IndexReaderCreateFunc = std::function<IndexReaderPtr()>;
 
 } // namespace DB

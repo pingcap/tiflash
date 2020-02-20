@@ -20,17 +20,25 @@ using KVClusterPtr = std::shared_ptr<pingcap::kv::Cluster>;
 namespace DB
 {
 
+// ReadIndex Request may report two error cases:
+// - region unavailable : This region is removed because of merge operation.
+// - region epoch not match : This region is splitted.
+// The case other than split is not likely to report error, because we always use the newest region mete to request.
+struct ReadIndexResult
+{
+    UInt64 read_index;
+    bool region_unavailable;
+    bool region_epoch_not_match;
+};
 
 struct IndexReader
 {
-    pingcap::kv::RegionVerID region_id;
     KVClusterPtr cluster;
     Logger * log;
 
-    IndexReader(KVClusterPtr cluster_, const pingcap::kv::RegionVerID & id);
+    IndexReader(KVClusterPtr cluster_);
 
-    // if region is merged and this region is removed, the second value returns true.
-    std::pair<UInt64, bool> getReadIndex();
+    ReadIndexResult getReadIndex(const pingcap::kv::RegionVerID & region_id);
 };
 
 using IndexReaderPtr = std::shared_ptr<IndexReader>;

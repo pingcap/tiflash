@@ -30,7 +30,7 @@ TMTContext::TMTContext(Context & context_, const std::vector<std::string> & addr
 
 void TMTContext::restore()
 {
-    kvstore->restore([&](pingcap::kv::RegionVerID id) -> IndexReaderPtr { return this->createIndexReader(id); });
+    kvstore->restore([&]() -> IndexReaderPtr { return this->createIndexReader(); });
     region_table.restore();
     initialized = true;
 
@@ -71,14 +71,14 @@ void TMTContext::setSchemaSyncer(SchemaSyncerPtr rhs)
 
 pingcap::pd::ClientPtr TMTContext::getPDClient() const { return cluster->pd_client; }
 
-IndexReaderPtr TMTContext::createIndexReader(pingcap::kv::RegionVerID region_version_id) const
+IndexReaderPtr TMTContext::createIndexReader() const
 {
     std::lock_guard<std::mutex> lock(mutex);
     if (cluster->pd_client->isMock())
     {
         return nullptr;
     }
-    return std::make_shared<IndexReader>(cluster, region_version_id);
+    return std::make_shared<IndexReader>(cluster);
 }
 
 const std::unordered_set<std::string> & TMTContext::getIgnoreDatabases() const { return ignore_databases; }

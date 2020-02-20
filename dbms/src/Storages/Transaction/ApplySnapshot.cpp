@@ -156,7 +156,7 @@ void KVStore::handleApplySnapshot(metapb::Region && region, UInt64 peer_id, cons
         }
         RegionMeta(std::move(peer), std::move(region), std::move(apply_state));
     });
-    IndexReaderCreateFunc index_reader_create = [&](pingcap::kv::RegionVerID id) -> IndexReaderPtr { return tmt.createIndexReader(id); };
+    IndexReaderCreateFunc index_reader_create = [&]() -> IndexReaderPtr { return tmt.createIndexReader(); };
     auto new_region = std::make_shared<Region>(std::move(meta), index_reader_create);
 
     LOG_INFO(log, "Try to apply snapshot: " << new_region->toString(true));
