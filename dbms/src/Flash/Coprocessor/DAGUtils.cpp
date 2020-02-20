@@ -302,17 +302,16 @@ UInt8 getFieldLengthForArrowEncode(Int32 tp)
         case TiDB::TypeYear:
         case TiDB::TypeDouble:
         case TiDB::TypeTime:
+        case TiDB::TypeDate:
+        case TiDB::TypeDatetime:
+        case TiDB::TypeNewDate:
+        case TiDB::TypeTimestamp:
             return 8;
         case TiDB::TypeFloat:
             return 4;
         case TiDB::TypeDecimal:
         case TiDB::TypeNewDecimal:
             return 40;
-        case TiDB::TypeDate:
-        case TiDB::TypeDatetime:
-        case TiDB::TypeNewDate:
-        case TiDB::TypeTimestamp:
-            return 20;
         case TiDB::TypeVarchar:
         case TiDB::TypeVarString:
         case TiDB::TypeString:

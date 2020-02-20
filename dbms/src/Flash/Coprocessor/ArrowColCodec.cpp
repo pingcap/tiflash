@@ -525,27 +525,16 @@ const char * arrowDateColToFlashCol(const char * pos, UInt8 field_length, UInt32
             pos += field_length;
             continue;
         }
-        UInt32 hour = toLittleEndian(*(reinterpret_cast<const UInt32 *>(pos)));
-        pos += 4;
-        UInt32 micro_second = toLittleEndian(*(reinterpret_cast<const UInt32 *>(pos)));
-        pos += 4;
-        UInt16 year = toLittleEndian(*(reinterpret_cast<const UInt16 *>(pos)));
-        pos += 2;
-        UInt8 month = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
-        pos += 1;
-        UInt8 day = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
-        pos += 1;
-        UInt8 minute = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
-        pos += 1;
-        UInt8 second = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
-        pos += 1;
-        pos += 2;
-        //UInt8 time_type = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
-        pos += 1;
-        //UInt8 fsp = toLittleEndian(*(reinterpret_cast<const Int8 *>(pos)));
-        pos += 1;
-        pos += 2;
+        UInt64 chunk_time = toLittleEndian(*(reinterpret_cast<const UInt64 *>(pos)));
+        UInt16 year = (UInt16)((chunk_time & MyTimeBase::YEAR_BIT_FIELD_MASK) >> MyTimeBase::YEAR_BIT_FIELD_OFFSET);
+        UInt8 month = (UInt8)((chunk_time & MyTimeBase::MONTH_BIT_FIELD_MASK) >> MyTimeBase::MONTH_BIT_FIELD_OFFSET);
+        UInt8 day = (UInt8)((chunk_time & MyTimeBase::DAY_BIT_FIELD_MASK) >> MyTimeBase::DAY_BIT_FIELD_OFFSET);
+        UInt16 hour = (UInt16)((chunk_time & MyTimeBase::HOUR_BIT_FIELD_MASK) >> MyTimeBase::HOUR_BIT_FIELD_OFFSET);
+        UInt8 minute = (UInt8)((chunk_time & MyTimeBase::MINUTE_BIT_FIELD_MASK) >> MyTimeBase::MINUTE_BIT_FIELD_OFFSET);
+        UInt8 second = (UInt8)((chunk_time & MyTimeBase::SECOND_BIT_FIELD_MASK) >> MyTimeBase::SECOND_BIT_FIELD_OFFSET);
+        UInt32 micro_second = (UInt32)((chunk_time & MyTimeBase::MICROSECOND_BIT_FIELD_MASK) >> MyTimeBase::MICROSECOND_BIT_FIELD_OFFSET);
         MyDateTime mt(year, month, day, hour, minute, second, micro_second);
+        pos += field_length;
         col.column->assumeMutable()->insert(Field(mt.toPackedUInt()));
     }
     return pos;
