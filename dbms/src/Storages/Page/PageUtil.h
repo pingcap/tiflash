@@ -141,7 +141,8 @@ std::unique_ptr<C> readValuesFromFile(const std::string & path, Allocator<false>
 
     size_t file_size = file.getSize();
     int    file_fd   = openFile<true>(path);
-    char * data      = (char *)allocator.alloc(file_size);
+    SCOPE_EXIT({ ::close(file_fd); });
+    char * data = (char *)allocator.alloc(file_size);
     SCOPE_EXIT({ allocator.free(data, file_size); });
     char * pos = data;
 

@@ -526,6 +526,8 @@ void PageFile::readAndSetPageMetas(PageEntriesEdit & edit)
     // File not exists.
     if (unlikely(!file_fd))
         return;
+    SCOPE_EXIT({ ::close(file_fd); });
+
     char * meta_data = (char *)alloc(file_size);
     SCOPE_EXIT({ free(meta_data, file_size); });
 
