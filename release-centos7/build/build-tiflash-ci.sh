@@ -19,7 +19,7 @@ set -xe
 install_dir="$SRCPATH/release-centos7/tiflash"
 if [ -d "$install_dir" ]; then rm -rf "$install_dir"/*; else mkdir -p "$install_dir"; fi
 
-cp -r /flash_cluster_manager "$install_dir"
+cp -r /flash_cluster_manager "$install_dir"/flash_cluster_manager
 
 if [ -d "$SRCPATH/contrib/kvproto" ]; then
   cd "$SRCPATH/contrib/kvproto"
