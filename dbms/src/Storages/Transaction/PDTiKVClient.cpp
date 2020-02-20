@@ -57,7 +57,7 @@ ReadIndexResult IndexReader::getReadIndex(const pingcap::kv::RegionVerID & regio
         }
         catch (pingcap::Exception & e)
         {
-            LOG_WARNING(log, "Region " << region_id.toString() << " get index failed, error message is :" + e.displayText());
+            LOG_WARNING(log, "Region " << region_id.toString() << " get index failed, error message is :" << e.displayText());
             retry_time++;
             // We try few times, may be cost several seconds, if it still fails, we should not waste too much time and report to tidb as soon.
             if (retry_time < maxRetryTime)
