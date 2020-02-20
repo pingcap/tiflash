@@ -37,6 +37,13 @@ class EtcdClient:
     def get_by_prefix(self, prefix):
         return self.client.get_prefix(prefix)
 
+    def update(self, key, value, ttl=conf.flash_conf.cluster_master_ttl):
+        ori_val, meta = self.client.get(key)
+        if ori_val is None or value != str(ori_val, encoding="utf8"):
+            self.client.put(key, value, self.client.lease(ttl))
+        else:
+            list(self.client.refresh_lease(meta.lease_id))
+
     def __init__(self, host, port):
         self.logger = logging.getLogger('etcd.client')
         self.client = etcd3.client(host=host, port=port, timeout=conf.flash_conf.update_rule_interval)
