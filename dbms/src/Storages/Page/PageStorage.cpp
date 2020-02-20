@@ -60,6 +60,9 @@ PageFileSet PageStorage::listAllPageFiles(const String & storage_path, Poco::Log
     PageFileSet page_files;
     for (const auto & name : file_names)
     {
+        if (name == PageStorage::ARCHIVE_SUBDIR)
+            continue;
+
         auto [page_file, page_file_type] = PageFile::recover(storage_path, name, page_file_log);
         if (page_file_type == PageFile::Type::Formal)
             page_files.insert(page_file);
@@ -126,7 +129,7 @@ void PageStorage::restore()
     }
 
     RestoreInfo info;
-    auto [checkpoint_wb_sequence, page_files_to_archieve]
+    auto [checkpoint_wb_sequence, page_files_to_archive]
         = restoreFromCheckpoints(merging_queue, versioned_page_entries, info, storage_name, log);
     if (checkpoint_wb_sequence)
         write_batch_seq = *checkpoint_wb_sequence;
@@ -168,11 +171,11 @@ void PageStorage::restore()
         }
     }
 
-    if (!page_files_to_archieve.empty())
+    if (!page_files_to_archive.empty())
     {
-        // Remove old checkpoints and archieve obsolete PageFiles that have not been archieved yet during gc for some reason.
-        archievePageFiles(page_files_to_archieve);
-        for (auto & pf : page_files_to_archieve)
+        // Remove old checkpoints and archive obsolete PageFiles that have not been archived yet during gc for some reason.
+        archivePageFiles(page_files_to_archive);
+        for (auto & pf : page_files_to_archive)
         {
             if (auto iter = page_files.find(pf); iter != page_files.end())
                 page_files.erase(iter);
@@ -201,7 +204,7 @@ PageStorage::restoreFromCheckpoints(PageStorage::MetaMergingQueue & merging_queu
                                     const String &                  storage_name,
                                     Poco::Logger *                  logger)
 {
-    PageFileSet page_files_to_archieve;
+    PageFileSet page_files_to_archive;
     // The sequence number of checkpoint. We should ignore the WriteBatch with
     // smaller number than checkpoint's.
     WriteBatch::SequenceID checkpoint_wb_sequence = 0;
@@ -227,7 +230,7 @@ PageStorage::restoreFromCheckpoints(PageStorage::MetaMergingQueue & merging_queu
     {
         // Old checkpoints can be removed
         for (size_t i = 0; i < checkpoints.size() - 1; ++i)
-            page_files_to_archieve.emplace(checkpoints[i]);
+            page_files_to_archive.emplace(checkpoints[i]);
         try
         {
             // Apply edits from latest checkpoint
@@ -262,16 +265,16 @@ PageStorage::restoreFromCheckpoints(PageStorage::MetaMergingQueue & merging_queu
                 // this file can be removed later
 
 
-                page_files_to_archieve.emplace(reader->belongingPageFile());
+                page_files_to_archive.emplace(reader->belongingPageFile());
                 merging_queue.pop();
             }
         }
         LOG_INFO(logger,
                  storage_name << " restore " << restore_info.toString() << " from checkpoint PageFile_" //
                               << last_checkpoint_file_id.first << "_" << last_checkpoint_file_id.second);
-        return {checkpoint_wb_sequence, page_files_to_archieve};
+        return {checkpoint_wb_sequence, page_files_to_archive};
     }
-    return {std::nullopt, page_files_to_archieve};
+    return {std::nullopt, page_files_to_archive};
 }
 
 PageId PageStorage::getMaxId()
@@ -874,7 +877,7 @@ PageFileSet PageStorage::gcCompactLegacy(PageFileSet && page_files, const std::s
         checkpoint_file.setCheckpoint();
     }
 
-    // Archieve obsolete PageFiles
+    // archive obsolete PageFiles
     {
         for (auto itr = page_files.begin(); itr != page_files.end();)
         {
@@ -895,7 +898,7 @@ PageFileSet PageStorage::gcCompactLegacy(PageFileSet && page_files, const std::s
             }
         }
 
-        archievePageFiles(page_files_to_compact);
+        archivePageFiles(page_files_to_compact);
     }
 
     return std::move(page_files);
@@ -924,25 +927,25 @@ WriteBatch PageStorage::prepareSnapshotWriteBatch(const SnapshotPtr snapshot, co
     return wb;
 }
 
-void PageStorage::archievePageFiles(const PageFileSet & page_files)
+void PageStorage::archivePageFiles(const PageFileSet & page_files)
 {
     if (page_files.empty())
         return;
 
-    const String archieve_path = storage_path + "/.archieve/";
-    Poco::File   archieve_dir(archieve_path);
-    if (!archieve_dir.exists())
-        archieve_dir.createDirectory();
+    const Poco::Path archive_path(storage_path, PageStorage::ARCHIVE_SUBDIR);
+    Poco::File       archive_dir(archive_path);
+    if (!archive_dir.exists())
+        archive_dir.createDirectory();
 
     for (auto & page_file : page_files)
     {
         Poco::Path path(page_file.folderPath());
-        auto       dest = archieve_path + path.getBaseName() + "/" + path.getFileName();
+        auto       dest = archive_path.toString() + "/" + path.getFileName();
         Poco::File file(path);
         if (file.exists())
             file.moveTo(dest);
     }
-    LOG_INFO(log, storage_name << " archieve " + DB::toString(page_files.size()) + " files to " + archieve_path);
+    LOG_INFO(log, storage_name << " archive " + DB::toString(page_files.size()) + " files to " + archive_path.toString());
 }
 
 struct MigrateInfo

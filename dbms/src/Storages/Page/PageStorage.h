@@ -141,7 +141,8 @@ private:
 
     WriteBatch prepareSnapshotWriteBatch(const SnapshotPtr snapshot, const WriteBatch::SequenceID wb_sequence);
 
-    void archievePageFiles(const PageFileSet & page_files_to_archieve);
+    static constexpr const char * ARCHIVE_SUBDIR = "archive";
+    void archivePageFiles(const PageFileSet & page_files_to_archive);
 
     PageEntriesEdit gcMigratePages(const SnapshotPtr &  snapshot,
                                    const GcLivesPages & file_valid_pages,
