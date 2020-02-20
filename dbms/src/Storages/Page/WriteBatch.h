@@ -1,9 +1,9 @@
 #pragma once
 
-#include <vector>
-
 #include <IO/ReadBuffer.h>
 #include <Storages/Page/PageDefines.h>
+
+#include <vector>
 
 namespace DB
 {
@@ -97,9 +97,11 @@ public:
         sequence = 0;
     }
 
-    void setSequence(SequenceID sequence_) { sequence = sequence_; }
-
     SequenceID getSequence() const { return sequence; }
+
+
+    // `setSequence` should only called by internal method of PageStorage.
+    void setSequence(SequenceID sequence_) { sequence = sequence_; }
 
 private:
     Writes     writes;

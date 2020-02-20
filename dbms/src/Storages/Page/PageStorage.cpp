@@ -1,15 +1,14 @@
-#include <queue>
-#include <set>
-#include <utility>
-
-#include <Storages/Page/PageStorage.h>
-
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
+#include <Storages/Page/PageStorage.h>
 #include <common/logger_useful.h>
+
 #include <ext/scope_guard.h>
+#include <queue>
+#include <set>
+#include <utility>
 
 namespace DB
 {
@@ -18,6 +17,29 @@ namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
+
+void mergeEditsToRestoreInfo(PageStorage::RestoreInfo & info, const PageEntriesEdit & edit)
+{
+    for (const auto & record : edit.getRecords())
+    {
+        if (record.type == WriteBatch::WriteType::DEL)
+            info.deletes++;
+        else if (record.type == WriteBatch::WriteType::PUT)
+            info.puts++;
+        else if (record.type == WriteBatch::WriteType::REF)
+            info.refs++;
+        else if (record.type == WriteBatch::WriteType::UPSERT)
+            info.upserts++;
+    }
+}
+
+String PageStorage::RestoreInfo::toString() const
+{
+    std::stringstream ss;
+    ss << puts << " puts and " << refs << " refs and " //
+       << deletes << " deletes and " << upserts << " upserts";
+    return ss.str();
+}
 
 PageFileSet PageStorage::listAllPageFiles(const String & storage_path, Poco::Logger * page_file_log, ListPageFilesOption option)
 {
@@ -103,8 +125,11 @@ void PageStorage::restore()
         merging_queue.push(std::move(reader));
     }
 
+    RestoreInfo info;
     auto [checkpoint_wb_sequence, page_files_to_archieve]
-        = restoreFromCheckpoints(merging_queue, versioned_page_entries, storage_name, log);
+        = restoreFromCheckpoints(merging_queue, versioned_page_entries, info, storage_name, log);
+    if (checkpoint_wb_sequence)
+        write_batch_seq = *checkpoint_wb_sequence;
 
     while (!merging_queue.empty())
     {
@@ -114,7 +139,7 @@ void PageStorage::restore()
         // If no checkpoint, we apply all edits.
         // Else restroed from checkpoint, if checkpoint's WriteBatch sequence number is 0, we need to apply
         // all edits after that checkpoint too. If checkpoint's WriteBatch sequence number is not 0, we
-        // apply WriteBatch edits only if its WriteBatch sequence is bigger than checkpoint.
+        // apply WriteBatch edits only if its WriteBatch sequence is larger than checkpoint.
         if (!checkpoint_wb_sequence.has_value() || //
             (checkpoint_wb_sequence.has_value()
              && (*checkpoint_wb_sequence == 0 || *checkpoint_wb_sequence < reader->writeBatchSequence())))
@@ -123,6 +148,7 @@ void PageStorage::restore()
             {
                 auto edits = reader->getEdits();
                 versioned_page_entries.apply(edits);
+                write_batch_seq = reader->writeBatchSequence();
             }
             catch (Exception & e)
             {
@@ -153,14 +179,14 @@ void PageStorage::restore()
         }
     }
 
+    // TODO: reuse some page_files
+    // fill write_files
     for (auto & page_file : page_files)
     {
         // We need to keep a PageFile with largest FileID in write_files
         if (page_file.getLevel() == 0)
             write_files[0] = page_file;
     }
-    // TODO: reuse some page_files
-    // fill write_files
     for (auto & page_file : write_files)
     {
         auto writer = getWriter(page_file);
@@ -171,6 +197,7 @@ void PageStorage::restore()
 std::pair<std::optional<WriteBatch::SequenceID>, PageFileSet> //
 PageStorage::restoreFromCheckpoints(PageStorage::MetaMergingQueue & merging_queue,
                                     VersionedPageEntries &          version_set,
+                                    PageStorage::RestoreInfo &      restore_info,
                                     const String &                  storage_name,
                                     Poco::Logger *                  logger)
 {
@@ -183,6 +210,7 @@ PageStorage::restoreFromCheckpoints(PageStorage::MetaMergingQueue & merging_queu
 
     PageEntriesEdit    last_checkpoint_edits;
     PageFileIdAndLevel last_checkpoint_file_id;
+    // Collect all checkpoints file, but just restore from the latest checkpoint.
     while (!merging_queue.empty() //
            && merging_queue.top()->belongingPageFile().getType() == PageFile::Type::Checkpoint)
     {
@@ -204,6 +232,7 @@ PageStorage::restoreFromCheckpoints(PageStorage::MetaMergingQueue & merging_queu
         {
             // Apply edits from latest checkpoint
             version_set.apply(last_checkpoint_edits);
+            mergeEditsToRestoreInfo(restore_info, last_checkpoint_edits);
         }
         catch (Exception & e)
         {
@@ -213,6 +242,7 @@ PageStorage::restoreFromCheckpoints(PageStorage::MetaMergingQueue & merging_queu
 
         if (checkpoint_wb_sequence == 0)
         {
+            // backward compatibility
             while (merging_queue.top()->fileIdLevel() <= last_checkpoint_file_id)
             {
                 auto reader = merging_queue.top();
@@ -225,15 +255,20 @@ PageStorage::restoreFromCheckpoints(PageStorage::MetaMergingQueue & merging_queu
                     throw Exception("Try to removing old PageFile: " + reader->belongingPageFile().toString()
                                         + " after restore checkpoint PageFile_" + DB::toString(last_checkpoint_file_id.first) + "_"
                                         + DB::toString(last_checkpoint_file_id.second)
-                                        + ", but write batch sequence is: " + DB::toString(reader->writeBatchSequence()),
+                                        + ", but write batch sequence is not zero: " + DB::toString(reader->writeBatchSequence()),
                                     ErrorCodes::LOGICAL_ERROR);
                 }
 
                 // this file can be removed later
+
+
                 page_files_to_archieve.emplace(reader->belongingPageFile());
                 merging_queue.pop();
             }
         }
+        LOG_INFO(logger,
+                 storage_name << " restore " << restore_info.toString() << " from checkpoint PageFile_" //
+                              << last_checkpoint_file_id.first << "_" << last_checkpoint_file_id.second);
         return {checkpoint_wb_sequence, page_files_to_archieve};
     }
     return {std::nullopt, page_files_to_archieve};
@@ -320,11 +355,6 @@ void PageStorage::write(const WriteBatch & wb)
     if (unlikely(wb.empty()))
         return;
 
-    if (unlikely(config.num_write_slots > 1 && wb.getSequence() == 0))
-        throw Exception(storage_name + " with num_write_slots=" + DB::toString(config.num_write_slots)
-                            + ", need to set sequence number for keeping order between write batches",
-                        ErrorCodes::LOGICAL_ERROR);
-
     WriterPtr file_to_write = nullptr;
     {
         // Lock to wait for one idle writer
@@ -335,6 +365,7 @@ void PageStorage::write(const WriteBatch & wb)
     }
 
     PageEntriesEdit edit;
+    const_cast<WriteBatch &>(wb).setSequence(++write_batch_seq); // Set sequence number to keep ordering between writers.
     file_to_write->write(wb, edit);
 
     {
@@ -724,6 +755,7 @@ PageFileSet PageStorage::gcCompactLegacy(PageFileSet && page_files, const std::s
     // Build a version_set with snapshot
     PageEntriesVersionSetWithDelta version_set(config.version_set_config, log);
     WriteBatch::SequenceID         largest_wb_sequence = 0;
+    RestoreInfo                    info;
     {
         MetaMergingQueue merging_queue;
         for (auto & page_file : page_files)
@@ -735,32 +767,38 @@ PageFileSet PageStorage::gcCompactLegacy(PageFileSet && page_files, const std::s
         }
 
         std::optional<WriteBatch::SequenceID> checkpoint_wb_sequence;
-        std::tie(checkpoint_wb_sequence, page_files_to_compact) = restoreFromCheckpoints(merging_queue, version_set, storage_name, log);
+        std::tie(checkpoint_wb_sequence, page_files_to_compact)
+            = restoreFromCheckpoints(merging_queue, version_set, info, storage_name, log);
 
         while (!merging_queue.empty())
         {
             auto reader = merging_queue.top();
             merging_queue.pop();
             // We don't want to do compaction on formal / writing files. If any, just stop collecting `page_files_to_compact`.
-            if (writing_file_id_levels.count(reader->fileIdLevel()) != 0)
+            if (writing_file_id_levels.count(reader->fileIdLevel()) != 0 //
+                || (reader->belongingPageFile().getType() == PageFile::Type::Formal && reader->fileIdLevel().second == 0))
+            {
+                LOG_TRACE(log,
+                          storage_name << " gcCompactLegacy meet PageFile_" << DB::toString(reader->fileIdLevel().first) << "_"
+                                       << DB::toString(reader->fileIdLevel().second));
                 break;
-            if (reader->belongingPageFile().getType() == PageFile::Type::Formal)
-                break;
+            }
 
             // If no checkpoint, we apply all edits.
             // Else restroed from checkpoint, if checkpoint's WriteBatch sequence number is 0, we need to apply
             // all edits after that checkpoint too. If checkpoint's WriteBatch sequence number is not 0, we
-            // apply WriteBatch edits only if its WriteBatch sequence is bigger than checkpoint.
+            // apply WriteBatch edits only if its WriteBatch sequence is larger than checkpoint.
             if (!checkpoint_wb_sequence.has_value() || //
                 (checkpoint_wb_sequence.has_value()
                  && (*checkpoint_wb_sequence == 0 || *checkpoint_wb_sequence < reader->writeBatchSequence())))
             {
-                LOG_TRACE(log, storage_name << " gcCompactLegacy recoveringPageStorageMultiWriters_test from " + reader->toString());
+                LOG_TRACE(log, storage_name << " gcCompactLegacy recovering from " + reader->toString());
                 try
                 {
                     auto edits = reader->getEdits();
                     version_set.apply(edits);
                     largest_wb_sequence = std::max(largest_wb_sequence, reader->writeBatchSequence());
+                    mergeEditsToRestoreInfo(info, edits);
                 }
                 catch (Exception & e)
                 {
@@ -778,6 +816,7 @@ PageFileSet PageStorage::gcCompactLegacy(PageFileSet && page_files, const std::s
             else
             {
                 // We apply all edit of belonging PageFile, do compaction on it.
+                LOG_TRACE(log, storage_name << " gcCompactLegacy try to compact: " + reader->belongingPageFile().toString());
                 page_files_to_compact.emplace(reader->belongingPageFile());
             }
         }
@@ -814,21 +853,26 @@ PageFileSet PageStorage::gcCompactLegacy(PageFileSet && page_files, const std::s
         std::stringstream ss;
         ss << "[";
         for (const auto & page_file : page_files_to_compact)
-            ss << "<" << page_file.getFileId() << "," << page_file.getLevel() << ">,";
+            ss << "(" << page_file.getFileId() << "," << page_file.getLevel() << "),";
         ss << "]";
         LOG_INFO(log,
-                 storage_name << " Compact legacy PageFile " << ss.str() //
-                              << " into checkpoint PageFile_" << largest_id_level.first << "_" << largest_id_level.second);
+                 storage_name << " Compact legacy PageFile " << ss.str()                                                  //
+                              << " into checkpoint PageFile_" << largest_id_level.first << "_" << largest_id_level.second //
+                              << " with " << info.toString());
     }
-    auto checkpoint_file = PageFile::newPageFile(largest_id_level.first, largest_id_level.second, storage_path, PageFile::Type::Temp, log);
+
+    if (!info.empty())
     {
-        auto checkpoint_writer = checkpoint_file.createWriter(false);
+        auto checkpoint_file
+            = PageFile::newPageFile(largest_id_level.first, largest_id_level.second, storage_path, PageFile::Type::Temp, log);
+        {
+            auto checkpoint_writer = checkpoint_file.createWriter(false);
 
-        PageEntriesEdit edit;
-        checkpoint_writer->write(wb, edit);
+            PageEntriesEdit edit;
+            checkpoint_writer->write(wb, edit);
+        }
+        checkpoint_file.setCheckpoint();
     }
-
-    checkpoint_file.setCheckpoint();
 
     // Archieve obsolete PageFiles
     {
@@ -893,13 +937,20 @@ void PageStorage::archievePageFiles(const PageFileSet & page_files)
     for (auto & page_file : page_files)
     {
         Poco::Path path(page_file.folderPath());
-        auto       dest = archieve_path + path.getBaseName();
+        auto       dest = archieve_path + path.getBaseName() + "/" + path.getFileName();
         Poco::File file(path);
         if (file.exists())
             file.moveTo(dest);
     }
-    LOG_INFO(log, storage_name << " archieve " + DB::toString(page_files.size()) + " to " + archieve_path);
+    LOG_INFO(log, storage_name << " archieve " + DB::toString(page_files.size()) + " files to " + archieve_path);
 }
+
+struct MigrateInfo
+{
+    PageFileIdAndLevel     file_id   = {0, 0};
+    size_t                 num_pages = 0;
+    WriteBatch::SequenceID sequence  = 0;
+};
 
 PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
                                             const GcLivesPages & file_valid_pages,
@@ -937,7 +988,8 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
     {
         PageEntriesEdit legacy_edit; // All page entries in `merge_files`
         // No need to sync after each write. Do sync before closing is enough.
-        auto gc_file_writer = gc_file.createWriter(/* sync_on_write= */ false);
+        auto                     gc_file_writer = gc_file.createWriter(/* sync_on_write= */ false);
+        std::vector<MigrateInfo> migrate_infos;
 
         for (const auto & file_id_level : merge_files)
         {
@@ -951,10 +1003,7 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
             if (it == file_valid_pages.end())
             {
                 // This file does not contain any valid page.
-                LOG_TRACE(log,
-                          storage_name << " No valid pages from PageFile_"                                      //
-                                       << file_id_level.first << "_" << file_id_level.second << " to PageFile_" //
-                                       << gc_file.getFileId() << "_" << gc_file.getLevel());
+                migrate_infos.emplace_back(MigrateInfo{.file_id = file_id_level, .num_pages = 0, .sequence = 0});
                 continue;
             }
 
@@ -1000,11 +1049,8 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
 
                 gc_file_writer->write(wb, gc_file_edit);
             }
-
-            LOG_TRACE(log,
-                      storage_name << " Migrate " << page_id_and_entries.size() << " pages from PageFile_"  //
-                                   << file_id_level.first << "_" << file_id_level.second << " to PageFile_" //
-                                   << gc_file.getFileId() << "_" << gc_file.getLevel());
+            migrate_infos.emplace_back(
+                MigrateInfo{.file_id = file_id_level, .num_pages = page_id_and_entries.size(), .sequence = max_wb_sequence});
         }
 
 #if 0
@@ -1035,6 +1081,24 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
             gc_file_writer->write(batch, gc_file_edit);
         }
 #endif
+        {
+            std::stringstream migrate_stream, remove_stream;
+            migrate_stream << "[";
+            remove_stream << "[";
+            for (const auto & info : migrate_infos)
+            {
+                if (info.num_pages > 0)
+                    migrate_stream << "((" << DB::toString(info.file_id.first) << "," << DB::toString(info.file_id.second) << ")," //
+                                   << DB::toString(info.num_pages) << "," << DB::toString(info.sequence) << "),";
+                else
+                    remove_stream << "(" << DB::toString(info.file_id.first) << "," << DB::toString(info.file_id.second) << "),";
+            }
+            migrate_stream << "]";
+            remove_stream << "]";
+            LOG_DEBUG(log,
+                      storage_name << " Migrate pages to PageFile_" << gc_file.getFileId() << "_" << gc_file.getLevel()
+                                   << ", mirgrate: " << migrate_stream.str() << ", remove: " << remove_stream.str());
+        }
     } // free gc_file_writer and sync
 
     const auto id = gc_file.fileIdLevel();
@@ -1048,7 +1112,7 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
         gc_file.setFormal();
         LOG_INFO(log,
                  storage_name << " GC have migrated " << num_successful_migrate_pages //
-                              << " regions and " << num_valid_ref_pages               //
+                              << " Pages and " << num_valid_ref_pages                 //
                               << " RefPages and " << num_del_page_meta                //
                               << " DelPage to PageFile_" << id.first << "_" << id.second);
     }

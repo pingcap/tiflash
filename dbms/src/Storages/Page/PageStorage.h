@@ -1,5 +1,12 @@
 #pragma once
 
+#include <Storages/Page/Page.h>
+#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/PageFile.h>
+#include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
+#include <Storages/Page/VersionSet/PageEntriesVersionSetWithDelta.h>
+#include <Storages/Page/WriteBatch.h>
+
 #include <functional>
 #include <optional>
 #include <queue>
@@ -7,13 +14,6 @@
 #include <shared_mutex>
 #include <type_traits>
 #include <unordered_map>
-
-#include <Storages/Page/Page.h>
-#include <Storages/Page/PageDefines.h>
-#include <Storages/Page/PageFile.h>
-#include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
-#include <Storages/Page/VersionSet/PageEntriesVersionSetWithDelta.h>
-#include <Storages/Page/WriteBatch.h>
 
 namespace DB
 {
@@ -77,6 +77,17 @@ public:
     using ExternalPagesRemover
         = std::function<void(const PathAndIdsVec & pengding_external_pages, const std::set<PageId> & valid_normal_pages)>;
 
+    // Debugging info for restore
+    struct RestoreInfo
+    {
+        size_t puts    = 0;
+        size_t refs    = 0;
+        size_t deletes = 0;
+        size_t upserts = 0;
+        bool   empty() const { return puts == 0 && refs == 0 && deletes == 0 && upserts == 0; }
+        String toString() const;
+    };
+
 public:
     PageStorage(String name, const String & storage_path, const Config & config_);
 
@@ -111,6 +122,7 @@ private:
     static std::pair<std::optional<WriteBatch::SequenceID>, PageFileSet> //
     restoreFromCheckpoints(PageStorage::MetaMergingQueue & merging_queue,
                            VersionedPageEntries &          version_set,
+                           RestoreInfo &                   restore_info,
                            const String &                  storage_name,
                            Poco::Logger *                  logger);
 
@@ -150,6 +162,8 @@ private:
     std::vector<PageFile>   write_files;
     std::deque<WriterPtr>   idle_writers;
 
+    // A sequence number to keep ordering between multi-writers.
+    std::atomic<WriteBatch::SequenceID> write_batch_seq;
 
     OpenReadFiles open_read_files;
     std::mutex    open_read_files_mutex; // A mutex only used to protect open_read_files.

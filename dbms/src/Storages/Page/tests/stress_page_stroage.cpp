@@ -71,8 +71,6 @@ public:
 
             DB::WriteBatch wb;
             wb.putPage(pageId, 0, buff, buff->buffer().size());
-            if (num_writer_slots > 1)
-                wb.setSequence(++write_batch_sequence);
             ps->write(wb);
             if (pageId % 100 == 0)
                 LOG_INFO(&Logger::get("root"), "writer wrote page" + DB::toString(pageId));
@@ -96,8 +94,6 @@ public:
 
             DB::WriteBatch wb;
             wb.putPage(pageId, 0, buff, buff->buffer().size());
-            if (num_writer_slots > 1)
-                wb.setSequence(++write_batch_sequence);
             ps->write(wb);
             ++pages_written;
             bytes_written += buff->buffer().size();

@@ -5,7 +5,6 @@
 #include <Poco/Runnable.h>
 #include <Poco/ThreadPool.h>
 #include <Poco/Timer.h>
-
 #include <Storages/Page/PageStorage.h>
 
 void Usage(const char * prog)
@@ -93,9 +92,10 @@ try
     DB::PageEntriesVersionSetWithDelta versions(DB::MVCC::VersionSetConfig(), &Poco::Logger::get("GetValidPages"));
     for (auto & page_file : page_files)
     {
-        DB::PageEntriesEdit  edit;
-        DB::PageIdAndEntries id_and_caches;
-        const_cast<DB::PageFile &>(page_file).readAndSetPageMetas(edit);
+        DB::PageEntriesEdit        edit;
+        DB::PageIdAndEntries       id_and_caches;
+        DB::WriteBatch::SequenceID sid = 0;
+        const_cast<DB::PageFile &>(page_file).readAndSetPageMetas(edit, sid);
 
         printf("File: page_%llu_%u with %zu entries:\n", page_file.getFileId(), page_file.getLevel(), edit.size());
         for (const auto & record : edit.getRecords())
@@ -157,15 +157,6 @@ try
             const auto entry = snapshot->version()->find(page_id);
             printPageEntry(page_id, *entry);
         }
-#if 0
-        //printf("Valid page entries: %zu\n", valid_page_entries->size());
-        for (auto iter = snapshot->version()->cbegin(); iter != snapshot->version()->cend(); ++iter)
-        {
-            const DB::PageId      pid   = iter.pageId();
-            const DB::PageEntry & entry = iter.pageEntry();
-            printPageEntry(pid, entry);
-        }
-#endif
     }
     else if (mode == LIST_ALL_CAPACITY)
     {
@@ -205,14 +196,14 @@ try
             global_total_valid_size += valid_size;
             // PageFileId, level, size, valid size, valid percentage
             printf("%9llu\t%9u\t"
-                   "%9.2f\t%9.2f\t%.2f\t%"
-                   "%zu"
+                   "%9.2f\t%9.2f\t%9.2f%%\t"
+                   "%6zu"
                    "\n",
                    id_and_level.first,
                    id_and_level.second,
                    total_size / MB,
                    valid_size / MB,
-                   100.0 * valid_size / total_size,
+                   total_size == 0 ? 0 : (100.0 * valid_size / total_size),
                    valid_pages.size());
         }
         printf("Total size: %.2f MB over %.2f MB\n", global_total_valid_size / MB, global_total_size / MB);

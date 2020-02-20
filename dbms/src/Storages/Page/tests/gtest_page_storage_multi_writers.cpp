@@ -61,8 +61,9 @@ protected:
             file.remove(true);
         }
         // default test config
-        config.file_roll_size  = 4 * MB;
-        config.num_write_slots = 4; // At most 4 threads for write
+        config.file_roll_size           = 4 * MB;
+        config.merge_hint_low_used_rate = 0.5;
+        config.num_write_slots          = 4; // At most 4 threads for write
 
         storage = reopenWithConfig(config);
     }
@@ -86,9 +87,6 @@ struct TestContext
 
     std::atomic<bool> running_without_exception = true;
     std::atomic<bool> running_without_timeout   = true;
-
-    bool                    set_sequence         = true;
-    std::atomic<DB::UInt64> write_batch_sequence = 0;
 
     void setRunable()
     {
@@ -144,17 +142,8 @@ public:
             DB::MemHolder     holder;
             DB::ReadBufferPtr buff = genRandomData(pageId, holder);
 
-            DB::WriteBatch             wb;
-            DB::WriteBatch::SequenceID seq = 0;
-            if (ctx.set_sequence)
-            {
-                ctx.write_batch_sequence = 1;
-                seq                      = ctx.write_batch_sequence;
-            }
-            (*reinterpret_cast<DB::WriteBatch::SequenceID *>(buff->position())) = seq; // Hack to set first 8 bytes.
-            wb.putPage(pageId, seq, buff, buff->buffer().size());
-            if (storage->config.num_write_slots > 1 && ctx.set_sequence)
-                wb.setSequence(seq);
+            DB::WriteBatch wb;
+            wb.putPage(pageId, 0, buff, buff->buffer().size());
             storage->write(wb);
             if (pageId % 100 == 0)
                 LOG_INFO(&Logger::get("root"), "writer wrote page" + DB::toString(pageId));
@@ -172,12 +161,8 @@ public:
             DB::MemHolder     holder;
             DB::ReadBufferPtr buff = genRandomData(pageId, holder);
 
-            DB::WriteBatch             wb;
-            DB::WriteBatch::SequenceID seq                                      = ++ctx.write_batch_sequence;
-            (*reinterpret_cast<DB::WriteBatch::SequenceID *>(buff->position())) = seq; // Hack to set first 8 bytes.
-            wb.putPage(pageId, seq, buff, buff->buffer().size());
-            if (storage->config.num_write_slots > 1 && ctx.set_sequence)
-                wb.setSequence(seq);
+            DB::WriteBatch wb;
+            wb.putPage(pageId, 0, buff, buff->buffer().size());
             storage->write(wb);
             ++pages_written;
             bytes_written += buff->buffer().size();
@@ -406,16 +391,12 @@ try
 
         auto   old_page = old_storage->read(page_id, old_snapshot);
         char * buf      = old_page.data.begin();
-        auto   seq      = *reinterpret_cast<DB::WriteBatch::SequenceID *>(buf);
-        ASSERT_EQ(seq, old_entry.tag);
-        for (size_t i = sizeof(DB::WriteBatch::SequenceID); i < old_page.data.size(); ++i)
+        for (size_t i = 0; i < old_page.data.size(); ++i)
             ASSERT_EQ(((size_t) * (buf + i)) % 0xFF, page_id % 0xFF);
 
         auto page = storage->read(page_id, snapshot);
         buf       = page.data.begin();
-        seq       = *reinterpret_cast<DB::WriteBatch::SequenceID *>(buf);
-        ASSERT_EQ(seq, entry.tag);
-        for (size_t i = sizeof(DB::WriteBatch::SequenceID); i < old_page.data.size(); ++i)
+        for (size_t i = 0; i < old_page.data.size(); ++i)
             ASSERT_EQ(((size_t) * (buf + i)) % 0xFF, page_id % 0xFF);
     }
 }
