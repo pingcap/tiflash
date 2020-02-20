@@ -110,7 +110,7 @@ void PageStorage::restore()
     {
         auto reader = merging_queue.top();
         merging_queue.pop();
-        LOG_TRACE(log, storage_name << " recovering from " + reader->toString());
+        // LOG_TRACE(log, storage_name << " recovering from " + reader->toString());
         // If no checkpoint, we apply all edits.
         // Else restroed from checkpoint, if checkpoint's WriteBatch sequence number is 0, we need to apply
         // all edits after that checkpoint too. If checkpoint's WriteBatch sequence number is not 0, we
@@ -322,7 +322,7 @@ void PageStorage::write(const WriteBatch & wb)
 
     if (unlikely(config.num_write_slots > 1 && wb.getSequence() == 0))
         throw Exception(storage_name + " with num_write_slots=" + DB::toString(config.num_write_slots)
-                            + ", need to set sequence number for  keep order between write batches",
+                            + ", need to set sequence number for keeping order between write batches",
                         ErrorCodes::LOGICAL_ERROR);
 
     WriterPtr file_to_write = nullptr;
@@ -755,7 +755,7 @@ PageFileSet PageStorage::gcCompactLegacy(PageFileSet && page_files, const std::s
                 (checkpoint_wb_sequence.has_value()
                  && (*checkpoint_wb_sequence == 0 || *checkpoint_wb_sequence < reader->writeBatchSequence())))
             {
-                LOG_TRACE(log, storage_name << " gcCompactLegacy recovering from " + reader->toString());
+                LOG_TRACE(log, storage_name << " gcCompactLegacy recoveringPageStorageMultiWriters_test from " + reader->toString());
                 try
                 {
                     auto edits = reader->getEdits();

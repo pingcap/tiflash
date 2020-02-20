@@ -148,13 +148,6 @@ void DeltaVersionEditAcceptor::applyPut(PageEntriesEdit::EditRecord & rec)
     else
     {
         // replace ori Page{normal_page_id}'s entry but inherit ref-counting
-        if (rec.entry.tag < old_entry->tag)
-        {
-            LOG_WARNING(log,
-                        "Try to apply Page" + DB::toString(rec.page_id) + ", normal Page" + DB::toString(normal_page_id) + " version "
-                            + DB::toString(old_entry->tag) + " with older version " + DB::toString(rec.entry.tag) + ", ignored.");
-            return;
-        }
         rec.entry.ref                                 = old_entry->ref + !is_ref_exist;
         current_version->normal_pages[normal_page_id] = rec.entry;
     }
