@@ -9,6 +9,7 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
+#include <Functions/FunctionsConditional.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Set.h>
 #include <Interpreters/convertFieldToType.h>
@@ -150,16 +151,15 @@ void DAGExpressionAnalyzer::appendWhere(
     auto & filter_column_type = chain.steps.back().actions->getSampleBlock().getByName(filter_column_name).type;
     if (!isUInt8Type(filter_column_type))
     {
-        filter_column_name = convertToUInt8ForFilter(chain, filter_column_name);
+        filter_column_name = convertToUInt8ForFilter(chain.steps.back().actions, filter_column_name);
     }
     chain.steps.back().required_output.push_back(filter_column_name);
 }
 
-String DAGExpressionAnalyzer::convertToUInt8ForFilter(ExpressionActionsChain & chain, const String & column_name)
+String DAGExpressionAnalyzer::convertToUInt8ForFilter(ExpressionActionsPtr & actions, const String & column_name)
 {
-    auto & last_actions = chain.steps.back().actions->getActions();
     // find the original unit8 column if possible
-    for (auto it = last_actions.rbegin(); it != last_actions.rend(); ++it)
+    for (auto it = actions->getActions().rbegin(); it != actions->getActions().rend(); ++it)
     {
         if (it->type == ExpressionAction::Type::APPLY_FUNCTION && it->result_name == column_name && it->function->getName() == "CAST")
         {
@@ -177,8 +177,7 @@ String DAGExpressionAnalyzer::convertToUInt8ForFilter(ExpressionActionsChain & c
     // 2. if the column is string, convert it to numeric column, and compare with 0
     // 3. if the column is date/datetime, compare it with zeroDate
     // 4. if the column is other type, throw exception
-    const auto & org_type = removeNullable(chain.steps.back().actions->getSampleBlock().getByName(column_name).type);
-    auto & actions = chain.steps.back().actions;
+    const auto & org_type = removeNullable(actions->getSampleBlock().getByName(column_name).type);
     if (org_type->isNumber() || org_type->isDecimal())
     {
         tipb::Expr const_expr;
@@ -315,7 +314,7 @@ void DAGExpressionAnalyzer::appendAggSelect(
     for (Int32 i = 0; i < aggregation.agg_func_size(); i++)
     {
         String & name = aggregated_columns[i].name;
-        String updated_name = appendCastIfNeeded(aggregation.agg_func(i), step.actions, name);
+        String updated_name = appendCastIfNeeded(aggregation.agg_func(i), step.actions, name, false);
         if (need_append_timezone_cast && aggregation.agg_func(i).field_type().tp() == TiDB::TypeTimestamp)
         {
             if (tz_col.length() == 0)
@@ -338,7 +337,7 @@ void DAGExpressionAnalyzer::appendAggSelect(
     for (Int32 i = 0; i < aggregation.group_by_size(); i++)
     {
         String & name = aggregated_columns[i + aggregation.agg_func_size()].name;
-        String updated_name = appendCastIfNeeded(aggregation.group_by(i), step.actions, name);
+        String updated_name = appendCastIfNeeded(aggregation.group_by(i), step.actions, name, false);
         if (need_append_timezone_cast && aggregation.group_by(i).field_type().tp() == TiDB::TypeTimestamp)
         {
             if (tz_col.length() == 0)
@@ -369,9 +368,10 @@ void DAGExpressionAnalyzer::appendAggSelect(
     }
 }
 
-String DAGExpressionAnalyzer::appendCastIfNeeded(const tipb::Expr & expr, ExpressionActionsPtr & actions, const String & expr_name)
+String DAGExpressionAnalyzer::appendCastIfNeeded(
+    const tipb::Expr & expr, ExpressionActionsPtr & actions, const String & expr_name, bool explicit_cast)
 {
-    if (!expr.has_field_type() && context.getSettingsRef().dag_expr_field_type_strict_check)
+    if (!expr.has_field_type() && (explicit_cast || context.getSettingsRef().dag_expr_field_type_strict_check))
     {
         throw Exception("Expression without field type", ErrorCodes::COP_BAD_DAG_REQUEST);
     }
@@ -383,7 +383,8 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(const tipb::Expr & expr, Expres
         // todo ignore nullable info??
         if (expected_type->getName() != actual_type->getName())
         {
-            implicit_cast_count++;
+
+            implicit_cast_count += !explicit_cast;
             // need to add cast function
             // first construct the second argument
             tipb::Expr type_expr;
@@ -474,7 +475,7 @@ String DAGExpressionAnalyzer::getActionsForInOperator(const tipb::Expr & expr, E
 
     String expr_name = applyFunction(func_name, argument_names, actions);
     // add cast if needed
-    expr_name = appendCastIfNeeded(expr, actions, expr_name);
+    expr_name = appendCastIfNeeded(expr, actions, expr_name, false);
     if (set->remaining_exprs.empty())
     {
         return expr_name;
@@ -494,6 +495,80 @@ String DAGExpressionAnalyzer::getActionsForInOperator(const tipb::Expr & expr, E
         argument_names.push_back(applyFunction(is_not_in ? "notEquals" : "equals", eq_arg_names, actions));
     }
     return applyFunction(is_not_in ? "and" : "or", argument_names, actions);
+}
+
+String DAGExpressionAnalyzer::getActionsForMultiIf(const tipb::Expr & expr, ExpressionActionsPtr & actions)
+{
+    // multiIf is special because
+    // 1. the type of odd argument(except the last one) must be UInt8
+    // 2. if the total number of arguments is even, we need to add an extra NULL to multiIf
+    const String & func_name = getFunctionName(expr);
+    Names argument_names;
+    for (int i = 0; i < expr.children_size(); i++)
+    {
+        // todo for expression like `case expr when cond1 then result1 ... when condN then resultN else default end`
+        //  tidb will convert it to `casewhen(expr = cond1, result1, ..., expr = condN, resultN, default)
+        //  it will save some redundant calculation if we can re-use expr column
+        String name = getActions(expr.children(i), actions);
+        if (i != expr.children_size() - 1 && i % 2 == 0)
+        {
+            name = convertToUInt8ForFilter(actions, name);
+        }
+        argument_names.push_back(name);
+    }
+    if (argument_names.size() % 2 == 0)
+    {
+        tipb::Expr null_expr;
+        constructNULLLiteralTiExpr(null_expr);
+        String name = getActions(null_expr, actions);
+        argument_names.push_back(name);
+    }
+    String expr_name = applyFunction(func_name, argument_names, actions);
+    // add cast if needed
+    expr_name = appendCastIfNeeded(expr, actions, expr_name, false);
+    return expr_name;
+}
+
+String DAGExpressionAnalyzer::getActionsForCast(const tipb::Expr & expr, ExpressionActionsPtr & actions)
+{
+    if (expr.children_size() != 1)
+    {
+        throw Exception("Cast function only support one argument", ErrorCodes::COP_BAD_DAG_REQUEST);
+    }
+    String name = getActions(expr.children(0), actions);
+    name = appendCastIfNeeded(expr, actions, name, true);
+    return name;
+}
+
+String DAGExpressionAnalyzer::getActionsForDateAdd(const tipb::Expr & expr, ExpressionActionsPtr & actions)
+{
+    static const std::unordered_map<String, String> unit_to_func_name_map({{"DAY", "addDays"}, {"WEEK", "addWeeks"}, {"MONTH", "addMonths"},
+        {"YEAR", "addYears"}, {"HOUR", "addHours"}, {"MINUTE", "addMinutes"}, {"SECOND", "addSeconds"}});
+    if (expr.children_size() != 3)
+    {
+        throw Exception("date add function requires three arguments", ErrorCodes::COP_BAD_DAG_REQUEST);
+    }
+    String date_column = getActions(expr.children(0), actions);
+    String delta_column = getActions(expr.children(1), actions);
+    if (expr.children(2).tp() != tipb::ExprType::String)
+    {
+        throw Exception("3rd argument of date add function must be string literal", ErrorCodes::COP_BAD_DAG_REQUEST);
+    }
+    String unit = expr.children(2).val();
+    if (unit_to_func_name_map.find(unit) == unit_to_func_name_map.end())
+        throw Exception("date_add does not support unit " + unit + " yet.", ErrorCodes::NOT_IMPLEMENTED);
+    String func_name = unit_to_func_name_map.find(unit)->second;
+    const auto & delta_column_type = removeNullable(actions->getSampleBlock().getByName(delta_column).type);
+    if (!delta_column_type->isNumber())
+    {
+        throw Exception("2rd argument of date add function must be numeric type", ErrorCodes::COP_BAD_DAG_REQUEST);
+    }
+    Names argument_names;
+    argument_names.push_back(date_column);
+    argument_names.push_back(delta_column);
+    String ret = applyFunction(func_name, argument_names, actions);
+    ret = appendCastIfNeeded(expr, actions, ret, true);
+    return ret;
 }
 
 String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActionsPtr & actions)
@@ -532,6 +607,18 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
         {
             return getActionsForInOperator(expr, actions);
         }
+        else if (func_name == "multiIf")
+        {
+            return getActionsForMultiIf(expr, actions);
+        }
+        else if (func_name == "CAST")
+        {
+            return getActionsForCast(expr, actions);
+        }
+        else if (func_name == "date_add")
+        {
+            return getActionsForDateAdd(expr, actions);
+        }
         Names argument_names;
         for (auto & child : expr.children())
         {
@@ -540,7 +627,7 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
         }
         String expr_name = applyFunction(func_name, argument_names, actions);
         // add cast if needed
-        expr_name = appendCastIfNeeded(expr, actions, expr_name);
+        expr_name = appendCastIfNeeded(expr, actions, expr_name, false);
         return expr_name;
     }
     else

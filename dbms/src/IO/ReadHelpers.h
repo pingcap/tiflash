@@ -573,6 +573,14 @@ inline void readMyDateText(UInt64 & date, ReadBuffer & buf)
     throw Exception("wrong date format.", ErrorCodes::CANNOT_PARSE_DATE);
 }
 
+inline bool tryReadMyDateText(UInt64 & x, ReadBuffer & buf)
+{
+    UInt64 tmp(0);
+    readMyDateText(tmp, buf);
+    x = tmp;
+    return true;
+}
+
 
 void readDateTextFallback(LocalDate & date, ReadBuffer & buf);
 
