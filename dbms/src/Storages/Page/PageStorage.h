@@ -69,8 +69,10 @@ public:
     using ReaderPtr     = std::shared_ptr<PageFile::Reader>;
     using OpenReadFiles = std::map<PageFileIdAndLevel, ReaderPtr>;
 
-    using MetaMergingQueue
-        = std::priority_queue<PageFile::MetaMergingReaderPtr, std::vector<PageFile::MetaMergingReaderPtr>, PageFile::MergingPtrComparator>;
+    using MetaMergingQueue = std::
+        priority_queue<PageFile::MetaMergingReaderPtr, std::vector<PageFile::MetaMergingReaderPtr>, PageFile::MergingPtrComparator<false>>;
+    using MetaCompactMergineQueue = std::
+        priority_queue<PageFile::MetaMergingReaderPtr, std::vector<PageFile::MetaMergingReaderPtr>, PageFile::MergingPtrComparator<true>>;
 
     using PathAndIdsVec        = std::vector<std::pair<String, std::set<PageId>>>;
     using ExternalPagesScanner = std::function<PathAndIdsVec()>;
@@ -119,12 +121,13 @@ public:
     listAllPageFiles(const String & storage_path, Poco::Logger * page_file_log, ListPageFilesOption option = ListPageFilesOption());
 
 private:
+    template <class MergineQueue>
     static std::pair<std::optional<WriteBatch::SequenceID>, PageFileSet> //
-    restoreFromCheckpoints(PageStorage::MetaMergingQueue & merging_queue,
-                           VersionedPageEntries &          version_set,
-                           RestoreInfo &                   restore_info,
-                           const String &                  storage_name,
-                           Poco::Logger *                  logger);
+    restoreFromCheckpoints(MergineQueue &         merging_queue,
+                           VersionedPageEntries & version_set,
+                           RestoreInfo &          restore_info,
+                           const String &         storage_name,
+                           Poco::Logger *         logger);
 
     WriterPtr getWriter(PageFile & page_file);
     ReaderPtr getReader(const PageFileIdAndLevel & file_id_level);
@@ -139,9 +142,11 @@ private:
 
     PageFileSet gcCompactLegacy(PageFileSet && page_files, const std::set<PageFileIdAndLevel> & writing_file_id_levels);
 
-    WriteBatch prepareSnapshotWriteBatch(const SnapshotPtr snapshot, const WriteBatch::SequenceID wb_sequence);
+    WriteBatch  prepareCheckpointWriteBatch(const SnapshotPtr snapshot, const WriteBatch::SequenceID wb_sequence);
+    static void writeToCheckpoint(const String & storage_path, const PageFileIdAndLevel & file_id, WriteBatch && wb, Poco::Logger * log);
 
     static constexpr const char * ARCHIVE_SUBDIR = "archive";
+
     void archivePageFiles(const PageFileSet & page_files_to_archive);
 
     PageEntriesEdit gcMigratePages(const SnapshotPtr &  snapshot,

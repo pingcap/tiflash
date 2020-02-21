@@ -1,14 +1,13 @@
 #pragma once
 
-#include <unordered_map>
-#include <vector>
-
 #include <IO/WriteHelpers.h>
-
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
 #include <Storages/Page/WriteBatch.h>
+
+#include <unordered_map>
+#include <vector>
 
 namespace Poco
 {
@@ -94,20 +93,28 @@ public:
             Finished,
         };
 
-        bool operator<(const MetaMergingReader & rhs) const
+        template <bool legacy_is_smaller>
+        static bool compare(const MetaMergingReader & lhs, const MetaMergingReader & rhs)
         {
-            if (page_file.getType() != rhs.page_file.getType())
+            if (lhs.page_file.getType() != rhs.page_file.getType())
             {
                 // If any PageFile's type is checkpoint, it is smaller
-                if (page_file.getType() == PageFile::Type::Checkpoint)
+                if (lhs.page_file.getType() == PageFile::Type::Checkpoint)
                     return true;
                 else if (rhs.page_file.getType() == PageFile::Type::Checkpoint)
                     return false;
+                if constexpr (legacy_is_smaller)
+                {
+                    if (lhs.page_file.getType() == PageFile::Type::Legacy)
+                        return true;
+                    else if (rhs.page_file.getType() == PageFile::Type::Legacy)
+                        return false;
+                }
                 // else fallback to later compare
             }
-            if (curr_write_batch_sequence == rhs.curr_write_batch_sequence)
-                return page_file.fileIdLevel() < rhs.page_file.fileIdLevel();
-            return curr_write_batch_sequence < rhs.curr_write_batch_sequence;
+            if (lhs.curr_write_batch_sequence == rhs.curr_write_batch_sequence)
+                return lhs.page_file.fileIdLevel() < rhs.page_file.fileIdLevel();
+            return lhs.curr_write_batch_sequence < rhs.curr_write_batch_sequence;
         }
 
     public:
@@ -148,12 +155,13 @@ public:
     };
     using MetaMergingReaderPtr = std::shared_ptr<MetaMergingReader>;
 
+    template <bool is_legacy_smaller>
     struct MergingPtrComparator
     {
         bool operator()(const MetaMergingReaderPtr & lhs, const MetaMergingReaderPtr & rhs) const
         {
             // priority_queue always pop the "biggest" elem
-            return *rhs < *lhs;
+            return MetaMergingReader::compare<is_legacy_smaller>(*rhs, *lhs);
         }
     };
 

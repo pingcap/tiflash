@@ -1,6 +1,3 @@
-#include <test_utils/TiflashTestBasic.h>
-#include "gtest/gtest.h"
-
 #include <Common/CurrentMetrics.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <Poco/AutoPtr.h>
@@ -9,13 +6,15 @@
 #include <Poco/FormattingChannel.h>
 #include <Poco/Logger.h>
 #include <Poco/PatternFormatter.h>
-#include <common/logger_useful.h>
-
 #include <Storages/DeltaMerge/tests/dm_basic_include.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageFile.h>
 #include <Storages/Page/WriteBatch.h>
+#include <common/logger_useful.h>
+#include <test_utils/TiflashTestBasic.h>
+
+#include "gtest/gtest.h"
 
 #define private public
 #include <Storages/Page/PageStorage.h>
@@ -688,7 +687,7 @@ try
     // Restore a new version set with snapshot WriteBatch
     {
         auto       snapshot = original_version.getSnapshot();
-        WriteBatch wb       = storage->prepareSnapshotWriteBatch(snapshot, 0);
+        WriteBatch wb       = storage->prepareCheckpointWriteBatch(snapshot, 0);
 
         PageEntriesEdit edit;
 
