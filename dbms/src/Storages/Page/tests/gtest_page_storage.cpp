@@ -359,75 +359,8 @@ TEST_F(PageStorage_test, IdempotentDelAndRef)
     }
 }
 
-TEST_F(PageStorage_test, DISABLED_GcMigrateValidRefPages)
-{
-    const size_t buf_sz      = 1024;
-    char         buf[buf_sz] = {0};
-    const PageId ref_id      = 1024;
-    const PageId page_id     = 32;
-
-    const PageId placeholder_page_id = 33;
-    const PageId deleted_ref_id      = 1025;
-
-    {
-        // prepare ref page record without any valid pages
-        PageStorage::Config tmp_config(config);
-        tmp_config.file_roll_size = 1;
-        storage                   = reopenWithConfig(tmp_config);
-        {
-            // this batch is written to PageFile{1,0}
-            WriteBatch batch;
-            batch.putPage(page_id, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz);
-            storage->write(batch);
-        }
-        {
-            // this batch is written to PageFile{2,0}
-            WriteBatch batch;
-            batch.putRefPage(ref_id, page_id);
-            batch.delPage(page_id);
-            // deleted ref pages will not migrate
-            batch.putRefPage(deleted_ref_id, page_id);
-            batch.putPage(placeholder_page_id, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz);
-            storage->write(batch);
-        }
-        {
-            // this batch is written to PageFile{3,0}
-            WriteBatch batch;
-            batch.delPage(deleted_ref_id);
-            storage->write(batch);
-        }
-        const PageEntry entry2 = storage->getEntry(ref_id);
-        ASSERT_TRUE(entry2.isValid());
-    }
-
-    const PageStorage::GcLivesPages lives_pages;
-    PageStorage::GcCandidates       candidates;
-    PageStorage::SnapshotPtr        snapshot = storage->getSnapshot();
-    //candidates.insert(PageFileIdAndLevel{1, 0});
-    candidates.insert(PageFileIdAndLevel{2, 0});
-    const PageEntriesEdit gc_file_edit = storage->gcMigratePages(snapshot, lives_pages, candidates, 3);
-    ASSERT_FALSE(gc_file_edit.empty());
-    // check the ref is migrated.
-    // check the deleted ref is not migrated.
-    bool is_deleted_ref_id_exists = false;
-    for (const auto & rec : gc_file_edit.getRecords())
-    {
-        if (rec.type == WriteBatch::WriteType::REF)
-        {
-            if (rec.page_id == ref_id)
-            {
-                ASSERT_EQ(rec.ori_page_id, page_id);
-            }
-            if (rec.page_id == deleted_ref_id)
-            {
-                ASSERT_NE(rec.ori_page_id, page_id);
-                is_deleted_ref_id_exists = true;
-            }
-        }
-    }
-    ASSERT_FALSE(is_deleted_ref_id_exists);
-}
-
+#if 0
+/// TODO: after gc normal page and restore from file, still can find that page
 TEST_F(PageStorage_test, GcMoveNormalPage)
 try
 {
@@ -502,6 +435,7 @@ try
 }
 CATCH
 
+/// TODO: after gc ref page and restore from file, still can find that page
 TEST_F(PageStorage_test, GcMoveRefPage)
 {
     const size_t buf_sz = 256;
@@ -541,6 +475,7 @@ TEST_F(PageStorage_test, GcMoveRefPage)
     ASSERT_EQ(normal_page_id, 1UL);
 }
 
+/// TODO: after gc del meta and restore from file, that page is delelted
 TEST_F(PageStorage_test, GcMovePageDelMeta)
 try
 {
@@ -597,6 +532,7 @@ try
 }
 CATCH
 
+/// TODO: after gc ref page to ref page and restore from file, that page is still valild
 TEST_F(PageStorage_test, GcMigrateRefPageToRefPage)
 try
 {
@@ -657,106 +593,7 @@ try
     storage = reopenWithConfig(config);
 }
 CATCH
-
-TEST_F(PageStorage_test, GcCompactLegacyLogicalCorrectness)
-try
-{
-    PageEntriesVersionSetWithDelta original_version(config.version_set_config, storage->log);
-
-    // Prepare a simple version
-    {
-        PageEntry entry1, entry2;
-        // Specify magic checksum for test
-        entry1.checksum = 0x123;
-        entry2.checksum = 0x321;
-
-        PageEntriesEdit edit;
-
-        edit.put(1, entry1);
-        edit.put(2, entry2);
-        edit.ref(3, 1);
-        edit.del(1);
-
-        // Expected version is:
-        //   Page{3} -> NormalPage{1}
-        //   Page{2} -> NormalPage{2}
-        original_version.apply(edit);
-    }
-
-    PageEntriesVersionSetWithDelta version_restored_with_snapshot(config.version_set_config, storage->log);
-    // Restore a new version set with snapshot WriteBatch
-    {
-        auto       snapshot = original_version.getSnapshot();
-        WriteBatch wb       = storage->prepareCheckpointWriteBatch(snapshot, 0);
-
-        PageEntriesEdit edit;
-
-        auto writes = wb.getWrites();
-        for (auto w : writes)
-        {
-            if (w.type == WriteBatch::WriteType::UPSERT)
-            {
-                auto entry = snapshot->version()->findNormalPageEntry(w.page_id);
-                if (entry)
-                    edit.upsertPage(w.page_id, *entry);
-                else
-                    FAIL() << "Cannot find specified page";
-            }
-            else if (w.type == WriteBatch::WriteType::REF)
-                edit.ref(w.page_id, w.ori_page_id);
-            else
-                FAIL() << "Snapshot writes should only contain UPSERT and REF";
-        }
-
-        version_restored_with_snapshot.apply(edit);
-    }
-
-    // Compare the two versions above
-    {
-        auto original_snapshot = original_version.getSnapshot();
-        auto original          = original_snapshot->version();
-        auto restored_snapshot = version_restored_with_snapshot.getSnapshot();
-        auto restored          = restored_snapshot->version();
-
-        auto original_normal_page_ids = original->validNormalPageIds();
-        auto restored_normal_page_ids = restored->validNormalPageIds();
-
-        ASSERT_EQ(original_normal_page_ids.size(), restored_normal_page_ids.size());
-
-        for (auto id : original_normal_page_ids)
-        {
-            EXPECT_TRUE(restored_normal_page_ids.find(id) != restored_normal_page_ids.end());
-
-            auto original_page = original->findNormalPageEntry(id);
-            auto restored_page = restored->findNormalPageEntry(id);
-
-            ASSERT_TRUE(original_page);
-            ASSERT_TRUE(restored_page);
-
-            ASSERT_EQ(original_page->ref, restored_page->ref);
-
-            // Use specified checksum to identify page_entry
-            ASSERT_EQ(original_page->checksum, restored_page->checksum);
-            if (id == 1)
-                ASSERT_EQ(original_page->checksum, 0x123UL);
-            else if (id == 2)
-                ASSERT_EQ(original_page->checksum, 0x321UL);
-            else
-                FAIL() << "Invalid normal page id";
-        }
-
-        auto original_ref_page_ids = original->validPageIds();
-        auto restored_ref_page_ids = restored->validPageIds();
-
-        ASSERT_EQ(original_ref_page_ids.size(), restored_ref_page_ids.size());
-
-        for (auto id : original_ref_page_ids)
-        {
-            EXPECT_TRUE(restored_ref_page_ids.find(id) != restored_ref_page_ids.end());
-        }
-    }
-}
-CATCH
+#endif
 
 TEST_F(PageStorage_test, ListPageFiles)
 try

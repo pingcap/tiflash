@@ -88,6 +88,7 @@ public:
         size_t upserts = 0;
         bool   empty() const { return puts == 0 && refs == 0 && deletes == 0 && upserts == 0; }
         String toString() const;
+        void   mergeEdits(const PageEntriesEdit & edit);
     };
 
 public:
@@ -121,42 +122,19 @@ public:
     listAllPageFiles(const String & storage_path, Poco::Logger * page_file_log, ListPageFilesOption option = ListPageFilesOption());
 
 private:
-    template <class MergineQueue>
-    static std::pair<std::optional<WriteBatch::SequenceID>, PageFileSet> //
-    restoreFromCheckpoints(MergineQueue &         merging_queue,
-                           VersionedPageEntries & version_set,
-                           RestoreInfo &          restore_info,
-                           const String &         storage_name,
-                           Poco::Logger *         logger);
-
     WriterPtr getWriter(PageFile & page_file);
     ReaderPtr getReader(const PageFileIdAndLevel & file_id_level);
-    // gc helper functions
-    using GcCandidates = std::set<PageFileIdAndLevel>;
-    using GcLivesPages = std::map<PageFileIdAndLevel, std::pair<size_t, PageIds>>;
-    GcCandidates gcSelectCandidateFiles(const PageFileSet &        page_files,
-                                        const GcLivesPages &       file_valid_pages,
-                                        const PageFileIdAndLevel & writing_file_id_level,
-                                        UInt64 &                   candidate_total_size,
-                                        size_t &                   migrate_page_count) const;
-
-    PageFileSet gcCompactLegacy(PageFileSet && page_files, const std::set<PageFileIdAndLevel> & writing_file_id_levels);
-
-    WriteBatch  prepareCheckpointWriteBatch(const SnapshotPtr snapshot, const WriteBatch::SequenceID wb_sequence);
-    static void writeToCheckpoint(const String & storage_path, const PageFileIdAndLevel & file_id, WriteBatch && wb, Poco::Logger * log);
 
     static constexpr const char * ARCHIVE_SUBDIR = "archive";
 
     void archivePageFiles(const PageFileSet & page_files_to_archive);
 
-    PageEntriesEdit gcMigratePages(const SnapshotPtr &  snapshot,
-                                   const GcLivesPages & file_valid_pages,
-                                   const GcCandidates & merge_files,
-                                   size_t               migrate_page_count) const;
-
     static void gcRemoveObsoleteData(PageFileSet &                        page_files,
                                      const PageFileIdAndLevel &           writing_file_id_level,
                                      const std::set<PageFileIdAndLevel> & live_files);
+
+    friend class LegacyCompactor;
+    friend class DataCompactor;
 
 private:
     String storage_name; // Identify between different Storage
