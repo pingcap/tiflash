@@ -99,8 +99,8 @@ RegionPtr Region::splitInto(RegionMeta && meta)
     RegionPtr new_region;
     if (index_reader != nullptr)
     {
-        new_region = std::make_shared<Region>(std::move(meta), [&](pingcap::kv::RegionVerID ver_id) {
-            return std::make_shared<IndexReader>(index_reader->cluster, ver_id);
+        new_region = std::make_shared<Region>(std::move(meta), [&]() {
+            return std::make_shared<IndexReader>(index_reader->cluster);
         });
     }
     else
@@ -427,11 +427,11 @@ std::string Region::toString(bool dump_status) const { return meta.toString(dump
 
 ImutRegionRangePtr Region::getRange() const { return meta.getRange(); }
 
-std::pair<UInt64, bool> Region::learnerRead()
+ReadIndexResult Region::learnerRead()
 {
     if (index_reader != nullptr)
-        return index_reader->getReadIndex();
-    return std::make_pair(0, false);
+        return index_reader->getReadIndex(meta.getRegionVerID());
+    return {};
 }
 
 void Region::waitIndex(UInt64 index)
@@ -677,11 +677,11 @@ void Region::doDeleteRange(const std::string & cf, const RegionRange & range)
 
 std::tuple<RegionVersion, RegionVersion, ImutRegionRangePtr> Region::dumpVersionRange() const { return meta.dumpVersionRange(); }
 
-Region::Region(RegionMeta && meta_) : Region(std::move(meta_), [](pingcap::kv::RegionVerID) { return nullptr; }) {}
+Region::Region(RegionMeta && meta_) : Region(std::move(meta_), []() { return nullptr; }) {}
 
 Region::Region(DB::RegionMeta && meta_, const DB::IndexReaderCreateFunc & index_reader_create)
     : meta(std::move(meta_)),
-      index_reader(index_reader_create(meta.getRegionVerID())),
+      index_reader(index_reader_create()),
       log(&Logger::get(log_name)),
       mapped_table_id(meta.getRange()->getMappedTableID())
 {}

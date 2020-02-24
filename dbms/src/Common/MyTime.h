@@ -9,6 +9,38 @@ namespace DB
 struct MyTimeBase
 {
 
+    // copied from https://github.com/pingcap/tidb/blob/master/types/time.go
+    // Core time bit fields.
+    static const UInt64 YEAR_BIT_FIELD_OFFSET = 50, YEAR_BIT_FIELD_WIDTH = 14;
+    static const UInt64 MONTH_BIT_FIELD_OFFSET = 46, MONTH_BIT_FIELD_WIDTH = 4;
+    static const UInt64 DAY_BIT_FIELD_OFFSET = 41, DAY_BIT_FIELD_WIDTH = 5;
+    static const UInt64 HOUR_BIT_FIELD_OFFSET = 36, HOUR_BIT_FIELD_WIDTH = 5;
+    static const UInt64 MINUTE_BIT_FIELD_OFFSET = 30, MINUTE_BIT_FIELD_WIDTH = 6;
+    static const UInt64 SECOND_BIT_FIELD_OFFSET = 24, SECOND_BIT_FIELD_WIDTH = 6;
+    static const UInt64 MICROSECOND_BIT_FIELD_OFFSET = 4, MICROSECOND_BIT_FIELD_WIDTH = 20;
+    // fspTt bit field.
+    // `fspTt` format:
+    // | fsp: 3 bits | type: 1 bit |
+    // When `fsp` is valid (in range [0, 6]):
+    // 1. `type` bit 0 represent `DateTime`
+    // 2. `type` bit 1 represent `Timestamp`
+    //
+    // Since s`Date` does not require `fsp`, we could use `fspTt` == 0b1110 to represent it.
+    static const UInt64 FSPTT_BIT_FIELD_OFFSET = 0, FSPTT_BIT_FIELD_WIDTH = 4;
+
+    static const UInt64 YEAR_BIT_FIELD_MASK        = ((1ull << YEAR_BIT_FIELD_WIDTH) - 1) << YEAR_BIT_FIELD_OFFSET;
+    static const UInt64 MONTH_BIT_FIELD_MASK       = ((1ull << MONTH_BIT_FIELD_WIDTH) - 1) << MONTH_BIT_FIELD_OFFSET;
+    static const UInt64 DAY_BIT_FIELD_MASK         = ((1ull << DAY_BIT_FIELD_WIDTH) - 1) << DAY_BIT_FIELD_OFFSET;
+    static const UInt64 HOUR_BIT_FIELD_MASK        = ((1ull << HOUR_BIT_FIELD_WIDTH) - 1) << HOUR_BIT_FIELD_OFFSET;
+    static const UInt64 MINUTE_BIT_FIELD_MASK      = ((1ull << MINUTE_BIT_FIELD_WIDTH) - 1) << MINUTE_BIT_FIELD_OFFSET;
+    static const UInt64 SECOND_BIT_FIELD_MASK      = ((1ull << SECOND_BIT_FIELD_WIDTH) - 1) << SECOND_BIT_FIELD_OFFSET;
+    static const UInt64 MICROSECOND_BIT_FIELD_MASK = ((1ull << MICROSECOND_BIT_FIELD_WIDTH) - 1) << MICROSECOND_BIT_FIELD_OFFSET;
+    static const UInt64 FSPTT_BIT_FIELD_MASK       = ((1ull << FSPTT_BIT_FIELD_WIDTH) - 1) << FSPTT_BIT_FIELD_OFFSET;
+
+    static const UInt64 FSPTT_FOR_DATE           = 0b1110;
+    static const UInt64 FSP_BIT_FIELD_MASK       = 0b1110;
+    static const UInt64 CORE_TIME_BIT_FIELD_MASK = ~FSPTT_BIT_FIELD_MASK;
+
     enum MyTimeType : UInt8
     {
         TypeDate = 0,
@@ -31,6 +63,7 @@ struct MyTimeBase
     MyTimeBase(UInt16 year_, UInt8 month_, UInt8 day_, UInt16 hour_, UInt8 minute_, UInt8 second_, UInt32 micro_second_);
 
     UInt64 toPackedUInt() const;
+    UInt64 toCoreTime() const;
 
     // DateFormat returns a textual representation of the time value formatted
     // according to layout

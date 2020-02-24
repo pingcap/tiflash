@@ -19,7 +19,7 @@ set -xe
 install_dir="$SRCPATH/release-centos7/tiflash"
 if [ -d "$install_dir" ]; then rm -rf "$install_dir"/*; else mkdir -p "$install_dir"; fi
 
-cp -r /flash_cluster_manager "$install_dir"
+cp -r /flash_cluster_manager "$install_dir"/flash_cluster_manager
 
 if [ -d "$SRCPATH/contrib/kvproto" ]; then
   cd "$SRCPATH/contrib/kvproto"
@@ -38,7 +38,7 @@ fi
 rm -rf ${SRCPATH}/libs/libtiflash-proxy
 mkdir -p ${SRCPATH}/libs/libtiflash-proxy
 curl -o "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" \
-http://fileserver.pingcap.net/download/builds/pingcap/tiflash-proxy/7883f740756a1e07787b4c06a92f6057aeed39f9/libtiflash_proxy.so
+http://fileserver.pingcap.net/download/builds/pingcap/tiflash-proxy/36bf93447f06b6d64b473f3b53789ac4cd40ed6e/libtiflash_proxy.so
 chmod 0731 "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so"
 
 build_dir="$SRCPATH/release-centos7/build-release"
