@@ -173,6 +173,9 @@ struct Types<true>
     using ValueOffsetType = UInt32;
 };
 
+/// Specific decode methods for individual types.
+/// Copied from https://github.com/pingcap/tidb/blob/master/util/rowcodec/decoder.go#L111
+/// Should be always kept identical with it.
 Field decodeNotNullColumn(size_t cursor, const TiKVValue::Base & raw_value, size_t length, const ColumnInfo & column_info)
 {
     switch (column_info.tp)
@@ -182,11 +185,12 @@ Field decodeNotNullColumn(size_t cursor, const TiKVValue::Base & raw_value, size
         case TiDB::TypeInt24:
         case TiDB::TypeShort:
         case TiDB::TypeTiny:
-        case TiDB::TypeYear:
             if (column_info.hasUnsignedFlag())
                 return decodeIntWithLength<UInt64>(raw_value, cursor, length);
             else
                 return decodeIntWithLength<Int64>(raw_value, cursor, length);
+        case TiDB::TypeYear:
+            return decodeIntWithLength<Int64>(raw_value, cursor, length);
         case TiDB::TypeFloat:
         case TiDB::TypeDouble:
             return DecodeFloat64(cursor, raw_value);
@@ -226,10 +230,11 @@ TiKVValue::Base encodeNotNullColumn(const Field & field, const ColumnInfo & colu
         case TiDB::TypeInt24:
         case TiDB::TypeShort:
         case TiDB::TypeTiny:
-        case TiDB::TypeYear:
             column_info.hasUnsignedFlag() ? encodeIntWithLength(field.safeGet<UInt64>(), ss)
                                           : encodeIntWithLength(field.safeGet<Int64>(), ss);
             break;
+        case TiDB::TypeYear:
+            encodeIntWithLength(field.safeGet<Int64>(), ss);
         case TiDB::TypeFloat:
         case TiDB::TypeDouble:
             EncodeFloat64(field.safeGet<Float64>(), ss);
