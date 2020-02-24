@@ -1270,52 +1270,79 @@ public:
 
         size_t rows = block.rows();
         auto res = ColumnInt64::create(rows);
+        if (unit == "year")
+            dispatchForColumns<MonthDiffCalculatorImpl, YearDiffResultCalculator>(x, y, res->getData());
+        else if (unit == "quarter")
+            dispatchForColumns<MonthDiffCalculatorImpl, QuarterDiffResultCalculator>(x, y, res->getData());
+        else if (unit == "month")
+            dispatchForColumns<MonthDiffCalculatorImpl, MonthDiffResultCalculator>(x, y, res->getData());
+        else if (unit == "week")
+            dispatchForColumns<DummyMonthDiffCalculatorImpl, WeekDiffResultCalculator>(x, y, res->getData());
+        else if (unit == "day")
+            dispatchForColumns<DummyMonthDiffCalculatorImpl, DayDiffResultCalculator>(x, y, res->getData());
+        else if (unit == "hour")
+            dispatchForColumns<DummyMonthDiffCalculatorImpl, HourDiffResultCalculator>(x, y, res->getData());
+        else if (unit == "minute")
+            dispatchForColumns<DummyMonthDiffCalculatorImpl, MinuteDiffResultCalculator>(x, y, res->getData());
+        else if (unit == "second")
+            dispatchForColumns<DummyMonthDiffCalculatorImpl, SecondDiffResultCalculator>(x, y, res->getData());
+        else if (unit == "microsecond")
+            dispatchForColumns<DummyMonthDiffCalculatorImpl, MicroSecondDiffResultCalculator>(x, y, res->getData());
+        else
+            throw Exception("Function " + getName() + " does not support '" + unit + "' unit", ErrorCodes::BAD_ARGUMENTS);
+        block.getByPosition(result).column = std::move(res);
+    }
+
+private:
+    template <typename MonthDiffCalculator, typename ResultCalculator>
+    void dispatchForColumns(const IColumn & x, const IColumn & y, ColumnInt64::Container & res)
+    {
         auto * x_const = checkAndGetColumnConst<ColumnUInt64>(&x);
         auto * y_const = checkAndGetColumnConst<ColumnUInt64>(&y);
         if(x_const)
         {
             auto * y_vec = checkAndGetColumn<ColumnUInt64>(&y);
-            constant_vector(x_const->getValue<UInt64>(), *y_vec, res->getData(), unit);
+            constant_vector<MonthDiffCalculator, ResultCalculator>(x_const->getValue<UInt64>(), *y_vec, res);
         }
         else if (y_const)
         {
             auto * x_vec = checkAndGetColumn<ColumnUInt64>(&x);
-            vector_constant(*x_vec, y_const->getValue<UInt64>(), res->getData(), unit);
+            vector_constant<MonthDiffCalculator, ResultCalculator>(*x_vec, y_const->getValue<UInt64>(), res);
         }
         else
         {
             auto * x_vec = checkAndGetColumn<ColumnUInt64>(&x);
             auto * y_vec = checkAndGetColumn<ColumnUInt64>(&y);
-            vector_vector(*x_vec, *y_vec, res->getData(), unit);
+            vector_vector<MonthDiffCalculator, ResultCalculator>(*x_vec, *y_vec, res);
         }
-
-        block.getByPosition(result).column = std::move(res);
     }
 
-private:
+    template <typename MonthDiffCalculator, typename ResultCalculator>
     void vector_vector(
-            const ColumnVector<UInt64> & x, const ColumnVector<UInt64> & y, ColumnInt64::Container & result, const String & unit)
+            const ColumnVector<UInt64> & x, const ColumnVector<UInt64> & y, ColumnInt64::Container & result)
     {
         const auto & x_data = x.getData();
         const auto & y_data = y.getData();
         for (size_t i = 0, size = x.size(); i < size; ++i)
-            result[i] = calculate(x_data[i], y_data[i], unit);
+            result[i] = calculate<MonthDiffCalculator, ResultCalculator>(x_data[i], y_data[i]);
     }
 
+    template <typename MonthDiffCalculator, typename ResultCalculator>
     void vector_constant(
-            const ColumnVector<UInt64> & x, UInt64 y, ColumnInt64::Container & result, const String & unit)
+            const ColumnVector<UInt64> & x, UInt64 y, ColumnInt64::Container & result)
     {
         const auto & x_data = x.getData();
         for (size_t i = 0, size = x.size(); i < size; ++i)
-            result[i] = calculate(x_data[i], y, unit);
+            result[i] = calculate<MonthDiffCalculator, ResultCalculator>(x_data[i], y);
     }
 
+    template <typename MonthDiffCalculator, typename ResultCalculator>
     void constant_vector(
-            UInt64 x, const ColumnVector<UInt64> & y, ColumnInt64::Container & result, const String & unit)
+            UInt64 x, const ColumnVector<UInt64> & y, ColumnInt64::Container & result)
     {
         const auto & y_data = y.getData();
         for (size_t i = 0, size = y.size(); i < size; ++i)
-            result[i] = calculate(x, y_data[i], unit);
+            result[i] = calculate<MonthDiffCalculator, ResultCalculator>(x, y_data[i]);
     }
 
     //calculates days since 0000-00-00
@@ -1324,9 +1351,12 @@ private:
         if(year == 0 || month == 0)
             return 0;
         int delsum = 365*year + 31*(month-1) + day;
-        if (month <= 2) {
+        if (month <= 2)
+        {
             year--;
-        } else {
+        }
+        else
+        {
             delsum -= (month*4 + 23) / 10;
         }
         int temp = ((year/100 + 1) * 3) / 4;
@@ -1352,17 +1382,11 @@ private:
         micro_seconds = int(tmp % E6);
     }
 
-    Int64 calculate(UInt64 x, UInt64 y, const String & unit)
+    struct MonthDiffCalculatorImpl
     {
-        MyDateTime x_time(x);
-        MyDateTime y_time(y);
-        int seconds = 0, micro_seconds = 0;
-        bool neg = false;
-        calculateTimeDiff(x, y, seconds, micro_seconds, neg);
-        UInt32 months = 0;
-
-        if (unit == "year" || unit == "quarter" || unit == "month")
+        static inline UInt32 execute(const MyDateTime & x_time, const MyDateTime & y_time, const bool & neg)
         {
+            UInt32 months = 0;
             UInt32 year_begin, year_end, month_begin, month_end, day_begin, day_end;
             UInt32 second_begin, second_end, micro_second_begin, micro_second_end;
             if(neg)
@@ -1395,48 +1419,127 @@ private:
             // calc years
             UInt32 years = year_end - year_begin;
             if (month_end < month_begin ||
-               (month_end == month_begin && day_end < day_begin)) {
+                (month_end == month_begin && day_end < day_begin))
+            {
                 years--;
             }
 
             // calc months
             months = 12 * years;
             if (month_end < month_begin ||
-               (month_end == month_begin && day_end < day_begin)) {
+                (month_end == month_begin && day_end < day_begin))
+            {
                 months += 12 - (month_begin - month_end);
-            } else {
+            }
+            else
+            {
                 months += month_end - month_begin;
             }
 
-            if (day_end < day_begin) {
-                        months--;
-                } else if ((day_end == day_begin) &&
-            ((second_end < second_begin) ||
-             (second_end == second_begin && micro_second_end < micro_second_begin))) {
+            if (day_end < day_begin)
+            {
                 months--;
             }
+            else if ((day_end == day_begin) &&
+                       ((second_end < second_begin) ||
+                        (second_end == second_begin && micro_second_end < micro_second_begin)))
+            {
+                months--;
+            }
+            return months;
         }
-        int negV = neg ? -1 : 1;
-        if(unit == "year")
-            return months/12*negV;
-        else if (unit == "quarter")
-            return months/3*negV;
-        else if (unit == "month")
-            return months*negV;
-        else if (unit == "week")
-            return seconds/SECOND_IN_24_HOURS/7*negV;
-        else if (unit == "day")
-            return seconds/SECOND_IN_24_HOURS*negV;
-        else if (unit == "hour")
-            return seconds/3600*negV;
-        else if (unit == "minute")
-            return seconds/60*negV;
-        else if (unit == "second")
-            return seconds*negV;
-        else if (unit == "microsecond")
-            return (seconds*E6+micro_seconds)*negV;
-        // should throw exception
-        return 0;
+    };
+
+    struct DummyMonthDiffCalculatorImpl
+    {
+        static inline UInt32 execute(const MyDateTime & , const MyDateTime & , const bool )
+        {
+            return 0;
+        }
+    };
+
+    struct YearDiffResultCalculator
+    {
+        static inline Int64 execute(const Int64 , const Int64 , const Int64 months, const int neg_value)
+        {
+            return months / 12 * neg_value;
+        }
+    };
+
+    struct QuarterDiffResultCalculator
+    {
+        static inline Int64 execute(const Int64 , const Int64 , const Int64 months, const int neg_value)
+        {
+            return months / 3 * neg_value;
+        }
+    };
+
+    struct MonthDiffResultCalculator
+    {
+        static inline Int64 execute(const Int64 , const Int64 , const Int64 months, const int neg_value)
+        {
+            return months * neg_value;
+        }
+    };
+
+    struct WeekDiffResultCalculator
+    {
+        static inline Int64 execute(const Int64 seconds, const Int64 , const Int64 , const int neg_value)
+        {
+            return seconds / SECOND_IN_24_HOURS / 7 * neg_value;
+        }
+    };
+
+    struct DayDiffResultCalculator
+    {
+        static inline Int64 execute(const Int64 seconds, const Int64 , const Int64 , const int neg_value)
+        {
+            return seconds / SECOND_IN_24_HOURS * neg_value;
+        }
+    };
+
+    struct HourDiffResultCalculator
+    {
+        static inline Int64 execute(const Int64 seconds, const Int64 , const Int64 , const int neg_value)
+        {
+            return seconds / 3600 * neg_value;
+        }
+    };
+
+    struct MinuteDiffResultCalculator
+    {
+        static inline Int64 execute(const Int64 seconds, const Int64 , const Int64 , const int neg_value)
+        {
+            return seconds / 60 * neg_value;
+        }
+    };
+
+    struct SecondDiffResultCalculator
+    {
+        static inline Int64 execute(const Int64 seconds, const Int64 , const Int64 , const int neg_value)
+        {
+            return seconds * neg_value;
+        }
+    };
+
+    struct MicroSecondDiffResultCalculator
+    {
+        static inline Int64 execute(const Int64 seconds, const Int64 micro_seconds, const Int64 , const int neg_value)
+        {
+            return (seconds * E6 + micro_seconds) * neg_value;
+        }
+    };
+
+    template <typename MonthDiffCalculator, typename ResultCalculator>
+    Int64 calculate(UInt64 x, UInt64 y)
+    {
+        MyDateTime x_time(x);
+        MyDateTime y_time(y);
+        int seconds = 0, micro_seconds = 0;
+        bool neg = false;
+        calculateTimeDiff(x, y, seconds, micro_seconds, neg);
+        UInt32 months = MonthDiffCalculator::execute(x_time, y_time, neg);
+        return ResultCalculator::execute(seconds, micro_seconds, months, neg ? -1 : 1);
     }
 };
 
