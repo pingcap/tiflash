@@ -235,6 +235,7 @@ TiKVValue::Base encodeNotNullColumn(const Field & field, const ColumnInfo & colu
             break;
         case TiDB::TypeYear:
             encodeIntWithLength(field.safeGet<Int64>(), ss);
+            break;
         case TiDB::TypeFloat:
         case TiDB::TypeDouble:
             EncodeFloat64(field.safeGet<Float64>(), ss);
