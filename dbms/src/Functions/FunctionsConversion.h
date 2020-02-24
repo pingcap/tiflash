@@ -559,6 +559,14 @@ template <> inline void parseImpl<DataTypeDate>(DataTypeDate::FieldType & x, Rea
     x = tmp;
 }
 
+template <> inline void parseImpl<DataTypeDateTime>(DataTypeDateTime::FieldType & x, ReadBuffer & rb, const DateLUTImpl * time_zone)
+{
+    time_t tmp = 0;
+    readDateTimeText(tmp, rb, *time_zone);
+    x = tmp;
+}
+
+
 template <> inline void parseImpl<DataTypeMyDate>(DataTypeMyDate::FieldType & x, ReadBuffer & rb, const DateLUTImpl *)
 {
     UInt64 tmp(0);
@@ -573,14 +581,6 @@ template <> inline void parseImpl<DataTypeMyDateTime>(DataTypeMyDateTime::FieldT
     x = tmp;
 }
 
-
-template <> inline void parseImpl<DataTypeDateTime>(DataTypeDateTime::FieldType & x, ReadBuffer & rb, const DateLUTImpl * time_zone)
-{
-    time_t tmp = 0;
-    readDateTimeText(tmp, rb, *time_zone);
-    x = tmp;
-}
-
 template <> inline void parseImpl<DataTypeUUID>(DataTypeUUID::FieldType & x, ReadBuffer & rb, const DateLUTImpl *)
 {
     UUID tmp;
@@ -591,7 +591,11 @@ template <> inline void parseImpl<DataTypeUUID>(DataTypeUUID::FieldType & x, Rea
 template <typename DataType>
 bool tryParseImpl(typename DataType::FieldType & x, ReadBuffer & rb)
 {
-    if constexpr (std::is_integral_v<typename DataType::FieldType>)
+    if constexpr (std::is_same_v<DataType, DataTypeMyDate>)
+        return tryReadMyDateText(x, rb);
+    else if constexpr (std::is_same_v<DataType, DataTypeMyDateTime>)
+        return tryReadMyDateTimeText(x, 6, rb);
+    else if constexpr (std::is_integral_v<typename DataType::FieldType>)
         return tryReadIntText(x, rb);
     else if constexpr (std::is_floating_point_v<typename DataType::FieldType>)
         return tryReadFloatText(x, rb);
@@ -755,23 +759,6 @@ template <typename ToDataType, typename Name>
 struct ConvertImpl<std::enable_if_t<!std::is_same_v<ToDataType, DataTypeString>, DataTypeString>, ToDataType, Name>
     : ConvertThroughParsing<DataTypeString, ToDataType, Name, ConvertFromStringExceptionMode::Throw, ConvertFromStringParsingMode::Normal> {};
 
-template <typename Name>
-struct ConvertImpl<DataTypeString, DataTypeMyDate, Name>
-{
-    static void execute(Block & , const ColumnNumbers & , size_t )
-    {
-        throw Exception("convert from string to MyDate is not supported yet");
-    }
-};
-
-template <typename Name>
-struct ConvertImpl<DataTypeString, DataTypeMyDateTime, Name>
-{
-    static void execute(Block & , const ColumnNumbers & , size_t )
-    {
-        throw Exception("convert from string to MyDateTime is not supported yet");
-    }
-};
 
 template <typename ToDataType, typename Name>
 struct ConvertImpl<std::enable_if_t<!std::is_same_v<ToDataType, DataTypeFixedString>, DataTypeFixedString>, ToDataType, Name>
@@ -1499,6 +1486,8 @@ struct NameToFloat32OrNull { static constexpr auto name = "toFloat32OrNull"; };
 struct NameToFloat64OrNull { static constexpr auto name = "toFloat64OrNull"; };
 struct NameToDateOrNull { static constexpr auto name = "toDateOrNull"; };
 struct NameToDateTimeOrNull { static constexpr auto name = "toDateTimeOrNull"; };
+struct NameToMyDateOrNull { static constexpr auto name = "toMyDateOrNull"; };
+struct NameToMyDateTimeOrNull { static constexpr auto name = "toMyDateTimeOrNull"; };
 
 using FunctionToUInt8OrNull = FunctionConvertFromString<DataTypeUInt8, NameToUInt8OrNull, ConvertFromStringExceptionMode::Null>;
 using FunctionToUInt16OrNull = FunctionConvertFromString<DataTypeUInt16, NameToUInt16OrNull, ConvertFromStringExceptionMode::Null>;
@@ -1512,6 +1501,8 @@ using FunctionToFloat32OrNull = FunctionConvertFromString<DataTypeFloat32, NameT
 using FunctionToFloat64OrNull = FunctionConvertFromString<DataTypeFloat64, NameToFloat64OrNull, ConvertFromStringExceptionMode::Null>;
 using FunctionToDateOrNull = FunctionConvertFromString<DataTypeDate, NameToDateOrNull, ConvertFromStringExceptionMode::Null>;
 using FunctionToDateTimeOrNull = FunctionConvertFromString<DataTypeDateTime, NameToDateTimeOrNull, ConvertFromStringExceptionMode::Null>;
+using FunctionToMyDateOrNull = FunctionConvertFromString<DataTypeMyDate, NameToMyDateOrNull, ConvertFromStringExceptionMode::Null>;
+using FunctionToMyDateTimeOrNull = FunctionConvertFromString<DataTypeMyDateTime, NameToMyDateTimeOrNull, ConvertFromStringExceptionMode::Null>;
 
 struct NameParseDateTimeBestEffort { static constexpr auto name = "parseDateTimeBestEffort"; };
 struct NameParseDateTimeBestEffortOrZero { static constexpr auto name = "parseDateTimeBestEffortOrZero"; };

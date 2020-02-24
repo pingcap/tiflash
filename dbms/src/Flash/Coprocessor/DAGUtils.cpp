@@ -801,8 +801,8 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::AddDateStringDecimal, "cast"},
     //{tipb::ScalarFuncSig::AddDateIntString, "cast"},
     //{tipb::ScalarFuncSig::AddDateIntInt, "cast"},
-    {tipb::ScalarFuncSig::AddDateDatetimeString, "date_add"},
-    //{tipb::ScalarFuncSig::AddDateDatetimeInt, "cast"},
+    //{tipb::ScalarFuncSig::AddDateDatetimeString, "date_add"},
+    {tipb::ScalarFuncSig::AddDateDatetimeInt, "date_add"},
 
     //{tipb::ScalarFuncSig::SubDateStringString, "cast"},
     //{tipb::ScalarFuncSig::SubDateStringInt, "cast"},

@@ -74,6 +74,8 @@ void registerFunctionsConversion(FunctionFactory & factory)
     factory.registerFunction<FunctionToFloat64OrNull>();
     factory.registerFunction<FunctionToDateOrNull>();
     factory.registerFunction<FunctionToDateTimeOrNull>();
+    factory.registerFunction<FunctionToMyDateOrNull>();
+    factory.registerFunction<FunctionToMyDateTimeOrNull>();
 
     factory.registerFunction<FunctionParseDateTimeBestEffort>();
     factory.registerFunction<FunctionParseDateTimeBestEffortOrZero>();

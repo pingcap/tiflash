@@ -540,8 +540,11 @@ void parseUUID(const UInt8 * src36, std::reverse_iterator<UInt8 *> dst16);
 template <typename IteratorSrc, typename IteratorDst>
 void formatHex(IteratorSrc src, IteratorDst dst, const size_t num_bytes);
 
-inline void readMyDateText(UInt64 & date, ReadBuffer & buf)
+template <typename ReturnType = void>
+ReturnType readMyDateTextImpl(UInt64 & date, ReadBuffer & buf)
 {
+    static constexpr bool throw_exception = std::is_same_v<ReturnType, void>;
+
     /// Optimistic path, when whole value is in buffer.
     if (buf.position() + 10 <= buf.buffer().end())
     {
@@ -567,18 +570,27 @@ inline void readMyDateText(UInt64 & date, ReadBuffer & buf)
             buf.position() += 1;
 
         date = MyDate(year, month, day).toPackedUInt();
-        return;
+        return ReturnType(true);
     }
 
-    throw Exception("wrong date format.", ErrorCodes::CANNOT_PARSE_DATE);
+    if constexpr (throw_exception)
+        throw Exception("wrong date format.", ErrorCodes::CANNOT_PARSE_DATE);
+    else
+        return ReturnType(false);
+}
+
+inline void readMyDateText(UInt64 & date, ReadBuffer & buf)
+{
+    readMyDateTextImpl<void>(date, buf);
 }
 
 inline bool tryReadMyDateText(UInt64 & x, ReadBuffer & buf)
 {
     UInt64 tmp(0);
-    readMyDateText(tmp, buf);
-    x = tmp;
-    return true;
+    bool ret = readMyDateTextImpl<bool>(tmp, buf);
+    if(ret)
+        x = tmp;
+    return ret;
 }
 
 
@@ -648,8 +660,10 @@ inline T parse(const char * data, size_t size);
 
 void readDateTimeTextFallback(time_t & datetime, ReadBuffer & buf, const DateLUTImpl & date_lut);
 
-inline void readMyDateTimeText(UInt64 & packed, int fsp, ReadBuffer & buf)
+template <typename ReturnType = void>
+ReturnType readMyDateTimeTextImpl(UInt64 & packed, int fsp, ReadBuffer & buf)
 {
+    static constexpr bool throw_exception = std::is_same_v<ReturnType, void>;
 
     const char * s = buf.position();
     if (s + 19 <= buf.buffer().end())
@@ -697,13 +711,29 @@ inline void readMyDateTimeText(UInt64 & packed, int fsp, ReadBuffer & buf)
                 micro_second *= 10;
 
             packed = MyDateTime(year, month, day, hour, minute, second, micro_second).toPackedUInt();
-            return;
+            return ReturnType(true);
         }
     }
 
-    throw Exception("wrong datetime format.", ErrorCodes::CANNOT_PARSE_DATETIME);
+    if constexpr (throw_exception)
+        throw Exception("wrong datetime format.", ErrorCodes::CANNOT_PARSE_DATETIME);
+    else
+        return ReturnType(false);
 }
 
+inline void readMyDateTimeText(UInt64 & packed, int fsp, ReadBuffer & buf)
+{
+    readMyDateTimeTextImpl<void>(packed, fsp, buf);
+}
+
+inline bool tryReadMyDateTimeText(UInt64 & x, int fsp, ReadBuffer & buf)
+{
+    UInt64 tmp(0);
+    bool ret = readMyDateTimeTextImpl<bool>(tmp, fsp, buf);
+    if(ret)
+        x = tmp;
+    return ret;
+}
 /** In YYYY-MM-DD hh:mm:ss format, according to specified time zone.
   * As an exception, also supported parsing of unix timestamp in form of decimal number.
   */
