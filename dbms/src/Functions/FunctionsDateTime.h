@@ -59,14 +59,14 @@ inline int calcDayNum(int year, int month, int day)
 
 // day number per 400 years, from the year that year % 400 = 1
 static const int DAY_NUM_PER_400_YEARS = 365 * 400 + 97;
-// for every 400 years, day number per 100 years, from the year that year % 100 = 1
+// day number per 100 years in every 400 years, from the year that year % 100 = 1
 // note the day number of the last 100 years should be DAY_NUM_PER_100_YEARS + 1
 static const int DAY_NUM_PER_100_YEARS = 365 * 100 + 24;
-// for every 100 years, day number per 4 years, from the year that year % 4 = 1
+// day number per 4 years in every 100 years, from the year that year % 4 = 1
 // note the day number of the last 4 years should be DAY_NUM_PER_4_YEARS - 1
 static const int DAY_NUM_PER_4_YEARS = 365 * 4 + 1;
-// for every 4 years, day number per years
-// note the day number of the last 1 years should be DAY_NUM_PER_YEARS - 1
+// day number per years in every 4 years
+// note the day number of the last 1 years maybe DAY_NUM_PER_YEARS + 1
 static const int DAY_NUM_PER_YEARS = 365;
 
 inline void fillMonthAndDay(int day_num, int & month, int & day, const int * accumulated_days_per_month)
