@@ -344,7 +344,7 @@ struct Suit
     StressTimeout cancel_runner;
 };
 
-TEST_F(PageStorageMultiWriters_test, MultiWriteReadRestore)
+TEST_F(PageStorageMultiWriters_test, DISABLED_MultiWriteReadRestore)
 try
 {
     size_t num_writers     = 4;

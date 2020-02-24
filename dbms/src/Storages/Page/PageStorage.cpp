@@ -141,7 +141,8 @@ void PageStorage::restore()
     {
         auto reader = merging_queue.top();
         merging_queue.pop();
-        LOG_TRACE(log, storage_name << " recovering from " + reader->toString());
+        // LOG_TRACE(log, storage_name << " recovering from " + reader->toString());
+
         // If no checkpoint, we apply all edits.
         // Else restroed from checkpoint, if checkpoint's WriteBatch sequence number is 0, we need to apply
         // all edits after that checkpoint too. If checkpoint's WriteBatch sequence number is not 0, we

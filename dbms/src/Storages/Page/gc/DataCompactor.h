@@ -6,8 +6,7 @@ namespace DB
 class DataCompactor
 {
 public:
-    using Candidates  = std::set<PageFileIdAndLevel>;
-    using ValidPages  = std::map<PageFileIdAndLevel, std::pair<size_t, PageIds>>;
+    using ValidPages  = std::map<PageFileIdAndLevel, std::pair<size_t, PageIdSet>>;
     using SnapshotPtr = PageStorage::SnapshotPtr;
 
     struct MigrateInfo
@@ -35,7 +34,7 @@ public:
 private:
     static ValidPages collectValidPagesInPageFile(const PageStorage::SnapshotPtr & snapshot);
 
-    std::tuple<Candidates, size_t, size_t> selectCandidateFiles( // keep readable indent
+    std::tuple<PageFileSet, size_t, size_t> selectCandidateFiles( // keep readable indent
         const PageFileSet &                  page_files,
         const ValidPages &                   file_valid_pages,
         const std::set<PageFileIdAndLevel> & writing_file_ids) const;
@@ -44,8 +43,17 @@ private:
 
     PageEntriesEdit migratePages(const SnapshotPtr & snapshot,
                                  const ValidPages &  file_valid_pages,
-                                 const Candidates &  candidates,
+                                 const PageFileSet & candidates,
                                  const size_t        migrate_page_count) const;
+
+    PageEntriesEdit mergeValidPages(PageStorage::MetaCompactMergineQueue && merging_queue,
+                                    PageStorage::OpenReadFiles &&           data_readers,
+                                    const ValidPages &                      file_valid_pages,
+                                    const SnapshotPtr &                     snapshot,
+                                    PageFile &                              gc_file,
+                                    std::vector<MigrateInfo> &              migrate_infos) const;
+
+    PageIdAndEntries collectValidEntries(PageEntriesEdit && edits, const PageIdSet & valid_pages, const SnapshotPtr & snap) const;
 
     void logMigrationDetails(const std::vector<MigrateInfo> & infos, const PageFileIdAndLevel & migrate_file_id) const;
 
