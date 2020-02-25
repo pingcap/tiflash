@@ -8,6 +8,7 @@
 
 #include <boost/core/noncopyable.hpp>
 #include <cassert>
+#include <list>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
@@ -63,24 +64,24 @@ public:
     using VersionPtr   = std::shared_ptr<VersionType>;
 
 public:
-    explicit VersionSetWithDelta(const ::DB::MVCC::VersionSetConfig & config_, Poco::Logger * log_)
-        : current(std::move(VersionType::createBase())),                   //
-          snapshots(std::move(std::make_shared<Snapshot>(this, nullptr))), //
+    explicit VersionSetWithDelta(String name_, const ::DB::MVCC::VersionSetConfig & config_, Poco::Logger * log_)
+        : current(std::move(VersionType::createBase())), //
+          snapshots(),                                   //
           config(config_),
+          name(std::move(name_)),
           log(log_)
     {
-        // The placeholder snapshot should not be counted.
-        CurrentMetrics::sub(CurrentMetrics::PSMVCCNumSnapshots);
     }
 
     virtual ~VersionSetWithDelta()
     {
         current.reset();
-        // snapshot list is empty
-        assert(snapshots->prev == snapshots.get());
 
-        // Ignore the destructor of placeholder snapshot
-        CurrentMetrics::add(CurrentMetrics::PSMVCCNumSnapshots);
+        std::unique_lock lock(read_write_mutex);
+        removeExpiredSnapshots(lock);
+
+        // snapshot list is empty
+        assert(snapshots.empty());
     }
 
     void apply(TVersionEdit & edit)
@@ -91,7 +92,7 @@ public:
         {
             ProfileEvents::increment(ProfileEvents::PSMVCCApplyOnCurrentBase);
             // If no readers, we could directly merge edits.
-            TEditAcceptor::applyInplace(current, edit, log);
+            TEditAcceptor::applyInplace(name, current, edit, log);
             return;
         }
 
@@ -108,25 +109,22 @@ public:
         }
         // Make a view from head to new version, then apply edits on `current`.
         auto         view = std::make_shared<TVersionView>(current);
-        EditAcceptor builder(view.get(), /* ignore_invalid_ref_= */ true, log);
+        EditAcceptor builder(view.get(), name, /* ignore_invalid_ref_= */ true, log);
         builder.apply(edit);
     }
 
 public:
     /// Snapshot.
     /// When snapshot object is free, it will call `view.release()` to compact VersionList,
-    /// and remove itself from VersionSet's snapshots list.
+    /// and its weak_ptr will be from VersionSet's snapshots list.
     class Snapshot : private boost::noncopyable
     {
     public:
         VersionSetWithDelta * vset;
         TVersionView          view;
 
-        Snapshot * prev;
-        Snapshot * next;
-
     public:
-        Snapshot(VersionSetWithDelta * vset_, VersionPtr tail_) : vset(vset_), view(std::move(tail_)), prev(this), next(this)
+        Snapshot(VersionSetWithDelta * vset_, VersionPtr tail_) : vset(vset_), view(std::move(tail_))
         {
             CurrentMetrics::add(CurrentMetrics::PSMVCCNumSnapshots);
         }
@@ -135,11 +133,15 @@ public:
         {
             vset->compactOnDeltaRelease(view.getSharedTailVersion());
             // Remove snapshot from linked list
-            std::unique_lock lock = vset->acquireForLock();
-            prev->next            = next;
-            next->prev            = prev;
 
-            view.release(); // view should be release under unique lock
+            view.release();
+
+            // Do cleanup for invalid snapshot weak_ptr randomly.
+            if (vset->config.doCleanup())
+            {
+                std::unique_lock lock = vset->acquireForLock();
+                vset->removeExpiredSnapshots(lock);
+            }
 
             CurrentMetrics::sub(CurrentMetrics::PSMVCCNumSnapshots);
         }
@@ -150,7 +152,8 @@ public:
         friend class VersionSetWithDelta;
     };
 
-    using SnapshotPtr = std::shared_ptr<Snapshot>;
+    using SnapshotPtr     = std::shared_ptr<Snapshot>;
+    using SnapshotWeakPtr = std::weak_ptr<Snapshot>;
 
     /// Create a snapshot for current version.
     /// call `snapshot.reset()` or let `snapshot` gone if you don't need it anymore.
@@ -161,10 +164,7 @@ public:
 
         auto s = std::make_shared<Snapshot>(this, current);
         // Register snapshot to VersionSet
-        s->prev               = snapshots->prev;
-        s->next               = snapshots.get();
-        snapshots->prev->next = s.get();
-        snapshots->prev       = s.get();
+        snapshots.emplace_back(SnapshotWeakPtr(s));
         return s;
     }
 
@@ -290,6 +290,23 @@ protected:
         }
     }
 
+private:
+    void removeExpiredSnapshots(const std::unique_lock<std::shared_mutex> &) const
+    {
+        for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
+        {
+            if (iter->expired())
+            {
+                // Clear free snapshots
+                iter = snapshots.erase(iter);
+            }
+            else
+            {
+                iter++;
+            }
+        }
+    }
+
 public:
     /// Some helper functions
 
@@ -307,6 +324,14 @@ public:
             sz += 1;
         }
         return sz;
+    }
+
+    size_t numSnapshots() const
+    {
+        // Note: this will scan and remove expired weak_ptr to snapshot
+        std::unique_lock lock(read_write_mutex);
+        removeExpiredSnapshots(lock);
+        return snapshots.size();
     }
 
     std::string toDebugString() const
@@ -339,11 +364,12 @@ public:
     }
 
 protected:
-    mutable std::shared_mutex    read_write_mutex;
-    VersionPtr                   current;
-    SnapshotPtr                  snapshots;
-    ::DB::MVCC::VersionSetConfig config;
-    Poco::Logger *               log;
+    mutable std::shared_mutex          read_write_mutex;
+    VersionPtr                         current;
+    mutable std::list<SnapshotWeakPtr> snapshots;
+    const ::DB::MVCC::VersionSetConfig config;
+    const String                       name;
+    Poco::Logger *                     log;
 };
 
 } // namespace MVCC

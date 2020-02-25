@@ -108,7 +108,7 @@ PageStorage::PageStorage(String name, const String & storage_path_, const Config
       write_files(std::max(1UL, config.num_write_slots)),
       page_file_log(&Poco::Logger::get("PageFile")),
       log(&Poco::Logger::get("PageStorage")),
-      versioned_page_entries(config.version_set_config, log)
+      versioned_page_entries(storage_name, config.version_set_config, log)
 {
     // at least 1 write slots
     config.num_write_slots = std::max(1UL, config.num_write_slots);
@@ -393,7 +393,7 @@ PageStorage::SnapshotPtr PageStorage::getSnapshot()
 
 size_t PageStorage::getNumSnapshots() const
 {
-    return versioned_page_entries.size();
+    return versioned_page_entries.numSnapshots();
 }
 
 Page PageStorage::read(PageId page_id, SnapshotPtr snapshot)

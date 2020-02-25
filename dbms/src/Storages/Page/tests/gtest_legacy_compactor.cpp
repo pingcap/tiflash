@@ -31,7 +31,7 @@ try
     PageStorage::Config config;
     Poco::Logger *      log = &Poco::Logger::get("LegacyCompactor_test");
 
-    PageEntriesVersionSetWithDelta original_version(config.version_set_config, log);
+    PageEntriesVersionSetWithDelta original_version("test", config.version_set_config, log);
 
     // Prepare a simple version
     {
@@ -53,7 +53,7 @@ try
         original_version.apply(edit);
     }
 
-    PageEntriesVersionSetWithDelta version_restored_with_snapshot(config.version_set_config, log);
+    PageEntriesVersionSetWithDelta version_restored_with_snapshot("test", config.version_set_config, log);
     // Restore a new version set with snapshot WriteBatch
     {
         auto       snapshot = original_version.getSnapshot();
@@ -165,7 +165,7 @@ try
     }
 
     DB::PageStorage::StatisticsInfo   debug_info;
-    PageStorage::VersionedPageEntries vset_restored(storage.config.version_set_config, storage.log);
+    PageStorage::VersionedPageEntries vset_restored("restore_vset", storage.config.version_set_config, storage.log);
     auto && [old_checkpoint_file, old_checkpoint_sequence, page_files_to_remove]
         = restoreFromCheckpoints(mergine_queue, vset_restored, debug_info, "restore_test", storage.log);
     (void)old_checkpoint_file;

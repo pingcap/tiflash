@@ -9,7 +9,7 @@ LegacyCompactor::LegacyCompactor(const PageStorage & storage)
       config(storage.config),
       log(storage.log),
       page_file_log(storage.page_file_log),
-      version_set(config.version_set_config, log)
+      version_set(storage.storage_name + ".legacy_compactor", config.version_set_config, log)
 {
 }
 
