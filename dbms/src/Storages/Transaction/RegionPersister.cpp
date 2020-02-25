@@ -15,7 +15,7 @@ void RegionPersister::drop(RegionID region_id, const RegionTaskLock &)
 {
     WriteBatch wb;
     wb.delPage(region_id);
-    page_storage.write(wb);
+    page_storage.write(std::move(wb));
 }
 
 void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionCacheWriteElement & region_write_buffer)
@@ -70,7 +70,7 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
     WriteBatch wb;
     auto read_buf = buffer.tryGetReadBuffer();
     wb.putPage(region_id, applied_index, read_buf, region_size);
-    page_storage.write(wb);
+    page_storage.write(std::move(wb));
 }
 
 RegionMap RegionPersister::restore(IndexReaderCreateFunc * func)

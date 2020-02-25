@@ -94,7 +94,7 @@ try
         WriteBatch wb;
         Packs      packs1 = DiskValueSpace::writePacks(opc, std::make_shared<OneBlockInputStream>(block1), wb);
         Packs      packs2 = DiskValueSpace::writePacks(opc, std::make_shared<OneBlockInputStream>(block2), wb);
-        dm_context->storage_pool.log().write(wb);
+        dm_context->storage_pool.log().write(std::move(wb));
 
         for (auto & pack : packs1)
         {
@@ -110,7 +110,7 @@ try
         EXPECT_EQ(num_rows_write, delta->num_rows(0, 2));
         WriteBatch remove_wb;
         delta = delta->tryFlushCache(opc, remove_wb, true);
-        opc.data_storage.write(remove_wb);
+        opc.data_storage.write(std::move(remove_wb));
         EXPECT_FALSE(!delta);
         EXPECT_EQ(num_rows_write, delta->num_rows(0, 1));
     }

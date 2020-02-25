@@ -94,7 +94,7 @@ void DiskValueSpace::restore(const OpContext & context)
         cache.swap(new_instance->cache);
         cache_packs = new_instance->cache_packs;
     }
-    context.data_storage.write(remove_data_wb);
+    context.data_storage.write(std::move(remove_data_wb));
 }
 
 
@@ -376,7 +376,7 @@ void DiskValueSpace::appendPackWithCache(const OpContext & context, Pack && pack
         auto       data_size = buf.count();
         WriteBatch meta_wb;
         meta_wb.putPage(page_id, 0, buf.tryGetReadBuffer(), data_size);
-        context.meta_storage.write(meta_wb);
+        context.meta_storage.write(std::move(meta_wb));
     }
 
     packs.push_back(std::move(pack));
@@ -674,8 +674,8 @@ DiskValueSpacePtr DiskValueSpace::doFlushCache(const OpContext & context, WriteB
     /// But the correctness is still guaranteed.
 
     // The order here is critical.
-    context.data_storage.write(data_wb_insert);
-    context.meta_storage.write(meta_wb);
+    context.data_storage.write(std::move(data_wb_insert));
+    context.meta_storage.write(std::move(meta_wb));
 
     // ============================================================
     // The following code are pure memory operations,
