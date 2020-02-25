@@ -614,6 +614,8 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read)
     size_t buf_size = 0;
     for (const auto & [page_id, entry, fields] : to_read)
     {
+        (void)page_id;
+        (void)entry;
         for (const auto field_index : fields)
         {
             buf_size += entry.getFieldSize(field_index);
