@@ -45,8 +45,6 @@ public:
             }
         }
 
-        if (!has_nullable_types)
-            throw Exception("Aggregate function combinator 'Null' requires at least one argument to be Nullable", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         /// Special case for 'count' function. It could be called with Nullable arguments
         /// - that means - count number of calls, when all arguments are not NULL.
@@ -66,9 +64,19 @@ public:
         if (arguments.size() == 1)
         {
             if (return_type_is_nullable)
-                return std::make_shared<AggregateFunctionNullUnary<true>>(nested_function);
+            {
+                if (has_nullable_types)
+                    return std::make_shared<AggregateFunctionNullUnary<true, true>>(nested_function);
+                else
+                    return std::make_shared<AggregateFunctionNullUnary<true, false>>(nested_function);
+            }
             else
-                return std::make_shared<AggregateFunctionNullUnary<false>>(nested_function);
+            {
+                if (has_nullable_types)
+                    return std::make_shared<AggregateFunctionNullUnary<false, true>>(nested_function);
+                else
+                    return std::make_shared<AggregateFunctionNullUnary<false, false>>(nested_function);
+            }
         }
         else
         {
