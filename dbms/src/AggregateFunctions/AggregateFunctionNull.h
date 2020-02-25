@@ -206,6 +206,7 @@ public:
         }
         else
         {
+            this->setFlag(place);
             this->nested_function->add(this->nestedPlace(place), columns, row_num, arena);
         }
     }
