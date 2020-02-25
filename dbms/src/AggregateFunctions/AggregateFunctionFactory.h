@@ -53,7 +53,8 @@ public:
         const String & name,
         const DataTypes & argument_types,
         const Array & parameters = {},
-        int recursion_level = 0) const;
+        int recursion_level = 0,
+        bool empty_input_as_null = false) const;
 
     /// Returns nullptr if not found.
     AggregateFunctionPtr tryGet(

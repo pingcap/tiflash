@@ -1,0 +1,38 @@
+mysql> drop table if exists test.t
+mysql> create table test.t(a int, b int, c int, d int, e int, f int)
+mysql> alter table test.t set tiflash replica 1 location labels 'rack', 'host', 'abc'
+
+SLEEP 15
+
+mysql> insert into test.t values (1, 1, 1, 1, 1, 1);
+mysql> insert into test.t values (1, 2, 3, NULL, NULL, 1);
+
+SLEEP 15
+
+mysql> select /*+ read_from_storage(tiflash[t]) */ count(1) from test.t where a > 10;
++----------+
+| count(1) |
++----------+
+|        0 |
++----------+
+
+mysql> select /*+ read_from_storage(tiflash[t]) */ sum(1) from test.t where a > 10;
++--------+
+| sum(1) |
++--------+
+|   NULL |
++--------+
+
+mysql> select /*+ read_from_storage(tiflash[t]) */ min(1) from test.t where a > 10;
++--------+
+| min(1) |
++--------+
+|   NULL |
++--------+
+
+mysql> select /*+ read_from_storage(tiflash[t]) */ max(1) from test.t where a > 10;
++--------+
+| max(1) |
++--------+
+|   NULL |
++--------+
