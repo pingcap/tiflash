@@ -300,7 +300,7 @@ PageStorage::SnapshotPtr PageStorage::getSnapshot()
 
 size_t PageStorage::getNumSnapshots() const
 {
-    return versioned_page_entries.size();
+    return versioned_page_entries.numSnapshots();
 }
 
 Page PageStorage::read(PageId page_id, SnapshotPtr snapshot)

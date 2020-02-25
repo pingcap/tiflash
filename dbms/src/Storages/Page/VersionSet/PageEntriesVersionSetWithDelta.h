@@ -33,8 +33,8 @@ public:
     std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> gcApply(PageEntriesEdit & edit, bool need_scan_page_ids = true);
 
     /// List all PageFile that are used by any version
-    std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> listAllLiveFiles(const std::unique_lock<std::shared_mutex> &,
-                                                                               bool need_scan_page_ids = true) const;
+    std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> //
+    listAllLiveFiles(std::unique_lock<std::shared_mutex> &&, bool need_scan_page_ids = true);
 
 private:
     void collectLiveFilesFromVersionList(const PageEntriesView &        view,
