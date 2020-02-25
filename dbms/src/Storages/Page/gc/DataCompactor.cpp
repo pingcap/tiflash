@@ -68,8 +68,7 @@ std::tuple<PageFileSet, size_t, size_t> DataCompactor::selectCandidateFiles( // 
     {
         if (unlikely(page_file.getType() != PageFile::Type::Formal))
         {
-            throw Exception("Try to pick PageFile_" + DB::toString(page_file.getFileId()) + "_" + DB::toString(page_file.getLevel()) + "("
-                                + PageFile::typeToString(page_file.getType()) + ") as gc candidate, path: " + page_file.folderPath(),
+            throw Exception("Try to pick " + page_file.toString() + " as gc candidate, path: " + page_file.folderPath(),
                             ErrorCodes::LOGICAL_ERROR);
         }
 
@@ -136,8 +135,8 @@ PageEntriesEdit DataCompactor::migratePages(const SnapshotPtr & snapshot,
     PageFile gc_file
         = PageFile::newPageFile(migrate_file_id.first, migrate_file_id.second, storage_path, PageFile::Type::Temp, page_file_log);
     LOG_INFO(log,
-             storage_name << " GC decide to merge " << candidates.size() << " files, containing " << migrate_page_count
-                          << " regions to PageFile_" << gc_file.getFileId() << "_" << gc_file.getLevel());
+             storage_name << " GC decide to compact " << candidates.size() << " files, containing " << migrate_page_count
+                          << " pages to PageFile_" << gc_file.getFileId() << "_" << gc_file.getLevel());
 
     PageEntriesEdit          gc_file_edit;
     std::vector<MigrateInfo> migrate_infos;
@@ -148,8 +147,9 @@ PageEntriesEdit DataCompactor::migratePages(const SnapshotPtr & snapshot,
         {
             if (page_file.getType() != PageFile::Type::Formal)
             {
-                // TODO: exception
-                throw Exception("", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("Try to migrate pages from invalid type PageFile: " + page_file.toString()
+                                    + ", path: " + page_file.folderPath(),
+                                ErrorCodes::LOGICAL_ERROR);
             }
 
             if (auto it = file_valid_pages.find(page_file.fileIdLevel()); it == file_valid_pages.end())
@@ -172,6 +172,7 @@ PageEntriesEdit DataCompactor::migratePages(const SnapshotPtr & snapshot,
             merging_queue.push(std::move(reader));
         }
 
+        // Merge all WriteBatch with valid pages, sorted by WriteBatch::sequence
         gc_file_edit
             = mergeValidPages(std::move(merging_queue), std::move(data_readers), file_valid_pages, snapshot, gc_file, migrate_infos);
     }

@@ -34,7 +34,7 @@ private:
     Poco::Logger * page_file_log;
 
     PageStorage::VersionedPageEntries version_set;
-    PageStorage::RestoreInfo          info;
+    PageStorage::StatisticsInfo       info;
 };
 
 } // namespace DB

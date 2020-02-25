@@ -80,7 +80,7 @@ public:
         = std::function<void(const PathAndIdsVec & pengding_external_pages, const std::set<PageId> & valid_normal_pages)>;
 
     // Debugging info for restore
-    struct RestoreInfo
+    struct StatisticsInfo
     {
         size_t puts    = 0;
         size_t refs    = 0;
@@ -167,10 +167,7 @@ private:
     ExternalPagesScanner external_pages_scanner = nullptr;
     ExternalPagesRemover external_pages_remover = nullptr;
 
-    size_t deletes = 0;
-    size_t puts    = 0;
-    size_t refs    = 0;
-    size_t upserts = 0;
+    StatisticsInfo statistics;
 };
 
 class PageReader

@@ -10,7 +10,7 @@ template <class MergineQueue>
 static std::pair<std::optional<WriteBatch::SequenceID>, PageFileSet> //
 restoreFromCheckpoints(MergineQueue &                      merging_queue,
                        PageStorage::VersionedPageEntries & version_set,
-                       PageStorage::RestoreInfo &          restore_info,
+                       PageStorage::StatisticsInfo &       info,
                        const String &                      storage_name,
                        Poco::Logger *                      logger)
 {
@@ -46,7 +46,7 @@ restoreFromCheckpoints(MergineQueue &                      merging_queue,
     {
         // Apply edits from latest checkpoint
         version_set.apply(last_checkpoint_edits);
-        restore_info.mergeEdits(last_checkpoint_edits);
+        info.mergeEdits(last_checkpoint_edits);
     }
     catch (Exception & e)
     {
@@ -79,7 +79,7 @@ restoreFromCheckpoints(MergineQueue &                      merging_queue,
         }
     }
     LOG_INFO(logger,
-             storage_name << " restore " << restore_info.toString() << " from checkpoint PageFile_" //
+             storage_name << " restore " << info.toString() << " from checkpoint PageFile_"         //
                           << last_checkpoint_file_id.first << "_" << last_checkpoint_file_id.second //
                           << " sequence: " << checkpoint_wb_sequence);
     return {checkpoint_wb_sequence, page_files_to_archive};

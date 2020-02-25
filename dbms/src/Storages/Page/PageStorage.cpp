@@ -21,7 +21,7 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-void PageStorage::RestoreInfo::mergeEdits(const PageEntriesEdit & edit)
+void PageStorage::StatisticsInfo::mergeEdits(const PageEntriesEdit & edit)
 {
     for (const auto & record : edit.getRecords())
     {
@@ -36,7 +36,7 @@ void PageStorage::RestoreInfo::mergeEdits(const PageEntriesEdit & edit)
     }
 }
 
-String PageStorage::RestoreInfo::toString() const
+String PageStorage::StatisticsInfo::toString() const
 {
     std::stringstream ss;
     ss << puts << " puts and " << refs << " refs and " //
@@ -63,6 +63,7 @@ PageFileSet PageStorage::listAllPageFiles(const String & storage_path, Poco::Log
     PageFileSet page_files;
     for (const auto & name : file_names)
     {
+        // Ignore archive directory.
         if (name == PageStorage::ARCHIVE_SUBDIR)
             continue;
 
@@ -109,6 +110,8 @@ PageStorage::PageStorage(String name, const String & storage_path_, const Config
 
 void PageStorage::restore()
 {
+    LOG_INFO(log, storage_name << " begin to restore from path: " << storage_path);
+
     /// page_files are in ascending ordered by (file_id, level).
     ListPageFilesOption opt;
     opt.remove_tmp_files   = true;
@@ -131,9 +134,9 @@ void PageStorage::restore()
         merging_queue.push(std::move(reader));
     }
 
-    RestoreInfo info;
+    StatisticsInfo restore_info;
     auto [checkpoint_wb_sequence, page_files_to_archive]
-        = restoreFromCheckpoints(merging_queue, versioned_page_entries, info, storage_name, log);
+        = restoreFromCheckpoints(merging_queue, versioned_page_entries, restore_info, storage_name, log);
     if (checkpoint_wb_sequence)
         write_batch_seq = *checkpoint_wb_sequence;
 
@@ -155,6 +158,7 @@ void PageStorage::restore()
             {
                 auto edits = reader->getEdits();
                 versioned_page_entries.apply(edits);
+                restore_info.mergeEdits(edits);
                 write_batch_seq = reader->writeBatchSequence();
             }
             catch (Exception & e)
@@ -164,13 +168,17 @@ void PageStorage::restore()
                 throw;
             }
         }
+
         if (reader->hasNext())
         {
+            // Continue to merge next WriteBatch.
             reader->moveNext();
             merging_queue.push(std::move(reader));
         }
         else
         {
+            // Set belonging PageFile's offset and close reader.
+            LOG_TRACE(log, storage_name << " merge done from " + reader->toString());
             reader->setPageFileOffsets();
         }
     }
@@ -198,6 +206,13 @@ void PageStorage::restore()
     {
         auto writer = getWriter(page_file);
         idle_writers.emplace_back(std::move(writer));
+    }
+
+    statistics = restore_info;
+    {
+        auto   snapshot  = getSnapshot();
+        size_t num_pages = snapshot->version()->numPages();
+        LOG_INFO(log, storage_name << " restore " << num_pages << " pages." << statistics.toString());
     }
 }
 
@@ -335,26 +350,7 @@ void PageStorage::write(WriteBatch && wb)
     // persist the invalid ref pair into PageFile.
     versioned_page_entries.apply(edit);
 
-    for (auto & w : wb.getWrites())
-    {
-        switch (w.type)
-        {
-        case WriteBatch::WriteType::DEL:
-            deletes++;
-            break;
-        case WriteBatch::WriteType::PUT:
-            puts++;
-            break;
-        case WriteBatch::WriteType::REF:
-            refs++;
-            break;
-        case WriteBatch::WriteType::UPSERT:
-            upserts++;
-            break;
-        default:
-            throw Exception("Unexpected write type " + DB::toString((UInt64)w.type));
-        }
-    }
+    statistics.mergeEdits(edit);
 }
 
 PageStorage::SnapshotPtr PageStorage::getSnapshot()
@@ -548,9 +544,7 @@ bool PageStorage::gc()
         gc_is_running.compare_exchange_strong(is_running, false);
     });
 
-    LOG_TRACE(log,
-              storage_name << " Before gc, deletes[" << deletes << "], puts[" << puts << "], refs[" << refs << "], upserts[" << upserts
-                           << "]");
+    LOG_TRACE(log, storage_name << " Before gc, " << statistics.toString());
 
     /// Get all pending external pages and PageFiles. Note that we should get external pages before PageFiles.
     PathAndIdsVec external_pages;
@@ -623,7 +617,7 @@ bool PageStorage::gc()
     }
 
     if (!compact_result.do_compaction)
-        LOG_TRACE(log,
+        LOG_DEBUG(log,
                   storage_name << " GC exit without compaction. merge file size: " << compact_result.candidate_size
                                << ", candidate size: " << compact_result.bytes_migrate);
     return compact_result.do_compaction;

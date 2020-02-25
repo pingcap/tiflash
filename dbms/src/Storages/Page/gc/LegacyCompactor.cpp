@@ -17,7 +17,7 @@ std::tuple<PageFileSet, PageFileSet> LegacyCompactor::tryCompact( //
     PageFileSet &&                       page_files,
     const std::set<PageFileIdAndLevel> & writing_file_ids)
 {
-    // Select PageFiles to compact
+    // Select PageFiles to compact, all compacted WriteBatch will apply to `this->version_set`
     WriteBatch::SequenceID checkpoint_sequence = 0;
     PageFileSet            page_files_to_compact;
     std::tie(checkpoint_sequence, page_files_to_compact) = collectPageFilesToCompact(page_files, writing_file_ids);
@@ -25,8 +25,8 @@ std::tuple<PageFileSet, PageFileSet> LegacyCompactor::tryCompact( //
     if (page_files_to_compact.size() < config.gc_compact_legacy_min_num)
     {
         LOG_DEBUG(log,
-                  storage_name << " gcCompactLegacy exit without compaction, candidate size: " << page_files_to_compact.size() << " < "
-                               << config.gc_compact_legacy_min_num);
+                  storage_name << " tryCompact exit without compaction, candidate size: " << page_files_to_compact.size() //
+                               << ", compact_legacy_min_num: " << config.gc_compact_legacy_min_num);
         // Nothing to compact, remove legacy/checkpoint page files since we
         // don't do gc on them later.
         for (auto itr = page_files.begin(); itr != page_files.end(); /* empty */)
@@ -121,7 +121,7 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
             || (reader->writeBatchSequence() > last_sequence + 1))
         {
             LOG_TRACE(log,
-                      storage_name << " gcCompactLegacy meet " << reader->belongingPageFile().toString() //
+                      storage_name << " collectPageFilesToCompact stop on " << reader->belongingPageFile().toString() //
                                    << ", sequence: " << reader->writeBatchSequence() << " last sequence: " << DB::toString(last_sequence));
             break;
         }
@@ -134,7 +134,7 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
             (checkpoint_wb_sequence.has_value()
              && (*checkpoint_wb_sequence == 0 || *checkpoint_wb_sequence < reader->writeBatchSequence())))
         {
-            LOG_TRACE(log, storage_name << " gcCompactLegacy recovering from " + reader->toString());
+            LOG_TRACE(log, storage_name << " collectPageFilesToCompact recovering from " + reader->toString());
             try
             {
                 auto edits = reader->getEdits();
@@ -158,7 +158,7 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
         else
         {
             // We apply all edit of belonging PageFile, do compaction on it.
-            LOG_TRACE(log, storage_name << " gcCompactLegacy try to compact: " + reader->belongingPageFile().toString());
+            LOG_TRACE(log, storage_name << " collectPageFilesToCompact try to compact: " + reader->belongingPageFile().toString());
             page_files_to_compact.emplace(reader->belongingPageFile());
         }
     }
