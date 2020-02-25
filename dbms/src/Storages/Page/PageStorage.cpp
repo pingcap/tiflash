@@ -277,7 +277,7 @@ PageStorage::ReaderPtr PageStorage::getReader(const PageFileIdAndLevel & file_id
     return pages_reader;
 }
 
-void PageStorage::write(const WriteBatch & wb)
+void PageStorage::write(WriteBatch && wb)
 {
     if (unlikely(wb.empty()))
         return;
@@ -292,7 +292,7 @@ void PageStorage::write(const WriteBatch & wb)
     }
 
     PageEntriesEdit edit;
-    const_cast<WriteBatch &>(wb).setSequence(++write_batch_seq); // Set sequence number to keep ordering between writers.
+    wb.setSequence(++write_batch_seq); // Set sequence number to keep ordering between writers.
     file_to_write->write(wb, edit);
 
     {
@@ -444,6 +444,38 @@ void PageStorage::read(const std::vector<PageId> & page_ids, const PageHandler &
 
         reader->read(page_id_and_entries, handler);
     }
+}
+
+PageMap PageStorage::read(const std::vector<PageReadFields> & page_fields, SnapshotPtr snapshot)
+{
+    if (!snapshot)
+        snapshot = this->getSnapshot();
+
+
+    std::map<PageFileIdAndLevel, std::pair<ReaderPtr, PageFile::Reader::FieldReadInfos>> file_read_infos;
+    for (const auto & [page_id, field_indices] : page_fields)
+    {
+        const auto page_entry = snapshot->version()->find(page_id);
+        if (!page_entry)
+            throw Exception("Page " + DB::toString(page_id) + " not found", ErrorCodes::LOGICAL_ERROR);
+        const auto file_id_level          = page_entry->fileIdLevel();
+        auto & [file_reader, field_infos] = file_read_infos[file_id_level];
+        field_infos.emplace_back(page_id, *page_entry, field_indices);
+        if (file_reader == nullptr)
+            file_reader = getReader(file_id_level);
+    }
+
+    PageMap page_map;
+    for (auto & [file_id_level, entries_and_reader] : file_read_infos)
+    {
+        (void)file_id_level;
+        auto & reader       = entries_and_reader.first;
+        auto & fields_infos = entries_and_reader.second;
+        auto   page_in_file = reader->read(fields_infos);
+        for (auto & [page_id, page] : page_in_file)
+            page_map.emplace(page_id, std::move(page));
+    }
+    return page_map;
 }
 
 void PageStorage::traverse(const std::function<void(const Page & page)> & acceptor, SnapshotPtr snapshot)

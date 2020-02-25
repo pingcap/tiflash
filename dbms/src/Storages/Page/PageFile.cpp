@@ -1,13 +1,12 @@
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
-
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <IO/WriteHelpers.h>
 #include <common/logger_useful.h>
 
-#include <IO/WriteHelpers.h>
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/split.hpp>
 
 #ifndef __APPLE__
 #include <fcntl.h>
@@ -15,10 +14,10 @@
 
 #include <IO/WriteBufferFromFile.h>
 #include <Poco/File.h>
-#include <ext/scope_guard.h>
-
 #include <Storages/Page/PageFile.h>
 #include <Storages/Page/PageUtil.h>
+
+#include <ext/scope_guard.h>
 
 namespace DB
 {
@@ -64,6 +63,8 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
         case WriteBatch::WriteType::UPSERT:
             data_write_bytes += write.size;
             meta_write_bytes += PAGE_META_SIZE;
+            meta_write_bytes += sizeof(UInt64); // size of field_offsets
+            meta_write_bytes += sizeof(UInt64) * write.offsets.size();
             break;
         case WriteBatch::WriteType::DEL:
             // For delete page, store page id only. And don't need to write data file.
@@ -95,31 +96,38 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
         switch (write.type)
         {
         case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::UPSERT:
-        {
+        case WriteBatch::WriteType::UPSERT: {
             if (write.read_buffer) // In case read_buffer is nullptr
                 write.read_buffer->readStrict(data_pos, write.size);
             Checksum page_checksum = CityHash_v1_0_2::CityHash64(data_pos, write.size);
             data_pos += write.size;
 
-            PageEntry pc{};
-            pc.file_id  = page_file.getFileId();
-            pc.level    = page_file.getLevel();
-            pc.tag      = write.tag;
-            pc.size     = write.size;
-            pc.offset   = page_data_file_off;
-            pc.checksum = page_checksum;
+            PageEntry entry;
+            entry.file_id  = page_file.getFileId();
+            entry.level    = page_file.getLevel();
+            entry.tag      = write.tag;
+            entry.size     = write.size;
+            entry.offset   = page_data_file_off;
+            entry.checksum = page_checksum;
+
+            entry.field_offsets = write.offsets;
+            // TODO: we can swap from WriteBatch instead of copying?
+            // entry.field_offsets.swap(const_cast<WriteBatch::Write &>(write).offsets);
 
             if (write.type == WriteBatch::WriteType::PUT)
-                edit.put(write.page_id, pc);
+                edit.put(write.page_id, entry);
             else if (write.type == WriteBatch::WriteType::UPSERT)
-                edit.upsertPage(write.page_id, pc);
+                edit.upsertPage(write.page_id, entry);
 
             PageUtil::put(meta_pos, (PageId)write.page_id);
             PageUtil::put(meta_pos, (PageTag)write.tag);
             PageUtil::put(meta_pos, (PageOffset)page_data_file_off);
             PageUtil::put(meta_pos, (PageSize)write.size);
             PageUtil::put(meta_pos, (Checksum)page_checksum);
+
+            PageUtil::put(meta_pos, (UInt64)entry.field_offsets.size());
+            for (size_t i = 0; i < entry.field_offsets.size(); ++i)
+                PageUtil::put(meta_pos, (UInt64)entry.field_offsets[i]);
 
             page_data_file_off += write.size;
             break;
@@ -180,11 +188,11 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
 
         WriteBatch::SequenceID wb_sequence    = 0;
         const auto             binary_version = PageUtil::get<PageFileVersion>(pos);
-        if (binary_version == 1)
+        if (binary_version == PageFile::VERSION_BASE)
         {
             wb_sequence = 0;
         }
-        else if (binary_version == PageFile::CURRENT_VERSION)
+        else if (binary_version == PageFile::VERSION_FLASH_341)
         {
             wb_sequence = PageUtil::get<WriteBatch::SequenceID>(pos);
         }
@@ -216,33 +224,38 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
             switch (write_type)
             {
             case WriteBatch::WriteType::PUT:
-            case WriteBatch::WriteType::UPSERT:
-            {
+            case WriteBatch::WriteType::UPSERT: {
                 auto      page_id = PageUtil::get<PageId>(pos);
-                PageEntry pc;
-                pc.file_id  = file_id;
-                pc.level    = level;
-                pc.tag      = PageUtil::get<PageTag>(pos);
-                pc.offset   = PageUtil::get<PageOffset>(pos);
-                pc.size     = PageUtil::get<PageSize>(pos);
-                pc.checksum = PageUtil::get<Checksum>(pos);
+                PageEntry entry;
+                entry.file_id  = file_id;
+                entry.level    = level;
+                entry.tag      = PageUtil::get<PageTag>(pos);
+                entry.offset   = PageUtil::get<PageOffset>(pos);
+                entry.size     = PageUtil::get<PageSize>(pos);
+                entry.checksum = PageUtil::get<Checksum>(pos);
+
+                if (binary_version == PageFile::VERSION_FLASH_341)
+                {
+                    const UInt64 num_fields = PageUtil::get<UInt64>(pos);
+                    entry.field_offsets.reserve(num_fields);
+                    for (size_t i = 0; i < num_fields; ++i)
+                        entry.field_offsets.emplace_back(PageUtil::get<UInt64>(pos));
+                }
 
                 if (write_type == WriteBatch::WriteType::PUT)
-                    edit.put(page_id, pc);
+                    edit.put(page_id, entry);
                 else if (write_type == WriteBatch::WriteType::UPSERT)
-                    edit.upsertPage(page_id, pc);
+                    edit.upsertPage(page_id, entry);
 
-                page_data_file_size += pc.size;
+                page_data_file_size += entry.size;
                 break;
             }
-            case WriteBatch::WriteType::DEL:
-            {
+            case WriteBatch::WriteType::DEL: {
                 auto page_id = PageUtil::get<PageId>(pos);
                 edit.del(page_id); // Reserve the order of removal.
                 break;
             }
-            case WriteBatch::WriteType::REF:
-            {
+            case WriteBatch::WriteType::REF: {
                 const auto ref_id  = PageUtil::get<PageId>(pos);
                 const auto page_id = PageUtil::get<PageId>(pos);
                 edit.ref(ref_id, page_id);
@@ -335,7 +348,7 @@ void PageFile::MetaMergingReader::moveNext()
     {
         wb_sequence = 0;
     }
-    else if (binary_version == PageFile::CURRENT_VERSION)
+    else if (binary_version == PageFile::VERSION_FLASH_341)
     {
         wb_sequence = PageUtil::get<WriteBatch::SequenceID>(pos);
     }
@@ -365,8 +378,7 @@ void PageFile::MetaMergingReader::moveNext()
         switch (write_type)
         {
         case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::UPSERT:
-        {
+        case WriteBatch::WriteType::UPSERT: {
             auto      page_id = PageUtil::get<PageId>(pos);
             PageEntry entry;
             entry.file_id  = page_file.getFileId();
@@ -376,6 +388,14 @@ void PageFile::MetaMergingReader::moveNext()
             entry.size     = PageUtil::get<PageSize>(pos);
             entry.checksum = PageUtil::get<PageMetaFormat::Checksum>(pos);
 
+            if (binary_version == PageFile::VERSION_FLASH_341)
+            {
+                const UInt64 num_fields = PageUtil::get<UInt64>(pos);
+                entry.field_offsets.reserve(num_fields);
+                for (size_t i = 0; i < num_fields; ++i)
+                    entry.field_offsets.emplace_back(PageUtil::get<UInt64>(pos));
+            }
+
             if (write_type == WriteBatch::WriteType::PUT)
                 curr_edit.put(page_id, entry);
             else if (write_type == WriteBatch::WriteType::UPSERT)
@@ -384,14 +404,12 @@ void PageFile::MetaMergingReader::moveNext()
             curr_wb_data_offset += entry.size;
             break;
         }
-        case WriteBatch::WriteType::DEL:
-        {
+        case WriteBatch::WriteType::DEL: {
             auto page_id = PageUtil::get<PageId>(pos);
             curr_edit.del(page_id);
             break;
         }
-        case WriteBatch::WriteType::REF:
-        {
+        case WriteBatch::WriteType::REF: {
             const auto ref_id  = PageUtil::get<PageId>(pos);
             const auto page_id = PageUtil::get<PageId>(pos);
             curr_edit.ref(ref_id, page_id);
@@ -584,11 +602,71 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
     }
 }
 
+PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read)
+{
+    ProfileEvents::increment(ProfileEvents::PSMReadPages, to_read.size());
+
+    // Sort in ascending order by offset in file.
+    std::sort(
+        to_read.begin(), to_read.end(), [](const FieldReadInfo & a, const FieldReadInfo & b) { return a.entry.offset < b.entry.offset; });
+
+    // allocate data_buf that can hold all pages with specify fields
+    size_t buf_size = 0;
+    for (const auto & [page_id, entry, fields] : to_read)
+    {
+        for (const auto field_index : fields)
+        {
+            buf_size += entry.getFieldSize(field_index);
+        }
+    }
+    // TODO optimization:
+    // 1. Succeeding pages can be read by one call.
+    // 2. Pages with small gaps between them can also read together.
+    // 3. Refactor this function to support iterator mode, and then use hint to do data pre-read.
+
+    char *    data_buf   = (char *)alloc(buf_size);
+    MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) { free(p, buf_size); });
+
+    char *  pos = data_buf;
+    PageMap page_map;
+    for (const auto & [page_id, entry, fields] : to_read)
+    {
+        size_t read_size_this_entry = 0;
+        char * write_offset         = pos;
+
+        std::set<Page::FieldOffset> fields_offset_in_page;
+        for (const auto field_index : fields)
+        {
+            // TODO: Continuously fields can read by one system call.
+            const auto [beg_offset, end_offset] = entry.getFieldOffsets(field_index);
+            const auto size_to_read             = end_offset - beg_offset;
+            PageUtil::readFile(data_file_fd, entry.offset + beg_offset, write_offset, size_to_read, data_file_path);
+            fields_offset_in_page.emplace(field_index, read_size_this_entry);
+            read_size_this_entry += size_to_read;
+            write_offset += size_to_read;
+            // Note that with such API, we can NOT check Page's checksum.
+        }
+
+        Page page;
+        page.page_id    = page_id;
+        page.data       = ByteBuffer(pos, write_offset);
+        page.mem_holder = mem_holder;
+        page.field_offsets.swap(fields_offset_in_page);
+        page_map.emplace(page_id, std::move(page));
+
+        pos = write_offset;
+    }
+
+    if (unlikely(pos != data_buf + buf_size))
+        throw Exception("pos not match", ErrorCodes::LOGICAL_ERROR);
+
+    return page_map;
+}
+
+
 // =========================================================
 // PageFile
 // =========================================================
-
-const PageFile::Version PageFile::CURRENT_VERSION = 2;
 
 PageFile::PageFile(PageFileId file_id_, UInt32 level_, const std::string & parent_path, PageFile::Type type_, bool is_create, Logger * log_)
     : file_id(file_id_), level(level_), type(type_), parent_path(parent_path), data_file_pos(0), meta_file_pos(0), log(log_)

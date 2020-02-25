@@ -172,8 +172,8 @@ WriteBatch LegacyCompactor::prepareCheckpointWriteBatch(const PageStorage::Snaps
     auto normal_ids = snapshot->version()->validNormalPageIds();
     for (auto & page_id : normal_ids)
     {
-        auto page = snapshot->version()->findNormalPageEntry(page_id);
-        wb.upsertPage(page_id, page->tag, nullptr, page->size);
+        auto entry = snapshot->version()->findNormalPageEntry(page_id);
+        wb.upsertPage(page_id, entry->tag, nullptr, entry->size, entry->field_offsets);
     }
 
     // After ingesting normal_pages, we will ref them manually to ensure the ref-count is correct.

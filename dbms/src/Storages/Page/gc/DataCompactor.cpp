@@ -233,7 +233,8 @@ PageEntriesEdit DataCompactor::mergeValidPages(PageStorage::MetaCompactMergineQu
                 wb.upsertPage(page_id,
                               entry.tag, //
                               std::make_shared<ReadBufferFromMemory>(page.data.begin(), page.data.size()),
-                              page.data.size());
+                              page.data.size(),
+                              entry.field_offsets);
             }
             gc_file_writer->write(wb, gc_file_edit);
         }

@@ -112,7 +112,7 @@ void DeltaVersionEditAcceptor::apply(PageEntriesEdit & edit)
             this->applyRef(rec);
             break;
         case WriteBatch::WriteType::UPSERT:
-            throw Exception("WriteType::MOVE_NORMAL_PAGE should only write by gcApply!", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("WriteType::UPSERT should only write by gcApply!", ErrorCodes::LOGICAL_ERROR);
             break;
         }
     }

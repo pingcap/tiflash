@@ -86,7 +86,7 @@ try
         batch.putPage(0, tag, buff, buf_sz);
         buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         batch.putPage(1, tag, buff, buf_sz);
-        storage->write(batch);
+        storage->write(std::move(batch));
     }
 
     Page page0 = storage->read(0);
@@ -121,13 +121,13 @@ try
         WriteBatch    batch;
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         batch.putPage(0, tag, buff, buf_sz);
-        storage->write(batch);
+        storage->write(std::move(batch));
     }
     {
         WriteBatch    batch;
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         batch.putPage(1, tag, buff, buf_sz);
-        storage->write(batch);
+        storage->write(std::move(batch));
     }
 
     Page page0 = storage->read(0);
@@ -161,7 +161,7 @@ TEST_F(PageStorage_test, WriteReadAfterGc)
         memset(c_buff, page0_byte, buf_sz);
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         batch.putPage(0, 0, buff, buf_sz);
-        storage->write(batch);
+        storage->write(std::move(batch));
     }
     // repeated put page1
     for (size_t n = 1; n <= num_repeat; ++n)
@@ -170,7 +170,7 @@ TEST_F(PageStorage_test, WriteReadAfterGc)
         memset(c_buff, n, buf_sz);
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         batch.putPage(pid, 0, buff, buf_sz);
-        storage->write(batch);
+        storage->write(std::move(batch));
     }
 
     {
@@ -220,7 +220,7 @@ try
         batch.putExternal(0, 0);
         batch.putRefPage(1, 0);
         batch.putExternal(1024, 0);
-        storage->write(batch);
+        storage->write(std::move(batch));
     }
 
     PageStorage::ExternalPagesScanner scanner = []() -> PageStorage::PathAndIdsVec { return {}; };
@@ -242,7 +242,7 @@ try
         batch.putRefPage(2, 1); // ref 2 -> 1 -> 0
         batch.delPage(1);       // free ref 1 -> 0
         batch.delPage(1024);    // free normal page 1024
-        storage->write(batch);
+        storage->write(std::move(batch));
     }
 
     {
@@ -295,7 +295,7 @@ TEST_F(PageStorage_test, IdempotentDelAndRef)
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         batch.putPage(1, 0, buff, buf_sz);
 
-        storage->write(batch);
+        storage->write(std::move(batch));
     }
 
     {
@@ -306,7 +306,7 @@ TEST_F(PageStorage_test, IdempotentDelAndRef)
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         batch.putPage(1000, 0, buff, buf_sz);
 
-        storage->write(batch);
+        storage->write(std::move(batch));
     }
 
     {
@@ -315,7 +315,7 @@ TEST_F(PageStorage_test, IdempotentDelAndRef)
         batch.putRefPage(2, 1);
         batch.delPage(1);
 
-        storage->write(batch);
+        storage->write(std::move(batch));
     }
 
     {
@@ -378,7 +378,7 @@ try
         // DelPage1
         batch.delPage(1);
 
-        storage->write(batch);
+        storage->write(std::move(batch));
     }
 
     PageFileIdAndLevel        id_and_lvl = {1, 0}; // PageFile{1, 0} is ready to be migrated by gc
@@ -451,7 +451,7 @@ TEST_F(PageStorage_test, GcMoveRefPage)
 
         batch.delPage(2);
 
-        storage->write(batch);
+        storage->write(std::move(batch));
     }
 
     PageFileIdAndLevel        id_and_lvl = {1, 0}; // PageFile{1, 0} is ready to be migrated by gc
@@ -493,7 +493,7 @@ try
         buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         batch.putPage(3, 0, buff, buf_sz);
 
-        storage->write(batch);
+        storage->write(std::move(batch));
     }
 
     {
@@ -501,7 +501,7 @@ try
         WriteBatch batch;
         batch.delPage(1);
 
-        storage->write(batch);
+        storage->write(std::move(batch));
     }
 
     PageFileIdAndLevel        id_and_lvl = {2, 0}; // PageFile{2, 0} is ready to be migrated by gc
@@ -557,7 +557,7 @@ try
         batch.delPage(2);
         batch.delPage(3);
 
-        storage->write(batch);
+        storage->write(std::move(batch));
     }
 
     PageFileIdAndLevel id_and_lvl = {1, 0}; // PageFile{1, 0} is ready to be migrated by gc
@@ -607,7 +607,7 @@ try
         memset(c_buff, 0xf, buf_sz);
         auto buf = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         wb.putPage(1, 0, buf, buf_sz);
-        storage->write(wb);
+        storage->write(std::move(wb));
 
         auto f = PageFile::openPageFileForRead(1, 0, storage->storage_path, PageFile::Type::Formal, storage->log);
         f.setLegacy();
@@ -678,7 +678,7 @@ try
         batch.putPage(0, tag, buff, buf_sz);
         buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         batch.putPage(1, tag, buff, buf_sz);
-        storage->write(batch);
+        storage->write(std::move(batch));
     }
 
     // Read
@@ -726,7 +726,7 @@ try
             WriteBatch    batch;
             ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
             batch.putPage(2, tag, buff, buf_sz);
-            storage->write(batch);
+            storage->write(std::move(batch));
         }
         // Read to check
         {
@@ -784,6 +784,119 @@ try
 }
 CATCH
 
+TEST_F(PageStorage_test, WriteReadWithSpecifyFields)
+try
+{
+    const UInt64 tag    = 0;
+    const size_t buf_sz = 1024;
+    char         c_buff[buf_sz];
+    for (size_t i = 0; i < buf_sz; ++i)
+        c_buff[i] = i % 0xff;
+
+    // field index, size
+    std::map<size_t, size_t> page0_fields = {{0, 16}, {1, 48}, {2, 192}, {3, 256}, {4, 10}, {5, 502}};
+    std::map<size_t, size_t> page1_fields = {{0, 20}, {1, 20}, {2, 59}, {3, 29}, {4, 896}};
+
+    {
+        WriteBatch     batch;
+        PageFieldSizes p0_sizes;
+        for (auto [idx, sz] : page0_fields)
+        {
+            (void)idx;
+            p0_sizes.emplace_back(sz);
+        }
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(0, tag, buff, buf_sz, p0_sizes);
+
+        PageFieldSizes p1_sizes;
+        for (auto [idx, sz] : page1_fields)
+        {
+            (void)idx;
+            p1_sizes.emplace_back(sz);
+        }
+        buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, tag, buff, buf_sz, p1_sizes);
+        storage->write(std::move(batch));
+    }
+
+    size_t           offset = 0;
+    PageFieldOffsets page0_offsets;
+    for (auto [idx, size] : page0_fields)
+    {
+        (void)idx;
+        page0_offsets.emplace_back(offset);
+        offset += size;
+    }
+    offset = 0;
+    PageFieldOffsets page1_offsets;
+    for (auto [idx, size] : page1_fields)
+    {
+        (void)idx;
+        page1_offsets.emplace_back(offset);
+        offset += size;
+    }
+
+    {
+        // Read as single page
+        std::vector<PageStorage::PageReadFields> read_fields;
+        PageStorage::PageReadFields              p0_fields{0, {0, 1, 3, 5}};
+        read_fields.push_back(p0_fields);
+        PageStorage::PageReadFields p1_fields{1, {0, 2, 4}};
+        read_fields.push_back(p1_fields);
+
+        auto pages = storage->read(read_fields);
+        ASSERT_EQ(pages.size(), 2UL);
+
+        {
+            Page page0 = pages.at(0);
+            ASSERT_EQ(page0.page_id, 0UL);
+            for (auto index : p0_fields.second)
+            {
+                auto data = page0.getFieldData(index);
+                ASSERT_EQ(data.size(), page0_fields.at(index));
+                // check page data
+                for (size_t i = 0; i < data.size(); ++i)
+                {
+                    // std::cout << "idx:" << index << ",i:" << i << ",ch:" //
+                    //   << size_t(page0_offsets[index] + i % 0xff) << std::endl;
+                    EXPECT_EQ(*(data.begin() + i), static_cast<char>((page0_offsets[index] + i) % 0xff))
+                        << "Page0, field index: " << index << ", offset: " << i //
+                        << ", offset inside page: " << page0_offsets[index] + i;
+                }
+            }
+        }
+        {
+            Page page1 = pages.at(1);
+            ASSERT_EQ(page1.page_id, 1UL);
+            for (auto index : p1_fields.second)
+            {
+                auto data = page1.getFieldData(index);
+                ASSERT_EQ(data.size(), page1_fields.at(index));
+                // check page data
+                for (size_t i = 0; i < data.size(); ++i)
+                    EXPECT_EQ(*(data.begin() + i), static_cast<char>((page1_offsets[index] + i) % 0xff))
+                        << "Page1, field index: " << index << ", offset: " << i //
+                        << ", offset inside page: " << page1_offsets[index] + i;
+            }
+        }
+    }
+
+    {
+        // Read as single page
+        Page page0 = storage->read(0);
+        ASSERT_EQ(page0.data.size(), buf_sz);
+        ASSERT_EQ(page0.page_id, 0UL);
+        for (size_t i = 0; i < buf_sz; ++i)
+            EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
+        Page page1 = storage->read(1);
+        ASSERT_EQ(page1.data.size(), buf_sz);
+        ASSERT_EQ(page1.page_id, 1UL);
+        for (size_t i = 0; i < buf_sz; ++i)
+            EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
+    }
+}
+CATCH
+
 
 /**
  * PageStorage tests with predefine Page1 && Page2
@@ -804,13 +917,13 @@ protected:
             WriteBatch wb;
             memset(buf, 0x01, buf_sz);
             wb.putPage(1, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz);
-            storage->write(wb);
+            storage->write(std::move(wb));
         }
         {
             WriteBatch wb;
             memset(buf, 0x02, buf_sz);
             wb.putPage(2, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz);
-            storage->write(wb);
+            storage->write(std::move(wb));
         }
     }
 };
@@ -823,7 +936,7 @@ TEST_F(PageStorageWith2Pages_test, UpdateRefPages)
     {
         WriteBatch batch;
         batch.putRefPage(3, 2);
-        storage->write(batch);
+        storage->write(std::move(batch));
     }
     const size_t buf_sz = 1024;
     char         buf[buf_sz];
@@ -834,7 +947,7 @@ TEST_F(PageStorageWith2Pages_test, UpdateRefPages)
         char       ch_to_update = 0x0f;
         memset(buf, ch_to_update, buf_sz);
         batch.putPage(3, tag, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz);
-        storage->write(batch);
+        storage->write(std::move(batch));
 
         // check RefPage3 and Page2 both get updated
         const Page page3 = storage->read(3);
@@ -854,7 +967,7 @@ TEST_F(PageStorageWith2Pages_test, UpdateRefPages)
         char       ch_to_update = 0xef;
         memset(buf, ch_to_update, buf_sz);
         batch.putPage(2, tag, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz);
-        storage->write(batch);
+        storage->write(std::move(batch));
 
         // check RefPage3 and Page2 both get updated
         const Page page3 = storage->read(3);
@@ -877,14 +990,14 @@ TEST_F(PageStorageWith2Pages_test, DeleteRefPages)
         WriteBatch batch;
         batch.putRefPage(3, 2);
         batch.putRefPage(4, 2);
-        storage->write(batch);
+        storage->write(std::move(batch));
     }
     { // tests for delete Page
         // delete RefPage3, RefPage4 don't get deleted
         {
             WriteBatch batch;
             batch.delPage(3);
-            storage->write(batch);
+            storage->write(std::move(batch));
             EXPECT_FALSE(storage->getEntry(3).isValid());
             EXPECT_TRUE(storage->getEntry(4).isValid());
         }
@@ -892,7 +1005,7 @@ TEST_F(PageStorageWith2Pages_test, DeleteRefPages)
         {
             WriteBatch batch;
             batch.delPage(4);
-            storage->write(batch);
+            storage->write(std::move(batch));
             EXPECT_FALSE(storage->getEntry(4).isValid());
         }
     }
@@ -907,7 +1020,7 @@ TEST_F(PageStorageWith2Pages_test, PutRefPagesOverRefPages)
         batch.putRefPage(3, 1);
         // RefPage4 -> RefPage3 -> Page1
         batch.putRefPage(4, 3);
-        storage->write(batch);
+        storage->write(std::move(batch));
     }
 
     const auto p0entry = storage->getEntry(1);
@@ -945,11 +1058,11 @@ TEST_F(PageStorageWith2Pages_test, PutDuplicateRefPages)
     {
         WriteBatch batch;
         batch.putRefPage(3, 1);
-        storage->write(batch);
+        storage->write(std::move(batch));
 
         WriteBatch batch2;
         batch2.putRefPage(3, 1);
-        storage->write(batch);
+        storage->write(std::move(batch));
         // now Page1's entry has ref count == 2 but not 3
     }
     PageEntry entry1 = storage->getEntry(1);
@@ -966,7 +1079,7 @@ TEST_F(PageStorageWith2Pages_test, PutDuplicateRefPages)
     {
         WriteBatch batch;
         batch.delPage(1);
-        storage->write(batch);
+        storage->write(std::move(batch));
         PageEntry entry_after_del1 = storage->getEntry(3);
         ASSERT_TRUE(entry_after_del1.isValid());
         EXPECT_EQ(entry1.fileIdLevel(), entry_after_del1.fileIdLevel());
@@ -976,7 +1089,7 @@ TEST_F(PageStorageWith2Pages_test, PutDuplicateRefPages)
 
         WriteBatch batch2;
         batch2.delPage(3);
-        storage->write(batch2);
+        storage->write(std::move(batch2));
         PageEntry entry_after_del2 = storage->getEntry(3);
         ASSERT_FALSE(entry_after_del2.isValid());
     }
@@ -991,12 +1104,12 @@ TEST_F(PageStorageWith2Pages_test, PutCollapseDuplicatedRefPages)
         batch.putRefPage(3, 1);
         // RefPage4 -> RefPage3, collapse to RefPage4 -> Page1
         batch.putRefPage(4, 3);
-        storage->write(batch);
+        storage->write(std::move(batch));
 
         WriteBatch batch2;
         // RefPage4 -> Page1, duplicated due to ref-path-collapse
         batch2.putRefPage(4, 1);
-        storage->write(batch);
+        storage->write(std::move(batch));
         // now Page1's entry has ref count == 3 but not 2
     }
 
@@ -1017,7 +1130,7 @@ TEST_F(PageStorageWith2Pages_test, PutCollapseDuplicatedRefPages)
         WriteBatch batch;
         batch.delPage(1);
         batch.delPage(4);
-        storage->write(batch);
+        storage->write(std::move(batch));
         PageEntry entry_after_del2 = storage->getEntry(3);
         ASSERT_TRUE(entry_after_del2.isValid());
         EXPECT_EQ(entry1.fileIdLevel(), entry_after_del2.fileIdLevel());
@@ -1027,7 +1140,7 @@ TEST_F(PageStorageWith2Pages_test, PutCollapseDuplicatedRefPages)
 
         WriteBatch batch2;
         batch2.delPage(3);
-        storage->write(batch2);
+        storage->write(std::move(batch2));
         PageEntry entry_after_del3 = storage->getEntry(3);
         ASSERT_FALSE(entry_after_del3.isValid());
     }
@@ -1039,7 +1152,7 @@ TEST_F(PageStorageWith2Pages_test, AddRefPageToNonExistPage)
         WriteBatch batch;
         // RefPage3 -> non-exist Page999
         batch.putRefPage(3, 999);
-        ASSERT_NO_THROW(storage->write(batch));
+        ASSERT_NO_THROW(storage->write(std::move(batch)));
     }
 
     ASSERT_FALSE(storage->getEntry(3).isValid());
@@ -1087,7 +1200,7 @@ TEST_F(PageStorageWith2Pages_test, SnapshotReadSnapshotVersion)
             memset(buf, ch_update, buf_sz);
             wb.putPage(1, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz);
             wb.putPage(3, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz);
-            storage->write(wb);
+            storage->write(std::move(wb));
         }
     }
 
@@ -1154,7 +1267,7 @@ TEST_F(PageStorageWith2Pages_test, GetIdenticalSnapshots)
             memset(buf, ch_update, buf_sz);
             wb.putPage(1, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz);
             wb.putPage(3, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz);
-            storage->write(wb);
+            storage->write(std::move(wb));
         }
     }
 

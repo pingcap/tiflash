@@ -144,7 +144,7 @@ public:
 
             DB::WriteBatch wb;
             wb.putPage(pageId, 0, buff, buff->buffer().size());
-            storage->write(wb);
+            storage->write(std::move(wb));
             if (pageId % 100 == 0)
                 LOG_INFO(&Logger::get("root"), "writer wrote page" + DB::toString(pageId));
         }
@@ -163,7 +163,7 @@ public:
 
             DB::WriteBatch wb;
             wb.putPage(pageId, 0, buff, buff->buffer().size());
-            storage->write(wb);
+            storage->write(std::move(wb));
             ++pages_written;
             bytes_written += buff->buffer().size();
             // LOG_INFO(&Logger::get("root"), "writer[" + DB::toString(index) + "] wrote page" + DB::toString(pageId));

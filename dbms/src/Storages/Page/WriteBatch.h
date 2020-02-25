@@ -8,7 +8,7 @@
 namespace DB
 {
 
-class WriteBatch
+class WriteBatch : private boost::noncopyable
 {
 public:
     enum class WriteType : UInt8
@@ -36,40 +36,56 @@ private:
         PageSize      size;
         // RefPage's origin page
         PageId ori_page_id;
+        // Fields' offset inside Page's data
+        PageFieldOffsets offsets;
     };
     using Writes = std::vector<Write>;
 
 public:
-    void putPage(PageId page_id, UInt64 tag, const ReadBufferPtr & read_buffer, PageSize size)
+    void putPage(PageId page_id, UInt64 tag, const ReadBufferPtr & read_buffer, PageSize size, const PageFieldSizes & data_sizes = {})
     {
-        Write w = {WriteType::PUT, page_id, tag, read_buffer, size, 0};
-        writes.emplace_back(w);
+        // Conver from data_sizes to the offset of each field
+        PageFieldOffsets offsets;
+        PageFieldOffset  off = 0;
+        for (auto data_sz : data_sizes)
+        {
+            offsets.emplace_back(off);
+            off += data_sz;
+        }
+        if (unlikely(!data_sizes.empty() && off != size))
+            throw Exception("Try to put Page" + DB::toString(page_id) + " with " + DB::toString(data_sizes.size())
+                                + " fields, but page size and filelds total size not match, page_size: " + DB::toString(size)
+                                + ", all fields size: " + DB::toString(off),
+                            ErrorCodes::LOGICAL_ERROR);
+
+        Write w{WriteType::PUT, page_id, tag, read_buffer, size, 0, std::move(offsets)};
+        writes.emplace_back(std::move(w));
     }
 
     void putExternal(PageId page_id, UInt64 tag)
     {
         // External page's data is not managed by PageStorage, which means data is empty.
-        Write w = {WriteType::PUT, page_id, tag, nullptr, 0, 0};
-        writes.emplace_back(w);
+        Write w{WriteType::PUT, page_id, tag, nullptr, 0, 0, {}};
+        writes.emplace_back(std::move(w));
     }
 
-    void upsertPage(PageId page_id, UInt64 tag, const ReadBufferPtr & read_buffer, UInt32 size)
+    void upsertPage(PageId page_id, UInt64 tag, const ReadBufferPtr & read_buffer, UInt32 size, const PageFieldOffsets & offsets)
     {
-        Write w = {WriteType::UPSERT, page_id, tag, read_buffer, size, 0};
-        writes.emplace_back(w);
+        Write w{WriteType::UPSERT, page_id, tag, read_buffer, size, 0, offsets};
+        writes.emplace_back(std::move(w));
     }
 
     // Add RefPage{ref_id} -> Page{page_id}
     void putRefPage(PageId ref_id, PageId page_id)
     {
-        Write w = {WriteType::REF, ref_id, 0, {}, 0, page_id};
-        writes.emplace_back(w);
+        Write w{WriteType::REF, ref_id, 0, {}, 0, page_id, {}};
+        writes.emplace_back(std::move(w));
     }
 
     void delPage(PageId page_id)
     {
-        Write w = {WriteType::DEL, page_id, 0, {}, 0, 0};
-        writes.emplace_back(w);
+        Write w{WriteType::DEL, page_id, 0, {}, 0, 0, {}};
+        writes.emplace_back(std::move(w));
     }
 
     bool empty() const { return writes.empty(); }
@@ -102,6 +118,10 @@ public:
 
     // `setSequence` should only called by internal method of PageStorage.
     void setSequence(SequenceID sequence_) { sequence = sequence_; }
+
+    WriteBatch() = default;
+    WriteBatch(WriteBatch && rhs) : writes(std::move(rhs.writes)), sequence(rhs.sequence) {}
+    WriteBatch & operator=(WriteBatch && o) = default;
 
 private:
     Writes     writes;

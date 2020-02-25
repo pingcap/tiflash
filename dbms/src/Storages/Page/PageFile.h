@@ -24,7 +24,12 @@ class PageFile : public Allocator<false>
 public:
     using Version = UInt32;
 
-    static const Version CURRENT_VERSION;
+    // Basic binary version
+    static constexpr Version VERSION_BASE = 1;
+    // Support multiple thread-write && read with offset inside page
+    // See FLASH_341 && FLASH-942 for details.
+    static constexpr Version VERSION_FLASH_341 = 2;
+    static constexpr Version CURRENT_VERSION   = VERSION_FLASH_341;
 
     /// Writer can NOT be used by multi threads.
     class Writer : private boost::noncopyable
@@ -64,6 +69,17 @@ public:
         PageMap read(PageIdAndEntries & to_read);
 
         void read(PageIdAndEntries & to_read, const PageHandler & handler);
+
+        struct FieldReadInfo
+        {
+            PageId              page_id;
+            PageEntry           entry;
+            std::vector<size_t> fields;
+
+            FieldReadInfo(PageId id_, PageEntry entry_, std::vector<size_t> fields_) : page_id(id_), entry(entry_), fields(fields_) {}
+        };
+        using FieldReadInfos = std::vector<FieldReadInfo>;
+        PageMap read(FieldReadInfos & to_read);
 
     private:
         String data_file_path;
