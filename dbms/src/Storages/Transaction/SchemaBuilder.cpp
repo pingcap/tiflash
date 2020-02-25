@@ -93,8 +93,8 @@ inline std::vector<AlterCommands> detectSchemaChanges(
                 command.column_name = orig_column_info.name;
                 command.column_id = orig_column_info.id;
                 drop_commands.emplace_back(std::move(command));
+                GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_drop_column).Increment();
             }
-            GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_drop_column).Increment();
         }
         result.push_back(drop_commands);
     }
