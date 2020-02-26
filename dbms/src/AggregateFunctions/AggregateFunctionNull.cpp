@@ -50,10 +50,17 @@ public:
         /// - that means - count number of calls, when all arguments are not NULL.
         if (nested_function && nested_function->getName() == "count")
         {
-            if (arguments.size() == 1)
-                return std::make_shared<AggregateFunctionCountNotNullUnary>(arguments[0]);
+            if(has_nullable_types)
+            {
+                if (arguments.size() == 1)
+                    return std::make_shared<AggregateFunctionCountNotNullUnary>(arguments[0]);
+                else
+                    return std::make_shared<AggregateFunctionCountNotNullVariadic>(arguments);
+            }
             else
-                return std::make_shared<AggregateFunctionCountNotNullVariadic>(arguments);
+            {
+                return std::make_shared<AggregateFunctionCount>();
+            }
         }
 
         if (has_null_types)
