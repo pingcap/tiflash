@@ -238,17 +238,7 @@ TEST_F(PageEntryMap_test, AddRefToNonExistPage)
     p0entry.level = 0, p0entry.checksum = 0x123;
     map->put(0, p0entry);
     // if try to add ref to non-exist page
-    ASSERT_THROW({ map->ref<true>(3, 2); }, DB::Exception);
-    // if try to access to non exist page, we get an exception
-    ASSERT_THROW({ map->at(3); }, DB::Exception);
-
-    // accept add RefPage{3} to non-exist Page{2}
-    ASSERT_NO_THROW(map->ref<false>(3, 2));
-    // FIXME we can find iterator by RefPage's id
-    //auto iter_to_non_exist_ref_page = map->find(3);
-    //ASSERT_NE(iter_to_non_exist_ref_page, std::nullopt);
-    // FIXME but if we want to access that non-exist Page, we get an exception
-    //ASSERT_THROW({ iter_to_non_exist_ref_page.pageEntry(); }, DB::Exception);
+    ASSERT_THROW({ map->ref(3, 2); }, DB::Exception);
     // if try to access to non exist page, we get an exception
     ASSERT_THROW({ map->at(3); }, DB::Exception);
 }

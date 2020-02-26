@@ -91,7 +91,7 @@ public:
         {
             ProfileEvents::increment(ProfileEvents::PSMVCCApplyOnCurrentBase);
             // If no readers, we could directly merge edits.
-            TEditAcceptor::applyInplace(current, edit);
+            TEditAcceptor::applyInplace(current, edit, log);
             return;
         }
 
