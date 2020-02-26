@@ -51,6 +51,8 @@ public:
 
     pingcap::pd::ClientPtr getPDClient() const;
 
+    pingcap::kv::Cluster * getKVCluster() {return cluster.get();}
+
     IndexReaderPtr createIndexReader() const;
 
     void restore();

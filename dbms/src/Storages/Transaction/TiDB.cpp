@@ -542,6 +542,21 @@ String TableInfo::getColumnName(const ColumnID id) const
         DB::ErrorCodes::LOGICAL_ERROR);
 }
 
+ColumnInfo TableInfo::getColumnInfoByID(const ColumnID id) const
+{
+    for (auto & col : columns)
+    {
+        if (id == col.id)
+        {
+            return col;
+        }
+    }
+
+    throw DB::Exception(
+            std::string(__PRETTY_FUNCTION__) + ": Invalidate column id " + std::to_string(id) + " for table " + db_name + "." + name,
+            DB::ErrorCodes::LOGICAL_ERROR);
+}
+
 std::optional<std::reference_wrapper<const ColumnInfo>> TableInfo::getPKHandleColumn() const
 {
     if (!pk_is_handle)

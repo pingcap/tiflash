@@ -152,6 +152,8 @@ void DAGStringConverter::buildString(const tipb::Executor & executor, std::strin
             return buildTopNString(executor.topn(), ss);
         case tipb::ExecType::TypeLimit:
             return buildLimitString(executor.limit(), ss);
+        case tipb::ExecType::TypeJoin:
+            throw Exception("join has not implemented");
     }
 }
 

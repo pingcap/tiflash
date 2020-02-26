@@ -5,6 +5,9 @@
 #include <Storages/IStorage.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Storages/Transaction/StorageEngineType.h>
+#include <Storages/Transaction/TiKVKeyValue.h>
+
+#include <tipb/select.pb.h>
 
 namespace TiDB
 {
@@ -48,6 +51,8 @@ public:
     virtual void setTableInfo(const TiDB::TableInfo & table_info_) = 0;
 
     virtual const TiDB::TableInfo & getTableInfo() const = 0;
+
+    virtual BlockInputStreams remote_read(const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges, const SelectQueryInfo & query_info, tipb::TableScan ts);
 
     // Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
     virtual void alterFromTiDB(
