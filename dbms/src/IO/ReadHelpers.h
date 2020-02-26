@@ -714,6 +714,12 @@ ReturnType readMyDateTimeTextImpl(UInt64 & packed, int fsp, ReadBuffer & buf)
             return ReturnType(true);
         }
     }
+    else if (s + 10 <= buf.buffer().end())
+    {
+        // try to parse it as MyDate
+        return readMyDateTextImpl<ReturnType>(packed, buf);
+
+    }
 
     if constexpr (throw_exception)
         throw Exception("wrong datetime format.", ErrorCodes::CANNOT_PARSE_DATETIME);

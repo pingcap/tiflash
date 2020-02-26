@@ -558,10 +558,21 @@ String DAGExpressionAnalyzer::getActionsForDateAdd(const tipb::Expr & expr, Expr
     if (unit_to_func_name_map.find(unit) == unit_to_func_name_map.end())
         throw Exception("date_add does not support unit " + unit + " yet.", ErrorCodes::NOT_IMPLEMENTED);
     String func_name = unit_to_func_name_map.find(unit)->second;
+    const auto & date_column_type = removeNullable(actions->getSampleBlock().getByName(date_column).type);
+    if (!date_column_type->isDateOrDateTime())
+    {
+        // convert to datetime first
+        Names arg_names;
+        arg_names.push_back(date_column);
+        date_column = applyFunction("toMyDateTimeOrNull", arg_names, actions);
+    }
     const auto & delta_column_type = removeNullable(actions->getSampleBlock().getByName(delta_column).type);
     if (!delta_column_type->isNumber())
     {
-        throw Exception("2rd argument of date add function must be numeric type", ErrorCodes::COP_BAD_DAG_REQUEST);
+        // convert to numeric first
+        Names arg_names;
+        arg_names.push_back(delta_column);
+        delta_column = applyFunction("toInt64OrNull", arg_names, actions);
     }
     Names argument_names;
     argument_names.push_back(date_column);
