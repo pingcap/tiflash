@@ -16,6 +16,13 @@ mysql> select /*+ read_from_storage(tiflash[t]) */ count(1) from test.t where a 
 |        0 |
 +----------+
 
+mysql> select /*+ read_from_storage(tiflash[t]) */ count(1) from test.t where a <= 10;
++----------+
+| count(1) |
++----------+
+|        2 |
++----------+
+
 mysql> select /*+ read_from_storage(tiflash[t]) */ sum(1) from test.t where a > 10;
 +--------+
 | sum(1) |
