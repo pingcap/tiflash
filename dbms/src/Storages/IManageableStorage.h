@@ -1,12 +1,15 @@
 #pragma once
 
+#include <DataStreams/CoprocessorBlockInputStream.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
 #include <Storages/IStorage.h>
-#include <DataTypes/DataTypesNumber.h>
+#include <Storages/RegionQueryInfo.h>
 #include <Storages/Transaction/StorageEngineType.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
-
+#include <pingcap/coprocessor/Client.h>
 #include <tipb/select.pb.h>
 
 namespace TiDB
@@ -52,12 +55,47 @@ public:
 
     virtual const TiDB::TableInfo & getTableInfo() const = 0;
 
-    virtual BlockInputStreams remote_read(const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges, const SelectQueryInfo & query_info, tipb::TableScan ts);
+    virtual BlockInputStreams remote_read(const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges,
+        const SelectQueryInfo & query_info, const tipb::TableScan & ts, Context & context)
+    {
+        std::vector<pingcap::coprocessor::KeyRange> cop_key_ranges;
+        for (const auto & key_range : key_ranges)
+        {
+            cop_key_ranges.push_back(
+                pingcap::coprocessor::KeyRange{static_cast<String>(key_range.first), static_cast<String>(key_range.second)});
+        }
+
+        ::tipb::DAGRequest dag_req;
+
+        auto * exec = dag_req.add_executors();
+        exec->set_tp(tipb::ExecType::TypeTableScan);
+        exec->set_allocated_tbl_scan(new tipb::TableScan(ts));
+        dag_req.set_encode_type(tipb::EncodeType::TypeChunk);
+
+        DAGSchema schema;
+        for (int i = 0; i < ts.columns_size(); i++)
+        {
+            dag_req.add_output_offsets(i);
+            auto id = ts.columns(i).column_id();
+            const ColumnInfo & info = getTableInfo().getColumnInfoByID(id);
+            schema.push_back(std::make_pair(info.name, info));
+        }
+
+        pingcap::coprocessor::Request req;
+
+        dag_req.SerializeToString(&req.data);
+        req.tp = pingcap::coprocessor::ReqType::DAG;
+        req.start_ts = query_info.mvcc_query_info->read_tso;
+        req.ranges = cop_key_ranges;
+
+        BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(context.getTMTContext().getKVCluster(), req, schema);
+        return {input};
+    };
 
     // Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
     virtual void alterFromTiDB(
-            const AlterCommands & commands, const TiDB::TableInfo & table_info, const String & database_name, const Context & context)
-    = 0;
+        const AlterCommands & commands, const TiDB::TableInfo & table_info, const String & database_name, const Context & context)
+        = 0;
 
     PKType getPKType() const
     {

@@ -26,15 +26,11 @@
 #include <DataStreams/AdditionalColumnsBlockOutputStream.h>
 #include <DataStreams/DedupSortedBlockInputStream.h>
 #include <DataStreams/InBlockDedupBlockOutputStream.h>
-#include <DataStreams/CoprocessorBlockInputStream.h>
 
 #include <Poco/DirectoryIterator.h>
 #include <Poco/File.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
-#include <Storages/RegionQueryInfo.h>
-
-#include <pingcap/coprocessor/Client.h>
 
 namespace DB
 {
@@ -132,41 +128,6 @@ void StorageMergeTree::removeFromTMTContext()
 StorageMergeTree::~StorageMergeTree()
 {
     shutdown();
-}
-
-BlockInputStreams StorageMergeTree::remote_read(const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges , const SelectQueryInfo & query_info, tipb::TableScan ts)
-{
-    std::vector<pingcap::coprocessor::KeyRange> cop_key_ranges;
-    for (const auto & key_range : key_ranges)
-    {
-        cop_key_ranges.push_back(pingcap::coprocessor::KeyRange{key_range.first.data(), key_range.second.data()});
-    }
-
-    ::tipb::DAGRequest dag_req;
-
-    auto * exec = dag_req.add_executors();
-    exec->set_tp(tipb::ExecType::TypeTableScan);
-    exec->set_allocated_tbl_scan(&ts);
-    dag_req.set_encode_type(tipb::EncodeType::TypeChunk);
-
-    DAGSchema schema;
-    for (int i =0 ; i < ts.columns_size(); i++)
-    {
-        dag_req.set_output_offsets(i, i);
-        auto id = ts.columns(i).column_id();
-        const ColumnInfo & info = data.table_info->getColumnInfoByID(id);
-        schema.push_back(std::make_pair(info.name, info));
-    }
-
-    pingcap::coprocessor::Request req;
-
-    req.data = dag_req.SerializeAsString();
-    req.tp = pingcap::coprocessor::ReqType::DAG;
-    req.start_ts = query_info.mvcc_query_info->read_tso;
-    req.ranges = cop_key_ranges;
-
-    BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(context.getTMTContext().getKVCluster(), req, schema);
-    return {input};
 }
 
 BlockInputStreams StorageMergeTree::read(

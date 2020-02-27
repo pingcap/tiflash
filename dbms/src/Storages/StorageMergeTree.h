@@ -13,8 +13,6 @@
 #include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
 
-#include <tipb/select.pb.h>
-
 namespace TiDB
 {
 struct TableInfo;
@@ -61,7 +59,6 @@ public:
 
     bool hasColumn(const String & column_name) const override { return data.hasColumn(column_name); }
 
-    BlockInputStreams remote_read(const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges , const SelectQueryInfo & query_info, tipb::TableScan ts) override;
     BlockInputStreams read(const Names & column_names,
         const SelectQueryInfo & query_info,
         const Context & context,

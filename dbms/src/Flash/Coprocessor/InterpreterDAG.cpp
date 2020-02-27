@@ -436,7 +436,7 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size,
                                          max_streams);
     } else {
-        pipeline.streams = storage->remote_read(dag.getKeyRanges(), query_info, ts);
+        pipeline.streams = storage->remote_read(dag.getKeyRanges(), query_info, ts, context);
     }
 
 
