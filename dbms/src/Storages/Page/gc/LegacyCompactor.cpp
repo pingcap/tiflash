@@ -77,9 +77,10 @@ std::tuple<PageFileSet, PageFileSet> LegacyCompactor::tryCompact( //
                 // Remove page files have been compacted
                 itr = page_files.erase(itr);
             }
-            else if (page_file.getType() == PageFile::Type::Legacy)
+            else if (page_file.getType() == PageFile::Type::Legacy || page_file.getType() == PageFile::Type::Checkpoint)
             {
                 // Remove legacy page files since we don't do gc on them later
+                page_files_to_compact.insert(page_file);
                 itr = page_files.erase(itr);
             }
             else
@@ -89,7 +90,7 @@ std::tuple<PageFileSet, PageFileSet> LegacyCompactor::tryCompact( //
         }
     }
 
-    return {std::move(page_files), page_files_to_compact};
+    return {std::move(page_files), std::move(page_files_to_compact)};
 }
 
 std::tuple<WriteBatch::SequenceID, PageFileSet>
