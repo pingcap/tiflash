@@ -1,8 +1,7 @@
+#include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
 #include <Storages/Page/VersionSet/PageEntriesVersionSetWithDelta.h>
 
 #include <stack>
-
-#include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
 
 namespace DB
 {
@@ -11,8 +10,8 @@ namespace DB
 // PageEntriesVersionSetWithDelta
 //==========================================================================================
 
-std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> PageEntriesVersionSetWithDelta::gcApply(PageEntriesEdit & edit,
-                                                                                                  bool              need_scan_page_ids)
+std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> //
+PageEntriesVersionSetWithDelta::gcApply(PageEntriesEdit & edit, bool need_scan_page_ids)
 {
     std::unique_lock lock(read_write_mutex);
     if (!edit.empty())
@@ -211,8 +210,8 @@ void DeltaVersionEditAcceptor::applyRef(PageEntriesEdit::EditRecord & rec)
         if (ignore_invalid_ref)
         {
             LOG_WARNING(log,
-                        "Ignore invalid RefPage while opening PageStorage: RefPage" + DB::toString(rec.page_id) + " to non-exist Page"
-                            + DB::toString(rec.ori_page_id));
+                        "Ignore invalid RefPage in DeltaVersionEditAcceptor::applyRef, RefPage" + DB::toString(rec.page_id)
+                            + " to non-exist Page" + DB::toString(rec.ori_page_id));
         }
         else
         {
@@ -222,7 +221,9 @@ void DeltaVersionEditAcceptor::applyRef(PageEntriesEdit::EditRecord & rec)
     }
 }
 
-void DeltaVersionEditAcceptor::applyInplace(const PageEntriesVersionSetWithDelta::VersionPtr & current, const PageEntriesEdit & edit)
+void DeltaVersionEditAcceptor::applyInplace(const PageEntriesVersionSetWithDelta::VersionPtr & current,
+                                            const PageEntriesEdit &                            edit,
+                                            Poco::Logger *                                     log)
 {
     assert(current->isBase());
     assert(current.use_count() == 1);
@@ -238,7 +239,16 @@ void DeltaVersionEditAcceptor::applyInplace(const PageEntriesVersionSetWithDelta
             break;
         case WriteBatch::WriteType::REF:
             // Shorten ref-path in case there is RefPage to RefPage
-            current->ref<false>(rec.page_id, rec.ori_page_id);
+            try
+            {
+                current->ref(rec.page_id, rec.ori_page_id);
+            }
+            catch (DB::Exception & e)
+            {
+                LOG_WARNING(log,
+                            "Ignore invalid RefPage in DeltaVersionEditAcceptor::applyInplace, RefPage" + DB::toString(rec.page_id)
+                                + " to non-exist Page" + DB::toString(rec.ori_page_id));
+            }
             break;
         case WriteBatch::WriteType::UPSERT:
             current->upsertPage(rec.page_id, rec.entry);
