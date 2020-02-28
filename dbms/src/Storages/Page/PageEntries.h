@@ -1,18 +1,17 @@
 #pragma once
 
-#include <cassert>
-#include <optional>
-#include <unordered_map>
-#include <unordered_set>
-
 #include <IO/WriteHelpers.h>
-#include <common/likely.h>
-#include <common/logger_useful.h>
-
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/mvcc/VersionSet.h>
 #include <Storages/Page/mvcc/VersionSetWithDelta.h>
+#include <common/likely.h>
+#include <common/logger_useful.h>
+
+#include <cassert>
+#include <optional>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace DB
 {
@@ -62,7 +61,6 @@ public:
      *  template must_exist = true ensure that corresponding Page must exist.
      *           must_exist = false if corresponding Page not exist, just add a record for RefPage{ref_id} -> Page{page_id}
      */
-    template <bool must_exist = false>
     void ref(PageId ref_id, PageId page_id);
 
     inline std::optional<PageEntry> find(const PageId page_id) const
@@ -276,7 +274,6 @@ void PageEntriesMixin<T>::del(PageId page_id)
 }
 
 template <typename T>
-template <bool must_exist>
 void PageEntriesMixin<T>::ref(const PageId ref_id, const PageId page_id)
 {
     assert(is_base); // can only call by base
@@ -293,7 +290,7 @@ void PageEntriesMixin<T>::ref(const PageId ref_id, const PageId page_id)
             // if RefPage{ref-id} -> Page{normal_page_id} already exists, just ignore
             if (ori_ref->second == normal_page_id)
                 return;
-            decreasePageRef<must_exist>(ori_ref->second);
+            decreasePageRef<true>(ori_ref->second);
         }
         // build ref
         page_ref[ref_id] = normal_page_id;
@@ -302,17 +299,7 @@ void PageEntriesMixin<T>::ref(const PageId ref_id, const PageId page_id)
     else
     {
         // The Page to be ref is not exist.
-        if constexpr (must_exist)
-        {
-            throw Exception("Adding RefPage" + DB::toString(ref_id) + " to non-exist Page" + DB::toString(page_id),
-                            ErrorCodes::LOGICAL_ERROR);
-        }
-        else
-        {
-            // else accept dangling ref if we are writing to a tmp entry map.
-            // like entry map of WriteBatch or Gc or AnalyzeMeta
-            page_ref[ref_id] = normal_page_id;
-        }
+        throw Exception("Adding RefPage" + DB::toString(ref_id) + " to non-exist Page" + DB::toString(page_id), ErrorCodes::LOGICAL_ERROR);
     }
     max_page_id = std::max(max_page_id, std::max(ref_id, page_id));
 }
@@ -326,7 +313,7 @@ void PageEntriesMixin<T>::decreasePageRef(const PageId page_id)
     {
         if (unlikely(iter == normal_pages.end()))
         {
-            throw Exception("Decreasing NON-exist normal page[" + DB::toString(page_id) + "] ref-count", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Decreasing non-exist normal page[" + DB::toString(page_id) + "] ref-count", ErrorCodes::LOGICAL_ERROR);
         }
     }
     if (iter != normal_pages.end())

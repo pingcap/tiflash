@@ -16,19 +16,19 @@ void PageEntriesBuilder::apply(const PageEntriesEdit & edit)
             current_version->del(rec.page_id);
             break;
         case WriteBatch::WriteType::REF:
-            if (likely(!ignore_invalid_ref))
+            try
             {
-                current_version->ref<false>(rec.page_id, rec.ori_page_id);
+                current_version->ref(rec.page_id, rec.ori_page_id);
             }
-            else
+            catch (DB::Exception & e)
             {
-                try
+                if (likely(!ignore_invalid_ref))
                 {
-                    current_version->ref<true>(rec.page_id, rec.ori_page_id);
+                    throw;
                 }
-                catch (DB::Exception & e)
+                else
                 {
-                    LOG_WARNING(log, "Ignore invalid RefPage while opening PageStorage: " + e.message());
+                    LOG_WARNING(log, "Ignore invalid RefPage in PageEntriesBuilder::apply, " + e.message());
                 }
             }
             break;

@@ -55,7 +55,7 @@ public:
 
     void apply(PageEntriesEdit & edit);
 
-    static void applyInplace(const PageEntriesVersionSetWithDelta::VersionPtr & current, const PageEntriesEdit & edit);
+    static void applyInplace(const PageEntriesVersionSetWithDelta::VersionPtr & current, const PageEntriesEdit & edit, Poco::Logger * log);
 
     void gcApply(PageEntriesEdit & edit) { PageEntriesBuilder::gcApplyTemplate(view, edit, current_version); }
 
