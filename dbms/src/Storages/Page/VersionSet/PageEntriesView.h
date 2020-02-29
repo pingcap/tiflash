@@ -32,12 +32,7 @@ public:
 
     inline std::shared_ptr<PageEntriesForDelta> getSharedTailVersion() const { return tail; }
 
-    inline std::shared_ptr<PageEntriesForDelta> transferTailVersionOwn()
-    {
-        std::shared_ptr<PageEntriesForDelta> owned_ptr;
-        owned_ptr.swap(tail);
-        return owned_ptr;
-    }
+    void release() { tail.reset(); }
 
     size_t numPages() const;
     size_t numNormalPages() const;

@@ -88,6 +88,8 @@ struct TestContext
     std::atomic<bool> running_without_exception = true;
     std::atomic<bool> running_without_timeout   = true;
 
+    bool gc_enabled = true;
+
     void setRunable()
     {
         running_without_exception = true;
@@ -255,6 +257,8 @@ public:
     PSGc(const PSPtr & storage_, TestContext & ctx_) : storage(storage_), ctx(ctx_) {}
     void onTime(Poco::Timer & /* t */)
     {
+        if (!ctx.gc_enabled)
+            return;
         try
         {
             storage->gc();
@@ -273,7 +277,7 @@ struct StressTimeout
     StressTimeout(TestContext & ctx_) : ctx(ctx_) {}
     void onTime(Poco::Timer & /* t */)
     {
-        LOG_INFO(&Logger::get("root"), "timeout.");
+        LOG_INFO(&Logger::get("root"), "Timeout. exiting...");
         ctx.running_without_timeout = false;
     }
 };
@@ -351,8 +355,8 @@ try
     size_t num_readers     = 4;
     size_t num_write_slots = 4;
 
-    size_t gc_interval_s = 10;
-    size_t timeout_s     = 1 * 60;
+    size_t gc_interval_s = 5;
+    size_t timeout_s     = 5 * 60;
 
     srand(0x123987);
     PageStorage::Config curr_config = config;
@@ -361,6 +365,7 @@ try
     storage = reopenWithConfig(curr_config);
 
     TestContext ctx;
+    // ctx.gc_enabled = false;
     PSWriter::fillAllPages(storage, ctx);
 
     // Create full suit and run

@@ -1,6 +1,11 @@
 #pragma once
 
+#include <Common/CurrentMetrics.h>
+#include <Common/ProfileEvents.h>
+#include <IO/WriteHelpers.h>
+#include <Storages/Page/mvcc/VersionSet.h>
 #include <stdint.h>
+
 #include <boost/core/noncopyable.hpp>
 #include <cassert>
 #include <memory>
@@ -8,11 +13,6 @@
 #include <shared_mutex>
 #include <stack>
 #include <unordered_set>
-
-#include <Common/CurrentMetrics.h>
-#include <Common/ProfileEvents.h>
-#include <IO/WriteHelpers.h>
-#include <Storages/Page/mvcc/VersionSet.h>
 
 namespace ProfileEvents
 {
@@ -133,11 +133,13 @@ public:
 
         ~Snapshot()
         {
-            vset->compactOnDeltaRelease(view.transferTailVersionOwn());
+            vset->compactOnDeltaRelease(view.getSharedTailVersion());
             // Remove snapshot from linked list
             std::unique_lock lock = vset->acquireForLock();
             prev->next            = next;
             next->prev            = prev;
+
+            view.release(); // view should be release under unique lock
 
             CurrentMetrics::sub(CurrentMetrics::PSMVCCNumSnapshots);
         }
@@ -243,54 +245,49 @@ protected:
 
     // If `tail` is in current
     // Do compaction on version-list [head, tail]. If there some versions after tail, use vset's `rebase` to concat them.
-    void compactOnDeltaRelease(VersionPtr && tail)
+    void compactOnDeltaRelease(VersionPtr tail)
     {
-        do
+        if (tail == nullptr || tail->isBase())
+            return;
+
         {
-            if (tail == nullptr || tail->isBase())
+            // If we can not found tail from `current` version-list, then other view has already
+            // do compaction on `tail` version, and we can just free that version
+            std::shared_lock lock(read_write_mutex);
+            if (!isValidVersion(tail))
+                return;
+        }
+        // do compact on delta
+        ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnDelta);
+        VersionPtr tmp = VersionType::compactDeltas(tail); // Note: May be compacted by different threads
+        if (tmp != nullptr)
+        {
+            // rebase vset->current on `this->tail` to base on `tmp`
+            if (this->rebase(tail, tmp) == RebaseResult::INVALID_VERSION)
             {
-                break;
+                // Another thread may have done compaction and rebase, then we just release `tail`
+                ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnDeltaRebaseRejected);
+                return;
             }
+            // release tail ref on this view, replace with tmp
+            tail = tmp;
+            tmp.reset();
+        }
+        // do compact on base
+        if (tail->shouldCompactToBase(config))
+        {
+            ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnBase);
+            auto old_base = tail->prev;
+            assert(old_base != nullptr);
+            VersionPtr new_base = VersionType::compactDeltaAndBase(old_base, tail);
+            // replace nodes [head, tail] -> new_base
+            if (this->rebase(tail, new_base) == RebaseResult::INVALID_VERSION)
             {
-                // If we can not found tail from `current` version-list, then other view has already
-                // do compaction on `tail` version, and we can just free that version
-                std::shared_lock lock(read_write_mutex);
-                if (!isValidVersion(tail))
-                    break;
+                // Another thread may have done compaction and rebase, then we just release `tail`. In case we may add more code after do compaction on base
+                ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnDeltaRebaseRejected);
+                return;
             }
-            // do compact on delta
-            ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnDelta);
-            VersionPtr tmp = VersionType::compactDeltas(tail); // Note: May be compacted by different threads
-            if (tmp != nullptr)
-            {
-                // rebase vset->current on `this->tail` to base on `tmp`
-                if (this->rebase(tail, tmp) == RebaseResult::INVALID_VERSION)
-                {
-                    // Another thread may have done compaction and rebase, then we just release `tail`
-                    ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnDeltaRebaseRejected);
-                    break;
-                }
-                // release tail ref on this view, replace with tmp
-                tail = tmp;
-                tmp.reset();
-            }
-            // do compact on base
-            if (tail->shouldCompactToBase(config))
-            {
-                ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnBase);
-                auto old_base = tail->prev;
-                assert(old_base != nullptr);
-                VersionPtr new_base = VersionType::compactDeltaAndBase(old_base, tail);
-                // replace nodes [head, tail] -> new_base
-                if (this->rebase(tail, new_base) == RebaseResult::INVALID_VERSION)
-                {
-                    // Another thread may have done compaction and rebase, then we just release `tail`. In case we may add more code after do compaction on base
-                    ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnDeltaRebaseRejected);
-                    break;
-                }
-            }
-        } while (false);
-        tail.reset();
+        }
     }
 
 public:
