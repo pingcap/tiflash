@@ -612,10 +612,12 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read)
 
     // allocate data_buf that can hold all pages with specify fields
     size_t buf_size = 0;
-    for (const auto & [page_id, entry, fields] : to_read)
+    for (auto & [page_id, entry, fields] : to_read)
     {
         (void)page_id;
         (void)entry;
+        // Sort fields to get better read on disk
+        std::sort(fields.begin(), fields.end());
         for (const auto field_index : fields)
         {
             buf_size += entry.getFieldSize(field_index);
@@ -636,14 +638,14 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read)
         size_t read_size_this_entry = 0;
         char * write_offset         = pos;
 
-        std::set<Page::FieldOffset> fields_offset_in_page;
+        PageFieldOffsets fields_offset_in_page;
         for (const auto field_index : fields)
         {
             // TODO: Continuously fields can read by one system call.
             const auto [beg_offset, end_offset] = entry.getFieldOffsets(field_index);
             const auto size_to_read             = end_offset - beg_offset;
             PageUtil::readFile(data_file_fd, entry.offset + beg_offset, write_offset, size_to_read, data_file_path);
-            fields_offset_in_page.emplace(field_index, read_size_this_entry);
+            fields_offset_in_page.emplace_back(read_size_this_entry);
             read_size_this_entry += size_to_read;
             write_offset += size_to_read;
             // Note that with such API, we can NOT check Page's checksum.
