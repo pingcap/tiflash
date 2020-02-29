@@ -12,24 +12,20 @@ static constexpr UInt64 STORAGE_META = 3;
 PageStorage::Config extractConfig(const Settings & settings, UInt64 subtype)
 {
     PageStorage::Config config;
-    if (subtype == STORAGE_LOG)
+    switch (subtype)
     {
+    case STORAGE_LOG:
         config.num_write_slots = settings.dm_storage_pool_log_write_slots;
-    }
-    else if (subtype == STORAGE_DATA)
-    {
+        break;
+    case STORAGE_DATA:
         config.num_write_slots = settings.dm_storage_pool_data_write_slots;
-    }
-    else if (subtype == STORAGE_META)
-    {
+        break;
+    case STORAGE_META:
         config.num_write_slots = settings.dm_storage_pool_meta_write_slots;
-    }
-    else
-    {
+        break;
+    default:
         throw Exception("Unknown subtype in extractConfig: " + DB::toString(subtype));
     }
-    // FIXME: remove this in FLASH-854
-    config.num_write_slots = 1;
     return config;
 }
 
