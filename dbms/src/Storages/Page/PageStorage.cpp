@@ -287,6 +287,10 @@ PageStorage::ReaderPtr PageStorage::getReader(const PageFileIdAndLevel & file_id
     {
         auto page_file
             = PageFile::openPageFileForRead(file_id_level.first, file_id_level.second, storage_path, PageFile::Type::Formal, page_file_log);
+        if (unlikely(!page_file.isExist()))
+            throw Exception("Try to create reader for " + page_file.toString() + ", but PageFile is broken, check "
+                                + page_file.folderPath(),
+                            ErrorCodes::LOGICAL_ERROR);
         pages_reader = page_file.createReader();
     }
     return pages_reader;

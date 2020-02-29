@@ -6,6 +6,7 @@
 #include <Storages/Page/WriteBatch.h>
 
 #include <boost/core/noncopyable.hpp>
+#include <tuple>
 
 namespace DB
 {

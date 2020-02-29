@@ -857,7 +857,12 @@ bool PageFile::isExist() const
     Poco::File file(folderPath());
     Poco::File data_file(dataPath());
     Poco::File meta_file(metaPath());
-    return (file.exists() && data_file.exists() && meta_file.exists());
+    if (likely(type == Type::Formal))
+        return (file.exists() && data_file.exists() && meta_file.exists());
+    else if (type == Type::Legacy || type == Type::Checkpoint)
+        return file.exists() && meta_file.exists();
+    else
+        throw Exception("Should not call isExist for " + toString());
 }
 
 UInt64 PageFile::getDataFileSize() const
