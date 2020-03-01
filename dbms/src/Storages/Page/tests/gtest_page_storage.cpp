@@ -1068,6 +1068,7 @@ TEST_F(PageStorageWith2Pages_test, PutCollapseDuplicatedRefPages)
 }
 
 TEST_F(PageStorageWith2Pages_test, AddRefPageToNonExistPage)
+try
 {
     {
         WriteBatch batch;
@@ -1078,11 +1079,35 @@ TEST_F(PageStorageWith2Pages_test, AddRefPageToNonExistPage)
 
     ASSERT_FALSE(storage->getEntry(3).isValid());
     ASSERT_THROW(storage->read(3), DB::Exception);
+    // storage->read(3);
 
     // Invalid Pages is filtered after reopen PageStorage
     ASSERT_NO_THROW(reopenWithConfig(config));
     ASSERT_FALSE(storage->getEntry(3).isValid());
+    ASSERT_THROW(storage->read(3), DB::Exception);
+    // storage->read(3);
+
+    // Test Add RefPage to non exists page with snapshot acuqired.
+    {
+        auto snap = storage->getSnapshot();
+        {
+            WriteBatch batch;
+            // RefPage3 -> non-exist Page999
+            batch.putRefPage(8, 999);
+            ASSERT_NO_THROW(storage->write(std::move(batch)));
+        }
+
+        ASSERT_FALSE(storage->getEntry(8).isValid());
+        ASSERT_THROW(storage->read(8), DB::Exception);
+        // storage->read(8);
+    }
+    // Invalid Pages is filtered after reopen PageStorage
+    ASSERT_NO_THROW(reopenWithConfig(config));
+    ASSERT_FALSE(storage->getEntry(8).isValid());
+    ASSERT_THROW(storage->read(8), DB::Exception);
+    // storage->read(8);
 }
+CATCH
 
 namespace
 {
