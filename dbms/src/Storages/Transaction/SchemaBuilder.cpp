@@ -311,6 +311,7 @@ void SchemaBuilder<Getter>::applyDiff(const SchemaDiff & diff)
         }
         case SchemaActionAddTablePartition:
         case SchemaActionDropTablePartition:
+        case SchemaActionTruncateTablePartition:
         {
             applyAlterPartition(di, diff.table_id);
             break;
