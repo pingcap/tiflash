@@ -10,6 +10,7 @@
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/Types.h>
+#include "DAGQueryBlock.h"
 
 namespace DB
 {
@@ -86,6 +87,8 @@ public:
     ASTPtr getAST() const { return ast; };
 
     tipb::EncodeType getEncodeType() const { return encode_type; }
+    
+    std::shared_ptr<DAGQueryBlock> getQueryBlock() const { return query_block_tree; }
 
 protected:
     void assertValid(Int32 index, const String & name) const
@@ -96,7 +99,7 @@ protected:
         }
     }
 
-    void analyzeResultFieldTypes();
+    //void analyzeResultFieldTypes();
     void analyzeDAGEncodeType();
 
 protected:
@@ -120,6 +123,7 @@ protected:
 
     std::vector<tipb::FieldType> result_field_types;
     tipb::EncodeType encode_type;
+    std::shared_ptr<DAGQueryBlock> query_block_tree;
 
     ASTPtr ast;
 };

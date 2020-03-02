@@ -20,14 +20,14 @@ const String DAGQuerySource::AGG_NAME("aggregation");
 const String DAGQuerySource::TOPN_NAME("topN");
 const String DAGQuerySource::LIMIT_NAME("limit");
 
-static void assignOrThrowException(Int32 & index, Int32 value, const String & name)
-{
-    if (index != -1)
-    {
-        throw Exception("Duplicated " + name + " in DAG request");
-    }
-    index = value;
-}
+//static void assignOrThrowException(Int32 & index, Int32 value, const String & name)
+//{
+//    if (index != -1)
+//    {
+//        throw Exception("Duplicated " + name + " in DAG request");
+//    }
+//    index = value;
+//}
 
 DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, RegionID region_id_, UInt64 region_version_,
     UInt64 region_conf_version_, const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges_,
@@ -41,6 +41,7 @@ DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, Re
       dag_request(dag_request_),
       metrics(context.getTiFlashMetrics())
 {
+    /*
     for (int i = 0; i < dag_request.executors_size(); i++)
     {
         switch (dag_request.executors(i).tp())
@@ -72,7 +73,32 @@ DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, Re
                     "Unsupported executor in DAG request: " + dag_request.executors(i).DebugString(), ErrorCodes::NOT_IMPLEMENTED);
         }
     }
-    analyzeResultFieldTypes();
+     */
+    if (dag_request.has_executor_tree())
+    {
+        query_block_tree = std::make_shared<DAGQueryBlock>(&dag_request.executor_tree());
+    } else {
+        std::vector<const tipb::Executor *> executors;
+        for(const tipb::Executor & executor : dag_request.executors())
+            executors.push_back(&executor);
+        query_block_tree = std::make_shared<DAGQueryBlock>(executors);
+    }
+    query_block_tree->is_final_query_block = true;
+    for(Int32 i : dag_request.output_offsets())
+        query_block_tree->output_offsets.push_back(i);
+    if (query_block_tree->aggregation != nullptr)
+    {
+        for(auto & field_type : query_block_tree->output_field_types)
+            result_field_types.push_back(field_type);
+    }
+    else
+    {
+        for (UInt32 i : dag_request.output_offsets())
+        {
+            result_field_types.push_back(query_block_tree->output_field_types[i]);
+        }
+    }
+    //analyzeResultFieldTypes();
     analyzeDAGEncodeType();
 }
 
@@ -107,6 +133,7 @@ std::unique_ptr<IInterpreter> DAGQuerySource::interpreter(Context &, QueryProces
     return std::make_unique<InterpreterDAG>(context, *this);
 }
 
+/*
 bool fillExecutorOutputFieldTypes(const tipb::Executor & executor, std::vector<tipb::FieldType> & output_field_types)
 {
     tipb::FieldType field_type;
@@ -145,7 +172,9 @@ bool fillExecutorOutputFieldTypes(const tipb::Executor & executor, std::vector<t
             return false;
     }
 }
+ */
 
+/*
 void DAGQuerySource::analyzeResultFieldTypes()
 {
     std::vector<tipb::FieldType> executor_output;
@@ -171,5 +200,6 @@ void DAGQuerySource::analyzeResultFieldTypes()
             result_field_types.push_back(executor_output[i]);
     }
 }
+ */
 
 } // namespace DB

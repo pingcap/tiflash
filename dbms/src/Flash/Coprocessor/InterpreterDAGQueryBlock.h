@@ -9,7 +9,6 @@
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
-#include <Flash/Coprocessor/InterpreterDAGQueryBlock.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
@@ -25,20 +24,66 @@ class Context;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 
+struct RegionInfo
+{
+    RegionInfo(RegionID region_id_, UInt64 region_version_, UInt64 region_conf_version_,
+        const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges_)
+        : region_id(region_id_), region_version(region_version_), region_conf_version(region_conf_version_), key_ranges(key_ranges_)
+    {}
+    const RegionID region_id;
+    const UInt64 region_version;
+    const UInt64 region_conf_version;
+    const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges;
+};
+
+struct Pipeline
+{
+    BlockInputStreams streams;
+
+    BlockInputStreamPtr & firstStream() { return streams.at(0); }
+
+    template <typename Transform>
+    void transform(Transform && transform)
+    {
+        for (auto & stream : streams)
+            transform(stream);
+    }
+
+    bool hasMoreThanOneStream() const { return streams.size() > 1; }
+};
+
+struct AnalysisResult
+{
+    bool has_where = false;
+    bool need_aggregate = false;
+    bool has_order_by = false;
+
+    ExpressionActionsPtr before_where;
+    ExpressionActionsPtr before_aggregation;
+    ExpressionActionsPtr before_order_and_select;
+    ExpressionActionsPtr final_projection;
+
+    String filter_column_name;
+    Strings order_column_names;
+    /// Columns from the SELECT list, before renaming them to aliases.
+    Names selected_columns;
+
+    Names aggregation_keys;
+    AggregateDescriptions aggregate_descriptions;
+};
 /** build ch plan from dag request: dag executors -> ch plan
   */
-class InterpreterDAG : public IInterpreter
+class InterpreterDAGQueryBlock
 {
 public:
-    InterpreterDAG(Context & context_, const DAGQuerySource & dag_);
+    InterpreterDAGQueryBlock(Context & context_, const BlockInputStreams & input_streams_, const DAGQueryBlock & query_block_,
+        bool keep_session_timezone_info_, const RegionInfo & region_info, const tipb::DAGRequest & rqst);
 
-    ~InterpreterDAG() = default;
+    ~InterpreterDAGQueryBlock() = default;
 
     BlockIO execute();
 
 private:
-
-    BlockIO executeQueryBlock(DAGQueryBlock & query_block, const RegionInfo & region_info);
     void executeImpl(Pipeline & pipeline);
     void executeTS(const tipb::TableScan & ts, Pipeline & pipeline);
     void executeWhere(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column);
@@ -52,14 +97,17 @@ private:
     void getAndLockStorageWithSchemaVersion(TableID table_id, Int64 schema_version);
     SortDescription getSortDescription(Strings & order_column_names);
     AnalysisResult analyzeExpressions();
-    void recordProfileStreams(Pipeline & pipeline, Int32 index);
+    //void recordProfileStreams(Pipeline & pipeline, Int32 index);
     bool addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, Pipeline & pipeline);
     RegionException::RegionReadStatus getRegionReadStatus(const RegionPtr & current_region);
 
 private:
     Context & context;
-
-    const DAGQuerySource & dag;
+    BlockInputStreams input_streams;
+    const DAGQueryBlock & query_block;
+    const bool keep_session_timezone_info;
+    const RegionInfo & region_info;
+    const tipb::DAGRequest & rqst;
 
     NamesWithAliases final_project;
 
@@ -72,7 +120,6 @@ private:
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
-    const bool keep_session_timezone_info;
 
     bool filter_on_handle = false;
     tipb::Expr handle_filter_expr;

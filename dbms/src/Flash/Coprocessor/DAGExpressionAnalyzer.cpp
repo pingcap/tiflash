@@ -290,6 +290,7 @@ bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(
             if (tz_col.length() == 0)
                 tz_col = getActions(tz_expr, actions);
             String casted_name = appendTimeZoneCast(tz_col, source_columns[i].name, func_name, actions);
+            // todo only append the original colum if keep_session_timezone is false
             source_columns.emplace_back(source_columns[i].name, source_columns[i].type);
             source_columns[i].name = casted_name;
             ret = true;
