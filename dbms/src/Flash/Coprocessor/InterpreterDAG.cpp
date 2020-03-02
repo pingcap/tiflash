@@ -859,13 +859,13 @@ BlockIO InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block, const Reg
             input_streams.push_back(child_stream.in);
         }
         InterpreterDAGQueryBlock query_block_interpreter(context, input_streams, query_block,
-                keep_session_timezone_info, region_info, dag.getDAGRequest());
+                keep_session_timezone_info, region_info, dag.getDAGRequest(), dag.getAST());
         return query_block_interpreter.execute();
     }
     else
     {
         InterpreterDAGQueryBlock query_block_interpreter(context, {}, query_block,
-                keep_session_timezone_info, region_info, dag.getDAGRequest());
+                keep_session_timezone_info, region_info, dag.getDAGRequest(), dag.getAST());
         return query_block_interpreter.execute();
     }
 }

@@ -43,13 +43,15 @@ extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
 InterpreterDAGQueryBlock::InterpreterDAGQueryBlock(Context & context_, const BlockInputStreams & input_streams_,
-    const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const RegionInfo & region_info_, const tipb::DAGRequest & rqst_)
+    const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const RegionInfo & region_info_,
+    const tipb::DAGRequest & rqst_, ASTPtr dummy_query_)
     : context(context_),
       input_streams(input_streams_),
       query_block(query_block_),
       keep_session_timezone_info(keep_session_timezone_info_),
       region_info(region_info_),
       rqst(rqst_),
+      dummy_query(dummy_query_),
       log(&Logger::get("InterpreterDAGQueryBlock"))
 {
     if (query_block.selection != nullptr)
@@ -422,7 +424,7 @@ void InterpreterDAGQueryBlock::executeTS(const tipb::TableScan & ts, Pipeline & 
     }
     SelectQueryInfo query_info;
     // todo double check if it is ok to set it to nullptr
-    query_info.query = nullptr;
+    query_info.query = dummy_query;
     query_info.dag_query = std::make_unique<DAGQueryInfo>(conditions, analyzer->getPreparedSets(), analyzer->getCurrentInputColumns());
     query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>();
     query_info.mvcc_query_info->resolve_locks = true;

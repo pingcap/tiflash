@@ -77,7 +77,7 @@ class InterpreterDAGQueryBlock
 {
 public:
     InterpreterDAGQueryBlock(Context & context_, const BlockInputStreams & input_streams_, const DAGQueryBlock & query_block_,
-        bool keep_session_timezone_info_, const RegionInfo & region_info, const tipb::DAGRequest & rqst);
+        bool keep_session_timezone_info_, const RegionInfo & region_info, const tipb::DAGRequest & rqst, ASTPtr dummp_query);
 
     ~InterpreterDAGQueryBlock() = default;
 
@@ -108,6 +108,7 @@ private:
     const bool keep_session_timezone_info;
     const RegionInfo & region_info;
     const tipb::DAGRequest & rqst;
+    ASTPtr dummy_query;
 
     NamesWithAliases final_project;
 
