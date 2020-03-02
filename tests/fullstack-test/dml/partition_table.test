@@ -15,3 +15,28 @@ mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t;
 |  1 | abc  |
 | 11 | def  |
 +----+------+
+
+mysql> alter table test.t truncate partition p1;
+
+SLEEP 15
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
++----+------+
+| i  | s    |
++----+------+
+|  1 | abc  |
++----+------+
+
+mysql> alter table test.t truncate partition p0;
+mysql> insert into test.t values(1, 'abc'), (11, 'def'); 
+
+SLEEP 15
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
++----+------+
+| i  | s    |
++----+------+
+|  1 | abc  |
+| 11 | def  |
++----+------+
+
