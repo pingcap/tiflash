@@ -212,7 +212,9 @@ void PageStorage::restore()
     {
         auto   snapshot  = getSnapshot();
         size_t num_pages = snapshot->version()->numPages();
-        LOG_INFO(log, storage_name << " restore " << num_pages << " pages." << statistics.toString());
+        LOG_INFO(log,
+                 storage_name << " restore " << num_pages << " pages, write batch sequence: " << write_batch_seq //
+                              << ", " << statistics.toString());
     }
 }
 
@@ -657,7 +659,7 @@ bool PageStorage::gc()
                            << "] to [" << debugging_info.max_file_id.first << "," << debugging_info.max_file_id.second
                            << "], compact legacy archive files: " << debugging_info.num_files_archive_in_compact_legacy
                            << ", remove data files: " << debugging_info.num_files_remove_data
-                           << ", gc apply:" << debugging_info.gc_apply_stat.toString());
+                           << ", gc apply: " << debugging_info.gc_apply_stat.toString());
     return debugging_info.compact_result.do_compaction;
 }
 

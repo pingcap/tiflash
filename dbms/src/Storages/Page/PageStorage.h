@@ -152,7 +152,7 @@ private:
     std::deque<WriterPtr>   idle_writers;
 
     // A sequence number to keep ordering between multi-writers.
-    std::atomic<WriteBatch::SequenceID> write_batch_seq;
+    std::atomic<WriteBatch::SequenceID> write_batch_seq = 0;
 
     OpenReadFiles open_read_files;
     std::mutex    open_read_files_mutex; // A mutex only used to protect open_read_files.
