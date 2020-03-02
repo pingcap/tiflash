@@ -147,8 +147,8 @@ PageEntriesEdit DataCompactor::migratePages(const SnapshotPtr & snapshot,
              storage_name << " GC decide to migrate " << candidates.size() << " files, containing " << migrate_page_count
                           << " pages to PageFile_" << gc_file.getFileId() << "_" << gc_file.getLevel());
 
-    PageEntriesEdit          gc_file_edit;
-    std::vector<MigrateInfo> migrate_infos;
+    PageEntriesEdit gc_file_edit;
+    MigrateInfos    migrate_infos;
     {
         PageStorage::OpenReadFiles           data_readers;
         PageStorage::MetaCompactMergineQueue merging_queue;
@@ -164,7 +164,7 @@ PageEntriesEdit DataCompactor::migratePages(const SnapshotPtr & snapshot,
             if (auto it = file_valid_pages.find(page_file.fileIdLevel()); it == file_valid_pages.end())
             {
                 // This file does not contain any valid page.
-                migrate_infos.emplace_back(MigrateInfo{.file_id = page_file.fileIdLevel(), .num_pages = 0, .sequence = 0});
+                migrate_infos.emplace(page_file.fileIdLevel(), 0);
                 continue;
             }
 
@@ -197,8 +197,11 @@ PageEntriesEdit DataCompactor::migratePages(const SnapshotPtr & snapshot,
     {
         gc_file.setFormal();
         size_t num_migrate_pages = 0;
-        for (const auto & info : migrate_infos)
-            num_migrate_pages += info.num_pages;
+        for (const auto & [file_id, num_pages] : migrate_infos)
+        {
+            (void)file_id;
+            num_migrate_pages += num_pages;
+        }
         LOG_INFO(log,
                  storage_name << " GC have migrated " << num_migrate_pages //
                               << " Pages to PageFile_" << migrate_file_id.first << "_" << migrate_file_id.second);
@@ -211,7 +214,7 @@ PageEntriesEdit DataCompactor::mergeValidPages(PageStorage::MetaCompactMergineQu
                                                const ValidPages &                      file_valid_pages,
                                                const SnapshotPtr &                     snapshot,
                                                PageFile &                              gc_file,
-                                               std::vector<MigrateInfo> &              migrate_infos) const
+                                               MigrateInfos &                          migrate_infos) const
 {
     PageEntriesEdit gc_file_edit;
     // No need to sync after each write. Do sync before closing is enough.
@@ -248,8 +251,15 @@ PageEntriesEdit DataCompactor::mergeValidPages(PageStorage::MetaCompactMergineQu
             }
             gc_file_writer->write(wb, gc_file_edit);
         }
-        migrate_infos.emplace_back(MigrateInfo{
-            .file_id = reader->fileIdLevel(), .num_pages = page_id_and_entries.size(), .sequence = reader->writeBatchSequence()});
+
+        if (auto iter = migrate_infos.find(reader->fileIdLevel()); iter != migrate_infos.end())
+        {
+            iter->second += page_id_and_entries.size();
+        }
+        else
+        {
+            migrate_infos.emplace(reader->fileIdLevel(), page_id_and_entries.size());
+        }
 
         //
         if (reader->hasNext())
@@ -282,18 +292,18 @@ DataCompactor::collectValidEntries(PageEntriesEdit && edits, const PageIdSet & v
     return page_id_and_entries;
 }
 
-void DataCompactor::logMigrationDetails(const std::vector<MigrateInfo> & infos, const PageFileIdAndLevel & migrate_file_id) const
+void DataCompactor::logMigrationDetails(const MigrateInfos & infos, const PageFileIdAndLevel & migrate_file_id) const
 {
     std::stringstream migrate_stream, remove_stream;
     migrate_stream << "[";
     remove_stream << "[";
-    for (const auto & info : infos)
+    for (const auto & [file_id, num_pages] : infos)
     {
-        if (info.num_pages > 0)
-            migrate_stream << "((" << DB::toString(info.file_id.first) << "," << DB::toString(info.file_id.second) << ")," //
-                           << DB::toString(info.num_pages) << "," << DB::toString(info.sequence) << "),";
+        if (num_pages > 0)
+            migrate_stream << "((" << file_id.first << "," << file_id.second << ")," //
+                           << num_pages << "),";
         else
-            remove_stream << "(" << DB::toString(info.file_id.first) << "," << DB::toString(info.file_id.second) << "),";
+            remove_stream << "(" << file_id.first << "," << file_id.second << "),";
     }
     migrate_stream << "]";
     remove_stream << "]";

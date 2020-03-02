@@ -1,5 +1,7 @@
 #include <Storages/Page/PageStorage.h>
 
+#include <map>
+
 namespace DB
 {
 
@@ -9,12 +11,8 @@ public:
     using ValidPages  = std::map<PageFileIdAndLevel, std::pair<size_t, PageIdSet>>;
     using SnapshotPtr = PageStorage::SnapshotPtr;
 
-    struct MigrateInfo
-    {
-        PageFileIdAndLevel     file_id   = {0, 0};
-        size_t                 num_pages = 0;
-        WriteBatch::SequenceID sequence  = 0;
-    };
+    // <Migrate PageFileId, num_pages>
+    using MigrateInfos = std::map<PageFileIdAndLevel, size_t>;
 
     struct Result
     {
@@ -51,11 +49,11 @@ private:
                                     const ValidPages &                      file_valid_pages,
                                     const SnapshotPtr &                     snapshot,
                                     PageFile &                              gc_file,
-                                    std::vector<MigrateInfo> &              migrate_infos) const;
+                                    MigrateInfos &                          migrate_infos) const;
 
     PageIdAndEntries collectValidEntries(PageEntriesEdit && edits, const PageIdSet & valid_pages, const SnapshotPtr & snap) const;
 
-    void logMigrationDetails(const std::vector<MigrateInfo> & infos, const PageFileIdAndLevel & migrate_file_id) const;
+    void logMigrationDetails(const MigrateInfos & infos, const PageFileIdAndLevel & migrate_file_id) const;
 
 private:
     const String & storage_name;
