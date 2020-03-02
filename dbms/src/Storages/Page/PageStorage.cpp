@@ -135,8 +135,9 @@ void PageStorage::restore()
     }
 
     StatisticsInfo restore_info;
-    auto [checkpoint_wb_sequence, page_files_to_archive]
+    auto [checkpoint_file, checkpoint_wb_sequence, page_files_to_archive]
         = restoreFromCheckpoints(merging_queue, versioned_page_entries, restore_info, storage_name, log);
+    (void)checkpoint_file;
     if (checkpoint_wb_sequence)
         write_batch_seq = *checkpoint_wb_sequence;
 
@@ -340,7 +341,9 @@ void PageStorage::write(WriteBatch && wb)
             PageFileIdAndLevel max_writing_id_lvl{0, 0};
             for (const auto & pf : write_files)
                 max_writing_id_lvl = std::max(max_writing_id_lvl, pf.fileIdLevel());
-            LOG_DEBUG(log, storage_name << " create new PageFile_" + DB::toString(max_writing_id_lvl.first + 1) + "_0 for write.");
+            LOG_DEBUG(log,
+                      storage_name << " PageFile_" << page_file.getFileId()
+                                   << "_0 is full, create new PageFile_" + DB::toString(max_writing_id_lvl.first + 1) + "_0 for write");
             page_file     = PageFile::newPageFile(max_writing_id_lvl.first + 1, 0, storage_path, PageFile::Type::Formal, page_file_log);
             file_to_write = page_file.createWriter(config.sync_on_write);
         }

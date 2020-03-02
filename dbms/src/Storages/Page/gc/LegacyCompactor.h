@@ -19,7 +19,7 @@ public:
     std::tuple<PageFileSet, PageFileSet> tryCompact(PageFileSet && page_files, const std::set<PageFileIdAndLevel> & writing_file_ids);
 
 private:
-    std::tuple<WriteBatch::SequenceID, PageFileSet> //
+    std::tuple<PageFileSet, WriteBatch::SequenceID, std::optional<PageFile>> //
     collectPageFilesToCompact(const PageFileSet & page_files, const std::set<PageFileIdAndLevel> & writing_fiel_ids);
 
     static WriteBatch prepareCheckpointWriteBatch(const PageStorage::SnapshotPtr snapshot, const WriteBatch::SequenceID wb_sequence);

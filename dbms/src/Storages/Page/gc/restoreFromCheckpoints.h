@@ -7,7 +7,7 @@ namespace DB
 {
 
 template <class MergineQueue>
-static std::pair<std::optional<WriteBatch::SequenceID>, PageFileSet> //
+static std::tuple<std::optional<PageFile>, std::optional<WriteBatch::SequenceID>, PageFileSet> //
 restoreFromCheckpoints(MergineQueue &                      merging_queue,
                        PageStorage::VersionedPageEntries & version_set,
                        PageStorage::StatisticsInfo &       info,
@@ -37,7 +37,7 @@ restoreFromCheckpoints(MergineQueue &                      merging_queue,
         checkpoints.emplace_back(reader->belongingPageFile());
     }
     if (checkpoints.empty())
-        return {std::nullopt, page_files_to_archive};
+        return {std::nullopt, std::nullopt, page_files_to_archive};
 
     // Old checkpoints can be removed
     for (size_t i = 0; i < checkpoints.size() - 1; ++i)
@@ -73,7 +73,7 @@ restoreFromCheckpoints(MergineQueue &                      merging_queue,
                                 ErrorCodes::LOGICAL_ERROR);
             }
 
-            // this file can be removed later
+            // This file is older that last_checkpoint, can be removed later
             page_files_to_archive.emplace(reader->belongingPageFile());
             merging_queue.pop();
         }
@@ -82,7 +82,8 @@ restoreFromCheckpoints(MergineQueue &                      merging_queue,
              storage_name << " restore " << info.toString() << " from checkpoint PageFile_"         //
                           << last_checkpoint_file_id.first << "_" << last_checkpoint_file_id.second //
                           << " sequence: " << checkpoint_wb_sequence);
-    return {checkpoint_wb_sequence, page_files_to_archive};
+    // The latest checkpoint, the WriteBatch's sequence of latest checkpoint, old PageFiles that somehow have not been clean before
+    return {checkpoints.back(), checkpoint_wb_sequence, page_files_to_archive};
 }
 
 } // namespace DB

@@ -18,9 +18,10 @@ std::tuple<PageFileSet, PageFileSet> LegacyCompactor::tryCompact( //
     const std::set<PageFileIdAndLevel> & writing_file_ids)
 {
     // Select PageFiles to compact, all compacted WriteBatch will apply to `this->version_set`
-    WriteBatch::SequenceID checkpoint_sequence = 0;
-    PageFileSet            page_files_to_compact;
-    std::tie(checkpoint_sequence, page_files_to_compact) = collectPageFilesToCompact(page_files, writing_file_ids);
+    PageFileSet             page_files_to_compact;
+    WriteBatch::SequenceID  checkpoint_sequence = 0;
+    std::optional<PageFile> old_checkpoint;
+    std::tie(page_files_to_compact, checkpoint_sequence, old_checkpoint) = collectPageFilesToCompact(page_files, writing_file_ids);
 
     if (page_files_to_compact.size() < config.gc_compact_legacy_min_num)
     {
@@ -52,13 +53,16 @@ std::tuple<PageFileSet, PageFileSet> LegacyCompactor::tryCompact( //
     // Use the largest id-level in page_files_to_compact as Checkpoint's file
     const PageFileIdAndLevel largest_id_level = page_files_to_compact.rbegin()->fileIdLevel();
     {
-        std::stringstream ss;
-        ss << "[";
+        std::stringstream legacy_ss;
+        legacy_ss << "[";
         for (const auto & page_file : page_files_to_compact)
-            ss << "(" << page_file.getFileId() << "," << page_file.getLevel() << "),";
-        ss << "]";
+            legacy_ss << "(" << page_file.getFileId() << "," << page_file.getLevel() << "),";
+        legacy_ss << "]";
+        const String old_checkpoint_str = (old_checkpoint ? old_checkpoint->toString() : "(none)");
+
         LOG_INFO(log,
-                 storage_name << " Compact legacy PageFile " << ss.str()                                                  //
+                 storage_name << " Compact legacy PageFile " << legacy_ss.str()                                           //
+                              << " and old checkpoint: " << old_checkpoint_str                                            //
                               << " into checkpoint PageFile_" << largest_id_level.first << "_" << largest_id_level.second //
                               << " with " << info.toString() << " sequence: " << checkpoint_sequence);
     }
@@ -68,7 +72,7 @@ std::tuple<PageFileSet, PageFileSet> LegacyCompactor::tryCompact( //
         writeToCheckpoint(storage_path, largest_id_level, std::move(wb), page_file_log);
     }
 
-    // archive obsolete PageFiles
+    // Clean up compacted PageFiles from `page_files`
     {
         for (auto itr = page_files.begin(); itr != page_files.end();)
         {
@@ -80,8 +84,7 @@ std::tuple<PageFileSet, PageFileSet> LegacyCompactor::tryCompact( //
             }
             else if (page_file.getType() == PageFile::Type::Legacy || page_file.getType() == PageFile::Type::Checkpoint)
             {
-                // Remove legacy page files since we don't do gc on them later
-                page_files_to_compact.insert(page_file);
+                // Remove legacy/checkpoint files since we don't do gc on them later
                 itr = page_files.erase(itr);
             }
             else
@@ -89,12 +92,16 @@ std::tuple<PageFileSet, PageFileSet> LegacyCompactor::tryCompact( //
                 itr++;
             }
         }
+
+        // We have generate a new checkpoint, old checkpoint can be remove later.
+        if (old_checkpoint)
+            page_files_to_compact.emplace(*old_checkpoint);
     }
 
     return {std::move(page_files), std::move(page_files_to_compact)};
 }
 
-std::tuple<WriteBatch::SequenceID, PageFileSet>
+std::tuple<PageFileSet, WriteBatch::SequenceID, std::optional<PageFile>>
 LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const std::set<PageFileIdAndLevel> & writing_file_ids)
 {
     WriteBatch::SequenceID               compact_sequence = 0;
@@ -107,9 +114,10 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
         merging_queue.push(std::move(reader));
     }
 
-    PageFileSet                           page_files_to_compact;
+    std::optional<PageFile>               old_checkpoint_file;
     std::optional<WriteBatch::SequenceID> checkpoint_wb_sequence;
-    std::tie(checkpoint_wb_sequence, page_files_to_compact) = //
+    PageFileSet                           page_files_to_compact;
+    std::tie(old_checkpoint_file, checkpoint_wb_sequence, page_files_to_compact) = //
         restoreFromCheckpoints(merging_queue, version_set, info, storage_name, log);
 
     WriteBatch::SequenceID last_sequence = (checkpoint_wb_sequence.has_value() ? *checkpoint_wb_sequence : 0);
@@ -164,7 +172,7 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
             page_files_to_compact.emplace(reader->belongingPageFile());
         }
     }
-    return {compact_sequence, page_files_to_compact};
+    return {page_files_to_compact, compact_sequence, old_checkpoint_file};
 }
 
 WriteBatch LegacyCompactor::prepareCheckpointWriteBatch(const PageStorage::SnapshotPtr snapshot, const WriteBatch::SequenceID wb_sequence)
