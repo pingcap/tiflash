@@ -223,7 +223,7 @@ TiFlashApplyRes KVStore::handleWriteRaftCmd(
             {
                 // Decode data in region and then flush
                 region->tryPreDecodeTiKVValue(tmt);
-                tmt.getRegionTable().tryFlushRegion(region, true);
+                tmt.getRegionTable().tryFlushRegion(region, false);
             }
             else
             {
@@ -320,6 +320,19 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
             }
         };
 
+        const auto try_flush_cache_in_storage = [&tmt](const Region & region)
+        {
+            if (tmt.isBgFlushDisabled())
+            {
+                auto table_id = region.getMappedTableID();
+                auto handle_range = region.getHandleRangeByTable(table_id);
+                auto storage = tmt.getStorages().get(table_id);
+                auto range_start = handle_range.first.handle_id;
+                auto range_end = handle_range.second.type == TiKVHandle::HandleIDType::MAX ? std::numeric_limits<HandleID>::max() : handle_range.second.handle_id;
+                storage->flushCache(tmt.getContext(), range_start, range_end);
+            }
+        };
+
         const auto persist_and_sync = [&]() {
             if (sync_log)
                 persist_region(curr_region);
@@ -360,16 +373,13 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
             }
 
             {
-                for (const auto & new_region : split_regions)
-                    try_to_flush_region(new_region);
-            }
-
-            {
                 // persist curr_region at last. if program crashed after split_region is persisted, curr_region can
                 // continue to complete split operation.
                 for (const auto & new_region : split_regions)
                 {
                     // no need to lock those new regions, because they don't have middle state.
+                    try_to_flush_region(new_region);
+                    try_flush_cache_in_storage(*new_region);
                     persist_region(*new_region);
                 }
                 persist_region(curr_region);
@@ -386,6 +396,7 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
         const auto handle_commit_merge = [&](const RegionID source_region_id) {
             region_table.shrinkRegionRange(curr_region);
             try_to_flush_region(curr_region_ptr);
+            try_flush_cache_in_storage(*curr_region_ptr);
             persist_region(curr_region);
             {
                 auto source_region = getRegion(source_region_id);
@@ -428,6 +439,11 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
                 break;
             default:
                 throw Exception("Unsupported RaftCommandResult", ErrorCodes::LOGICAL_ERROR);
+        }
+
+        if (sync_log)
+        {
+            try_flush_cache_in_storage(curr_region);
         }
 
         return sync_log ? TiFlashApplyRes::Persist : TiFlashApplyRes::None;

@@ -75,6 +75,7 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
         if (col.name != EXTRA_HANDLE_COLUMN_NAME && col.name != VERSION_COLUMN_NAME && col.name != TAG_COLUMN_NAME)
             store_columns->emplace_back(col);
     }
+    original_header = toEmptyBlock(original_table_columns);
 
     auto dm_context = newDMContext(db_context, db_context.getSettingsRef());
 
@@ -328,6 +329,14 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         }
 
         offset += limit;
+    }
+
+    if (db_settings.dm_flush_after_write)
+    {
+        HandleRange merge_range = HandleRange::newNone();
+        for (auto & segment : updated_segments)
+            merge_range = merge_range.merge(segment->getRange());
+        flushCache(dm_context, merge_range);
     }
 
     for (auto & segment : updated_segments)

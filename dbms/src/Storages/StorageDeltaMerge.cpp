@@ -228,7 +228,13 @@ Block StorageDeltaMerge::buildInsertBlock(bool is_import, bool is_delete, const 
     const Block & header = store->getHeader();
     for (auto & col : block)
     {
-        if (col.name != VERSION_COLUMN_NAME && col.name != TAG_COLUMN_NAME && col.name != EXTRA_HANDLE_COLUMN_NAME)
+        if (col.name == EXTRA_HANDLE_COLUMN_NAME)
+            col.column_id = EXTRA_HANDLE_COLUMN_ID;
+        else if (col.name == VERSION_COLUMN_NAME)
+            col.column_id = VERSION_COLUMN_ID;
+        else if (col.name == TAG_COLUMN_NAME)
+            col.column_id = TAG_COLUMN_ID;
+        else
             col.column_id = header.getByName(col.name).column_id;
     }
 
@@ -660,6 +666,11 @@ BlockInputStreams StorageDeltaMerge::read( //
 }
 
 void StorageDeltaMerge::checkStatus(const Context & context) { store->check(context); }
+
+void StorageDeltaMerge::flushCache(const Context & context, HandleID start, HandleID end)
+{
+    store->flushCache(context, DM::HandleRange(start, end));
+}
 
 void StorageDeltaMerge::deleteRange(const DM::HandleRange & range_to_delete, const Settings & settings)
 {
