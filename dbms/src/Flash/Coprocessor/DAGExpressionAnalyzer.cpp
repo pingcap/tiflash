@@ -93,7 +93,7 @@ void DAGExpressionAnalyzer::appendAggregation(
             continue;
         aggregate.column_name = func_string;
         aggregate.parameters = Array();
-        aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types);
+        aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, true);
         aggregate_descriptions.push_back(aggregate);
         DataTypePtr result_type = aggregate.function->getReturnType();
         // this is a temp result since implicit cast maybe added on these aggregated_columns
