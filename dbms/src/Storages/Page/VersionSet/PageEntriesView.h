@@ -10,10 +10,10 @@ class PageEntriesView
 {
 private:
     // tail of the list
-    std::shared_ptr<PageEntriesForDelta> tail;
+    PageEntriesForDeltaPtr tail;
 
 public:
-    explicit PageEntriesView(std::shared_ptr<PageEntriesForDelta> tail_) : tail(std::move(tail_)) {}
+    explicit PageEntriesView(PageEntriesForDeltaPtr tail_) : tail(std::move(tail_)) {}
 
     std::optional<PageEntry> find(PageId page_id) const;
 
@@ -30,7 +30,7 @@ public:
 
     PageId maxId() const;
 
-    inline std::shared_ptr<PageEntriesForDelta> getSharedTailVersion() const { return tail; }
+    inline PageEntriesForDeltaPtr getSharedTailVersion() const { return tail; }
 
     void release() { tail.reset(); }
 
