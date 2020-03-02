@@ -33,6 +33,14 @@ DataCompactor::tryMigrate(const PageFileSet & page_files, SnapshotPtr && snapsho
     {
         migrate_entries_edit = migratePages(snapshot, valid_pages, candidates, result.num_migrate_pages);
     }
+    else
+    {
+        LOG_DEBUG(log,
+                  storage_name << " DataCompactor::tryMigrate exit without compaction, candidates size: " //
+                               << result.candidate_size << ", total byte size: " << result.bytes_migrate
+                               << ", low_used_file_num: " << config.merge_hint_low_used_file_num
+                               << ", low_use_file_total_size: " << config.merge_hint_low_used_file_total_size);
+    }
 
     return {result, std::move(migrate_entries_edit)};
 }
@@ -135,7 +143,7 @@ PageEntriesEdit DataCompactor::migratePages(const SnapshotPtr & snapshot,
     PageFile gc_file
         = PageFile::newPageFile(migrate_file_id.first, migrate_file_id.second, storage_path, PageFile::Type::Temp, page_file_log);
     LOG_INFO(log,
-             storage_name << " GC decide to compact " << candidates.size() << " files, containing " << migrate_page_count
+             storage_name << " GC decide to migrate " << candidates.size() << " files, containing " << migrate_page_count
                           << " pages to PageFile_" << gc_file.getFileId() << "_" << gc_file.getLevel());
 
     PageEntriesEdit          gc_file_edit;

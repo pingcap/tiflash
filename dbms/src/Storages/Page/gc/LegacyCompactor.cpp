@@ -25,7 +25,8 @@ std::tuple<PageFileSet, PageFileSet> LegacyCompactor::tryCompact( //
     if (page_files_to_compact.size() < config.gc_compact_legacy_min_num)
     {
         LOG_DEBUG(log,
-                  storage_name << " tryCompact exit without compaction, candidate size: " << page_files_to_compact.size() //
+                  storage_name << " LegacyCompactor::tryCompact exit without compaction, candidates size: "
+                               << page_files_to_compact.size() //
                                << ", compact_legacy_min_num: " << config.gc_compact_legacy_min_num);
         // Nothing to compact, remove legacy/checkpoint page files since we
         // don't do gc on them later.

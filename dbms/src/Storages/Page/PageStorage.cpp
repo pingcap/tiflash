@@ -536,6 +536,20 @@ void PageStorage::registerExternalPagesCallbacks(ExternalPagesScanner scanner, E
     external_pages_remover = remover;
 }
 
+struct GCDebugInfo
+{
+    PageFileIdAndLevel min_file_id;
+    PageFileIdAndLevel max_file_id;
+
+    size_t num_files_archive_in_compact_legacy = 0;
+
+    DataCompactor::Result compact_result;
+
+    PageStorage::StatisticsInfo gc_apply_stat;
+
+    size_t num_files_remove_data;
+};
+
 bool PageStorage::gc()
 {
     // If another thread is running gc, just return;
@@ -559,19 +573,35 @@ bool PageStorage::gc()
     ListPageFilesOption opt;
     opt.remove_tmp_files = true;
     auto page_files      = PageStorage::listAllPageFiles(storage_path, page_file_log, opt);
-    if (page_files.empty())
-        return false;
 
     std::set<PageFileIdAndLevel> writing_file_id_levels;
     PageFileIdAndLevel           min_writing_file_id_level;
     {
         std::lock_guard<std::mutex> lock(write_mutex);
-        for (size_t i = 1; i < write_files.size(); ++i)
+        for (size_t i = 0; i < write_files.size(); ++i)
         {
             writing_file_id_levels.insert(write_files[i].fileIdLevel());
         }
         min_writing_file_id_level = *writing_file_id_levels.begin();
     }
+
+    // Ignore page files that maybe writing to.
+    {
+        PageFileSet removed_page_files;
+        for (auto & pf : page_files)
+        {
+            if (pf.fileIdLevel() >= min_writing_file_id_level)
+                continue;
+            removed_page_files.emplace(pf);
+        }
+        page_files.swap(removed_page_files);
+        if (page_files.empty())
+            return false;
+    }
+
+    GCDebugInfo debugging_info;
+    debugging_info.min_file_id = page_files.begin()->fileIdLevel();
+    debugging_info.max_file_id = page_files.rbegin()->fileIdLevel();
 
     {
         // Try to compact consecutive Legacy PageFiles into a snapshot
@@ -579,19 +609,21 @@ bool PageStorage::gc()
         PageFileSet     page_files_to_archive;
         std::tie(page_files, page_files_to_archive) = compactor.tryCompact(std::move(page_files), writing_file_id_levels);
         archivePageFiles(page_files_to_archive);
+        debugging_info.num_files_archive_in_compact_legacy = page_files_to_archive.size();
     }
 
-    DataCompactor::Result compact_result;
-    PageEntriesEdit       gc_file_entries_edit;
+    PageEntriesEdit gc_file_entries_edit;
     {
         /// Select the GC candidates files and migrate valid pages into an new file.
         /// Acquire a snapshot version of page map, new edit on page map store in `gc_file_entries_edit`
         DataCompactor compactor(*this);
-        std::tie(compact_result, gc_file_entries_edit) = compactor.tryMigrate(page_files, getSnapshot(), writing_file_id_levels);
+        std::tie(debugging_info.compact_result, gc_file_entries_edit)
+            = compactor.tryMigrate(page_files, getSnapshot(), writing_file_id_levels);
     }
 
     /// Here we have to apply edit to versioned_page_entries and generate a new version, then return all files that are in used
     auto [live_files, live_normal_pages] = versioned_page_entries.gcApply(gc_file_entries_edit, external_pages_scanner != nullptr);
+    debugging_info.gc_apply_stat.mergeEdits(gc_file_entries_edit);
 
     {
         // Remove obsolete files' reader cache that are not used by any version
@@ -612,7 +644,7 @@ bool PageStorage::gc()
     }
 
     // Delete obsolete files that are not used by any version, without lock
-    gcRemoveObsoleteData(page_files, min_writing_file_id_level, live_files);
+    debugging_info.num_files_remove_data = gcRemoveObsoleteData(page_files, min_writing_file_id_level, live_files);
 
     // Invoke callback with valid normal page id after gc.
     if (external_pages_remover)
@@ -620,11 +652,13 @@ bool PageStorage::gc()
         external_pages_remover(external_pages, live_normal_pages);
     }
 
-    if (!compact_result.do_compaction)
-        LOG_DEBUG(log,
-                  storage_name << " GC exit without compaction. merge file size: " << compact_result.candidate_size
-                               << ", candidate size: " << compact_result.bytes_migrate);
-    return compact_result.do_compaction;
+    LOG_DEBUG(log,
+              storage_name << " GC exit. PageFiles from [" << debugging_info.min_file_id.first << "," << debugging_info.min_file_id.second
+                           << "] to [" << debugging_info.max_file_id.first << "," << debugging_info.max_file_id.second
+                           << "], compact legacy archive files: " << debugging_info.num_files_archive_in_compact_legacy
+                           << ", remove data files: " << debugging_info.num_files_remove_data
+                           << ", gc apply:" << debugging_info.gc_apply_stat.toString());
+    return debugging_info.compact_result.do_compaction;
 }
 
 void PageStorage::archivePageFiles(const PageFileSet & page_files)
@@ -654,10 +688,11 @@ void PageStorage::archivePageFiles(const PageFileSet & page_files)
  * @param writing_file_id_level The min PageFile id which is writing to
  * @param live_files            The live files after gc
  */
-void PageStorage::gcRemoveObsoleteData(PageFileSet &                        page_files,
-                                       const PageFileIdAndLevel &           writing_file_id_level,
-                                       const std::set<PageFileIdAndLevel> & live_files)
+size_t PageStorage::gcRemoveObsoleteData(PageFileSet &                        page_files,
+                                         const PageFileIdAndLevel &           writing_file_id_level,
+                                         const std::set<PageFileIdAndLevel> & live_files)
 {
+    size_t num_data_removed = 0;
     for (auto & page_file : page_files)
     {
         const auto page_id_and_lvl = page_file.fileIdLevel();
@@ -671,8 +706,10 @@ void PageStorage::gcRemoveObsoleteData(PageFileSet &                        page
             /// The page file is not used by any version, remove the page file's data in disk.
             /// Page file's meta is left and will be compacted later.
             const_cast<PageFile &>(page_file).setLegacy();
+            num_data_removed += 1;
         }
     }
+    return num_data_removed;
 }
 
 } // namespace DB
