@@ -49,13 +49,16 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
           dag.getEncodeType() == tipb::EncodeType::TypeChunk || dag.getEncodeType() == tipb::EncodeType::TypeCHBlock),
       log(&Logger::get("InterpreterDAG"))
 {
+    /*
     if (dag.hasSelection())
     {
         for (auto & condition : dag.getSelection().conditions())
             conditions.push_back(&condition);
     }
+     */
 }
 
+/*
 template <typename HandleType>
 void constructHandleColRefExpr(tipb::Expr & expr, Int64 col_index)
 {
@@ -455,13 +458,12 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         limits.max_execution_time = settings.max_execution_time;
         limits.timeout_overflow_mode = settings.timeout_overflow_mode;
 
-        /** Quota and minimal speed restrictions are checked on the initiating server of the request, and not on remote servers,
-              *  because the initiating server has a summary of the execution of the request on all servers.
-              *
-              * But limits on data size to read and maximum execution time are reasonable to check both on initiator and
-              *  additionally on each remote server, because these limits are checked per block of data processed,
-              *  and remote servers may process way more blocks of data than are received by initiator.
-              */
+        /// Quota and minimal speed restrictions are checked on the initiating server of the request, and not on remote servers,
+        /// because the initiating server has a summary of the execution of the request on all servers.
+        ///
+        /// But limits on data size to read and maximum execution time are reasonable to check both on initiator and
+        /// additionally on each remote server, because these limits are checked per block of data processed,
+        /// and remote servers may process way more blocks of data than are received by initiator.
         limits.min_execution_speed = settings.min_execution_speed;
         limits.timeout_before_checking_execution_speed = settings.timeout_before_checking_execution_speed;
 
@@ -584,10 +586,9 @@ void InterpreterDAG::executeAggregation(
 
     const Settings & settings = context.getSettingsRef();
 
-    /** Two-level aggregation is useful in two cases:
-      * 1. Parallel aggregation is done, and the results should be merged in parallel.
-      * 2. An aggregation is done with store of temporary data on the disk, and they need to be merged in a memory efficient way.
-      */
+    /// Two-level aggregation is useful in two cases:
+    /// 1. Parallel aggregation is done, and the results should be merged in parallel.
+    /// 2. An aggregation is done with store of temporary data on the disk, and they need to be merged in a memory efficient way.
     bool allow_to_use_two_level_group_by = pipeline.streams.size() > 1 || settings.max_bytes_before_external_group_by != 0;
 
     Aggregator::Params params(header, keys, aggregates, false, settings.max_rows_to_group_by, settings.group_by_overflow_mode,
@@ -847,6 +848,7 @@ void InterpreterDAG::executeLimit(Pipeline & pipeline)
             [&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, dag.getLimit().limit(), 0, false); });
     }
 }
+ */
 
 BlockIO InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block, const RegionInfo & region_info)
 {

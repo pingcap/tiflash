@@ -14,11 +14,11 @@ namespace ErrorCodes
 extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
-const String DAGQuerySource::TS_NAME("tablescan");
-const String DAGQuerySource::SEL_NAME("selection");
-const String DAGQuerySource::AGG_NAME("aggregation");
-const String DAGQuerySource::TOPN_NAME("topN");
-const String DAGQuerySource::LIMIT_NAME("limit");
+//const String DAGQuerySource::TS_NAME("tablescan");
+//const String DAGQuerySource::SEL_NAME("selection");
+//const String DAGQuerySource::AGG_NAME("aggregation");
+//const String DAGQuerySource::TOPN_NAME("topN");
+//const String DAGQuerySource::LIMIT_NAME("limit");
 
 //static void assignOrThrowException(Int32 & index, Int32 value, const String & name)
 //{
