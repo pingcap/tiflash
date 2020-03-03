@@ -1450,7 +1450,7 @@ private:
         const auto & y_data = y.getData();
         for (size_t i = 0, size = x.size(); i < size; ++i)
         {
-            result_null_map[i] = x_data[i] == 0 || y_data[i] == 0;
+            result_null_map[i] = (x_data[i] == 0 || y_data[i] == 0);
             if (!result_null_map[i])
                 result[i] = calculate<MonthDiffCalculator, ResultCalculator>(x_data[i], y_data[i]);
         }
@@ -1470,7 +1470,7 @@ private:
         {
             for (size_t i = 0, size = x.size(); i < size; ++i)
             {
-                result_null_map[i] = !!x_data[i];
+                result_null_map[i] = (x_data[i] == 0);
                 if (!result_null_map[i])
                     result[i] = calculate<MonthDiffCalculator, ResultCalculator>(x_data[i], y);
             }
@@ -1490,7 +1490,7 @@ private:
         else
         {
             for (size_t i = 0, size = y.size(); i < size; ++i) {
-                result_null_map[i] = !!y_data[i];
+                result_null_map[i] = (y_data[i] == 0);
                 if (!result_null_map[i])
                     result[i] = calculate<MonthDiffCalculator, ResultCalculator>(x, y_data[i]);
             }
