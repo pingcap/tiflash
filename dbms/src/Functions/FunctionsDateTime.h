@@ -26,6 +26,8 @@
 
 #include <type_traits>
 #include <DataTypes/DataTypeMyDate.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <Columns/ColumnNullable.h>
 
 
 namespace DB
@@ -1321,23 +1323,25 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (!arguments[0]->isString())
+        if (!removeNullable(arguments[0])->isString())
             throw Exception("First argument for function " + getName() + " (unit) must be String",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if(!checkDataType<DataTypeMyDateTime>(arguments[1].get()) &&
-                !checkDataType<DataTypeMyDate>(arguments[1].get()))
+        if(!checkDataType<DataTypeMyDateTime>(removeNullable(arguments[1]).get()) &&
+                !checkDataType<DataTypeMyDate>(removeNullable(arguments[1]).get()))
             throw Exception("Second argument for function " + getName() + " must be MyDate or MyDateTime",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if(!checkDataType<DataTypeMyDateTime>(arguments[2].get()) &&
-           !checkDataType<DataTypeMyDate>(arguments[2].get()))
+        if(!checkDataType<DataTypeMyDateTime>(removeNullable(arguments[2]).get()) &&
+           !checkDataType<DataTypeMyDate>(removeNullable(arguments[2]).get()))
             throw Exception("Third argument for function " + getName() + " must be MyDate or MyDateTime",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        return std::make_shared<DataTypeInt64>();
+        // to align with tidb, timestampdiff with zeroDate input should return null, so always return nullable type
+        return makeNullable(std::make_shared<DataTypeInt64>());
     }
 
+    bool useDefaultImplementationForNulls() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return true; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {0}; }
 
@@ -1349,84 +1353,148 @@ public:
 
         String unit = Poco::toLower(unit_column->getValue<String>());
 
-        const IColumn & x = *block.getByPosition(arguments[1]).column;
-        const IColumn & y = *block.getByPosition(arguments[2]).column;
+        bool has_nullable = false;
+        bool has_null_constant = false;
+        for(const auto & arg : arguments)
+        {
+            const auto & elem = block.getByPosition(arg);
+            has_nullable |= elem.type->isNullable();
+            has_null_constant |= elem.type->onlyNull();
+        }
+
+        if (has_null_constant)
+        {
+            block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
+            return;
+        }
+
+        ColumnPtr x_p = block.getByPosition(arguments[1]).column;
+        ColumnPtr y_p = block.getByPosition(arguments[2]).column;
+        if (has_nullable)
+        {
+            Block temporary_block = createBlockWithNestedColumns(block, arguments, result);
+            x_p = temporary_block.getByPosition(arguments[1]).column;
+            y_p = temporary_block.getByPosition(arguments[2]).column;
+        }
+
+        const IColumn & x = *x_p;
+        const IColumn & y = *y_p;
 
         size_t rows = block.rows();
         auto res = ColumnInt64::create(rows);
+        auto result_null_map = ColumnUInt8::create(rows);
         if (unit == "year")
-            dispatchForColumns<MonthDiffCalculatorImpl, YearDiffResultCalculator>(x, y, res->getData());
+            dispatchForColumns<MonthDiffCalculatorImpl, YearDiffResultCalculator>(x, y, res->getData(), result_null_map->getData());
         else if (unit == "quarter")
-            dispatchForColumns<MonthDiffCalculatorImpl, QuarterDiffResultCalculator>(x, y, res->getData());
+            dispatchForColumns<MonthDiffCalculatorImpl, QuarterDiffResultCalculator>(x, y, res->getData(), result_null_map->getData());
         else if (unit == "month")
-            dispatchForColumns<MonthDiffCalculatorImpl, MonthDiffResultCalculator>(x, y, res->getData());
+            dispatchForColumns<MonthDiffCalculatorImpl, MonthDiffResultCalculator>(x, y, res->getData(), result_null_map->getData());
         else if (unit == "week")
-            dispatchForColumns<DummyMonthDiffCalculatorImpl, WeekDiffResultCalculator>(x, y, res->getData());
+            dispatchForColumns<DummyMonthDiffCalculatorImpl, WeekDiffResultCalculator>(x, y, res->getData(), result_null_map->getData());
         else if (unit == "day")
-            dispatchForColumns<DummyMonthDiffCalculatorImpl, DayDiffResultCalculator>(x, y, res->getData());
+            dispatchForColumns<DummyMonthDiffCalculatorImpl, DayDiffResultCalculator>(x, y, res->getData(), result_null_map->getData());
         else if (unit == "hour")
-            dispatchForColumns<DummyMonthDiffCalculatorImpl, HourDiffResultCalculator>(x, y, res->getData());
+            dispatchForColumns<DummyMonthDiffCalculatorImpl, HourDiffResultCalculator>(x, y, res->getData(), result_null_map->getData());
         else if (unit == "minute")
-            dispatchForColumns<DummyMonthDiffCalculatorImpl, MinuteDiffResultCalculator>(x, y, res->getData());
+            dispatchForColumns<DummyMonthDiffCalculatorImpl, MinuteDiffResultCalculator>(x, y, res->getData(), result_null_map->getData());
         else if (unit == "second")
-            dispatchForColumns<DummyMonthDiffCalculatorImpl, SecondDiffResultCalculator>(x, y, res->getData());
+            dispatchForColumns<DummyMonthDiffCalculatorImpl, SecondDiffResultCalculator>(x, y, res->getData(), result_null_map->getData());
         else if (unit == "microsecond")
-            dispatchForColumns<DummyMonthDiffCalculatorImpl, MicroSecondDiffResultCalculator>(x, y, res->getData());
+            dispatchForColumns<DummyMonthDiffCalculatorImpl, MicroSecondDiffResultCalculator>(x, y, res->getData(), result_null_map->getData());
         else
             throw Exception("Function " + getName() + " does not support '" + unit + "' unit", ErrorCodes::BAD_ARGUMENTS);
-        block.getByPosition(result).column = std::move(res);
+        // warp null
+
+        if (block.getByPosition(arguments[1]).type->isNullable()
+        || block.getByPosition(arguments[2]).type->isNullable())
+        {
+            ColumnUInt8::Container &vec_result_null_map = result_null_map->getData();
+            ColumnPtr x_p = block.getByPosition(arguments[1]).column;
+            ColumnPtr y_p = block.getByPosition(arguments[2]).column;
+            for (size_t i = 0; i < rows; i++) {
+                vec_result_null_map[i] |= (x_p->isNullAt(i) || y_p->isNullAt(i));
+            }
+        }
+        block.getByPosition(result).column = ColumnNullable::create(std::move(res), std::move(result_null_map));
     }
 
 private:
     template <typename MonthDiffCalculator, typename ResultCalculator>
-    void dispatchForColumns(const IColumn & x, const IColumn & y, ColumnInt64::Container & res)
+    void dispatchForColumns(const IColumn & x, const IColumn & y, ColumnInt64::Container & res, ColumnUInt8::Container & res_null_map)
     {
         auto * x_const = checkAndGetColumnConst<ColumnUInt64>(&x);
         auto * y_const = checkAndGetColumnConst<ColumnUInt64>(&y);
         if(x_const)
         {
             auto * y_vec = checkAndGetColumn<ColumnUInt64>(&y);
-            constant_vector<MonthDiffCalculator, ResultCalculator>(x_const->getValue<UInt64>(), *y_vec, res);
+            constant_vector<MonthDiffCalculator, ResultCalculator>(x_const->getValue<UInt64>(), *y_vec, res, res_null_map);
         }
         else if (y_const)
         {
             auto * x_vec = checkAndGetColumn<ColumnUInt64>(&x);
-            vector_constant<MonthDiffCalculator, ResultCalculator>(*x_vec, y_const->getValue<UInt64>(), res);
+            vector_constant<MonthDiffCalculator, ResultCalculator>(*x_vec, y_const->getValue<UInt64>(), res, res_null_map);
         }
         else
         {
             auto * x_vec = checkAndGetColumn<ColumnUInt64>(&x);
             auto * y_vec = checkAndGetColumn<ColumnUInt64>(&y);
-            vector_vector<MonthDiffCalculator, ResultCalculator>(*x_vec, *y_vec, res);
+            vector_vector<MonthDiffCalculator, ResultCalculator>(*x_vec, *y_vec, res, res_null_map);
         }
     }
 
     template <typename MonthDiffCalculator, typename ResultCalculator>
-    void vector_vector(
-            const ColumnVector<UInt64> & x, const ColumnVector<UInt64> & y, ColumnInt64::Container & result)
+    void vector_vector(const ColumnVector<UInt64> & x, const ColumnVector<UInt64> & y,
+            ColumnInt64::Container & result, ColumnUInt8::Container & result_null_map)
     {
         const auto & x_data = x.getData();
         const auto & y_data = y.getData();
         for (size_t i = 0, size = x.size(); i < size; ++i)
-            result[i] = calculate<MonthDiffCalculator, ResultCalculator>(x_data[i], y_data[i]);
+        {
+            result_null_map[i] = x_data[i] == 0 || y_data[i] == 0;
+            if (!result_null_map[i])
+                result[i] = calculate<MonthDiffCalculator, ResultCalculator>(x_data[i], y_data[i]);
+        }
     }
 
     template <typename MonthDiffCalculator, typename ResultCalculator>
-    void vector_constant(
-            const ColumnVector<UInt64> & x, UInt64 y, ColumnInt64::Container & result)
+    void vector_constant(const ColumnVector<UInt64> & x, UInt64 y,
+            ColumnInt64::Container & result, ColumnUInt8::Container & result_null_map)
     {
         const auto & x_data = x.getData();
-        for (size_t i = 0, size = x.size(); i < size; ++i)
-            result[i] = calculate<MonthDiffCalculator, ResultCalculator>(x_data[i], y);
+        if (y == 0)
+        {
+            for (size_t i = 0, size = x.size(); i < size; ++i)
+                result_null_map[i] = 1;
+        }
+        else
+        {
+            for (size_t i = 0, size = x.size(); i < size; ++i)
+            {
+                result_null_map[i] = !!x_data[i];
+                if (!result_null_map[i])
+                    result[i] = calculate<MonthDiffCalculator, ResultCalculator>(x_data[i], y);
+            }
+        }
     }
 
     template <typename MonthDiffCalculator, typename ResultCalculator>
-    void constant_vector(
-            UInt64 x, const ColumnVector<UInt64> & y, ColumnInt64::Container & result)
+    void constant_vector(UInt64 x, const ColumnVector<UInt64> & y,
+            ColumnInt64::Container & result, ColumnUInt8::Container & result_null_map)
     {
         const auto & y_data = y.getData();
-        for (size_t i = 0, size = y.size(); i < size; ++i)
-            result[i] = calculate<MonthDiffCalculator, ResultCalculator>(x, y_data[i]);
+        if (x == 0)
+        {
+            for (size_t i = 0, size = y.size(); i < size; ++i)
+                result_null_map[i] = 1;
+        }
+        else
+        {
+            for (size_t i = 0, size = y.size(); i < size; ++i) {
+                result_null_map[i] = !!y_data[i];
+                if (!result_null_map[i])
+                    result[i] = calculate<MonthDiffCalculator, ResultCalculator>(x, y_data[i]);
+            }
+        }
     }
 
     void calculateTimeDiff(const MyDateTime &x, const MyDateTime &y, Int64 & seconds, int & micro_seconds, bool & neg) {
