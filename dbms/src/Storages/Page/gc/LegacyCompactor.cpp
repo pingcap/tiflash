@@ -144,7 +144,7 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
             (checkpoint_wb_sequence.has_value()
              && (*checkpoint_wb_sequence == 0 || *checkpoint_wb_sequence < reader->writeBatchSequence())))
         {
-            LOG_TRACE(log, storage_name << " collectPageFilesToCompact recovering from " + reader->toString());
+            // LOG_TRACE(log, storage_name << " collectPageFilesToCompact recovering from " + reader->toString());
             try
             {
                 auto edits = reader->getEdits();

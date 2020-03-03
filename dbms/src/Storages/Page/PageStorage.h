@@ -134,9 +134,9 @@ private:
 
     void archivePageFiles(const PageFileSet & page_files_to_archive);
 
-    static size_t gcRemoveObsoleteData(PageFileSet &                        page_files,
-                                       const PageFileIdAndLevel &           writing_file_id_level,
-                                       const std::set<PageFileIdAndLevel> & live_files);
+    size_t gcRemoveObsoleteData(PageFileSet &                        page_files,
+                                const PageFileIdAndLevel &           writing_file_id_level,
+                                const std::set<PageFileIdAndLevel> & live_files);
 
     friend class LegacyCompactor;
     friend class DataCompactor;

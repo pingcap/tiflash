@@ -145,7 +145,7 @@ void PageStorage::restore()
     {
         auto reader = merging_queue.top();
         merging_queue.pop();
-        // LOG_TRACE(log, storage_name << " recovering from " + reader->toString());
+        LOG_TRACE(log, storage_name << " recovering from " + reader->toString());
 
         // If no checkpoint, we apply all edits.
         // Else restroed from checkpoint, if checkpoint's WriteBatch sequence number is 0, we need to apply
@@ -710,6 +710,7 @@ size_t PageStorage::gcRemoveObsoleteData(PageFileSet &                        pa
         {
             /// The page file is not used by any version, remove the page file's data in disk.
             /// Page file's meta is left and will be compacted later.
+            // LOG_INFO(log, storage_name << " remove data " << page_file.toString());
             const_cast<PageFile &>(page_file).setLegacy();
             num_data_removed += 1;
         }
