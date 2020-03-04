@@ -31,13 +31,14 @@ public:
     const tipb::Executor * aggregation = nullptr;
     const tipb::Executor * limitOrTopN = nullptr;
     UInt32 id;
+    String qb_column_prefix;
     // todo use unique_ptr instead
     std::vector<std::shared_ptr<DAGQueryBlock>> children;
     std::vector<tipb::FieldType> output_field_types;
     // kinds of project
     std::vector<Int32> output_offsets;
-    bool is_final_query_block;
     void fillOutputFieldTypes();
+    bool isRootQueryBlock() const { return id == 1; };
 };
 
 } // namespace DB

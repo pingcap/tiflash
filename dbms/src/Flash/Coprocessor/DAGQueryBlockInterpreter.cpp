@@ -383,19 +383,27 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
-    if (query_block.aggregation == nullptr && query_block.is_final_query_block)
+    if (query_block.aggregation == nullptr)
     {
-        // only add final project if the query block is the final query block
         int extra_col_size = (filter_on_handle && !has_handle_column) ? 1 : 0;
-        for (auto i : query_block.output_offsets)
+        if (query_block.isRootQueryBlock())
         {
-            if ((size_t)i >= required_columns.size() - extra_col_size)
+            for (auto i : query_block.output_offsets)
             {
-                // array index out of bound
-                throw Exception("Output offset index is out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
+                if ((size_t) i >= required_columns.size() - extra_col_size)
+                {
+                    // array index out of bound
+                    throw Exception("Output offset index is out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
+                }
+                // do not have alias
+                final_project.emplace_back(required_columns[i], "");
             }
-            // do not have alias
-            final_project.emplace_back(required_columns[i], "");
+        }
+        else
+        {
+            for(size_t i = 0; i < required_columns.size() - extra_col_size; i++)
+                /// for child query block, add alias start with qb_column_prefix to avoid column name conflict
+                final_project.emplace_back(required_columns[i], query_block.qb_column_prefix + required_columns[i]);
         }
     }
     // todo handle alias column
@@ -423,7 +431,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         }
     }
     SelectQueryInfo query_info;
-    // todo double check if it is ok to set it to nullptr
+    /// to avoid null point exception
     query_info.query = dummy_query;
     query_info.dag_query = std::make_unique<DAGQueryInfo>(conditions, analyzer->getPreparedSets(), analyzer->getCurrentInputColumns());
     query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>();
@@ -474,22 +482,13 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         });
     }
 
-    // only cast the timezone back in the final query block
-    // todo only add 2 timestamp column if it is the final query block
-    if (query_block.is_final_query_block && addTimeZoneCastAfterTS(is_ts_column, pipeline))
-    {
-        // for arrow encode, the final select of timestamp column should be column with session timezone
-        if (keep_session_timezone_info && !query_block.aggregation)
-        {
-            for (auto i : query_block.output_offsets)
-            {
-                if (is_ts_column[i])
-                {
-                    final_project[i].first = analyzer->getCurrentInputColumns()[i].name;
-                }
-            }
-        }
-    }
+    addTimeZoneCastAfterTS(is_ts_column, pipeline);
+}
+
+void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & , Pipeline & )
+{
+    // todo support join
+    throw Exception("Join is not supported yet", ErrorCodes::NOT_IMPLEMENTED);
 }
 
 // add timezone cast for timestamp type, this is used to support session level timezone
@@ -502,7 +501,12 @@ bool DAGQueryBlockInterpreter::addTimeZoneCastAfterTS(std::vector<bool> & is_ts_
         return false;
 
     ExpressionActionsChain chain;
-    if (analyzer->appendTimeZoneCastsAfterTS(chain, is_ts_column, rqst))
+    /// only keep UTC column if
+    /// 1. the query block is the root query block
+    /// 2. keep_session_timezone_info is false
+    /// 3. current query block does not have aggregation
+    if (analyzer->appendTimeZoneCastsAfterTS(chain, is_ts_column, rqst,
+            query_block.isRootQueryBlock() && !keep_session_timezone_info && query_block.aggregation == nullptr))
     {
         pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions()); });
         return true;
@@ -525,7 +529,6 @@ AnalysisResult DAGQueryBlockInterpreter::analyzeExpressions()
     // There will be either Agg...
     if (query_block.aggregation)
     {
-        // todo need to get stream_agg ???
         analyzer->appendAggregation(chain, query_block.aggregation->aggregation(), res.aggregation_keys, res.aggregate_descriptions);
         res.need_aggregate = true;
         res.before_aggregation = chain.getLastActions();
@@ -535,13 +538,20 @@ AnalysisResult DAGQueryBlockInterpreter::analyzeExpressions()
 
         // add cast if type is not match
         analyzer->appendAggSelect(
-            chain, query_block.aggregation->aggregation(), rqst, keep_session_timezone_info || !query_block.is_final_query_block);
-        //todo use output_offset to reconstruct the final project columns
-        if (query_block.is_final_query_block)
+            chain, query_block.aggregation->aggregation(), rqst, keep_session_timezone_info || !query_block.isRootQueryBlock());
+        if (query_block.isRootQueryBlock())
         {
+            // todo for root query block, use output offsets to reconstruct the final project
             for (auto & element : analyzer->getCurrentInputColumns())
             {
                 final_project.emplace_back(element.name, "");
+            }
+        }
+        else
+        {
+            for (auto & element : analyzer->getCurrentInputColumns())
+            {
+                final_project.emplace_back(element.name, query_block.qb_column_prefix + element.name);
             }
         }
     }
@@ -552,11 +562,8 @@ AnalysisResult DAGQueryBlockInterpreter::analyzeExpressions()
         analyzer->appendOrderBy(chain, query_block.limitOrTopN->topn(), res.order_column_names);
     }
     // Append final project results if needed.
-    if (query_block.is_final_query_block)
-    {
-        analyzer->appendFinalProject(chain, final_project);
-        res.before_order_and_select = chain.getLastActions();
-    }
+    analyzer->appendFinalProject(chain, final_project);
+    res.before_order_and_select = chain.getLastActions();
     chain.finalize();
     chain.clear();
     //todo need call prependProjectInput??
@@ -793,8 +800,7 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
 {
     if (query_block.source->tp() == tipb::ExecType::TypeJoin)
     {
-        // todo support join
-        throw Exception("Join is not supported yet", ErrorCodes::NOT_IMPLEMENTED);
+        executeJoin(query_block.source->join(), pipeline);
     }
     else
     {
@@ -828,11 +834,8 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
             //recordProfileStreams(pipeline, dag.getTopNIndex());
         }
 
-        if (query_block.is_final_query_block)
-        {
-            // execute projection
-            executeFinalProject(pipeline);
-        }
+        // execute projection
+        executeFinalProject(pipeline);
 
         // execute limit
         if (query_block.limitOrTopN != nullptr && query_block.limitOrTopN->tp() == tipb::TypeLimit)

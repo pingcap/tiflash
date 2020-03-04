@@ -270,7 +270,8 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
 // column to the columns with session-level timezone info, the original ts columns with UTC timezone
 // are still kept, and the InterpreterDAG will choose the correct column based on encode type
 bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(
-    ExpressionActionsChain & chain, std::vector<bool> is_ts_column, const tipb::DAGRequest & rqst)
+    ExpressionActionsChain & chain, std::vector<bool> is_ts_column,
+    const tipb::DAGRequest & rqst, bool keep_UTC_column)
 {
     if (!hasMeaningfulTZInfo(rqst))
         return false;
@@ -290,8 +291,8 @@ bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(
             if (tz_col.length() == 0)
                 tz_col = getActions(tz_expr, actions);
             String casted_name = appendTimeZoneCast(tz_col, source_columns[i].name, func_name, actions);
-            // todo only append the original colum if keep_session_timezone is false
-            source_columns.emplace_back(source_columns[i].name, source_columns[i].type);
+            if (keep_UTC_column)
+                source_columns.emplace_back(source_columns[i].name, source_columns[i].type);
             source_columns[i].name = casted_name;
             ret = true;
         }

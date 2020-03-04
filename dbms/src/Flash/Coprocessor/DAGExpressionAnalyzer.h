@@ -66,7 +66,8 @@ public:
     void makeExplicitSetForIndex(const tipb::Expr & expr, const ManageableStoragePtr & storage);
     String applyFunction(const String & func_name, const Names & arg_names, ExpressionActionsPtr & actions);
     Int32 getImplicitCastCount() { return implicit_cast_count; };
-    bool appendTimeZoneCastsAfterTS(ExpressionActionsChain & chain, std::vector<bool> is_ts_column, const tipb::DAGRequest & rqst);
+    bool appendTimeZoneCastsAfterTS(ExpressionActionsChain & chain, std::vector<bool> is_ts_column,
+            const tipb::DAGRequest & rqst, bool keep_UTC_column);
     String appendTimeZoneCast(const String & tz_col, const String & ts_col, const String & func_name, ExpressionActionsPtr & actions);
     DAGPreparedSets getPreparedSets() { return prepared_sets; }
     String convertToUInt8ForFilter(ExpressionActionsChain & chain, const String & column_name);
