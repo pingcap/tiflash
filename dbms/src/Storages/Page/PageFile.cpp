@@ -819,9 +819,24 @@ void PageFile::setCheckpoint()
 {
     if (type != Type::Temp)
         return;
+
+    {
+        // The data part of checkpoint file should be empty.
+        const auto data_size = getDataFileSize();
+        if (data_size != 0)
+            throw Exception("Setting " + toString() + " to checkpoint, but data size is not zero: " + DB::toString(data_size)
+                                + ", path: " + folderPath(),
+                            ErrorCodes::LOGICAL_ERROR);
+    }
+
     Poco::File file(folderPath());
     type = Type::Checkpoint;
     file.renameTo(folderPath());
+    // Remove the data part, should be a emtpy file.
+    if (auto data_file = Poco::File(dataPath()); data_file.exists())
+    {
+        data_file.remove();
+    }
 }
 
 void PageFile::removeDataIfExists() const
@@ -872,6 +887,12 @@ UInt64 PageFile::getDataFileSize() const
     if (type != Type::Formal)
         return 0;
     Poco::File file(dataPath());
+    return file.getSize();
+}
+
+UInt64 PageFile::getMetaFileSize() const
+{
+    Poco::File file(metaPath());
     return file.getSize();
 }
 

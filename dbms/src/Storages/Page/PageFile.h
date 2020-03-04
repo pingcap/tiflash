@@ -265,6 +265,7 @@ public:
     UInt64 getDataFileAppendPos() const { return data_file_pos; }
     UInt64 getMetaFileAppendPos() const { return meta_file_pos; }
     UInt64 getDataFileSize() const;
+    UInt64 getMetaFileSize() const;
 
     String folderPath() const;
 

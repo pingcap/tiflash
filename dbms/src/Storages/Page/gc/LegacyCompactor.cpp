@@ -94,7 +94,7 @@ std::tuple<PageFileSet, PageFileSet> LegacyCompactor::tryCompact( //
         }
 
         // We have generate a new checkpoint, old checkpoint can be remove later.
-        if (old_checkpoint)
+        if (!info.empty() && old_checkpoint)
             page_files_to_compact.emplace(*old_checkpoint);
     }
 
@@ -115,17 +115,17 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
     }
 
     std::optional<PageFile>               old_checkpoint_file;
-    std::optional<WriteBatch::SequenceID> checkpoint_wb_sequence;
-    PageFileSet                           page_files_to_compact;
-    std::tie(old_checkpoint_file, checkpoint_wb_sequence, page_files_to_compact) = //
+    std::optional<WriteBatch::SequenceID> old_checkpoint_sequence;
+    PageFileSet                           page_files_to_remove;
+    std::tie(old_checkpoint_file, old_checkpoint_sequence, page_files_to_remove) = //
         restoreFromCheckpoints(merging_queue, version_set, info, storage_name, log);
 
-    WriteBatch::SequenceID last_sequence = (checkpoint_wb_sequence.has_value() ? *checkpoint_wb_sequence : 0);
+    WriteBatch::SequenceID last_sequence = (old_checkpoint_sequence.has_value() ? *old_checkpoint_sequence : 0);
     while (!merging_queue.empty())
     {
         auto reader = merging_queue.top();
         merging_queue.pop();
-        // We don't want to do compaction on formal / writing files. If any, just stop collecting `page_files_to_compact`.
+        // We don't want to do compaction on formal / writing files. If any, just stop collecting `page_files_to_remove`.
         if (reader->belongingPageFile().getType() == PageFile::Type::Formal //
             || writing_file_ids.count(reader->fileIdLevel()) != 0           //
             || (reader->writeBatchSequence() > last_sequence + 1))
@@ -140,9 +140,9 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
         // Else restroed from checkpoint, if checkpoint's WriteBatch sequence number is 0, we need to apply
         // all edits after that checkpoint too. If checkpoint's WriteBatch sequence number is not 0, we
         // apply WriteBatch edits only if its WriteBatch sequence is larger than checkpoint.
-        if (!checkpoint_wb_sequence.has_value() || //
-            (checkpoint_wb_sequence.has_value()
-             && (*checkpoint_wb_sequence == 0 || *checkpoint_wb_sequence < reader->writeBatchSequence())))
+        if (!old_checkpoint_sequence.has_value() || //
+            (old_checkpoint_sequence.has_value()
+             && (*old_checkpoint_sequence == 0 || *old_checkpoint_sequence < reader->writeBatchSequence())))
         {
             // LOG_TRACE(log, storage_name << " collectPageFilesToCompact recovering from " + reader->toString());
             try
@@ -156,7 +156,8 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
             catch (Exception & e)
             {
                 /// Better diagnostics.
-                e.addMessage("(PageStorage: " + storage_name + " while applying edit in gcCompactLegacy with " + reader->toString() + ")");
+                e.addMessage("(PageStorage: " + storage_name + " while applying edit in collectPageFilesToCompact with "
+                             + reader->toString() + ")");
                 throw;
             }
         }
@@ -169,10 +170,10 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
         {
             // We apply all edit of belonging PageFile, do compaction on it.
             LOG_TRACE(log, storage_name << " collectPageFilesToCompact try to compact: " + reader->belongingPageFile().toString());
-            page_files_to_compact.emplace(reader->belongingPageFile());
+            page_files_to_remove.emplace(reader->belongingPageFile());
         }
     }
-    return {page_files_to_compact, compact_sequence, old_checkpoint_file};
+    return {page_files_to_remove, compact_sequence, old_checkpoint_file};
 }
 
 WriteBatch LegacyCompactor::prepareCheckpointWriteBatch(const PageStorage::SnapshotPtr snapshot, const WriteBatch::SequenceID wb_sequence)
@@ -183,7 +184,7 @@ WriteBatch LegacyCompactor::prepareCheckpointWriteBatch(const PageStorage::Snaps
     for (auto & page_id : normal_ids)
     {
         auto entry = snapshot->version()->findNormalPageEntry(page_id);
-        wb.upsertPage(page_id, entry->tag, nullptr, entry->size, entry->field_offsets);
+        wb.upsertPage(page_id, entry->tag, nullptr, 0, entry->field_offsets);
     }
 
     // After ingesting normal_pages, we will ref them manually to ensure the ref-count is correct.
