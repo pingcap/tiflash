@@ -60,10 +60,11 @@ void collectOutPutFieldTypesFromAgg(std::vector<tipb::FieldType> & field_type, c
     }
 }
 
-DAGQueryBlock::DAGQueryBlock(const tipb::Executor * root)
+DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor * root)
+: id(id_)
 {
     const tipb::Executor * current = root;
-    while (isSourceNode(current))
+    while (!isSourceNode(current))
     {
         switch (current->tp())
         {
@@ -92,10 +93,17 @@ DAGQueryBlock::DAGQueryBlock(const tipb::Executor * root)
         }
     }
     assignOrThrowException(&source, current, SOURCE_NAME);
+    if (current->tp() == tipb::ExecType::TypeJoin)
+    {
+        // todo need to figure out left and right side of the join
+        children.push_back(std::make_shared<DAGQueryBlock>(id * 2, &source->join().probe_exec()));
+        children.push_back(std::make_shared<DAGQueryBlock>(id * 2 + 1, &source->join().build_exec()));
+    }
     fillOutputFieldTypes();
 }
 
-DAGQueryBlock::DAGQueryBlock(std::vector<const tipb::Executor *> & executors, int start_index, int end_index)
+DAGQueryBlock::DAGQueryBlock(UInt32 id_, std::vector<const tipb::Executor *> & executors, int start_index, int end_index)
+: id(id_)
 {
     for (int i = end_index; i >= start_index; i--)
     {
@@ -147,8 +155,8 @@ DAGQueryBlock::DAGQueryBlock(std::vector<const tipb::Executor *> & executors, in
                     probe_start_index++;
                     build_start_index = start_index;
                 }
-                children.push_back(std::make_shared<DAGQueryBlock>(executors, probe_start_index, probe_end_index));
-                children.push_back(std::make_shared<DAGQueryBlock>(executors, build_start_index, build_end_index));
+                children.push_back(std::make_shared<DAGQueryBlock>(id * 2, executors, probe_start_index, probe_end_index));
+                children.push_back(std::make_shared<DAGQueryBlock>(id * 2 + 1, executors, build_start_index, build_end_index));
                 // to break the for loop
                 i = start_index - 1;
                 break;
@@ -163,9 +171,6 @@ void DAGQueryBlock::fillOutputFieldTypes()
 {
     if (source->tp() == tipb::ExecType::TypeJoin)
     {
-        // todo need to figure out left and right side of the join
-        children.push_back(std::make_shared<DAGQueryBlock>(&source->join().probe_exec()));
-        children.push_back(std::make_shared<DAGQueryBlock>(&source->join().build_exec()));
         if (output_field_types.empty())
         {
             for (auto & field_type : children[0]->output_field_types)

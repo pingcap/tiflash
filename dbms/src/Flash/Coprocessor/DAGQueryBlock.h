@@ -24,12 +24,13 @@ using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 class DAGQueryBlock
 {
 public:
-    explicit DAGQueryBlock(const tipb::Executor * root);
-    explicit DAGQueryBlock(std::vector<const tipb::Executor *> & executors, int start_index, int end_index);
+    DAGQueryBlock(UInt32 id, const tipb::Executor * root);
+    DAGQueryBlock(UInt32 id, std::vector<const tipb::Executor *> & executors, int start_index, int end_index);
     const tipb::Executor * source = nullptr;
     const tipb::Executor * selection = nullptr;
     const tipb::Executor * aggregation = nullptr;
     const tipb::Executor * limitOrTopN = nullptr;
+    UInt32 id;
     // todo use unique_ptr instead
     std::vector<std::shared_ptr<DAGQueryBlock>> children;
     std::vector<tipb::FieldType> output_field_types;
