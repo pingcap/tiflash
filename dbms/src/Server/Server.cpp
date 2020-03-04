@@ -438,18 +438,23 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 engine = engine_if_empty;
         }
 
-        if (config().has("raft.disable_bg_flush"))
+        /// "tmt" engine ONLY support disable_bg_flush = false.
+        /// "dm" engine by default disable_bg_flush = true.
+
+        String disable_bg_flush_conf = "raft.disable_bg_flush";
+        if (engine == ::TiDB::StorageEngine::TMT)
         {
-            bool disable = config().getBool("raft.disable_bg_flush");
-            if (disable)
-            {
-                if (engine == ::TiDB::StorageEngine::TMT)
-                {
-                    throw Exception("Illegal arguments: disable background flush while using engine TxnMergeTree.",
-                        ErrorCodes::INVALID_CONFIG_PARAMETER);
-                }
+            if (config().has(disable_bg_flush_conf) && config().getBool(disable_bg_flush_conf))
+                throw Exception("Illegal arguments: disable background flush while using engine TxnMergeTree.",
+                                ErrorCodes::INVALID_CONFIG_PARAMETER);
+            disable_bg_flush = false;
+        }
+        else if (engine == ::TiDB::StorageEngine::DM)
+        {
+            if (config().has(disable_bg_flush_conf))
+                disable_bg_flush = config().getBool(disable_bg_flush_conf);
+            else
                 disable_bg_flush = true;
-            }
         }
     }
 
