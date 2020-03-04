@@ -75,21 +75,21 @@ BackgroundService::BackgroundService(TMTContext & tmt_)
             }
             return ok;
         });
+
+        {
+            std::vector<RegionPtr> regions;
+            tmt.getKVStore()->traverseRegions([&regions](RegionID, const RegionPtr & region) {
+                if (region->dataSize())
+                    regions.emplace_back(region);
+            });
+
+            for (const auto & region : regions)
+                addRegionToDecode(region);
+        }
     }
     else
     {
         LOG_INFO(log, "Configuration raft.disable_bg_flush is set to true, background flush tasks are disabled.");
-    }
-
-    {
-        std::vector<RegionPtr> regions;
-        tmt.getKVStore()->traverseRegions([&regions](RegionID, const RegionPtr & region) {
-            if (region->dataSize())
-                regions.emplace_back(region);
-        });
-
-        for (const auto & region : regions)
-            addRegionToDecode(region);
     }
 }
 

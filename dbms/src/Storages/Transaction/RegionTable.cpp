@@ -95,7 +95,7 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtr & region, bool t
 {
     const auto & tmt = context->getTMTContext();
 
-    LOG_INFO(log,
+    LOG_TRACE(log,
         __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " original " << region->dataSize()
                      << " bytes");
 
@@ -126,7 +126,7 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtr & region, bool t
                 tmt.getKVStore()->tryPersist(region->id());
         }
 
-        LOG_INFO(log,
+        LOG_TRACE(log,
             __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " after flush " << cache_size
                          << " bytes");
     }
