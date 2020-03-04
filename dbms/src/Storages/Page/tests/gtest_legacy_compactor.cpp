@@ -170,6 +170,7 @@ try
         = restoreFromCheckpoints(mergine_queue, vset_restored, debug_info, "restore_test", storage.log);
     (void)old_checkpoint_file;
     (void)old_checkpoint_sequence;
+    (void)page_files_to_remove;
 
     {
         auto s0 = compactor.version_set.getSnapshot();
