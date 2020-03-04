@@ -511,10 +511,17 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
     ExpressionActionsChain chain;
     if (!conditions.empty())
     {
-        analyzer->appendWhere(chain, conditions, res.filter_column_name);
         res.has_where = true;
-        res.before_where = chain.getLastActions();
-        chain.addStep();
+        for(int i = (int)conditions.size() - 1; i >= 0; i--)
+        {
+            const auto * cond = conditions[i];
+            std::vector<const tipb::Expr *> c;
+            c.push_back(cond);
+            analyzer->appendWhere(chain, c, res.filter_column_name);
+            res.before_wheres.push_back(chain.getLastActions());
+            res.filter_column_names.push_back(res.filter_column_name);
+            chain.addStep();
+        }
     }
     // There will be either Agg...
     if (dag.hasAggregation())
@@ -784,7 +791,10 @@ void InterpreterDAG::executeImpl(Pipeline & pipeline)
     // execute selection
     if (res.has_where)
     {
-        executeWhere(pipeline, res.before_where, res.filter_column_name);
+        for(size_t i = 0; i < res.before_wheres.size(); i++)
+        {
+            executeWhere(pipeline, res.before_wheres[i], res.filter_column_names[i]);
+        }
         if (dag.hasSelection())
             recordProfileStreams(pipeline, dag.getSelectionIndex());
     }

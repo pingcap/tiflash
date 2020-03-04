@@ -58,6 +58,8 @@ private:
         bool need_aggregate = false;
         bool has_order_by = false;
 
+        std::vector<ExpressionActionsPtr> before_wheres;
+        std::vector<String> filter_column_names;
         ExpressionActionsPtr before_where;
         ExpressionActionsPtr before_aggregation;
         ExpressionActionsPtr before_order_and_select;
