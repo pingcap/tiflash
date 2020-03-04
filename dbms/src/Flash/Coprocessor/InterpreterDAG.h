@@ -10,6 +10,7 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/BloomFilter.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/IInterpreter.h>
@@ -107,6 +108,9 @@ private:
     const bool keep_session_timezone_info;
 
     std::vector<const tipb::Expr *> conditions;
+
+    std::vector<long long> join_key;
+    BloomFilter * bf;
 
     Poco::Logger * log;
 };
