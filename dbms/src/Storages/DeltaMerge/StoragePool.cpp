@@ -29,7 +29,6 @@ PageStorage::Config extractConfig(const Settings & settings, UInt64 subtype)
     return config;
 }
 
-// TODO: Load configs from settings.
 StoragePool::StoragePool(const String & name, const String & path, const Settings & settings)
     : log_storage(name + ".log", path + "/log", extractConfig(settings, STORAGE_LOG)),
       data_storage(name + ".data", path + "/data", extractConfig(settings, STORAGE_DATA)),
