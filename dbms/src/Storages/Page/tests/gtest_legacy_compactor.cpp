@@ -18,6 +18,8 @@
 #include <Storages/Page/gc/LegacyCompactor.h>
 #undef private
 
+#include <Storages/Page/gc/restoreFromCheckpoints.h>
+
 namespace DB
 {
 namespace tests
@@ -122,6 +124,78 @@ try
         {
             EXPECT_TRUE(restored_ref_page_ids.find(id) != restored_ref_page_ids.end());
         }
+    }
+}
+CATCH
+
+// TODO: enable this test
+TEST(LegacyCompactor_test, DISABLED_CompactAndRestore)
+try
+{
+    Poco::AutoPtr<Poco::ConsoleChannel>   channel = new Poco::ConsoleChannel(std::cerr);
+    Poco::AutoPtr<Poco::PatternFormatter> formatter(new Poco::PatternFormatter);
+    formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i <%p> %s: %t");
+    Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
+    Poco::Logger::root().setChannel(formatting_channel);
+    Poco::Logger::root().setLevel("trace");
+
+    const String path = TiFlashTestEnv::getTemporaryPath() + "/legacy_compactor_test";
+    PageStorage  storage("compact_test", path, {});
+
+    PageStorage::ListPageFilesOption opt;
+    opt.ignore_checkpoint = false;
+    opt.ignore_legacy     = false;
+    opt.remove_tmp_files  = false;
+    auto page_files       = PageStorage::listAllPageFiles(path, storage.page_file_log, opt);
+
+    LegacyCompactor compactor(storage);
+    auto && [page_files_left, page_files_compacted] = compactor.tryCompact(std::move(page_files), {});
+    (void)page_files_left;
+    ASSERT_EQ(page_files_compacted.size(), 4UL);
+
+    // TODO:
+    PageFile page_file = PageFile::openPageFileForRead(7, 0, path, PageFile::Type::Checkpoint, storage.page_file_log);
+    ASSERT_TRUE(page_file.isExist());
+
+    PageStorage::MetaCompactMergineQueue mergine_queue;
+    {
+        auto reader = page_file.createMetaMergingReader();
+        reader->moveNext();
+        mergine_queue.push(std::move(reader));
+    }
+
+    DB::PageStorage::StatisticsInfo   debug_info;
+    PageStorage::VersionedPageEntries vset_restored(storage.config.version_set_config, storage.log);
+    auto && [old_checkpoint_file, old_checkpoint_sequence, page_files_to_remove]
+        = restoreFromCheckpoints(mergine_queue, vset_restored, debug_info, "restore_test", storage.log);
+    (void)old_checkpoint_file;
+    (void)old_checkpoint_sequence;
+
+    {
+        auto s0 = compactor.version_set.getSnapshot();
+        auto s1 = vset_restored.getSnapshot();
+        ASSERT_EQ(s0->version()->numPages(), s1->version()->numPages());
+        ASSERT_EQ(s0->version()->numNormalPages(), s1->version()->numNormalPages());
+
+        auto   page_ids  = s0->version()->validPageIds();
+        size_t num_pages = 0;
+        for (auto page_id : page_ids)
+        {
+            auto entry0 = s0->version()->find(page_id);
+            ASSERT_TRUE(entry0);
+            auto entry1 = s1->version()->find(page_id);
+            ASSERT_TRUE(entry1);
+            ASSERT_EQ(entry0->fileIdLevel(), entry1->fileIdLevel());
+            ASSERT_EQ(entry0->offset, entry1->offset);
+            ASSERT_EQ(entry0->size, entry1->size);
+            ASSERT_EQ(entry0->tag, entry1->tag);
+            // TODO: compare
+            // entry0->field_offsets
+
+            num_pages += 1;
+        }
+
+        LOG_INFO(storage.log, "All " << num_pages << " are consist.");
     }
 }
 CATCH

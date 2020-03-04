@@ -145,11 +145,14 @@ void PageStorage::restore()
 
     StatisticsInfo restore_info;
     /// First try to recover from latest checkpoint
-    auto [checkpoint_file, checkpoint_wb_sequence, page_files_to_archive]
+    std::optional<PageFile>               checkpoint_file;
+    std::optional<WriteBatch::SequenceID> checkpoint_sequence;
+    PageFileSet                           page_files_to_remove;
+    std::tie(checkpoint_file, checkpoint_sequence, page_files_to_remove)
         = restoreFromCheckpoints(merging_queue, versioned_page_entries, restore_info, storage_name, log);
     (void)checkpoint_file;
-    if (checkpoint_wb_sequence)
-        write_batch_seq = *checkpoint_wb_sequence;
+    if (checkpoint_sequence)
+        write_batch_seq = *checkpoint_sequence;
 
     while (!merging_queue.empty())
     {
@@ -168,9 +171,8 @@ void PageStorage::restore()
         // Else restroed from checkpoint, if checkpoint's WriteBatch sequence number is 0, we need to apply
         // all edits after that checkpoint too. If checkpoint's WriteBatch sequence number is not 0, we
         // apply WriteBatch edits only if its WriteBatch sequence is larger than checkpoint.
-        if (!checkpoint_wb_sequence.has_value() || //
-            (checkpoint_wb_sequence.has_value()
-             && (*checkpoint_wb_sequence == 0 || *checkpoint_wb_sequence < reader->writeBatchSequence())))
+        if (!checkpoint_sequence.has_value() || //
+            (checkpoint_sequence.has_value() && (*checkpoint_sequence == 0 || *checkpoint_sequence < reader->writeBatchSequence())))
         {
             try
             {
@@ -202,21 +204,17 @@ void PageStorage::restore()
         }
     }
 
-    if (!page_files_to_archive.empty())
+    if (!page_files_to_remove.empty())
     {
         // Remove old checkpoints and archive obsolete PageFiles that have not been archived yet during gc for some reason.
 #ifdef PAGE_STORAGE_UTIL_DEBUGGGING
         LOG_TRACE(log, storage_name << " These file whould be archive:");
-        for (auto & pf : page_files_to_archive)
+        for (auto & pf : page_files_to_remove)
             LOG_TRACE(log, storage_name << pf.toString());
 #else
-        archivePageFiles(page_files_to_archive);
+        archivePageFiles(page_files_to_remove);
 #endif
-        for (auto & pf : page_files_to_archive)
-        {
-            if (auto iter = page_files.find(pf); iter != page_files.end())
-                page_files.erase(iter);
-        }
+        removePageFilesIf(page_files, [&page_files_to_remove](const PageFile & pf) -> bool { return page_files_to_remove.count(pf) > 0; });
     }
 
     // TODO: reuse some page_files

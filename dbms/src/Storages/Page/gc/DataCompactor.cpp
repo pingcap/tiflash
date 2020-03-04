@@ -112,13 +112,6 @@ std::tuple<PageFileSet, size_t, size_t> DataCompactor::selectCandidateFiles( // 
     return {candidates, candidate_total_size, num_migrate_pages};
 }
 
-bool DataCompactor::isMigrateFileExist(const PageFileIdAndLevel & file_id) const
-{
-    // In case that those files are hold by snapshot and do migratePages to same PageFile again, we need to check if gc_file is already exist.
-    PageFile gc_file = PageFile::openPageFileForRead(file_id.first, file_id.second, storage_path, PageFile::Type::Formal, page_file_log);
-    return gc_file.isExist();
-}
-
 PageEntriesEdit DataCompactor::migratePages(const SnapshotPtr & snapshot,
                                             const ValidPages &  file_valid_pages,
                                             const PageFileSet & candidates,
@@ -132,7 +125,7 @@ PageEntriesEdit DataCompactor::migratePages(const SnapshotPtr & snapshot,
     const PageFileIdAndLevel migrate_file_id{largest_file_id, level + 1};
 
     // In case that those files are hold by snapshot and do migratePages to same PageFile again, we need to check if gc_file is already exist.
-    if (isMigrateFileExist(migrate_file_id))
+    if (PageFile::isPageFileExist(migrate_file_id, storage_path, PageFile::Type::Formal, page_file_log))
     {
         LOG_INFO(log,
                  storage_name << " GC migration to PageFile_" //

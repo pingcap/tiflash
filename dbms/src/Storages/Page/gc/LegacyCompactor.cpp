@@ -18,10 +18,12 @@ std::tuple<PageFileSet, PageFileSet> LegacyCompactor::tryCompact( //
     const std::set<PageFileIdAndLevel> & writing_file_ids)
 {
     // Select PageFiles to compact, all compacted WriteBatch will apply to `this->version_set`
+    PageFileSet             page_files_to_remove;
     PageFileSet             page_files_to_compact;
     WriteBatch::SequenceID  checkpoint_sequence = 0;
     std::optional<PageFile> old_checkpoint;
-    std::tie(page_files_to_compact, checkpoint_sequence, old_checkpoint) = collectPageFilesToCompact(page_files, writing_file_ids);
+    std::tie(page_files_to_remove, page_files_to_compact, checkpoint_sequence, old_checkpoint)
+        = collectPageFilesToCompact(page_files, writing_file_ids);
 
     if (page_files_to_compact.size() < config.gc_compact_legacy_min_num)
     {
@@ -31,18 +33,25 @@ std::tuple<PageFileSet, PageFileSet> LegacyCompactor::tryCompact( //
                                << ", compact_legacy_min_num: " << config.gc_compact_legacy_min_num);
         // Nothing to compact, remove legacy/checkpoint page files since we
         // don't do gc on them later.
-        for (auto itr = page_files.begin(); itr != page_files.end(); /* empty */)
-        {
-            auto & page_file = *itr;
-            if (page_file.getType() == PageFile::Type::Legacy || page_file.getType() == PageFile::Type::Checkpoint)
-            {
-                itr = page_files.erase(itr);
-            }
-            else
-            {
-                itr++;
-            }
-        }
+        removePageFilesIf(page_files, [](const PageFile & pf) -> bool {
+            return pf.getType() == PageFile::Type::Legacy || pf.getType() == PageFile::Type::Checkpoint;
+        });
+        return {std::move(page_files), {}};
+    }
+
+    // Use the largest id-level in page_files_to_compact as Checkpoint's file
+    const PageFileIdAndLevel checkpoint_id = page_files_to_compact.rbegin()->fileIdLevel();
+
+    if (PageFile::isPageFileExist(checkpoint_id, storage_path, PageFile::Type::Checkpoint, page_file_log))
+    {
+        LOG_WARNING(log,
+                    storage_name << " LegacyCompactor::tryCompact to checkpoint PageFile_" //
+                                 << checkpoint_id.first << "_" << checkpoint_id.second << " is done before.");
+        // Nothing to compact, remove legacy/checkpoint page files since we
+        // don't do gc on them later.
+        removePageFilesIf(page_files, [](const PageFile & pf) -> bool {
+            return pf.getType() == PageFile::Type::Legacy || pf.getType() == PageFile::Type::Checkpoint;
+        });
         return {std::move(page_files), {}};
     }
 
@@ -50,8 +59,6 @@ std::tuple<PageFileSet, PageFileSet> LegacyCompactor::tryCompact( //
     auto snapshot = version_set.getSnapshot();
     auto wb       = prepareCheckpointWriteBatch(snapshot, checkpoint_sequence);
 
-    // Use the largest id-level in page_files_to_compact as Checkpoint's file
-    const PageFileIdAndLevel largest_id_level = page_files_to_compact.rbegin()->fileIdLevel();
     {
         std::stringstream legacy_ss;
         legacy_ss << "[";
@@ -61,47 +68,38 @@ std::tuple<PageFileSet, PageFileSet> LegacyCompactor::tryCompact( //
         const String old_checkpoint_str = (old_checkpoint ? old_checkpoint->toString() : "(none)");
 
         LOG_INFO(log,
-                 storage_name << " Compact legacy PageFile " << legacy_ss.str()                                           //
-                              << " and old checkpoint: " << old_checkpoint_str                                            //
-                              << " into checkpoint PageFile_" << largest_id_level.first << "_" << largest_id_level.second //
+                 storage_name << " Compact legacy PageFile " << legacy_ss.str()                                     //
+                              << " and old checkpoint: " << old_checkpoint_str                                      //
+                              << " into checkpoint PageFile_" << checkpoint_id.first << "_" << checkpoint_id.second //
                               << " with " << info.toString() << " sequence: " << checkpoint_sequence);
     }
 
     if (!info.empty())
     {
-        writeToCheckpoint(storage_path, largest_id_level, std::move(wb), page_file_log);
+        writeToCheckpoint(storage_path, checkpoint_id, std::move(wb), page_file_log);
     }
 
     // Clean up compacted PageFiles from `page_files`
     {
-        for (auto itr = page_files.begin(); itr != page_files.end();)
-        {
-            auto & page_file = *itr;
-            if (page_files_to_compact.count(page_file) > 0)
-            {
-                // Remove page files have been compacted
-                itr = page_files.erase(itr);
-            }
-            else if (page_file.getType() == PageFile::Type::Legacy || page_file.getType() == PageFile::Type::Checkpoint)
-            {
-                // Remove legacy/checkpoint files since we don't do gc on them later
-                itr = page_files.erase(itr);
-            }
-            else
-            {
-                itr++;
-            }
-        }
-
         // We have generate a new checkpoint, old checkpoint can be remove later.
         if (!info.empty() && old_checkpoint)
-            page_files_to_compact.emplace(*old_checkpoint);
+            page_files_to_remove.emplace(*old_checkpoint);
+        // Compacted files can be remove later
+        for (const auto & pf : page_files_to_compact)
+            page_files_to_remove.emplace(pf);
+
+        removePageFilesIf(page_files, [&page_files_to_remove](const PageFile & pf) -> bool {
+            // Remove page files have been compacted
+            return page_files_to_remove.count(pf) > 0 //
+                // Remove legacy/checkpoint files since we don't do gc on them later
+                || pf.getType() == PageFile::Type::Legacy || pf.getType() == PageFile::Type::Checkpoint;
+        });
     }
 
-    return {std::move(page_files), std::move(page_files_to_compact)};
+    return {std::move(page_files), std::move(page_files_to_remove)};
 }
 
-std::tuple<PageFileSet, WriteBatch::SequenceID, std::optional<PageFile>>
+std::tuple<PageFileSet, PageFileSet, WriteBatch::SequenceID, std::optional<PageFile>>
 LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const std::set<PageFileIdAndLevel> & writing_file_ids)
 {
     WriteBatch::SequenceID               compact_sequence = 0;
@@ -120,6 +118,7 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
     std::tie(old_checkpoint_file, old_checkpoint_sequence, page_files_to_remove) = //
         restoreFromCheckpoints(merging_queue, version_set, info, storage_name, log);
 
+    PageFileSet            page_files_to_compact;
     WriteBatch::SequenceID last_sequence = (old_checkpoint_sequence.has_value() ? *old_checkpoint_sequence : 0);
     while (!merging_queue.empty())
     {
@@ -170,10 +169,10 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
         {
             // We apply all edit of belonging PageFile, do compaction on it.
             LOG_TRACE(log, storage_name << " collectPageFilesToCompact try to compact: " + reader->belongingPageFile().toString());
-            page_files_to_remove.emplace(reader->belongingPageFile());
+            page_files_to_compact.emplace(reader->belongingPageFile());
         }
     }
-    return {page_files_to_remove, compact_sequence, old_checkpoint_file};
+    return {page_files_to_remove, page_files_to_compact, compact_sequence, old_checkpoint_file};
 }
 
 WriteBatch LegacyCompactor::prepareCheckpointWriteBatch(const PageStorage::SnapshotPtr snapshot, const WriteBatch::SequenceID wb_sequence)

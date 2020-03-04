@@ -830,6 +830,12 @@ PageFile PageFile::openPageFileForRead(PageFileId file_id, UInt32 level, const s
     return PageFile(file_id, level, parent_path, type, false, log);
 }
 
+bool PageFile::isPageFileExist(PageFileIdAndLevel file_id, const String & parent_path, Type type, Poco::Logger * log)
+{
+    PageFile pf = openPageFileForRead(file_id.first, file_id.second, parent_path, type, log);
+    return pf.isExist();
+}
+
 void PageFile::readAndSetPageMetas(PageEntriesEdit & edit, WriteBatch::SequenceID & max_wb_sequence)
 {
     const auto path = metaPath();
@@ -985,6 +991,21 @@ String PageFile::folderPath() const
     }
     path += "_" + DB::toString(file_id) + "_" + DB::toString(level);
     return path;
+}
+
+void removePageFilesIf(PageFileSet & page_files, const std::function<bool(const PageFile &)> & pred)
+{
+    for (auto itr = page_files.begin(); itr != page_files.end(); /* empty */)
+    {
+        if (pred(*itr))
+        {
+            itr = page_files.erase(itr);
+        }
+        else
+        {
+            itr++;
+        }
+    }
 }
 
 } // namespace DB

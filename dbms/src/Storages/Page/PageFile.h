@@ -90,6 +90,15 @@ public:
     {
         bool operator()(const PageFile & lhs, const PageFile & rhs) const
         {
+            if (lhs.type != rhs.type)
+            {
+                // If any PageFile's type is checkpoint, it is smaller
+                if (lhs.type == PageFile::Type::Checkpoint)
+                    return true;
+                else if (rhs.type == PageFile::Type::Checkpoint)
+                    return true;
+                // else fallback to later compare
+            }
             return std::make_pair(lhs.file_id, lhs.level) < std::make_pair(rhs.file_id, rhs.level);
         }
     };
@@ -151,6 +160,7 @@ public:
                 return lhs.page_file.fileIdLevel() < rhs.page_file.fileIdLevel();
             return lhs.curr_write_batch_sequence < rhs.curr_write_batch_sequence;
         }
+
     private:
         void initialize();
 
@@ -217,6 +227,8 @@ public:
     static PageFile newPageFile(PageFileId file_id, UInt32 level, const String & parent_path, Type type, Poco::Logger * log);
     /// Open an existing page file for read.
     static PageFile openPageFileForRead(PageFileId file_id, UInt32 level, const String & parent_path, Type type, Poco::Logger * log);
+    /// If page file is exist.
+    static bool isPageFileExist(PageFileIdAndLevel file_id, const String & parent_path, Type type, Poco::Logger * log);
 
     /// Get pages' metadata by this method. Will also update file pos.
     /// Call this method after a page file recovered.
@@ -295,5 +307,7 @@ private:
     Poco::Logger * log = nullptr;
 };
 using PageFileSet = std::set<PageFile, PageFile::Comparator>;
+
+void removePageFilesIf(PageFileSet & page_files, const std::function<bool(const PageFile &)> & pred);
 
 } // namespace DB

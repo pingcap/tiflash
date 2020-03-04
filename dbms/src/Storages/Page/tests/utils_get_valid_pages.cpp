@@ -1,3 +1,9 @@
+#include <Storages/Page/PageStorage.h>
+
+#define private public
+#include <Storages/Page/gc/DataCompactor.h>
+#undef private
+
 #include <Poco/ConsoleChannel.h>
 #include <Poco/FormattingChannel.h>
 #include <Poco/Logger.h>
@@ -6,12 +12,8 @@
 #include <Poco/ThreadPool.h>
 #include <Poco/Timer.h>
 
-#define PAGE_STORAGE_UTIL_DEBUGGGING
-#include <Storages/Page/PageStorage.h>
 
-#define private public
-#include <Storages/Page/gc/DataCompactor.h>
-#undef private
+DB::WriteBatch::SequenceID debugging_recover_stop_sequence = 0;
 
 void Usage(const char * prog)
 {
@@ -79,6 +81,11 @@ try
         Usage(argv[0]);
         return 1;
     }
+    if (mode == DUMP_VALID_ENTRIES && argc > 3)
+    {
+        debugging_recover_stop_sequence = strtoull(argv[3], nullptr, 10);
+        LOG_TRACE(&Poco::Logger::get("root"), "debug early stop sequence set to: " << debugging_recover_stop_sequence);
+    }
 
     // Do not remove any files.
     DB::PageStorage::ListPageFilesOption options;
@@ -101,7 +108,7 @@ try
         return 0;
     }
 
-    DB::PageStorage storage("PageStorageUtils", path, {});
+    DB::PageStorage storage("DebugUtils", path, {});
     storage.restore();
     switch (mode)
     {

@@ -39,8 +39,6 @@ private:
         const ValidPages &                   file_valid_pages,
         const std::set<PageFileIdAndLevel> & writing_file_ids) const;
 
-    bool isMigrateFileExist(const PageFileIdAndLevel & file_id) const;
-
     PageEntriesEdit migratePages(const SnapshotPtr & snapshot,
                                  const ValidPages &  file_valid_pages,
                                  const PageFileSet & candidates,
