@@ -44,7 +44,7 @@ String PageStorage::StatisticsInfo::toString() const
     return ss.str();
 }
 
-PageFileSet PageStorage::listAllPageFiles(const String & storage_path, Poco::Logger * page_file_log, ListPageFilesOption option)
+PageFileSet PageStorage::listAllPageFiles(const String & storage_path, Poco::Logger * page_file_log, const ListPageFilesOption & option)
 {
     // collect all pages from `storage_path` and recover to `PageFile` objects
     Poco::File folder(storage_path);
@@ -114,7 +114,10 @@ void PageStorage::restore()
 
     /// page_files are in ascending ordered by (file_id, level).
     ListPageFilesOption opt;
-    opt.remove_tmp_files   = true;
+    opt.remove_tmp_files = true;
+#ifdef PAGE_STORAGE_UTIL_DEBUGGGING
+    opt.remove_tmp_files = false;
+#endif
     opt.ignore_legacy      = false;
     opt.ignore_checkpoint  = false;
     PageFileSet page_files = PageStorage::listAllPageFiles(storage_path, page_file_log, opt);
@@ -135,6 +138,7 @@ void PageStorage::restore()
     }
 
     StatisticsInfo restore_info;
+    /// First try to recover from latest checkpoint
     auto [checkpoint_file, checkpoint_wb_sequence, page_files_to_archive]
         = restoreFromCheckpoints(merging_queue, versioned_page_entries, restore_info, storage_name, log);
     (void)checkpoint_file;
@@ -145,7 +149,6 @@ void PageStorage::restore()
     {
         auto reader = merging_queue.top();
         merging_queue.pop();
-        LOG_TRACE(log, storage_name << " recovering from " + reader->toString());
 
         // If no checkpoint, we apply all edits.
         // Else restroed from checkpoint, if checkpoint's WriteBatch sequence number is 0, we need to apply
@@ -157,6 +160,7 @@ void PageStorage::restore()
         {
             try
             {
+                LOG_TRACE(log, storage_name << " recovering from " + reader->toString());
                 auto edits = reader->getEdits();
                 versioned_page_entries.apply(edits);
                 restore_info.mergeEdits(edits);
@@ -187,7 +191,13 @@ void PageStorage::restore()
     if (!page_files_to_archive.empty())
     {
         // Remove old checkpoints and archive obsolete PageFiles that have not been archived yet during gc for some reason.
+#ifdef PAGE_STORAGE_UTIL_DEBUGGGING
+        LOG_TRACE(log, storage_name << " These file whould be archive:");
+        for (auto & pf : page_files_to_archive)
+            LOG_TRACE(log, storage_name << pf.toString());
+#else
         archivePageFiles(page_files_to_archive);
+#endif
         for (auto & pf : page_files_to_archive)
         {
             if (auto iter = page_files.find(pf); iter != page_files.end())
@@ -203,11 +213,13 @@ void PageStorage::restore()
         if (page_file.getLevel() == 0)
             write_files[0] = page_file;
     }
+#ifndef PAGE_STORAGE_UTIL_DEBUGGGING
     for (auto & page_file : write_files)
     {
         auto writer = getWriter(page_file);
         idle_writers.emplace_back(std::move(writer));
     }
+#endif
 
     statistics = restore_info;
     {

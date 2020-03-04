@@ -1,11 +1,13 @@
 #include <Storages/Page/PageStorage.h>
 
+#include <boost/core/noncopyable.hpp>
 #include <map>
+#include <tuple>
 
 namespace DB
 {
 
-class DataCompactor
+class DataCompactor : private boost::noncopyable
 {
 public:
     using ValidPages  = std::map<PageFileIdAndLevel, std::pair<size_t, PageIdSet>>;

@@ -54,7 +54,7 @@ restoreFromCheckpoints(MergineQueue &                      merging_queue,
         throw;
     }
 
-    if (checkpoint_wb_sequence == 0)
+    if (!checkpoints.empty() && checkpoint_wb_sequence == 0)
     {
         // backward compatibility
         while (merging_queue.top()->fileIdLevel() <= last_checkpoint_file_id)

@@ -5,15 +5,23 @@
 #include <Poco/Runnable.h>
 #include <Poco/ThreadPool.h>
 #include <Poco/Timer.h>
+
+#define PAGE_STORAGE_UTIL_DEBUGGGING
 #include <Storages/Page/PageStorage.h>
+
+#define private public
+#include <Storages/Page/gc/DataCompactor.h>
+#undef private
 
 void Usage(const char * prog)
 {
     fprintf(stderr,
             "Usage: %s <path> <mode>\n"
             "\tmode==1 -> dump all page entries\n"
-            "\tmode==2 -> dump valid page entries\n"
-            "\tmode==3 -> check all page entries and page data checksum",
+            "\t      2 -> dump valid page entries\n"
+            "\t      3 -> check all page entries and page data checksum\n"
+            "\t      4 -> list capacity of all page files\n"
+            "\t      5 -> list all page files\n",
             prog);
 }
 
@@ -40,6 +48,9 @@ enum Mode
 
     TOTAL_NUM_MODES,
 };
+
+void dump_all_entries(DB::PageFileSet & page_files, int32_t mode = Mode::DUMP_ALL_ENTRIES);
+void list_all_capacity(const DB::PageFileSet & page_files, DB::PageStorage & storage);
 
 int main(int argc, char ** argv)
 try
@@ -76,32 +87,70 @@ try
     options.ignore_checkpoint = false;
     auto page_files           = DB::PageStorage::listAllPageFiles(path, &Poco::Logger::get("root"), options);
 
-    if (mode == LIST_ALL_PAGE_FILE)
+    switch (mode)
     {
+    case DUMP_ALL_ENTRIES:
+    case CHECK_DATA_CHECKSUM:
+        dump_all_entries(page_files, mode);
+        return 0;
+    case LIST_ALL_PAGE_FILE:
         for (auto & page_file : page_files)
         {
-            auto [id, level] = page_file.fileIdLevel();
-            auto type        = page_file.getType();
-            std::cout << "PageFile_" << id << "_" << level //
-                      << "\t" << DB::PageFile::typeToString(type) << std::endl;
+            std::cout << page_file.toString() << std::endl;
         }
         return 0;
     }
 
-    //DB::PageEntriesVersionSet versions;
-    DB::PageEntriesVersionSetWithDelta versions(DB::MVCC::VersionSetConfig(), &Poco::Logger::get("GetValidPages"));
+    DB::PageStorage storage("PageStorageUtils", path, {});
+    storage.restore();
+    switch (mode)
+    {
+    case DUMP_VALID_ENTRIES: {
+        auto snapshot = storage.getSnapshot();
+        auto page_ids = snapshot->version()->validPageIds();
+        for (auto page_id : page_ids)
+        {
+            const auto entry = snapshot->version()->find(page_id);
+            printPageEntry(page_id, *entry);
+        }
+        break;
+    }
+    case LIST_ALL_CAPACITY:
+        list_all_capacity(page_files, storage);
+        break;
+    }
+
+    return 0;
+}
+catch (const DB::Exception & e)
+{
+    std::string text = e.displayText();
+
+    auto embedded_stack_trace_pos = text.find("Stack trace");
+    std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
+    if (std::string::npos == embedded_stack_trace_pos)
+        std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl;
+
+    return -1;
+}
+
+void dump_all_entries(DB::PageFileSet & page_files, int32_t mode)
+{
     for (auto & page_file : page_files)
     {
-        DB::PageEntriesEdit        edit;
-        DB::PageIdAndEntries       id_and_caches;
-        DB::WriteBatch::SequenceID sid = 0;
-        const_cast<DB::PageFile &>(page_file).readAndSetPageMetas(edit, sid);
+        DB::PageEntriesEdit  edit;
+        DB::PageIdAndEntries id_and_caches;
 
-        printf("File: page_%llu_%u with %zu entries:\n", page_file.getFileId(), page_file.getLevel(), edit.size());
-        for (const auto & record : edit.getRecords())
+        auto reader = const_cast<DB::PageFile &>(page_file).createMetaMergingReader();
+
+        while (reader->hasNext())
         {
-            if (mode == DUMP_ALL_ENTRIES)
+            reader->moveNext();
+            edit          = reader->getEdits();
+            auto sequence = reader->writeBatchSequence();
+            for (const auto & record : edit.getRecords())
             {
+                printf("%s\t%llu\t", page_file.toString().c_str(), sequence);
                 switch (record.type)
                 {
                 case DB::WriteBatch::WriteType::PUT:
@@ -115,13 +164,13 @@ try
                     id_and_caches.emplace_back(std::make_pair(record.page_id, record.entry));
                     break;
                 case DB::WriteBatch::WriteType::DEL:
-                    printf("DEL\t%lld\t\t@PageFile%llu_%u\n", //
+                    printf("DEL\t%lld\n", //
                            record.page_id,
                            page_file.getFileId(),
                            page_file.getLevel());
                     break;
                 case DB::WriteBatch::WriteType::REF:
-                    printf("REF\t%lld\t%lld\t@PageFile%llu_%u\n", //
+                    printf("REF\t%lld\t%lld\t\n", //
                            record.page_id,
                            record.ori_page_id,
                            page_file.getFileId(),
@@ -130,6 +179,8 @@ try
                 }
             }
         }
+        reader->setPageFileOffsets();
+
         if (mode == CHECK_DATA_CHECKSUM)
         {
             // Read correspond page and check checksum
@@ -144,80 +195,53 @@ try
                 fprintf(stderr, "%s\n", e.displayText().c_str());
             }
         }
-
-        versions.apply(edit);
     }
-
-    if (mode == DUMP_VALID_ENTRIES)
-    {
-        auto snapshot = versions.getSnapshot();
-        auto page_ids = snapshot->version()->validPageIds();
-        for (auto page_id : page_ids)
-        {
-            const auto entry = snapshot->version()->find(page_id);
-            printPageEntry(page_id, *entry);
-        }
-    }
-    else if (mode == LIST_ALL_CAPACITY)
-    {
-        constexpr double MB                    = 1.0 * 1024 * 1024;
-        auto             snapshot              = versions.getSnapshot();
-        auto             valid_normal_page_ids = snapshot->version()->validNormalPageIds();
-
-        std::map<DB::PageFileIdAndLevel, std::pair<size_t, DB::PageIds>> file_valid_pages;
-        for (auto page_id : valid_normal_page_ids)
-        {
-            const auto page_entry = snapshot->version()->findNormalPageEntry(page_id);
-            if (unlikely(!page_entry))
-            {
-                throw DB::Exception("PageStorage GC: Normal Page " + DB::toString(page_id) + " not found.", DB::ErrorCodes::LOGICAL_ERROR);
-            }
-            auto && [valid_size, valid_page_ids_in_file] = file_valid_pages[page_entry->fileIdLevel()];
-            valid_size += page_entry->size;
-            valid_page_ids_in_file.emplace_back(page_id);
-        }
-
-        size_t global_total_size       = 0;
-        size_t global_total_valid_size = 0;
-
-        printf("PageFileId\tPageFileLevel\tPageFileSize\tValidSize\tValidPercent\tNumValidPages\n");
-        for (auto & page_file : page_files)
-        {
-            size_t      total_size   = page_file.getDataFileSize();
-            auto        id_and_level = page_file.fileIdLevel();
-            size_t      valid_size   = 0;
-            DB::PageIds valid_pages;
-            if (auto iter = file_valid_pages.find(page_file.fileIdLevel()); iter != file_valid_pages.end())
-            {
-                valid_size  = iter->second.first;
-                valid_pages = iter->second.second;
-            }
-            global_total_size += total_size;
-            global_total_valid_size += valid_size;
-            // PageFileId, level, size, valid size, valid percentage
-            printf("%9llu\t%9u\t"
-                   "%9.2f\t%9.2f\t%9.2f%%\t"
-                   "%6zu"
-                   "\n",
-                   id_and_level.first,
-                   id_and_level.second,
-                   total_size / MB,
-                   valid_size / MB,
-                   total_size == 0 ? 0 : (100.0 * valid_size / total_size),
-                   valid_pages.size());
-        }
-        printf("Total size: %.2f MB over %.2f MB\n", global_total_valid_size / MB, global_total_size / MB);
-    }
-    return 0;
 }
-catch (const DB::Exception & e)
+
+void list_all_capacity(const DB::PageFileSet & page_files, DB::PageStorage & storage)
 {
-    std::string text = e.displayText();
+    constexpr double MB = 1.0 * 1024 * 1024;
 
-    auto embedded_stack_trace_pos = text.find("Stack trace");
-    std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
-    if (std::string::npos == embedded_stack_trace_pos)
-        std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl;
+    auto snapshot = storage.getSnapshot();
 
-    return -1;
+    DB::DataCompactor::ValidPages file_valid_pages;
+    {
+        DB::DataCompactor compactor(storage);
+        file_valid_pages = compactor.collectValidPagesInPageFile(snapshot);
+    }
+
+    size_t global_total_size       = 0;
+    size_t global_total_valid_size = 0;
+
+    printf("PageFileId\tPageFileLevel\tPageFileSize\tValidSize\tValidPercent\tNumValidPages\n");
+    for (auto & page_file : page_files)
+    {
+        if (page_file.getType() != DB::PageFile::Type::Formal)
+        {
+            printf("%s\n", page_file.toString().c_str());
+            continue;
+        }
+
+        const size_t  total_size = page_file.getDataFileSize();
+        size_t        valid_size = 0;
+        DB::PageIdSet valid_pages;
+        if (auto iter = file_valid_pages.find(page_file.fileIdLevel()); iter != file_valid_pages.end())
+        {
+            valid_size  = iter->second.first;
+            valid_pages = iter->second.second;
+        }
+        global_total_size += total_size;
+        global_total_valid_size += valid_size;
+        // PageFileId, level, size, valid size, valid percentage
+        printf("%s\t"
+               "%9.2f\t%9.2f\t%9.2f%%\t"
+               "%6zu"
+               "\n",
+               page_file.toString().c_str(),
+               total_size / MB,
+               valid_size / MB,
+               total_size == 0 ? 0 : (100.0 * valid_size / total_size),
+               valid_pages.size());
+    }
+    printf("Total size: %.2f MB over %.2f MB\n", global_total_valid_size / MB, global_total_size / MB);
 }

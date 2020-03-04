@@ -124,7 +124,7 @@ public:
     void registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover);
 
     static PageFileSet
-    listAllPageFiles(const String & storage_path, Poco::Logger * page_file_log, ListPageFilesOption option = ListPageFilesOption());
+    listAllPageFiles(const String & storage_path, Poco::Logger * page_file_log, const ListPageFilesOption & option = ListPageFilesOption());
 
 private:
     WriterPtr getWriter(PageFile & page_file);
