@@ -225,8 +225,12 @@ try
         storage->write(std::move(batch));
     }
 
+    size_t times_remover_called = 0;
+
     PageStorage::ExternalPagesScanner scanner = []() -> PageStorage::PathAndIdsVec { return {}; };
-    PageStorage::ExternalPagesRemover remover = [](const PageStorage::PathAndIdsVec &, const std::set<PageId> & normal_page_ids) -> void {
+    PageStorage::ExternalPagesRemover remover
+        = [&times_remover_called](const PageStorage::PathAndIdsVec &, const std::set<PageId> & normal_page_ids) -> void {
+        times_remover_called += 1;
         ASSERT_EQ(normal_page_ids.size(), 2UL);
         EXPECT_GT(normal_page_ids.count(0), 0UL);
         EXPECT_GT(normal_page_ids.count(1024), 0UL);
@@ -235,6 +239,7 @@ try
     {
         SCOPED_TRACE("fist gc");
         storage->gc();
+        EXPECT_EQ(times_remover_called, 1UL);
     }
 
     auto snapshot = storage->getSnapshot();
@@ -250,6 +255,7 @@ try
     {
         SCOPED_TRACE("gc with snapshot");
         storage->gc();
+        EXPECT_EQ(times_remover_called, 2UL);
     }
 
     {
@@ -263,7 +269,8 @@ try
     }
 
     snapshot.reset();
-    remover = [](const PageStorage::PathAndIdsVec &, const std::set<PageId> & normal_page_ids) -> void {
+    remover = [&times_remover_called](const PageStorage::PathAndIdsVec &, const std::set<PageId> & normal_page_ids) -> void {
+        times_remover_called += 1;
         ASSERT_EQ(normal_page_ids.size(), 1UL);
         EXPECT_GT(normal_page_ids.count(0), 0UL);
     };
@@ -271,6 +278,7 @@ try
     {
         SCOPED_TRACE("gc with snapshot released");
         storage->gc();
+        EXPECT_EQ(times_remover_called, 3UL);
     }
 }
 CATCH

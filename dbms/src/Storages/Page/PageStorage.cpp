@@ -614,21 +614,60 @@ bool PageStorage::gc()
         min_writing_file_id_level = *writing_file_id_levels.begin();
     }
 
+    GCDebugInfo debugging_info;
+    // Helper function for apply edits and clean up before gc exit.
+    auto apply_and_cleanup = [&, this](PageEntriesEdit && gc_edits) -> void {
+        /// Here we have to apply edit to versioned_page_entries and generate a new version, then return all files that are in used
+        auto [live_files, live_normal_pages] = versioned_page_entries.gcApply(gc_edits, external_pages_scanner != nullptr);
+        debugging_info.gc_apply_stat.mergeEdits(gc_edits);
+
+        {
+            // Remove obsolete files' reader cache that are not used by any version
+            std::lock_guard<std::mutex> lock(open_read_files_mutex);
+            for (const auto & page_file : page_files)
+            {
+                const auto page_id_and_lvl = page_file.fileIdLevel();
+                if (page_id_and_lvl >= min_writing_file_id_level)
+                {
+                    continue;
+                }
+
+                if (live_files.count(page_id_and_lvl) == 0)
+                {
+                    open_read_files.erase(page_id_and_lvl);
+                }
+            }
+        }
+
+        // Delete obsolete files that are not used by any version, without lock
+        debugging_info.num_files_remove_data = gcRemoveObsoleteData(page_files, min_writing_file_id_level, live_files);
+
+        // Invoke callback with valid normal page id after gc.
+        if (external_pages_remover)
+        {
+            external_pages_remover(external_pages, live_normal_pages);
+        }
+    };
+
     // Ignore page files that maybe writing to.
     {
         PageFileSet removed_page_files;
-        for (auto & pf : page_files)
+        for (const auto & pf : page_files)
         {
             if (pf.fileIdLevel() >= min_writing_file_id_level)
                 continue;
             removed_page_files.emplace(pf);
         }
         page_files.swap(removed_page_files);
-        if (page_files.empty())
+        if (page_files.size() < 3)
+        {
+            // Apply empty edit and cleanup.
+            apply_and_cleanup(PageEntriesEdit{});
+            LOG_DEBUG(log, storage_name << " GC exit with no files to gc.");
             return false;
+        }
     }
 
-    GCDebugInfo debugging_info;
     debugging_info.min_file_id = page_files.begin()->fileIdLevel();
     debugging_info.max_file_id = page_files.rbegin()->fileIdLevel();
 
@@ -650,36 +689,7 @@ bool PageStorage::gc()
             = compactor.tryMigrate(page_files, getSnapshot(), writing_file_id_levels);
     }
 
-    /// Here we have to apply edit to versioned_page_entries and generate a new version, then return all files that are in used
-    auto [live_files, live_normal_pages] = versioned_page_entries.gcApply(gc_file_entries_edit, external_pages_scanner != nullptr);
-    debugging_info.gc_apply_stat.mergeEdits(gc_file_entries_edit);
-
-    {
-        // Remove obsolete files' reader cache that are not used by any version
-        std::lock_guard<std::mutex> lock(open_read_files_mutex);
-        for (const auto & page_file : page_files)
-        {
-            const auto page_id_and_lvl = page_file.fileIdLevel();
-            if (page_id_and_lvl >= min_writing_file_id_level)
-            {
-                continue;
-            }
-
-            if (live_files.count(page_id_and_lvl) == 0)
-            {
-                open_read_files.erase(page_id_and_lvl);
-            }
-        }
-    }
-
-    // Delete obsolete files that are not used by any version, without lock
-    debugging_info.num_files_remove_data = gcRemoveObsoleteData(page_files, min_writing_file_id_level, live_files);
-
-    // Invoke callback with valid normal page id after gc.
-    if (external_pages_remover)
-    {
-        external_pages_remover(external_pages, live_normal_pages);
-    }
+    apply_and_cleanup(std::move(gc_file_entries_edit));
 
     LOG_DEBUG(log,
               storage_name << " GC exit. PageFiles from [" << debugging_info.min_file_id.first << "," << debugging_info.min_file_id.second
