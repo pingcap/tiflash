@@ -83,8 +83,8 @@ TEST(Page_test, GetField)
 
 TEST(PageEntry_test, GetFieldInfo)
 {
-    PageEntry        entry;
-    PageFieldOffsets field_offsets{0, 20, 64, 99, 1024};
+    PageEntry                entry;
+    PageFieldOffsetChecksums field_offsets{{0, 0}, {20, 0}, {64, 0}, {99, 0}, {1024, 0}};
     entry.size          = 40000;
     entry.field_offsets = field_offsets;
 

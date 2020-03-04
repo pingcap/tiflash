@@ -63,7 +63,7 @@ struct PageEntry
     UInt32     ref      = 1; // for ref counting
 
     // The offset to the begining of specify field.
-    PageFieldOffsets field_offsets;
+    PageFieldOffsetChecksums field_offsets;
 
 public:
     inline bool               isValid() const { return file_id != 0; }
@@ -77,9 +77,9 @@ public:
                                 + ", fields size: " + DB::toString(field_offsets.size()),
                             ErrorCodes::LOGICAL_ERROR);
         else if (index == field_offsets.size() - 1)
-            return size - field_offsets.back();
+            return size - field_offsets.back().first;
         else
-            return field_offsets[index + 1] - field_offsets[index];
+            return field_offsets[index + 1].first - field_offsets[index].first;
     }
 
     // Return field{index} offsets: [begin, end) of page data.
@@ -90,9 +90,9 @@ public:
                                 + ", fields size: " + DB::toString(field_offsets.size()),
                             ErrorCodes::LOGICAL_ERROR);
         else if (index == field_offsets.size() - 1)
-            return {field_offsets.back(), size};
+            return {field_offsets.back().first, size};
         else
-            return {field_offsets[index], field_offsets[index + 1]};
+            return {field_offsets[index].first, field_offsets[index + 1].first};
     }
 };
 

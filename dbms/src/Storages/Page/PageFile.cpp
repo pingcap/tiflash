@@ -76,8 +76,8 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
             if (write.read_buffer)
                 data_write_bytes += write.size;
             meta_write_bytes += PAGE_META_SIZE;
-            meta_write_bytes += sizeof(UInt64); // size of field_offsets
-            meta_write_bytes += sizeof(UInt64) * write.offsets.size();
+            meta_write_bytes += sizeof(UInt64); // size of field_offsets + checksum
+            meta_write_bytes += ((sizeof(UInt64) + sizeof(UInt64)) * write.offsets.size());
             break;
         case WriteBatch::WriteType::DEL:
             // For delete page, store page id only. And don't need to write data file.
@@ -118,8 +118,6 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
                 write.read_buffer->readStrict(data_pos, write.size);
                 page_checksum = CityHash_v1_0_2::CityHash64(data_pos, write.size);
                 page_offset   = page_data_file_off;
-                data_pos += write.size;
-                page_data_file_off += write.size;
             }
             else
             {
@@ -143,11 +141,6 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
             // TODO: we can swap from WriteBatch instead of copying?
             // entry.field_offsets.swap(const_cast<WriteBatch::Write &>(write).offsets);
 
-            if (write.type == WriteBatch::WriteType::PUT)
-                edit.put(write.page_id, entry);
-            else if (write.type == WriteBatch::WriteType::UPSERT)
-                edit.upsertPage(write.page_id, entry);
-
             PageUtil::put(meta_pos, (PageId)write.page_id);
             PageUtil::put(meta_pos, (PageFileId)entry.file_id);
             PageUtil::put(meta_pos, (PageFileLevel)entry.level);
@@ -159,8 +152,23 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 
             PageUtil::put(meta_pos, (UInt64)entry.field_offsets.size());
             for (size_t i = 0; i < entry.field_offsets.size(); ++i)
-                PageUtil::put(meta_pos, (UInt64)entry.field_offsets[i]);
+            {
+                auto [field_beg, field_end]   = entry.getFieldOffsets(i);
+                entry.field_offsets[i].second = CityHash_v1_0_2::CityHash64(data_pos + field_beg, field_end - field_beg);
+                PageUtil::put(meta_pos, (UInt64)entry.field_offsets[i].first);
+                PageUtil::put(meta_pos, (UInt64)entry.field_offsets[i].second);
+            }
 
+            if (write.type == WriteBatch::WriteType::PUT)
+                edit.put(write.page_id, entry);
+            else if (write.type == WriteBatch::WriteType::UPSERT)
+                edit.upsertPage(write.page_id, entry);
+
+            if (write.read_buffer)
+            {
+                data_pos += write.size;
+                page_data_file_off += write.size;
+            }
             break;
         }
         case WriteBatch::WriteType::DEL:
@@ -280,7 +288,11 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
                     const UInt64 num_fields = PageUtil::get<UInt64>(pos);
                     entry.field_offsets.reserve(num_fields);
                     for (size_t i = 0; i < num_fields; ++i)
-                        entry.field_offsets.emplace_back(PageUtil::get<UInt64>(pos));
+                    {
+                        auto field_offset   = PageUtil::get<UInt64>(pos);
+                        auto field_checksum = PageUtil::get<UInt64>(pos);
+                        entry.field_offsets.emplace_back(field_offset, field_checksum);
+                    }
                 }
 
                 if (write_type == WriteBatch::WriteType::PUT)
@@ -450,7 +462,11 @@ void PageFile::MetaMergingReader::moveNext()
                 const UInt64 num_fields = PageUtil::get<UInt64>(pos);
                 entry.field_offsets.reserve(num_fields);
                 for (size_t i = 0; i < num_fields; ++i)
-                    entry.field_offsets.emplace_back(PageUtil::get<UInt64>(pos));
+                {
+                    auto field_offset   = PageUtil::get<UInt64>(pos);
+                    auto field_checksum = PageUtil::get<UInt64>(pos);
+                    entry.field_offsets.emplace_back(field_offset, field_checksum);
+                }
             }
 
             if (write_type == WriteBatch::WriteType::PUT)
@@ -712,9 +728,23 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read)
             const auto size_to_read             = end_offset - beg_offset;
             PageUtil::readFile(data_file_fd, entry.offset + beg_offset, write_offset, size_to_read, data_file_path);
             fields_offset_in_page.emplace_back(read_size_this_entry);
+
+            if constexpr (PAGE_CHECKSUM_ON_READ)
+            {
+                auto expect_checksum = entry.field_offsets[field_index].second;
+                auto field_checksum  = CityHash_v1_0_2::CityHash64(write_offset, size_to_read);
+                if (unlikely(entry.size != 0 && field_checksum != expect_checksum))
+                {
+                    std::stringstream ss;
+                    ss << ", expected: " << std::hex << expect_checksum << ", but: " << field_checksum;
+                    throw Exception("Page[" + DB::toString(page_id) + "] field[" + DB::toString(field_index)
+                                        + "] checksum not match, broken file: " + data_file_path + ss.str(),
+                                    ErrorCodes::CHECKSUM_DOESNT_MATCH);
+                }
+            }
+
             read_size_this_entry += size_to_read;
             write_offset += size_to_read;
-            // Note that with such API, we can NOT check Page's checksum.
         }
 
         Page page;

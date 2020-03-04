@@ -37,7 +37,7 @@ private:
         // RefPage's origin page
         PageId ori_page_id;
         // Fields' offset inside Page's data
-        PageFieldOffsets offsets;
+        PageFieldOffsetChecksums offsets;
 
         /// The meta and data may not be the same PageFile, (read_buffer == nullptr)
         /// use `target_file_id`, `page_offset`, `page_checksum` to indicate where
@@ -54,11 +54,11 @@ public:
     void putPage(PageId page_id, UInt64 tag, const ReadBufferPtr & read_buffer, PageSize size, const PageFieldSizes & data_sizes = {})
     {
         // Conver from data_sizes to the offset of each field
-        PageFieldOffsets offsets;
-        PageFieldOffset  off = 0;
+        PageFieldOffsetChecksums offsets;
+        PageFieldOffset          off = 0;
         for (auto data_sz : data_sizes)
         {
-            offsets.emplace_back(off);
+            offsets.emplace_back(off, 0);
             off += data_sz;
         }
         if (unlikely(!data_sizes.empty() && off != size))
@@ -78,24 +78,24 @@ public:
         writes.emplace_back(std::move(w));
     }
 
-    void upsertPage(PageId                     page_id,
-                    UInt64                     tag,
-                    const PageFileIdAndLevel & file_id,
-                    const ReadBufferPtr &      read_buffer,
-                    UInt32                     size,
-                    const PageFieldOffsets &   offsets)
+    void upsertPage(PageId                           page_id,
+                    UInt64                           tag,
+                    const PageFileIdAndLevel &       file_id,
+                    const ReadBufferPtr &            read_buffer,
+                    UInt32                           size,
+                    const PageFieldOffsetChecksums & offsets)
     {
         Write w{WriteType::UPSERT, page_id, tag, read_buffer, size, 0, offsets, 0, 0, file_id};
         writes.emplace_back(std::move(w));
     }
 
-    void upsertPage(PageId                     page_id,
-                    UInt64                     tag,
-                    const PageFileIdAndLevel & file_id,
-                    UInt64                     page_offset,
-                    UInt32                     size,
-                    UInt64                     page_checksum,
-                    const PageFieldOffsets &   offsets)
+    void upsertPage(PageId                           page_id,
+                    UInt64                           tag,
+                    const PageFileIdAndLevel &       file_id,
+                    UInt64                           page_offset,
+                    UInt32                           size,
+                    UInt64                           page_checksum,
+                    const PageFieldOffsetChecksums & offsets)
     {
         Write w{WriteType::UPSERT, page_id, tag, nullptr, size, 0, offsets, page_offset, page_checksum, file_id};
         writes.emplace_back(std::move(w));
