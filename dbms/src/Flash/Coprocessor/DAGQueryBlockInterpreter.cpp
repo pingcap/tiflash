@@ -11,10 +11,10 @@
 #include <DataStreams/UnionBlockInputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
+#include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Flash/Coprocessor/InterpreterDAGQueryBlock.h>
 #include <Interpreters/Aggregator.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/MutableSupport.h>
@@ -42,17 +42,17 @@ extern const int UNKNOWN_EXCEPTION;
 extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
-InterpreterDAGQueryBlock::InterpreterDAGQueryBlock(Context & context_, const BlockInputStreams & input_streams_,
-    const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const RegionInfo & region_info_,
-    const tipb::DAGRequest & rqst_, ASTPtr dummy_query_)
+DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std::vector<BlockInputStreams> & input_streams_vec_,
+    const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const RegionInfo & region_info_, const tipb::DAGRequest & rqst_,
+    ASTPtr dummy_query_)
     : context(context_),
-      input_streams(input_streams_),
+      input_streams_vec(input_streams_vec_),
       query_block(query_block_),
       keep_session_timezone_info(keep_session_timezone_info_),
       region_info(region_info_),
       rqst(rqst_),
       dummy_query(dummy_query_),
-      log(&Logger::get("InterpreterDAGQueryBlock"))
+      log(&Logger::get("DAGQueryBlockInterpreter"))
 {
     if (query_block.selection != nullptr)
     {
@@ -279,7 +279,7 @@ bool checkKeyRanges(const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>>
         return checkRangeAndGenExprIfNeeded<Int64>(handle_ranges, region_handle_ranges, handle_col_id, handle_filter);
 }
 
-RegionException::RegionReadStatus InterpreterDAGQueryBlock::getRegionReadStatus(const RegionPtr & current_region)
+RegionException::RegionReadStatus DAGQueryBlockInterpreter::getRegionReadStatus(const RegionPtr & current_region)
 {
     if (!current_region)
         return RegionException::NOT_FOUND;
@@ -291,7 +291,7 @@ RegionException::RegionReadStatus InterpreterDAGQueryBlock::getRegionReadStatus(
 }
 
 // the flow is the same as executeFetchcolumns
-void InterpreterDAGQueryBlock::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
+void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
 {
     if (!ts.has_table_id())
     {
@@ -493,7 +493,7 @@ void InterpreterDAGQueryBlock::executeTS(const tipb::TableScan & ts, Pipeline & 
 }
 
 // add timezone cast for timestamp type, this is used to support session level timezone
-bool InterpreterDAGQueryBlock::addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, Pipeline & pipeline)
+bool DAGQueryBlockInterpreter::addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, Pipeline & pipeline)
 {
     bool hasTSColumn = false;
     for (auto b : is_ts_column)
@@ -511,7 +511,7 @@ bool InterpreterDAGQueryBlock::addTimeZoneCastAfterTS(std::vector<bool> & is_ts_
         return false;
 }
 
-AnalysisResult InterpreterDAGQueryBlock::analyzeExpressions()
+AnalysisResult DAGQueryBlockInterpreter::analyzeExpressions()
 {
     AnalysisResult res;
     ExpressionActionsChain chain;
@@ -563,12 +563,12 @@ AnalysisResult InterpreterDAGQueryBlock::analyzeExpressions()
     return res;
 }
 
-void InterpreterDAGQueryBlock::executeWhere(Pipeline & pipeline, const ExpressionActionsPtr & expr, String & filter_column)
+void DAGQueryBlockInterpreter::executeWhere(Pipeline & pipeline, const ExpressionActionsPtr & expr, String & filter_column)
 {
     pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, expr, filter_column); });
 }
 
-void InterpreterDAGQueryBlock::executeAggregation(
+void DAGQueryBlockInterpreter::executeAggregation(
     Pipeline & pipeline, const ExpressionActionsPtr & expr, Names & key_names, AggregateDescriptions & aggregates)
 {
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expr); });
@@ -620,7 +620,7 @@ void InterpreterDAGQueryBlock::executeAggregation(
     // add cast
 }
 
-void InterpreterDAGQueryBlock::executeExpression(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr)
+void DAGQueryBlockInterpreter::executeExpression(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr)
 {
     if (!expressionActionsPtr->getActions().empty())
     {
@@ -628,7 +628,7 @@ void InterpreterDAGQueryBlock::executeExpression(Pipeline & pipeline, const Expr
     }
 }
 
-void InterpreterDAGQueryBlock::getAndLockStorageWithSchemaVersion(TableID table_id, Int64 query_schema_version)
+void DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVersion(TableID table_id, Int64 query_schema_version)
 {
     /// Get current schema version in schema syncer for a chance to shortcut.
     auto global_schema_version = context.getTMTContext().getSchemaSyncer()->getCurrentVersion();
@@ -725,7 +725,7 @@ void InterpreterDAGQueryBlock::getAndLockStorageWithSchemaVersion(TableID table_
     }
 }
 
-SortDescription InterpreterDAGQueryBlock::getSortDescription(Strings & order_column_names)
+SortDescription DAGQueryBlockInterpreter::getSortDescription(Strings & order_column_names)
 {
     // construct SortDescription
     SortDescription order_descr;
@@ -746,7 +746,7 @@ SortDescription InterpreterDAGQueryBlock::getSortDescription(Strings & order_col
     return order_descr;
 }
 
-void InterpreterDAGQueryBlock::executeUnion(Pipeline & pipeline)
+void DAGQueryBlockInterpreter::executeUnion(Pipeline & pipeline)
 {
     if (pipeline.hasMoreThanOneStream())
     {
@@ -755,7 +755,7 @@ void InterpreterDAGQueryBlock::executeUnion(Pipeline & pipeline)
     }
 }
 
-void InterpreterDAGQueryBlock::executeOrder(Pipeline & pipeline, Strings & order_column_names)
+void DAGQueryBlockInterpreter::executeOrder(Pipeline & pipeline, Strings & order_column_names)
 {
     SortDescription order_descr = getSortDescription(order_column_names);
     const Settings & settings = context.getSettingsRef();
@@ -781,7 +781,7 @@ void InterpreterDAGQueryBlock::executeOrder(Pipeline & pipeline, Strings & order
         limit, settings.max_bytes_before_external_sort, context.getTemporaryPath());
 }
 
-//void InterpreterDAGQueryBlock::recordProfileStreams(Pipeline & pipeline, Int32 index)
+//void DAGQueryBlockInterpreter::recordProfileStreams(Pipeline & pipeline, Int32 index)
 //{
 //    for (auto & stream : pipeline.streams)
 //    {
@@ -789,7 +789,7 @@ void InterpreterDAGQueryBlock::executeOrder(Pipeline & pipeline, Strings & order
 //    }
 //}
 
-void InterpreterDAGQueryBlock::executeImpl(Pipeline & pipeline)
+void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
 {
     if (query_block.source->tp() == tipb::ExecType::TypeJoin)
     {
@@ -843,7 +843,7 @@ void InterpreterDAGQueryBlock::executeImpl(Pipeline & pipeline)
     }
 }
 
-void InterpreterDAGQueryBlock::executeFinalProject(Pipeline & pipeline)
+void DAGQueryBlockInterpreter::executeFinalProject(Pipeline & pipeline)
 {
     auto columns = pipeline.firstStream()->getHeader();
     NamesAndTypesList input_column;
@@ -857,7 +857,7 @@ void InterpreterDAGQueryBlock::executeFinalProject(Pipeline & pipeline)
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, project); });
 }
 
-void InterpreterDAGQueryBlock::executeLimit(Pipeline & pipeline)
+void DAGQueryBlockInterpreter::executeLimit(Pipeline & pipeline)
 {
     size_t limit = 0;
     if (query_block.limitOrTopN->tp() == tipb::TypeLimit)
@@ -872,16 +872,11 @@ void InterpreterDAGQueryBlock::executeLimit(Pipeline & pipeline)
     }
 }
 
-BlockIO InterpreterDAGQueryBlock::execute()
+BlockInputStreams DAGQueryBlockInterpreter::execute()
 {
-    // todo should not return BlockIO as it will
-    //  union all the streams
     Pipeline pipeline;
     executeImpl(pipeline);
-    executeUnion(pipeline);
 
-    BlockIO res;
-    res.in = pipeline.firstStream();
-    return res;
+    return pipeline.streams;
 }
 } // namespace DB

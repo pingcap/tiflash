@@ -25,7 +25,7 @@ class DAGQueryBlock
 {
 public:
     explicit DAGQueryBlock(const tipb::Executor * root);
-    explicit DAGQueryBlock(std::vector<const tipb::Executor *> & executors);
+    explicit DAGQueryBlock(std::vector<const tipb::Executor *> & executors, int start_index, int end_index);
     const tipb::Executor * source = nullptr;
     const tipb::Executor * selection = nullptr;
     const tipb::Executor * aggregation = nullptr;
@@ -36,6 +36,7 @@ public:
     // kinds of project
     std::vector<Int32> output_offsets;
     bool is_final_query_block;
+    void fillOutputFieldTypes();
 };
 
 } // namespace DB

@@ -8,8 +8,8 @@
 
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
+#include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
-#include <Flash/Coprocessor/InterpreterDAGQueryBlock.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
@@ -37,8 +37,8 @@ public:
     BlockIO execute();
 
 private:
-
-    BlockIO executeQueryBlock(DAGQueryBlock & query_block, const RegionInfo & region_info);
+    BlockInputStreams executeQueryBlock(DAGQueryBlock & query_block, const RegionInfo & region_info);
+    void executeUnion(Pipeline & pipeline);
     /*
     void executeImpl(Pipeline & pipeline);
     void executeTS(const tipb::TableScan & ts, Pipeline & pipeline);
@@ -63,6 +63,8 @@ private:
 
     const DAGQuerySource & dag;
 
+    /// How many streams we ask for storage to produce, and in how many threads we will do further processing.
+    size_t max_streams = 1;
     /*
     NamesWithAliases final_project;
 

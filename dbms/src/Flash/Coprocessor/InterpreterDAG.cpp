@@ -49,6 +49,12 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
           dag.getEncodeType() == tipb::EncodeType::TypeChunk || dag.getEncodeType() == tipb::EncodeType::TypeCHBlock),
       log(&Logger::get("InterpreterDAG"))
 {
+    const Settings & settings = context.getSettingsRef();
+    max_streams = settings.max_threads;
+    if (max_streams > 1)
+    {
+        max_streams *= settings.max_streams_to_max_threads_ratio;
+    }
     /*
     if (dag.hasSelection())
     {
@@ -850,24 +856,33 @@ void InterpreterDAG::executeLimit(Pipeline & pipeline)
 }
  */
 
-BlockIO InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block, const RegionInfo & region_info)
+void InterpreterDAG::executeUnion(Pipeline & pipeline)
+{
+    if (pipeline.hasMoreThanOneStream())
+    {
+        pipeline.firstStream() = std::make_shared<UnionBlockInputStream<>>(pipeline.streams, nullptr, max_streams);
+        pipeline.streams.resize(1);
+    }
+}
+
+BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block, const RegionInfo & region_info)
 {
     if (!query_block.children.empty())
     {
-        BlockInputStreams input_streams;
+        std::vector<BlockInputStreams> input_streams_vec;
         for (auto & child : query_block.children)
         {
-            BlockIO child_stream = executeQueryBlock(*child, region_info);
-            input_streams.push_back(child_stream.in);
+            BlockInputStreams child_streams = executeQueryBlock(*child, region_info);
+            input_streams_vec.push_back(child_streams);
         }
-        InterpreterDAGQueryBlock query_block_interpreter(context, input_streams, query_block,
-                keep_session_timezone_info, region_info, dag.getDAGRequest(), dag.getAST());
+        DAGQueryBlockInterpreter query_block_interpreter(
+            context, input_streams_vec, query_block, keep_session_timezone_info, region_info, dag.getDAGRequest(), dag.getAST());
         return query_block_interpreter.execute();
     }
     else
     {
-        InterpreterDAGQueryBlock query_block_interpreter(context, {}, query_block,
-                keep_session_timezone_info, region_info, dag.getDAGRequest(), dag.getAST());
+        DAGQueryBlockInterpreter query_block_interpreter(
+            context, {}, query_block, keep_session_timezone_info, region_info, dag.getDAGRequest(), dag.getAST());
         return query_block_interpreter.execute();
     }
 }
@@ -878,8 +893,14 @@ BlockIO InterpreterDAG::execute()
     /// tidb does not support multi-table dag request yet, so
     /// it is ok to use the same region_info for the whole dag request
     RegionInfo region_info(dag.getRegionID(), dag.getRegionVersion(), dag.getRegionConfVersion(), dag.getKeyRanges());
-    BlockIO res = executeQueryBlock(*dag.getQueryBlock(), region_info);
+    BlockInputStreams streams = executeQueryBlock(*dag.getQueryBlock(), region_info);
+    Pipeline pipeline;
+    pipeline.streams = streams;
+    executeUnion(pipeline);
 
+    BlockIO res;
+    res.in = pipeline.firstStream();
+    return res;
     /*
     LOG_DEBUG(
         log, __PRETTY_FUNCTION__ << " Convert DAG request to BlockIO, adding " << analyzer->getImplicitCastCount() << " implicit cast");

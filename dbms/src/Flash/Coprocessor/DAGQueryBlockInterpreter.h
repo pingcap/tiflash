@@ -73,15 +73,16 @@ struct AnalysisResult
 };
 /** build ch plan from dag request: dag executors -> ch plan
   */
-class InterpreterDAGQueryBlock
+class DAGQueryBlockInterpreter
 {
 public:
-    InterpreterDAGQueryBlock(Context & context_, const BlockInputStreams & input_streams_, const DAGQueryBlock & query_block_,
-        bool keep_session_timezone_info_, const RegionInfo & region_info, const tipb::DAGRequest & rqst, ASTPtr dummp_query);
+    DAGQueryBlockInterpreter(Context & context_, const std::vector<BlockInputStreams> & input_streams_vec_,
+        const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const RegionInfo & region_info, const tipb::DAGRequest & rqst,
+        ASTPtr dummp_query);
 
-    ~InterpreterDAGQueryBlock() = default;
+    ~DAGQueryBlockInterpreter() = default;
 
-    BlockIO execute();
+    BlockInputStreams execute();
 
 private:
     void executeImpl(Pipeline & pipeline);
@@ -103,7 +104,7 @@ private:
 
 private:
     Context & context;
-    BlockInputStreams input_streams;
+    std::vector<BlockInputStreams> input_streams_vec;
     const DAGQueryBlock & query_block;
     const bool keep_session_timezone_info;
     const RegionInfo & region_info;
