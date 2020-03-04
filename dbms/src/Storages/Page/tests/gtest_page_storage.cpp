@@ -148,6 +148,7 @@ try
 CATCH
 
 TEST_F(PageStorage_test, WriteReadAfterGc)
+try
 {
     const size_t buf_sz = 256;
     char         c_buff[buf_sz];
@@ -211,6 +212,7 @@ TEST_F(PageStorage_test, WriteReadAfterGc)
         }
     }
 }
+CATCH
 
 TEST_F(PageStorage_test, WriteReadGcExternalPage)
 try
@@ -271,19 +273,10 @@ try
         storage->gc();
     }
 }
-catch (const Exception & e)
-{
-    std::string text = e.displayText();
-
-    auto embedded_stack_trace_pos = text.find("Stack trace");
-    std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
-    if (std::string::npos == embedded_stack_trace_pos)
-        std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl;
-
-    throw;
-}
+CATCH
 
 TEST_F(PageStorage_test, IdempotentDelAndRef)
+try
 {
     const size_t buf_sz = 1024;
     char         c_buff[buf_sz];
@@ -358,6 +351,7 @@ TEST_F(PageStorage_test, IdempotentDelAndRef)
         ASSERT_EQ(ref_entry->offset, normal_entry->offset);
     }
 }
+CATCH
 
 #if 0
 /// TODO: after gc normal page and restore from file, still can find that page

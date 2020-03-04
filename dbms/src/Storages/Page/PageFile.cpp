@@ -41,7 +41,19 @@ using IsPut      = std::underlying_type<WriteBatch::WriteType>::type;
 using PageOffset = UInt64;
 using Checksum   = UInt64;
 
-static const size_t PAGE_META_SIZE = sizeof(PageId) + sizeof(PageTag) + sizeof(PageOffset) + sizeof(PageSize) + sizeof(Checksum);
+struct PageFlags
+{
+    UInt32 flags = 0x00000000;
+
+    // Detach page means the meta and data not in the same PageFile
+    void setIsDetachPage() { flags |= 0x1; }
+    bool isDetachPage() const { return flags & 0x1; }
+};
+static_assert(std::is_trivially_copyable_v<PageFlags>);
+static_assert(sizeof(PageFlags) == sizeof(UInt32));
+
+static const size_t PAGE_META_SIZE = sizeof(PageId) + sizeof(PageFileId) + sizeof(PageFileLevel) + sizeof(PageFlags) + sizeof(PageTag)
+    + sizeof(PageOffset) + sizeof(PageSize) + sizeof(Checksum);
 
 /// Return <data to write into meta file, data to write into data file>.
 std::pair<ByteBuffer, ByteBuffer> genWriteData( //
@@ -61,7 +73,8 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
         {
         case WriteBatch::WriteType::PUT:
         case WriteBatch::WriteType::UPSERT:
-            data_write_bytes += write.size;
+            if (write.read_buffer)
+                data_write_bytes += write.size;
             meta_write_bytes += PAGE_META_SIZE;
             meta_write_bytes += sizeof(UInt64); // size of field_offsets
             meta_write_bytes += sizeof(UInt64) * write.offsets.size();
@@ -97,17 +110,33 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
         {
         case WriteBatch::WriteType::PUT:
         case WriteBatch::WriteType::UPSERT: {
-            if (write.read_buffer) // In case read_buffer is nullptr
+            PageFlags  flags;
+            Checksum   page_checksum = 0;
+            PageOffset page_offset   = 0;
+            if (write.read_buffer)
+            {
                 write.read_buffer->readStrict(data_pos, write.size);
-            Checksum page_checksum = CityHash_v1_0_2::CityHash64(data_pos, write.size);
-            data_pos += write.size;
+                page_checksum = CityHash_v1_0_2::CityHash64(data_pos, write.size);
+                page_offset   = page_data_file_off;
+                data_pos += write.size;
+                page_data_file_off += write.size;
+            }
+            else
+            {
+                // get page_checksum from write when read_buffer is nullptr
+                flags.setIsDetachPage();
+                page_checksum = write.page_checksum;
+                page_offset   = write.page_offset;
+                // page_data_file_off += 0;
+            }
 
+            // UPSERT may point to another PageFile
             PageEntry entry;
-            entry.file_id  = page_file.getFileId();
-            entry.level    = page_file.getLevel();
+            entry.file_id  = (write.type == WriteBatch::WriteType::PUT ? page_file.getFileId() : write.target_file_id.first);
+            entry.level    = (write.type == WriteBatch::WriteType::PUT ? page_file.getLevel() : write.target_file_id.second);
             entry.tag      = write.tag;
             entry.size     = write.size;
-            entry.offset   = page_data_file_off;
+            entry.offset   = page_offset;
             entry.checksum = page_checksum;
 
             entry.field_offsets = write.offsets;
@@ -120,8 +149,11 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
                 edit.upsertPage(write.page_id, entry);
 
             PageUtil::put(meta_pos, (PageId)write.page_id);
+            PageUtil::put(meta_pos, (PageFileId)entry.file_id);
+            PageUtil::put(meta_pos, (PageFileLevel)entry.level);
+            PageUtil::put(meta_pos, (PageFlags)flags);
             PageUtil::put(meta_pos, (PageTag)write.tag);
-            PageUtil::put(meta_pos, (PageOffset)page_data_file_off);
+            PageUtil::put(meta_pos, (PageOffset)entry.offset);
             PageUtil::put(meta_pos, (PageSize)write.size);
             PageUtil::put(meta_pos, (Checksum)page_checksum);
 
@@ -129,7 +161,6 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
             for (size_t i = 0; i < entry.field_offsets.size(); ++i)
                 PageUtil::put(meta_pos, (UInt64)entry.field_offsets[i]);
 
-            page_data_file_off += write.size;
             break;
         }
         case WriteBatch::WriteType::DEL:
@@ -225,10 +256,20 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
             {
             case WriteBatch::WriteType::PUT:
             case WriteBatch::WriteType::UPSERT: {
+                PageFlags flags;
                 auto      page_id = PageUtil::get<PageId>(pos);
                 PageEntry entry;
-                entry.file_id  = file_id;
-                entry.level    = level;
+                if (binary_version == PageFile::VERSION_BASE)
+                {
+                    entry.file_id = file_id;
+                    entry.level   = level;
+                }
+                else if (binary_version == PageFile::VERSION_FLASH_341)
+                {
+                    entry.file_id = PageUtil::get<PageFileId>(pos);
+                    entry.level   = PageUtil::get<PageFileLevel>(pos);
+                    flags         = PageUtil::get<PageFlags>(pos);
+                }
                 entry.tag      = PageUtil::get<PageTag>(pos);
                 entry.offset   = PageUtil::get<PageOffset>(pos);
                 entry.size     = PageUtil::get<PageSize>(pos);
@@ -243,11 +284,16 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
                 }
 
                 if (write_type == WriteBatch::WriteType::PUT)
+                {
                     edit.put(page_id, entry);
+                    page_data_file_size += entry.size;
+                }
                 else if (write_type == WriteBatch::WriteType::UPSERT)
+                {
                     edit.upsertPage(page_id, entry);
-
-                page_data_file_size += entry.size;
+                    // If it is a deatch page, don't move data offset.
+                    page_data_file_size += flags.isDetachPage() ? 0 : entry.size;
+                }
                 break;
             }
             case WriteBatch::WriteType::DEL: {
@@ -379,10 +425,21 @@ void PageFile::MetaMergingReader::moveNext()
         {
         case WriteBatch::WriteType::PUT:
         case WriteBatch::WriteType::UPSERT: {
+            PageMetaFormat::PageFlags flags;
+
             auto      page_id = PageUtil::get<PageId>(pos);
             PageEntry entry;
-            entry.file_id  = page_file.getFileId();
-            entry.level    = page_file.getLevel();
+            if (binary_version == PageFile::VERSION_BASE)
+            {
+                entry.file_id = page_file.getFileId();
+                entry.level   = page_file.getLevel();
+            }
+            else if (binary_version == PageFile::VERSION_FLASH_341)
+            {
+                entry.file_id = PageUtil::get<PageFileId>(pos);
+                entry.level   = PageUtil::get<PageFileLevel>(pos);
+                flags         = PageUtil::get<PageMetaFormat::PageFlags>(pos);
+            }
             entry.tag      = PageUtil::get<PageMetaFormat::PageTag>(pos);
             entry.offset   = PageUtil::get<PageMetaFormat::PageOffset>(pos);
             entry.size     = PageUtil::get<PageSize>(pos);
@@ -397,11 +454,16 @@ void PageFile::MetaMergingReader::moveNext()
             }
 
             if (write_type == WriteBatch::WriteType::PUT)
+            {
                 curr_edit.put(page_id, entry);
+                curr_wb_data_offset += entry.size;
+            }
             else if (write_type == WriteBatch::WriteType::UPSERT)
+            {
                 curr_edit.upsertPage(page_id, entry);
-
-            curr_wb_data_offset += entry.size;
+                // If it is a deatch page, don't move data offset.
+                curr_wb_data_offset += flags.isDetachPage() ? 0 : entry.size;
+            }
             break;
         }
         case WriteBatch::WriteType::DEL: {
@@ -520,27 +582,29 @@ PageMap PageFile::Reader::read(PageIdAndEntries & to_read)
 
     char *  pos = data_buf;
     PageMap page_map;
-    for (const auto & [page_id, page_cache] : to_read)
+    for (const auto & [page_id, entry] : to_read)
     {
-        PageUtil::readFile(data_file_fd, page_cache.offset, pos, page_cache.size, data_file_path);
+        PageUtil::readFile(data_file_fd, entry.offset, pos, entry.size, data_file_path);
 
         if constexpr (PAGE_CHECKSUM_ON_READ)
         {
-            auto checksum = CityHash_v1_0_2::CityHash64(pos, page_cache.size);
-            if (checksum != page_cache.checksum)
+            auto checksum = CityHash_v1_0_2::CityHash64(pos, entry.size);
+            if (unlikely(entry.size != 0 && checksum != entry.checksum))
             {
-                throw Exception("Page [" + DB::toString(page_id) + "] checksum not match, broken file: " + data_file_path,
+                std::stringstream ss;
+                ss << ", expected: " << std::hex << entry.checksum << ", but: " << checksum;
+                throw Exception("Page [" + DB::toString(page_id) + "] checksum not match, broken file: " + data_file_path + ss.str(),
                                 ErrorCodes::CHECKSUM_DOESNT_MATCH);
             }
         }
 
         Page page;
         page.page_id    = page_id;
-        page.data       = ByteBuffer(pos, pos + page_cache.size);
+        page.data       = ByteBuffer(pos, pos + entry.size);
         page.mem_holder = mem_holder;
         page_map.emplace(page_id, page);
 
-        pos += page_cache.size;
+        pos += entry.size;
     }
 
     if (unlikely(pos != data_buf + buf_size))
@@ -569,23 +633,25 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
     auto it = to_read.begin();
     while (it != to_read.end())
     {
-        auto && [page_id, page_cache] = *it;
+        auto && [page_id, entry] = *it;
 
-        PageUtil::readFile(data_file_fd, page_cache.offset, data_buf, page_cache.size, data_file_path);
+        PageUtil::readFile(data_file_fd, entry.offset, data_buf, entry.size, data_file_path);
 
         if constexpr (PAGE_CHECKSUM_ON_READ)
         {
-            auto checksum = CityHash_v1_0_2::CityHash64(data_buf, page_cache.size);
-            if (checksum != page_cache.checksum)
+            auto checksum = CityHash_v1_0_2::CityHash64(data_buf, entry.size);
+            if (unlikely(entry.size != 0 && checksum != entry.checksum))
             {
-                throw Exception("Page [" + DB::toString(page_id) + "] checksum not match, broken file: " + data_file_path,
+                std::stringstream ss;
+                ss << ", expected: " << std::hex << entry.checksum << ", but: " << checksum;
+                throw Exception("Page [" + DB::toString(page_id) + "] checksum not match, broken file: " + data_file_path + ss.str(),
                                 ErrorCodes::CHECKSUM_DOESNT_MATCH);
             }
         }
 
         Page page;
         page.page_id    = page_id;
-        page.data       = ByteBuffer(data_buf, data_buf + page_cache.size);
+        page.data       = ByteBuffer(data_buf, data_buf + entry.size);
         page.mem_holder = mem_holder;
 
         ++it;

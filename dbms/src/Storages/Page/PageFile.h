@@ -109,6 +109,25 @@ public:
             Finished,
         };
 
+    public:
+        bool hasNext() const;
+
+        void moveNext();
+
+        PageEntriesEdit getEdits() { return std::move(curr_edit); }
+
+        void setPageFileOffsets() { page_file.setFileAppendPos(meta_file_offset, data_file_offset); }
+
+        String toString() const
+        {
+            return "MergingReader of " + page_file.toString() + ", sequence no: " + DB::toString(curr_write_batch_sequence)
+                + ", meta offset: " + DB::toString(meta_file_offset) + ", data offset: " + DB::toString(data_file_offset);
+        }
+
+        WriteBatch::SequenceID writeBatchSequence() const { return curr_write_batch_sequence; }
+        PageFileIdAndLevel     fileIdLevel() const { return page_file.fileIdLevel(); }
+        PageFile &             belongingPageFile() { return page_file; }
+
         template <bool legacy_is_smaller>
         static bool compare(const MetaMergingReader & lhs, const MetaMergingReader & rhs)
         {
@@ -132,26 +151,6 @@ public:
                 return lhs.page_file.fileIdLevel() < rhs.page_file.fileIdLevel();
             return lhs.curr_write_batch_sequence < rhs.curr_write_batch_sequence;
         }
-
-    public:
-        bool hasNext() const;
-
-        void moveNext();
-
-        PageEntriesEdit getEdits() { return std::move(curr_edit); }
-
-        void setPageFileOffsets() { page_file.setFileAppendPos(meta_file_offset, data_file_offset); }
-
-        String toString() const
-        {
-            return "MergingReader of " + page_file.toString() + ", sequence no: " + DB::toString(curr_write_batch_sequence)
-                + ", meta offset: " + DB::toString(meta_file_offset) + ", data offset: " + DB::toString(data_file_offset);
-        }
-
-        WriteBatch::SequenceID writeBatchSequence() const { return curr_write_batch_sequence; }
-        PageFileIdAndLevel     fileIdLevel() const { return page_file.fileIdLevel(); }
-        PageFile &             belongingPageFile() { return page_file; }
-
     private:
         void initialize();
 

@@ -13,6 +13,12 @@
 #include <set>
 #include <utility>
 
+// #define PAGE_STORAGE_UTIL_DEBUGGGING
+
+#ifdef PAGE_STORAGE_UTIL_DEBUGGGING
+extern DB::WriteBatch::SequenceID debugging_recover_stop_sequence;
+#endif
+
 namespace DB
 {
 
@@ -149,6 +155,14 @@ void PageStorage::restore()
     {
         auto reader = merging_queue.top();
         merging_queue.pop();
+
+#ifdef PAGE_STORAGE_UTIL_DEBUGGGING
+        if (debugging_recover_stop_sequence != 0 && reader->writeBatchSequence() > debugging_recover_stop_sequence)
+        {
+            LOG_TRACE(log, storage_name << " debugging early stop on sequence: " << debugging_recover_stop_sequence);
+            break;
+        }
+#endif
 
         // If no checkpoint, we apply all edits.
         // Else restroed from checkpoint, if checkpoint's WriteBatch sequence number is 0, we need to apply

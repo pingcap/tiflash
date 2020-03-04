@@ -33,7 +33,8 @@ using PageFieldOffsets = std::vector<PageFieldOffset>;
 using PageFieldSizes   = std::vector<UInt64>;
 
 using PageFileId          = UInt64;
-using PageFileIdAndLevel  = std::pair<PageFileId, UInt32>;
+using PageFileLevel       = UInt32;
+using PageFileIdAndLevel  = std::pair<PageFileId, PageFileLevel>;
 using PageFileIdAndLevels = std::vector<PageFileIdAndLevel>;
 
 using PageSize = UInt64;

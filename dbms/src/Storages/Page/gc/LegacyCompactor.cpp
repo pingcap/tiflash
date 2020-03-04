@@ -130,7 +130,7 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
             || writing_file_ids.count(reader->fileIdLevel()) != 0           //
             || (reader->writeBatchSequence() > last_sequence + 1))
         {
-            LOG_TRACE(log,
+            LOG_DEBUG(log,
                       storage_name << " collectPageFilesToCompact stop on " << reader->belongingPageFile().toString() //
                                    << ", sequence: " << reader->writeBatchSequence() << " last sequence: " << DB::toString(last_sequence));
             break;
@@ -184,7 +184,18 @@ WriteBatch LegacyCompactor::prepareCheckpointWriteBatch(const PageStorage::Snaps
     for (auto & page_id : normal_ids)
     {
         auto entry = snapshot->version()->findNormalPageEntry(page_id);
-        wb.upsertPage(page_id, entry->tag, nullptr, 0, entry->field_offsets);
+        if (unlikely(!entry))
+        {
+            throw Exception("Normal Page " + DB::toString(page_id) + " not found while prepareCheckpointWriteBatch.",
+                            ErrorCodes::LOGICAL_ERROR);
+        }
+        wb.upsertPage(page_id, //
+                      entry->tag,
+                      entry->fileIdLevel(),
+                      entry->offset,
+                      entry->size,
+                      entry->checksum,
+                      entry->field_offsets);
     }
 
     // After ingesting normal_pages, we will ref them manually to ensure the ref-count is correct.

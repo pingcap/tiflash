@@ -217,6 +217,7 @@ PageEntriesEdit DataCompactor::mergeValidPages(PageStorage::MetaCompactMergineQu
                                                MigrateInfos &                          migrate_infos) const
 {
     PageEntriesEdit gc_file_edit;
+    const auto      gc_file_id = gc_file.fileIdLevel();
     // No need to sync after each write. Do sync before closing is enough.
     auto gc_file_writer = gc_file.createWriter(/* sync_on_write= */ false);
 
@@ -242,9 +243,11 @@ PageEntriesEdit DataCompactor::mergeValidPages(PageStorage::MetaCompactMergineQu
             wb.setSequence(reader->writeBatchSequence());
             for (const auto & [page_id, entry] : page_id_and_entries)
             {
+                // Upsert page to gc_file
                 const auto page = pages.find(page_id)->second;
                 wb.upsertPage(page_id,
-                              entry.tag, //
+                              entry.tag,
+                              gc_file_id,
                               std::make_shared<ReadBufferFromMemory>(page.data.begin(), page.data.size()),
                               page.data.size(),
                               entry.field_offsets);
