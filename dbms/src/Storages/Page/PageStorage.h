@@ -71,8 +71,6 @@ public:
 
     using MetaMergingQueue = std::
         priority_queue<PageFile::MetaMergingReaderPtr, std::vector<PageFile::MetaMergingReaderPtr>, PageFile::MergingPtrComparator<false>>;
-    using MetaCompactMergineQueue = std::
-        priority_queue<PageFile::MetaMergingReaderPtr, std::vector<PageFile::MetaMergingReaderPtr>, PageFile::MergingPtrComparator<true>>;
 
     using PathAndIdsVec        = std::vector<std::pair<String, std::set<PageId>>>;
     using ExternalPagesScanner = std::function<PathAndIdsVec()>;

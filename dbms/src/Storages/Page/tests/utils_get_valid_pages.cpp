@@ -157,7 +157,7 @@ void dump_all_entries(DB::PageFileSet & page_files, int32_t mode)
             auto sequence = reader->writeBatchSequence();
             for (const auto & record : edit.getRecords())
             {
-                printf("%s\t%llu\t", page_file.toString().c_str(), sequence);
+                printf("%s\tseq: %9llu\t", page_file.toString().c_str(), sequence);
                 switch (record.type)
                 {
                 case DB::WriteBatch::WriteType::PUT:

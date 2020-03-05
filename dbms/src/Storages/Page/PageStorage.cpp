@@ -176,7 +176,7 @@ void PageStorage::restore()
         {
             try
             {
-                LOG_TRACE(log, storage_name << " recovering from " + reader->toString());
+                // LOG_TRACE(log, storage_name << " recovering from " + reader->toString());
                 auto edits = reader->getEdits();
                 versioned_page_entries.apply(edits);
                 restore_info.mergeEdits(edits);

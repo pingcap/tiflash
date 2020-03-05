@@ -44,12 +44,12 @@ private:
                                  const PageFileSet & candidates,
                                  const size_t        migrate_page_count) const;
 
-    PageEntriesEdit mergeValidPages(PageStorage::MetaCompactMergineQueue && merging_queue,
-                                    PageStorage::OpenReadFiles &&           data_readers,
-                                    const ValidPages &                      file_valid_pages,
-                                    const SnapshotPtr &                     snapshot,
-                                    PageFile &                              gc_file,
-                                    MigrateInfos &                          migrate_infos) const;
+    PageEntriesEdit mergeValidPages(PageStorage::MetaMergingQueue && merging_queue,
+                                    PageStorage::OpenReadFiles &&    data_readers,
+                                    const ValidPages &               file_valid_pages,
+                                    const SnapshotPtr &              snapshot,
+                                    PageFile &                       gc_file,
+                                    MigrateInfos &                   migrate_infos) const;
 
     PageIdAndEntries collectValidEntries(PageEntriesEdit && edits, const PageIdSet & valid_pages, const SnapshotPtr & snap) const;
 

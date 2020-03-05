@@ -102,8 +102,8 @@ std::tuple<PageFileSet, PageFileSet> LegacyCompactor::tryCompact( //
 std::tuple<PageFileSet, PageFileSet, WriteBatch::SequenceID, std::optional<PageFile>>
 LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const std::set<PageFileIdAndLevel> & writing_file_ids)
 {
-    WriteBatch::SequenceID               compact_sequence = 0;
-    PageStorage::MetaCompactMergineQueue merging_queue;
+    WriteBatch::SequenceID        compact_sequence = 0;
+    PageStorage::MetaMergingQueue merging_queue;
     for (auto & page_file : page_files)
     {
         auto reader = const_cast<PageFile &>(page_file).createMetaMergingReader();

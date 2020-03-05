@@ -157,7 +157,7 @@ try
     PageFile page_file = PageFile::openPageFileForRead(7, 0, path, PageFile::Type::Checkpoint, storage.page_file_log);
     ASSERT_TRUE(page_file.isExist());
 
-    PageStorage::MetaCompactMergineQueue mergine_queue;
+    PageStorage::MetaMergingQueue mergine_queue;
     {
         auto reader = page_file.createMetaMergingReader();
         reader->moveNext();

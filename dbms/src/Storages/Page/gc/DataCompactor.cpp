@@ -143,8 +143,8 @@ PageEntriesEdit DataCompactor::migratePages(const SnapshotPtr & snapshot,
     PageEntriesEdit gc_file_edit;
     MigrateInfos    migrate_infos;
     {
-        PageStorage::OpenReadFiles           data_readers;
-        PageStorage::MetaCompactMergineQueue merging_queue;
+        PageStorage::OpenReadFiles    data_readers;
+        PageStorage::MetaMergingQueue merging_queue;
         for (auto & page_file : candidates)
         {
             if (page_file.getType() != PageFile::Type::Formal)
@@ -202,12 +202,12 @@ PageEntriesEdit DataCompactor::migratePages(const SnapshotPtr & snapshot,
     return gc_file_edit;
 }
 
-PageEntriesEdit DataCompactor::mergeValidPages(PageStorage::MetaCompactMergineQueue && merging_queue,
-                                               PageStorage::OpenReadFiles &&           data_readers,
-                                               const ValidPages &                      file_valid_pages,
-                                               const SnapshotPtr &                     snapshot,
-                                               PageFile &                              gc_file,
-                                               MigrateInfos &                          migrate_infos) const
+PageEntriesEdit DataCompactor::mergeValidPages(PageStorage::MetaMergingQueue && merging_queue,
+                                               PageStorage::OpenReadFiles &&    data_readers,
+                                               const ValidPages &               file_valid_pages,
+                                               const SnapshotPtr &              snapshot,
+                                               PageFile &                       gc_file,
+                                               MigrateInfos &                   migrate_infos) const
 {
     PageEntriesEdit gc_file_edit;
     const auto      gc_file_id = gc_file.fileIdLevel();
