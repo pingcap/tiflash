@@ -419,17 +419,18 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext & dm_context, SegmentSn
 
     EventRecorder recorder(ProfileEvents::DMDeltaMerge, ProfileEvents::DMDeltaMergeNS);
 
-    auto read_info   = getReadInfo<false>(dm_context, *dm_context.store_columns, segment_snap);
-    auto data_stream = getPlacedStream(dm_context,
-                                       read_info.read_columns,
-                                       range,
-                                       EMPTY_FILTER,
-                                       segment_snap.stable,
-                                       segment_snap.delta,
-                                       read_info.index_begin,
-                                       read_info.index_end,
-                                       read_info.index->entryCount(),
-                                       dm_context.stable_pack_rows);
+    auto read_info = getReadInfo<false>(dm_context, *dm_context.store_columns, segment_snap);
+
+    BlockInputStreamPtr data_stream = getPlacedStream(dm_context,
+                                                      read_info.read_columns,
+                                                      range,
+                                                      EMPTY_FILTER,
+                                                      segment_snap.stable,
+                                                      segment_snap.delta,
+                                                      read_info.index_begin,
+                                                      read_info.index_end,
+                                                      read_info.index->entryCount(),
+                                                      dm_context.stable_pack_rows);
 
     data_stream = std::make_shared<DMHandleFilterBlockInputStream<true>>(data_stream, range, 0);
     data_stream = std::make_shared<ReorganizeBlockInputStream>(data_stream, EXTRA_HANDLE_COLUMN_NAME);
@@ -571,17 +572,18 @@ Handle Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_
     size_t exact_rows = 0;
 
     {
-        auto stream = getPlacedStream(dm_context,
-                                      {handle},
-                                      range,
-                                      EMPTY_FILTER,
-                                      segment_snap.stable,
-                                      segment_snap.delta,
-                                      read_info.index_begin,
-                                      read_info.index_end,
-                                      read_info.index->entryCount(),
-                                      dm_context.stable_pack_rows);
-        stream      = std::make_shared<DMHandleFilterBlockInputStream<true>>(stream, range, 0);
+        BlockInputStreamPtr stream = getPlacedStream(dm_context,
+                                                     {handle},
+                                                     range,
+                                                     EMPTY_FILTER,
+                                                     segment_snap.stable,
+                                                     segment_snap.delta,
+                                                     read_info.index_begin,
+                                                     read_info.index_end,
+                                                     read_info.index->entryCount(),
+                                                     dm_context.stable_pack_rows);
+
+        stream = std::make_shared<DMHandleFilterBlockInputStream<true>>(stream, range, 0);
 
         stream->readPrefix();
         Block block;
@@ -590,17 +592,18 @@ Handle Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_
         stream->readSuffix();
     }
 
-    auto stream = getPlacedStream(dm_context,
-                                  {handle},
-                                  range,
-                                  EMPTY_FILTER,
-                                  segment_snap.stable,
-                                  segment_snap.delta,
-                                  read_info.index_begin,
-                                  read_info.index_end,
-                                  read_info.index->entryCount(),
-                                  dm_context.stable_pack_rows);
-    stream      = std::make_shared<DMHandleFilterBlockInputStream<true>>(stream, range, 0);
+    BlockInputStreamPtr stream = getPlacedStream(dm_context,
+                                                 {handle},
+                                                 range,
+                                                 EMPTY_FILTER,
+                                                 segment_snap.stable,
+                                                 segment_snap.delta,
+                                                 read_info.index_begin,
+                                                 read_info.index_end,
+                                                 read_info.index->entryCount(),
+                                                 dm_context.stable_pack_rows);
+
+    stream = std::make_shared<DMHandleFilterBlockInputStream<true>>(stream, range, 0);
 
     size_t split_row_index = exact_rows / 2;
     Handle split_handle    = 0;
@@ -1066,21 +1069,21 @@ ColumnDefines Segment::arrangeReadColumns(const ColumnDefine & handle, const Col
     return new_columns_to_read;
 }
 
-template <class IndexIterator>
-BlockInputStreamPtr Segment::getPlacedStream(const DMContext &           dm_context,
-                                             const ColumnDefines &       read_columns,
-                                             const HandleRange &         handle_range,
-                                             const RSOperatorPtr &       filter,
-                                             const StableValueSpacePtr & stable_snap,
-                                             DeltaSnapshotPtr &          delta_snap,
-                                             const IndexIterator &       delta_index_begin,
-                                             const IndexIterator &       delta_index_end,
-                                             size_t                      index_size,
-                                             size_t                      expected_block_size) const
+template <class IndexIterator, bool skippable_place>
+SkippableBlockInputStreamPtr Segment::getPlacedStream(const DMContext &           dm_context,
+                                                      const ColumnDefines &       read_columns,
+                                                      const HandleRange &         handle_range,
+                                                      const RSOperatorPtr &       filter,
+                                                      const StableValueSpacePtr & stable_snap,
+                                                      DeltaSnapshotPtr &          delta_snap,
+                                                      const IndexIterator &       delta_index_begin,
+                                                      const IndexIterator &       delta_index_end,
+                                                      size_t                      index_size,
+                                                      size_t                      expected_block_size) const
 {
     SkippableBlockInputStreamPtr stable_input_stream
         = stable_snap->getInputStream(dm_context, read_columns, handle_range, filter, MAX_UINT64, false);
-    return std::make_shared<DeltaMergeBlockInputStream<DeltaSnapshot, IndexIterator>>( //
+    return std::make_shared<DeltaMergeBlockInputStream<DeltaSnapshot, IndexIterator, skippable_place>>( //
         stable_input_stream,
         delta_snap,
         delta_index_begin,
@@ -1135,13 +1138,22 @@ Segment::ensurePlace(const DMContext & dm_context, const StableValueSpacePtr & s
     {
         if (!v.delete_range.none())
         {
-            placeDelete(dm_context, stable_snap, delta_snap, v.delete_range, *update_delta_tree);
+
+            if (dm_context.enable_skippable_place)
+                placeDelete<true>(dm_context, stable_snap, delta_snap, v.delete_range, *update_delta_tree);
+            else
+                placeDelete<false>(dm_context, stable_snap, delta_snap, v.delete_range, *update_delta_tree);
+
             ++my_placed_delta_deletes;
         }
         else if (v.block)
         {
             auto rows = v.block.rows();
-            placeUpsert(dm_context, stable_snap, delta_snap, my_placed_delta_rows, std::move(v.block), *update_delta_tree);
+            if (dm_context.enable_skippable_place)
+                placeUpsert<true>(dm_context, stable_snap, delta_snap, my_placed_delta_rows, std::move(v.block), *update_delta_tree);
+            else
+                placeUpsert<false>(dm_context, stable_snap, delta_snap, my_placed_delta_rows, std::move(v.block), *update_delta_tree);
+
             my_placed_delta_rows += rows;
         }
     }
@@ -1158,6 +1170,7 @@ Segment::ensurePlace(const DMContext & dm_context, const StableValueSpacePtr & s
     return update_delta_tree->getEntriesCopy<Allocator<false>>();
 }
 
+template <bool skippable_place>
 void Segment::placeUpsert(const DMContext &           dm_context,
                           const StableValueSpacePtr & stable_snap,
                           DeltaSnapshotPtr &          delta_snap,
@@ -1167,14 +1180,20 @@ void Segment::placeUpsert(const DMContext &           dm_context,
 {
     EventRecorder recorder(ProfileEvents::DMPlaceUpsert, ProfileEvents::DMPlaceUpsertNS);
 
-    auto & handle            = getExtraHandleColumnDefine();
-    auto   delta_index_begin = update_delta_tree.begin();
-    auto   delta_index_end   = update_delta_tree.end();
+    IColumn::Permutation perm;
 
-    BlockInputStreamPtr merged_stream = getPlacedStream<DefaultDeltaTree::EntryIterator>( //
+    auto & handle             = getExtraHandleColumnDefine();
+    auto   delta_index_begin  = update_delta_tree.begin();
+    auto   delta_index_end    = update_delta_tree.end();
+    bool   do_sort            = sortBlockByPk(handle, block, perm);
+    Handle first_handle       = block.getByPosition(0).column->getInt(0);
+    auto   place_handle_range = skippable_place ? HandleRange(first_handle, HandleRange::MAX) : HandleRange::newAll();
+
+
+    auto merged_stream = getPlacedStream<DefaultDeltaTree::EntryIterator, skippable_place>( //
         dm_context,
         {handle, getVersionColumnDefine()},
-        HandleRange::newAll(),
+        place_handle_range,
         EMPTY_FILTER,
         stable_snap,
         delta_snap,
@@ -1183,13 +1202,13 @@ void Segment::placeUpsert(const DMContext &           dm_context,
         update_delta_tree.numEntries(),
         dm_context.stable_pack_rows);
 
-    IColumn::Permutation perm;
-    if (sortBlockByPk(handle, block, perm))
+    if (do_sort)
         DM::placeInsert<true>(merged_stream, block, update_delta_tree, delta_value_space_offset, perm, getPkSort(handle));
     else
         DM::placeInsert<false>(merged_stream, block, update_delta_tree, delta_value_space_offset, perm, getPkSort(handle));
 }
 
+template <bool skippable_place>
 void Segment::placeDelete(const DMContext &           dm_context,
                           const StableValueSpacePtr & stable_snap,
                           DeltaSnapshotPtr &          delta_snap,
@@ -1237,10 +1256,13 @@ void Segment::placeDelete(const DMContext &           dm_context,
         auto delta_index_begin = update_delta_tree.begin();
         auto delta_index_end   = update_delta_tree.end();
 
-        BlockInputStreamPtr merged_stream = getPlacedStream<DefaultDeltaTree::EntryIterator>( //
+        Handle first_handle       = block.getByPosition(0).column->getInt(0);
+        auto   place_handle_range = skippable_place ? HandleRange(first_handle, HandleRange::MAX) : HandleRange::newAll();
+
+        auto merged_stream = getPlacedStream<DefaultDeltaTree::EntryIterator, skippable_place>( //
             dm_context,
             {handle, getVersionColumnDefine()},
-            HandleRange::newAll(),
+            place_handle_range,
             EMPTY_FILTER,
             stable_snap,
             delta_snap,

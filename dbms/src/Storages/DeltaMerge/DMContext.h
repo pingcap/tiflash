@@ -47,6 +47,7 @@ struct DMContext : private boost::noncopyable
     const size_t stable_pack_rows;
 
     const bool enable_logical_split;
+    const bool enable_skippable_place = true;
     const bool read_delta_only;
     const bool read_stable_only;
 
