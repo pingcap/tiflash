@@ -224,6 +224,9 @@ public:
     size_t getUnsavedRows() const { return unsaved_rows; }
     size_t getUnsavedDeletes() const { return unsaved_deletes; }
 
+    size_t getTotalCacheRows() const;
+    size_t getValidCacheRows() const;
+
     bool isUpdating() const { return is_updating; }
     bool isShouldCompact() const { return shouldCompact; }
 
