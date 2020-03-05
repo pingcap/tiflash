@@ -49,7 +49,7 @@ public:
         std::vector<double> ratio;
         for (auto s : path_sizes)
         {
-            ratio.push_back((double)(total_size - s) / (2 * total_size));
+            ratio.push_back((double)(total_size - s) / ((paths.size() - 1) * total_size));
         }
         double rand_number = (double) rand() / RAND_MAX;
         double ratio_sum = 0;
