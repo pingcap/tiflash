@@ -164,7 +164,7 @@ String DAGExpressionAnalyzer::convertToUInt8ForFilter(ExpressionActionsChain & c
         if (it->type == ExpressionAction::Type::APPLY_FUNCTION &&
             it->result_name == column_name &&
             it->function->getName() == "CAST" &&
-            it->function->getArgumentTypes().at(0)->getTypeId() == TypeIndex::UInt8)
+            isUInt8Type(it->function->getArgumentTypes().at(0)))
         {
             // for cast function, the casted column is the first argument
             return it->argument_names[0];
