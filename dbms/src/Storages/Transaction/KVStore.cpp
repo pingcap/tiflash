@@ -231,6 +231,10 @@ TiFlashApplyRes KVStore::handleWriteRaftCmd(
             }
         }
     }
+
+    region->setApplied(index, term);
+    region->notifyApplied();
+
     return TiFlashApplyRes::None;
 }
 

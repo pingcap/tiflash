@@ -621,10 +621,7 @@ void Region::handleWriteRaftCmd(raft_cmdpb::RaftCmdRequest && request, UInt64 in
                 }
             }
         }
-        meta.setApplied(index, term);
     }
-
-    meta.notifyAll();
 }
 
 RegionRaftCommandDelegate & Region::makeRaftCommandDelegate(const KVStoreTaskLock & lock)
