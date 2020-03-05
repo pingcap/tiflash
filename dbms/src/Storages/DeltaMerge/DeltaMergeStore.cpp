@@ -6,6 +6,7 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ExpressionElementParsers.h>
+#include <Poco/DirectoryIterator.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMSegmentThreadInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
@@ -13,7 +14,6 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <Poco/DirectoryIterator.h>
 
 namespace ProfileEvents
 {
@@ -59,9 +59,9 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
     LOG_INFO(log, "Restore DeltaMerge Store start");
 
     auto & extra_paths_root = db_context.getGlobalContext().getExtraPaths();
-    extra_paths = extra_paths_root.withTable(db_name, table_name_);
+    extra_paths             = extra_paths_root.withTable(db_name, table_name_);
 
-    loadDMFile();
+    loadDMFiles();
 
     table_columns.emplace_back(table_handle_define);
     table_columns.emplace_back(getVersionColumnDefine());
@@ -1301,14 +1301,14 @@ SortDescription DeltaMergeStore::getPrimarySortDescription() const
     return desc;
 }
 
-void DeltaMergeStore::loadDMFile()
+void DeltaMergeStore::loadDMFiles()
 {
     LOG_DEBUG(log, "Loading dm files");
 
     Poco::DirectoryIterator end;
     for (const auto & path : extra_paths.listPaths())
     {
-        for (auto & file_id: DMFile::listAllInPath(path + "/" + STABLE_FOLDER_NAME, false))
+        for (auto & file_id : DMFile::listAllInPath(path + "/" + STABLE_FOLDER_NAME, false))
         {
             auto dmfile = DMFile::restore(file_id, /* ref_id= */ 0, path + "/" + STABLE_FOLDER_NAME, false);
             extra_paths.addDMFile(file_id, dmfile->getBytes(), path);

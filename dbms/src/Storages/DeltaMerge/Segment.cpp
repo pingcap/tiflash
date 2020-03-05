@@ -954,7 +954,7 @@ SegmentPair Segment::doSplitLogical(DMContext &             dm_context,
     {
         auto ori_ref_id = dmfile->refId();
         auto file_id    = storage_snap.data_reader.getNormalPageId(ori_ref_id);
-        
+
         auto file_parent_path = dm_context.extra_paths.getPath(file_id) + "/" + STABLE_FOLDER_NAME;
 
         auto my_dmfile_id    = storage_pool.newDataPageId();
