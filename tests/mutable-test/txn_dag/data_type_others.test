@@ -18,7 +18,7 @@
 │ data type test │ female │
 └────────────────┴────────┘
 
-=> DBGInvoke dag('select * from default.test', 4, 'chunk') 
+=> DBGInvoke dag('select * from default.test', 4, 'arrow') 
 ┌─col_1──────────┬─col_2──┐
 │ data type test │ female │
 └────────────────┴────────┘

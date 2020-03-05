@@ -35,8 +35,8 @@
 │ 0000-00-00 │ 0000-00-00 00:00:00.00000 │ 0000-00-00 00:00:00 │
 └────────────┴───────────────────────────┴─────────────────────┘
 
-# test chunk encode
-=> DBGInvoke dag('select * from default.test',4,'chunk',28800) 
+# test arrow encode
+=> DBGInvoke dag('select * from default.test',4,'arrow',28800) 
 ┌──────col_1─┬─────────────────────col_2─┬───────────────col_3─┐
 │ 2019-06-10 │ 2019-06-10 17:00:00.00000 │ 2019-06-10 09:00:00 │
 │ 2019-06-11 │ 2019-06-11 15:00:00.00000 │ 2019-06-11 09:00:00 │
@@ -86,8 +86,8 @@
 │ 2019-06-10 09:00:00 │ 2019-06-10 │
 └─────────────────────┴────────────┘
 
-# ts_col in agg clause for chunk encode
-=> DBGInvoke dag('select max(col_2) from default.test group by col_1',4,'chunk',28800) 
+# ts_col in agg clause for arrow encode
+=> DBGInvoke dag('select max(col_2) from default.test group by col_1',4,'arrow',28800) 
 ┌──────────max(col_2)─┬──────col_1─┐
 │ 0000-00-00 00:00:00 │ 0000-00-00 │
 │ 2019-06-11 16:00:00 │ 2019-06-12 │

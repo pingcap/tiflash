@@ -46,7 +46,7 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
     : context(context_),
       dag(dag_),
       keep_session_timezone_info(
-          dag.getEncodeType() == tipb::EncodeType::TypeChunk || dag.getEncodeType() == tipb::EncodeType::TypeCHBlock),
+          dag.getEncodeType() == tipb::EncodeType::TypeArrow || dag.getEncodeType() == tipb::EncodeType::TypeCHBlock),
       log(&Logger::get("InterpreterDAG"))
 {
     if (dag.hasSelection())
