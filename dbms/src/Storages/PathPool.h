@@ -16,12 +16,12 @@ public:
 
     PathPool() = default;
 
-    PathPool(const Paths & paths_) : paths(paths_), log{&Logger::get("DMFile")}
+    PathPool(const Paths & paths_) : paths(paths_), log{&Logger::get("PathPool")}
     {
         path_sizes.resize(paths.size(), 0);
     }
 
-    PathPool(const Paths & paths_, const String & database_, const String & table_) : database(database_), table(table_), log{&Logger::get("DMFile")}
+    PathPool(const Paths & paths_, const String & database_, const String & table_) : database(database_), table(table_), log{&Logger::get("PathPool")}
     {
         for (auto & path : paths_)
         {
@@ -40,9 +40,9 @@ public:
     const String & choosePath() const
     {
         UInt64 total_size = std::accumulate(path_sizes.begin(), path_sizes.end(), 0UL);
-        LOG_DEBUG(log, "total size " + std::to_string(total_size) + ", path_sizes length " + std::to_string(path_sizes.size()));
         if (total_size == 0)
         {
+            LOG_DEBUG(log, "database " + database + " table " + table + " no dmfile currently. Choose path 0.");
             return paths[0];
         }
 
@@ -56,9 +56,9 @@ public:
         for (size_t i = 0; i < temp_sizes.size(); i++)
         {
             partial_size += temp_sizes[i];
-            LOG_DEBUG(log, "databse " + database + " table " + table + "index " + std::to_string(i) + " partial size " + std::to_string(partial_size));
             if (rand_number < partial_size)
             {
+                LOG_DEBUG(log, "database " + database + " table " + table + " choose path " + std::to_string(i));
                 return paths[i];
             }
         }

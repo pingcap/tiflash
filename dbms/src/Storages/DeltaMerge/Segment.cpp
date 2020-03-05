@@ -954,11 +954,7 @@ SegmentPair Segment::doSplitLogical(DMContext &             dm_context,
     {
         auto ori_ref_id = dmfile->refId();
         auto file_id    = storage_snap.data_reader.getNormalPageId(ori_ref_id);
-
-        auto page_entry = storage_snap.data_reader.getPageEntry(ori_ref_id);
-        if (!page_entry.isValid())
-            throw Exception("Page entry of " + DB::toString(ori_ref_id) + " not found!");
-//        auto path_id          = page_entry.tag;
+        
         auto file_parent_path = dm_context.extra_paths.getPath(file_id) + "/" + STABLE_FOLDER_NAME;
 
         auto my_dmfile_id    = storage_pool.newDataPageId();
@@ -1143,10 +1139,6 @@ SegmentPtr Segment::doMergeLogical(
         {
             auto ori_ref_id = dmfile->refId();
             auto file_id    = storage_snap.data_reader.getNormalPageId(ori_ref_id);
-            auto page_entry = storage_snap.data_reader.getPageEntry(ori_ref_id);
-            if (!page_entry.isValid())
-                throw Exception("Page entry of " + DB::toString(ori_ref_id) + " not found!");
-//            auto path_id          = page_entry.tag;
             auto file_parent_path = dm_context.extra_paths.getPath(file_id) + "/" + STABLE_FOLDER_NAME;
 
             auto new_dmfile_id = storage_pool.newDataPageId();
