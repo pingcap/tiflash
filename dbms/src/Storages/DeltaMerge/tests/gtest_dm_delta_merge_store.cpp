@@ -10,7 +10,6 @@
 
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
-#include <Storages/DeltaMerge/DeltaMergeStore-internal.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 
 namespace DB
@@ -54,13 +53,13 @@ protected:
         Logger::get("DeltaMergeStore").setLevel("trace");
     }
 
-    DeltaMergeStorePtr reload(const ColumnDefines & pre_define_columns = {})
+    DeltaMergeStorePtr reload(const ColumnDefinesPtr & pre_define_columns = {})
     {
-        ColumnDefines cols                 = pre_define_columns.empty() ? DMTestEnv::getDefaultColumns() : pre_define_columns;
-        ColumnDefine  handle_column_define = cols[0];
+        auto         cols                 = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;
+        ColumnDefine handle_column_define = (*cols)[0];
 
         DeltaMergeStorePtr s
-            = std::make_shared<DeltaMergeStore>(*context, path, "test", name, cols, handle_column_define, DeltaMergeStore::Settings());
+            = std::make_shared<DeltaMergeStore>(*context, path, "test", name, *cols, handle_column_define, DeltaMergeStore::Settings());
         return s;
     }
 
@@ -104,9 +103,9 @@ try
     const ColumnDefine col_str_define(2, "col2", std::make_shared<DataTypeString>());
     const ColumnDefine col_i8_define(3, "i8", std::make_shared<DataTypeInt8>());
     {
-        ColumnDefines table_column_defines = DMTestEnv::getDefaultColumns();
-        table_column_defines.emplace_back(col_str_define);
-        table_column_defines.emplace_back(col_i8_define);
+        auto table_column_defines = DMTestEnv::getDefaultColumns();
+        table_column_defines->emplace_back(col_str_define);
+        table_column_defines->emplace_back(col_i8_define);
         store = reload(table_column_defines);
     }
 
@@ -132,9 +131,9 @@ try
     const ColumnDefine col_str_define(2, "col2", std::make_shared<DataTypeString>());
     const ColumnDefine col_i8_define(3, "i8", std::make_shared<DataTypeInt8>());
     {
-        ColumnDefines table_column_defines = DMTestEnv::getDefaultColumns();
-        table_column_defines.emplace_back(col_str_define);
-        table_column_defines.emplace_back(col_i8_define);
+        auto table_column_defines = DMTestEnv::getDefaultColumns();
+        table_column_defines->emplace_back(col_str_define);
+        table_column_defines->emplace_back(col_i8_define);
 
         // TODO: remove this cleanUp() after we support DDL for DMFile.
         cleanUp();
@@ -788,9 +787,9 @@ try
     const DataTypePtr col_type_before_ddl = DataTypeFactory::instance().get("Int8");
     const DataTypePtr col_type_after_ddl  = DataTypeFactory::instance().get("Int32");
     {
-        ColumnDefines table_column_defines = DMTestEnv::getDefaultColumns();
-        ColumnDefine  cd(col_id_ddl, col_name_ddl, col_type_before_ddl);
-        table_column_defines.emplace_back(cd);
+        auto         table_column_defines = DMTestEnv::getDefaultColumns();
+        ColumnDefine cd(col_id_ddl, col_name_ddl, col_type_before_ddl);
+        table_column_defines->emplace_back(cd);
         store = reload(table_column_defines);
     }
 
@@ -901,9 +900,9 @@ try
     const ColId       col_id_to_drop   = 2;
     const DataTypePtr col_type_to_drop = DataTypeFactory::instance().get("Int8");
     {
-        ColumnDefines table_column_defines = DMTestEnv::getDefaultColumns();
-        ColumnDefine  cd(col_id_to_drop, col_name_to_drop, col_type_to_drop);
-        table_column_defines.emplace_back(cd);
+        auto         table_column_defines = DMTestEnv::getDefaultColumns();
+        ColumnDefine cd(col_id_to_drop, col_name_to_drop, col_type_to_drop);
+        table_column_defines->emplace_back(cd);
         store = reload(table_column_defines);
     }
 
@@ -1006,9 +1005,9 @@ try
     const ColId       col_id_to_add   = 3;
     const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("Int32");
     {
-        ColumnDefines table_column_defines = DMTestEnv::getDefaultColumns();
-        ColumnDefine  cd(col_id_c1, col_name_c1, col_type_c1);
-        table_column_defines.emplace_back(cd);
+        auto         table_column_defines = DMTestEnv::getDefaultColumns();
+        ColumnDefine cd(col_id_c1, col_name_c1, col_type_c1);
+        table_column_defines->emplace_back(cd);
         store = reload(table_column_defines);
     }
 
@@ -1266,9 +1265,9 @@ try
     const ColId       col_id_ddl          = 2;
     const DataTypePtr col_type            = DataTypeFactory::instance().get("Int32");
     {
-        ColumnDefines table_column_defines = DMTestEnv::getDefaultColumns();
-        ColumnDefine  cd(col_id_ddl, col_name_before_ddl, col_type);
-        table_column_defines.emplace_back(cd);
+        auto         table_column_defines = DMTestEnv::getDefaultColumns();
+        ColumnDefine cd(col_id_ddl, col_name_before_ddl, col_type);
+        table_column_defines->emplace_back(cd);
         store = reload(table_column_defines);
     }
 

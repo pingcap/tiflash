@@ -58,12 +58,12 @@ public:
 
     static constexpr const char * pk_name = "_tidb_rowid";
 
-    static ColumnDefines getDefaultColumns()
+    static ColumnDefinesPtr getDefaultColumns()
     {
-        ColumnDefines columns;
-        columns.emplace_back(ColumnDefine(EXTRA_HANDLE_COLUMN_ID, pk_name, std::make_shared<DataTypeInt64>()));
-        columns.emplace_back(getVersionColumnDefine());
-        columns.emplace_back(getTagColumnDefine());
+        ColumnDefinesPtr columns = std::make_shared<ColumnDefines>();
+        columns->emplace_back(ColumnDefine(EXTRA_HANDLE_COLUMN_ID, pk_name, std::make_shared<DataTypeInt64>()));
+        columns->emplace_back(getVersionColumnDefine());
+        columns->emplace_back(getTagColumnDefine());
         return columns;
     }
 
