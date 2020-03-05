@@ -47,9 +47,9 @@ struct DMContext : private boost::noncopyable
     const size_t stable_pack_rows;
 
     const bool enable_logical_split;
-    const bool enable_skippable_place = true;
     const bool read_delta_only;
     const bool read_stable_only;
+    const bool enable_skippable_place;
 
     DMContext(const Context &          db_context_,
               const String &           store_path_,
@@ -66,7 +66,8 @@ struct DMContext : private boost::noncopyable
               const size_t             stable_pack_rows_,
               const bool               enable_logical_split_,
               const bool               read_delta_only_,
-              const bool               read_stable_only)
+              const bool               read_stable_only,
+              const bool               enable_skippable_place_ = true)
         : db_context(db_context_),
           store_path(store_path_),
           extra_paths(extra_paths_),
@@ -82,7 +83,8 @@ struct DMContext : private boost::noncopyable
           stable_pack_rows(stable_pack_rows_),
           enable_logical_split(enable_logical_split_),
           read_delta_only(read_delta_only_),
-          read_stable_only(read_stable_only)
+          read_stable_only(read_stable_only),
+          enable_skippable_place(enable_skippable_place_)
     {
     }
 };
