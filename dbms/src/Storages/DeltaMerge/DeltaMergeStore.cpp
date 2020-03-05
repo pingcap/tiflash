@@ -6,7 +6,6 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ExpressionElementParsers.h>
-#include <Poco/DirectoryIterator.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMSegmentThreadInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
@@ -1305,7 +1304,6 @@ void DeltaMergeStore::loadDMFiles()
 {
     LOG_DEBUG(log, "Loading dm files");
 
-    Poco::DirectoryIterator end;
     for (const auto & path : extra_paths.listPaths())
     {
         for (auto & file_id : DMFile::listAllInPath(path + "/" + STABLE_FOLDER_NAME, false))
