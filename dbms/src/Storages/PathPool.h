@@ -46,22 +46,17 @@ public:
             return paths[0];
         }
 
-        PathSizes temp_sizes;
+        std::vector<double> ratio;
         for (auto s : path_sizes)
         {
-            temp_sizes.push_back(total_size - s);
+            ratio.push_back((double)(total_size - s) / (2 * total_size));
         }
-        UInt64 rand_number = rand() % std::accumulate(temp_sizes.begin(), temp_sizes.end(), 0UL);
-        UInt64 partial_size = 0;
-        for (size_t i = 0; i < temp_sizes.size(); i++)
+        double rand_number = (double) rand() / RAND_MAX;
+        double ratio_sum = 0;
+        for (size_t i = 0; i < ratio.size(); i++)
         {
-            LOG_DEBUG(log, "path " + std::to_string(i) + " size " + std::to_string(temp_sizes[i]));
-        }
-        LOG_DEBUG(log, "random number " + std::to_string(rand_number));
-        for (size_t i = 0; i < temp_sizes.size(); i++)
-        {
-            partial_size += temp_sizes[i];
-            if (rand_number < partial_size)
+            ratio_sum += ratio[i];
+            if ((rand_number < ratio_sum) || (i == ratio.size() - 1))
             {
                 LOG_DEBUG(log, "database " + database + " table " + table + " choose path " + std::to_string(i));
                 return paths[i];
