@@ -108,7 +108,7 @@ size_t StableValueSpace::getRows()
 size_t StableValueSpace::getBytes()
 {
     size_t result = 0;
-    for (auto dmfile : files)
+    for (auto & dmfile : files)
     {
         result += dmfile->getBytes();
     }
