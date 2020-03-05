@@ -53,7 +53,7 @@ void DMFileWriter::write(const Block & block, size_t not_clean_rows)
     DMFile::PackStat stat;
     stat.rows      = block.rows();
     stat.not_clean = not_clean_rows;
-    stat.bytes = block.bytes();
+    stat.bytes     = block.bytes();
 
     for (auto & cd : write_columns)
     {
