@@ -124,7 +124,7 @@ public:
 
         const Columns & getColumnsOfPack(size_t pack_index, size_t col_num);
 
-        size_t         read(MutableColumns & output_columns, size_t offset, size_t limit);
+        size_t         read(const HandleRange & range, MutableColumns & output_columns, size_t offset, size_t limit);
         Block          read(size_t col_num, size_t offset, size_t limit);
         Block          read(size_t pack_index);
         BlockOrDeletes getMergeBlocks(size_t rows_begin, size_t deletes_begin, size_t rows_end, size_t deletes_end);

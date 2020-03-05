@@ -205,17 +205,17 @@ private:
     template <bool add_tag_column>
     static ColumnDefines arrangeReadColumns(const ColumnDefine & handle, const ColumnDefines & columns_to_read);
 
-    template <class IndexIterator = DeltaIndex::Iterator>
-    BlockInputStreamPtr getPlacedStream(const DMContext &           dm_context,
-                                        const ColumnDefines &       read_columns,
-                                        const HandleRange &         handle_range,
-                                        const RSOperatorPtr &       filter,
-                                        const StableValueSpacePtr & stable_snap,
-                                        DeltaSnapshotPtr &          delta_snap,
-                                        const IndexIterator &       delta_index_begin,
-                                        const IndexIterator &       delta_index_end,
-                                        size_t                      index_size,
-                                        size_t                      expected_block_size) const;
+    template <class IndexIterator = DeltaIndex::Iterator, bool skippable_place = false>
+    SkippableBlockInputStreamPtr getPlacedStream(const DMContext &           dm_context,
+                                                 const ColumnDefines &       read_columns,
+                                                 const HandleRange &         handle_range,
+                                                 const RSOperatorPtr &       filter,
+                                                 const StableValueSpacePtr & stable_snap,
+                                                 DeltaSnapshotPtr &          delta_snap,
+                                                 const IndexIterator &       delta_index_begin,
+                                                 const IndexIterator &       delta_index_end,
+                                                 size_t                      index_size,
+                                                 size_t                      expected_block_size) const;
 
     /// Merge delta & stable, and then take the middle one.
     Handle getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, SegmentSnapshot & segment_snap) const;
@@ -230,6 +230,7 @@ private:
     DeltaIndexPtr ensurePlace(const DMContext & dm_context, const StableValueSpacePtr & stable_snap, DeltaSnapshotPtr & delta_snap) const;
 
     /// Reference the inserts/updates by delta tree.
+    template <bool skippable_place>
     void placeUpsert(const DMContext &           dm_context,
                      const StableValueSpacePtr & stable_snap,
                      DeltaSnapshotPtr &          delta_snap,
@@ -237,6 +238,7 @@ private:
                      Block &&                    block,
                      DeltaTree &                 delta_tree) const;
     /// Reference the deletes by delta tree.
+    template <bool skippable_place>
     void placeDelete(const DMContext &           dm_context,
                      const StableValueSpacePtr & stable_snap,
                      DeltaSnapshotPtr &          delta_snap,

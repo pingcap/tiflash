@@ -7,6 +7,7 @@
 #include <IO/MemoryReadWriteBuffer.h>
 #include <IO/ReadHelpers.h>
 #include <Storages/DeltaMerge/DeltaValueSpace.h>
+#include <Storages/DeltaMerge/HandleFilter.h>
 
 namespace DB
 {
@@ -1153,7 +1154,7 @@ const Columns & DeltaValueSpace::Snapshot::getColumnsOfPack(size_t pack_index, s
     return columns;
 }
 
-size_t DeltaValueSpace::Snapshot::read(MutableColumns & output_columns, size_t offset, size_t limit)
+size_t DeltaValueSpace::Snapshot::read(const HandleRange & range, MutableColumns & output_columns, size_t offset, size_t limit)
 {
     auto start = std::min(offset, rows);
     auto end   = std::min(offset + limit, rows);
@@ -1175,19 +1176,28 @@ size_t DeltaValueSpace::Snapshot::read(MutableColumns & output_columns, size_t o
         if (rows_start_in_pack == rows_end_in_pack)
             continue;
 
-        auto & columns = getColumnsOfPack(pack_index, output_columns.size());
+        auto & columns         = getColumnsOfPack(pack_index, output_columns.size());
+        auto & handle_col_data = toColumnVectorData<Handle>(columns[0]);
         if (rows_in_pack_limit == 1)
         {
-            for (size_t col_index = 0; col_index < output_columns.size(); ++col_index)
-                output_columns[col_index]->insertFrom(*columns[col_index], rows_start_in_pack);
+            if (range.check(handle_col_data[rows_start_in_pack]))
+            {
+                for (size_t col_index = 0; col_index < output_columns.size(); ++col_index)
+                    output_columns[col_index]->insertFrom(*columns[col_index], rows_start_in_pack);
+
+                ++actually_read;
+            }
         }
         else
         {
-            for (size_t col_index = 0; col_index < output_columns.size(); ++col_index)
-                output_columns[col_index]->insertRangeFrom(*columns[col_index], rows_start_in_pack, rows_in_pack_limit);
-        }
+            auto [actual_offset, actual_limit]
+                = HandleFilter::getPosRangeOfSorted(range, handle_col_data, rows_start_in_pack, rows_in_pack_limit);
 
-        actually_read += rows_in_pack_limit;
+            for (size_t col_index = 0; col_index < output_columns.size(); ++col_index)
+                output_columns[col_index]->insertRangeFrom(*columns[col_index], actual_offset, actual_limit);
+
+            actually_read += actual_limit;
+        }
     }
     return actually_read;
 }
@@ -1197,7 +1207,7 @@ Block DeltaValueSpace::Snapshot::read(size_t col_num, size_t offset, size_t limi
     MutableColumns columns;
     for (size_t i = 0; i < col_num; ++i)
         columns.push_back(column_defines[i].type->createColumn());
-    auto actually_read = read(columns, offset, limit);
+    auto actually_read = read(HandleRange::newAll(), columns, offset, limit);
     if (unlikely(actually_read != limit))
         throw Exception("Expected read " + DB::toString(limit) + " rows, but got " + DB::toString(actually_read));
     Block block;

@@ -183,6 +183,8 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
                                db_settings.dm_enable_logical_split,
                                db_settings.dm_read_delta_only,
                                db_settings.dm_read_stable_only);
+
+    ctx->enable_skippable_place = db_settings.dm_enable_skippable_place;
     return DMContextPtr(ctx);
 }
 

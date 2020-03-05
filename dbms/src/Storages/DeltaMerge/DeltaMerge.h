@@ -20,8 +20,8 @@ namespace DM
 
 // Note that the columns in stable input stream and value space must exactly the same, including name, type, and id.
 // The first column must be handle column.
-template <class DeltaValueSpace, class IndexIterator>
-class DeltaMergeBlockInputStream final : public IBlockInputStream, Allocator<false>
+template <class DeltaValueSpace, class IndexIterator, bool skippable_place = false>
+class DeltaMergeBlockInputStream final : public SkippableBlockInputStream, Allocator<false>
 {
     static constexpr size_t UNLIMITED = std::numeric_limits<UInt64>::max();
 
@@ -39,11 +39,17 @@ private:
 
     SkippableBlockInputStreamPtr stable_input_stream;
 
-    // How many rows we need to skip before writing stable rows into output.
+    // How many rows we need to ignore before writing stable rows into output.
     // == 0: None
-    // > 0 : some rows are ignored by delta tree (index), should not write into output.
+    // > 0 : some rows are ignored by delta tree (deletes), should not write into output.
     // < 0 : some rows are filtered out by stable filter, should not write into output.
-    ssize_t stable_skip = 0;
+    ssize_t stable_ignore = 0;
+
+    /// Those vars are only used in skippable_place mode
+    size_t sk_call_status      = 0; // 0: initial, 1: called once by getSkippedRows
+    size_t sk_skip_stable_rows = 0;
+    size_t sk_skip_total_rows  = 0;
+    Block  sk_first_block;
 
     DeltaValueSpacePtr delta_value_space;
 
@@ -94,6 +100,12 @@ public:
           handle_range(handle_range_),
           max_block_size(max_block_size_)
     {
+        if constexpr (skippable_place)
+        {
+            if (handle_range.end != HandleRange::MAX)
+                throw Exception("The end of handle range should be MAX in skippable_place mode");
+        }
+
         header      = stable_input_stream->getHeader();
         num_columns = header.columns();
 
@@ -146,9 +158,77 @@ public:
     String getName() const override { return "DeltaMerge"; }
     Block  getHeader() const override { return header; }
 
+    bool getSkippedRows(size_t & skip_rows) override
+    {
+        if constexpr (!skippable_place)
+        {
+            skip_rows = 0;
+            return true;
+        }
+
+        if (sk_call_status != 0)
+            throw Exception("Call #getSkippedRows() more than once");
+        ++sk_call_status;
+
+        stable_input_stream->getSkippedRows(sk_skip_stable_rows);
+        stable_ignore -= sk_skip_stable_rows;
+
+        sk_first_block = doRead();
+
+        skip_rows           = sk_skip_total_rows;
+        sk_skip_stable_rows = 0;
+        sk_skip_total_rows  = 0;
+        return true;
+    }
+
     Block read() override
     {
-        ++num_read;
+        if constexpr (skippable_place)
+        {
+            if (sk_call_status == 0)
+                throw Exception("Unexpected call #read() in status 0");
+            if (sk_call_status == 1 && sk_first_block)
+            {
+                Block tmp;
+                tmp.swap(sk_first_block);
+                beforeReturnBlock(tmp);
+                ++sk_call_status;
+                return tmp;
+            }
+        }
+
+        auto block = doRead();
+        if (block)
+            beforeReturnBlock(block);
+        return block;
+    }
+
+private:
+    void beforeReturnBlock(const Block & block)
+    {
+        if constexpr (DM_RUN_CHECK)
+        {
+            ++num_read;
+
+            auto & handle_column = toColumnVectorData<Handle>(block.getByPosition(0).column);
+            for (size_t i = 0; i < handle_column.size(); ++i)
+            {
+                if (handle_column[i] < last_handle)
+                {
+                    throw Exception("DeltaMerge return wrong result, current handle [" + DB::toString(handle_column[i]) + "]@read["
+                                    + DB::toString(num_read) + "]@pos[" + DB::toString(i) + "] is expected >= last handle ["
+                                    + DB::toString(last_handle) + "]@read[" + DB::toString(last_handle_read_num) + "]@pos["
+                                    + DB::toString(last_handle_pos) + "]");
+                }
+                last_handle          = handle_column[i];
+                last_handle_pos      = i;
+                last_handle_read_num = num_read;
+            }
+        }
+    }
+
+    Block doRead()
+    {
         if (finished())
             return {};
         while (!finished())
@@ -179,25 +259,7 @@ public:
             if (limit == max_block_size)
                 continue;
 
-            auto result = header.cloneWithColumns(std::move(columns));
-            if constexpr (DM_RUN_CHECK)
-            {
-                auto & handle_column = toColumnVectorData<Handle>(result.getByPosition(0).column);
-                for (size_t i = 0; i < handle_column.size(); ++i)
-                {
-                    if (handle_column[i] < last_handle)
-                    {
-                        throw Exception("DeltaMerge return wrong result, current handle [" + DB::toString(handle_column[i]) + "]@read["
-                                        + DB::toString(num_read) + "]@pos[" + DB::toString(i) + "] is expected >= last handle ["
-                                        + DB::toString(last_handle) + "]@read[" + DB::toString(last_handle_read_num) + "]@pos["
-                                        + DB::toString(last_handle_pos) + "]");
-                    }
-                    last_handle          = handle_column[i];
-                    last_handle_pos      = i;
-                    last_handle_read_num = num_read;
-                }
-            }
-            return result;
+            return header.cloneWithColumns(std::move(columns));
         }
         return {};
     }
@@ -233,15 +295,28 @@ private:
                     break;
                 case DT_INS:
                 {
-                    use_delta_offset = cur_index.value;
-                    use_delta_rows   = cur_index.count;
-                    writeInsertFromDelta(output_columns, output_write_limit);
+                    bool do_write = true;
+                    if constexpr (skippable_place)
+                    {
+                        if (cur_index.sid < sk_skip_stable_rows)
+                        {
+                            do_write = false;
+                            sk_skip_total_rows += cur_index.count;
+                        }
+                    }
+
+                    if (do_write)
+                    {
+                        use_delta_offset = cur_index.value;
+                        use_delta_rows   = cur_index.count;
+                        writeInsertFromDelta(output_columns, output_write_limit);
+                    }
                     break;
                 }
                 default:
                     throw Exception("Entry type " + DTTypeString(cur_index.type) + " is not supported, is end: "
                                     + DB::toString(index_pos == index_valid_size) + ", use_stable_rows: " + DB::toString(use_stable_rows)
-                                    + ", stable_skip: " + DB::toString(stable_skip) + ", stable_done: " + DB::toString(stable_done)
+                                    + ", stable_ignore: " + DB::toString(stable_ignore) + ", stable_done: " + DB::toString(stable_done)
                                     + ", delta_done: " + DB::toString(delta_done) + ", delta_done: " + DB::toString(delta_done));
                 }
             }
@@ -292,21 +367,21 @@ private:
     template <bool c_delta_done>
     void writeFromStable(MutableColumns & output_columns, size_t & output_write_limit)
     {
-        // First let's do skip caused by stable_skip.
-        while (stable_skip > 0)
+        // First let's do skip caused by stable_ignore.
+        while (stable_ignore > 0)
         {
             if (curStableBlockRemaining())
             {
-                stable_skip -= skipRowsInCurStableBlock(stable_skip);
+                stable_ignore -= skipRowsInCurStableBlock(stable_ignore);
                 continue;
             }
 
-            size_t stable_skipped_rows;
-            stable_input_stream->getSkippedRows(stable_skipped_rows);
+            size_t skips;
+            stable_input_stream->getSkippedRows(skips);
 
-            if (stable_skipped_rows > 0)
+            if (skips > 0)
             {
-                stable_skip -= stable_skipped_rows;
+                stable_ignore -= skips;
                 continue;
             }
             else
@@ -316,22 +391,27 @@ private:
             }
         }
 
-        if (stable_skip < 0)
+        if (stable_ignore < 0)
         {
-            if (use_stable_rows > (size_t)(std::abs(stable_skip)))
+            size_t stable_ignore_abs = (size_t)(std::abs(stable_ignore));
+            if (use_stable_rows > stable_ignore_abs)
             {
-                use_stable_rows += stable_skip;
-                stable_skip = 0;
+                use_stable_rows += stable_ignore;
+                if constexpr (skippable_place)
+                    sk_skip_total_rows += stable_ignore_abs;
+                stable_ignore = 0;
             }
             else
             {
-                stable_skip += use_stable_rows;
+                stable_ignore += use_stable_rows;
+                if constexpr (skippable_place)
+                    sk_skip_total_rows += use_stable_rows;
                 // Nothing to write, because those rows we want to write are skipped already.
                 use_stable_rows = 0;
             }
         }
 
-        if (unlikely(!(stable_skip == 0 || use_stable_rows == 0)))
+        if (unlikely(!(stable_ignore == 0 || use_stable_rows == 0)))
             throw Exception("Algorithm broken!");
 
         while (use_stable_rows && output_write_limit)
@@ -342,18 +422,18 @@ private:
                 continue;
             }
 
-            size_t stable_skipped_rows;
-            stable_input_stream->getSkippedRows(stable_skipped_rows);
+            size_t skips;
+            stable_input_stream->getSkippedRows(skips);
 
-            if (stable_skipped_rows > 0)
+            if (skips > 0)
             {
-                if (stable_skipped_rows <= use_stable_rows)
+                if (skips <= use_stable_rows)
                 {
-                    use_stable_rows -= stable_skipped_rows;
+                    use_stable_rows -= skips;
                 }
                 else
                 {
-                    stable_skip -= stable_skipped_rows - use_stable_rows;
+                    stable_ignore -= skips - use_stable_rows;
                     use_stable_rows = 0;
                 }
             }
@@ -374,20 +454,23 @@ private:
         }
     }
 
-    // Return number of rows written into output
     inline void writeCurStableBlock(MutableColumns & output_columns, size_t & output_write_limit)
     {
         auto output_offset = output_columns.at(0)->size();
 
-        size_t copy_rows  = std::min(output_write_limit, use_stable_rows);
-        copy_rows         = std::min(copy_rows, cur_stable_block_rows - cur_stable_block_pos);
-        auto valid_offset = cur_stable_block_pos;
-        auto valid_limit  = copy_rows;
+        size_t copy_rows = std::min(output_write_limit, use_stable_rows);
+        copy_rows        = std::min(copy_rows, cur_stable_block_rows - cur_stable_block_pos);
+        auto offset      = cur_stable_block_pos;
+        auto limit       = copy_rows;
 
-        std::tie(valid_offset, valid_limit)
-            = HandleFilter::getPosRangeOfSorted(handle_range, cur_stable_block_columns[0], valid_offset, valid_limit);
+        auto [final_offset, final_limit] = HandleFilter::getPosRangeOfSorted(handle_range, cur_stable_block_columns[0], offset, limit);
 
-        if (!output_offset && !valid_offset && valid_limit == cur_stable_block_rows)
+        if constexpr (skippable_place)
+        {
+            sk_skip_total_rows += final_offset - offset;
+        }
+
+        if (!output_offset && !final_offset && final_limit == cur_stable_block_rows)
         {
             // Simply return columns in current stable block.
             for (size_t column_id = 0; column_id < output_columns.size(); ++column_id)
@@ -396,7 +479,7 @@ private:
             // Let's return current stable block directly. No more expending.
             output_write_limit = 0;
         }
-        else if (valid_limit)
+        else if (final_limit)
         {
             // Prevent frequently reallocation.
             if (output_columns[0]->empty())
@@ -405,9 +488,9 @@ private:
                     output_columns[column_id]->reserve(max_block_size);
             }
             for (size_t column_id = 0; column_id < num_columns; ++column_id)
-                output_columns[column_id]->insertRangeFrom(*cur_stable_block_columns[column_id], valid_offset, valid_limit);
+                output_columns[column_id]->insertRangeFrom(*cur_stable_block_columns[column_id], final_offset, final_limit);
 
-            output_write_limit -= std::min(valid_limit, output_write_limit);
+            output_write_limit -= std::min(final_limit, output_write_limit);
         }
 
         cur_stable_block_pos += copy_rows;
@@ -425,14 +508,19 @@ private:
                 output_columns[column_id]->reserve(max_block_size);
         }
 
-        auto actually_write_rows = delta_value_space->read(output_columns, use_delta_offset, write_rows);
+        auto actual_write = delta_value_space->read(handle_range, output_columns, use_delta_offset, write_rows);
 
-        output_write_limit -= actually_write_rows;
+        if constexpr (skippable_place)
+        {
+            sk_skip_total_rows += write_rows - actual_write;
+        }
+
+        output_write_limit -= actual_write;
         use_delta_offset += write_rows;
         use_delta_rows -= write_rows;
     }
 
-    inline void writeDeleteFromDelta(size_t n) { stable_skip += n; }
+    inline void writeDeleteFromDelta(size_t n) { stable_ignore += n; }
 
     inline void stepForwardEntryIt()
     {
