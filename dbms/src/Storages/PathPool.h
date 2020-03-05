@@ -55,6 +55,11 @@ public:
         UInt64 partial_size = 0;
         for (size_t i = 0; i < temp_sizes.size(); i++)
         {
+            LOG_DEBUG(log, "path " + std::to_string(i) + " size " + std::to_string(temp_sizes[i]));
+        }
+        LOG_DEBUG(log, "random number " + std::to_string(rand_number));
+        for (size_t i = 0; i < temp_sizes.size(); i++)
+        {
             partial_size += temp_sizes[i];
             if (rand_number < partial_size)
             {
