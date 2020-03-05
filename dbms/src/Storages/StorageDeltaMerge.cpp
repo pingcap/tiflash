@@ -531,6 +531,8 @@ BlockInputStreams StorageDeltaMerge::read( //
 
         const auto & mvcc_query_info = *query_info.mvcc_query_info;
 
+        LOG_DEBUG(log, "Read with tso: " << mvcc_query_info.read_tso);
+
         const auto check_read_tso = [&tmt, &context, this](UInt64 read_tso) {
             // Read with specify tso, check if tso is smaller than TiDB GcSafePoint
             auto pd_client = tmt.getPDClient();
