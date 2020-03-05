@@ -156,7 +156,7 @@ public:
     String getTemporaryPath() const;
     String getFlagsPath() const;
     String getUserFilesPath() const;
-    const PathPool & getExtraPaths() const;
+    PathPool & getExtraPaths() const;
 
     void setPath(const String & path);
     void setTemporaryPath(const String & path);

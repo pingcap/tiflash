@@ -510,7 +510,7 @@ String Context::getUserFilesPath() const
     return shared->user_files_path;
 }
 
-const PathPool & Context::getExtraPaths() const
+PathPool & Context::getExtraPaths() const
 {
     auto lock = getLock();
     return shared->extra_paths;
