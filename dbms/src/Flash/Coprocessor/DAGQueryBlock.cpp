@@ -61,7 +61,7 @@ void collectOutPutFieldTypesFromAgg(std::vector<tipb::FieldType> & field_type, c
 }
 
 DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor * root)
-: id(id_), qb_column_prefix("___QB_" + std::to_string(id_))
+: id(id_), qb_column_prefix("___QB_" + std::to_string(id_) + "_")
 {
     const tipb::Executor * current = root;
     while (!isSourceNode(current))
@@ -104,7 +104,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor * root)
 }
 
 DAGQueryBlock::DAGQueryBlock(UInt32 id_, std::vector<const tipb::Executor *> & executors, int start_index, int end_index)
-: id(id_), qb_column_prefix("___QB_" + std::to_string(id_))
+: id(id_), qb_column_prefix("___QB_" + std::to_string(id_) + "_")
 {
     for (int i = end_index; i >= start_index; i--)
     {
