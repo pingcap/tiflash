@@ -48,6 +48,7 @@ private:
                                     PageStorage::OpenReadFiles &&    data_readers,
                                     const ValidPages &               file_valid_pages,
                                     const SnapshotPtr &              snapshot,
+                                    const WriteBatch::SequenceID     compact_sequence,
                                     PageFile &                       gc_file,
                                     MigrateInfos &                   migrate_infos) const;
 

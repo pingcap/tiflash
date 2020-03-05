@@ -145,6 +145,7 @@ PageEntriesEdit DataCompactor::migratePages(const SnapshotPtr & snapshot,
     {
         PageStorage::OpenReadFiles    data_readers;
         PageStorage::MetaMergingQueue merging_queue;
+        WriteBatch::SequenceID        compact_seq = 0;
         for (auto & page_file : candidates)
         {
             if (page_file.getType() != PageFile::Type::Formal)
@@ -162,9 +163,12 @@ PageEntriesEdit DataCompactor::migratePages(const SnapshotPtr & snapshot,
             }
 
             {
+                // Set offsets of PageFile, so that we can create a reader to read migrate data
                 PageEntriesEdit        edit;
-                WriteBatch::SequenceID seq;
-                const_cast<PageFile &>(page_file).readAndSetPageMetas(edit, seq);
+                WriteBatch::SequenceID seq_in_migrate_file = 0;
+                const_cast<PageFile &>(page_file).readAndSetPageMetas(edit, seq_in_migrate_file);
+                compact_seq = std::max(compact_seq, seq_in_migrate_file);
+
                 auto data_reader = const_cast<PageFile &>(page_file).createReader();
                 data_readers.emplace(page_file.fileIdLevel(), std::move(data_reader));
             }
@@ -175,8 +179,8 @@ PageEntriesEdit DataCompactor::migratePages(const SnapshotPtr & snapshot,
         }
 
         // Merge all WriteBatch with valid pages, sorted by WriteBatch::sequence
-        gc_file_edit
-            = mergeValidPages(std::move(merging_queue), std::move(data_readers), file_valid_pages, snapshot, gc_file, migrate_infos);
+        gc_file_edit = mergeValidPages(
+            std::move(merging_queue), std::move(data_readers), file_valid_pages, snapshot, compact_seq, gc_file, migrate_infos);
     }
 
     logMigrationDetails(migrate_infos, migrate_file_id);
@@ -206,6 +210,7 @@ PageEntriesEdit DataCompactor::mergeValidPages(PageStorage::MetaMergingQueue && 
                                                PageStorage::OpenReadFiles &&    data_readers,
                                                const ValidPages &               file_valid_pages,
                                                const SnapshotPtr &              snapshot,
+                                               const WriteBatch::SequenceID     compact_sequence,
                                                PageFile &                       gc_file,
                                                MigrateInfos &                   migrate_infos) const
 {
@@ -233,7 +238,7 @@ PageEntriesEdit DataCompactor::mergeValidPages(PageStorage::MetaMergingQueue && 
             auto          data_reader = data_readers.at(reader->fileIdLevel());
             const PageMap pages       = data_reader->read(page_id_and_entries);
             WriteBatch    wb;
-            wb.setSequence(reader->writeBatchSequence());
+            wb.setSequence(compact_sequence);
             for (const auto & [page_id, entry] : page_id_and_entries)
             {
                 // Upsert page to gc_file
