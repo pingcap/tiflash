@@ -68,6 +68,7 @@ public:
     Int32 getImplicitCastCount() { return implicit_cast_count; };
     bool appendTimeZoneCastsAfterTS(ExpressionActionsChain & chain, std::vector<bool> is_ts_column,
             const tipb::DAGRequest & rqst, bool keep_UTC_column);
+    bool appendJoinKey(ExpressionActionsChain & chain, const tipb::Join & join, Names & key_names, bool tiflash_left);
     String appendTimeZoneCast(const String & tz_col, const String & ts_col, const String & func_name, ExpressionActionsPtr & actions);
     DAGPreparedSets getPreparedSets() { return prepared_sets; }
     String convertToUInt8ForFilter(ExpressionActionsChain & chain, const String & column_name);

@@ -16,6 +16,7 @@
 #include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Interpreters/Aggregator.h>
+#include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/RegionQueryInfo.h>
@@ -29,6 +30,8 @@
 #include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <Storages/Transaction/Types.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
+#include <Interpreters/ExpressionAnalyzer.h>
 
 namespace DB
 {
@@ -492,9 +495,79 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     addTimeZoneCastAfterTS(is_ts_column, pipeline);
 }
 
-void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & , Pipeline & )
+void DAGQueryBlockInterpreter::prepareJoinKeys(const tipb::Join & join, Pipeline & pipeline, Names & key_names, bool tiflash_left)
 {
-    // todo support join
+    std::vector<NameAndTypePair> source_columns;
+    for( auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
+        source_columns.emplace_back(p.name, p.type);
+    DAGExpressionAnalyzer dag_analyzer(std::move(source_columns), context);
+    ExpressionActionsChain chain;
+    if (dag_analyzer.appendJoinKey(chain, join, key_names, tiflash_left))
+    {
+        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions()); });
+    }
+}
+void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & , SubqueryForSet & right_query)
+{
+    // build
+    static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> join_type_map{
+        {tipb::JoinType::TypeInnerJoin, ASTTableJoin::Kind::Inner},
+        {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::Left},
+        {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Right}
+    };
+    if (input_streams_vec.size() != 2)
+    {
+        throw Exception("Join query block must have 2 input streams", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    auto join_type_it = join_type_map.find(join.join_type());
+    if (join_type_it == join_type_map.end())
+        throw Exception("Unknown join type in dag request", ErrorCodes::COP_BAD_DAG_REQUEST);
+    ASTTableJoin::Kind kind = join_type_it->second;
+    BlockInputStreams left_streams;
+    BlockInputStreams right_streams;
+    Names left_key_names;
+    Names right_key_names;
+    if (join.inner_idx() == 0)
+    {
+        // in DAG request, inner part is the build side, however for tiflash implementation,
+        // the build side must be the right side, so need to update the join type if needed
+        if (kind == ASTTableJoin::Kind::Left)
+            kind = ASTTableJoin::Kind::Right;
+        else if (kind == ASTTableJoin::Kind::Right)
+            kind = ASTTableJoin::Kind::Left;
+        left_streams = input_streams_vec[1];
+        right_streams = input_streams_vec[0];
+    }
+    else
+    {
+        left_streams = input_streams_vec[0];
+        right_streams = input_streams_vec[1];
+    }
+
+    /// add necessary transformation if the join key is an expression
+    Pipeline left_pipeline;
+    left_pipeline.streams = left_streams;
+    prepareJoinKeys(join, left_pipeline, left_key_names, true);
+    Pipeline right_pipeline;
+    right_pipeline.streams = right_streams;
+    prepareJoinKeys(join, right_pipeline, right_key_names, false);
+
+    left_streams = left_pipeline.streams;
+    right_streams = right_pipeline.streams;
+
+    const Settings & settings = context.getSettingsRef();
+    JoinPtr joinPtr = std::make_shared<Join>(left_key_names, right_key_names, true,
+            SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode),
+            kind, ASTTableJoin::Strictness::All);
+    executeUnion(right_pipeline);
+    // todo clickhouse use LazyBlockInputStream to initialize the source, need to double check why and
+    //  how to use LazyBlockInputStream here
+    right_query.source = right_pipeline.firstStream();
+    right_query.join = joinPtr;
+    right_query.join->setSampleBlock(right_query.source->getHeader());
+
+
     throw Exception("Join is not supported yet", ErrorCodes::NOT_IMPLEMENTED);
 }
 
@@ -807,7 +880,8 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
 {
     if (query_block.source->tp() == tipb::ExecType::TypeJoin)
     {
-        executeJoin(query_block.source->join(), pipeline);
+        SubqueryForSet right_query;
+        executeJoin(query_block.source->join(), pipeline, right_query);
     }
     else
     {

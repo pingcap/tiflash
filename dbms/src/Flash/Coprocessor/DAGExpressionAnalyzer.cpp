@@ -300,6 +300,33 @@ bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(
     return ret;
 }
 
+/// return true if same actions is needed
+bool DAGExpressionAnalyzer::appendJoinKey(ExpressionActionsChain & chain, const tipb::Join & join, Names & key_names, bool tiflash_left)
+{
+    bool ret = false;
+    initChain(chain, getCurrentInputColumns());
+    ExpressionActionsPtr actions = chain.getLastActions();
+    if ((tiflash_left && join.inner_idx() == 1) || (!tiflash_left && join.inner_idx() == 0))
+    {
+        for(const auto & key : join.left_join_keys())
+        {
+            key_names.push_back(getActions(key, actions));
+            if (key.tp() != tipb::ExprType::ColumnRef)
+                ret = true;
+        }
+    }
+    else
+    {
+        for(const auto & key : join.right_join_keys())
+        {
+            key_names.push_back(getActions(key, actions));
+            if (key.tp() != tipb::ExprType::ColumnRef)
+                ret = true;
+        }
+    }
+    return ret;
+}
+
 void DAGExpressionAnalyzer::appendAggSelect(
     ExpressionActionsChain & chain, const tipb::Aggregation & aggregation, const tipb::DAGRequest & rqst, bool keep_session_timezone_info)
 {
