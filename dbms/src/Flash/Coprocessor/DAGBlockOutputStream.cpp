@@ -25,7 +25,7 @@ DAGBlockOutputStream::DAGBlockOutputStream(tipb::SelectResponse & dag_response_,
     {
         chunk_codec_stream = std::make_unique<DefaultChunkCodec>()->newCodecStream(result_field_types);
     }
-    else if (encodeType == tipb::EncodeType::TypeArrow)
+    else if (encodeType == tipb::EncodeType::TypeChunk)
     {
         chunk_codec_stream = std::make_unique<ArrowChunkCodec>()->newCodecStream(result_field_types);
     }

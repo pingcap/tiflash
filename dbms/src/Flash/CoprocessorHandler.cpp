@@ -56,10 +56,13 @@ grpc::Status CoprocessorHandler::execute()
                 tipb::DAGRequest dag_request;
                 dag_request.ParseFromString(cop_request->data());
                 LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
+                if (dag_request.has_is_rpn_expr() && dag_request.is_rpn_expr())
+                    throw Exception("DAG request with rpn expression is not supported in TiFlash", ErrorCodes::NOT_IMPLEMENTED);
                 tipb::SelectResponse dag_response;
                 DAGDriver driver(cop_context.db_context, dag_request, cop_context.kv_context.region_id(),
                     cop_context.kv_context.region_epoch().version(), cop_context.kv_context.region_epoch().conf_ver(),
-                    cop_request->schema_ver(), std::move(key_ranges), dag_response);
+                    cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(),
+                    std::move(key_ranges), dag_response);
                 driver.execute();
                 cop_response->set_data(dag_response.SerializeAsString());
                 LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");

@@ -81,6 +81,10 @@ void DAGQuerySource::analyzeDAGEncodeType()
     encode_type = dag_request.encode_type();
     if (isUnsupportedEncodeType(getResultFieldTypes(), encode_type))
         encode_type = tipb::EncodeType::TypeDefault;
+    if (encode_type == tipb::EncodeType::TypeChunk && dag_request.has_chunk_memory_layout()
+        && dag_request.chunk_memory_layout().has_endian() && dag_request.chunk_memory_layout().endian() == tipb::Endian::BigEndian)
+        // todo support BigEndian encode for chunk encode type
+        encode_type = tipb::EncodeType::TypeDefault;
 }
 
 std::tuple<std::string, ASTPtr> DAGQuerySource::parse(size_t max_query_size)

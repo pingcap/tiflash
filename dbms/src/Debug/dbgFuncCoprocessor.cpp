@@ -42,9 +42,9 @@ using DAGColumnInfo = std::pair<String, ColumnInfo>;
 using DAGSchema = std::vector<DAGColumnInfo>;
 using SchemaFetcher = std::function<TableInfo(const String &, const String &)>;
 std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context, const String & query, SchemaFetcher schema_fetcher,
-    Timestamp start_ts, Int64 tz_offset, const String & tz_name, const String & encode_type);
+    Int64 tz_offset, const String & tz_name, const String & encode_type);
 tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version,
-    UInt64 region_conf_version, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges);
+    UInt64 region_conf_version, Timestamp start_ts, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges);
 BlockInputStreamPtr outputDAGResponse(Context & context, const DAGSchema & schema, const tipb::SelectResponse & dag_response);
 
 BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
@@ -78,7 +78,7 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
                 throw Exception(database_name + "." + table_name + " is not ManageableStorage", ErrorCodes::BAD_ARGUMENTS);
             return managed_storage->getTableInfo();
         },
-        start_ts, tz_offset, tz_name, encode_type);
+        tz_offset, tz_name, encode_type);
 
     RegionPtr region;
     if (region_id == InvalidRegionID)
@@ -101,7 +101,7 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
     DecodedTiKVKey end_key = RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id);
     key_ranges.emplace_back(std::make_pair(std::move(start_key), std::move(end_key)));
     tipb::SelectResponse dag_response
-        = executeDAGRequest(context, dag_request, region->id(), region->version(), region->confVer(), key_ranges);
+        = executeDAGRequest(context, dag_request, region->id(), region->version(), region->confVer(), start_ts, key_ranges);
 
     return outputDAGResponse(context, schema, dag_response);
 }
@@ -134,7 +134,7 @@ BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
         [&](const String & database_name, const String & table_name) {
             return MockTiDB::instance().getTableByName(database_name, table_name)->table_info;
         },
-        start_ts, tz_offset, tz_name, encode_type);
+        tz_offset, tz_name, encode_type);
     std::ignore = table_id;
 
     RegionPtr region = context.getTMTContext().getKVStore()->getRegion(region_id);
@@ -144,7 +144,7 @@ BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
     DecodedTiKVKey end_key = RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id);
     key_ranges.emplace_back(std::make_pair(std::move(start_key), std::move(end_key)));
     tipb::SelectResponse dag_response
-        = executeDAGRequest(context, dag_request, region_id, region->version(), region->confVer(), key_ranges);
+        = executeDAGRequest(context, dag_request, region_id, region->version(), region->confVer(), start_ts, key_ranges);
 
     return outputDAGResponse(context, schema, dag_response);
 }
@@ -339,16 +339,15 @@ void compileFilter(const DAGSchema & input, ASTPtr ast, tipb::Selection * filter
 }
 
 std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context, const String & query, SchemaFetcher schema_fetcher,
-    Timestamp start_ts, Int64 tz_offset, const String & tz_name, const String & encode_type)
+    Int64 tz_offset, const String & tz_name, const String & encode_type)
 {
     DAGSchema schema;
     tipb::DAGRequest dag_request;
     dag_request.set_time_zone_name(tz_name);
     dag_request.set_time_zone_offset(tz_offset);
 
-    dag_request.set_start_ts(start_ts);
-    if (encode_type == "arrow")
-        dag_request.set_encode_type(tipb::EncodeType::TypeArrow);
+    if (encode_type == "chunk")
+        dag_request.set_encode_type(tipb::EncodeType::TypeChunk);
     else if (encode_type == "chblock")
         dag_request.set_encode_type(tipb::EncodeType::TypeCHBlock);
     else
@@ -639,12 +638,13 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context,
 }
 
 tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version,
-    UInt64 region_conf_version, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges)
+    UInt64 region_conf_version, Timestamp start_ts, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges)
 {
     static Logger * log = &Logger::get("MockDAG");
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
     tipb::SelectResponse dag_response;
-    DAGDriver driver(context, dag_request, region_id, region_version, region_conf_version, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, std::move(key_ranges), dag_response, true);
+    DAGDriver driver(context, dag_request, region_id, region_version, region_conf_version, start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION,
+        std::move(key_ranges), dag_response, true);
     driver.execute();
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");
     return dag_response;
@@ -656,7 +656,7 @@ std::unique_ptr<ChunkCodec> getCodec(tipb::EncodeType encode_type)
     {
         case tipb::EncodeType::TypeDefault:
             return std::make_unique<DefaultChunkCodec>();
-        case tipb::EncodeType::TypeArrow:
+        case tipb::EncodeType::TypeChunk:
             return std::make_unique<ArrowChunkCodec>();
         case tipb::EncodeType::TypeCHBlock:
             return std::make_unique<CHBlockChunkCodec>();

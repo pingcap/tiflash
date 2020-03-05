@@ -22,7 +22,7 @@ extern const int UNKNOWN_EXCEPTION;
 } // namespace ErrorCodes
 
 DAGDriver::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, RegionID region_id_, UInt64 region_version_,
-    UInt64 region_conf_version_, UInt64 schema_ver, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> && key_ranges_,
+    UInt64 region_conf_version_, UInt64 start_ts, UInt64 schema_ver, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> && key_ranges_,
     tipb::SelectResponse & dag_response_, bool internal_)
     : context(context_),
       dag_request(dag_request_),
@@ -34,6 +34,7 @@ DAGDriver::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, 
       internal(internal_),
       log(&Logger::get("DAGDriver"))
 {
+    context.setSetting("read_tso", start_ts);
     if (schema_ver)
         // schema_ver being 0 means TiDB/TiSpark hasn't specified schema version.
         context.setSetting("schema_version", schema_ver);
@@ -42,8 +43,6 @@ DAGDriver::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, 
 void DAGDriver::execute()
 try
 {
-    context.setSetting("read_tso", UInt64(dag_request.start_ts()));
-
     DAGContext dag_context(dag_request.executors_size());
     DAGQuerySource dag(context, dag_context, region_id, region_version, region_conf_version, key_ranges, dag_request);
 
