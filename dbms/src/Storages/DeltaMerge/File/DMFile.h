@@ -48,6 +48,7 @@ public:
         UInt32 rows;
         UInt32 not_clean;
         UInt64 first_version;
+        UInt64 bytes;
         UInt8  first_tag;
     };
 
@@ -95,8 +96,10 @@ public:
 
     size_t getBytes()
     {
-        // TODO: fix me!
-        return 0;
+        size_t bytes = 0;
+        for (auto & s : pack_stats)
+            bytes += s.bytes;
+        return bytes;
     }
 
     size_t              getPacks() { return pack_stats.size(); }

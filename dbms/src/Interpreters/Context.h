@@ -162,7 +162,7 @@ public:
     void setTemporaryPath(const String & path);
     void setFlagsPath(const String & path);
     void setUserFilesPath(const String & path);
-    void setExtraPaths(const std::vector<std::pair<UInt32, String>> & extra_paths);
+    void setExtraPaths(const std::vector<String> & extra_paths);
 
     using ConfigurationPtr = Poco::AutoPtr<Poco::Util::AbstractConfiguration>;
 

@@ -99,14 +99,15 @@ DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
 
 StableValueSpacePtr createNewStable(DMContext & context, const BlockInputStreamPtr & input_stream, PageId stable_id, WriteBatches & wbs)
 {
-    auto [store_path_id, store_path] = context.extra_paths.choosePath();
+    auto & store_path = context.extra_paths.choosePath();
 
     PageId dmfile_id = context.storage_pool.newDataPageId();
     auto   dmfile    = writeIntoNewDMFile(context, input_stream, dmfile_id, store_path + "/" + STABLE_FOLDER_NAME);
     auto   stable    = std::make_shared<StableValueSpace>(stable_id);
     stable->setFiles({dmfile});
     stable->saveMeta(wbs.meta);
-    wbs.data.putExternal(dmfile_id, store_path_id);
+    wbs.data.putExternal(dmfile_id, 0);
+    context.extra_paths.addDMFile(dmfile_id, dmfile->getBytes(), store_path);
 
     return stable;
 }
@@ -953,11 +954,12 @@ SegmentPair Segment::doSplitLogical(DMContext &             dm_context,
     {
         auto ori_ref_id = dmfile->refId();
         auto file_id    = storage_snap.data_reader.getNormalPageId(ori_ref_id);
+
         auto page_entry = storage_snap.data_reader.getPageEntry(ori_ref_id);
         if (!page_entry.isValid())
             throw Exception("Page entry of " + DB::toString(ori_ref_id) + " not found!");
-        auto path_id          = page_entry.tag;
-        auto file_parent_path = dm_context.extra_paths.getPath(path_id) + "/" + STABLE_FOLDER_NAME;
+//        auto path_id          = page_entry.tag;
+        auto file_parent_path = dm_context.extra_paths.getPath(file_id) + "/" + STABLE_FOLDER_NAME;
 
         auto my_dmfile_id    = storage_pool.newDataPageId();
         auto other_dmfile_id = storage_pool.newDataPageId();
@@ -1144,8 +1146,8 @@ SegmentPtr Segment::doMergeLogical(
             auto page_entry = storage_snap.data_reader.getPageEntry(ori_ref_id);
             if (!page_entry.isValid())
                 throw Exception("Page entry of " + DB::toString(ori_ref_id) + " not found!");
-            auto path_id          = page_entry.tag;
-            auto file_parent_path = dm_context.extra_paths.getPath(path_id) + "/" + STABLE_FOLDER_NAME;
+//            auto path_id          = page_entry.tag;
+            auto file_parent_path = dm_context.extra_paths.getPath(file_id) + "/" + STABLE_FOLDER_NAME;
 
             auto new_dmfile_id = storage_pool.newDataPageId();
 

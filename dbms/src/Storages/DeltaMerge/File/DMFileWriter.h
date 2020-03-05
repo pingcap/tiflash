@@ -90,6 +90,8 @@ private:
 
     ColumnStreams       column_streams;
     WriteBufferFromFile pack_stat_file;
+
+    Logger * log;
 };
 
 } // namespace DM
