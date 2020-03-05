@@ -58,6 +58,7 @@ protected:
                 if (!task)
                 {
                     done = true;
+                    LOG_DEBUG(log, "Read done");
                     return {};
                 }
 
