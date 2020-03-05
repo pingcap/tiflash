@@ -19,7 +19,8 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
       max_compress_block_size(max_compress_block_size_),
       compression_settings(compression_settings_),
       wal_mode(wal_mode_),
-      pack_stat_file(dmfile->packStatPath())
+      pack_stat_file(dmfile->packStatPath()),
+      log(&Logger::get("DMFileWriter"))
 {
     dmfile->setStatus(DMFile::Status::WRITING);
     for (auto & cd : write_columns)
@@ -53,6 +54,9 @@ void DMFileWriter::write(const Block & block, size_t not_clean_rows)
     DMFile::PackStat stat;
     stat.rows      = block.rows();
     stat.not_clean = not_clean_rows;
+        stat.bytes = block.bytes();
+
+    LOG_DEBUG(log, "block bytes " + std::to_string(stat.bytes));
 
     for (auto & cd : write_columns)
     {

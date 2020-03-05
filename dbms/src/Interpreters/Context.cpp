@@ -530,9 +530,6 @@ void Context::setPath(const String & path)
 
     if (shared->user_files_path.empty())
         shared->user_files_path = shared->path + "user_files/";
-
-    if (shared->extra_paths.listPaths().empty())
-        shared->extra_paths = PathPool({PathPool::IdAndPath(0, shared->path + "data/")});
 }
 
 void Context::setTemporaryPath(const String & path)
@@ -553,7 +550,7 @@ void Context::setUserFilesPath(const String & path)
     shared->user_files_path = path;
 }
 
-void Context::setExtraPaths(const std::vector<std::pair<UInt32, String>> & extra_paths_)
+void Context::setExtraPaths(const std::vector<String> & extra_paths_)
 {
     auto lock = getLock();
     shared->extra_paths = PathPool(extra_paths_);

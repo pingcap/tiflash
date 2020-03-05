@@ -179,35 +179,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     }
 
-    std::vector<std::pair<UInt32, String>> extra_paths;
-    if (config().has("extra_path"))
-    {
-        String s = config().getString("extra_path");
-        Poco::trimInPlace(s);
-        if (s.empty())
-            throw Exception("Extra path configuration parameter is empty");
-
-        std::vector<std::string> id_path_list;
-        boost::split(id_path_list, s, boost::is_any_of(";"));
-        for (auto & id_path_s : id_path_list)
-        {
-            std::vector<String> id_path;
-            boost::split(id_path, id_path_s, boost::is_any_of(":"));
-            if (id_path.size() != 2)
-                throw Exception("Illegal id_path format: " + id_path_s);
-            UInt32 id = std::stoul(id_path[0]);
-            String path = id_path[1];
-            extra_paths.emplace_back(id, getCanonicalPath(path));
-            LOG_DEBUG(log, "Extra path add " + DB::toString(id) + ":" + path);
-        }
-    }
-
+    global_context->setExtraPaths(all_normal_path);
     std::string path = all_normal_path[0];
     std::string default_database = config().getString("default_database", "default");
     global_context->setPath(path);
     global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
-    if (!extra_paths.empty())
-        global_context->setExtraPaths(extra_paths);
 
     /// Create directories for 'path' and for default database, if not exist.
     for (const String & candidate_path : global_context->getPartPathSelector().getAllPath())
