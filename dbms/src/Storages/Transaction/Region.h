@@ -132,6 +132,9 @@ public:
 
     UInt64 appliedIndex() const;
 
+    void setApplied(UInt64 index, UInt64 term) { meta.setApplied(index, term); }
+    void notifyApplied() { meta.notifyAll(); }
+
     RegionVersion version() const;
     RegionVersion confVer() const;
 
