@@ -170,9 +170,9 @@ void PageStorage::restore()
         // If no checkpoint, we apply all edits.
         // Else restroed from checkpoint, if checkpoint's WriteBatch sequence number is 0, we need to apply
         // all edits after that checkpoint too. If checkpoint's WriteBatch sequence number is not 0, we
-        // apply WriteBatch edits only if its WriteBatch sequence is larger than checkpoint.
+        // apply WriteBatch edits only if its WriteBatch sequence is larger than or equal to checkpoint.
         if (!checkpoint_sequence.has_value() || //
-            (checkpoint_sequence.has_value() && (*checkpoint_sequence == 0 || *checkpoint_sequence < reader->writeBatchSequence())))
+            (checkpoint_sequence.has_value() && (*checkpoint_sequence == 0 || *checkpoint_sequence <= reader->writeBatchSequence())))
         {
             try
             {
