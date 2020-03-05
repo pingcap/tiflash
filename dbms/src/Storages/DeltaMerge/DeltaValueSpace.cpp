@@ -378,8 +378,8 @@ Packs DeltaValueSpace::checkHeadAndCloneTail(DMContext & context, const Packs & 
         if (*it_1 != *it_2 || (*it_1)->rows != (*it_2)->rows)
         {
             LOG_ERROR(log,
-                      info() << ", Delta  Check head packs failed, unexpected size. head_packs: " << packsString(head_packs)
-                             << ", packs: " << packsString(packs));
+                      simpleInfo() << ", Delta  Check head packs failed, unexpected size. head_packs: " << packsString(head_packs)
+                                   << ", packs: " << packsString(packs));
             throw Exception("Check head packs failed", ErrorCodes::LOGICAL_ERROR);
         }
     }
@@ -401,6 +401,34 @@ Packs DeltaValueSpace::checkHeadAndCloneTail(DMContext & context, const Packs & 
     }
 
     return tail_clone;
+}
+
+size_t DeltaValueSpace::getTotalCacheRows() const
+{
+    std::scoped_lock lock(mutex);
+    size_t           cache_rows = 0;
+    CachePtr         _last_cache;
+    for (auto & pack : packs)
+    {
+        if (pack->cache && pack->cache != _last_cache)
+        {
+            cache_rows += pack->cache->block.rows();
+        }
+        _last_cache = pack->cache;
+    }
+    return cache_rows;
+}
+
+size_t DeltaValueSpace::getValidCacheRows() const
+{
+    std::scoped_lock lock(mutex);
+    size_t           cache_rows = 0;
+    for (auto & pack : packs)
+    {
+        if (pack->isCached())
+            cache_rows += pack->rows;
+    }
+    return cache_rows;
 }
 
 void DeltaValueSpace::recordRemovePacksPages(WriteBatches & wbs) const
@@ -586,7 +614,7 @@ bool DeltaValueSpace::flush(DMContext & context)
             {
                 String msg = "Pack should not already saved, because previous packs are not saved.";
 
-                LOG_ERROR(log, info() << msg << " Packs: " << packsString(packs));
+                LOG_ERROR(log, simpleInfo() << msg << " Packs: " << packsString(packs));
                 throw Exception(msg, ErrorCodes::LOGICAL_ERROR);
             }
 
@@ -740,7 +768,9 @@ bool DeltaValueSpace::flush(DMContext & context)
         unsaved_rows -= flush_rows;
         unsaved_deletes -= flush_deletes;
 
-        LOG_DEBUG(log, info() << " Flush end. Flushed " << flush_rows << " rows and " << flush_deletes << " deletes");
+        LOG_DEBUG(log,
+                  simpleInfo() << " Flush end. Flushed " << tasks.size() << " packs, " << flush_rows << " rows and " << flush_deletes
+                               << " deletes.");
     }
 
     return true;
@@ -858,7 +888,7 @@ bool DeltaValueSpace::compact(DMContext & context)
                 compact_columns[i]->insertRangeFrom(*block.getByPosition(i).column, 0, block_rows);
 
             for (auto page_id : pack->col_pages)
-                wbs.removed_meta.delPage(page_id);
+                wbs.removed_log.delPage(page_id);
         }
 
         Block compact_block = schema.cloneWithColumns(std::move(compact_columns));
@@ -945,8 +975,8 @@ bool DeltaValueSpace::compact(DMContext & context)
         last_try_compact_packs = std::min(packs.size(), last_try_compact_packs.load());
 
         LOG_DEBUG(log,
-                  info() << " Compact end" << total_compact_packs << " packs into " << tasks.size() << " packs, total "
-                         << total_compact_rows << " rows.");
+                  simpleInfo() << " Successfully compacted " << total_compact_packs << " packs into " << tasks.size() << " packs, total "
+                               << total_compact_rows << " rows.");
     }
 
     wbs.writeRemoves(context.storage_pool);

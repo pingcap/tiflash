@@ -940,8 +940,12 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     INSERT_INT(segment_count)
     INSERT_INT(total_rows)
     INSERT_RATE(delta_rate_rows)
-    INSERT_RATE(delta_rate_count)
+    INSERT_RATE(delta_rate_segments)
+
     INSERT_RATE(delta_placed_rate)
+    INSERT_RATE(delta_cache_rate)
+    INSERT_RATE(delta_cache_wasted_rate)
+
     INSERT_INT(total_delete_ranges)
     INSERT_FLOAT(avg_segment_rows)
 
@@ -978,6 +982,8 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     INSERT_INT(storage_meta_num_pages);
     INSERT_INT(storage_meta_num_normal_pages)
     INSERT_INT(storage_meta_max_page_id);
+
+    INSERT_INT(background_tasks_length);
 
 #undef INSERT_INT
 #undef INSERT_RATE

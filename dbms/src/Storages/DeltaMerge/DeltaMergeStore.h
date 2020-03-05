@@ -23,15 +23,17 @@ static const PageId DELTA_MERGE_FIRST_SEGMENT_ID = 1;
 
 struct DeltaMergeStoreStat
 {
-    UInt64  segment_count    = 0;
-    Float64 delta_rate_rows  = 0;
-    Float64 delta_rate_count = 0;
+    UInt64  segment_count       = 0;
+    Float64 delta_rate_rows     = 0;
+    Float64 delta_rate_segments = 0;
 
     UInt64 total_rows          = 0;
     UInt64 total_bytes         = 0;
     UInt64 total_delete_ranges = 0;
 
-    Float64 delta_placed_rate = 0;
+    Float64 delta_placed_rate       = 0;
+    Float64 delta_cache_rate        = 0;
+    Float64 delta_cache_wasted_rate = 0;
 
     Float64 avg_segment_rows  = 0;
     Float64 avg_segment_bytes = 0;
@@ -73,6 +75,8 @@ struct DeltaMergeStoreStat
     UInt64 storage_meta_num_pages        = 0;
     UInt64 storage_meta_num_normal_pages = 0;
     UInt64 storage_meta_max_page_id      = 0;
+
+    UInt64 background_tasks_length = 0;
 };
 
 // It is used to prevent hash conflict of file caches.
@@ -171,6 +175,8 @@ public:
         std::mutex mutex;
 
     public:
+        size_t length() { return tasks.size(); }
+
         void addTask(const BackgroundTask & task, const ThreadType & whom, Logger * log_)
         {
             LOG_DEBUG(log_,

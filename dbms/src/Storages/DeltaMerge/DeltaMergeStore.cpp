@@ -173,7 +173,7 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
                                storage_pool,
                                hash_salt,
                                store_columns,
-                               /* min_version */ MAX_INT64, /// FIXME: change to 0!!
+                               /* min_version */ 0,
                                settings.not_compress_columns,
                                db_settings.dm_segment_limit_rows,
                                db_settings.dm_segment_delta_limit_rows,
@@ -315,7 +315,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
                     wbs.rollbackWrittenLogAndData(dm_context->storage_pool);
                     wbs.clear();
 
-                    write_pack  = DeltaValueSpace::writePack(*dm_context, block, offset, limit, wbs);
+                    write_pack = DeltaValueSpace::writePack(*dm_context, block, offset, limit, wbs);
+                    wbs.writeLogAndData(dm_context->storage_pool);
                     write_range = range;
                 }
 
@@ -323,7 +324,6 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
                 if (segment->writeToDisk(*dm_context, write_pack))
                 {
                     updated_segments.push_back(segment);
-                    wbs.writeAll(dm_context->storage_pool);
                     break;
                 }
             }
@@ -823,6 +823,18 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         }
         return false;
     };
+    auto try_fg_split = [&](const SegmentPtr & my_segment) -> bool {
+        auto my_segment_rows = my_segment->getEstimatedRows();
+        auto my_should_split = my_segment_rows >= dm_context->segment_limit_rows * 3;
+        if (my_should_split)
+        {
+            if (segmentSplit(*dm_context, my_segment).first)
+                return true;
+            else
+                return false;
+        }
+        return false;
+    };
     auto try_bg_merge = [&]() {
         if (should_merge && (merge_sibling = getMergeSibling()))
         {
@@ -849,18 +861,15 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
 
     if (thread_type == ThreadType::Write)
     {
+        if (try_fg_split(segment))
+            return;
+
         SegmentPtr new_segment;
         if ((new_segment = try_fg_merge_delta()))
         {
             // After merge delta, we better check split immediately.
-            auto new_segment_rows = new_segment->getEstimatedRows();
-            auto new_should_split = new_segment_rows >= dm_context->segment_limit_rows * 2;
-            if (new_should_split)
-            {
-                background_tasks.addTask(BackgroundTask{TaskType::Split, dm_context, new_segment, {}}, thread_type, log);
-                background_task_handle->wake();
-            }
-            return;
+            if (try_bg_split(new_segment))
+                return;
         }
     }
     else if (thread_type == ThreadType::BG_MergeDelta)
@@ -898,37 +907,48 @@ bool DeltaMergeStore::handleBackgroundTask()
     }
 
     SegmentPtr left, right;
-    ThreadType type;
-    switch (task.type)
+    ThreadType type = ThreadType::Write;
+    try
     {
-    case Split:
-        std::tie(left, right) = segmentSplit(*task.dm_context, task.segment);
-        type                  = ThreadType::BG_Split;
-        break;
-    case Merge:
-        segmentMerge(*task.dm_context, task.segment, task.next_segment);
-        type = ThreadType::BG_Merge;
-        break;
-    case MergeDelta:
-        left = segmentMergeDelta(*task.dm_context, task.segment, false);
-        type = ThreadType::BG_MergeDelta;
-        break;
-    case Compact:
-    {
-        task.segment->getDelta()->compact(*task.dm_context);
-        left = task.segment;
-        type = ThreadType::BG_Compact;
-        break;
+        switch (task.type)
+        {
+        case Split:
+            std::tie(left, right) = segmentSplit(*task.dm_context, task.segment);
+            type                  = ThreadType::BG_Split;
+            break;
+        case Merge:
+            segmentMerge(*task.dm_context, task.segment, task.next_segment);
+            type = ThreadType::BG_Merge;
+            break;
+        case MergeDelta:
+            left = segmentMergeDelta(*task.dm_context, task.segment, false);
+            type = ThreadType::BG_MergeDelta;
+            break;
+        case Compact:
+        {
+            task.segment->getDelta()->compact(*task.dm_context);
+            left = task.segment;
+            type = ThreadType::BG_Compact;
+            break;
+        }
+        case Flush:
+        {
+            task.segment->getDelta()->flush(*task.dm_context);
+            left = task.segment;
+            type = ThreadType::BG_Flush;
+            break;
+        }
+        default:
+            throw Exception("Unsupported task type: " + DeltaMergeStore::toString(task.type));
+        }
     }
-    case Flush:
+    catch (const Exception & e)
     {
-        task.segment->getDelta()->flush(*task.dm_context);
-        left = task.segment;
-        type = ThreadType::BG_Flush;
-        break;
-    }
-    default:
-        throw Exception("Unsupported task type: " + DeltaMergeStore::toString(task.type));
+        LOG_ERROR(log,
+                  "Task " << toString(task.type) << " on Segment [" << task.segment->segmentId()
+                          << ((bool)task.next_segment ? ("] and [" + DB::toString(task.next_segment->segmentId())) : "")
+                          << "] failed. Error msg: " << e.message());
+        e.rethrow();
     }
 
     if (left)
@@ -1268,8 +1288,9 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
 
     stat.segment_count = segments.size();
 
-    long total_placed_rows = 0;
-
+    long total_placed_rows            = 0;
+    long total_delta_cache_rows       = 0;
+    long total_delta_valid_cache_rows = 0;
     for (const auto & [handle, segment] : segments)
     {
         (void)handle;
@@ -1290,6 +1311,9 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
 
             stat.total_delta_rows += delta->getRows();
             stat.total_delta_bytes += delta->getBytes();
+
+            total_delta_cache_rows += delta->getTotalCacheRows();
+            total_delta_valid_cache_rows += delta->getValidCacheRows();
         }
 
         if (stable->getPacks())
@@ -1305,9 +1329,12 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
         }
     }
 
-    stat.delta_rate_rows   = (Float64)stat.total_delta_rows / stat.total_rows;
-    stat.delta_rate_count  = (Float64)stat.delta_count / stat.segment_count;
-    stat.delta_placed_rate = (Float64)total_placed_rows / stat.total_delta_rows;
+    stat.delta_rate_rows     = (Float64)stat.total_delta_rows / stat.total_rows;
+    stat.delta_rate_segments = (Float64)stat.delta_count / stat.segment_count;
+
+    stat.delta_placed_rate       = (Float64)total_placed_rows / stat.total_delta_rows;
+    stat.delta_cache_rate        = (Float64)total_delta_valid_cache_rows / stat.total_delta_rows;
+    stat.delta_cache_wasted_rate = (Float64)(total_delta_cache_rows - total_delta_valid_cache_rows) / total_delta_valid_cache_rows;
 
     stat.avg_segment_rows  = (Float64)stat.total_rows / stat.segment_count;
     stat.avg_segment_bytes = (Float64)stat.total_bytes / stat.segment_count;
@@ -1348,6 +1375,8 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
         stat.storage_meta_num_normal_pages     = meta_snapshot->version()->numNormalPages();
         stat.storage_meta_max_page_id          = meta_snapshot->version()->maxId();
     }
+
+    stat.background_tasks_length = background_tasks.length();
 
     return stat;
 }
