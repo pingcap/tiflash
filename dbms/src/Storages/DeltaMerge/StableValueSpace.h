@@ -18,6 +18,11 @@ static const String STABLE_FOLDER_NAME = "stable";
 class StableValueSpace
 {
 public:
+    struct Snapshot{
+
+    };
+
+public:
     StableValueSpace(PageId id_) : id(id_), log(&Logger::get("StableValueSpace")) {}
 
     void setFiles(const DMFiles & files_, DMContext * dm_context = nullptr, HandleRange range = HandleRange::newAll());

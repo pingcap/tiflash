@@ -513,8 +513,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
         for (const auto & [handle, segment] : segments)
         {
             (void)handle;
-            tasks.emplace_back(
-                std::make_shared<SegmentReadTask>(segment, segment->createSnapshot(*dm_context), HandleRanges{segment->getRange()}));
+            tasks.push(std::make_shared<SegmentReadTask>(segment, segment->createSnapshot(*dm_context), HandleRanges{segment->getRange()}));
         }
     }
 
@@ -551,7 +550,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
                                         const RSOperatorPtr & filter,
                                         size_t                expected_block_size)
 {
-    LOG_TRACE(log, "Read with " << sorted_ranges.size() << " ranges");
+    LOG_DEBUG(log, "Read with " << sorted_ranges.size() << " ranges");
 
     SegmentReadTasks tasks;
 
@@ -579,7 +578,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
                 if (tasks.empty() || tasks.back()->segment != seg_it->second)
                 {
                     auto segment = seg_it->second;
-                    tasks.emplace_back(std::make_shared<SegmentReadTask>(segment, segment->createSnapshot(*dm_context)));
+                    tasks.push(std::make_shared<SegmentReadTask>(segment, segment->createSnapshot(*dm_context)));
                 }
 
                 tasks.back()->addRange(req_range);
@@ -659,7 +658,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
         res.push_back(stream);
     }
 
-    LOG_DEBUG(log, "Read creating stream done");
+    LOG_DEBUG(log, "Read create stream done");
 
     return res;
 }
