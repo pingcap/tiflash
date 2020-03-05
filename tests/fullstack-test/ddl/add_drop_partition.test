@@ -1,0 +1,57 @@
+mysql> drop table if exists test.t;
+mysql> create table test.t (a int primary key, b int) partition by range(a) ( partition p0 values less than (1000), partition p1 values less than (2000), partition p2 values less than (3000), partition p3 values less than (4000), partition p4 values less than (5000));
+mysql> alter table test.t set tiflash replica 1;
+
+SLEEP 15
+
+mysql> insert into test.t values(1, 0),(1000, 1),(2000, 2),(3000, 3),(4000, 4);
+
+SLEEP 5
+
+mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t partition(p0);
++---+------+
+| a | b    |
++---+------+
+| 1 |    0 |
++---+------+
+
+mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t partition(p1);
++------+------+
+| a    | b    |
++------+------+
+| 1000 |    1 |
++------+------+
+
+mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t partition(p2);
++------+------+
+| a    | b    |
++------+------+
+| 2000 |    2 |
++------+------+
+
+mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t partition(p3);
++------+------+
+| a    | b    |
++------+------+
+| 3000 |    3 |
++------+------+
+
+mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t partition(p4);
++------+------+
+| a    | b    |
++------+------+
+| 4000 |    4 |
++------+------+
+
+mysql> alter table test.t drop partition p0;
+mysql> insert into test.t values(1, 0);
+
+SLEEP 5
+
+mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t partition(p1);
++------+------+
+| a    | b    |
++------+------+
+| 1000 |    1 |
+|    1 |    0 |
++------+------+

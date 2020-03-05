@@ -1,0 +1,62 @@
+mysql> drop table if exists test.t;
+mysql> create table test.t (a int, b varchar(20), c int as (a * 2) virtual);
+mysql> alter table test.t set tiflash replica 1;
+
+SLEEP 15
+
+mysql> insert into test.t set a = 1, b = "str1";
+mysql> insert into test.t set a = 2, b = "str2";
+
+SLEEP 5
+
+mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t;
++------+------+------+
+| a    | b    | c    |
++------+------+------+
+|    1 | str1 |    2 |
+|    2 | str2 |    4 |
++------+------+------+
+
+mysql> alter table test.t drop column c;
+mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t;
++------+------+
+| a    | b    |
++------+------+
+|    1 | str1 |
+|    2 | str2 |
++------+------+
+
+mysql> insert into test.t set a = 3, b = "str3";
+
+SLEEP 5
+
+mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t;
++------+------+
+| a    | b    |
++------+------+
+|    1 | str1 |
+|    2 | str2 |
+|    3 | str3 |
++------+------+
+
+mysql> alter table test.t add column c int as (a * 3) virtual;
+mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t;
++------+------+------+
+| a    | b    | c    |
++------+------+------+
+|    1 | str1 |    3 |
+|    2 | str2 |    6 |
+|    3 | str3 |    9 |
++------+------+------+
+
+mysql> delete from test.t where a = 1;
+
+SLEEP 5
+
+mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t;
++------+------+------+
+| a    | b    | c    |
++------+------+------+
+|    2 | str2 |    6 |
+|    3 | str3 |    9 |
++------+------+------+
