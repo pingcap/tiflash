@@ -1,10 +1,10 @@
 #pragma once
 
-#include <unordered_set>
-#include <vector>
-
 #include <Core/Defines.h>
 #include <Core/Types.h>
+
+#include <unordered_set>
+#include <vector>
 
 namespace DB
 {
@@ -18,16 +18,25 @@ static constexpr UInt64 PAGE_SPLIT_SIZE      = 1 * MB;
 static constexpr UInt64 PAGE_FILE_MAX_SIZE   = 1024 * 2 * MB;
 static constexpr UInt64 PAGE_FILE_SMALL_SIZE = 2 * MB;
 static constexpr UInt64 PAGE_FILE_ROLL_SIZE  = 128 * MB;
+static constexpr UInt64 PAGE_META_ROLL_SIZE  = 2 * MB;
 
 static_assert(PAGE_SIZE_STEP >= ((1 << 10) * 16), "PAGE_SIZE_STEP should be at least 16 KB");
 static_assert((PAGE_SIZE_STEP & (PAGE_SIZE_STEP - 1)) == 0, "PAGE_SIZE_STEP should be power of 2");
 static_assert(PAGE_BUFFER_SIZE % PAGE_SIZE_STEP == 0, "PAGE_BUFFER_SIZE should be dividable by PAGE_SIZE_STEP");
 
-using PageId              = UInt64;
-using PageIds             = std::vector<PageId>;
-using PageIdSet           = std::unordered_set<PageId>;
+using PageId    = UInt64;
+using PageIds   = std::vector<PageId>;
+using PageIdSet = std::unordered_set<PageId>;
+
+using PageFieldOffset  = UInt64;
+using PageFieldOffsets = std::vector<PageFieldOffset>;
+using PageFieldSizes   = std::vector<UInt64>;
+
+using PageFieldOffsetChecksums = std::vector<std::pair<PageFieldOffset, UInt64>>;
+
 using PageFileId          = UInt64;
-using PageFileIdAndLevel  = std::pair<PageFileId, UInt32>;
+using PageFileLevel       = UInt32;
+using PageFileIdAndLevel  = std::pair<PageFileId, PageFileLevel>;
 using PageFileIdAndLevels = std::vector<PageFileIdAndLevel>;
 
 using PageSize = UInt64;

@@ -50,7 +50,7 @@ TYPED_TEST_CASE_P(PageMapVersionSet_test);
 
 TYPED_TEST_P(PageMapVersionSet_test, ApplyEdit)
 {
-    TypeParam versions(this->config_, this->log);
+    TypeParam versions("vset_test", this->config_, this->log);
     LOG_TRACE(&Logger::root(), "init      :" + versions.toDebugString());
     {
         PageEntriesEdit edit;
@@ -88,7 +88,7 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEdit)
 /// s2 released first, then release s1
 TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock)
 {
-    TypeParam versions(this->config_, this->log);
+    TypeParam versions("vset_test", this->config_, this->log);
     auto      s1 = versions.getSnapshot();
     EXPECT_EQ(versions.size(), 1UL);
     LOG_TRACE(&Logger::root(), "snapshot 1:" + versions.toDebugString());
@@ -150,7 +150,7 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock)
 /// s1 released first, then release s2
 TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock2)
 {
-    TypeParam versions(this->config_, this->log);
+    TypeParam versions("vset_test", this->config_, this->log);
     auto      s1 = versions.getSnapshot();
     LOG_TRACE(&Logger::root(), "snapshot 1:" + versions.toDebugString());
     PageEntriesEdit edit;
@@ -181,7 +181,7 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock2)
 /// s1 released first, then release s2
 TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock3)
 {
-    TypeParam versions(this->config_, this->log);
+    TypeParam versions("vset_test", this->config_, this->log);
     auto      s1 = versions.getSnapshot();
     LOG_TRACE(&Logger::root(), "snapshot 1:" + versions.toDebugString());
     {
@@ -254,7 +254,7 @@ std::set<PageId> getNormalPageIDs(const PageEntriesVersionSetWithDelta::Snapshot
 
 TYPED_TEST_P(PageMapVersionSet_test, Restore)
 {
-    TypeParam versions(this->config_, this->log);
+    TypeParam versions("vset_test", this->config_, this->log);
     if constexpr (std::is_same_v<TypeParam, PageEntriesVersionSet>)
     {
         // For PageEntriesVersionSet, we need a builder
@@ -319,7 +319,7 @@ TYPED_TEST_P(PageMapVersionSet_test, Restore)
 
 TYPED_TEST_P(PageMapVersionSet_test, PutOrDelRefPage)
 {
-    TypeParam versions(this->config_, this->log);
+    TypeParam versions("vset_test", this->config_, this->log);
     {
         PageEntriesEdit edit;
         PageEntry       e;
@@ -431,7 +431,7 @@ TYPED_TEST_P(PageMapVersionSet_test, PutOrDelRefPage)
 
 TYPED_TEST_P(PageMapVersionSet_test, IdempotentDel)
 {
-    TypeParam versions(this->config_, this->log);
+    TypeParam versions("vset_test", this->config_, this->log);
     {
         PageEntriesEdit edit;
         PageEntry       e;
@@ -479,7 +479,7 @@ TYPED_TEST_P(PageMapVersionSet_test, IdempotentDel)
 TYPED_TEST_P(PageMapVersionSet_test, GcConcurrencyDelPage)
 {
     PageId    pid = 0;
-    TypeParam versions(this->config_, this->log);
+    TypeParam versions("vset_test", this->config_, this->log);
     // Page0 is in PageFile{2, 0} at first
     {
         PageEntriesEdit init_edit;
@@ -528,7 +528,7 @@ TYPED_TEST_P(PageMapVersionSet_test, GcPageMove)
     EXPECT_PagePos_LT({5, 1}, {6, 1});
     EXPECT_PagePos_LT({5, 2}, {6, 1});
 
-    TypeParam versions(this->config_, this->log);
+    TypeParam versions("vset_test", this->config_, this->log);
 
     const PageId pid     = 0;
     const PageId ref_pid = 1;
@@ -572,7 +572,7 @@ TYPED_TEST_P(PageMapVersionSet_test, GcPageMove)
 TYPED_TEST_P(PageMapVersionSet_test, GcConcurrencySetPage)
 {
     const PageId pid = 0;
-    TypeParam    versions(this->config_, this->log);
+    TypeParam    versions("vset_test", this->config_, this->log);
 
 
     // gc move Page0 -> PageFile{5,1}
@@ -607,7 +607,7 @@ TYPED_TEST_P(PageMapVersionSet_test, GcConcurrencySetPage)
 
 TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage)
 {
-    TypeParam versions(this->config_, this->log);
+    TypeParam versions("vset_test", this->config_, this->log);
     {
         PageEntriesEdit edit;
         PageEntry       e;
@@ -659,7 +659,7 @@ TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage)
 
 TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage2)
 {
-    TypeParam versions(this->config_, this->log);
+    TypeParam versions("vset_test", this->config_, this->log);
     {
         PageEntriesEdit edit;
         PageEntry       e;
@@ -688,7 +688,7 @@ TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage2)
 
 TYPED_TEST_P(PageMapVersionSet_test, IsRefId)
 {
-    TypeParam versions(this->config_, this->log);
+    TypeParam versions("vset_test", this->config_, this->log);
     {
         PageEntriesEdit edit;
         PageEntry       e;
@@ -716,7 +716,7 @@ TYPED_TEST_P(PageMapVersionSet_test, IsRefId)
 
 TYPED_TEST_P(PageMapVersionSet_test, Snapshot)
 {
-    TypeParam versions(this->config_, this->log);
+    TypeParam versions("vset_test", this->config_, this->log);
     ASSERT_EQ(versions.size(), 1UL);
     {
         PageEntriesEdit init_edit;
@@ -795,7 +795,7 @@ String livePagesToString(const std::set<PageId> & ids)
 
 TYPED_TEST_P(PageMapVersionSet_test, LiveFiles)
 {
-    TypeParam versions(this->config_, this->log);
+    TypeParam versions("vset_test", this->config_, this->log);
 
     {
         PageEntriesEdit edit;
@@ -870,7 +870,7 @@ TYPED_TEST_P(PageMapVersionSet_test, PutOnTombstonePageEntry)
         const PageId page_id = 2;
 
         ::DB::MVCC::VersionSetConfig config;
-        TypeParam                    versions(config, this->log);
+        TypeParam                    versions("vset_test", config, this->log);
         {
             // First we put a page and add read lock by acquiring a snapshot(s1)
             PageEntriesEdit edit;
