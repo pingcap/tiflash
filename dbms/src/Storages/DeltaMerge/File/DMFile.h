@@ -1,9 +1,8 @@
 #pragma once
 
-#include <Poco/File.h>
-
 #include <Core/Types.h>
 #include <IO/ReadBufferFromFile.h>
+#include <Poco/File.h>
 #include <Storages/DeltaMerge/ColumnStat.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <common/logger_useful.h>

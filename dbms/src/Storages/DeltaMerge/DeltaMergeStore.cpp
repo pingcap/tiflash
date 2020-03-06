@@ -45,7 +45,7 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
                                  const ColumnDefine &  handle,
                                  const Settings &      settings_)
     : path(path_),
-      storage_pool(db_name_ + "." + table_name_, path),
+      storage_pool(db_name_ + "." + table_name_, path, db_context.getSettingsRef()),
       db_name(db_name_),
       table_name(table_name_),
       table_handle_define(handle),
@@ -76,6 +76,7 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
 
     try
     {
+        storage_pool.restore(); // restore from disk
         if (!storage_pool.maxMetaPageId())
         {
             // Create the first segment.
