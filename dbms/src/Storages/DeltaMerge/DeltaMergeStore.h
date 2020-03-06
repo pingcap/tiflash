@@ -246,6 +246,8 @@ private:
 
     bool isSegmentValid(const SegmentPtr & segment);
 
+    void loadDMFiles();
+
 private:
     String      path;
     PathPool    extra_paths;
