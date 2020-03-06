@@ -123,6 +123,8 @@ private:
 
     void prepareSnapshotWriteBatch(const SnapshotPtr snapshot, WriteBatch & wb);
 
+    static constexpr const char * ARCHIVE_SUBDIR = "archive";
+
     void archievePageFiles(const std::set<PageFile, PageFile::Comparator> & page_files_to_archieve);
 
     PageEntriesEdit gcMigratePages(const SnapshotPtr &  snapshot,

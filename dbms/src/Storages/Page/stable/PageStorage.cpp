@@ -40,6 +40,9 @@ PageStorage::listAllPageFiles(const String & storage_path, Poco::Logger * page_f
     std::set<PageFile, PageFile::Comparator> page_files;
     for (const auto & name : file_names)
     {
+        if (name == PageStorage::ARCHIVE_SUBDIR)
+            continue;
+
         auto [page_file, page_file_type] = PageFile::recover(storage_path, name, page_file_log);
         if (page_file_type == PageFile::Type::Formal)
             page_files.insert(page_file);
@@ -762,20 +765,20 @@ void PageStorage::archievePageFiles(const std::set<PageFile, PageFile::Comparato
     if (page_files.empty())
         return;
 
-    const String archieve_path = storage_path + "/.archieve/";
-    Poco::File   archieve_dir(archieve_path);
-    if (!archieve_dir.exists())
-        archieve_dir.createDirectory();
+    const Poco::Path archive_path(storage_path, PageStorage::ARCHIVE_SUBDIR);
+    Poco::File       archive_dir(archive_path);
+    if (!archive_dir.exists())
+        archive_dir.createDirectory();
 
     for (auto & page_file : page_files)
     {
         Poco::Path path(page_file.folderPath());
-        auto       dest = archieve_path + path.getBaseName();
+        auto       dest = archive_path.toString() + "/" + path.getFileName();
         Poco::File file(path);
         if (file.exists())
             file.moveTo(dest);
     }
-    LOG_INFO(log, storage_name << " archieve " + DB::toString(page_files.size()) + " to " + archieve_path);
+    LOG_INFO(log, storage_name << " archive " + DB::toString(page_files.size()) + " files to " + archive_path.toString());
 }
 
 PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,

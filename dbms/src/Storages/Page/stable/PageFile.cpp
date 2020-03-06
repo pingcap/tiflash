@@ -392,7 +392,7 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
 
         Page page;
         page.page_id    = page_id;
-        page.data       = ByteBuffer(data_buf, data_buf + page_cache.size);
+        page.data       = stable::ByteBuffer(data_buf, data_buf + page_cache.size);
         page.mem_holder = mem_holder;
 
         ++it;
