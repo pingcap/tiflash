@@ -11,7 +11,7 @@
 => DBGInvoke __set_flush_threshold(1000000, 1000000)
 
 # create table and insert some rows
-=> DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int8', '', 'dm')
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int8', '', 'dt')
 => DBGInvoke __refresh_schemas()
 => select database,name,engine from system.tables where database='default' and name='test'
 ┌─database─┬─name─┬─engine─────┐
@@ -51,7 +51,7 @@
 => drop table if exists default.test
 => DBGInvoke __refresh_schemas()
 
-=> DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int8', '', 'dm')
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int8', '', 'dt')
 => DBGInvoke __refresh_schemas()
 => select database,name,engine from system.tables where database='default' and name='test'
 ┌─database─┬─name─┬─engine─────┐
@@ -99,7 +99,7 @@
 => DBGInvoke __refresh_schemas()
 
 
-=> DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int8', '', 'dm')
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int8', '', 'dt')
 => DBGInvoke __refresh_schemas()
 => select database,name,engine from system.tables where database='default' and name='test'
 ┌─database─┬─name─┬─engine─────┐
@@ -139,7 +139,7 @@
 
 # do a lot of change and sync at once.
 
-=> DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int8', '', 'dm')
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int8', '', 'dt')
 => DBGInvoke __refresh_schemas()
 => select database,name,engine from system.tables where database='default' and name='test'
 ┌─database─┬─name─┬─engine─────┐
@@ -181,7 +181,7 @@
 => DBGInvoke __refresh_schemas()
 
 ## test for partial-linked rename
-=> DBGInvoke __mock_tidb_table(default, test, 'a String, b Int8', '', 'dm')
+=> DBGInvoke __mock_tidb_table(default, test, 'a String, b Int8', '', 'dt')
 => DBGInvoke __refresh_schemas()
 => select database,name,engine from system.tables where database='default' and name='test'
 ┌─database─┬─name─┬─engine─────┐

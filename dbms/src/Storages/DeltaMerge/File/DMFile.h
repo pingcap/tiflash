@@ -48,6 +48,7 @@ public:
         UInt32 rows;
         UInt32 not_clean;
         UInt64 first_version;
+        UInt64 bytes;
         UInt8  first_tag;
     };
 
@@ -95,13 +96,15 @@ public:
 
     size_t getBytes()
     {
-        // TODO: fix me!
-        return 0;
+        size_t bytes = 0;
+        for (auto & s : pack_stats)
+            bytes += s.bytes;
+        return bytes;
     }
 
     size_t              getPacks() { return pack_stats.size(); }
-    const PackStats &  getPackStats() { return pack_stats; }
-    const PackStat &   getPackStat(size_t pack_index) { return pack_stats[pack_index]; }
+    const PackStats &   getPackStats() { return pack_stats; }
+    const PackStat &    getPackStat(size_t pack_index) { return pack_stats[pack_index]; }
     const ColumnStats & getColumnStats() { return column_stats; }
     Status              getStatus() { return status; }
 
@@ -126,7 +129,7 @@ private:
     UInt64 ref_id; // It is a reference to file_id, could be the same.
     String parent_path;
 
-    PackStats  pack_stats;
+    PackStats   pack_stats;
     ColumnStats column_stats;
 
     Status status;

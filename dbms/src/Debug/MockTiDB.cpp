@@ -186,8 +186,8 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
     std::transform(engine_type.begin(), engine_type.end(), engine_type.begin(), [](unsigned char c) { return std::tolower(c); });
     if (engine_type == "tmt")
         table_info.engine_type = TiDB::StorageEngine::TMT;
-    else if (engine_type == "dm")
-        table_info.engine_type = TiDB::StorageEngine::DM;
+    else if (engine_type == "dt")
+        table_info.engine_type = TiDB::StorageEngine::DT;
     else if (engine_type == "buggy")
         table_info.engine_type = TiDB::StorageEngine::DEBUGGING_MEMORY;
     else
