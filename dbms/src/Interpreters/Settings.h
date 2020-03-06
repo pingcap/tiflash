@@ -248,6 +248,9 @@ struct Settings
     M(SettingBool, dm_read_delta_only, false, "Only read delta data in DeltaMerge Engine.")\
     M(SettingBool, dm_read_stable_only, false, "Only read stable data in DeltaMerge Engine.")\
     M(SettingBool, dm_enable_logical_split, true, "Enable logical split or not in DeltaMerge Engine.")\
+    M(SettingUInt64, dm_storage_pool_log_write_slots, 4, "Max write concurrency for each StoragePool.log") \
+    M(SettingUInt64, dm_storage_pool_data_write_slots, 1, "Max write concurrency for each StoragePool.data") \
+    M(SettingUInt64, dm_storage_pool_meta_write_slots, 2, "Max write concurrency for each StoragePool.meta") \
     \
     M(SettingUInt64, max_rows_in_set, 0, "Maximum size of the set (in number of elements) resulting from the execution of the IN section.") \
     M(SettingUInt64, max_bytes_in_set, 0, "Maximum size of the set (in bytes in memory) resulting from the execution of the IN section.") \

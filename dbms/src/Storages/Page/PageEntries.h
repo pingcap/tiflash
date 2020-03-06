@@ -493,8 +493,8 @@ public:
         while (!nodes.empty())
         {
             auto node = nodes.top();
-            nodes.pop();
             tmp->merge(*node);
+            nodes.pop();
         }
 
         return tmp;

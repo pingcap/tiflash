@@ -1,8 +1,5 @@
 #pragma once
 
-#include <set>
-#include <vector>
-
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageEntries.h>
 #include <Storages/Page/VersionSet/PageEntriesBuilder.h>
@@ -10,14 +7,17 @@
 #include <Storages/Page/WriteBatch.h>
 #include <Storages/Page/mvcc/VersionSet.h>
 
+#include <set>
+#include <vector>
+
 namespace DB
 {
 
 class PageEntriesVersionSet : public ::DB::MVCC::VersionSet<PageEntries, PageEntriesEdit, PageEntriesBuilder>
 {
 public:
-    explicit PageEntriesVersionSet(const ::DB::MVCC::VersionSetConfig & config_, Poco::Logger * log)
-        : ::DB::MVCC::VersionSet<PageEntries, PageEntriesEdit, PageEntriesBuilder>(config_)
+    explicit PageEntriesVersionSet(String name_, const ::DB::MVCC::VersionSetConfig & config_, Poco::Logger * log)
+        : ::DB::MVCC::VersionSet<PageEntries, PageEntriesEdit, PageEntriesBuilder>(config_), storage_name(std::move(name_))
     {
         (void)log;
     }
@@ -31,6 +31,9 @@ public:
 
     /// List all PageFile that are used by any version
     std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> listAllLiveFiles(const std::unique_lock<std::shared_mutex> &) const;
+
+private:
+    const String storage_name;
 };
 
 
