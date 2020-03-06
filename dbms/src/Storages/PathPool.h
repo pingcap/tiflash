@@ -146,9 +146,10 @@ public:
         std::lock_guard<std::mutex> lock{mutex};
         if (unlikely(path_map.find(file_id) == path_map.end()))
             throw Exception("Cannot find DMFile for id " + std::to_string(file_id));
-        path_infos[path_map.at(file_id)].total_size -= path_infos[path_map.at(file_id)].file_size_map.at(file_id);
+        UInt32 index = path_map.at(file_id);
+        path_infos[index].total_size -= path_infos[index].file_size_map.at(file_id);
         path_map.erase(file_id);
-        path_infos[path_map.at(file_id)].file_size_map.erase(file_id);
+        path_infos[index].file_size_map.erase(file_id);
     }
 
     std::vector<String> listPaths() const
