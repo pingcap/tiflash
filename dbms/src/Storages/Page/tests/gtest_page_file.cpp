@@ -45,57 +45,55 @@ TEST(Page_test, GetField)
 
     Page page;
     page.data = ByteBuffer(c_buff, c_buff + buf_sz);
-    // {field_index, data_offset}
-    // {2, 0},
-    // {3, 20},
-    // {9, 99},
-    // {10086, 1000}};
-    PageFieldOffsets offsets = {0, 20, 99, 1000};
-    page.field_offsets       = offsets;
+    std::set<Page::FieldOffset> fields{// {field_index, data_offset}
+                                       {2, 0},
+                                       {3, 20},
+                                       {9, 99},
+                                       {10086, 1000}};
+    page.field_offsets = fields;
 
     ASSERT_EQ(page.data.size(), buf_sz);
-    auto data = page.getFieldDataByRequestIndex(0);
-    ASSERT_EQ(data.size(), offsets[1] - offsets[0]);
+    auto data = page.getFieldData(2);
+    ASSERT_EQ(data.size(), fields.find(3)->offset - fields.find(2)->offset);
     for (size_t i = 0; i < data.size(); ++i)
     {
-        auto field_offset = offsets[0];
+        auto field_offset = fields.find(2)->offset;
         EXPECT_EQ(*(data.begin() + i), static_cast<char>((field_offset + i) % 0xff)) //
             << "field index: 2, offset: " << i                                       //
             << ", offset inside page: " << field_offset + i;
     }
 
-    data = page.getFieldDataByRequestIndex(1);
-    ASSERT_EQ(data.size(), offsets[2] - offsets[1]);
+    data = page.getFieldData(3);
+    ASSERT_EQ(data.size(), fields.find(9)->offset - fields.find(3)->offset);
     for (size_t i = 0; i < data.size(); ++i)
     {
-        auto field_offset = offsets[1];
+        auto field_offset = fields.find(3)->offset;
         EXPECT_EQ(*(data.begin() + i), static_cast<char>((field_offset + i) % 0xff)) //
             << "field index: 3, offset: " << i                                       //
             << ", offset inside page: " << field_offset + i;
     }
 
-    data = page.getFieldDataByRequestIndex(2);
-    ASSERT_EQ(data.size(), offsets[3] - offsets[2]);
+    data = page.getFieldData(9);
+    ASSERT_EQ(data.size(), fields.find(10086)->offset - fields.find(9)->offset);
     for (size_t i = 0; i < data.size(); ++i)
     {
-        auto field_offset = offsets[2];
+        auto field_offset = fields.find(9)->offset;
         EXPECT_EQ(*(data.begin() + i), static_cast<char>((field_offset + i) % 0xff)) //
             << "field index: 9, offset: " << i                                       //
             << ", offset inside page: " << field_offset + i;
     }
 
-    data = page.getFieldDataByRequestIndex(3);
-    ASSERT_EQ(data.size(), buf_sz - offsets[3]);
+    data = page.getFieldData(10086);
+    ASSERT_EQ(data.size(), buf_sz - fields.find(10086)->offset);
     for (size_t i = 0; i < data.size(); ++i)
     {
-        auto field_offset = offsets[3];
+        auto field_offset = fields.find(10086)->offset;
         EXPECT_EQ(*(data.begin() + i), static_cast<char>((field_offset + i) % 0xff)) //
             << "field index: 10086, offset: " << i                                   //
             << ", offset inside page: " << field_offset + i;
     }
 
-    // Try to access not requested field
-    ASSERT_THROW({ page.getFieldDataByRequestIndex(4); }, DB::Exception);
+    ASSERT_THROW({ page.getFieldData(0); }, DB::Exception);
 }
 
 TEST(PageEntry_test, GetFieldInfo)
@@ -131,8 +129,8 @@ TEST(PageEntry_test, GetFieldInfo)
     ASSERT_EQ(end, entry.size);
     ASSERT_EQ(entry.getFieldSize(4), entry.size - 1024);
 
-    ASSERT_THROW({ entry.getFieldOffsets(5); }, DB::Exception);
-    ASSERT_THROW({ entry.getFieldSize(5); }, DB::Exception);
+    ASSERT_THROW({ entry.getFieldOffsets(5);}, DB::Exception);
+    ASSERT_THROW({ entry.getFieldSize(5);}, DB::Exception);
 }
 
 } // namespace tests

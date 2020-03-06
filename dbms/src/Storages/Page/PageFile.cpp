@@ -713,6 +713,8 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read)
     char *    data_buf   = (char *)alloc(buf_size);
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) { free(p, buf_size); });
 
+    std::set<Page::FieldOffset> fields_offset_in_page;
+
     char *  pos = data_buf;
     PageMap page_map;
     for (const auto & [page_id, entry, fields] : to_read)
@@ -720,14 +722,13 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read)
         size_t read_size_this_entry = 0;
         char * write_offset         = pos;
 
-        PageFieldOffsets fields_offset_in_page;
         for (const auto field_index : fields)
         {
             // TODO: Continuously fields can read by one system call.
             const auto [beg_offset, end_offset] = entry.getFieldOffsets(field_index);
             const auto size_to_read             = end_offset - beg_offset;
             PageUtil::readFile(data_file_fd, entry.offset + beg_offset, write_offset, size_to_read, data_file_path);
-            fields_offset_in_page.emplace_back(read_size_this_entry);
+            fields_offset_in_page.emplace(field_index, read_size_this_entry);
 
             if constexpr (PAGE_CHECKSUM_ON_READ)
             {
@@ -752,13 +753,15 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read)
         page.data       = ByteBuffer(pos, write_offset);
         page.mem_holder = mem_holder;
         page.field_offsets.swap(fields_offset_in_page);
+        fields_offset_in_page.clear();
         page_map.emplace(page_id, std::move(page));
 
         pos = write_offset;
     }
 
     if (unlikely(pos != data_buf + buf_size))
-        throw Exception("pos not match", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Pos not match, expect to read " + DB::toString(buf_size) + " bytes, but only " + DB::toString(pos - data_buf),
+                        ErrorCodes::LOGICAL_ERROR);
 
     return page_map;
 }

@@ -27,23 +27,37 @@ inline MemHolder createMemHolder(char * memory, const std::function<void(char *)
 struct Page
 {
 public:
+    struct FieldOffset
+    {
+        size_t index;
+        size_t offset;
+
+        FieldOffset(size_t index_) : index(index_), offset(0) {}
+        FieldOffset(size_t index_, size_t offset_) : index(index_), offset(offset_) {}
+
+        bool operator<(const FieldOffset & rhs) const { return index < rhs.index; }
+    };
+
     PageId     page_id;
     ByteBuffer data;
     MemHolder  mem_holder;
-    // Request field offsets inside this page.
-    PageFieldOffsets field_offsets;
+    // Field offsets inside this page.
+    std::set<FieldOffset> field_offsets;
 
 public:
-    ByteBuffer getFieldDataByRequestIndex(size_t index) const
+    ByteBuffer getFieldData(size_t index) const
     {
-        if (unlikely(index >= field_offsets.size()))
-            throw Exception("Try to getFieldData with invalid index: " + DB::toString(index)
-                                + ", fields size: " + DB::toString(field_offsets.size()),
+        auto iter = field_offsets.find(index);
+        if (unlikely(iter == field_offsets.end()))
+            throw Exception("Try to getFieldData of Page" + DB::toString(page_id) + " with invalid field index: " + DB::toString(index),
                             ErrorCodes::LOGICAL_ERROR);
-        else if (index == field_offsets.size() - 1)
-            return ByteBuffer(data.begin() + field_offsets.back(), data.begin() + data.size());
-        else
-            return ByteBuffer(data.begin() + field_offsets[index], data.begin() + field_offsets[index + 1]);
+
+        PageFieldOffset beg = iter->offset;
+        ++iter;
+        PageFieldOffset end = (iter == field_offsets.end() ? data.size() : iter->offset);
+        assert(beg <= data.size());
+        assert(end <= data.size());
+        return ByteBuffer(data.begin() + beg, data.begin() + end);
     }
 };
 using Pages       = std::vector<Page>;
