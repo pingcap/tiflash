@@ -8,6 +8,8 @@
 #endif
 
 #include <Common/typeid_cast.h>
+#include <Common/formatReadable.h>
+
 #include <Core/Defines.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
@@ -931,6 +933,10 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     name_col->insert(String(#NAME)); \
     value_col->insert(DB::toString(stat.NAME));
 
+#define INSERT_SIZE(NAME)             \
+    name_col->insert(String(#NAME)); \
+    value_col->insert(formatReadableSizeWithBinarySuffix(stat.NAME, 2));
+
 #define INSERT_RATE(NAME)            \
     name_col->insert(String(#NAME)); \
     value_col->insert(DB::toString(stat.NAME * 100, 2) + "%");
@@ -941,15 +947,18 @@ BlockInputStreamPtr StorageDeltaMerge::status()
 
     INSERT_INT(segment_count)
     INSERT_INT(total_rows)
+    INSERT_SIZE(total_size)
     INSERT_RATE(delta_rate_rows)
     INSERT_RATE(delta_rate_segments)
 
     INSERT_RATE(delta_placed_rate)
+    INSERT_RATE(delta_cache_size)
     INSERT_RATE(delta_cache_rate)
     INSERT_RATE(delta_cache_wasted_rate)
 
     INSERT_INT(total_delete_ranges)
     INSERT_FLOAT(avg_segment_rows)
+    INSERT_SIZE(avg_segment_size)
 
     INSERT_INT(delta_count)
     INSERT_INT(total_delta_rows)
@@ -963,12 +972,12 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     INSERT_INT(total_pack_count_in_delta)
     INSERT_FLOAT(avg_pack_count_in_delta)
     INSERT_FLOAT(avg_pack_rows_in_delta)
-    INSERT_FLOAT(avg_pack_bytes_in_delta)
+    INSERT_SIZE(avg_pack_size_in_delta)
 
     INSERT_INT(total_pack_count_in_stable)
     INSERT_FLOAT(avg_pack_count_in_stable)
     INSERT_FLOAT(avg_pack_rows_in_stable)
-    INSERT_FLOAT(avg_pack_bytes_in_stable)
+    INSERT_SIZE(avg_pack_size_in_stable)
 
     INSERT_INT(storage_stable_num_snapshots);
     INSERT_INT(storage_stable_num_pages);

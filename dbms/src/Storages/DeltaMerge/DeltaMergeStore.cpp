@@ -1285,9 +1285,10 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
 
     stat.segment_count = segments.size();
 
-    long total_placed_rows            = 0;
-    long total_delta_cache_rows       = 0;
-    long total_delta_valid_cache_rows = 0;
+    long    total_placed_rows            = 0;
+    long    total_delta_cache_rows       = 0;
+    Float64 total_delta_cache_size       = 0;
+    long    total_delta_valid_cache_rows = 0;
     for (const auto & [handle, segment] : segments)
     {
         (void)handle;
@@ -1299,7 +1300,7 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
         if (delta->getPackCount())
         {
             stat.total_rows += delta->getRows();
-            stat.total_bytes += delta->getBytes();
+            stat.total_size += delta->getBytes();
 
             stat.total_delete_ranges += delta->getDeletes();
 
@@ -1307,22 +1308,23 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
             stat.total_pack_count_in_delta += delta->getPackCount();
 
             stat.total_delta_rows += delta->getRows();
-            stat.total_delta_bytes += delta->getBytes();
+            stat.total_delta_size += delta->getBytes();
 
             total_delta_cache_rows += delta->getTotalCacheRows();
+            total_delta_cache_size += delta->getTotalCacheBytes();
             total_delta_valid_cache_rows += delta->getValidCacheRows();
         }
 
         if (stable->getPacks())
         {
             stat.total_rows += stable->getRows();
-            stat.total_bytes += stable->getBytes();
+            stat.total_size += stable->getBytes();
 
             stat.stable_count += 1;
             stat.total_pack_count_in_stable += stable->getPacks();
 
             stat.total_stable_rows += stable->getRows();
-            stat.total_stable_bytes += stable->getBytes();
+            stat.total_stable_size += stable->getBytes();
         }
     }
 
@@ -1330,26 +1332,27 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
     stat.delta_rate_segments = (Float64)stat.delta_count / stat.segment_count;
 
     stat.delta_placed_rate       = (Float64)total_placed_rows / stat.total_delta_rows;
+    stat.delta_cache_size        = total_delta_cache_size;
     stat.delta_cache_rate        = (Float64)total_delta_valid_cache_rows / stat.total_delta_rows;
     stat.delta_cache_wasted_rate = (Float64)(total_delta_cache_rows - total_delta_valid_cache_rows) / total_delta_valid_cache_rows;
 
-    stat.avg_segment_rows  = (Float64)stat.total_rows / stat.segment_count;
-    stat.avg_segment_bytes = (Float64)stat.total_bytes / stat.segment_count;
+    stat.avg_segment_rows = (Float64)stat.total_rows / stat.segment_count;
+    stat.avg_segment_size = (Float64)stat.total_size / stat.segment_count;
 
     stat.avg_delta_rows          = (Float64)stat.total_delta_rows / stat.delta_count;
-    stat.avg_delta_bytes         = (Float64)stat.total_delta_bytes / stat.delta_count;
+    stat.avg_delta_size          = (Float64)stat.total_delta_size / stat.delta_count;
     stat.avg_delta_delete_ranges = (Float64)stat.total_delete_ranges / stat.delta_count;
 
-    stat.avg_stable_rows  = (Float64)stat.total_stable_rows / stat.stable_count;
-    stat.avg_stable_bytes = (Float64)stat.total_stable_bytes / stat.stable_count;
+    stat.avg_stable_rows = (Float64)stat.total_stable_rows / stat.stable_count;
+    stat.avg_stable_size = (Float64)stat.total_stable_size / stat.stable_count;
 
     stat.avg_pack_count_in_delta = (Float64)stat.total_pack_count_in_delta / stat.delta_count;
     stat.avg_pack_rows_in_delta  = (Float64)stat.total_delta_rows / stat.total_pack_count_in_delta;
-    stat.avg_pack_bytes_in_delta = (Float64)stat.total_delta_bytes / stat.total_pack_count_in_delta;
+    stat.avg_pack_size_in_delta  = (Float64)stat.total_delta_size / stat.total_pack_count_in_delta;
 
     stat.avg_pack_count_in_stable = (Float64)stat.total_pack_count_in_stable / stat.stable_count;
     stat.avg_pack_rows_in_stable  = (Float64)stat.total_stable_rows / stat.total_pack_count_in_stable;
-    stat.avg_pack_bytes_in_stable = (Float64)stat.total_stable_bytes / stat.total_pack_count_in_stable;
+    stat.avg_pack_size_in_stable  = (Float64)stat.total_stable_size / stat.total_pack_count_in_stable;
 
     {
         stat.storage_stable_num_snapshots        = storage_pool.data().getNumSnapshots();

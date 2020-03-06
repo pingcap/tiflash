@@ -53,7 +53,7 @@ public:
         UInt64      bytes;
         BlockPtr    schema;
         HandleRange delete_range;
-        PageIds     col_pages;
+        PageId      data_page = 0;
 
         /// The members below are not serialized.
 
@@ -68,7 +68,7 @@ public:
         bool isDeleteRange() const { return !delete_range.empty(); }
         bool isCached() const { return !isDeleteRange() && (bool)cache; }
         /// This pack is not a delete range, the data in it has not been saved to disk.
-        bool isMutable() const { return !isDeleteRange() && col_pages.empty(); }
+        bool isMutable() const { return !isDeleteRange() && data_page == 0; }
         /// This pack's metadata has been saved to disk.
         bool isSaved() const { return saved; }
         void setSchema(const BlockPtr & schema_)
@@ -81,12 +81,13 @@ public:
 
         String toString()
         {
-            return "{rows:" + DB::toString(rows)                                                //
-                + ",bytes:" + DB::toString(bytes) + ",has_schema:" + DB::toString((bool)schema) //
-                + ",delete_range:" + delete_range.toString()                                    //
-                + ",col_pages_size:" + DB::toString(col_pages.size())                           //
-                + ",has_cache:" + DB::toString((bool)cache)                                     //
-                + ",cache_offset:" + DB::toString(cache_offset)                                 //
+            return "{rows:" + DB::toString(rows)                //
+                + ",bytes:" + DB::toString(bytes)               //
+                + ",has_schema:" + DB::toString((bool)schema)   //
+                + ",delete_range:" + delete_range.toString()    //
+                + ",data_page:" + DB::toString(data_page)       //
+                + ",has_cache:" + DB::toString((bool)cache)     //
+                + ",cache_offset:" + DB::toString(cache_offset) //
                 + ",saved:" + DB::toString(saved) + "}";
         }
     };
@@ -236,6 +237,7 @@ public:
     size_t getUnsavedDeletes() const { return unsaved_deletes; }
 
     size_t getTotalCacheRows() const;
+    size_t getTotalCacheBytes() const;
     size_t getValidCacheRows() const;
 
     bool isUpdating() const { return is_updating; }
@@ -247,6 +249,8 @@ public:
     std::atomic<size_t> & getLastTrySplitRows() { return last_try_split_rows; }
 
 public:
+    static PageId writePackData(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs);
+
     static PackPtr writePack(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs);
 
     /// Return false means this operation failed, caused by other threads could have done some updates on this instance. E.g. this instance have been abandoned.

@@ -18,9 +18,10 @@ static constexpr size_t PACK_SERIALIZE_BUFFER_SIZE = 65536;
 
 const Int64 DeltaValueSpace::CURRENT_VERSION = 1;
 
-using BlockPtr    = DeltaValueSpace::BlockPtr;
-using Snapshot    = DeltaValueSpace::Snapshot;
-using SnapshotPtr = std::shared_ptr<Snapshot>;
+using BlockPtr       = DeltaValueSpace::BlockPtr;
+using Snapshot       = DeltaValueSpace::Snapshot;
+using SnapshotPtr    = std::shared_ptr<Snapshot>;
+using PageReadFields = PageStorage::PageReadFields;
 
 // ================================================
 // Serialize / deserialize
@@ -31,11 +32,10 @@ inline void serializePack(const Pack & pack, const BlockPtr & schema, WriteBuffe
     writeIntBinary(pack.rows, buf);
     writeIntBinary(pack.bytes, buf);
     writePODBinary(pack.delete_range, buf);
-    writeIntBinary(pack.col_pages.size(), buf);
-    buf.write((const char *)pack.col_pages.data(), sizeof(PageId) * pack.col_pages.size());
+    writeIntBinary(pack.data_page, buf);
     if (schema)
     {
-        writeIntBinary((UInt8)1, buf);
+        writeIntBinary((UInt32)schema->columns(), buf);
         for (auto & col : *pack.schema)
         {
             writeIntBinary(col.column_id, buf);
@@ -45,7 +45,7 @@ inline void serializePack(const Pack & pack, const BlockPtr & schema, WriteBuffe
     }
     else
     {
-        writeIntBinary((UInt8)0, buf);
+        writeIntBinary((UInt32)0, buf);
     }
 }
 
@@ -56,16 +56,15 @@ inline PackPtr deserializePack(ReadBuffer & buf)
     readIntBinary(pack->rows, buf);
     readIntBinary(pack->bytes, buf);
     readPODBinary(pack->delete_range, buf);
-    size_t size;
-    readIntBinary(size, buf);
-    pack->col_pages.resize(size);
-    buf.read((char *)pack->col_pages.data(), sizeof(PageId) * size);
+    readIntBinary(pack->data_page, buf);
     UInt8 has_schema;
     readIntBinary(has_schema, buf);
     if (has_schema)
     {
+        UInt32 column_size;
+        readIntBinary(column_size, buf);
         auto schema = std::make_shared<Block>();
-        for (size_t i = 0; i < (size_t)size; ++i)
+        for (size_t i = 0; i < column_size; ++i)
         {
             Int64  column_id;
             String name;
@@ -139,12 +138,11 @@ Packs deserializePacks(ReadBuffer & buf)
 }
 
 using BufferAndSize = std::pair<ReadBufferPtr, size_t>;
-BufferAndSize serializeColumn(const IColumn & column, const DataTypePtr & type, size_t offset, size_t limit, bool compress)
+void serializeColumn(MemoryWriteBuffer & buf, const IColumn & column, const DataTypePtr & type, size_t offset, size_t limit, bool compress)
 {
-    MemoryWriteBuffer plain;
     CompressionMethod method = compress ? CompressionMethod::LZ4 : CompressionMethod::NONE;
 
-    CompressedWriteBuffer compressed(plain, CompressionSettings(method));
+    CompressedWriteBuffer compressed(buf, CompressionSettings(method));
     type->serializeBinaryBulkWithMultipleStreams(column, //
                                                  [&](const IDataType::SubstreamPath &) { return &compressed; },
                                                  offset,
@@ -152,19 +150,16 @@ BufferAndSize serializeColumn(const IColumn & column, const DataTypePtr & type, 
                                                  true,
                                                  {});
     compressed.next();
-
-    auto data_size = plain.count();
-    return {plain.tryGetReadBuffer(), data_size};
 }
 
-void deserializeColumn(IColumn & column, const DataTypePtr & type, const Page & page, size_t rows)
+void deserializeColumn(IColumn & column, const DataTypePtr & type, const ByteBuffer & data_buf, size_t rows)
 {
-    ReadBufferFromMemory buf(page.data.begin(), page.data.size());
+    ReadBufferFromMemory buf(data_buf.begin(), data_buf.size());
     CompressedReadBuffer compressed(buf);
     type->deserializeBinaryBulkWithMultipleStreams(column, //
                                                    [&](const IDataType::SubstreamPath &) { return &compressed; },
                                                    rows,
-                                                   (double)(page.data.size()) / rows,
+                                                   (double)(data_buf.size()) / rows,
                                                    true,
                                                    {});
 }
@@ -236,17 +231,20 @@ Columns readPackFromCache(const PackPtr & pack, const ColumnDefines & column_def
 
 Block readPackFromDisk(const PackPtr & pack, const PageReader & page_reader)
 {
-    auto page_map = page_reader.read(pack->col_pages);
+    auto page = page_reader.read(pack->data_page);
 
     auto & schema  = *pack->schema;
     auto   columns = schema.cloneEmptyColumns();
+
+    if (unlikely(columns.size() != page.fieldSize()))
+        throw Exception("Column size and field size not the same");
+
     for (size_t index = 0; index < schema.columns(); ++index)
     {
-        auto   page_id = pack->col_pages[index];
-        auto & page    = page_map[page_id];
-        auto & type    = schema.getByPosition(index).type;
-        auto & column  = columns[index];
-        deserializeColumn(*column, type, page, pack->rows);
+        auto   data_buf = page.getFieldDataByRequestIndex(index);
+        auto & type     = schema.getByPosition(index).type;
+        auto & column   = columns[index];
+        deserializeColumn(*column, type, data_buf, pack->rows);
     }
 
     return schema.cloneWithColumns(std::move(columns));
@@ -258,7 +256,8 @@ Columns readPackFromDisk(const PackPtr &       pack, //
                          size_t                col_start,
                          size_t                col_end)
 {
-    std::vector<PageId> page_ids;
+    PageReadFields fields;
+    fields.first = pack->data_page;
     for (size_t index = col_start; index < col_end; ++index)
     {
         auto col_id = column_defines[index].id;
@@ -268,23 +267,25 @@ Columns readPackFromDisk(const PackPtr &       pack, //
             throw Exception("Cannot find column with id" + DB::toString(col_id));
         else
         {
-            auto col_offset = it->second;
-            auto page_id    = pack->col_pages[col_offset];
-            page_ids.push_back(page_id);
+            auto col_index = it->second;
+            fields.second.push_back(col_index);
         }
     }
 
-    auto page_map = page_reader.read(page_ids);
+    auto page_map = page_reader.read({fields});
+    Page page     = page_map[pack->data_page];
 
     Columns columns;
     for (size_t index = col_start; index < col_end; ++index)
     {
-        auto   page_id = page_ids[index - col_start];
-        auto & page    = page_map[page_id];
+        auto col_id    = column_defines[index].id;
+        auto col_index = pack->colid_to_offset[col_id];
+
+        auto data_buf = page.getFieldDataByRequestIndex(col_index);
 
         auto & cd  = column_defines[index];
         auto   col = cd.type->createColumn();
-        deserializeColumn(*col, cd.type, page, pack->rows);
+        deserializeColumn(*col, cd.type, data_buf, pack->rows);
 
         columns.push_back(std::move(col));
     }
@@ -402,13 +403,10 @@ Packs DeltaValueSpace::checkHeadAndCloneTail(DMContext &         context,
         }
         else
         {
-            new_pack->col_pages.clear();
-            for (auto page_id : pack->col_pages)
-            {
-                auto new_page_id = context.storage_pool.newLogPageId();
-                wbs.log.putRefPage(new_page_id, page_id);
-                new_pack->col_pages.push_back(new_page_id);
-            }
+            auto new_page_id = context.storage_pool.newLogPageId();
+            wbs.log.putRefPage(new_page_id, pack->data_page);
+            new_pack->data_page = new_page_id;
+
             tail_clone.push_back(new_pack);
         }
     }
@@ -432,6 +430,22 @@ size_t DeltaValueSpace::getTotalCacheRows() const
     return cache_rows;
 }
 
+size_t DeltaValueSpace::getTotalCacheBytes() const
+{
+    std::scoped_lock lock(mutex);
+    size_t           cache_bytes = 0;
+    CachePtr         _last_cache;
+    for (auto & pack : packs)
+    {
+        if (pack->cache && pack->cache != _last_cache)
+        {
+            cache_bytes += pack->cache->block.bytes();
+        }
+        _last_cache = pack->cache;
+    }
+    return cache_bytes;
+}
+
 size_t DeltaValueSpace::getValidCacheRows() const
 {
     std::scoped_lock lock(mutex);
@@ -448,25 +462,36 @@ void DeltaValueSpace::recordRemovePacksPages(WriteBatches & wbs) const
 {
     for (auto & pack : packs)
     {
-        for (auto page : pack->col_pages)
-            wbs.removed_log.delPage(page);
+        wbs.removed_log.delPage(pack->data_page);
     }
+}
+
+PageId DeltaValueSpace::writePackData(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs)
+{
+    auto page_id = context.storage_pool.newLogPageId();
+
+    MemoryWriteBuffer write_buf;
+    PageFieldSizes    col_data_sizes;
+    for (auto & col : block)
+    {
+        auto last_buf_size = write_buf.count();
+        serializeColumn(write_buf, *col.column, col.type, offset, limit, true);
+        col_data_sizes.push_back(write_buf.count() - last_buf_size);
+    }
+
+    auto data_size = write_buf.count();
+    auto buf       = write_buf.tryGetReadBuffer();
+    wbs.log.putPage(page_id, 0, buf, data_size, col_data_sizes);
+
+    return page_id;
 }
 
 PackPtr DeltaValueSpace::writePack(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs)
 {
-    auto pack   = std::make_shared<Pack>();
-    pack->rows  = limit;
-    pack->bytes = block.bytes();
-
-    for (auto & col : block)
-    {
-        auto page_id     = context.storage_pool.newLogPageId();
-        auto [buf, size] = serializeColumn(*col.column, col.type, offset, limit, true);
-        wbs.log.putPage(page_id, 0, buf, size);
-        pack->col_pages.push_back(page_id);
-    }
-
+    auto pack       = std::make_shared<Pack>();
+    pack->rows      = limit;
+    pack->bytes     = block.bytes() * ((double)limit / block.rows());
+    pack->data_page = writePackData(context, block, offset, limit, wbs);
     pack->setSchema(std::make_shared<Block>(block.cloneEmpty()));
 
     return pack;
@@ -549,14 +574,14 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
     {
         // Merge into last pack.
         mutable_pack->rows += limit;
-        mutable_pack->bytes += block.bytes();
+        mutable_pack->bytes += block.bytes() * ((double)limit / block.rows());
     }
     else
     {
         // Create a new pack.
         auto pack          = std::make_shared<Pack>();
         pack->rows         = limit;
-        pack->bytes        = block.bytes();
+        pack->bytes        = block.bytes() * ((double)limit / block.rows());
         pack->cache        = cache;
         pack->cache_offset = cache_offset;
 
@@ -597,7 +622,7 @@ struct FlushPackTask
     FlushPackTask(const PackPtr & pack_) : pack(pack_) {}
 
     PackPtr pack;
-    PageIds col_pages;
+    PageId  data_page = 0;
 };
 using FlushPackTasks = std::vector<FlushPackTask>;
 
@@ -634,20 +659,13 @@ bool DeltaValueSpace::flush(DMContext & context)
             if (!pack->isSaved())
             {
                 auto & task = tasks.emplace_back(pack);
-                // We only write the pack's data if it is not a delete range, and it's data haven't been saved (col_pages is empty).
+                // We only write the pack's data if it is not a delete range, and it's data haven't been saved.
                 // Otherwise, simply save it's metadata is enough.
                 if (pack->isMutable())
                 {
                     if (unlikely(!pack->cache))
                         throw Exception("Mutable pack does not have cache", ErrorCodes::LOGICAL_ERROR);
-
-                    for (auto & col : pack->cache->block)
-                    {
-                        auto [buf, size] = serializeColumn(*col.column, col.type, pack->cache_offset, pack->rows, true);
-                        auto page_id     = context.storage_pool.newLogPageId();
-                        wbs.log.putPage(page_id, 0, buf, size);
-                        task.col_pages.push_back(page_id);
-                    }
+                    task.data_page = writePackData(context, pack->cache->block, pack->cache_offset, pack->rows, wbs);
                 }
                 flush_rows += pack->rows;
                 flush_deletes += pack->isDeleteRange();
@@ -731,8 +749,8 @@ bool DeltaValueSpace::flush(DMContext & context)
             // Set saved to true, otherwise it cannot be serialized.
             shadow->saved = true;
             // If it's data have been updated, use the new pages info.
-            if (!task.col_pages.empty())
-                shadow->col_pages.swap(task.col_pages);
+            if (task.data_page != 0)
+                shadow->data_page = task.data_page;
             if (task.pack->rows >= context.delta_small_pack_rows)
             {
                 // This pack is too large to use cache.
@@ -900,27 +918,17 @@ bool DeltaValueSpace::compact(DMContext & context)
             for (size_t i = 0; i < schema.columns(); ++i)
                 compact_columns[i]->insertRangeFrom(*block.getByPosition(i).column, 0, block_rows);
 
-            for (auto page_id : pack->col_pages)
-                wbs.removed_log.delPage(page_id);
+            wbs.removed_log.delPage(pack->data_page);
         }
 
         Block compact_block = schema.cloneWithColumns(std::move(compact_columns));
-
-        auto compact_rows = compact_block.rows();
+        auto  compact_rows  = compact_block.rows();
 
         // Note that after compact, caches are no longer exist.
-        auto compact_pack   = std::make_shared<Pack>();
-        compact_pack->rows  = compact_rows;
-        compact_pack->bytes = compact_block.bytes();
+
+        auto compact_pack = writePack(context, compact_block, 0, compact_rows, wbs);
         compact_pack->setSchema(task.to_compact.front()->schema);
         compact_pack->saved = true;
-        for (auto & col : compact_block)
-        {
-            auto page_id     = context.storage_pool.newLogPageId();
-            auto [buf, size] = serializeColumn(*col.column, col.type, 0, compact_rows, true);
-            wbs.log.putPage(page_id, 0, buf, size);
-            compact_pack->col_pages.push_back(page_id);
-        }
 
         wbs.writeLogAndData(context.storage_pool);
         task.result = compact_pack;

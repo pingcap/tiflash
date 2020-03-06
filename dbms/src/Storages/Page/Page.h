@@ -45,6 +45,11 @@ public:
         else
             return ByteBuffer(data.begin() + field_offsets[index], data.begin() + field_offsets[index + 1]);
     }
+
+    size_t fieldSize() const
+    {
+        return field_offsets.size();
+    }
 };
 using Pages       = std::vector<Page>;
 using PageMap     = std::map<PageId, Page>;
