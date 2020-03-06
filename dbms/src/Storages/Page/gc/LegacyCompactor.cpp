@@ -102,7 +102,6 @@ std::tuple<PageFileSet, PageFileSet> LegacyCompactor::tryCompact( //
 std::tuple<PageFileSet, PageFileSet, WriteBatch::SequenceID, std::optional<PageFile>>
 LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const std::set<PageFileIdAndLevel> & writing_file_ids)
 {
-    WriteBatch::SequenceID        compact_sequence = 0;
     PageStorage::MetaMergingQueue merging_queue;
     for (auto & page_file : page_files)
     {
@@ -118,8 +117,17 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
     std::tie(old_checkpoint_file, old_checkpoint_sequence, page_files_to_remove) = //
         restoreFromCheckpoints(merging_queue, version_set, info, storage_name, log);
 
-    PageFileSet            page_files_to_compact;
-    WriteBatch::SequenceID last_sequence = (old_checkpoint_sequence.has_value() ? *old_checkpoint_sequence : 0);
+    // The sequence for compacted checkpoint writebatch
+    WriteBatch::SequenceID compact_sequence = 0;
+    // To see if we stop to collect candidates
+    WriteBatch::SequenceID last_sequence = 0;
+    if (old_checkpoint_sequence)
+    {
+        compact_sequence = *old_checkpoint_sequence;
+        last_sequence    = *old_checkpoint_sequence;
+    }
+
+    PageFileSet page_files_to_compact;
     while (!merging_queue.empty())
     {
         auto reader = merging_queue.top();
@@ -138,10 +146,10 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
         // If no checkpoint, we apply all edits.
         // Else restroed from checkpoint, if checkpoint's WriteBatch sequence number is 0, we need to apply
         // all edits after that checkpoint too. If checkpoint's WriteBatch sequence number is not 0, we
-        // apply WriteBatch edits only if its WriteBatch sequence is larger than checkpoint.
+        // apply WriteBatch edits only if its WriteBatch sequence is larger than or equeal tocheckpoint.
         if (!old_checkpoint_sequence.has_value() || //
             (old_checkpoint_sequence.has_value()
-             && (*old_checkpoint_sequence == 0 || *old_checkpoint_sequence < reader->writeBatchSequence())))
+             && (*old_checkpoint_sequence == 0 || *old_checkpoint_sequence <= reader->writeBatchSequence())))
         {
             // LOG_TRACE(log, storage_name << " collectPageFilesToCompact recovering from " + reader->toString());
             try
