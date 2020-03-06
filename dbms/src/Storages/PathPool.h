@@ -56,6 +56,7 @@ public:
         path_infos.clear();
         database = path_pool.database;
         table = path_pool.table;
+        log = path_pool.log;
         for (auto & path_info : path_pool.path_infos)
         {
             path_infos.emplace_back(path_info);

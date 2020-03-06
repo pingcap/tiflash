@@ -432,8 +432,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
             std::transform(s_engine.begin(), s_engine.end(), s_engine.begin(), [](char ch) { return std::tolower(ch); });
             if (s_engine == "tmt")
                 engine = ::TiDB::StorageEngine::TMT;
-            else if (s_engine == "dm")
-                engine = ::TiDB::StorageEngine::DM;
+            else if (s_engine == "dt")
+                engine = ::TiDB::StorageEngine::DT;
             else
                 engine = engine_if_empty;
         }
