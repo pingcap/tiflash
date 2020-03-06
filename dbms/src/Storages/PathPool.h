@@ -36,7 +36,7 @@ public:
         for (auto & path : paths_)
         {
             PathInfo info;
-            info.path = path;
+            info.path = path + "/" + database + "/" + table;
             info.total_size = 0;
             path_infos.emplace_back(info);
         }
@@ -52,15 +52,15 @@ public:
 
     PathPool& operator=(const PathPool & path_pool)
     {
-        path_map.clear();
         path_infos.clear();
-        database = path_pool.database;
-        table = path_pool.table;
-        log = path_pool.log;
+        path_map = path_pool.path_map;
         for (auto & path_info : path_pool.path_infos)
         {
             path_infos.emplace_back(path_info);
         }
+        database = path_pool.database;
+        table = path_pool.table;
+        log = path_pool.log;
         return *this;
     }
 
@@ -133,6 +133,7 @@ public:
             if (path_infos[i].path == path)
             {
                 index = i;
+                break;
             }
         }
         if (unlikely(index == UINT32_MAX))
