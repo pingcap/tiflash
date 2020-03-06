@@ -18,11 +18,6 @@
 │ data type test │ female │
 └────────────────┴────────┘
 
-=> DBGInvoke dag('select * from default.test', 4, 'chunk') 
-┌─col_1──────────┬─col_2──┐
-│ data type test │ female │
-└────────────────┴────────┘
-
 # DAG read filter string column
 => DBGInvoke dag('select * from default.test where col_1 = \'data type test\'') 
 ┌─col_1──────────┬─col_2──┐
