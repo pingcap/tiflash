@@ -52,7 +52,7 @@ public:
 
     void alter(const AlterCommands & commands, const String & database_name, const String & table_name, const Context & context) override;
 
-    ::TiDB::StorageEngine engineType() const override { return ::TiDB::StorageEngine::DM; }
+    ::TiDB::StorageEngine engineType() const override { return ::TiDB::StorageEngine::DT; }
 
     // Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
     void alterFromTiDB(

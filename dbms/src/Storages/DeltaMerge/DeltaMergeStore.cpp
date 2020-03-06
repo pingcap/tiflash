@@ -58,10 +58,9 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
     LOG_INFO(log, "Restore DeltaMerge Store start");
 
     auto & extra_paths_root = db_context.getGlobalContext().getExtraPaths();
-    if (extra_paths_root.empty())
-        extra_paths = PathPool({PathPool::IdAndPath{0, path}}).withTable(db_name, table_name_);
-    else
-        extra_paths = extra_paths_root.withTable(db_name, table_name_);
+    extra_paths             = extra_paths_root.withTable(db_name, table_name_);
+
+    loadDMFiles();
 
     table_columns.emplace_back(table_handle_define);
     table_columns.emplace_back(getVersionColumnDefine());
@@ -109,19 +108,18 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
 
     auto dmfile_scanner = [=]() {
         PageStorage::PathAndIdsVec path_and_ids_vec;
-        for (auto & [_, extra_path] : extra_paths.listPaths())
+        for (auto & path : extra_paths.listPaths())
         {
-            (void)_;
             auto & path_and_ids           = path_and_ids_vec.emplace_back();
-            path_and_ids.first            = extra_path;
-            auto file_ids_in_current_path = DMFile::listAllInPath(extra_path + "/" + STABLE_FOLDER_NAME, /* can_gc= */ true);
+            path_and_ids.first            = path;
+            auto file_ids_in_current_path = DMFile::listAllInPath(path + "/" + STABLE_FOLDER_NAME, /* can_gc= */ true);
             for (auto id : file_ids_in_current_path)
                 path_and_ids.second.insert(id);
         }
         return path_and_ids_vec;
     };
     auto dmfile_remover = [&](const PageStorage::PathAndIdsVec & path_and_ids_vec, const std::set<PageId> & valid_ids) {
-        for (auto & [extra_path, ids] : path_and_ids_vec)
+        for (auto & [path, ids] : path_and_ids_vec)
         {
             for (auto id : ids)
             {
@@ -129,9 +127,12 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
                     continue;
 
                 // Note that ref_id is useless here.
-                auto dmfile = DMFile::restore(id, /* ref_id= */ 0, extra_path + "/" + STABLE_FOLDER_NAME, false);
+                auto dmfile = DMFile::restore(id, /* ref_id= */ 0, path + "/" + STABLE_FOLDER_NAME, false);
                 if (dmfile->canGC())
+                {
+                    extra_paths.removeDMFile(dmfile->fileId());
                     dmfile->remove();
+                }
 
                 LOG_DEBUG(log, "GC removed useless dmfile: " << dmfile->path());
             }
@@ -1299,6 +1300,21 @@ SortDescription DeltaMergeStore::getPrimarySortDescription() const
     desc.emplace_back(table_handle_define.name, /* direction_= */ 1, /* nulls_direction_= */ 1);
     return desc;
 }
+
+void DeltaMergeStore::loadDMFiles()
+{
+    LOG_DEBUG(log, "Loading dm files");
+
+    for (const auto & path : extra_paths.listPaths())
+    {
+        for (auto & file_id : DMFile::listAllInPath(path + "/" + STABLE_FOLDER_NAME, false))
+        {
+            auto dmfile = DMFile::restore(file_id, /* ref_id= */ 0, path + "/" + STABLE_FOLDER_NAME, true);
+            extra_paths.addDMFile(file_id, dmfile->getBytes(), path);
+        }
+    }
+}
+
 
 } // namespace DM
 } // namespace DB

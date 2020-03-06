@@ -21,7 +21,7 @@ struct DMContext : private boost::noncopyable
 {
     const Context &  db_context;
     const String     store_path;
-    const PathPool & extra_paths;
+    PathPool &       extra_paths;
     StoragePool &    storage_pool;
     const UInt64     hash_salt;
 
@@ -52,7 +52,7 @@ struct DMContext : private boost::noncopyable
 
     DMContext(const Context &       db_context_,
               const String &        store_path_,
-              const PathPool &      extra_paths_,
+              PathPool &            extra_paths_,
               StoragePool &         storage_pool_,
               const UInt64          hash_salt_,
               const ColumnDefines & store_columns_,
