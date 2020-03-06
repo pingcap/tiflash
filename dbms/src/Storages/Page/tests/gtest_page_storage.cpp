@@ -839,7 +839,7 @@ try
     }
 
     {
-        // Read as single page
+        // Read as their sequence
         std::vector<PageStorage::PageReadFields> read_fields;
         PageStorage::PageReadFields              p0_fields{0, {0, 1, 3, 5}};
         read_fields.push_back(p0_fields);
@@ -852,35 +852,76 @@ try
         {
             Page page0 = pages.at(0);
             ASSERT_EQ(page0.page_id, 0UL);
-            for (size_t index = 0; index < p0_fields.second.size(); ++index)
+            for (auto index : p0_fields.second)
             {
-                auto field_index = p0_fields.second[index];
-                auto data        = page0.getFieldDataByRequestIndex(index);
-                ASSERT_EQ(data.size(), page0_fields.at(field_index)) //
-                    << "Page0 field[" << field_index << "] data's size not match";
+                auto data = page0.getFieldData(index);
+                ASSERT_EQ(data.size(), page0_fields.at(index));
                 // check page data
                 for (size_t i = 0; i < data.size(); ++i)
                 {
-                    EXPECT_EQ(*(data.begin() + i), static_cast<char>((page0_offsets[field_index] + i) % 0xff))
-                        << "Page0, field index: " << field_index << ", offset: " << i //
-                        << ", offset inside page: " << page0_offsets[field_index] + i;
+                    EXPECT_EQ(*(data.begin() + i), static_cast<char>((page0_offsets[index] + i) % 0xff))
+                        << "Page0, field index: " << index << ", offset: " << i //
+                        << ", offset inside page: " << page0_offsets[index] + i;
                 }
             }
         }
         {
             Page page1 = pages.at(1);
             ASSERT_EQ(page1.page_id, 1UL);
-            for (size_t index = 0; index < p1_fields.second.size(); ++index)
+            for (auto index : p1_fields.second)
             {
-                auto field_index = p1_fields.second[index];
-                auto data        = page1.getFieldDataByRequestIndex(index);
-                ASSERT_EQ(data.size(), page1_fields.at(field_index)) //
-                    << "Page0 field[" << field_index << "] data's size not match";
+                auto data = page1.getFieldData(index);
+                ASSERT_EQ(data.size(), page1_fields.at(index));
                 // check page data
                 for (size_t i = 0; i < data.size(); ++i)
-                    EXPECT_EQ(*(data.begin() + i), static_cast<char>((page1_offsets[field_index] + i) % 0xff))
-                        << "Page1, field index: " << field_index << ", offset: " << i //
-                        << ", offset inside page: " << page1_offsets[field_index] + i;
+                    EXPECT_EQ(*(data.begin() + i), static_cast<char>((page1_offsets[index] + i) % 0xff))
+                        << "Page1, field index: " << index << ", offset: " << i //
+                        << ", offset inside page: " << page1_offsets[index] + i;
+            }
+        }
+    }
+
+    {
+        // Read in random sequence
+        std::vector<PageStorage::PageReadFields> read_fields;
+        PageStorage::PageReadFields              p0_fields{0, {3, 0, 1, 5}};
+        read_fields.push_back(p0_fields);
+        PageStorage::PageReadFields p1_fields{1, {3, 4, 2}};
+        read_fields.push_back(p1_fields);
+
+        auto pages = storage->read(read_fields);
+        ASSERT_EQ(pages.size(), 2UL);
+
+        {
+            Page page0 = pages.at(0);
+            ASSERT_EQ(page0.page_id, 0UL);
+            ASSERT_EQ(page0.field_offsets.size(), p0_fields.second.size());
+            for (auto index : p0_fields.second)
+            {
+                auto data = page0.getFieldData(index);
+                ASSERT_EQ(data.size(), page0_fields.at(index));
+                // check page data
+                for (size_t i = 0; i < data.size(); ++i)
+                {
+                    EXPECT_EQ(*(data.begin() + i), static_cast<char>((page0_offsets[index] + i) % 0xff))
+                        << "Page0, field index: " << index << ", offset: " << i //
+                        << ", offset inside page: " << page0_offsets[index] + i;
+                }
+            }
+        }
+        {
+            Page page1 = pages.at(1);
+            ASSERT_EQ(page1.page_id, 1UL);
+            ASSERT_EQ(page1.field_offsets.size(), p1_fields.second.size());
+            for (auto index : p1_fields.second)
+            {
+                auto data = page1.getFieldData(index);
+                ASSERT_EQ(data.size(), page1_fields.at(index));
+                // check page data
+                for (size_t i = 0; i < data.size(); ++i)
+                    EXPECT_EQ(*(data.begin() + i), static_cast<char>((page1_offsets[index] + i) % 0xff))
+                        << "Page1, field index: " << index << ", offset: " << i //
+                        << ", offset inside page: " << page1_offsets[index] + i;
             }
         }
     }
