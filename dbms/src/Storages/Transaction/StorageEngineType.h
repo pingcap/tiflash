@@ -8,7 +8,7 @@ enum class StorageEngine
 {
     UNSPECIFIED = 0,
     TMT,
-    DM,
+    DT,
 
     // indicate other engine type in ClickHouse
     UNSUPPORTED_ENGINES = 128,

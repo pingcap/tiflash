@@ -221,7 +221,7 @@ void RegionTable::removeRegion(const RegionID region_id)
             /// If this block for long time, consider to do this in background threads.
             TMTContext & tmt = context->getTMTContext();
             auto storage = tmt.getStorages().get(table_id);
-            if (storage && storage->engineType() == TiDB::StorageEngine::DM)
+            if (storage && storage->engineType() == TiDB::StorageEngine::DT)
             {
                 // acquire lock so that no other threads can change storage's structure
                 auto storage_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
