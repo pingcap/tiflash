@@ -748,7 +748,8 @@ void PageStorage::prepareSnapshotWriteBatch(const SnapshotPtr snapshot, WriteBat
     for (auto & page_id : normal_ids)
     {
         auto page = snapshot->version()->findNormalPageEntry(page_id);
-        wb.upsertPage(page_id, page->tag, nullptr, page->size);
+        // upsert page size in checkpoint is 0
+        wb.upsertPage(page_id, page->tag, nullptr, 0);
     }
 
     // After ingesting normal_pages, we will ref them manually to ensure the ref-count is correct.
