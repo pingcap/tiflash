@@ -13,7 +13,7 @@ extern const int LOGICAL_ERROR;
 
 void RegionPersister::drop(RegionID region_id, const RegionTaskLock &)
 {
-    WriteBatch wb;
+    stable::WriteBatch wb;
     wb.delPage(region_id);
     page_storage.write(std::move(wb));
 }
@@ -67,7 +67,7 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
         return;
     }
 
-    WriteBatch wb;
+    stable::WriteBatch wb;
     auto read_buf = buffer.tryGetReadBuffer();
     wb.putPage(region_id, applied_index, read_buf, region_size);
     page_storage.write(std::move(wb));
@@ -75,10 +75,11 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
 
 RegionMap RegionPersister::restore(IndexReaderCreateFunc * func)
 {
-    page_storage.restore();
+    // FIXME: if we use DB::PageStorage, we should call `restore`
+    // page_storage.restore();
 
     RegionMap regions;
-    auto acceptor = [&](const Page & page) {
+    auto acceptor = [&](const stable::Page & page) {
         ReadBufferFromMemory buf(page.data.begin(), page.data.size());
         auto region = Region::deserialize(buf, func);
         if (page.page_id != region->id())
