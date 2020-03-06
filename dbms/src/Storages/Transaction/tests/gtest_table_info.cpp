@@ -61,7 +61,7 @@ struct Case
         };
 
         verify_stmt(TiDB::StorageEngine::TMT);
-        verify_stmt(TiDB::StorageEngine::DM);
+        verify_stmt(TiDB::StorageEngine::DT);
     }
 
 private:

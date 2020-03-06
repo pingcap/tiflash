@@ -66,11 +66,7 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
         readIntBinary(ref_id, buf);
 
         auto file_id    = context.storage_pool.data().getNormalPageId(ref_id);
-        auto page_entry = context.storage_pool.data().getEntry(ref_id);
-        if (!page_entry.isValid())
-            throw Exception("Page entry of " + DB::toString(ref_id) + " not found!");
-        auto path_id          = page_entry.tag;
-        auto file_parent_path = context.extra_paths.getPath(path_id) + "/" + STABLE_FOLDER_NAME;
+        auto file_parent_path = context.extra_paths.getPath(file_id) + "/" + STABLE_FOLDER_NAME;
 
         auto dmfile = DMFile::restore(file_id, ref_id, file_parent_path);
         stable->files.push_back(dmfile);
@@ -111,7 +107,12 @@ size_t StableValueSpace::getRows()
 
 size_t StableValueSpace::getBytes()
 {
-    return 0;
+    size_t result = 0;
+    for (auto & dmfile : files)
+    {
+        result += dmfile->getBytes();
+    }
+    return result;
 }
 
 size_t StableValueSpace::getPacks()

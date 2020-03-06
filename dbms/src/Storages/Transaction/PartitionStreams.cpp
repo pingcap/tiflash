@@ -98,7 +98,7 @@ void RegionTable::writeBlockByRegion(Context & context, RegionPtr region, Region
                 output.write(std::move(block));
                 break;
             }
-            case ::TiDB::StorageEngine::DM:
+            case ::TiDB::StorageEngine::DT:
             {
                 auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
                 // imported data from TiDB, ASTInsertQuery.is_import need to be true
