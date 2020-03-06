@@ -25,7 +25,7 @@ public:
     void SetUp() override
     {
         dropFiles();
-        storage_pool = std::make_unique<StoragePool>("test.t1", path);
+        storage_pool = std::make_unique<StoragePool>("test.t1", path, DB::Settings());
         dm_file      = DMFile::create(0, path);
         db_context   = std::make_unique<Context>(DMTestEnv::getContext(DB::Settings()));
 

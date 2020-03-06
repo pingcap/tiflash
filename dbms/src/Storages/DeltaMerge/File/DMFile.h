@@ -1,9 +1,8 @@
 #pragma once
 
-#include <Poco/File.h>
-
 #include <Core/Types.h>
 #include <IO/ReadBufferFromFile.h>
+#include <Poco/File.h>
 #include <Storages/DeltaMerge/ColumnStat.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <common/logger_useful.h>
@@ -100,8 +99,8 @@ public:
     }
 
     size_t              getPacks() { return pack_stats.size(); }
-    const PackStats &  getPackStats() { return pack_stats; }
-    const PackStat &   getPackStat(size_t pack_index) { return pack_stats[pack_index]; }
+    const PackStats &   getPackStats() { return pack_stats; }
+    const PackStat &    getPackStat(size_t pack_index) { return pack_stats[pack_index]; }
     const ColumnStats & getColumnStats() { return column_stats; }
     Status              getStatus() { return status; }
 
@@ -126,7 +125,7 @@ private:
     UInt64 ref_id; // It is a reference to file_id, could be the same.
     String parent_path;
 
-    PackStats  pack_stats;
+    PackStats   pack_stats;
     ColumnStats column_stats;
 
     Status status;

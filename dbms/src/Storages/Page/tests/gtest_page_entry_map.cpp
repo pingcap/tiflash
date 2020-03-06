@@ -1,6 +1,6 @@
-#include "gtest/gtest.h"
-
 #include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
+
+#include "gtest/gtest.h"
 
 namespace DB
 {
@@ -10,7 +10,7 @@ namespace tests
 class PageEntryMap_test : public ::testing::Test
 {
 public:
-    PageEntryMap_test() : map(nullptr), log(&Poco::Logger::get("PageEntryMap_test")), versions(config_, log) {}
+    PageEntryMap_test() : map(nullptr), log(&Poco::Logger::get("PageEntryMap_test")), versions("entries_map_test", config_, log) {}
 
 protected:
     void SetUp() override

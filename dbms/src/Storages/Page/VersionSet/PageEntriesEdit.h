@@ -48,6 +48,8 @@ public:
         records.emplace_back(record);
     }
 
+    void clear() { records.clear(); }
+
     bool empty() const { return records.empty(); }
 
     size_t size() const { return records.size(); }

@@ -23,13 +23,19 @@ struct WriteBatches
 
     void writeLogAndData(StoragePool & storage_pool)
     {
-        storage_pool.log().write(log);
-        storage_pool.data().write(data);
-
+        PageIds log_write_pages, data_write_pages;
         for (auto & w : log.getWrites())
-            writtenLog.push_back(w.page_id);
+            log_write_pages.push_back(w.page_id);
         for (auto & w : data.getWrites())
-            writtenData.push_back(w.page_id);
+            data_write_pages.push_back(w.page_id);
+
+        storage_pool.log().write(std::move(log));
+        storage_pool.data().write(std::move(data));
+
+        for (auto page_id : log_write_pages)
+            writtenLog.push_back(page_id);
+        for (auto page_id : data_write_pages)
+            writtenData.push_back(page_id);
 
         log.clear();
         data.clear();
@@ -44,21 +50,21 @@ struct WriteBatches
         for (auto p : writtenData)
             data_wb.delPage(p);
 
-        storage_pool.log().write(log_wb);
-        storage_pool.data().write(data_wb);
+        storage_pool.log().write(std::move(log_wb));
+        storage_pool.data().write(std::move(data_wb));
     }
 
     void writeMeta(StoragePool & storage_pool)
     {
-        storage_pool.meta().write(meta);
+        storage_pool.meta().write(std::move(meta));
         meta.clear();
     }
 
     void writeRemoves(StoragePool & storage_pool)
     {
-        storage_pool.log().write(removed_log);
-        storage_pool.data().write(removed_data);
-        storage_pool.meta().write(removed_meta);
+        storage_pool.log().write(std::move(removed_log));
+        storage_pool.data().write(std::move(removed_data));
+        storage_pool.meta().write(std::move(removed_meta));
 
         removed_log.clear();
         removed_data.clear();
