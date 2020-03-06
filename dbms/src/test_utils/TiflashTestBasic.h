@@ -15,7 +15,8 @@ class TiFlashTestEnv
 public:
     static String getTemporaryPath() { return "./tmp/"; }
 
-    static std::vector<String> getExtraPaths() {
+    static std::vector<String> getExtraPaths() 
+    {
         std::vector<String> result;
         result.push_back(getTemporaryPath());
         return result;
