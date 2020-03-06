@@ -246,7 +246,7 @@ Block readPackFromDisk(const PackPtr & pack, const PageReader & page_reader)
 
     for (size_t index = 0; index < schema.columns(); ++index)
     {
-        auto   data_buf = page.getFieldDataByRequestIndex(index);
+        auto   data_buf = page.getFieldData(index);
         auto & type     = schema.getByPosition(index).type;
         auto & column   = columns[index];
         deserializeColumn(*column, type, data_buf, pack->rows);
@@ -281,10 +281,11 @@ Columns readPackFromDisk(const PackPtr &       pack, //
     Page page     = page_map[pack->data_page];
 
     Columns columns;
-    size_t  i = 0;
     for (size_t index = col_start; index < col_end; ++index)
     {
-        auto data_buf = page.getFieldDataByRequestIndex(i++);
+        auto col_id    = column_defines[index].id;
+        auto col_index = pack->colid_to_offset[col_id];
+        auto data_buf  = page.getFieldData(col_index);
 
         auto & cd  = column_defines[index];
         auto   col = cd.type->createColumn();
