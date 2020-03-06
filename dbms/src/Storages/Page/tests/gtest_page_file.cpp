@@ -20,8 +20,9 @@ TEST(PageFile_test, Compare)
     ASSERT_EQ(comp(pf0, pf1), true);
     ASSERT_EQ(comp(pf1, pf0), false);
 
+    // Checkpoin file is less than formal file
     ASSERT_EQ(comp(checkpoint_pf, pf0), true);
-    ASSERT_EQ(comp(pf0, checkpoint_pf), true);
+    ASSERT_EQ(comp(pf0, checkpoint_pf), false);
 
     PageFileSet pf_set;
     pf_set.emplace(pf0);
