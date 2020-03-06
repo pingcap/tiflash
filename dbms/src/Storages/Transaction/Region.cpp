@@ -622,11 +622,11 @@ void Region::handleWriteRaftCmd(raft_cmdpb::RaftCmdRequest && request, UInt64 in
             }
         }
 
-        if (set_applied_index)
+        if (set_applied)
             meta.setApplied(index, term);
     }
 
-    if (set_applied_index)
+    if (set_applied)
         meta.notifyAll();
 }
 
