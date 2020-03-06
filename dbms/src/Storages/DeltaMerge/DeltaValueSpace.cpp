@@ -407,9 +407,15 @@ Packs DeltaValueSpace::checkHeadAndCloneTail(DMContext &         context,
         }
         else
         {
-            auto new_page_id = context.storage_pool.newLogPageId();
-            wbs.log.putRefPage(new_page_id, pack->data_page);
-            new_pack->data_page = new_page_id;
+            if (pack->saved)
+            {
+                if (unlikely(pack->data_page == 0))
+                    throw Exception("Saved pack has no data_page: " + pack->toString());
+
+                auto new_page_id = context.storage_pool.newLogPageId();
+                wbs.log.putRefPage(new_page_id, pack->data_page);
+                new_pack->data_page = new_page_id;
+            }
 
             tail_clone.push_back(new_pack);
         }
