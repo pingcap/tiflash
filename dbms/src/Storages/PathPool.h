@@ -42,13 +42,7 @@ public:
         }
     }
 
-    PathPool(const PathPool & path_pool) : log{&Logger::get("PathPool")}
-    {
-        for (auto & path_info : path_pool.path_infos)
-        {
-            path_infos.emplace_back(path_info);
-        }
-    }
+    PathPool(const PathPool & path_pool) = delete;
 
     PathPool& operator=(const PathPool & path_pool)
     {
