@@ -147,7 +147,6 @@ public:
 
     WriteBatch() = default;
     WriteBatch(WriteBatch && rhs) : writes(std::move(rhs.writes)), sequence(rhs.sequence) {}
-    WriteBatch & operator=(WriteBatch && o) = default;
 
 private:
     Writes     writes;
