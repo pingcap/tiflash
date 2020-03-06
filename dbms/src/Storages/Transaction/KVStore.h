@@ -54,6 +54,7 @@ public:
     void gcRegionCache(Seconds gc_persist_period = REGION_CACHE_GC_PERIOD);
 
     void tryPersist(const RegionID region_id);
+    static void tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region);
 
     size_t regionSize() const;
     TiFlashApplyRes handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,

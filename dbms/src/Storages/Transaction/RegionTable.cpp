@@ -93,7 +93,7 @@ bool RegionTable::shouldFlush(const InternalRegion & region) const
 
 RegionDataReadInfoList RegionTable::flushRegion(const RegionPtr & region, bool try_persist) const
 {
-    const auto & tmt = context->getTMTContext();
+    auto & tmt = context->getTMTContext();
 
     LOG_TRACE(log,
         __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " original " << region->dataSize()
@@ -123,7 +123,10 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtr & region, bool t
         if (cache_size == 0)
         {
             if (try_persist)
+            {
+                KVStore::tryFlushRegionCacheInStorage(tmt, *region);
                 tmt.getKVStore()->tryPersist(region->id());
+            }
         }
 
         LOG_TRACE(log,
@@ -230,8 +233,12 @@ void RegionTable::removeRegion(const RegionID region_id)
                 if (region_it == table.regions.end())
                     return;
                 HandleRange<HandleID> handle_range = region_it->second.range_in_table;
-                ::DB::DM::HandleRange dm_handle_range(handle_range.first.handle_id, handle_range.second.handle_id);
-                dm_storage->deleteRange(dm_handle_range, context->getSettingsRef());
+
+                auto dm_range_start = handle_range.first.handle_id;
+                auto dm_range_end = handle_range.second.type == TiKVHandle::HandleIDType::MAX ? DM::HandleRange::MAX : handle_range.second.handle_id;
+
+                dm_storage->deleteRange({dm_range_start, dm_range_end}, context->getSettingsRef());
+                dm_storage->flushCache(tmt.getContext(), dm_range_start, dm_range_end);
             }
         }
 
