@@ -42,7 +42,18 @@ public:
         }
     }
 
-    PathPool(const PathPool & path_pool) = delete;
+    PathPool(const PathPool & path_pool)
+    {
+        path_infos.clear();
+        path_map = path_pool.path_map;
+        for (auto & path_info : path_pool.path_infos)
+        {
+            path_infos.emplace_back(path_info);
+        }
+        database = path_pool.database;
+        table = path_pool.table;
+        log = path_pool.log;
+    }
 
     PathPool& operator=(const PathPool & path_pool)
     {
