@@ -237,8 +237,8 @@ struct Settings
     M(SettingUInt64, mutable_deduper, 5, "The deduper used by MutableMergeTree storage. By default 5. 0: OriginStreams, 1: OriginUnity, 2: ReplacingUnity, 3: ReplacingPartitioning, 4: DedupPartitioning, 5: ReplacingPartitioningOpt.")\
     M(SettingUInt64, delta_merge_size, 10000000, "The delta rows limit in memory. After that delta rows will be flushed.")\
     \
-    M(SettingUInt64, dm_segment_limit_rows, 1500000, "Average rows of segments in DeltaMerge Engine")\
-    M(SettingUInt64, dm_segment_delta_limit_rows, 150000, "Max rows of segment delta in DeltaMerge Engine ")\
+    M(SettingUInt64, dm_segment_limit_rows, 1000000, "Average rows of segments in DeltaMerge Engine")\
+    M(SettingUInt64, dm_segment_delta_limit_rows, 80000, "Max rows of segment delta in DeltaMerge Engine ")\
     M(SettingUInt64, dm_segment_delta_cache_limit_rows, 4000, "Max rows of cache in segment delta in DeltaMerge Engine")\
     M(SettingUInt64, dm_segment_delta_small_pack_rows, 512, "Determine whether a pack in delta is small or not")\
     M(SettingUInt64, dm_segment_stable_pack_rows, DEFAULT_MERGE_BLOCK_SIZE, "Expected stable pack rows in DeltaMerge Engine")\
