@@ -1,9 +1,9 @@
 #pragma once
 
-#include <gtest/gtest.h>
-
 #include <Interpreters/Context.h>
+#include <Poco/Path.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <gtest/gtest.h>
 
 namespace DB
 {
@@ -13,7 +13,7 @@ namespace tests
 class TiFlashTestEnv
 {
 public:
-    static String getTemporaryPath() { return "./tmp/"; }
+    static String getTemporaryPath() { return Poco::Path("./tmp/").absolute().toString(); }
 
     static std::vector<String> getExtraPaths()
     {
