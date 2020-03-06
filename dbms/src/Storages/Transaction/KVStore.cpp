@@ -213,13 +213,18 @@ TiFlashApplyRes KVStore::handleWriteRaftCmd(
         LOG_WARNING(log, __PRETTY_FUNCTION__ << ": [region " << region_id << "] is not found, might be removed already");
         return TiFlashApplyRes::NotFound;
     }
+
+    /// If isBgFlushDisabled = true, then only set region's applied index and term after region is flushed.
+
+    bool is_bg_flush_disabled = tmt.isBgFlushDisabled();
     const auto ori_size = region->dataSize();
-    region->handleWriteRaftCmd(std::move(request), index, term);
+    region->handleWriteRaftCmd(std::move(request), index, term, /* set_applied */ !is_bg_flush_disabled);
+
     {
         tmt.getRegionTable().updateRegion(*region);
         if (region->dataSize() != ori_size)
         {
-            if (tmt.isBgFlushDisabled())
+            if (is_bg_flush_disabled)
             {
                 // Decode data in region and then flush
                 region->tryPreDecodeTiKVValue(tmt);
@@ -232,8 +237,11 @@ TiFlashApplyRes KVStore::handleWriteRaftCmd(
         }
     }
 
-    region->setApplied(index, term);
-    region->notifyApplied();
+    if (is_bg_flush_disabled)
+    {
+        region->setApplied(index, term);
+        region->notifyApplied();
+    }
 
     return TiFlashApplyRes::None;
 }

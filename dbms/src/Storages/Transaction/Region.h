@@ -161,7 +161,7 @@ public:
     void tryPreDecodeTiKVValue(TMTContext & tmt);
 
     TableID getMappedTableID() const;
-    void handleWriteRaftCmd(raft_cmdpb::RaftCmdRequest && request, UInt64 index, UInt64 term);
+    void handleWriteRaftCmd(raft_cmdpb::RaftCmdRequest && request, UInt64 index, UInt64 term, bool set_applied = true);
 
 private:
     Region() = delete;
