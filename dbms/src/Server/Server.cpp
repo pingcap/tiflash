@@ -449,7 +449,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                                 ErrorCodes::INVALID_CONFIG_PARAMETER);
             disable_bg_flush = false;
         }
-        else if (engine == ::TiDB::StorageEngine::DM)
+        else if (engine == ::TiDB::StorageEngine::DT)
         {
             if (config().has(disable_bg_flush_conf))
                 disable_bg_flush = config().getBool(disable_bg_flush_conf);
