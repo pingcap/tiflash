@@ -11,12 +11,28 @@ namespace tests
 
 TEST(PageFile_test, Compare)
 {
-    PageFile pf0 = PageFile::openPageFileForRead(0, 0, ".", PageFile::Type::Formal, &Poco::Logger::get("PageFile"));
-    PageFile pf1 = PageFile::openPageFileForRead(0, 1, ".", PageFile::Type::Formal, &Poco::Logger::get("PageFile"));
+    PageFile checkpoint_pf = PageFile::openPageFileForRead(55, 0, ".", PageFile::Type::Checkpoint, &Poco::Logger::get("PageFile"));
+
+    PageFile pf0 = PageFile::openPageFileForRead(2, 0, ".", PageFile::Type::Formal, &Poco::Logger::get("PageFile"));
+    PageFile pf1 = PageFile::openPageFileForRead(55, 1, ".", PageFile::Type::Formal, &Poco::Logger::get("PageFile"));
 
     PageFile::Comparator comp;
     ASSERT_EQ(comp(pf0, pf1), true);
     ASSERT_EQ(comp(pf1, pf0), false);
+
+    ASSERT_EQ(comp(checkpoint_pf, pf0), true);
+    ASSERT_EQ(comp(pf0, checkpoint_pf), true);
+
+    PageFileSet pf_set;
+    pf_set.emplace(pf0);
+    pf_set.emplace(pf1);
+    pf_set.emplace(checkpoint_pf);
+
+    ASSERT_EQ(pf_set.begin()->getType(), PageFile::Type::Checkpoint);
+    ASSERT_EQ(pf_set.begin()->fileIdLevel(), checkpoint_pf.fileIdLevel());
+    ASSERT_EQ(pf_set.rbegin()->getType(), PageFile::Type::Formal);
+    ASSERT_EQ(pf_set.rbegin()->fileIdLevel(), pf1.fileIdLevel());
+
 }
 
 TEST(Page_test, GetField)

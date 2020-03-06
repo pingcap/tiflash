@@ -96,7 +96,7 @@ public:
                 if (lhs.type == PageFile::Type::Checkpoint)
                     return true;
                 else if (rhs.type == PageFile::Type::Checkpoint)
-                    return true;
+                    return false;
                 // else fallback to later compare
             }
             return std::make_pair(lhs.file_id, lhs.level) < std::make_pair(rhs.file_id, rhs.level);

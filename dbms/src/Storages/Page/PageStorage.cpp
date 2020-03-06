@@ -429,7 +429,17 @@ PageMap PageStorage::read(const std::vector<PageId> & page_ids, SnapshotPtr snap
         auto & [page_id_and_entries, file_reader] = file_read_infos[file_id_level];
         page_id_and_entries.emplace_back(page_id, *page_entry);
         if (file_reader == nullptr)
-            file_reader = getReader(file_id_level);
+        {
+            try
+            {
+                file_reader = getReader(file_id_level);
+            }
+            catch (DB::Exception & e)
+            {
+                e.addMessage("(while reading Page[" + DB::toString(page_id) + "] of " + storage_name + ")");
+                throw;
+            }
+        }
     }
 
     PageMap page_map;
@@ -462,7 +472,17 @@ void PageStorage::read(const std::vector<PageId> & page_ids, const PageHandler &
         auto & [page_id_and_entries, file_reader] = file_read_infos[file_id_level];
         page_id_and_entries.emplace_back(page_id, *page_entry);
         if (file_reader == nullptr)
-            file_reader = getReader(file_id_level);
+        {
+            try
+            {
+                file_reader = getReader(file_id_level);
+            }
+            catch (DB::Exception & e)
+            {
+                e.addMessage("(while reading Page[" + DB::toString(page_id) + "] of " + storage_name + ")");
+                throw;
+            }
+        }
     }
 
     for (auto & [file_id_level, entries_and_reader] : file_read_infos)
@@ -491,7 +511,17 @@ PageMap PageStorage::read(const std::vector<PageReadFields> & page_fields, Snaps
         auto & [file_reader, field_infos] = file_read_infos[file_id_level];
         field_infos.emplace_back(page_id, *page_entry, field_indices);
         if (file_reader == nullptr)
-            file_reader = getReader(file_id_level);
+        {
+            try
+            {
+                file_reader = getReader(file_id_level);
+            }
+            catch (DB::Exception & e)
+            {
+                e.addMessage("(while reading Page[" + DB::toString(page_id) + "] of " + storage_name + ")");
+                throw;
+            }
+        }
     }
 
     PageMap page_map;
@@ -568,7 +598,10 @@ void PageStorage::registerExternalPagesCallbacks(ExternalPagesScanner scanner, E
 struct GCDebugInfo
 {
     PageFileIdAndLevel min_file_id;
+    PageFile::Type     min_file_type;
     PageFileIdAndLevel max_file_id;
+    PageFile::Type     max_file_type;
+    size_t             page_files_size;
 
     size_t num_files_archive_in_compact_legacy = 0;
 
@@ -668,8 +701,11 @@ bool PageStorage::gc()
         }
     }
 
-    debugging_info.min_file_id = page_files.begin()->fileIdLevel();
-    debugging_info.max_file_id = page_files.rbegin()->fileIdLevel();
+    debugging_info.min_file_id     = page_files.begin()->fileIdLevel();
+    debugging_info.min_file_type   = page_files.begin()->getType();
+    debugging_info.max_file_id     = page_files.rbegin()->fileIdLevel();
+    debugging_info.max_file_type   = page_files.rbegin()->getType();
+    debugging_info.page_files_size = page_files.size();
 
     {
         // Try to compact consecutive Legacy PageFiles into a snapshot
@@ -692,9 +728,13 @@ bool PageStorage::gc()
     apply_and_cleanup(std::move(gc_file_entries_edit));
 
     LOG_DEBUG(log,
-              storage_name << " GC exit. PageFiles from [" << debugging_info.min_file_id.first << "," << debugging_info.min_file_id.second
-                           << "] to [" << debugging_info.max_file_id.first << "," << debugging_info.max_file_id.second
-                           << "], compact legacy archive files: " << debugging_info.num_files_archive_in_compact_legacy
+              storage_name << " GC exit. PageFiles from ["                                                 //
+                           << debugging_info.min_file_id.first << "," << debugging_info.min_file_id.second //
+                           << "," << PageFile::typeToString(debugging_info.min_file_type) << "] to ["      //
+                           << debugging_info.max_file_id.first << "," << debugging_info.max_file_id.second //
+                           << "," << PageFile::typeToString(debugging_info.max_file_type)
+                           << "], size: " + DB::toString(debugging_info.page_files_size) //
+                           << ", compact legacy archive files: " << debugging_info.num_files_archive_in_compact_legacy
                            << ", remove data files: " << debugging_info.num_files_remove_data
                            << ", gc apply: " << debugging_info.gc_apply_stat.toString());
     return debugging_info.compact_result.do_compaction;
