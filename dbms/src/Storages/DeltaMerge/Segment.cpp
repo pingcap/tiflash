@@ -235,6 +235,13 @@ bool Segment::write(DMContext & dm_context, const Block & block)
 
 bool Segment::write(DMContext & dm_context, const HandleRange & delete_range)
 {
+    auto new_range = delete_range.shrink(range);
+    if (new_range.none())
+    {
+        LOG_WARNING(log, "Try to write an invalid delete range " << delete_range.toString() << " into " << simpleInfo());
+        return true;
+    }
+
     LOG_TRACE(log, "Segment [" << segment_id << "] write delete range: " << delete_range.toString());
     return delta->appendDeleteRange(dm_context, delete_range);
 }
