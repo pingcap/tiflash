@@ -98,7 +98,7 @@ void serializeSavedPacks(WriteBuffer & buf, const Packs & packs)
         else
         {
             if (unlikely(!pack->schema))
-                throw Exception("A data pack without schema", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("A data pack without schema: " + pack->toString(), ErrorCodes::LOGICAL_ERROR);
             if (pack->schema != last_schema)
             {
                 serializePack(*pack, pack->schema, buf);
