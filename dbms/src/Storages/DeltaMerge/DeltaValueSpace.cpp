@@ -57,12 +57,10 @@ inline PackPtr deserializePack(ReadBuffer & buf)
     readIntBinary(pack->bytes, buf);
     readPODBinary(pack->delete_range, buf);
     readIntBinary(pack->data_page, buf);
-    UInt8 has_schema;
-    readIntBinary(has_schema, buf);
-    if (has_schema)
+    UInt32 column_size;
+    readIntBinary(column_size, buf);
+    if (column_size != 0)
     {
-        UInt32 column_size;
-        readIntBinary(column_size, buf);
         auto schema = std::make_shared<Block>();
         for (size_t i = 0; i < column_size; ++i)
         {
@@ -231,10 +229,17 @@ Columns readPackFromCache(const PackPtr & pack, const ColumnDefines & column_def
 
 Block readPackFromDisk(const PackPtr & pack, const PageReader & page_reader)
 {
-    auto page = page_reader.read(pack->data_page);
+    auto & schema = *pack->schema;
 
-    auto & schema  = *pack->schema;
-    auto   columns = schema.cloneEmptyColumns();
+    PageReadFields fields;
+    fields.first = pack->data_page;
+    for (size_t i = 0; i < schema.columns(); ++i)
+        fields.second.push_back(i);
+
+    auto page_map = page_reader.read({fields});
+    auto page     = page_map[pack->data_page];
+
+    auto columns = schema.cloneEmptyColumns();
 
     if (unlikely(columns.size() != page.fieldSize()))
         throw Exception("Column size and field size not the same");
@@ -276,12 +281,10 @@ Columns readPackFromDisk(const PackPtr &       pack, //
     Page page     = page_map[pack->data_page];
 
     Columns columns;
+    size_t  i = 0;
     for (size_t index = col_start; index < col_end; ++index)
     {
-        auto col_id    = column_defines[index].id;
-        auto col_index = pack->colid_to_offset[col_id];
-
-        auto data_buf = page.getFieldDataByRequestIndex(col_index);
+        auto data_buf = page.getFieldDataByRequestIndex(i++);
 
         auto & cd  = column_defines[index];
         auto   col = cd.type->createColumn();
