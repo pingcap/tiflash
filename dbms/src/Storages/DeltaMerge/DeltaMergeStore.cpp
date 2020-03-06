@@ -412,9 +412,6 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
         start_handle = end_handle;
     }
 
-    /// Flush after each delete range.
-    flushCache(dm_context, delete_range);
-
     for (auto & segment : updated_segments)
         checkSegmentUpdate(dm_context, segment, ThreadType::Write);
 }

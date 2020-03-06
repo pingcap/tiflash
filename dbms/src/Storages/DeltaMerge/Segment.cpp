@@ -458,7 +458,7 @@ SegmentPtr Segment::applyMergeDelta(DMContext &                 context,
 {
     LOG_DEBUG(log, "Before apply merge delta: " << info());
 
-    auto later_packs = delta->checkHeadAndCloneTail(context, segment_snap.delta->packs, wbs);
+    auto later_packs = delta->checkHeadAndCloneTail(context, range, segment_snap.delta->packs, wbs);
     // Created references to tail pages' pages in "log" storage, we need to write them down.
     wbs.writeLogAndData(context.storage_pool);
 
@@ -796,25 +796,14 @@ SegmentPair Segment::applySplit(DMContext &       dm_context, //
     HandleRange my_range    = {range.start, split_info.split_point};
     HandleRange other_range = {split_info.split_point, range.end};
 
-    auto shrink_delete_range = [](Packs & packs, const HandleRange & segment_range) {
-        for (auto & pack : packs)
-        {
-            if (pack->isDeleteRange())
-                pack->delete_range = pack->delete_range.shrink(segment_range);
-        }
-    };
-
     Packs   empty_packs;
     Packs * head_packs = split_info.is_logical ? &empty_packs : &segment_snap.delta->packs;
 
-    auto my_delta_packs    = delta->checkHeadAndCloneTail(dm_context, *head_packs, wbs);
-    auto other_delta_packs = delta->checkHeadAndCloneTail(dm_context, *head_packs, wbs);
+    auto my_delta_packs    = delta->checkHeadAndCloneTail(dm_context, my_range, *head_packs, wbs);
+    auto other_delta_packs = delta->checkHeadAndCloneTail(dm_context, other_range, *head_packs, wbs);
 
     // Created references to tail pages' pages in "log" storage, we need to write them down.
     wbs.writeLogAndData(dm_context.storage_pool);
-
-    shrink_delete_range(my_delta_packs, my_range);
-    shrink_delete_range(other_delta_packs, other_range);
 
     auto other_segment_id = dm_context.storage_pool.newMetaPageId();
     auto other_delta_id   = dm_context.storage_pool.newMetaPageId();
@@ -934,8 +923,10 @@ SegmentPtr Segment::applyMerge(DMContext &                 dm_context, //
 {
     LOG_DEBUG(left->log, "Segment [" << left->segmentId() << "] and [" << right->segmentId() << "] apply merge");
 
-    auto left_tail_packs  = left->delta->checkHeadAndCloneTail(dm_context, left_snap.delta->packs, wbs);
-    auto right_tail_packs = right->delta->checkHeadAndCloneTail(dm_context, right_snap.delta->packs, wbs);
+    HandleRange merged_range = {left->range.start, right->range.end};
+
+    auto left_tail_packs  = left->delta->checkHeadAndCloneTail(dm_context, merged_range, left_snap.delta->packs, wbs);
+    auto right_tail_packs = right->delta->checkHeadAndCloneTail(dm_context, merged_range, right_snap.delta->packs, wbs);
 
     // Created references to tail pages' pages in "log" storage, we need to write them down.
     wbs.writeLogAndData(dm_context.storage_pool);
@@ -954,8 +945,7 @@ SegmentPtr Segment::applyMerge(DMContext &                 dm_context, //
 
     auto merged_delta = std::make_shared<DeltaValueSpace>(left->delta->getId(), merged_packs);
 
-    HandleRange merged_range = {left->range.start, right->range.end};
-    auto        merged       = std::make_shared<Segment>(left->epoch + 1, //
+    auto merged = std::make_shared<Segment>(left->epoch + 1, //
                                             merged_range,
                                             left->segment_id,
                                             right->next_segment_id,
