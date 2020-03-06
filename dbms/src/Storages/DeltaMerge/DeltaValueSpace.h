@@ -65,7 +65,7 @@ public:
         // Already persisted to disk or not.
         bool saved = false;
 
-        bool isDeleteRange() const { return !delete_range.none(); }
+        bool isDeleteRange() const { return !delete_range.empty(); }
         bool isCached() const { return !isDeleteRange() && (bool)cache; }
         /// This pack is not a delete range, the data in it has not been saved to disk.
         bool isMutable() const { return !isDeleteRange() && col_pages.empty(); }
@@ -223,7 +223,7 @@ public:
     ///   Otherwise, throw an exception.
     ///
     /// Note that this method is expected to be called by some one who already have lock on this instance.
-    Packs checkHeadAndCloneTail(DMContext & context, const Packs & head_packs, WriteBatches & wbs) const;
+    Packs checkHeadAndCloneTail(DMContext & context, const HandleRange & target_range, const Packs & head_packs, WriteBatches & wbs) const;
 
     PageId getId() const { return id; }
 

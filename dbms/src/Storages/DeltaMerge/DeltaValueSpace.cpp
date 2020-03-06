@@ -362,7 +362,10 @@ void DeltaValueSpace::saveMeta(WriteBatches & wbs) const
     wbs.meta.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
 }
 
-Packs DeltaValueSpace::checkHeadAndCloneTail(DMContext & context, const Packs & head_packs, WriteBatches & wbs) const
+Packs DeltaValueSpace::checkHeadAndCloneTail(DMContext &         context,
+                                             const HandleRange & target_range,
+                                             const Packs &       head_packs,
+                                             WriteBatches &      wbs) const
 {
     if (head_packs.size() > packs.size())
     {
@@ -391,14 +394,23 @@ Packs DeltaValueSpace::checkHeadAndCloneTail(DMContext & context, const Packs & 
         // Clone a new pack, and column pages are referenced to the old.
         auto & pack     = *it_2;
         auto   new_pack = std::make_shared<Pack>(*pack);
-        new_pack->col_pages.clear();
-        for (auto page_id : pack->col_pages)
+        if (pack->isDeleteRange())
         {
-            auto new_page_id = context.storage_pool.newLogPageId();
-            wbs.log.putRefPage(new_page_id, page_id);
-            new_pack->col_pages.push_back(new_page_id);
+            new_pack->delete_range = pack->delete_range.shrink(target_range);
+            if (!new_pack->delete_range.none())
+                tail_clone.push_back(new_pack);
         }
-        tail_clone.push_back(new_pack);
+        else
+        {
+            new_pack->col_pages.clear();
+            for (auto page_id : pack->col_pages)
+            {
+                auto new_page_id = context.storage_pool.newLogPageId();
+                wbs.log.putRefPage(new_page_id, page_id);
+                new_pack->col_pages.push_back(new_page_id);
+            }
+            tail_clone.push_back(new_pack);
+        }
     }
 
     return tail_clone;
