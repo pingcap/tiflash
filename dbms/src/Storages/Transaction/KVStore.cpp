@@ -340,7 +340,7 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
                 auto handle_range = region.getHandleRangeByTable(table_id);
                 auto storage = tmt.getStorages().get(table_id);
                 auto range_start = handle_range.first.handle_id;
-                auto range_end = handle_range.second.type == TiKVHandle::HandleIDType::MAX ? std::numeric_limits<HandleID>::max() : handle_range.second.handle_id;
+                auto range_end = handle_range.second.type == TiKVHandle::HandleIDType::MAX ? DM::HandleRange::MAX : handle_range.second.handle_id;
                 storage->flushCache(tmt.getContext(), range_start, range_end);
             }
         };

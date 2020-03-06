@@ -98,7 +98,9 @@ bool KVStore::tryApplySnapshot(RegionPtr new_region, Context & context, bool try
                     auto table_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
                     // In StorageDeltaMerge, we use deleteRange to remove old data
                     auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-                    ::DB::DM::HandleRange dm_handle_range(handle_range.first.handle_id, handle_range.second.handle_id);
+                    auto range_start = handle_range.first.handle_id;
+                    auto range_end = handle_range.second.type == TiKVHandle::HandleIDType::MAX ? DM::HandleRange::MAX : handle_range.second.handle_id;
+                    DM::HandleRange dm_handle_range(range_start, range_end);
                     dm_storage->deleteRange(dm_handle_range, context.getSettingsRef());
                     break;
                 }
