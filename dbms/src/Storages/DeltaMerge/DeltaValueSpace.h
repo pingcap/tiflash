@@ -78,6 +78,17 @@ public:
             for (size_t i = 0; i < schema->columns(); ++i)
                 colid_to_offset.emplace(schema->getByPosition(i).column_id, i);
         }
+
+        String toString()
+        {
+            return "{rows:" + DB::toString(rows)                                                //
+                + ",bytes:" + DB::toString(bytes) + ",has_schema:" + DB::toString((bool)schema) //
+                + ",delete_range:" + delete_range.toString()                                    //
+                + ",col_pages_size:" + DB::toString(col_pages.size())                           //
+                + ",has_cache:" + DB::toString((bool)cache)                                     //
+                + ",cache_offset:" + DB::toString(cache_offset)                                 //
+                + ",saved:" + DB::toString(saved) + "}";
+        }
     };
     using PackPtr = std::shared_ptr<Pack>;
     using Packs   = std::vector<PackPtr>;
