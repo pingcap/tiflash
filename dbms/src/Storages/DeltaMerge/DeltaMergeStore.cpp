@@ -735,7 +735,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
 
     bool should_background_merge_delta = (delta_check_rows >= delta_limit_rows //
                                           && delta_rows - delta_last_try_merge_delta_rows >= delta_cache_limit_rows)
-        || delta_deletes >= 3;
+        || delta_deletes >= 2;
     bool should_foreground_merge_delta
         = delta_check_rows >= forceMergeDeltaRows(dm_context) || delta_deletes >= forceMergeDeltaDeletes(dm_context);
 
