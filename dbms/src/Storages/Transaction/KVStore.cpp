@@ -1,5 +1,3 @@
-#include <chrono>
-
 #include <Interpreters/Context.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/BackgroundService.h>
@@ -9,6 +7,8 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
+
+#include <chrono>
 
 namespace DB
 {
@@ -80,7 +80,7 @@ void KVStore::traverseRegions(std::function<void(RegionID, const RegionPtr &)> &
         callback(it->first, it->second);
 }
 
-void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region)
+void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, Poco::Logger * log)
 {
     if (tmt.isBgFlushDisabled())
     {
@@ -88,10 +88,14 @@ void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
         auto handle_range = region.getHandleRangeByTable(table_id);
         auto storage = tmt.getStorages().get(table_id);
         if (storage == nullptr)
-            throw Exception("tryFlushRegionCacheInStorage can not get table for region:" + region.toString() + " with table id: " + DB::toString(table_id));
+        {
+            LOG_WARNING(log,
+                "tryFlushRegionCacheInStorage can not get table for region:" + region.toString()
+                    + " with table id: " + DB::toString(table_id) + ", ignored");
+            return;
+        }
         auto range_start = handle_range.first.handle_id;
-        auto range_end = handle_range.second.type == TiKVHandle::HandleIDType::MAX ? DM::HandleRange::MAX
-                                                                                   : handle_range.second.handle_id;
+        auto range_end = handle_range.second.type == TiKVHandle::HandleIDType::MAX ? DM::HandleRange::MAX : handle_range.second.handle_id;
         storage->flushCache(tmt.getContext(), range_start, range_end);
     }
 }
@@ -111,7 +115,7 @@ bool KVStore::onSnapshot(RegionPtr new_region, TMTContext & tmt, const RegionsAp
             if (try_flush_region)
             {
                 region_table.tryFlushRegion(new_region, false);
-                tryFlushRegionCacheInStorage(tmt, *new_region);
+                tryFlushRegionCacheInStorage(tmt, *new_region, log);
             }
         }
         catch (...)
@@ -397,7 +401,7 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
                 {
                     // no need to lock those new regions, because they don't have middle state.
                     try_to_flush_region(new_region);
-                    tryFlushRegionCacheInStorage(tmt, *new_region);
+                    tryFlushRegionCacheInStorage(tmt, *new_region, log);
                     persist_region(*new_region);
                 }
                 persist_region(curr_region);
@@ -414,7 +418,7 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
         const auto handle_commit_merge = [&](const RegionID source_region_id) {
             region_table.shrinkRegionRange(curr_region);
             try_to_flush_region(curr_region_ptr);
-            tryFlushRegionCacheInStorage(tmt, *curr_region_ptr);
+            tryFlushRegionCacheInStorage(tmt, *curr_region_ptr, log);
             persist_region(curr_region);
             {
                 auto source_region = getRegion(source_region_id);
@@ -461,7 +465,7 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
 
         if (sync_log)
         {
-            tryFlushRegionCacheInStorage(tmt, curr_region);
+            tryFlushRegionCacheInStorage(tmt, curr_region, log);
         }
 
         return sync_log ? TiFlashApplyRes::Persist : TiFlashApplyRes::None;

@@ -124,7 +124,7 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtr & region, bool t
         {
             if (try_persist)
             {
-                KVStore::tryFlushRegionCacheInStorage(tmt, *region);
+                KVStore::tryFlushRegionCacheInStorage(tmt, *region, log);
                 tmt.getKVStore()->tryPersist(region->id());
             }
         }
@@ -235,7 +235,8 @@ void RegionTable::removeRegion(const RegionID region_id)
                 HandleRange<HandleID> handle_range = region_it->second.range_in_table;
 
                 auto dm_range_start = handle_range.first.handle_id;
-                auto dm_range_end = handle_range.second.type == TiKVHandle::HandleIDType::MAX ? DM::HandleRange::MAX : handle_range.second.handle_id;
+                auto dm_range_end
+                    = handle_range.second.type == TiKVHandle::HandleIDType::MAX ? DM::HandleRange::MAX : handle_range.second.handle_id;
 
                 dm_storage->deleteRange({dm_range_start, dm_range_end}, context->getSettingsRef());
                 dm_storage->flushCache(tmt.getContext(), dm_range_start, dm_range_end);
