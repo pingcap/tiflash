@@ -179,7 +179,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     }
 
-    global_context->setExtraPaths(all_normal_path);
+    bool path_realtime_mode = config().getBool("path_realtime_mode", false);
+    std::vector<String> extra_paths(all_normal_path.begin(), all_normal_path.end());
+    for (auto & p : extra_paths)
+        p += "/data";
+
+    if (path_realtime_mode && all_normal_path.size() > 1)
+        global_context->setExtraPaths(std::vector<String>(extra_paths.begin() + 1, extra_paths.end()));
+    else
+        global_context->setExtraPaths(extra_paths);
+
     std::string path = all_normal_path[0];
     std::string default_database = config().getString("default_database", "default");
     global_context->setPath(path);
