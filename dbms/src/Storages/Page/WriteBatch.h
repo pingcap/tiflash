@@ -117,6 +117,7 @@ public:
     bool empty() const { return writes.empty(); }
 
     const Writes & getWrites() const { return writes; }
+    Writes &       getWrites() { return writes; }
 
     size_t putWriteCount() const
     {
