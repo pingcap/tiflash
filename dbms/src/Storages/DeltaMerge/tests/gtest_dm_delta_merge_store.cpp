@@ -1,16 +1,16 @@
-#include <gtest/gtest.h>
-#include <test_utils/TiflashTestBasic.h>
-#include <memory>
-#include "dm_basic_include.h"
-
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTLiteral.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/File.h>
 #include <Poco/FormattingChannel.h>
 #include <Poco/PatternFormatter.h>
-
-#include <Parsers/ASTFunction.h>
-#include <Parsers/ASTLiteral.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <gtest/gtest.h>
+#include <test_utils/TiflashTestBasic.h>
+
+#include <memory>
+
+#include "dm_basic_include.h"
 
 namespace DB
 {
@@ -767,8 +767,8 @@ try
                 }
             }
             in->readSuffix();
-            if (num_rows_read != num_rows_write_in_total)
-                ASSERT_EQ(num_rows_read, num_rows_write_in_total);
+            // if (num_rows_read != num_rows_write_in_total)
+            ASSERT_EQ(num_rows_read, num_rows_write_in_total);
 
             LOG_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "done checking data of [1," << num_rows_write_in_total << "]");
         }
