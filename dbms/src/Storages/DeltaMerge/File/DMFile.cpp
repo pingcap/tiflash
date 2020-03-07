@@ -46,7 +46,7 @@ DMFilePtr DMFile::restore(UInt64 file_id, UInt64 ref_id, const String & parent_p
 void DMFile::writeMeta()
 {
     WriteBufferFromFile buf(metaPath(), 4096);
-    writeString("DeltaMergeFile format: 0", buf);
+    writeString("DTFile format: 0", buf);
     writeString("\n", buf);
     writeText(column_stats, buf);
 }
@@ -55,7 +55,7 @@ void DMFile::readMeta()
 {
     {
         auto buf = openForRead(metaPath());
-        assertString("DeltaMergeFile format: 0", buf);
+        assertString("DTFile format: 0", buf);
         assertString("\n", buf);
         readText(column_stats, buf);
     }

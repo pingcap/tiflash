@@ -18,8 +18,8 @@ static const String STABLE_FOLDER_NAME = "stable";
 class StableValueSpace
 {
 public:
-    struct Snapshot{
-
+    struct Snapshot
+    {
     };
 
 public:
@@ -57,6 +57,7 @@ private:
     // Valid rows is not always the sum of rows in file,
     // because after logical split, two segments could reference to a same file.
     UInt64  valid_rows;
+    UInt64  valid_bytes;
     DMFiles files;
 
     Logger * log;

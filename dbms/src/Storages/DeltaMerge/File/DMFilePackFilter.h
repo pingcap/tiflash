@@ -16,11 +16,11 @@ class DMFilePackFilter
 {
 public:
     DMFilePackFilter(const DMFilePtr &     dmfile_,
-                      MinMaxIndexCache *    index_cache_,
-                      UInt64                hash_salt_,
-                      const HandleRange &   handle_range_,
-                      const RSOperatorPtr & filter_,
-                      const IdSetPtr &      read_packs_)
+                     MinMaxIndexCache *    index_cache_,
+                     UInt64                hash_salt_,
+                     const HandleRange &   handle_range_,
+                     const RSOperatorPtr & filter_,
+                     const IdSetPtr &      read_packs_)
         : dmfile(dmfile_),
           index_cache(index_cache_),
           hash_salt(hash_salt_),
@@ -120,13 +120,20 @@ public:
         return minmax_index->getUInt64MinMax(pack_id).second;
     }
 
-    size_t validRows()
+    std::pair<size_t, size_t> validRowsAndBytes()
     {
-        size_t rows        = 0;
+        size_t rows       = 0;
+        size_t bytes      = 0;
         auto & pack_stats = dmfile->getPackStats();
         for (size_t i = 0; i < pack_stats.size(); ++i)
-            rows += use_packs[i] ? pack_stats[i].rows : 0;
-        return rows;
+        {
+            if (use_packs[i])
+            {
+                rows += pack_stats[i].rows;
+                bytes += pack_stats[i].bytes;
+            }
+        }
+        return {rows, bytes};
     }
 
 private:
