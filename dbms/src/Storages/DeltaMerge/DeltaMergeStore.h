@@ -23,16 +23,17 @@ static const PageId DELTA_MERGE_FIRST_SEGMENT_ID = 1;
 
 struct DeltaMergeStoreStat
 {
-    UInt64  segment_count       = 0;
+    UInt64 segment_count = 0;
+
+    UInt64 total_rows          = 0;
+    UInt64 total_size          = 0;
+    UInt64 total_delete_ranges = 0;
+
     Float64 delta_rate_rows     = 0;
     Float64 delta_rate_segments = 0;
 
-    UInt64 total_rows          = 0;
-    Float64 total_size          = 0;
-    UInt64 total_delete_ranges = 0;
-
     Float64 delta_placed_rate       = 0;
-    Float64 delta_cache_size        = 0;
+    UInt64  delta_cache_size        = 0;
     Float64 delta_cache_rate        = 0;
     Float64 delta_cache_wasted_rate = 0;
 
@@ -48,7 +49,7 @@ struct DeltaMergeStoreStat
 
     UInt64  stable_count      = 0;
     UInt64  total_stable_rows = 0;
-    Float64  total_stable_size = 0;
+    UInt64  total_stable_size = 0;
     Float64 avg_stable_rows   = 0;
     Float64 avg_stable_size   = 0;
 

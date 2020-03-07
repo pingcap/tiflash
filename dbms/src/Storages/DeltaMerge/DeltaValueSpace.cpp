@@ -577,18 +577,19 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
         }
     }
 
+    size_t append_bytes = block.bytes() * ((double)limit / block.rows());
     if (mutable_pack)
     {
         // Merge into last pack.
         mutable_pack->rows += limit;
-        mutable_pack->bytes += block.bytes() * ((double)limit / block.rows());
+        mutable_pack->bytes += append_bytes;
     }
     else
     {
         // Create a new pack.
         auto pack          = std::make_shared<Pack>();
         pack->rows         = limit;
-        pack->bytes        = block.bytes() * ((double)limit / block.rows());
+        pack->bytes        = append_bytes;
         pack->cache        = cache;
         pack->cache_offset = cache_offset;
 
@@ -602,7 +603,7 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
     }
 
     rows += limit;
-    bytes += block.bytes();
+    bytes += append_bytes;
     unsaved_rows += limit;
 
     return true;
