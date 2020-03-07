@@ -136,7 +136,7 @@ Segment::Segment(UInt64                      epoch_, //
 SegmentPtr Segment::newSegment(
     DMContext & context, const HandleRange & range, PageId segment_id, PageId next_segment_id, PageId delta_id, PageId stable_id)
 {
-    WriteBatches wbs;
+    WriteBatches wbs(context.storage_pool);
 
     auto delta  = std::make_shared<DeltaValueSpace>(delta_id);
     auto stable = createNewStable(context, std::make_shared<EmptySkippableBlockInputStream>(*context.store_columns), stable_id, wbs);
@@ -148,7 +148,7 @@ SegmentPtr Segment::newSegment(
     stable->saveMeta(wbs.meta);
     segment->serialize(wbs.meta);
 
-    wbs.writeAll(context.storage_pool);
+    wbs.writeAll();
     stable->enableDMFilesGC();
 
     return segment;
@@ -219,9 +219,9 @@ bool Segment::write(DMContext & dm_context, const Block & block)
 {
     LOG_TRACE(log, "Segment [" << segment_id << "] write to disk rows: " << block.rows());
 
-    WriteBatches wbs;
+    WriteBatches wbs(dm_context.storage_pool);
     PackPtr      pack = DeltaValueSpace::writePack(dm_context, block, 0, block.rows(), wbs);
-    wbs.writeAll(dm_context.storage_pool);
+    wbs.writeAll();
 
     if (delta->appendToDisk(dm_context, pack))
     {
@@ -401,20 +401,20 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context, con
 
 SegmentPtr Segment::mergeDelta(DMContext & dm_context) const
 {
-    WriteBatches wbs;
+    WriteBatches wbs(dm_context.storage_pool);
     auto         segment_snap = createSnapshot(dm_context, true);
     if (!segment_snap)
         return {};
 
     auto new_stable = prepareMergeDelta(dm_context, segment_snap, wbs);
 
-    wbs.writeLogAndData(dm_context.storage_pool);
+    wbs.writeLogAndData();
     new_stable->enableDMFilesGC();
 
     auto lock        = mustGetUpdateLock();
     auto new_segment = applyMergeDelta(dm_context, segment_snap, wbs, new_stable);
 
-    wbs.writeAll(dm_context.storage_pool);
+    wbs.writeAll();
     return new_segment;
 }
 
@@ -461,7 +461,7 @@ SegmentPtr Segment::applyMergeDelta(DMContext &                 context,
 
     auto later_packs = delta->checkHeadAndCloneTail(context, range, segment_snap.delta->packs, wbs);
     // Created references to tail pages' pages in "log" storage, we need to write them down.
-    wbs.writeLogAndData(context.storage_pool);
+    wbs.writeLogAndData();
 
     auto new_delta = std::make_shared<DeltaValueSpace>(delta->getId(), later_packs);
     new_delta->saveMeta(wbs);
@@ -488,21 +488,21 @@ SegmentPtr Segment::applyMergeDelta(DMContext &                 context,
 
 SegmentPair Segment::split(DMContext & dm_context) const
 {
-    WriteBatches wbs;
+    WriteBatches wbs(dm_context.storage_pool);
     auto         segment_snap = createSnapshot(dm_context, true);
     if (!segment_snap)
         return {};
 
     auto split_info = prepareSplit(dm_context, segment_snap, wbs);
 
-    wbs.writeLogAndData(dm_context.storage_pool);
+    wbs.writeLogAndData();
     split_info.my_stable->enableDMFilesGC();
     split_info.other_stable->enableDMFilesGC();
 
     auto lock         = mustGetUpdateLock();
     auto segment_pair = applySplit(dm_context, segment_snap, wbs, split_info);
 
-    wbs.writeAll(dm_context.storage_pool);
+    wbs.writeAll();
 
     return segment_pair;
 }
@@ -670,7 +670,8 @@ Segment::prepareSplitLogical(DMContext & dm_context, SegmentSnapshot & segment_s
     HandleRange other_range = {split_point, range.end};
 
     if (my_range.none() || other_range.none())
-        throw Exception("prepareSplitLogical: unexpected range! my_range: " + my_range.toString() + ", other_range: " + other_range.toString());
+        throw Exception("prepareSplitLogical: unexpected range! my_range: " + my_range.toString()
+                        + ", other_range: " + other_range.toString());
 
     GenPageId log_gen_page_id = std::bind(&StoragePool::newLogPageId, &storage_pool);
 
@@ -679,8 +680,8 @@ Segment::prepareSplitLogical(DMContext & dm_context, SegmentSnapshot & segment_s
 
     for (auto & dmfile : segment_snap.stable->getDMFiles())
     {
-        auto ori_ref_id = dmfile->refId();
-        auto file_id    = segment_snap.delta->storage_snap->data_reader.getNormalPageId(ori_ref_id);
+        auto ori_ref_id       = dmfile->refId();
+        auto file_id          = segment_snap.delta->storage_snap->data_reader.getNormalPageId(ori_ref_id);
         auto file_parent_path = dm_context.extra_paths.getPath(file_id) + "/" + STABLE_FOLDER_NAME;
 
         auto my_dmfile_id    = storage_pool.newDataPageId();
@@ -723,7 +724,8 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, Segment
     HandleRange other_range = {split_point, range.end};
 
     if (my_range.none() || other_range.none())
-        throw Exception("prepareSplitPhysical: unexpected range! my_range: " + my_range.toString() + ", other_range: " + other_range.toString());
+        throw Exception("prepareSplitPhysical: unexpected range! my_range: " + my_range.toString()
+                        + ", other_range: " + other_range.toString());
 
     StableValueSpacePtr my_new_stable;
     StableValueSpacePtr other_stable;
@@ -800,7 +802,7 @@ SegmentPair Segment::applySplit(DMContext &       dm_context, //
     auto other_delta_packs = delta->checkHeadAndCloneTail(dm_context, other_range, *head_packs, wbs);
 
     // Created references to tail pages' pages in "log" storage, we need to write them down.
-    wbs.writeLogAndData(dm_context.storage_pool);
+    wbs.writeLogAndData();
 
     auto other_segment_id = dm_context.storage_pool.newMetaPageId();
     auto other_delta_id   = dm_context.storage_pool.newMetaPageId();
@@ -842,7 +844,7 @@ SegmentPair Segment::applySplit(DMContext &       dm_context, //
 
 SegmentPtr Segment::merge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right)
 {
-    WriteBatches wbs;
+    WriteBatches wbs(dm_context.storage_pool);
 
     auto left_snap  = left->createSnapshot(dm_context, true);
     auto right_snap = right->createSnapshot(dm_context, true);
@@ -851,7 +853,7 @@ SegmentPtr Segment::merge(DMContext & dm_context, const SegmentPtr & left, const
 
     auto merged_stable = prepareMerge(dm_context, left, left_snap, right, right_snap, wbs);
 
-    wbs.writeLogAndData(dm_context.storage_pool);
+    wbs.writeLogAndData();
     merged_stable->enableDMFilesGC();
 
     auto left_lock  = left->mustGetUpdateLock();
@@ -859,7 +861,7 @@ SegmentPtr Segment::merge(DMContext & dm_context, const SegmentPtr & left, const
 
     auto merged = applyMerge(dm_context, left, left_snap, right, right_snap, wbs, merged_stable);
 
-    wbs.writeAll(dm_context.storage_pool);
+    wbs.writeAll();
     return merged;
 }
 
@@ -926,7 +928,7 @@ SegmentPtr Segment::applyMerge(DMContext &                 dm_context, //
     auto right_tail_packs = right->delta->checkHeadAndCloneTail(dm_context, merged_range, right_snap.delta->packs, wbs);
 
     // Created references to tail pages' pages in "log" storage, we need to write them down.
-    wbs.writeLogAndData(dm_context.storage_pool);
+    wbs.writeLogAndData();
 
     /// Make sure saved packs are appended before unsaved packs.
     Packs merged_packs;

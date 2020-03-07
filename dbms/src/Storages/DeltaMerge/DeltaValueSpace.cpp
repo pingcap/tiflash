@@ -638,7 +638,7 @@ bool DeltaValueSpace::flush(DMContext & context)
     LOG_DEBUG(log, info() << ", Flush start");
 
     FlushPackTasks tasks;
-    WriteBatches   wbs;
+    WriteBatches   wbs(context.storage_pool);
 
     size_t flush_rows    = 0;
     size_t flush_deletes = 0;
@@ -697,7 +697,7 @@ bool DeltaValueSpace::flush(DMContext & context)
 
     {
         /// Write prepared data to disk.
-        wbs.writeLogAndData(context.storage_pool);
+        wbs.writeLogAndData();
     }
 
     {
@@ -707,7 +707,7 @@ bool DeltaValueSpace::flush(DMContext & context)
         if (abandoned.load(std::memory_order_relaxed))
         {
             // Delete written data.
-            wbs.rollbackWrittenLogAndData(context.storage_pool);
+            wbs.setRollback();
             LOG_DEBUG(log, simpleInfo() << " Flush stop because abandoned");
             return false;
         }
@@ -735,7 +735,7 @@ bool DeltaValueSpace::flush(DMContext & context)
                 {
                     // The packs have been modified, or this pack already saved by another thread.
                     // Let's rollback and break up.
-                    wbs.rollbackWrittenLogAndData(context.storage_pool);
+                    wbs.rollbackWrittenLogAndData();
                     LOG_DEBUG(log, simpleInfo() << " Stop flush because structure got updated");
                     return false;
                 }
@@ -798,7 +798,7 @@ bool DeltaValueSpace::flush(DMContext & context)
         const auto data_size = buf.count();
 
         wbs.meta.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
-        wbs.writeMeta(context.storage_pool);
+        wbs.writeMeta();
 
         /// Commit updates in memory.
         packs.swap(packs_copy);
@@ -908,7 +908,7 @@ bool DeltaValueSpace::compact(DMContext & context)
     size_t total_compact_packs = 0;
     size_t total_compact_rows  = 0;
 
-    WriteBatches wbs;
+    WriteBatches wbs(context.storage_pool);
     PageReader   reader(context.storage_pool.log(), log_storage_snap);
     for (auto & task : tasks)
     {
@@ -937,7 +937,7 @@ bool DeltaValueSpace::compact(DMContext & context)
         compact_pack->setSchema(task.to_compact.front()->schema);
         compact_pack->saved = true;
 
-        wbs.writeLogAndData(context.storage_pool);
+        wbs.writeLogAndData();
         task.result = compact_pack;
 
         total_compact_packs += task.to_compact.size();
@@ -950,7 +950,7 @@ bool DeltaValueSpace::compact(DMContext & context)
         /// Check before commit.
         if (abandoned.load(std::memory_order_relaxed))
         {
-            wbs.rollbackWrittenLogAndData(context.storage_pool);
+            wbs.rollbackWrittenLogAndData();
             LOG_DEBUG(log, simpleInfo() << " Stop compact because abandoned");
             return false;
         }
@@ -975,7 +975,7 @@ bool DeltaValueSpace::compact(DMContext & context)
             if (unlikely(start_it == packs.end() || end_it == packs.end()))
             {
                 LOG_WARNING(log, "Structure has been updated during compact");
-                wbs.rollbackWrittenLogAndData(context.storage_pool);
+                wbs.rollbackWrittenLogAndData();
                 LOG_DEBUG(log, simpleInfo() << " Compact stop because structure got updated");
                 return false;
             }
@@ -995,7 +995,7 @@ bool DeltaValueSpace::compact(DMContext & context)
         const auto data_size = buf.count();
 
         wbs.meta.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
-        wbs.writeMeta(context.storage_pool);
+        wbs.writeMeta();
 
         /// Update packs in memory.
         packs.swap(new_packs);
@@ -1007,7 +1007,7 @@ bool DeltaValueSpace::compact(DMContext & context)
                                << total_compact_rows << " rows.");
     }
 
-    wbs.writeRemoves(context.storage_pool);
+    wbs.writeRemoves();
 
     return true;
 }

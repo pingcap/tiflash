@@ -10,6 +10,8 @@
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/Transaction/TMTContext.h>
 
+#include <ext/scope_guard.h>
+
 namespace ProfileEvents
 {
 extern const Event DMWriteBlock;
@@ -115,11 +117,11 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
 
     auto dmfile_scanner = [=]() {
         PageStorage::PathAndIdsVec path_and_ids_vec;
-        for (auto & path : extra_paths.listPaths())
+        for (auto & root_path : extra_paths.listPaths())
         {
             auto & path_and_ids           = path_and_ids_vec.emplace_back();
-            path_and_ids.first            = path;
-            auto file_ids_in_current_path = DMFile::listAllInPath(path + "/" + STABLE_FOLDER_NAME, /* can_gc= */ true);
+            path_and_ids.first            = root_path;
+            auto file_ids_in_current_path = DMFile::listAllInPath(root_path + "/" + STABLE_FOLDER_NAME, /* can_gc= */ true);
             for (auto id : file_ids_in_current_path)
                 path_and_ids.second.insert(id);
         }
@@ -260,7 +262,6 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         LOG_TRACE(log, msg);
     }
 
-
     Segments updated_segments;
 
     size_t       offset = 0;
@@ -270,7 +271,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
     {
         auto start_handle = handle_data[offset];
 
-        WriteBatches wbs;
+        WriteBatches wbs(storage_pool);
         PackPtr      write_pack;
         HandleRange  write_range;
 
@@ -313,11 +314,11 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             {
                 if (!write_pack || (write_pack && write_range != range))
                 {
-                    wbs.rollbackWrittenLogAndData(dm_context->storage_pool);
+                    wbs.rollbackWrittenLogAndData();
                     wbs.clear();
 
                     write_pack = DeltaValueSpace::writePack(*dm_context, block, offset, limit, wbs);
-                    wbs.writeLogAndData(dm_context->storage_pool);
+                    wbs.writeLogAndData();
                     write_range = range;
                 }
 
@@ -747,6 +748,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         if (should_foreground_flush)
         {
             delta_last_try_flush_rows = delta_rows;
+            LOG_DEBUG(log, "Foreground flush cache " << segment->info());
             segment->flushCache(*dm_context);
         }
         else if (should_background_flush)
@@ -979,11 +981,11 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
         }
     }
 
-    WriteBatches wbs;
+    WriteBatches wbs(storage_pool);
     auto         range      = segment->getRange();
     auto         split_info = segment->prepareSplit(dm_context, segment_snap, wbs);
 
-    wbs.writeLogAndData(storage_pool);
+    wbs.writeLogAndData();
     split_info.my_stable->enableDMFilesGC();
     split_info.other_stable->enableDMFilesGC();
 
@@ -994,8 +996,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
         if (!isSegmentValid(segment))
         {
             LOG_DEBUG(log, "Give up segment [" << segment->segmentId() << "] split");
-
-            wbs.rollbackWrittenLogAndData(storage_pool);
+            wbs.setRollback();
             return {};
         }
 
@@ -1005,7 +1006,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 
         std::tie(new_left, new_right) = segment->applySplit(dm_context, segment_snap, wbs, split_info);
 
-        wbs.writeMeta(storage_pool);
+        wbs.writeMeta();
 
         segment->abandon();
         segments.erase(range.end);
@@ -1026,7 +1027,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
         LOG_DEBUG(log, "Apply split done. Segment [" << segment->segmentId() << "]");
     }
 
-    wbs.writeRemoves(storage_pool);
+    wbs.writeRemoves();
 
     if constexpr (DM_RUN_CHECK)
         check(dm_context.db_context);
@@ -1068,9 +1069,9 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
     auto left_range  = left->getRange();
     auto right_range = right->getRange();
 
-    WriteBatches wbs;
+    WriteBatches wbs(storage_pool);
     auto         merged_stable = Segment::prepareMerge(dm_context, left, left_snap, right, right_snap, wbs);
-    wbs.writeLogAndData(storage_pool);
+    wbs.writeLogAndData();
     merged_stable->enableDMFilesGC();
 
     {
@@ -1079,8 +1080,7 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
         if (!isSegmentValid(left) || !isSegmentValid(right))
         {
             LOG_DEBUG(log, "Give up merge segments left [" << left->segmentId() << "], right [" << right->segmentId() << "]");
-
-            wbs.rollbackWrittenLogAndData(storage_pool);
+            wbs.setRollback();
             return;
         }
 
@@ -1091,7 +1091,7 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
 
         auto merged = Segment::applyMerge(dm_context, left, left_snap, right, right_snap, wbs, merged_stable);
 
-        wbs.writeMeta(storage_pool);
+        wbs.writeMeta();
 
         left->abandon();
         right->abandon();
@@ -1111,7 +1111,7 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
         LOG_DEBUG(log, "Apply merge done. [" << left->info() << "] and [" << right->info() << "]");
     }
 
-    wbs.writeRemoves(storage_pool);
+    wbs.writeRemoves();
 
     if constexpr (DM_RUN_CHECK)
         check(dm_context.db_context);
@@ -1140,10 +1140,10 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
         }
     }
 
+    WriteBatches wbs(storage_pool);
 
-    WriteBatches wbs;
-    auto         new_stable = segment->prepareMergeDelta(dm_context, segment_snap, wbs);
-    wbs.writeLogAndData(storage_pool);
+    auto new_stable = segment->prepareMergeDelta(dm_context, segment_snap, wbs);
+    wbs.writeLogAndData();
     new_stable->enableDMFilesGC();
 
     SegmentPtr new_segment;
@@ -1153,7 +1153,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
         if (!isSegmentValid(segment))
         {
             LOG_DEBUG(log, "Give up merge delta, segment [" << segment->segmentId() << "]");
-            wbs.rollbackWrittenLogAndData(storage_pool);
+            wbs.setRollback();
             return {};
         }
 
@@ -1163,7 +1163,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
 
         new_segment = segment->applyMergeDelta(dm_context, segment_snap, wbs, new_stable);
 
-        wbs.writeMeta(storage_pool);
+        wbs.writeMeta();
 
         segments[segment->getRange().end]   = new_segment;
         id_to_segment[segment->segmentId()] = new_segment;
@@ -1178,7 +1178,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
         LOG_DEBUG(log, "Apply merge delta done. Segment [" << segment->segmentId() << "]");
     }
 
-    wbs.writeRemoves(storage_pool);
+    wbs.writeRemoves();
 
     if constexpr (DM_RUN_CHECK)
         check(dm_context.db_context);
@@ -1267,12 +1267,13 @@ void DeltaMergeStore::loadDMFiles()
 {
     LOG_DEBUG(log, "Loading dm files");
 
-    for (const auto & path : extra_paths.listPaths())
+    for (const auto & root_path : extra_paths.listPaths())
     {
-        for (auto & file_id : DMFile::listAllInPath(path + "/" + STABLE_FOLDER_NAME, false))
+        auto parent_path = root_path + "/" + STABLE_FOLDER_NAME;
+        for (auto & file_id : DMFile::listAllInPath(parent_path, false))
         {
-            auto dmfile = DMFile::restore(file_id, /* ref_id= */ 0, path + "/" + STABLE_FOLDER_NAME, true);
-            extra_paths.addDMFile(file_id, dmfile->getBytes(), path);
+            auto dmfile = DMFile::restore(file_id, /* ref_id= */ 0, parent_path, true);
+            extra_paths.addDMFile(file_id, dmfile->getBytes(), root_path);
         }
     }
 }

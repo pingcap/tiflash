@@ -8,7 +8,7 @@ namespace DB
 namespace DM
 {
 
-struct WriteBatches
+struct WriteBatches : private boost::noncopyable
 {
     WriteBatch log;
     WriteBatch data;
@@ -20,6 +20,11 @@ struct WriteBatches
     WriteBatch removed_log;
     WriteBatch removed_data;
     WriteBatch removed_meta;
+
+    StoragePool & storage_pool;
+    bool          should_roll_back = false;
+
+    WriteBatches(StoragePool & storage_pool_) : storage_pool(storage_pool_) {}
 
     ~WriteBatches()
     {
@@ -43,9 +48,16 @@ struct WriteBatches
             check_empty(removed_data, "removed_data");
             check_empty(removed_meta, "removed_meta");
         }
+
+        if (should_roll_back)
+        {
+            rollbackWrittenLogAndData();
+        }
     }
 
-    void writeLogAndData(StoragePool & storage_pool)
+    void setRollback() { should_roll_back = true; }
+
+    void writeLogAndData()
     {
         PageIds log_write_pages, data_write_pages;
 
@@ -84,7 +96,7 @@ struct WriteBatches
         data.clear();
     }
 
-    void rollbackWrittenLogAndData(StoragePool & storage_pool)
+    void rollbackWrittenLogAndData()
     {
         WriteBatch log_wb;
         for (auto p : writtenLog)
@@ -114,9 +126,12 @@ struct WriteBatches
 
         storage_pool.log().write(std::move(log_wb));
         storage_pool.data().write(std::move(data_wb));
+
+        writtenLog.clear();
+        writtenData.clear();
     }
 
-    void writeMeta(StoragePool & storage_pool)
+    void writeMeta()
     {
         if constexpr (DM_RUN_CHECK)
         {
@@ -140,7 +155,7 @@ struct WriteBatches
         meta.clear();
     }
 
-    void writeRemoves(StoragePool & storage_pool)
+    void writeRemoves()
     {
         if constexpr (DM_RUN_CHECK)
         {
@@ -171,11 +186,11 @@ struct WriteBatches
         removed_meta.clear();
     }
 
-    void writeAll(StoragePool & storage_pool)
+    void writeAll()
     {
-        writeLogAndData(storage_pool);
-        writeMeta(storage_pool);
-        writeRemoves(storage_pool);
+        writeLogAndData();
+        writeMeta();
+        writeRemoves();
     }
 
     void clear()
