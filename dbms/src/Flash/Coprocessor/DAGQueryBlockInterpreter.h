@@ -90,6 +90,7 @@ private:
     void executeTS(const tipb::TableScan & ts, Pipeline & pipeline);
     void executeJoin(const tipb::Join & join, Pipeline & pipeline, SubqueryForSet & right_query);
     void prepareJoinKeys(const tipb::Join & join, Pipeline & pipeline, Names & key_names, bool tiflash_left);
+    void executeSubqueryInJoin(Pipeline & pipeline, SubqueryForSet & subquery);
     void executeWhere(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column);
     void executeExpression(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr);
     void executeOrder(Pipeline & pipeline, Strings & order_column_names);

@@ -11,6 +11,7 @@
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Storages/Transaction/TMTStorages.h>
+#include <Interpreters/ExpressionAnalyzer.h>
 
 namespace DB
 {
@@ -58,6 +59,7 @@ public:
             chain.steps.emplace_back(std::make_shared<ExpressionActions>(column_list, settings));
         }
     }
+    void appendJoin(ExpressionActionsChain & chain, SubqueryForSet & join_query, const NamesAndTypesList & columns_added_by_join);
     void appendFinalProject(ExpressionActionsChain & chain, const NamesWithAliases & final_project);
     String getActions(const tipb::Expr & expr, ExpressionActionsPtr & actions);
     String getActionsForInOperator(const tipb::Expr & expr, ExpressionActionsPtr & actions);

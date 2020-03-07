@@ -32,6 +32,7 @@
 #include <Storages/Transaction/Types.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Interpreters/ExpressionAnalyzer.h>
+#include <DataStreams/CreatingSetsBlockInputStream.h>
 
 namespace DB
 {
@@ -507,7 +508,7 @@ void DAGQueryBlockInterpreter::prepareJoinKeys(const tipb::Join & join, Pipeline
         pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions()); });
     }
 }
-void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & , SubqueryForSet & right_query)
+void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & pipeline, SubqueryForSet & right_query)
 {
     // build
     static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> join_type_map{
@@ -524,6 +525,12 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & ,
     if (join_type_it == join_type_map.end())
         throw Exception("Unknown join type in dag request", ErrorCodes::COP_BAD_DAG_REQUEST);
     ASTTableJoin::Kind kind = join_type_it->second;
+    if (kind != ASTTableJoin::Kind::Inner)
+    {
+        // todo support left and right join
+        throw Exception("Only Inner join is supported", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     BlockInputStreams left_streams;
     BlockInputStreams right_streams;
     Names left_key_names;
@@ -543,6 +550,22 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & ,
     {
         left_streams = input_streams_vec[0];
         right_streams = input_streams_vec[1];
+    }
+    std::vector<NameAndTypePair> join_output_columns;
+    for( auto const & p : left_streams[0]->getHeader().getNamesAndTypesList())
+    {
+        join_output_columns.emplace_back(p.name, p.type);
+        if (!query_block.aggregation)
+            final_project.emplace_back(p.name, query_block.qb_column_prefix + p.name);
+    }
+    /// all the columns from right table should be added after join, even for the join key
+    NamesAndTypesList columns_added_by_join;
+    for( auto const & p : right_streams[0]->getHeader().getNamesAndTypesList())
+    {
+        columns_added_by_join.emplace_back(p.name, p.type);
+        join_output_columns.emplace_back(p.name, p.type);
+        if (!query_block.aggregation)
+            final_project.emplace_back(p.name, query_block.qb_column_prefix + p.name);
     }
 
     /// add necessary transformation if the join key is an expression
@@ -567,8 +590,18 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & ,
     right_query.join = joinPtr;
     right_query.join->setSampleBlock(right_query.source->getHeader());
 
+    std::vector<NameAndTypePair> source_columns;
+    for(const auto & p : left_streams[0]->getHeader().getNamesAndTypesList())
+        source_columns.emplace_back(p.name, p.type);
+    DAGExpressionAnalyzer dag_analyzer(std::move(source_columns), context);
+    ExpressionActionsChain chain;
+    dag_analyzer.appendJoin(chain, right_query, columns_added_by_join);
+    pipeline.streams = left_streams;
+    for (auto & stream : pipeline.streams)
+        stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions());
 
-    throw Exception("Join is not supported yet", ErrorCodes::NOT_IMPLEMENTED);
+    // todo should add a project here???
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(join_output_columns), context);
 }
 
 // add timezone cast for timestamp type, this is used to support session level timezone
@@ -876,16 +909,28 @@ void DAGQueryBlockInterpreter::executeOrder(Pipeline & pipeline, Strings & order
 //    }
 //}
 
+void DAGQueryBlockInterpreter::executeSubqueryInJoin(Pipeline & pipeline, SubqueryForSet & subquery)
+{
+    const Settings & settings = context.getSettingsRef();
+    executeUnion(pipeline);
+    SubqueriesForSets subquries;
+    subquries[query_block.qb_column_prefix + "join"] = subquery;
+    pipeline.firstStream() = std::make_shared<CreatingSetsBlockInputStream>(
+            pipeline.firstStream(), subquries,
+            SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode));
+}
+
 void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
 {
+    SubqueryForSet right_query;
     if (query_block.source->tp() == tipb::ExecType::TypeJoin)
     {
-        SubqueryForSet right_query;
         executeJoin(query_block.source->join(), pipeline, right_query);
     }
     else
     {
         executeTS(query_block.source->tbl_scan(), pipeline);
+    }
         // todo enable profile stream info
         //recordProfileStreams(pipeline, dag.getTSIndex());
 
@@ -924,7 +969,11 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
             executeLimit(pipeline);
             //recordProfileStreams(pipeline, dag.getLimitIndex());
         }
-    }
+        if (query_block.source->tp() == tipb::ExecType::TypeJoin)
+        {
+            // add the
+            executeSubqueryInJoin(pipeline, right_query);
+        }
 }
 
 void DAGQueryBlockInterpreter::executeFinalProject(Pipeline & pipeline)

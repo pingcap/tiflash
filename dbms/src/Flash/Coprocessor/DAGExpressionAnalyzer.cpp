@@ -300,28 +300,55 @@ bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(
     return ret;
 }
 
-/// return true if same actions is needed
+void DAGExpressionAnalyzer::appendJoin(ExpressionActionsChain & chain, SubqueryForSet & join_query, const NamesAndTypesList & columns_added_by_join)
+{
+    initChain(chain, getCurrentInputColumns());
+    ExpressionActionsPtr actions = chain.getLastActions();
+    actions->add(ExpressionAction::ordinaryJoin(join_query.join, columns_added_by_join));
+}
+/// return true if some actions is needed
 bool DAGExpressionAnalyzer::appendJoinKey(ExpressionActionsChain & chain, const tipb::Join & join, Names & key_names, bool tiflash_left)
 {
     bool ret = false;
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsPtr actions = chain.getLastActions();
+    NamesWithAliases right_key_dummy_production;
     if ((tiflash_left && join.inner_idx() == 1) || (!tiflash_left && join.inner_idx() == 0))
     {
         for(const auto & key : join.left_join_keys())
         {
-            key_names.push_back(getActions(key, actions));
             if (key.tp() != tipb::ExprType::ColumnRef)
                 ret = true;
+            if (!tiflash_left && key.tp() == tipb::ExprType::ColumnRef)
+            {
+                // for right side table, add a project
+                String org_key_name = getActions(key, actions);
+                String updated_key_name = "_r_k_" + org_key_name;
+                actions->add(ExpressionAction::copyColumn(org_key_name, updated_key_name));
+                key_names.push_back(updated_key_name);
+                ret = true;
+            }
+            else
+                key_names.push_back(getActions(key, actions));
         }
     }
     else
     {
         for(const auto & key : join.right_join_keys())
         {
-            key_names.push_back(getActions(key, actions));
             if (key.tp() != tipb::ExprType::ColumnRef)
                 ret = true;
+            if (!tiflash_left && key.tp() == tipb::ExprType::ColumnRef)
+            {
+                // for right side table, add a project
+                String org_key_name = getActions(key, actions);
+                String updated_key_name = "_r_k_" + org_key_name;
+                actions->add(ExpressionAction::copyColumn(org_key_name, updated_key_name));
+                key_names.push_back(updated_key_name);
+                ret = true;
+            }
+            else
+                key_names.push_back(getActions(key, actions));
         }
     }
     return ret;
