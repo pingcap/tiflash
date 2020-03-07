@@ -87,6 +87,8 @@ void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
         auto table_id = region.getMappedTableID();
         auto handle_range = region.getHandleRangeByTable(table_id);
         auto storage = tmt.getStorages().get(table_id);
+        if (storage == nullptr)
+            throw Exception("tryFlushRegionCacheInStorage can not get table for region:" + region.toString() + " with table id: " + DB::toString(table_id));
         auto range_start = handle_range.first.handle_id;
         auto range_end = handle_range.second.type == TiKVHandle::HandleIDType::MAX ? DM::HandleRange::MAX
                                                                                    : handle_range.second.handle_id;
