@@ -395,12 +395,16 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
             }
 
             {
+                for (const auto &new_region : split_regions)
+                    try_to_flush_region(new_region);
+            }
+
+            {
                 // persist curr_region at last. if program crashed after split_region is persisted, curr_region can
                 // continue to complete split operation.
                 for (const auto & new_region : split_regions)
                 {
                     // no need to lock those new regions, because they don't have middle state.
-                    try_to_flush_region(new_region);
                     tryFlushRegionCacheInStorage(tmt, *new_region, log);
                     persist_region(*new_region);
                 }

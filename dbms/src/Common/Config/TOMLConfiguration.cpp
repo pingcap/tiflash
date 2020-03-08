@@ -15,8 +15,6 @@ bool TOMLConfiguration::getRaw(const std::string & key, std::string & value) con
 {
     try
     {
-        if (!root->contains_qualified(key))
-            return false;
         auto node = root->get_qualified(key);
         if (auto str_node = std::dynamic_pointer_cast<cpptoml::value<std::string>>(node))
         {
