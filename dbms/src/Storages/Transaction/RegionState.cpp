@@ -1,6 +1,8 @@
 #include <Storages/Transaction/RegionState.h>
 #include <Storages/Transaction/TiKVRange.h>
 
+#include <common/logger_useful.h>
+
 namespace DB
 {
 
@@ -60,12 +62,15 @@ raft_serverpb::MergeState & RegionState::getMutMergeState() { return *mutable_me
 
 TableID computeMappedTableID(const DecodedTiKVKey & key)
 {
+    Logger * log = &Logger::get("RegionRangeKeys");
+    LOG_TRACE(log, __PRETTY_FUNCTION__ << " key : " << StringObject<true>::copyFrom(key).toHex());
+
     // t table_id _r
     if (key.size() >= (1 + 8 + 2) && key[0] == RecordKVFormat::TABLE_PREFIX
         && memcmp(key.data() + 9, RecordKVFormat::RECORD_PREFIX_SEP, 2) == 0)
         return RecordKVFormat::getTableId(key);
 
-    throw Exception("Can't tell table id for region, should not happen. key: " + StringObject(key).toHex(), ErrorCodes::LOGICAL_ERROR);
+    throw Exception("Can't tell table id for region, should not happen. key: " + StringObject<true>::copyFrom(key).toHex(), ErrorCodes::LOGICAL_ERROR);
 }
 
 RegionRangeKeys::RegionRangeKeys(TiKVKey && start_key, TiKVKey && end_key)
