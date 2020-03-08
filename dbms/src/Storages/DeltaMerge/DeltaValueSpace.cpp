@@ -1084,6 +1084,11 @@ public:
 
     Block read() override
     {
+        for (; next_pack_index < delta_snap->packs.size(); ++next_pack_index)
+        {
+            if (!(delta_snap->packs[next_pack_index]->isDeleteRange()))
+                break;
+        }
         if (next_pack_index >= delta_snap->packs.size())
             return {};
         return delta_snap->read(next_pack_index++);
