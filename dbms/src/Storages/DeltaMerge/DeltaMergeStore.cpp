@@ -742,6 +742,15 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
 
     bool should_compact = std::max((Int64)pack_count - delta_last_try_compact_packs, 0) >= 10;
 
+    auto try_add_background_task = [&](const BackgroundTask & task) {
+        if (background_tasks.length() <= std::max(id_to_segment.size() * 2, background_pool.getNumberOfThreads() * 5))
+        {
+            // Prevent too many tasks.
+            background_tasks.addTask(task, thread_type, log);
+            background_task_handle->wake();
+        }
+    };
+
     /// Flush is always try first.
     if (thread_type != ThreadType::Read)
     {
@@ -754,12 +763,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         else if (should_background_flush)
         {
             delta_last_try_flush_rows = delta_rows;
-            if (background_tasks.length() <= std::max(id_to_segment.size() * 2, background_pool.getNumberOfThreads()))
-            {
-                // Too many flush tasks could block other critical tasks, like merge delta.
-                background_tasks.addTask(BackgroundTask{TaskType::Flush, dm_context, segment, {}}, thread_type, log);
-                background_task_handle->wake();
-            }
+            try_add_background_task(BackgroundTask{TaskType::Flush, dm_context, segment, {}});
         }
     }
 
@@ -810,8 +814,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         if (should_background_merge_delta)
         {
             delta_last_try_merge_delta_rows = delta_rows;
-            background_tasks.addTask(BackgroundTask{TaskType::MergeDelta, dm_context, segment, {}}, thread_type, log);
-            background_task_handle->wake();
+            try_add_background_task(BackgroundTask{TaskType::MergeDelta, dm_context, segment, {}});
             return true;
         }
         return false;
@@ -820,8 +823,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         if (should_split)
         {
             delta_last_try_split_rows = delta_rows;
-            background_tasks.addTask(BackgroundTask{TaskType::Split, dm_context, seg, {}}, thread_type, log);
-            background_task_handle->wake();
+            try_add_background_task(BackgroundTask{TaskType::Split, dm_context, seg, {}});
             return true;
         }
         return false;
@@ -841,8 +843,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     auto try_bg_merge = [&]() {
         if (should_merge && (merge_sibling = getMergeSibling()))
         {
-            background_tasks.addTask(BackgroundTask{TaskType::Merge, dm_context, segment, merge_sibling}, thread_type, log);
-            background_task_handle->wake();
+            try_add_background_task(BackgroundTask{TaskType::Merge, dm_context, segment, merge_sibling});
             return true;
         }
         return false;
@@ -851,8 +852,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         if (should_compact)
         {
             delta_last_try_compact_packs = pack_count;
-            background_tasks.addTask(BackgroundTask{TaskType::Compact, dm_context, segment, {}}, thread_type, log);
-            background_task_handle->wake();
+            try_add_background_task(BackgroundTask{TaskType::Compact, dm_context, segment, {}});
             return true;
         }
         return false;
