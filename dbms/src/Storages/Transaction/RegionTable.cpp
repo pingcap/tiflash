@@ -95,9 +95,18 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtr & region, bool t
 {
     auto & tmt = context->getTMTContext();
 
-    LOG_TRACE(log,
-        __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " original " << region->dataSize()
-                     << " bytes");
+    if (tmt.isBgFlushDisabled())
+    {
+        LOG_TRACE(log,
+            __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " original "
+                         << region->dataSize() << " bytes");
+    }
+    else
+    {
+        LOG_INFO(log,
+            __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " original "
+                         << region->dataSize() << " bytes");
+    }
 
     /// Write region data into corresponding storage.
     RegionDataReadInfoList data_list_to_remove;
@@ -129,9 +138,18 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtr & region, bool t
             }
         }
 
-        LOG_TRACE(log,
-            __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " after flush " << cache_size
-                         << " bytes");
+        if (tmt.isBgFlushDisabled())
+        {
+            LOG_TRACE(log,
+                __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " after flush " << cache_size
+                             << " bytes");
+        }
+        else
+        {
+            LOG_INFO(log,
+                __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " after flush " << cache_size
+                             << " bytes");
+        }
     }
 
     return data_list_to_remove;

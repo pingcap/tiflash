@@ -74,7 +74,6 @@ RegionRangeKeys::RegionRangeKeys(TiKVKey && start_key, TiKVKey && end_key)
     : ori(RegionRangeKeys::makeComparableKeys(std::move(start_key), std::move(end_key))),
       raw(ori.first.key.empty() ? DecodedTiKVKey() : RecordKVFormat::decodeTiKVKey(ori.first.key),
           ori.second.key.empty() ? DecodedTiKVKey() : RecordKVFormat::decodeTiKVKey(ori.second.key))
-
 {
     Logger * log = &Logger::get("RegionRangeKeys");
     LOG_TRACE(log, __PRETTY_FUNCTION__ << " original start: " << ori.first.key.toHex() << ", end: " << ori.second.key.toHex());
