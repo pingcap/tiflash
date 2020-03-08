@@ -65,7 +65,7 @@ TableID computeMappedTableID(const DecodedTiKVKey & key)
         && memcmp(key.data() + 9, RecordKVFormat::RECORD_PREFIX_SEP, 2) == 0)
         return RecordKVFormat::getTableId(key);
 
-    throw Exception("Can't tell table id for region, should not happen. key: " + key, ErrorCodes::LOGICAL_ERROR);
+    throw Exception("Can't tell table id for region, should not happen. key: " + StringObject(key).toHex(), ErrorCodes::LOGICAL_ERROR);
 }
 
 RegionRangeKeys::RegionRangeKeys(TiKVKey && start_key, TiKVKey && end_key)
