@@ -62,9 +62,6 @@ raft_serverpb::MergeState & RegionState::getMutMergeState() { return *mutable_me
 
 TableID computeMappedTableID(const DecodedTiKVKey & key)
 {
-    Logger * log = &Logger::get("RegionRangeKeys");
-    LOG_TRACE(log, __PRETTY_FUNCTION__ << " key : " << StringObject<true>::copyFrom(key).toHex());
-
     // t table_id _r
     if (key.size() >= (1 + 8 + 2) && key[0] == RecordKVFormat::TABLE_PREFIX
         && memcmp(key.data() + 9, RecordKVFormat::RECORD_PREFIX_SEP, 2) == 0)
@@ -76,10 +73,15 @@ TableID computeMappedTableID(const DecodedTiKVKey & key)
 RegionRangeKeys::RegionRangeKeys(TiKVKey && start_key, TiKVKey && end_key)
     : ori(RegionRangeKeys::makeComparableKeys(std::move(start_key), std::move(end_key))),
       raw(ori.first.key.empty() ? DecodedTiKVKey() : RecordKVFormat::decodeTiKVKey(ori.first.key),
-          ori.second.key.empty() ? DecodedTiKVKey() : RecordKVFormat::decodeTiKVKey(ori.second.key)),
-      mapped_table_id(computeMappedTableID(raw.first)),
-      mapped_handle_range(TiKVRange::getHandleRangeByTable(rawKeys().first, rawKeys().second, mapped_table_id))
+          ori.second.key.empty() ? DecodedTiKVKey() : RecordKVFormat::decodeTiKVKey(ori.second.key))
+
 {
+    Logger * log = &Logger::get("RegionRangeKeys");
+    LOG_TRACE(log, __PRETTY_FUNCTION__ << " original start: " << ori.first.key.toHex() << ", end: " << ori.second.key.toHex());
+
+    mapped_table_id = computeMappedTableID(raw.first);
+    mapped_handle_range = TiKVRange::getHandleRangeByTable(rawKeys().first, rawKeys().second, mapped_table_id);
+
     if (mapped_handle_range.first == mapped_handle_range.second)
         throw Exception(std::string(__PRETTY_FUNCTION__) + " got empty handle range", ErrorCodes::LOGICAL_ERROR);
 }
