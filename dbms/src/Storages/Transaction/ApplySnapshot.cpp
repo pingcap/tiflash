@@ -92,7 +92,7 @@ bool KVStore::tryApplySnapshot(RegionPtr new_region, Context & context, bool try
                         getHandleMapByRange<Int64>(context, *tmt_storage, handle_range, handle_map);
                     break;
                 }
-                case TiDB::StorageEngine::DM:
+                case TiDB::StorageEngine::DT:
                 {
                     // acquire lock so that no other threads can change storage's structure
                     auto table_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);

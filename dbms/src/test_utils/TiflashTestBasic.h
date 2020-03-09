@@ -15,10 +15,18 @@ class TiFlashTestEnv
 public:
     static String getTemporaryPath() { return "./tmp/"; }
 
+    static std::vector<String> getExtraPaths()
+    {
+        std::vector<String> result;
+        result.push_back(getTemporaryPath());
+        return result;
+    }
+
     static Context & getContext(const DB::Settings & settings = DB::Settings())
     {
         static Context context = DB::Context::createGlobal();
         context.setPath(getTemporaryPath());
+        context.setExtraPaths(getExtraPaths());
         context.setGlobalContext(context);
         try
         {
