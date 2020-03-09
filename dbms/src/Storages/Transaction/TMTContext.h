@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Poco/Util/AbstractConfiguration.h>
 #include <Storages/Transaction/PDTiKVClient.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/StorageEngineType.h>
@@ -58,6 +59,8 @@ public:
     const std::unordered_set<std::string> & getIgnoreDatabases() const;
 
     ::TiDB::StorageEngine getEngineType() const { return engine; }
+
+    void reloadConfig(const Poco::Util::AbstractConfiguration & config);
 
 private:
     Context & context;
