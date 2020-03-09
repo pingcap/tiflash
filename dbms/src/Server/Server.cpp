@@ -179,7 +179,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     }
 
-    global_context->setExtraPaths(all_normal_path);
+    bool path_realtime_mode = config().getBool("path_realtime_mode", false);
+    std::vector<String> extra_paths(all_normal_path.begin(), all_normal_path.end());
+    for (auto & p : extra_paths)
+        p += "/data";
+
+    if (path_realtime_mode && all_normal_path.size() > 1)
+        global_context->setExtraPaths(std::vector<String>(extra_paths.begin() + 1, extra_paths.end()));
+    else
+        global_context->setExtraPaths(extra_paths);
+
     std::string path = all_normal_path[0];
     std::string default_database = config().getString("default_database", "default");
     global_context->setPath(path);
@@ -438,18 +447,23 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 engine = engine_if_empty;
         }
 
-        if (config().has("raft.disable_bg_flush"))
+        /// "tmt" engine ONLY support disable_bg_flush = false.
+        /// "dm" engine by default disable_bg_flush = true.
+
+        String disable_bg_flush_conf = "raft.disable_bg_flush";
+        if (engine == ::TiDB::StorageEngine::TMT)
         {
-            bool disable = config().getBool("raft.disable_bg_flush");
-            if (disable)
-            {
-                if (engine == ::TiDB::StorageEngine::TMT)
-                {
-                    throw Exception("Illegal arguments: disable background flush while using engine TxnMergeTree.",
-                        ErrorCodes::INVALID_CONFIG_PARAMETER);
-                }
+            if (config().has(disable_bg_flush_conf) && config().getBool(disable_bg_flush_conf))
+                throw Exception("Illegal arguments: disable background flush while using engine TxnMergeTree.",
+                                ErrorCodes::INVALID_CONFIG_PARAMETER);
+            disable_bg_flush = false;
+        }
+        else if (engine == ::TiDB::StorageEngine::DT)
+        {
+            if (config().has(disable_bg_flush_conf))
+                disable_bg_flush = config().getBool(disable_bg_flush_conf);
+            else
                 disable_bg_flush = true;
-            }
         }
     }
 

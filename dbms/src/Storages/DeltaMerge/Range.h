@@ -37,6 +37,8 @@ struct Range
 
     inline Range shrink(const Range<T> & other) const { return Range(std::max(start, other.start), std::min(end, other.end)); }
 
+    inline Range merge(const Range<T> & other) const { return Range(std::min(start, other.start), std::max(end, other.end)); }
+
     inline bool intersect(const Range<T> & other) const { return std::max(other.start, start) < std::min(other.end, end); }
 
     // [first, last_include]
@@ -58,6 +60,7 @@ struct Range
     inline String toString() const { return rangeToString(*this); }
 
     bool operator==(const Range & rhs) const { return start == rhs.start && end == rhs.end; }
+    bool operator!=(const Range & rhs) const { return !(*this == rhs); }
 };
 
 using HandleRange  = Range<Handle>;

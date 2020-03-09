@@ -117,6 +117,7 @@ public:
     bool empty() const { return writes.empty(); }
 
     const Writes & getWrites() const { return writes; }
+    Writes &       getWrites() { return writes; }
 
     size_t putWriteCount() const
     {
@@ -141,9 +142,27 @@ public:
 
     SequenceID getSequence() const { return sequence; }
 
-
     // `setSequence` should only called by internal method of PageStorage.
     void setSequence(SequenceID sequence_) { sequence = sequence_; }
+
+    String toString() const
+    {
+        String str;
+        for (auto & w : writes)
+        {
+            if (w.type == WriteType::PUT)
+                str += DB::toString(w.page_id) + ",";
+            else if (w.type == WriteType::REF)
+                str += DB::toString(w.page_id) + ">" + DB::toString(w.ori_page_id) + ",";
+            else if (w.type == WriteType::DEL)
+                str += "X" + DB::toString(w.page_id) + ",";
+            else if (w.type == WriteType::UPSERT)
+                str += "U" + DB::toString(w.page_id) + ",";
+        }
+        if (!str.empty())
+            str.erase(str.size() - 1);
+        return str;
+    }
 
     WriteBatch() = default;
     WriteBatch(WriteBatch && rhs) : writes(std::move(rhs.writes)), sequence(rhs.sequence) {}

@@ -57,9 +57,9 @@ static const size_t PAGE_META_SIZE = sizeof(PageId) + sizeof(PageFileId) + sizeo
 
 /// Return <data to write into meta file, data to write into data file>.
 std::pair<ByteBuffer, ByteBuffer> genWriteData( //
-    const WriteBatch & wb,
-    PageFile &         page_file,
-    PageEntriesEdit &  edit)
+    WriteBatch &      wb,
+    PageFile &        page_file,
+    PageEntriesEdit & edit)
 {
     WBSize meta_write_bytes = 0;
     size_t data_write_bytes = 0;
@@ -103,7 +103,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
     PageUtil::put(meta_pos, wb.getSequence());
 
     PageOffset page_data_file_off = page_file.getDataFileAppendPos();
-    for (const auto & write : wb.getWrites())
+    for (auto & write : wb.getWrites())
     {
         PageUtil::put(meta_pos, static_cast<IsPut>(write.type));
         switch (write.type)
@@ -118,13 +118,28 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
                 write.read_buffer->readStrict(data_pos, write.size);
                 page_checksum = CityHash_v1_0_2::CityHash64(data_pos, write.size);
                 page_offset   = page_data_file_off;
+                // In this case, checksum of each fields (inside `write.offsets[i].second`)
+                // is simply 0, we need to calulate the checksums of each fields
+                for (size_t i = 0; i < write.offsets.size(); ++i)
+                {
+                    const auto field_beg    = write.offsets[i].first;
+                    const auto field_end    = (i == write.offsets.size() - 1) ? write.size : write.offsets[i + 1].first;
+                    write.offsets[i].second = CityHash_v1_0_2::CityHash64(data_pos + field_beg, field_end - field_beg);
+                }
+
+                data_pos += write.size;
+                page_data_file_off += write.size;
             }
             else
             {
+                // Notice: in this case, we need to copy checksum instead of calculate from buffer(which is null)
+                // Do NOT use `data_pos` outside this if-else branch
+
                 // get page_checksum from write when read_buffer is nullptr
                 flags.setIsDetachPage();
                 page_checksum = write.page_checksum;
                 page_offset   = write.page_offset;
+                // `entry.field_offsets`(and checksum) just simply copy `write.offsets`
                 // page_data_file_off += 0;
             }
 
@@ -137,9 +152,9 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
             entry.offset   = page_offset;
             entry.checksum = page_checksum;
 
-            entry.field_offsets = write.offsets;
-            // TODO: we can swap from WriteBatch instead of copying?
-            // entry.field_offsets.swap(const_cast<WriteBatch::Write &>(write).offsets);
+            // entry.field_offsets = write.offsets;
+            // we can swap from WriteBatch instead of copying
+            entry.field_offsets.swap(write.offsets);
 
             PageUtil::put(meta_pos, (PageId)write.page_id);
             PageUtil::put(meta_pos, (PageFileId)entry.file_id);
@@ -153,8 +168,6 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
             PageUtil::put(meta_pos, (UInt64)entry.field_offsets.size());
             for (size_t i = 0; i < entry.field_offsets.size(); ++i)
             {
-                auto [field_beg, field_end]   = entry.getFieldOffsets(i);
-                entry.field_offsets[i].second = CityHash_v1_0_2::CityHash64(data_pos + field_beg, field_end - field_beg);
                 PageUtil::put(meta_pos, (UInt64)entry.field_offsets[i].first);
                 PageUtil::put(meta_pos, (UInt64)entry.field_offsets[i].second);
             }
@@ -164,11 +177,6 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
             else if (write.type == WriteBatch::WriteType::UPSERT)
                 edit.upsertPage(write.page_id, entry);
 
-            if (write.read_buffer)
-            {
-                data_pos += write.size;
-                page_data_file_off += write.size;
-            }
             break;
         }
         case WriteBatch::WriteType::DEL:
@@ -530,7 +538,7 @@ PageFile::Writer::~Writer()
     PageUtil::syncFile(meta_file_fd, meta_file_path);
 }
 
-void PageFile::Writer::write(const WriteBatch & wb, PageEntriesEdit & edit)
+void PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
 {
     ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
 

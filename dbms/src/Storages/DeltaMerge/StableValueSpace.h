@@ -42,14 +42,17 @@ public:
 
     static StableValueSpacePtr restore(DMContext & context, PageId id);
 
+    void recordRemovePacksPages(WriteBatches & wbs) const;
+
 private:
-    static const UInt64 CURRENT_VERSION;
+    static const Int64 CURRENT_VERSION;
 
     const PageId id;
 
     // Valid rows is not always the sum of rows in file,
     // because after logical split, two segments could reference to a same file.
     UInt64  valid_rows;
+    UInt64  valid_bytes;
     DMFiles files;
 
     Logger * log;

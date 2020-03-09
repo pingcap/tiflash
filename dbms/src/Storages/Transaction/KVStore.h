@@ -55,6 +55,8 @@ public:
 
     void tryPersist(const RegionID region_id);
 
+    static void tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, Poco::Logger * log);
+
     size_t regionSize() const;
     TiFlashApplyRes handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
         raft_cmdpb::AdminResponse && response,

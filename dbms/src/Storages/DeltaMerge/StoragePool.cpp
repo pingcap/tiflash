@@ -52,12 +52,15 @@ void StoragePool::restore()
 
 bool StoragePool::gc(const Seconds & try_gc_period)
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    {
+        std::lock_guard<std::mutex> lock(mutex);
 
-    Timepoint now = Clock::now();
-    if (now < (last_try_gc_time.load() + try_gc_period))
-        return false;
-    last_try_gc_time = now;
+        Timepoint now = Clock::now();
+        if (now < (last_try_gc_time.load() + try_gc_period))
+            return false;
+
+        last_try_gc_time = now;
+    }
 
     bool ok = false;
 

@@ -40,10 +40,9 @@ getPosRangeOfSorted(const HandleRange & handle_range, const ColumnPtr & handle_c
     return getPosRangeOfSorted(handle_range, toColumnVectorData<Handle>(handle_column), offset, limit);
 }
 
-inline Block filterSorted(const HandleRange & handle_range, Block && block, size_t handle_pos)
+inline Block cutBlock(Block && block, size_t offset, size_t limit)
 {
-    size_t rows          = block.rows();
-    auto [offset, limit] = getPosRangeOfSorted(handle_range, block.getByPosition(handle_pos).column, 0, rows);
+    size_t rows = block.rows();
     if (!limit)
         return {};
     if (offset == 0 && limit == rows)
@@ -71,6 +70,12 @@ inline Block filterSorted(const HandleRange & handle_range, Block && block, size
         }
     }
     return std::move(block);
+}
+
+inline Block filterSorted(const HandleRange & handle_range, Block && block, size_t handle_pos)
+{
+    auto [offset, limit] = getPosRangeOfSorted(handle_range, block.getByPosition(handle_pos).column, 0, block.rows());
+    return cutBlock(std::move(block), offset, limit);
 }
 
 inline Block filterUnsorted(const HandleRange & handle_range, Block && block, size_t handle_pos)
