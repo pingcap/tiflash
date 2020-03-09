@@ -45,7 +45,8 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context,
     Int64 tz_offset, const String & tz_name, const String & encode_type);
 tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version,
     UInt64 region_conf_version, Timestamp start_ts, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges);
-BlockInputStreamPtr outputDAGResponse(Context & context, const DAGSchema & schema, const tipb::SelectResponse & dag_response);
+BlockInputStreamPtr outputDAGResponse(
+    Context & context, const DAGSchema & schema, const tipb::SelectResponse & dag_response, const String & encode_type);
 
 BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
 {
@@ -103,7 +104,7 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
     tipb::SelectResponse dag_response
         = executeDAGRequest(context, dag_request, region->id(), region->version(), region->confVer(), start_ts, key_ranges);
 
-    return outputDAGResponse(context, schema, dag_response);
+    return outputDAGResponse(context, schema, dag_response, encode_type);
 }
 
 BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
@@ -146,7 +147,7 @@ BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
     tipb::SelectResponse dag_response
         = executeDAGRequest(context, dag_request, region_id, region->version(), region->confVer(), start_ts, key_ranges);
 
-    return outputDAGResponse(context, schema, dag_response);
+    return outputDAGResponse(context, schema, dag_response, encode_type);
 }
 
 struct ExecutorCtx
@@ -232,7 +233,7 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
             if (func_name_lowercase == "notin")
             {
                 // notin is transformed into not(in()) by tidb
-                expr->set_sig(tipb::ScalarFuncSig::UnaryNotInt);
+                expr->set_sig(tipb::ScalarFuncSig::UnaryNot);
                 auto * ft = expr->mutable_field_type();
                 ft->set_tp(TiDB::TypeLongLong);
                 ft->set_flag(TiDB::ColumnFlagUnsigned);
@@ -346,9 +347,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context,
     dag_request.set_time_zone_name(tz_name);
     dag_request.set_time_zone_offset(tz_offset);
 
-    if (encode_type == "chunk")
-        dag_request.set_encode_type(tipb::EncodeType::TypeChunk);
-    else if (encode_type == "chblock")
+    if (encode_type == "chblock")
         dag_request.set_encode_type(tipb::EncodeType::TypeCHBlock);
     else
         dag_request.set_encode_type(tipb::EncodeType::TypeDefault);
@@ -650,35 +649,29 @@ tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest
     return dag_response;
 }
 
-std::unique_ptr<ChunkCodec> getCodec(tipb::EncodeType encode_type)
+std::unique_ptr<ChunkCodec> getCodec(const String & encode_type)
 {
-    switch (encode_type)
-    {
-        case tipb::EncodeType::TypeDefault:
-            return std::make_unique<DefaultChunkCodec>();
-        case tipb::EncodeType::TypeChunk:
-            return std::make_unique<ArrowChunkCodec>();
-        case tipb::EncodeType::TypeCHBlock:
-            return std::make_unique<CHBlockChunkCodec>();
-        default:
-            throw Exception("Unsupported encode type", ErrorCodes::BAD_ARGUMENTS);
-    }
+    if (encode_type == "chblock")
+        return std::make_unique<CHBlockChunkCodec>();
+    else
+        return std::make_unique<DefaultChunkCodec>();
 }
 
-void chunksToBlocks(const DAGSchema & schema, const tipb::SelectResponse & dag_response, BlocksList & blocks)
+void chunksToBlocks(const DAGSchema & schema, const tipb::SelectResponse & dag_response, BlocksList & blocks, const String & encode_type)
 {
-    auto codec = getCodec(dag_response.encode_type());
+    auto codec = getCodec(encode_type);
     for (const auto & chunk : dag_response.chunks())
         blocks.emplace_back(codec->decode(chunk, schema));
 }
 
-BlockInputStreamPtr outputDAGResponse(Context &, const DAGSchema & schema, const tipb::SelectResponse & dag_response)
+BlockInputStreamPtr outputDAGResponse(
+    Context &, const DAGSchema & schema, const tipb::SelectResponse & dag_response, const String & encode_type)
 {
     if (dag_response.has_error())
         throw Exception(dag_response.error().msg(), dag_response.error().code());
 
     BlocksList blocks;
-    chunksToBlocks(schema, dag_response, blocks);
+    chunksToBlocks(schema, dag_response, blocks, encode_type);
     return std::make_shared<BlocksListBlockInputStream>(std::move(blocks));
 }
 

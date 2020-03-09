@@ -437,9 +437,7 @@ std::unordered_map<tipb::ScalarFuncSig, FilterParser::RSFilterType> FilterParser
     {tipb::ScalarFuncSig::LogicalAnd, FilterParser::RSFilterType::And},
     {tipb::ScalarFuncSig::LogicalOr, FilterParser::RSFilterType::Or},
     // {tipb::ScalarFuncSig::LogicalXor, "xor"},
-    {tipb::ScalarFuncSig::UnaryNotDecimal, FilterParser::RSFilterType::Not},
-    {tipb::ScalarFuncSig::UnaryNotInt, FilterParser::RSFilterType::Not},
-    {tipb::ScalarFuncSig::UnaryNotReal, FilterParser::RSFilterType::Not},
+    {tipb::ScalarFuncSig::UnaryNot, FilterParser::RSFilterType::Not},
 
     // {tipb::ScalarFuncSig::UnaryMinusInt, "negate"},
     // {tipb::ScalarFuncSig::UnaryMinusReal, "negate"},
