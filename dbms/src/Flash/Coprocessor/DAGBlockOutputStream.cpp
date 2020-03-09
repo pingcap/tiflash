@@ -1,7 +1,6 @@
-#include <Flash/Coprocessor/DAGBlockOutputStream.h>
-
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 
 namespace DB
@@ -25,10 +24,6 @@ DAGBlockOutputStream::DAGBlockOutputStream(tipb::SelectResponse & dag_response_,
     {
         chunk_codec_stream = std::make_unique<DefaultChunkCodec>()->newCodecStream(result_field_types);
     }
-    else if (encodeType == tipb::EncodeType::TypeChunk)
-    {
-        chunk_codec_stream = std::make_unique<ArrowChunkCodec>()->newCodecStream(result_field_types);
-    }
     else if (encodeType == tipb::EncodeType::TypeCHBlock)
     {
         chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(result_field_types);
@@ -36,9 +31,8 @@ DAGBlockOutputStream::DAGBlockOutputStream(tipb::SelectResponse & dag_response_,
     }
     else
     {
-        throw Exception("Only Default and Arrow encode type is supported in DAGBlockOutputStream.", ErrorCodes::UNSUPPORTED_PARAMETER);
+        throw Exception("Only Default and chblock encode type is supported in DAGBlockOutputStream.", ErrorCodes::UNSUPPORTED_PARAMETER);
     }
-    dag_response.set_encode_type(encodeType);
 }
 
 

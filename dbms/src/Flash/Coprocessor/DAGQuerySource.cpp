@@ -79,11 +79,9 @@ DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, Re
 void DAGQuerySource::analyzeDAGEncodeType()
 {
     encode_type = dag_request.encode_type();
+    if (encode_type == tipb::EncodeType::TypeArrow)
+        throw Exception("Only Default and chblock encode type is supported in DAG request.", ErrorCodes::NOT_IMPLEMENTED);
     if (isUnsupportedEncodeType(getResultFieldTypes(), encode_type))
-        encode_type = tipb::EncodeType::TypeDefault;
-    if (encode_type == tipb::EncodeType::TypeChunk && dag_request.has_chunk_memory_layout()
-        && dag_request.chunk_memory_layout().has_endian() && dag_request.chunk_memory_layout().endian() == tipb::Endian::BigEndian)
-        // todo support BigEndian encode for chunk encode type
         encode_type = tipb::EncodeType::TypeDefault;
 }
 

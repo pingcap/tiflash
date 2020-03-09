@@ -16,10 +16,6 @@
 ┌──────col_1─┬───────────────col_2─┐
 │ 2019-06-10 │ 2019-06-10 09:00:00 │
 └────────────┴─────────────────────┘
-=> DBGInvoke dag('select * from default.test',4,'chunk') 
-┌──────col_1─┬───────────────col_2─┐
-│ 2019-06-10 │ 2019-06-10 09:00:00 │
-└────────────┴─────────────────────┘
 
 # Mock DAG doesn't support date/datetime comparison with string, may need type inference and do implicit conversion to literal.
 # => DBGInvoke dag('select * from default.test where col_1 = \'2019-06-06\' and col_2 = \'2019-06-10 09:00:00\'') 

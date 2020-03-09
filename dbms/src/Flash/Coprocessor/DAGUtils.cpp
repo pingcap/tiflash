@@ -276,7 +276,7 @@ bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::E
 {
     const static std::unordered_map<tipb::EncodeType, std::unordered_set<Int32>> unsupported_types_map({
         {tipb::EncodeType::TypeCHBlock, {TiDB::TypeSet, TiDB::TypeGeometry, TiDB::TypeNull, TiDB::TypeEnum, TiDB::TypeJSON}},
-        {tipb::EncodeType::TypeChunk, {TiDB::TypeSet, TiDB::TypeGeometry, TiDB::TypeNull}},
+        {tipb::EncodeType::TypeArrow, {TiDB::TypeSet, TiDB::TypeGeometry, TiDB::TypeNull}},
     });
 
     auto unsupported_set = unsupported_types_map.find(encode_type);
@@ -539,11 +539,10 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::Sin, "sin"}, {tipb::ScalarFuncSig::Tan, "tan"}, {tipb::ScalarFuncSig::TruncateInt, "trunc"},
     {tipb::ScalarFuncSig::TruncateReal, "trunc"},
     //{tipb::ScalarFuncSig::TruncateDecimal, "cast"},
-    {tipb::ScalarFuncSig::TruncateUint, "trunc"},
+    {tipb::ScalarFuncSig::TruncateInt, "trunc"},
 
     {tipb::ScalarFuncSig::LogicalAnd, "and"}, {tipb::ScalarFuncSig::LogicalOr, "or"}, {tipb::ScalarFuncSig::LogicalXor, "xor"},
-    {tipb::ScalarFuncSig::UnaryNotDecimal, "not"}, {tipb::ScalarFuncSig::UnaryNotInt, "not"}, {tipb::ScalarFuncSig::UnaryNotReal, "not"},
-    {tipb::ScalarFuncSig::UnaryMinusInt, "negate"}, {tipb::ScalarFuncSig::UnaryMinusReal, "negate"},
+    {tipb::ScalarFuncSig::UnaryNot, "not"}, {tipb::ScalarFuncSig::UnaryMinusInt, "negate"}, {tipb::ScalarFuncSig::UnaryMinusReal, "negate"},
     {tipb::ScalarFuncSig::UnaryMinusDecimal, "negate"}, {tipb::ScalarFuncSig::DecimalIsNull, "isNull"},
     {tipb::ScalarFuncSig::DurationIsNull, "isNull"}, {tipb::ScalarFuncSig::RealIsNull, "isNull"},
     {tipb::ScalarFuncSig::StringIsNull, "isNull"}, {tipb::ScalarFuncSig::TimeIsNull, "isNull"}, {tipb::ScalarFuncSig::IntIsNull, "isNull"},
@@ -820,7 +819,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::Bin, "cast"},
     //{tipb::ScalarFuncSig::ASCII, "cast"},
     //{tipb::ScalarFuncSig::Char, "cast"},
-    {tipb::ScalarFuncSig::CharLengthUTF8, "lengthUTF8"},
+    {tipb::ScalarFuncSig::CharLength, "lengthUTF8"},
     //{tipb::ScalarFuncSig::Concat, "cast"},
     //{tipb::ScalarFuncSig::ConcatWS, "cast"},
     //{tipb::ScalarFuncSig::Convert, "cast"},
@@ -882,7 +881,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::Trim2Args, "cast"},
     //{tipb::ScalarFuncSig::Trim3Args, "cast"},
     //{tipb::ScalarFuncSig::UnHex, "cast"},
-    {tipb::ScalarFuncSig::UpperUTF8, "upper"},
+    {tipb::ScalarFuncSig::Upper, "upper"},
     //{tipb::ScalarFuncSig::Upper, "upper"},
     //{tipb::ScalarFuncSig::CharLength, "upper"},
 });
