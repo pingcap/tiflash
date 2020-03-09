@@ -147,7 +147,7 @@ void StorageDeltaMerge::drop()
     // Remove data in extra paths;
     for (auto & p : global_context.getExtraPaths().listPaths())
     {
-        Poco::File file(p.second + "/" + db_name + "/" + table_name);
+        Poco::File file(p + "/" + db_name + "/" + table_name);
         if (file.exists())
             file.remove(true);
     }

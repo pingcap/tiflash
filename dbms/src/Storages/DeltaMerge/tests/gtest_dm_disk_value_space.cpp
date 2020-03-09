@@ -34,8 +34,9 @@ protected:
     {
         dropDataInDisk();
 
-        storage_pool        = std::make_unique<StoragePool>("test.t1", path);
-        Context & context   = DMTestEnv::getContext();
+        Context & context = DMTestEnv::getContext();
+        storage_pool      = std::make_unique<StoragePool>("test.t1", path, context.getSettingsRef());
+        storage_pool->restore();
         table_handle_define = ColumnDefine(EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_TYPE);
         table_columns.clear();
         table_columns.emplace_back(table_handle_define);
@@ -91,9 +92,9 @@ try
         Block      block2 = DMTestEnv::prepareSimpleWriteBlock(value_beg + num_rows_write / 2, value_beg + num_rows_write, false);
         auto       opc    = DiskValueSpace::OpContext::createForLogStorage(*dm_context);
         WriteBatch wb;
-        Packs     packs1 = DiskValueSpace::writePacks(opc, std::make_shared<OneBlockInputStream>(block1), wb);
-        Packs     packs2 = DiskValueSpace::writePacks(opc, std::make_shared<OneBlockInputStream>(block2), wb);
-        dm_context->storage_pool.log().write(wb);
+        Packs      packs1 = DiskValueSpace::writePacks(opc, std::make_shared<OneBlockInputStream>(block1), wb);
+        Packs      packs2 = DiskValueSpace::writePacks(opc, std::make_shared<OneBlockInputStream>(block2), wb);
+        dm_context->storage_pool.log().write(std::move(wb));
 
         for (auto & pack : packs1)
         {
@@ -109,7 +110,7 @@ try
         EXPECT_EQ(num_rows_write, delta->num_rows(0, 2));
         WriteBatch remove_wb;
         delta = delta->tryFlushCache(opc, remove_wb, true);
-        opc.data_storage.write(remove_wb);
+        opc.data_storage.write(std::move(remove_wb));
         EXPECT_FALSE(!delta);
         EXPECT_EQ(num_rows_write, delta->num_rows(0, 1));
     }
@@ -199,7 +200,7 @@ TEST_F(DiskValueSpace_test, writePacks_OneBlock)
     auto        in    = std::make_shared<OneBlockInputStream>(block);
 
     WriteBatch wb;
-    auto       opc    = DiskValueSpace::OpContext::createForDataStorage(*dm_context);
+    auto       opc   = DiskValueSpace::OpContext::createForDataStorage(*dm_context);
     auto       packs = DiskValueSpace::writePacks(opc, in, wb);
     ASSERT_EQ(packs.size(), 1UL);
 
@@ -237,7 +238,7 @@ TEST_F(DiskValueSpace_test, writePacks_NonOverlapBlocks)
     }
 
     WriteBatch wb;
-    auto       opc    = DiskValueSpace::OpContext::createForDataStorage(*dm_context);
+    auto       opc   = DiskValueSpace::OpContext::createForDataStorage(*dm_context);
     auto       packs = DiskValueSpace::writePacks(opc, in, wb);
     ASSERT_EQ(packs.size(), 2UL);
 
@@ -306,7 +307,7 @@ TEST_F(DiskValueSpace_test, writePacks_OverlapBlocks)
     }
 
     WriteBatch wb;
-    auto       opc    = DiskValueSpace::OpContext::createForDataStorage(*dm_context);
+    auto       opc   = DiskValueSpace::OpContext::createForDataStorage(*dm_context);
     auto       packs = DiskValueSpace::writePacks(opc, in, wb);
     ASSERT_EQ(packs.size(), 3UL);
 
@@ -380,7 +381,7 @@ TEST_F(DiskValueSpace_test, writePacks_OverlapBlocksMerged)
     }
 
     WriteBatch wb;
-    auto       opc    = DiskValueSpace::OpContext::createForDataStorage(*dm_context);
+    auto       opc   = DiskValueSpace::OpContext::createForDataStorage(*dm_context);
     auto       packs = DiskValueSpace::writePacks(opc, in, wb);
     // Second block is merge to the first
     ASSERT_EQ(packs.size(), 2UL);

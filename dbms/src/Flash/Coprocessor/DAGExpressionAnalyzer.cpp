@@ -161,7 +161,10 @@ String DAGExpressionAnalyzer::convertToUInt8ForFilter(ExpressionActionsPtr & act
     // find the original unit8 column if possible
     for (auto it = actions->getActions().rbegin(); it != actions->getActions().rend(); ++it)
     {
-        if (it->type == ExpressionAction::Type::APPLY_FUNCTION && it->result_name == column_name && it->function->getName() == "CAST")
+        if (it->type == ExpressionAction::Type::APPLY_FUNCTION &&
+            it->result_name == column_name &&
+            it->function->getName() == "CAST" &&
+            isUInt8Type(it->function->getArgumentTypes().at(0)))
         {
             // for cast function, the casted column is the first argument
             return it->argument_names[0];
