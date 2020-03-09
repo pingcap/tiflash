@@ -60,10 +60,6 @@ public:
     }
     void appendFinalProject(ExpressionActionsChain & chain, const NamesWithAliases & final_project);
     String getActions(const tipb::Expr & expr, ExpressionActionsPtr & actions);
-    String getActionsForInOperator(const tipb::Expr & expr, ExpressionActionsPtr & actions);
-    String getActionsForMultiIf(const tipb::Expr & expr, ExpressionActionsPtr & actions);
-    String getActionsForCast(const tipb::Expr & expr, ExpressionActionsPtr & actions);
-    String getActionsForDateAdd(const tipb::Expr & expr, ExpressionActionsPtr & actions);
     const std::vector<NameAndTypePair> & getCurrentInputColumns();
     void makeExplicitSet(const tipb::Expr & expr, const Block & sample_block, bool create_ordered_set, const String & left_arg_name);
     void makeExplicitSetForIndex(const tipb::Expr & expr, const ManageableStoragePtr & storage);
@@ -71,7 +67,7 @@ public:
     Int32 getImplicitCastCount() { return implicit_cast_count; };
     bool appendTimeZoneCastsAfterTS(ExpressionActionsChain & chain, std::vector<bool> is_ts_column, const tipb::DAGRequest & rqst);
     String appendTimeZoneCast(const String & tz_col, const String & ts_col, const String & func_name, ExpressionActionsPtr & actions);
-    DAGPreparedSets getPreparedSets() { return prepared_sets; }
+    DAGPreparedSets & getPreparedSets() { return prepared_sets; }
     String convertToUInt8ForFilter(ExpressionActionsPtr & actions, const String & column_name);
 };
 

@@ -48,6 +48,165 @@ static String genFuncString(const String & func_name, const Names & argument_nam
     return ss.str();
 }
 
+static String getUniqueName(const Block & block, const String & prefix)
+{
+    int i = 1;
+    while (block.has(prefix + toString(i)))
+        ++i;
+    return prefix + toString(i);
+}
+
+
+static String buildMultiIfFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions) {
+    // multiIf is special because
+    // 1. the type of odd argument(except the last one) must be UInt8
+    // 2. if the total number of arguments is even, we need to add an extra NULL to multiIf
+    const String & func_name = getFunctionName(expr);
+    Names argument_names;
+    for (int i = 0; i < expr.children_size(); i++)
+    {
+        // todo for expression like `case expr when cond1 then result1 ... when condN then resultN else default end`
+        //  tidb will convert it to `casewhen(expr = cond1, result1, ..., expr = condN, resultN, default)
+        //  it will save some redundant calculation if we can re-use expr column
+        String name = analyzer->getActions(expr.children(i), actions);
+        if (i != expr.children_size() - 1 && i % 2 == 0)
+        {
+            name = analyzer->convertToUInt8ForFilter(actions, name);
+        }
+        argument_names.push_back(name);
+    }
+    if (argument_names.size() % 2 == 0)
+    {
+        tipb::Expr null_expr;
+        constructNULLLiteralTiExpr(null_expr);
+        String name = analyzer->getActions(null_expr, actions);
+        argument_names.push_back(name);
+    }
+    String expr_name = analyzer->applyFunction(func_name, argument_names, actions);
+    // add cast if needed
+    expr_name = analyzer->appendCastIfNeeded(expr, actions, expr_name, false);
+    return expr_name;
+}
+
+static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions) {
+    const String & func_name = getFunctionName(expr);
+    Names argument_names;
+    String key_name = analyzer->getActions(expr.children(0), actions);
+    argument_names.push_back(key_name);
+    analyzer->makeExplicitSet(expr, actions->getSampleBlock(), false, key_name);
+    const DAGSetPtr & set = analyzer->getPreparedSets()[&expr];
+
+    ColumnWithTypeAndName column;
+    column.type = std::make_shared<DataTypeSet>();
+
+    column.name = getUniqueName(actions->getSampleBlock(), "___set");
+    column.column = ColumnSet::create(1, set->constant_set);
+    actions->add(ExpressionAction::addColumn(column));
+    argument_names.push_back(column.name);
+
+    String expr_name = analyzer->applyFunction(func_name, argument_names, actions);
+    // add cast if needed
+    expr_name = analyzer->appendCastIfNeeded(expr, actions, expr_name, false);
+    if (set->remaining_exprs.empty())
+    {
+        return expr_name;
+    }
+    // if there are remaining non_constant_expr, then convert
+    // key in (const1, const2, non_const1, non_const2) => or(key in (const1, const2), key eq non_const1, key eq non_const2)
+    // key not in (const1, const2, non_const1, non_const2) => and(key not in (const1, const2), key not eq non_const1, key not eq non_const2)
+    argument_names.clear();
+    argument_names.push_back(expr_name);
+    bool is_not_in = func_name == "notIn" || func_name == "globalNotIn" || func_name == "tidbNotIn";
+    for (const tipb::Expr * non_constant_expr : set->remaining_exprs)
+    {
+        Names eq_arg_names;
+        eq_arg_names.push_back(key_name);
+        eq_arg_names.push_back(analyzer->getActions(*non_constant_expr, actions));
+        // do not need extra cast because TiDB will ensure type of key_name and right_expr_name is the same
+        argument_names.push_back(analyzer->applyFunction(is_not_in ? "notEquals" : "equals", eq_arg_names, actions));
+    }
+    return analyzer->applyFunction(is_not_in ? "and" : "or", argument_names, actions);
+}
+
+static String buildCastFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions) {
+    if (expr.children_size() != 1)
+    {
+        throw Exception("Cast function only support one argument", ErrorCodes::COP_BAD_DAG_REQUEST);
+    }
+    String name = analyzer->getActions(expr.children(0), actions);
+    name = analyzer->appendCastIfNeeded(expr, actions, name, true);
+    return name;
+}
+
+static String buildDateAddFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions) {
+
+    static const std::unordered_map<String, String> unit_to_func_name_map({{"DAY", "addDays"}, {"WEEK", "addWeeks"}, {"MONTH", "addMonths"},
+                                                                           {"YEAR", "addYears"}, {"HOUR", "addHours"}, {"MINUTE", "addMinutes"}, {"SECOND", "addSeconds"}});
+    if (expr.children_size() != 3)
+    {
+        throw Exception("date add function requires three arguments", ErrorCodes::COP_BAD_DAG_REQUEST);
+    }
+    String date_column = analyzer->getActions(expr.children(0), actions);
+    String delta_column = analyzer->getActions(expr.children(1), actions);
+    if (expr.children(2).tp() != tipb::ExprType::String)
+    {
+        throw Exception("3rd argument of date add function must be string literal", ErrorCodes::COP_BAD_DAG_REQUEST);
+    }
+    String unit = expr.children(2).val();
+    if (unit_to_func_name_map.find(unit) == unit_to_func_name_map.end())
+        throw Exception("date_add does not support unit " + unit + " yet.", ErrorCodes::NOT_IMPLEMENTED);
+    String func_name = unit_to_func_name_map.find(unit)->second;
+    const auto & date_column_type = removeNullable(actions->getSampleBlock().getByName(date_column).type);
+    if (!date_column_type->isDateOrDateTime())
+    {
+        // convert to datetime first
+        Names arg_names;
+        arg_names.push_back(date_column);
+        date_column = analyzer->applyFunction("toMyDateTimeOrNull", arg_names, actions);
+    }
+    const auto & delta_column_type = removeNullable(actions->getSampleBlock().getByName(delta_column).type);
+    if (!delta_column_type->isNumber())
+    {
+        // convert to numeric first
+        Names arg_names;
+        arg_names.push_back(delta_column);
+        delta_column = analyzer->applyFunction("toInt64OrNull", arg_names, actions);
+    }
+    Names argument_names;
+    argument_names.push_back(date_column);
+    argument_names.push_back(delta_column);
+    String ret = analyzer->applyFunction(func_name, argument_names, actions);
+    ret = analyzer->appendCastIfNeeded(expr, actions, ret, true);
+    return ret;
+}
+
+static String buildFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions) {
+    const String & func_name = getFunctionName(expr);
+    Names argument_names;
+    for (auto & child : expr.children())
+    {
+        String name = analyzer->getActions(child, actions);
+        argument_names.push_back(name);
+    }
+    String expr_name = analyzer->applyFunction(func_name, argument_names, actions);
+    // add cast if needed
+    expr_name = analyzer->appendCastIfNeeded(expr, actions, expr_name, false);
+    return expr_name;
+}
+
+static std::unordered_map<String, std::function<String(DAGExpressionAnalyzer *, const tipb::Expr &, ExpressionActionsPtr &)>>
+function_builder_map({
+        {"in", buildInFunction},
+        {"notIn", buildInFunction},
+        {"globalIn", buildInFunction},
+        {"globalNotIn", buildInFunction},
+        {"tidbIn", buildInFunction},
+        {"tidbNotIn", buildInFunction},
+        {"multiIf", buildMultiIfFunction},
+        {"CAST", buildCastFunction},
+        {"date_add", buildDateAddFunction},
+});
+
 DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> && source_columns_, const Context & context_)
     : source_columns(std::move(source_columns_)), context(context_), after_agg(false), implicit_cast_count(0)
 {
@@ -451,140 +610,6 @@ void DAGExpressionAnalyzer::makeExplicitSet(
     prepared_sets[&expr] = std::make_shared<DAGSet>(std::move(set), std::move(remaining_exprs));
 }
 
-static String getUniqueName(const Block & block, const String & prefix)
-{
-    int i = 1;
-    while (block.has(prefix + toString(i)))
-        ++i;
-    return prefix + toString(i);
-}
-
-String DAGExpressionAnalyzer::getActionsForInOperator(const tipb::Expr & expr, ExpressionActionsPtr & actions)
-{
-    const String & func_name = getFunctionName(expr);
-    Names argument_names;
-    String key_name = getActions(expr.children(0), actions);
-    argument_names.push_back(key_name);
-    makeExplicitSet(expr, actions->getSampleBlock(), false, key_name);
-    const DAGSetPtr & set = prepared_sets[&expr];
-
-    ColumnWithTypeAndName column;
-    column.type = std::make_shared<DataTypeSet>();
-
-    column.name = getUniqueName(actions->getSampleBlock(), "___set");
-    column.column = ColumnSet::create(1, set->constant_set);
-    actions->add(ExpressionAction::addColumn(column));
-    argument_names.push_back(column.name);
-
-    String expr_name = applyFunction(func_name, argument_names, actions);
-    // add cast if needed
-    expr_name = appendCastIfNeeded(expr, actions, expr_name, false);
-    if (set->remaining_exprs.empty())
-    {
-        return expr_name;
-    }
-    // if there are remaining non_constant_expr, then convert
-    // key in (const1, const2, non_const1, non_const2) => or(key in (const1, const2), key eq non_const1, key eq non_const2)
-    // key not in (const1, const2, non_const1, non_const2) => and(key not in (const1, const2), key not eq non_const1, key not eq non_const2)
-    argument_names.clear();
-    argument_names.push_back(expr_name);
-    bool is_not_in = func_name == "notIn" || func_name == "globalNotIn" || func_name == "tidbNotIn";
-    for (const tipb::Expr * non_constant_expr : set->remaining_exprs)
-    {
-        Names eq_arg_names;
-        eq_arg_names.push_back(key_name);
-        eq_arg_names.push_back(getActions(*non_constant_expr, actions));
-        // do not need extra cast because TiDB will ensure type of key_name and right_expr_name is the same
-        argument_names.push_back(applyFunction(is_not_in ? "notEquals" : "equals", eq_arg_names, actions));
-    }
-    return applyFunction(is_not_in ? "and" : "or", argument_names, actions);
-}
-
-String DAGExpressionAnalyzer::getActionsForMultiIf(const tipb::Expr & expr, ExpressionActionsPtr & actions)
-{
-    // multiIf is special because
-    // 1. the type of odd argument(except the last one) must be UInt8
-    // 2. if the total number of arguments is even, we need to add an extra NULL to multiIf
-    const String & func_name = getFunctionName(expr);
-    Names argument_names;
-    for (int i = 0; i < expr.children_size(); i++)
-    {
-        // todo for expression like `case expr when cond1 then result1 ... when condN then resultN else default end`
-        //  tidb will convert it to `casewhen(expr = cond1, result1, ..., expr = condN, resultN, default)
-        //  it will save some redundant calculation if we can re-use expr column
-        String name = getActions(expr.children(i), actions);
-        if (i != expr.children_size() - 1 && i % 2 == 0)
-        {
-            name = convertToUInt8ForFilter(actions, name);
-        }
-        argument_names.push_back(name);
-    }
-    if (argument_names.size() % 2 == 0)
-    {
-        tipb::Expr null_expr;
-        constructNULLLiteralTiExpr(null_expr);
-        String name = getActions(null_expr, actions);
-        argument_names.push_back(name);
-    }
-    String expr_name = applyFunction(func_name, argument_names, actions);
-    // add cast if needed
-    expr_name = appendCastIfNeeded(expr, actions, expr_name, false);
-    return expr_name;
-}
-
-String DAGExpressionAnalyzer::getActionsForCast(const tipb::Expr & expr, ExpressionActionsPtr & actions)
-{
-    if (expr.children_size() != 1)
-    {
-        throw Exception("Cast function only support one argument", ErrorCodes::COP_BAD_DAG_REQUEST);
-    }
-    String name = getActions(expr.children(0), actions);
-    name = appendCastIfNeeded(expr, actions, name, true);
-    return name;
-}
-
-String DAGExpressionAnalyzer::getActionsForDateAdd(const tipb::Expr & expr, ExpressionActionsPtr & actions)
-{
-    static const std::unordered_map<String, String> unit_to_func_name_map({{"DAY", "addDays"}, {"WEEK", "addWeeks"}, {"MONTH", "addMonths"},
-        {"YEAR", "addYears"}, {"HOUR", "addHours"}, {"MINUTE", "addMinutes"}, {"SECOND", "addSeconds"}});
-    if (expr.children_size() != 3)
-    {
-        throw Exception("date add function requires three arguments", ErrorCodes::COP_BAD_DAG_REQUEST);
-    }
-    String date_column = getActions(expr.children(0), actions);
-    String delta_column = getActions(expr.children(1), actions);
-    if (expr.children(2).tp() != tipb::ExprType::String)
-    {
-        throw Exception("3rd argument of date add function must be string literal", ErrorCodes::COP_BAD_DAG_REQUEST);
-    }
-    String unit = expr.children(2).val();
-    if (unit_to_func_name_map.find(unit) == unit_to_func_name_map.end())
-        throw Exception("date_add does not support unit " + unit + " yet.", ErrorCodes::NOT_IMPLEMENTED);
-    String func_name = unit_to_func_name_map.find(unit)->second;
-    const auto & date_column_type = removeNullable(actions->getSampleBlock().getByName(date_column).type);
-    if (!date_column_type->isDateOrDateTime())
-    {
-        // convert to datetime first
-        Names arg_names;
-        arg_names.push_back(date_column);
-        date_column = applyFunction("toMyDateTimeOrNull", arg_names, actions);
-    }
-    const auto & delta_column_type = removeNullable(actions->getSampleBlock().getByName(delta_column).type);
-    if (!delta_column_type->isNumber())
-    {
-        // convert to numeric first
-        Names arg_names;
-        arg_names.push_back(delta_column);
-        delta_column = applyFunction("toInt64OrNull", arg_names, actions);
-    }
-    Names argument_names;
-    argument_names.push_back(date_column);
-    argument_names.push_back(delta_column);
-    String ret = applyFunction(func_name, argument_names, actions);
-    ret = appendCastIfNeeded(expr, actions, ret, true);
-    return ret;
-}
-
 String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActionsPtr & actions)
 {
     if (isLiteralExpr(expr))
@@ -616,33 +641,14 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
             throw Exception("agg function is not supported yet", ErrorCodes::UNSUPPORTED_METHOD);
         }
         const String & func_name = getFunctionName(expr);
-
-        if (functionIsInOrGlobalInOperator(func_name))
+        if (function_builder_map.find(func_name) == function_builder_map.end())
         {
-            return getActionsForInOperator(expr, actions);
+            return function_builder_map[func_name](this, expr, actions);
         }
-        else if (func_name == "multiIf")
+        else
         {
-            return getActionsForMultiIf(expr, actions);
+            return buildFunction(this, expr, actions);
         }
-        else if (func_name == "CAST")
-        {
-            return getActionsForCast(expr, actions);
-        }
-        else if (func_name == "date_add")
-        {
-            return getActionsForDateAdd(expr, actions);
-        }
-        Names argument_names;
-        for (auto & child : expr.children())
-        {
-            String name = getActions(child, actions);
-            argument_names.push_back(name);
-        }
-        String expr_name = applyFunction(func_name, argument_names, actions);
-        // add cast if needed
-        expr_name = appendCastIfNeeded(expr, actions, expr_name, false);
-        return expr_name;
     }
     else
     {
