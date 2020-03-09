@@ -17,8 +17,7 @@ public:
         : sorted_input_stream(std::move(child)), pk_column_name(std::move(pk_column_name_))
     {
         assert(sorted_input_stream != nullptr);
-        cur_block  = {};
-        next_block = ::DB::DM::readNextBlock(sorted_input_stream);
+        cur_block = {};
         if constexpr (DM_RUN_CHECK)
         {
             // Sanity check for existence of pk column
@@ -35,13 +34,19 @@ public:
 
     Block read() override
     {
+        if (first_read)
+        {
+            next_block = DB::DM::readNextBlock(sorted_input_stream);
+            first_read = false;
+        }
+
         cur_block = next_block;
         if (!cur_block)
             return cur_block;
 
         while (true)
         {
-            next_block = ::DB::DM::readNextBlock(sorted_input_stream);
+            next_block = DB::DM::readNextBlock(sorted_input_stream);
 
             const size_t cut_offset = findCutOffsetInNextBlock(cur_block, next_block, pk_column_name);
             if (unlikely(cut_offset == 0))
@@ -113,6 +118,8 @@ private:
 
     Block cur_block;
     Block next_block;
+
+    bool first_read = true;
 };
 
 } // namespace DM

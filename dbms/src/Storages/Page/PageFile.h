@@ -40,7 +40,7 @@ public:
         Writer(PageFile &, bool sync_on_write);
         ~Writer();
 
-        void write(const WriteBatch & wb, PageEntriesEdit & edit);
+        void write(WriteBatch & wb, PageEntriesEdit & edit);
 
         PageFileIdAndLevel fileIdLevel() const;
 
