@@ -1,16 +1,16 @@
 #pragma once
 
-#include <condition_variable>
-#include <functional>
-#include <mutex>
-#include <optional>
-#include <vector>
-
 #include <Core/Names.h>
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/TiKVHandle.h>
 #include <common/logger_useful.h>
+
+#include <condition_variable>
+#include <functional>
+#include <mutex>
+#include <optional>
+#include <vector>
 
 namespace TiDB
 {
@@ -66,7 +66,7 @@ public:
     {
         std::mutex mutex;
         bool is_checking = false;
-        double threshold = 1.0;
+        std::atomic<double> threshold = 1.0;
         Timepoint last_check_time = Clock::now();
     };
 

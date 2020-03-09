@@ -83,4 +83,10 @@ IndexReaderPtr TMTContext::createIndexReader() const
 
 const std::unordered_set<std::string> & TMTContext::getIgnoreDatabases() const { return ignore_databases; }
 
+void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
+{
+    getRegionTable().setTableCheckerThreshold(config.getDouble("flash.overlap_threshold", 0.6));
+    getKVStore()->setRegionCompactLogPeriod(Seconds{config.getUInt64("flash.compact_log_min_period", 5 * 60)});
+}
+
 } // namespace DB

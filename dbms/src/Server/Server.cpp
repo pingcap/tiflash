@@ -311,6 +311,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             buildLoggers(*config);
             global_context->setClustersConfig(config);
             global_context->setMacros(std::make_unique<Macros>(*config, "macros"));
+            global_context->getTMTContext().reloadConfig(*config);
         },
         /* already_loaded = */ true);
 
@@ -471,9 +472,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_DEBUG(log, "Default storage engine: " << static_cast<Int64>(engine));
         /// create TMTContext
         global_context->createTMTContext(pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, engine, disable_bg_flush);
-        global_context->getTMTContext().getRegionTable().setTableCheckerThreshold(config().getDouble("flash.overlap_threshold", 0.6));
-        global_context->getTMTContext().getKVStore()->setRegionCompactLogPeriod(
-            Seconds{config().getUInt64("flash.compact_log_min_period", 5 * 60)});
+        global_context->getTMTContext().reloadConfig(config());
     }
 
     /// Then, load remaining databases
