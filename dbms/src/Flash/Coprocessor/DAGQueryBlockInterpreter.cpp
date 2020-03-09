@@ -448,14 +448,23 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     info.range_in_table = current_region->getHandleRangeByTable(table_id);
     query_info.mvcc_query_info->regions_query_info.push_back(info);
     query_info.mvcc_query_info->concurrent = 0.0;
-    //if (ts.engine() == 0) {
-    //    pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size,
-    //                                     max_streams);
-    //} else {
-        //pipeline.streams = storage->remote_read(dag.getKeyRanges(), query_info, ts, context);
-    //}
-    pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size,
-                                max_streams);
+    if (ts.next_read_engine() == tipb::EngineType::Local) {
+        pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size,
+                                         max_streams);
+    } else {
+        std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
+        for (auto & range : ts.ranges())
+        {
+            std::string start_key(range.low());
+            DecodedTiKVKey start(std::move(start_key));
+            std::string end_key(range.high());
+            DecodedTiKVKey end(std::move(end_key));
+            key_ranges.emplace_back(std::make_pair(std::move(start), std::move(end)));
+        }
+        pipeline.streams = storage->remote_read(key_ranges, query_info, ts, context);
+    }
+    //pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size,
+    //                            max_streams);
 
     if (pipeline.streams.empty())
     {
