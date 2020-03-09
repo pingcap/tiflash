@@ -80,7 +80,7 @@ void DAGQuerySource::analyzeDAGEncodeType()
 {
     encode_type = dag_request.encode_type();
     if (encode_type == tipb::EncodeType::TypeArrow)
-        encode_type = tipb::EncodeType::TypeDefault;
+        throw Exception("Only Default and chblock encode type is supported in DAG request.", ErrorCodes::NOT_IMPLEMENTED);
     if (isUnsupportedEncodeType(getResultFieldTypes(), encode_type))
         encode_type = tipb::EncodeType::TypeDefault;
 }

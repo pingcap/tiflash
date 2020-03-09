@@ -20,7 +20,7 @@ DAGBlockOutputStream::DAGBlockOutputStream(tipb::SelectResponse & dag_response_,
       records_per_chunk(records_per_chunk_),
       current_records_num(0)
 {
-    if (encodeType == tipb::EncodeType::TypeDefault || encodeType == tipb::EncodeType::TypeArrow)
+    if (encodeType == tipb::EncodeType::TypeDefault)
     {
         chunk_codec_stream = std::make_unique<DefaultChunkCodec>()->newCodecStream(result_field_types);
     }
@@ -31,7 +31,7 @@ DAGBlockOutputStream::DAGBlockOutputStream(tipb::SelectResponse & dag_response_,
     }
     else
     {
-        throw Exception("Only Default and Arrow encode type is supported in DAGBlockOutputStream.", ErrorCodes::UNSUPPORTED_PARAMETER);
+        throw Exception("Only Default and chblock encode type is supported in DAGBlockOutputStream.", ErrorCodes::UNSUPPORTED_PARAMETER);
     }
 }
 
