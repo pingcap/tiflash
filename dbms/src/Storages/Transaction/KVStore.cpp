@@ -395,7 +395,7 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
             }
 
             {
-                for (const auto &new_region : split_regions)
+                for (const auto & new_region : split_regions)
                     try_to_flush_region(new_region);
             }
 

@@ -65,7 +65,7 @@ public:
         // Already persisted to disk or not.
         bool saved = false;
 
-        bool isDeleteRange() const { return !delete_range.empty(); }
+        bool isDeleteRange() const { return !delete_range.none(); }
         bool isCached() const { return !isDeleteRange() && (bool)cache; }
         /// This pack is not a delete range, the data in it has not been saved to disk.
         bool isMutable() const { return !isDeleteRange() && data_page == 0; }

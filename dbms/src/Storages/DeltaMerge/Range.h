@@ -34,7 +34,6 @@ struct Range
 
     inline bool all() const { return start == MIN && end == MAX; }
     inline bool none() const { return start >= end; }
-    inline bool empty() const { return start == 0 && end == 0; }
 
     inline Range shrink(const Range<T> & other) const { return Range(std::max(start, other.start), std::min(end, other.end)); }
 
