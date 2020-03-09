@@ -65,14 +65,7 @@ static String buildMultiIfFunction(DAGExpressionAnalyzer * analyzer, const tipb:
     Names argument_names;
     for (int i = 0; i < expr.children_size(); i++)
     {
-        // todo for expression like `case expr when cond1 then result1 ... when condN then resultN else default end`
-        //  tidb will convert it to `casewhen(expr = cond1, result1, ..., expr = condN, resultN, default)
-        //  it will save some redundant calculation if we can re-use expr column
-        String name = analyzer->getActions(expr.children(i), actions);
-        if (i != expr.children_size() - 1 && i % 2 == 0)
-        {
-            name = analyzer->convertToUInt8ForFilter(actions, name);
-        }
+        String name = analyzer->getActions(expr.children(i), actions, i != expr.children_size() - 1 && i % 2 == 0);
         argument_names.push_back(name);
     }
     if (argument_names.size() % 2 == 0)
@@ -82,10 +75,7 @@ static String buildMultiIfFunction(DAGExpressionAnalyzer * analyzer, const tipb:
         String name = analyzer->getActions(null_expr, actions);
         argument_names.push_back(name);
     }
-    String expr_name = analyzer->applyFunction(func_name, argument_names, actions);
-    // add cast if needed
-    expr_name = analyzer->appendCastIfNeeded(expr, actions, expr_name, false);
-    return expr_name;
+    return analyzer->applyFunction(func_name, argument_names, actions);
 }
 
 static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions) {
@@ -105,8 +95,6 @@ static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr
     argument_names.push_back(column.name);
 
     String expr_name = analyzer->applyFunction(func_name, argument_names, actions);
-    // add cast if needed
-    expr_name = analyzer->appendCastIfNeeded(expr, actions, expr_name, false);
     if (set->remaining_exprs.empty())
     {
         return expr_name;
@@ -175,9 +163,7 @@ static String buildDateAddFunction(DAGExpressionAnalyzer * analyzer, const tipb:
     Names argument_names;
     argument_names.push_back(date_column);
     argument_names.push_back(delta_column);
-    String ret = analyzer->applyFunction(func_name, argument_names, actions);
-    ret = analyzer->appendCastIfNeeded(expr, actions, ret, true);
-    return ret;
+    return analyzer->applyFunction(func_name, argument_names, actions);
 }
 
 static String buildFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions) {
@@ -188,10 +174,7 @@ static String buildFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr &
         String name = analyzer->getActions(child, actions);
         argument_names.push_back(name);
     }
-    String expr_name = analyzer->applyFunction(func_name, argument_names, actions);
-    // add cast if needed
-    expr_name = analyzer->appendCastIfNeeded(expr, actions, expr_name, false);
-    return expr_name;
+    return analyzer->applyFunction(func_name, argument_names, actions);
 }
 
 static std::unordered_map<String, std::function<String(DAGExpressionAnalyzer *, const tipb::Expr &, ExpressionActionsPtr &)>>
@@ -295,7 +278,7 @@ void DAGExpressionAnalyzer::appendWhere(
     Names arg_names;
     for (const auto * condition : conditions)
     {
-        arg_names.push_back(getActions(*condition, last_step.actions));
+        arg_names.push_back(getActions(*condition, last_step.actions, true));
     }
     if (arg_names.size() == 1)
     {
@@ -306,35 +289,14 @@ void DAGExpressionAnalyzer::appendWhere(
         // connect all the conditions by logical and
         filter_column_name = applyFunction("and", arg_names, last_step.actions);
     }
-
-    auto & filter_column_type = chain.steps.back().actions->getSampleBlock().getByName(filter_column_name).type;
-    if (!isUInt8Type(filter_column_type))
-    {
-        filter_column_name = convertToUInt8ForFilter(chain.steps.back().actions, filter_column_name);
-    }
     chain.steps.back().required_output.push_back(filter_column_name);
 }
 
-String DAGExpressionAnalyzer::convertToUInt8ForFilter(ExpressionActionsPtr & actions, const String & column_name)
+String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, const String & column_name)
 {
-    // find the original unit8 column if possible
-    for (auto it = actions->getActions().rbegin(); it != actions->getActions().rend(); ++it)
-    {
-        if (it->type == ExpressionAction::Type::APPLY_FUNCTION &&
-            it->result_name == column_name &&
-            it->function->getName() == "CAST" &&
-            isUInt8Type(it->function->getArgumentTypes().at(0)))
-        {
-            // for cast function, the casted column is the first argument
-            return it->argument_names[0];
-        }
-    }
-    // couldn't find the original uint8 column, which means the top level expression of where
-    // condition is not a comparision/logical expression. For example:
-    // select * from table where c1 + c2
-    // TiFlash does not support this, in order to make the dag request work, need to convert the
+    // Some of the TiFlash operators(e.g. FilterBlockInputStream) only support uint8 as its input, so need to convert the
     // column type to UInt8
-    // for where condition of non-comparision/logical expression, the basic rule is:
+    // the basic rule is:
     // 1. if the column is numeric, compare it with 0
     // 2. if the column is string, convert it to numeric column, and compare with 0
     // 3. if the column is date/datetime, compare it with zeroDate
@@ -530,6 +492,28 @@ void DAGExpressionAnalyzer::appendAggSelect(
     }
 }
 
+/**
+ * when force_uint8 is false, alignReturnType align the data type in tiflash with the data type in dag request, otherwise
+ * always convert the return type to uint8 or nullable(uint8)
+ * @param expr
+ * @param actions
+ * @param expr_name
+ * @param force_uint8
+ * @return
+ */
+String DAGExpressionAnalyzer::alignReturnType(const tipb::Expr & expr, ExpressionActionsPtr & actions,
+        const String & expr_name, bool force_uint8)
+{
+    DataTypePtr orig_type = actions->getSampleBlock().getByName(expr_name).type;
+    if (force_uint8 && isUInt8Type(orig_type))
+        return expr_name;
+    String updated_name = appendCastIfNeeded(expr, actions, expr_name, false);
+    DataTypePtr updated_type = actions->getSampleBlock().getByName(updated_name).type;
+    if (force_uint8 && !isUInt8Type(updated_type))
+        updated_name = convertToUInt8(actions, updated_name);
+    return updated_name;
+}
+
 String DAGExpressionAnalyzer::appendCastIfNeeded(
     const tipb::Expr & expr, ExpressionActionsPtr & actions, const String & expr_name, bool explicit_cast)
 {
@@ -610,7 +594,7 @@ void DAGExpressionAnalyzer::makeExplicitSet(
     prepared_sets[&expr] = std::make_shared<DAGSet>(std::move(set), std::move(remaining_exprs));
 }
 
-String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActionsPtr & actions)
+String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActionsPtr & actions, bool output_as_uint8_type)
 {
     if (isLiteralExpr(expr))
     {
@@ -641,14 +625,17 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
             throw Exception("agg function is not supported yet", ErrorCodes::UNSUPPORTED_METHOD);
         }
         const String & func_name = getFunctionName(expr);
+        String expr_name;
         if (function_builder_map.find(func_name) == function_builder_map.end())
         {
-            return function_builder_map[func_name](this, expr, actions);
+            expr_name = function_builder_map[func_name](this, expr, actions);
         }
         else
         {
-            return buildFunction(this, expr, actions);
+            expr_name = buildFunction(this, expr, actions);
         }
+        expr_name = alignReturnType(expr, actions, expr_name, output_as_uint8_type);
+        return expr_name;
     }
     else
     {
