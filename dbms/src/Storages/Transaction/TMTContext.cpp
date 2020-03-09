@@ -85,8 +85,11 @@ const std::unordered_set<std::string> & TMTContext::getIgnoreDatabases() const {
 
 void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
 {
-    getRegionTable().setTableCheckerThreshold(config.getDouble("flash.overlap_threshold", 0.6));
-    getKVStore()->setRegionCompactLogPeriod(Seconds{config.getUInt64("flash.compact_log_min_period", 5 * 60)});
+    static const std::string & TABLE_OVERLAP_THRESHOLD = "flash.overlap_threshold";
+    static const std::string & COMPACT_LOG_MIN_PERIOD = "flash.compact_log_min_period";
+
+    getRegionTable().setTableCheckerThreshold(config.getDouble(TABLE_OVERLAP_THRESHOLD, 0.6));
+    getKVStore()->setRegionCompactLogPeriod(Seconds{config.getUInt64(COMPACT_LOG_MIN_PERIOD, 5 * 60)});
 }
 
 } // namespace DB
