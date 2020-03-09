@@ -170,7 +170,6 @@ private:
     void doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value);
     void doCheckTable(const DecodedTiKVKey & key) const;
     void doRemove(ColumnFamilyType type, const TiKVKey & key);
-    void doDeleteRange(const std::string & cf, const RegionRange & range);
 
     RegionDataReadInfo readDataByWriteIt(const RegionData::ConstWriteCFIter & write_it, bool need_value = true) const;
     RegionData::WriteCFIter removeDataByWriteIt(const RegionData::WriteCFIter & write_it);
