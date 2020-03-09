@@ -5,6 +5,7 @@
 #include <Storages/IStorage.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Storages/Transaction/StorageEngineType.h>
+#include <Storages/Transaction/Types.h>
 
 namespace TiDB
 {
@@ -34,6 +35,8 @@ public:
     ~IManageableStorage() override = default;
 
     virtual void flushDelta() {}
+
+    virtual void flushCache(const Context & /*context*/, HandleID /*start*/, HandleID /*end*/) {}
 
     virtual BlockInputStreamPtr status() { return {}; }
 
