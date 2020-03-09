@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
-#include <memory>
 #include <test_utils/TiflashTestBasic.h>
+#include <memory>
 #include "dm_basic_include.h"
 
 #include <Poco/ConsoleChannel.h>
@@ -23,7 +23,7 @@ namespace tests
 class DeltaMergeStore_test : public ::testing::Test
 {
 public:
-    DeltaMergeStore_test() : name("tmp"), path(DB::tests::TiFlashTestEnv::getTemporaryPath() + name) {}
+    DeltaMergeStore_test() : name("DeltaMergeStore_test"), path(DB::tests::TiFlashTestEnv::getTemporaryPath() + name) {}
 
 protected:
     static void SetUpTestCase()
@@ -693,7 +693,7 @@ try
     settings.dm_segment_limit_rows             = 11;
     settings.dm_segment_delta_limit_rows       = 7;
     settings.dm_segment_delta_cache_limit_rows = 4;
-    settings.dm_segment_stable_pack_rows      = 10;
+    settings.dm_segment_stable_pack_rows       = 10;
 
     size_t num_rows_write_in_total = 0;
 

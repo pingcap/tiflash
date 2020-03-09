@@ -648,7 +648,7 @@ void Segment::flushCache(DMContext & dm_context)
 {
     WriteBatch remove_log_wb;
     doFlushCache(dm_context, remove_log_wb);
-    dm_context.storage_pool.log().write(remove_log_wb);
+    dm_context.storage_pool.log().write(std::move(remove_log_wb));
 }
 
 size_t Segment::getEstimatedRows() const

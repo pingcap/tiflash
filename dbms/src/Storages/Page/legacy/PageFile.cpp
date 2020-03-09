@@ -640,6 +640,7 @@ void PageFile::readAndSetPageMetas(PageCacheMap & page_caches)
     if (!file_fd)
         return;
     SCOPE_EXIT({ ::close(file_fd); });
+
     char * data = (char *)alloc(file_size);
     SCOPE_EXIT({ free(data, file_size); });
 

@@ -1,12 +1,14 @@
 #pragma once
 
+#include <IO/WriteHelpers.h>
+#include <Storages/Page/mvcc/utils.h>
 #include <stdint.h>
+
 #include <boost/core/noncopyable.hpp>
 #include <cassert>
 #include <mutex>
+#include <random>
 #include <shared_mutex>
-
-#include <IO/WriteHelpers.h>
 
 /* TODO: This abstraction above PageEntriesVersion seems to be redundant and 
 make changes hard to apply. (template make something wried between VersionSet, 
@@ -25,6 +27,21 @@ struct VersionSetConfig
 {
     size_t compact_hint_delta_deletions = 5000;
     size_t compact_hint_delta_entries   = 200 * 1000;
+
+    void setSnapshotCleanupProb(UInt32 prob)
+    {
+        // Range from [0, 1000)
+        prob = std::max(1U, prob);
+        prob = std::min(1000U, prob);
+
+        prob_cleanup_invalid_snapshot = prob;
+    }
+
+    bool doCleanup() const { return utils::randInt(0, 1000) < prob_cleanup_invalid_snapshot; }
+
+private:
+    // Probability to cleanup invalid snapshots. 10 out of 1000 by default.
+    size_t prob_cleanup_invalid_snapshot = 10;
 };
 
 /// Base type for VersionType of VersionSet
