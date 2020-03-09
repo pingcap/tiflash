@@ -57,7 +57,8 @@ static String getUniqueName(const Block & block, const String & prefix)
 }
 
 
-static String buildMultiIfFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions) {
+static String buildMultiIfFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+{
     // multiIf is special because
     // 1. the type of odd argument(except the last one) must be UInt8
     // 2. if the total number of arguments is even, we need to add an extra NULL to multiIf
@@ -78,7 +79,8 @@ static String buildMultiIfFunction(DAGExpressionAnalyzer * analyzer, const tipb:
     return analyzer->applyFunction(func_name, argument_names, actions);
 }
 
-static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions) {
+static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+{
     const String & func_name = getFunctionName(expr);
     Names argument_names;
     String key_name = analyzer->getActions(expr.children(0), actions);
@@ -116,7 +118,8 @@ static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr
     return analyzer->applyFunction(is_not_in ? "and" : "or", argument_names, actions);
 }
 
-static String buildCastFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions) {
+static String buildCastFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+{
     if (expr.children_size() != 1)
     {
         throw Exception("Cast function only support one argument", ErrorCodes::COP_BAD_DAG_REQUEST);
@@ -126,10 +129,11 @@ static String buildCastFunction(DAGExpressionAnalyzer * analyzer, const tipb::Ex
     return name;
 }
 
-static String buildDateAddFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions) {
+static String buildDateAddFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+{
 
     static const std::unordered_map<String, String> unit_to_func_name_map({{"DAY", "addDays"}, {"WEEK", "addWeeks"}, {"MONTH", "addMonths"},
-                                                                           {"YEAR", "addYears"}, {"HOUR", "addHours"}, {"MINUTE", "addMinutes"}, {"SECOND", "addSeconds"}});
+        {"YEAR", "addYears"}, {"HOUR", "addHours"}, {"MINUTE", "addMinutes"}, {"SECOND", "addSeconds"}});
     if (expr.children_size() != 3)
     {
         throw Exception("date add function requires three arguments", ErrorCodes::COP_BAD_DAG_REQUEST);
@@ -166,7 +170,8 @@ static String buildDateAddFunction(DAGExpressionAnalyzer * analyzer, const tipb:
     return analyzer->applyFunction(func_name, argument_names, actions);
 }
 
-static String buildFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions) {
+static String buildFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+{
     const String & func_name = getFunctionName(expr);
     Names argument_names;
     for (auto & child : expr.children())
@@ -178,7 +183,7 @@ static String buildFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr &
 }
 
 static std::unordered_map<String, std::function<String(DAGExpressionAnalyzer *, const tipb::Expr &, ExpressionActionsPtr &)>>
-function_builder_map({
+    function_builder_map({
         {"in", buildInFunction},
         {"notIn", buildInFunction},
         {"globalIn", buildInFunction},
@@ -188,7 +193,7 @@ function_builder_map({
         {"multiIf", buildMultiIfFunction},
         {"CAST", buildCastFunction},
         {"date_add", buildDateAddFunction},
-});
+    });
 
 DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> && source_columns_, const Context & context_)
     : source_columns(std::move(source_columns_)), context(context_), after_agg(false), implicit_cast_count(0)
@@ -501,8 +506,8 @@ void DAGExpressionAnalyzer::appendAggSelect(
  * @param force_uint8
  * @return
  */
-String DAGExpressionAnalyzer::alignReturnType(const tipb::Expr & expr, ExpressionActionsPtr & actions,
-        const String & expr_name, bool force_uint8)
+String DAGExpressionAnalyzer::alignReturnType(
+    const tipb::Expr & expr, ExpressionActionsPtr & actions, const String & expr_name, bool force_uint8)
 {
     DataTypePtr orig_type = actions->getSampleBlock().getByName(expr_name).type;
     if (force_uint8 && isUInt8Type(orig_type))
