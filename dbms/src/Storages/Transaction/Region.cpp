@@ -1,5 +1,6 @@
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/PDTiKVClient.h>
+#include <Storages/Transaction/ProxyFFIType.h>
 #include <Storages/Transaction/RaftCommandResult.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionTable.h>
@@ -18,9 +19,6 @@ extern const int UNKNOWN_FORMAT_VERSION;
 
 const UInt32 Region::CURRENT_VERSION = 1;
 
-const std::string Region::lock_cf_name = "lock";
-const std::string Region::default_cf_name = "default";
-const std::string Region::write_cf_name = "write";
 const std::string Region::log_name = "Region";
 
 RegionData::WriteCFIter Region::removeDataByWriteIt(const RegionData::WriteCFIter & write_it) { return data.removeDataByWriteIt(write_it); }
@@ -34,7 +32,7 @@ LockInfoPtr Region::getLockInfo(UInt64 start_ts) const { return data.getLockInfo
 
 void Region::insert(const std::string & cf, TiKVKey && key, TiKVValue && value)
 {
-    return insert(getCfType(cf), std::move(key), std::move(value));
+    return insert(NameToCF(cf), std::move(key), std::move(value));
 }
 
 void Region::insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value)
@@ -64,7 +62,7 @@ void Region::doCheckTable(const DB::DecodedTiKVKey & raw_key) const
 void Region::remove(const std::string & cf, const TiKVKey & key)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
-    doRemove(getCfType(cf), key);
+    doRemove(NameToCF(cf), key);
 }
 
 void Region::doRemove(ColumnFamilyType type, const TiKVKey & key)
@@ -99,9 +97,7 @@ RegionPtr Region::splitInto(RegionMeta && meta)
     RegionPtr new_region;
     if (index_reader != nullptr)
     {
-        new_region = std::make_shared<Region>(std::move(meta), [&]() {
-            return std::make_shared<IndexReader>(index_reader->cluster);
-        });
+        new_region = std::make_shared<Region>(std::move(meta), [&]() { return std::make_shared<IndexReader>(index_reader->cluster); });
     }
     else
         new_region = std::make_shared<Region>(std::move(meta));
@@ -362,18 +358,6 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const IndexReaderCreateFunc * in
     return region;
 }
 
-ColumnFamilyType Region::getCfType(const std::string & cf)
-{
-    if (cf.empty() || cf == default_cf_name)
-        return ColumnFamilyType::Default;
-    else if (cf == write_cf_name)
-        return ColumnFamilyType::Write;
-    else if (cf == lock_cf_name)
-        return ColumnFamilyType::Lock;
-    else
-        throw Exception("Illegal cf: " + cf, ErrorCodes::LOGICAL_ERROR);
-}
-
 RegionID Region::id() const { return meta.regionId(); }
 
 bool Region::isPendingRemove() const { return peerState() == raft_serverpb::PeerState::Tombstone; }
@@ -531,96 +515,85 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const Timestamp 
         LOG_INFO(log, __FUNCTION__ << ": add deleted gc: " << deleted_gc_cnt);
 }
 
-void Region::handleWriteRaftCmd(raft_cmdpb::RaftCmdRequest && request, UInt64 index, UInt64 term, bool set_applied)
+TiFlashApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, bool set_applied)
 {
 
     if (index <= appliedIndex())
     {
         LOG_WARNING(log, toString() << " ignore outdated raft log [term: " << term << ", index: " << index << "]");
-        return;
+        return TiFlashApplyRes::Persist;
     }
 
+    const auto handle_by_index_func = [&](auto i) {
+        auto type = cmds.cmd_types[i];
+        auto cf = cmds.cmd_cf[i];
+        switch (type)
+        {
+            case WriteCmdType::Put:
+            {
+                auto tikv_key = TiKVKey(cmds.keys[i].data, cmds.keys[i].len);
+                auto tikv_value = TiKVValue(cmds.vals[i].data, cmds.vals[i].len);
+                try
+                {
+                    doInsert(cf, std::move(tikv_key), std::move(tikv_value));
+                }
+                catch (Exception & e)
+                {
+                    LOG_ERROR(log,
+                        toString() << " catch exception: " << e.message() << ", while applying CmdType::Put on [term: " << term
+                                   << ", index: " << index << "], CF: " << CFToName(cf));
+                    e.rethrow();
+                }
+                break;
+            }
+            case WriteCmdType::Del:
+            {
+                auto tikv_key = TiKVKey(cmds.keys[i].data, cmds.keys[i].len);
+                try
+                {
+                    doRemove(cf, tikv_key);
+                }
+                catch (Exception & e)
+                {
+                    LOG_ERROR(log,
+                        toString() << " catch exception: " << e.message() << ", while applying CmdType::Delete on [term: " << term
+                                   << ", index: " << index << "], key in hex: " << tikv_key.toHex() << ", CF: " << CFToName(cf));
+                    e.rethrow();
+                }
+                break;
+            }
+            default:
+                throw Exception(
+                    std::string(__PRETTY_FUNCTION__) + ": unsupported command type " + std::to_string(type), ErrorCodes::LOGICAL_ERROR);
+        }
+    };
+
+    const auto handle_write_cmd_func = [&]() {
+        auto need_handle_write_cf = false;
+        for (UInt64 i = 0; i < cmds.len; ++i)
+        {
+            if (cmds.cmd_cf[i] == ColumnFamilyType::Write)
+                need_handle_write_cf = true;
+            else
+                handle_by_index_func(i);
+        }
+
+        if (need_handle_write_cf)
+        {
+            for (UInt64 i = 0; i < cmds.len; ++i)
+            {
+                if (cmds.cmd_cf[i] == ColumnFamilyType::Write)
+                    handle_by_index_func(i);
+            }
+        }
+    };
+
     {
+
         std::unique_lock<std::shared_mutex> lock(mutex);
         std::lock_guard<std::mutex> predecode_lock(predecode_mutex);
 
-        for (auto && req : *request.mutable_requests())
-        {
-            auto type = req.cmd_type();
-
-            switch (type)
-            {
-                case raft_cmdpb::CmdType::Put:
-                {
-                    auto & put = *req.mutable_put();
-
-                    auto & key = *put.mutable_key();
-                    auto & value = *put.mutable_value();
-
-                    auto tikv_key = TiKVKey(std::move(key));
-                    auto tikv_value = TiKVValue(std::move(value));
-
-                    try
-                    {
-                        doInsert(getCfType(put.cf()), std::move(tikv_key), std::move(tikv_value));
-                    }
-                    catch (Exception & e)
-                    {
-                        LOG_ERROR(log,
-                            toString() << " catch exception: " << e.message() << ", while applying CmdType::Put on [term: " << term
-                                       << ", index: " << index << "], CF: " << put.cf());
-                        e.rethrow();
-                    }
-
-                    break;
-                }
-                case raft_cmdpb::CmdType::Delete:
-                {
-                    auto & del = *req.mutable_delete_();
-
-                    auto & key = *del.mutable_key();
-                    auto tikv_key = TiKVKey(std::move(key));
-
-                    try
-                    {
-                        doRemove(getCfType(del.cf()), tikv_key);
-                    }
-                    catch (Exception & e)
-                    {
-                        LOG_ERROR(log,
-                            toString() << " catch exception: " << e.message() << ", while applying CmdType::Delete on [term: " << term
-                                       << ", index: " << index << "], key in hex: " << tikv_key.toHex() << ", CF: " << del.cf());
-                        e.rethrow();
-                    }
-
-                    break;
-                }
-                case raft_cmdpb::CmdType::Snap:
-                case raft_cmdpb::CmdType::Get:
-                case raft_cmdpb::CmdType::ReadIndex:
-                    LOG_WARNING(log, toString(false) << " skip unsupported command: " << raft_cmdpb::CmdType_Name(type));
-                    break;
-                case raft_cmdpb::CmdType::DeleteRange:
-                {
-                    auto & delete_range = *req.mutable_delete_range();
-                    const auto & cf = delete_range.cf();
-                    auto start = TiKVKey(std::move(*delete_range.mutable_start_key()));
-                    auto end = TiKVKey(std::move(*delete_range.mutable_end_key()));
-
-                    LOG_INFO(log,
-                        toString(false) << " start to execute " << raft_cmdpb::CmdType_Name(type) << ", CF: " << cf
-                                        << ", start key in hex: " << start.toHex() << ", end key in hex: " << end.toHex());
-                    doDeleteRange(cf, RegionRangeKeys::makeComparableKeys(std::move(start), std::move(end)));
-                    break;
-                }
-                default:
-                {
-                    throw Exception(std::string(__PRETTY_FUNCTION__) + ": unsupported command type " + raft_cmdpb::CmdType_Name(type),
-                        ErrorCodes::LOGICAL_ERROR);
-                    break;
-                }
-            }
-        }
+        handle_write_cmd_func();
 
         if (set_applied)
             meta.setApplied(index, term);
@@ -628,6 +601,8 @@ void Region::handleWriteRaftCmd(raft_cmdpb::RaftCmdRequest && request, UInt64 in
 
     if (set_applied)
         meta.notifyAll();
+
+    return TiFlashApplyRes::None;
 }
 
 RegionRaftCommandDelegate & Region::makeRaftCommandDelegate(const KVStoreTaskLock & lock)
@@ -670,12 +645,6 @@ void Region::compareAndUpdateHandleMaps(const Region & source_region, HandleMap 
 
         LOG_DEBUG(log, __FUNCTION__ << ": memory cache: source " << source_region.toString(false) << ", record size " << write_map.size());
     }
-}
-
-void Region::doDeleteRange(const std::string & cf, const RegionRange & range)
-{
-    auto type = getCfType(cf);
-    return data.deleteRange(type, range);
 }
 
 std::tuple<RegionVersion, RegionVersion, ImutRegionRangePtr> Region::dumpVersionRange() const { return meta.dumpVersionRange(); }

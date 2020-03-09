@@ -454,8 +454,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (engine == ::TiDB::StorageEngine::TMT)
         {
             if (config().has(disable_bg_flush_conf) && config().getBool(disable_bg_flush_conf))
-                throw Exception("Illegal arguments: disable background flush while using engine TxnMergeTree.",
-                                ErrorCodes::INVALID_CONFIG_PARAMETER);
+                throw Exception(
+                    "Illegal arguments: disable background flush while using engine TxnMergeTree.", ErrorCodes::INVALID_CONFIG_PARAMETER);
             disable_bg_flush = false;
         }
         else if (engine == ::TiDB::StorageEngine::DT)
@@ -564,7 +564,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         // a special number, also defined in proxy
         .magic_number = 0x13579BDF,
-        .version = 1};
+        .version = 2};
 
     auto proxy_runner = std::thread([&proxy_conf, &log, &helper]() {
         if (!proxy_conf.inited)
