@@ -531,7 +531,7 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const Timestamp 
         LOG_INFO(log, __FUNCTION__ << ": add deleted gc: " << deleted_gc_cnt);
 }
 
-void Region::handleWriteRaftCmd(raft_cmdpb::RaftCmdRequest && request, UInt64 index, UInt64 term)
+void Region::handleWriteRaftCmd(raft_cmdpb::RaftCmdRequest && request, UInt64 index, UInt64 term, bool set_applied)
 {
 
     if (index <= appliedIndex())
@@ -621,10 +621,13 @@ void Region::handleWriteRaftCmd(raft_cmdpb::RaftCmdRequest && request, UInt64 in
                 }
             }
         }
-        meta.setApplied(index, term);
+
+        if (set_applied)
+            meta.setApplied(index, term);
     }
 
-    meta.notifyAll();
+    if (set_applied)
+        meta.notifyAll();
 }
 
 RegionRaftCommandDelegate & Region::makeRaftCommandDelegate(const KVStoreTaskLock & lock)

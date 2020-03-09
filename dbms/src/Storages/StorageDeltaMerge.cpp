@@ -8,6 +8,8 @@
 #endif
 
 #include <Common/typeid_cast.h>
+#include <Common/formatReadable.h>
+
 #include <Core/Defines.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
@@ -228,7 +230,13 @@ Block StorageDeltaMerge::buildInsertBlock(bool is_import, bool is_delete, const 
     const Block & header = store->getHeader();
     for (auto & col : block)
     {
-        if (col.name != VERSION_COLUMN_NAME && col.name != TAG_COLUMN_NAME && col.name != EXTRA_HANDLE_COLUMN_NAME)
+        if (col.name == EXTRA_HANDLE_COLUMN_NAME)
+            col.column_id = EXTRA_HANDLE_COLUMN_ID;
+        else if (col.name == VERSION_COLUMN_NAME)
+            col.column_id = VERSION_COLUMN_ID;
+        else if (col.name == TAG_COLUMN_NAME)
+            col.column_id = TAG_COLUMN_ID;
+        else
             col.column_id = header.getByName(col.name).column_id;
     }
 
@@ -525,6 +533,8 @@ BlockInputStreams StorageDeltaMerge::read( //
 
         const auto & mvcc_query_info = *query_info.mvcc_query_info;
 
+        LOG_DEBUG(log, "Read with tso: " << mvcc_query_info.read_tso);
+
         const auto check_read_tso = [&tmt, &context, this](UInt64 read_tso) {
             // Read with specify tso, check if tso is smaller than TiDB GcSafePoint
             auto pd_client = tmt.getPDClient();
@@ -661,6 +671,11 @@ BlockInputStreams StorageDeltaMerge::read( //
 
 void StorageDeltaMerge::checkStatus(const Context & context) { store->check(context); }
 
+void StorageDeltaMerge::flushCache(const Context & context, HandleID start, HandleID end)
+{
+    store->flushCache(context, DM::HandleRange(start, end));
+}
+
 void StorageDeltaMerge::deleteRange(const DM::HandleRange & range_to_delete, const Settings & settings)
 {
     return store->deleteRange(global_context, settings, range_to_delete);
@@ -717,14 +732,14 @@ void StorageDeltaMerge::deleteRows(const Context & context, size_t delete_rows)
     auto delete_range = getRange(store, context, total_rows, delete_rows);
     size_t actual_delete_rows = getRows(store, context, delete_range);
     if (actual_delete_rows != delete_rows)
-        throw Exception("Expected delete rows: " + DB::toString(delete_rows) + ", got: " + DB::toString(actual_delete_rows));
+        LOG_ERROR(log, "Expected delete rows: " << delete_rows << ", got: " << actual_delete_rows);
 
     store->deleteRange(context, context.getSettingsRef(), delete_range);
 
     size_t after_delete_rows = getRows(store, context, DM::HandleRange::newAll());
     if (after_delete_rows != total_rows - delete_rows)
-        throw Exception("Rows after delete range not match, expected: " + DB::toString(total_rows - delete_rows)
-            + ", got: " + DB::toString(after_delete_rows));
+        LOG_ERROR(log, "Rows after delete range not match, expected: " << (total_rows - delete_rows)
+            << ", got: " << after_delete_rows);
 }
 
 //==========================================================================================
@@ -918,6 +933,10 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     name_col->insert(String(#NAME)); \
     value_col->insert(DB::toString(stat.NAME));
 
+#define INSERT_SIZE(NAME)             \
+    name_col->insert(String(#NAME)); \
+    value_col->insert(formatReadableSizeWithBinarySuffix(stat.NAME, 2));
+
 #define INSERT_RATE(NAME)            \
     name_col->insert(String(#NAME)); \
     value_col->insert(DB::toString(stat.NAME * 100, 2) + "%");
@@ -928,11 +947,22 @@ BlockInputStreamPtr StorageDeltaMerge::status()
 
     INSERT_INT(segment_count)
     INSERT_INT(total_rows)
-    INSERT_RATE(delta_rate_rows)
-    INSERT_RATE(delta_rate_count)
-    INSERT_RATE(delta_placed_rate)
+    INSERT_SIZE(total_size)
     INSERT_INT(total_delete_ranges)
+
+    INSERT_SIZE(total_delta_size)
+    INSERT_SIZE(total_stable_size)
+
+    INSERT_RATE(delta_rate_rows)
+    INSERT_RATE(delta_rate_segments)
+
+    INSERT_RATE(delta_placed_rate)
+    INSERT_SIZE(delta_cache_size)
+    INSERT_RATE(delta_cache_rate)
+    INSERT_RATE(delta_cache_wasted_rate)
+
     INSERT_FLOAT(avg_segment_rows)
+    INSERT_SIZE(avg_segment_size)
 
     INSERT_INT(delta_count)
     INSERT_INT(total_delta_rows)
@@ -946,12 +976,12 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     INSERT_INT(total_pack_count_in_delta)
     INSERT_FLOAT(avg_pack_count_in_delta)
     INSERT_FLOAT(avg_pack_rows_in_delta)
-    INSERT_FLOAT(avg_pack_bytes_in_delta)
+    INSERT_SIZE(avg_pack_size_in_delta)
 
     INSERT_INT(total_pack_count_in_stable)
     INSERT_FLOAT(avg_pack_count_in_stable)
     INSERT_FLOAT(avg_pack_rows_in_stable)
-    INSERT_FLOAT(avg_pack_bytes_in_stable)
+    INSERT_SIZE(avg_pack_size_in_stable)
 
     INSERT_INT(storage_stable_num_snapshots);
     INSERT_INT(storage_stable_num_pages);
@@ -967,6 +997,8 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     INSERT_INT(storage_meta_num_pages);
     INSERT_INT(storage_meta_num_normal_pages)
     INSERT_INT(storage_meta_max_page_id);
+
+    INSERT_INT(background_tasks_length);
 
 #undef INSERT_INT
 #undef INSERT_RATE

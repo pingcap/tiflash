@@ -1,5 +1,3 @@
-#include <chrono>
-
 #include <Interpreters/Context.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/BackgroundService.h>
@@ -9,6 +7,8 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
+
+#include <chrono>
 
 namespace DB
 {
@@ -80,6 +80,26 @@ void KVStore::traverseRegions(std::function<void(RegionID, const RegionPtr &)> &
         callback(it->first, it->second);
 }
 
+void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, Poco::Logger * log)
+{
+    if (tmt.isBgFlushDisabled())
+    {
+        auto table_id = region.getMappedTableID();
+        auto handle_range = region.getHandleRangeByTable(table_id);
+        auto storage = tmt.getStorages().get(table_id);
+        if (storage == nullptr)
+        {
+            LOG_WARNING(log,
+                "tryFlushRegionCacheInStorage can not get table for region:" + region.toString()
+                    + " with table id: " + DB::toString(table_id) + ", ignored");
+            return;
+        }
+        auto range_start = handle_range.first.handle_id;
+        auto range_end = handle_range.second.type == TiKVHandle::HandleIDType::MAX ? DM::HandleRange::MAX : handle_range.second.handle_id;
+        storage->flushCache(tmt.getContext(), range_start, range_end);
+    }
+}
+
 bool KVStore::onSnapshot(RegionPtr new_region, TMTContext & tmt, const RegionsAppliedindexMap & regions_to_check, bool try_flush_region)
 {
     RegionID region_id = new_region->id();
@@ -93,7 +113,10 @@ bool KVStore::onSnapshot(RegionPtr new_region, TMTContext & tmt, const RegionsAp
         try
         {
             if (try_flush_region)
+            {
                 region_table.tryFlushRegion(new_region, false);
+                tryFlushRegionCacheInStorage(tmt, *new_region, log);
+            }
         }
         catch (...)
         {
@@ -213,17 +236,22 @@ TiFlashApplyRes KVStore::handleWriteRaftCmd(
         LOG_WARNING(log, __PRETTY_FUNCTION__ << ": [region " << region_id << "] is not found, might be removed already");
         return TiFlashApplyRes::NotFound;
     }
+
+    /// If isBgFlushDisabled = true, then only set region's applied index and term after region is flushed.
+
+    bool is_bg_flush_disabled = tmt.isBgFlushDisabled();
     const auto ori_size = region->dataSize();
-    region->handleWriteRaftCmd(std::move(request), index, term);
+    region->handleWriteRaftCmd(std::move(request), index, term, /* set_applied */ !is_bg_flush_disabled);
+
     {
         tmt.getRegionTable().updateRegion(*region);
         if (region->dataSize() != ori_size)
         {
-            if (tmt.isBgFlushDisabled())
+            if (is_bg_flush_disabled)
             {
                 // Decode data in region and then flush
                 region->tryPreDecodeTiKVValue(tmt);
-                tmt.getRegionTable().tryFlushRegion(region, true);
+                tmt.getRegionTable().tryFlushRegion(region, false);
             }
             else
             {
@@ -231,6 +259,13 @@ TiFlashApplyRes KVStore::handleWriteRaftCmd(
             }
         }
     }
+
+    if (is_bg_flush_disabled)
+    {
+        region->setApplied(index, term);
+        region->notifyApplied();
+    }
+
     return TiFlashApplyRes::None;
 }
 
@@ -370,6 +405,7 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
                 for (const auto & new_region : split_regions)
                 {
                     // no need to lock those new regions, because they don't have middle state.
+                    tryFlushRegionCacheInStorage(tmt, *new_region, log);
                     persist_region(*new_region);
                 }
                 persist_region(curr_region);
@@ -386,6 +422,7 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
         const auto handle_commit_merge = [&](const RegionID source_region_id) {
             region_table.shrinkRegionRange(curr_region);
             try_to_flush_region(curr_region_ptr);
+            tryFlushRegionCacheInStorage(tmt, *curr_region_ptr, log);
             persist_region(curr_region);
             {
                 auto source_region = getRegion(source_region_id);
@@ -428,6 +465,11 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
                 break;
             default:
                 throw Exception("Unsupported RaftCommandResult", ErrorCodes::LOGICAL_ERROR);
+        }
+
+        if (sync_log)
+        {
+            tryFlushRegionCacheInStorage(tmt, curr_region, log);
         }
 
         return sync_log ? TiFlashApplyRes::Persist : TiFlashApplyRes::None;

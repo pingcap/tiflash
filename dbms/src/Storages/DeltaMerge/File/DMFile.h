@@ -74,7 +74,6 @@ public:
     String ngcPath() { return path() + "/" + NGC_FILE_NAME; }
     String colDataPath(const String & file_name_base) { return path() + "/" + file_name_base + ".dat"; }
     String colIndexPath(const String & file_name_base) { return path() + "/" + file_name_base + ".idx"; }
-    String colEdgePath(const String & file_name_base) { return path() + "/" + file_name_base + ".edge"; }
     String colMarkPath(const String & file_name_base) { return path() + "/" + file_name_base + ".mrk"; }
 
     const ColumnStat & getColumnStat(ColId col_id)

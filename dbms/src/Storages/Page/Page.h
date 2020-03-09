@@ -59,6 +59,11 @@ public:
         assert(end <= data.size());
         return ByteBuffer(data.begin() + beg, data.begin() + end);
     }
+
+    size_t fieldSize() const
+    {
+        return field_offsets.size();
+    }
 };
 using Pages       = std::vector<Page>;
 using PageMap     = std::map<PageId, Page>;
