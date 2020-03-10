@@ -7,7 +7,9 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/SchemaUpdate.h>
+#include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/Transaction/TMTContext.h>
 
 #include <ext/scope_guard.h>
@@ -34,6 +36,38 @@ extern const int LOGICAL_ERROR;
 
 namespace DM
 {
+
+// ================================================
+//   MergeDeltaTaskPool
+// ================================================
+
+void DeltaMergeStore::MergeDeltaTaskPool::addTask(const BackgroundTask & task, const ThreadType & whom, Logger * log_)
+{
+    LOG_DEBUG(log_,
+              "Segment [" << task.segment->segmentId() << "] task [" << toString(task.type) << "] add to background task pool by ["
+                          << toString(whom) << "]");
+
+    std::scoped_lock lock(mutex);
+    tasks.push(task);
+}
+
+DeltaMergeStore::BackgroundTask DeltaMergeStore::MergeDeltaTaskPool::nextTask(Logger * log_)
+{
+    std::scoped_lock lock(mutex);
+
+    if (tasks.empty())
+        return {};
+    auto task = tasks.front();
+    tasks.pop();
+
+    LOG_DEBUG(log_, "Segment [" << task.segment->segmentId() << "] task [" << toString(task.type) << "] pop from background task pool");
+
+    return task;
+}
+
+// ================================================
+//   DeltaMergeStore
+// ================================================
 
 DeltaMergeStore::DeltaMergeStore(Context &             db_context,
                                  const String &        path_,
@@ -919,15 +953,13 @@ bool DeltaMergeStore::handleBackgroundTask()
             left = segmentMergeDelta(*task.dm_context, task.segment, false);
             type = ThreadType::BG_MergeDelta;
             break;
-        case Compact:
-        {
+        case Compact: {
             task.segment->getDelta()->compact(*task.dm_context);
             left = task.segment;
             type = ThreadType::BG_Compact;
             break;
         }
-        case Flush:
-        {
+        case Flush: {
             task.segment->getDelta()->flush(*task.dm_context);
             left = task.segment;
             type = ThreadType::BG_Flush;

@@ -1,11 +1,7 @@
-#include <numeric>
-
-#include <DataTypes/DataTypeFactory.h>
-
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
-
+#include <DataTypes/DataTypeFactory.h>
 #include <Storages/DeltaMerge/DMDecoratorStreams.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMerge.h>
@@ -16,6 +12,9 @@
 #include <Storages/DeltaMerge/FilterHelper.h>
 #include <Storages/DeltaMerge/ReorganizeBlockInputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/DeltaMerge/StableValueSpace.h>
+
+#include <numeric>
 
 namespace ProfileEvents
 {
