@@ -1,16 +1,17 @@
 #pragma once
 
+#include <Core/Names.h>
+#include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/RegionDataRead.h>
+#include <Storages/Transaction/RegionException.h>
+#include <Storages/Transaction/TiKVHandle.h>
+#include <common/logger_useful.h>
+
 #include <condition_variable>
 #include <functional>
 #include <mutex>
 #include <optional>
 #include <vector>
-
-#include <Core/Names.h>
-#include <Storages/Transaction/RegionDataRead.h>
-#include <Storages/Transaction/RegionException.h>
-#include <Storages/Transaction/TiKVHandle.h>
-#include <common/logger_useful.h>
 
 namespace TiDB
 {
@@ -20,8 +21,6 @@ struct TableInfo;
 namespace DB
 {
 
-class Region;
-using RegionPtr = std::shared_ptr<Region>;
 struct ColumnsDescription;
 class Context;
 class IStorage;
@@ -140,6 +139,8 @@ public:
         bool resolve_locks,
         Timestamp start_ts,
         DB::HandleRange<HandleID> & handle_range);
+
+    static void resolveLocks(Region::CommittedScanner & scanner, const Timestamp start_ts);
 
     void checkTableOptimize();
     void checkTableOptimize(TableID, const double);

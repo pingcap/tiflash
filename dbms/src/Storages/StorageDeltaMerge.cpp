@@ -7,9 +7,8 @@
 #include <gperftools/malloc_extension.h>
 #endif
 
-#include <Common/typeid_cast.h>
 #include <Common/formatReadable.h>
-
+#include <Common/typeid_cast.h>
 #include <Core/Defines.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
@@ -328,7 +327,9 @@ RegionException::RegionReadStatus isValidRegion(const RegionQueryInfo & region_t
 
 RegionMap doLearnerRead(const TiDB::TableID table_id,           //
     const MvccQueryInfo::RegionsQueryInfo & regions_query_info, //
-    size_t concurrent_num,                                      //
+    const bool resolve_locks,
+    const Timestamp start_ts,
+    size_t concurrent_num, //
     TMTContext & tmt, Poco::Logger * log)
 {
     assert(log != nullptr);
@@ -374,7 +375,7 @@ RegionMap doLearnerRead(const TiDB::TableID table_id,           //
     const size_t num_regions = regions_info.size();
     const size_t batch_size = num_regions / concurrent_num;
     std::atomic_uint8_t region_status = RegionException::RegionReadStatus::OK;
-    const auto batch_wait_index = [&](const size_t region_begin_idx) -> void {
+    const auto batch_wait_index = [&, resolve_locks, start_ts](const size_t region_begin_idx) -> void {
         const size_t region_end_idx = std::min(region_begin_idx + batch_size, num_regions);
         for (size_t region_idx = region_begin_idx; region_idx < region_end_idx; ++region_idx)
         {
@@ -414,6 +415,12 @@ RegionMap doLearnerRead(const TiDB::TableID table_id,           //
             }
             else
                 region->waitIndex(read_index_result.read_index);
+
+            if (resolve_locks)
+            {
+                auto scanner = region->createCommittedScanner();
+                RegionTable::resolveLocks(scanner, start_ts);
+            }
         }
     };
     auto start_time = Clock::now();
@@ -561,7 +568,8 @@ BlockInputStreams StorageDeltaMerge::read( //
         if (likely(!select_query.no_kvstore))
         {
             /// Learner read.
-            regions_in_learner_read = doLearnerRead(tidb_table_info.id, mvcc_query_info.regions_query_info, concurrent_num, tmt, log);
+            regions_in_learner_read = doLearnerRead(
+                tidb_table_info.id, mvcc_query_info.regions_query_info, mvcc_query_info.resolve_locks, mvcc_query_info.read_tso, concurrent_num, tmt, log);
 
             if (likely(!mvcc_query_info.regions_query_info.empty()))
             {
@@ -738,8 +746,7 @@ void StorageDeltaMerge::deleteRows(const Context & context, size_t delete_rows)
 
     size_t after_delete_rows = getRows(store, context, DM::HandleRange::newAll());
     if (after_delete_rows != total_rows - delete_rows)
-        LOG_ERROR(log, "Rows after delete range not match, expected: " << (total_rows - delete_rows)
-            << ", got: " << after_delete_rows);
+        LOG_ERROR(log, "Rows after delete range not match, expected: " << (total_rows - delete_rows) << ", got: " << after_delete_rows);
 }
 
 //==========================================================================================
@@ -933,7 +940,7 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     name_col->insert(String(#NAME)); \
     value_col->insert(DB::toString(stat.NAME));
 
-#define INSERT_SIZE(NAME)             \
+#define INSERT_SIZE(NAME)            \
     name_col->insert(String(#NAME)); \
     value_col->insert(formatReadableSizeWithBinarySuffix(stat.NAME, 2));
 
