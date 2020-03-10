@@ -1,9 +1,9 @@
 #pragma once
 
+#include <Storages/Transaction/TiKVKeyValue.h>
+
 #include <deque>
 #include <optional>
-
-#include <Storages/Transaction/TiKVKeyValue.h>
 
 namespace DB
 {
@@ -44,13 +44,6 @@ private:
 template <>
 struct CFDataPreDecode<RegionWriteCFDataTrait> : CFDataPreDecode<RegionDefaultCFDataTrait>
 {
-    using Base = CFDataPreDecode<RegionDefaultCFDataTrait>;
-    void add(const std::shared_ptr<const TiKVValue> & e)
-    {
-        if (!e)
-            return;
-        Base::add(e);
-    }
 };
 
 } // namespace DB

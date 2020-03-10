@@ -5,6 +5,7 @@
 #include <Storages/Transaction/CHTableHandle.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
+
 #include <DataStreams/PKColumnIterator.hpp>
 
 namespace DB
@@ -139,7 +140,7 @@ void RegionTable::checkTableOptimize()
     }
 
     for (const auto table_id : table_to_check)
-        checkTableOptimize(table_id, table_checker.threshold);
+        checkTableOptimize(table_id, table_checker.OVERLAP_THRESHOLD);
 
     {
         std::lock_guard<std::mutex> lock(table_checker.mutex);
@@ -168,6 +169,6 @@ void RegionTable::checkTableOptimize(DB::TableID table_id, const double threshol
     }
 }
 
-void RegionTable::setTableCheckerThreshold(double threshold) { table_checker.threshold = threshold; }
+void RegionTable::setTableCheckerThreshold(double overlap_threshold) { table_checker.OVERLAP_THRESHOLD = overlap_threshold; }
 
 } // namespace DB

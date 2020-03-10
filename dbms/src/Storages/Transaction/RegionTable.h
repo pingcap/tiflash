@@ -65,7 +65,7 @@ public:
     {
         std::mutex mutex;
         bool is_checking = false;
-        double threshold = 1.0;
+        std::atomic<double> OVERLAP_THRESHOLD = 1.0;
         Timepoint last_check_time = Clock::now();
     };
 
