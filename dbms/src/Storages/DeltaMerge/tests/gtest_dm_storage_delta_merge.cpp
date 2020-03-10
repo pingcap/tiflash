@@ -1,7 +1,3 @@
-#include <gtest/gtest.h>
-#include <limits>
-#include "dm_basic_include.h"
-
 #include <Columns/IColumn.h>
 #include <Core/Block.h>
 #include <Core/ColumnWithTypeAndName.h>
@@ -24,6 +20,11 @@
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
+#include <gtest/gtest.h>
+
+#include <limits>
+
+#include "dm_basic_include.h"
 
 namespace DB
 {
@@ -153,14 +154,7 @@ try
 
     storage->drop();
 }
-catch (const Exception & e)
-{
-    const auto text = e.displayText();
-    std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
-    std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString();
-
-    throw;
-}
+CATCH
 
 
 TEST(StorageDeltaMerge_internal_test, GetMergedQueryRanges)
@@ -178,9 +172,9 @@ TEST(StorageDeltaMerge_internal_test, GetMergedQueryRanges)
 
     auto ranges = ::DB::getQueryRanges(regions);
     ASSERT_EQ(ranges.size(), 3UL);
-    ASSERT_EQ(ranges[0], ::DB::DM::HandleRange(100, 250));
-    ASSERT_EQ(ranges[1], ::DB::DM::HandleRange(300, 400));
-    ASSERT_EQ(ranges[2], ::DB::DM::HandleRange(425, 475));
+    ASSERT_RANGE_EQ(ranges[0], ::DB::DM::HandleRange(100, 250));
+    ASSERT_RANGE_EQ(ranges[1], ::DB::DM::HandleRange(300, 400));
+    ASSERT_RANGE_EQ(ranges[2], ::DB::DM::HandleRange(425, 475));
 }
 
 TEST(StorageDeltaMerge_internal_test, MergedUnsortedQueryRanges)
@@ -210,7 +204,7 @@ TEST(StorageDeltaMerge_internal_test, MergedUnsortedQueryRanges)
 
     auto ranges = ::DB::getQueryRanges(regions);
     ASSERT_EQ(ranges.size(), 1UL);
-    ASSERT_EQ(ranges[0], ::DB::DM::HandleRange(1961680, 2950532)) << ranges[0].toString();
+    ASSERT_RANGE_EQ(ranges[0], DB::DM::HandleRange(1961680, 2950532));
 }
 
 TEST(StorageDeltaMerge_internal_test, GetFullQueryRanges)
@@ -223,7 +217,7 @@ TEST(StorageDeltaMerge_internal_test, GetFullQueryRanges)
     auto ranges = ::DB::getQueryRanges(regions);
     ASSERT_EQ(ranges.size(), 1UL);
     const auto full_range = ::DB::DM::HandleRange::newAll();
-    ASSERT_EQ(ranges[0], full_range);
+    ASSERT_RANGE_EQ(ranges[0], full_range);
 }
 
 TEST(StorageDeltaMerge_internal_test, OverlapQueryRanges)
