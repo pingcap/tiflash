@@ -463,8 +463,6 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         }
         pipeline.streams = storage->remote_read(key_ranges, query_info, ts, context);
     }
-    //pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size,
-    //                            max_streams);
 
     if (pipeline.streams.empty())
     {
@@ -564,8 +562,6 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     for( auto const & p : left_streams[0]->getHeader().getNamesAndTypesList())
     {
         join_output_columns.emplace_back(p.name, p.type);
-        if (!query_block.aggregation)
-            final_project.emplace_back(p.name, query_block.qb_column_prefix + p.name);
     }
     /// all the columns from right table should be added after join, even for the join key
     NamesAndTypesList columns_added_by_join;
@@ -573,7 +569,13 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     {
         columns_added_by_join.emplace_back(p.name, p.type);
         join_output_columns.emplace_back(p.name, p.type);
-        if (!query_block.aggregation)
+    }
+
+    if (!query_block.aggregation)
+    {
+        for(auto const & p : input_streams_vec[0][0]->getHeader().getNamesAndTypesList())
+            final_project.emplace_back(p.name, query_block.qb_column_prefix + p.name);
+        for(auto const & p : input_streams_vec[1][0]->getHeader().getNamesAndTypesList())
             final_project.emplace_back(p.name, query_block.qb_column_prefix + p.name);
     }
 
