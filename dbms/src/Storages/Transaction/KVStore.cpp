@@ -36,6 +36,7 @@ void KVStore::restore(const IndexReaderCreateFunc & index_reader_create)
     // init range index
     for (const auto & [id, region] : regions())
     {
+        std::ignore = id;
         region_range_index.add(region);
         ss << region->toString() << "; ";
     }
