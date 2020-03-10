@@ -60,6 +60,29 @@ Block FilterBlockInputStream::getTotals()
 
 Block FilterBlockInputStream::getHeader() const { return header; }
 
+bool IsUInt(String type) {
+    if (type == "Nullable(UInt32)") return true;
+    if (type == "UInt32") return true;
+    if (type == "Nullable(UInt64)") return true;
+    if (type == "UInt64") return true;
+    return false;
+}
+
+bool IsInt(String type) {
+    if (type == "Nullable(Int32)") return true;
+    if (type == "Int32") return true;
+    if (type == "Nullable(Int64)") return true;
+    if (type == "Int64") return true;
+    return false;
+}
+
+bool IsString(String type) {
+    if (type == "Nullable(String)") return true;
+    if (type == "String") return true;
+    if (type == "Nullable(FixedString)") return true;
+    if (type == "FixedString") return true;
+    return false;
+}
 
 Block FilterBlockInputStream::readImpl()
 {
@@ -94,12 +117,10 @@ Block FilterBlockInputStream::readImpl()
             for (unsigned i = 0;i < join_key.size();i++) {
                 ColumnWithTypeAndName col = res.safeGetByPosition(join_key[i] + 1);
                 String type = col.type->getName();
-                if (type.compare("Nullable(Int32)") != 0 &&
-                    type.compare("Int32") != 0 ) {
+                if (!IsInt(type) && !IsUInt(type) && !IsString(type)) {
                     canUseBloom = false;
                     break;
                 }
-
                 cols.push_back(col);
             }
             if (canUseBloom) {
@@ -113,11 +134,23 @@ Block FilterBlockInputStream::readImpl()
                     flag[0] = 8;
                     UInt8 tmp[8];
                     for (unsigned j = 0;j < join_key.size();j++) {
-                        if (cols[j].type->getName().compare("Nullable(Int32)") == 0) {
+                        if (IsInt(cols[j].type->getName())) {
                             flag[0] = 8;
                             *(UInt64 *)(tmp) = cols[j].column->get64(i);
                             bf->myhash(flag,1);
                             bf->myhash(tmp,8);
+                        }
+                        if (IsUInt(cols[j].type->getName())) {
+                            flag[0] = 9;
+                            *(UInt64 *)(tmp) = cols[j].column->get64(i);
+                            bf->myhash(flag,1);
+                            bf->myhash(tmp,8);
+                        }
+                        if (IsString(cols[j].type->getName())) {
+                            flag[0] = 2;
+                            bf->myhash(flag, 1);
+                            auto t = (*cols[j].column)[i].get<String>();
+                            bf->myhash((UInt8 *)(t.c_str()), t.length());
                         }
                     }
                     if (bf->ProbeU64(bf->sum64())) {
