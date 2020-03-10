@@ -4,8 +4,14 @@
 #include <Core/Block.h>
 #include <Core/Types.h>
 #include <Storages/DeltaMerge/DeltaValueSpace.h>
+#include <Storages/Page/PageStorage.h>
 
-namespace DB::DM
+namespace DB
+{
+
+class MemoryWriteBuffer;
+
+namespace DM
 {
 
 using BlockPtr = DeltaValueSpace::BlockPtr;
@@ -27,4 +33,5 @@ Columns readPackFromDisk(const PackPtr &       pack, //
                          size_t                col_start,
                          size_t                col_end);
 
-} // namespace DB::DM
+} // namespace DM
+} // namespace DB

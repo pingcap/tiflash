@@ -1,5 +1,9 @@
+#include <IO/MemoryReadWriteBuffer.h>
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/Pack.h>
 #include <Storages/DeltaMerge/DeltaValueSpace.h>
+#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/Page/PageStorage.h>
 
 #include <ext/scope_guard.h>

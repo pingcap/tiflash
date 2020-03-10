@@ -1,6 +1,8 @@
 #include <IO/CompressedReadBuffer.h>
 #include <IO/CompressedWriteBuffer.h>
+#include <IO/MemoryReadWriteBuffer.h>
 #include <Storages/DeltaMerge/Delta/Pack.h>
+#include <Storages/Page/PageStorage.h>
 
 
 namespace DB::DM

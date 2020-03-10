@@ -3,10 +3,12 @@
 #include <Core/Types.h>
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/PathPool.h>
 
 namespace DB
 {
+
+class PathPool;
+
 namespace DM
 {
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <vector>
+#include <queue>
 
 #include <Storages/DeltaMerge/Segment.h>
 

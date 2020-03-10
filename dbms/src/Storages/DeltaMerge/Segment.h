@@ -4,7 +4,6 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/DeltaValueSpace.h>
-#include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Index/MinMax.h>
 #include <Storages/DeltaMerge/Range.h>
@@ -13,6 +12,7 @@
 
 namespace DB
 {
+class WriteBatch;
 namespace DM
 {
 

@@ -3,13 +3,9 @@
 #include <Common/Exception.h>
 #include <Core/Block.h>
 #include <IO/WriteHelpers.h>
-#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
-#include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/PageStorage.h>
-#include <Storages/Page/WriteBatch.h>
 
 namespace DB
 {
@@ -19,6 +15,11 @@ namespace DM
 using GenPageId = std::function<PageId()>;
 class DeltaValueSpace;
 using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
+struct WriteBatches;
+class StoragePool;
+struct StorageSnapshot;
+using StorageSnapshotPtr = std::shared_ptr<StorageSnapshot>;
+struct DMContext;
 
 struct BlockOrDelete
 {
