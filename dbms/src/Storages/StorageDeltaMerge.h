@@ -7,7 +7,7 @@
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
-#include <Storages/StorageDeltaMerge-internal.h>
+#include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/TiDB.h>
 #include <common/logger_useful.h>
 

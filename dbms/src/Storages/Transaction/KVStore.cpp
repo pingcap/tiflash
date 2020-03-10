@@ -1,5 +1,5 @@
 #include <Interpreters/Context.h>
-#include <Storages/StorageDeltaMerge-internal.h>
+#include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/KVStore.h>
