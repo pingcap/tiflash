@@ -38,7 +38,7 @@ public:
     {
         Poco::AutoPtr<Poco::ConsoleChannel>   channel = new Poco::ConsoleChannel(std::cerr);
         Poco::AutoPtr<Poco::PatternFormatter> formatter(new Poco::PatternFormatter);
-        formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i <%p> %s: %t");
+        formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i [%I] <%p> %s: %t");
         Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
         Logger::root().setChannel(formatting_channel);
         Logger::root().setLevel("trace");
@@ -53,12 +53,12 @@ public:
     }
 
 protected:
-    SegmentPtr reload(ColumnDefines && pre_define_columns = {}, DB::Settings && db_settings = DB::Settings())
+    SegmentPtr reload(const ColumnDefinesPtr & pre_define_columns = {}, DB::Settings && db_settings = DB::Settings())
     {
-        *db_context        = DMTestEnv::getContext(db_settings);
-        storage_pool       = std::make_unique<StoragePool>("test.t1", path, db_context->getSettingsRef());
+        *db_context  = DMTestEnv::getContext(db_settings);
+        storage_pool = std::make_unique<StoragePool>("test.t1", path, db_context->getSettingsRef());
         storage_pool->restore();
-        ColumnDefines cols = pre_define_columns.empty() ? DMTestEnv::getDefaultColumns() : pre_define_columns;
+        ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;
         setColumns(cols);
 
         auto segment_id = storage_pool->newMetaPageId();
@@ -66,7 +66,7 @@ protected:
     }
 
     // setColumns should update dm_context at the same time
-    void setColumns(const ColumnDefines & columns)
+    void setColumns(const ColumnDefinesPtr & columns)
     {
         table_columns_ = columns;
 
@@ -76,7 +76,6 @@ protected:
                                                   *storage_pool,
                                                   0,
                                                   table_columns_,
-                                                  table_columns_.at(0),
                                                   /*min_version_*/ 0,
                                                   settings.not_compress_columns,
                                                   db_context->getSettingsRef().dm_segment_limit_rows,
@@ -89,7 +88,7 @@ protected:
                                                   false);
     }
 
-    const ColumnDefines & tableColumns() const { return table_columns_; }
+    const ColumnDefinesPtr & tableColumns() const { return table_columns_; }
 
     DMContext & dmContext() { return *dm_context_; }
 
@@ -101,7 +100,7 @@ private:
     String path;
     /// all these var lives as ref in dm_context
     std::unique_ptr<StoragePool>  storage_pool;
-    ColumnDefines                 table_columns_;
+    ColumnDefinesPtr              table_columns_;
     DM::DeltaMergeStore::Settings settings;
     /// dm_context
     std::unique_ptr<DMContext> dm_context_;
@@ -116,20 +115,16 @@ try
 {
     const size_t num_rows_write = 100;
     {
-        // write to segment
-        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-        segment->write(dmContext(), std::move(block));
-    }
 
-    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+        // write to segment
+        segment->write(dmContext(), block);
         // estimate segment
         auto estimatedRows = segment->getEstimatedRows();
-        ASSERT_GT(estimatedRows, num_rows_write / 2);
-        ASSERT_LT(estimatedRows, num_rows_write * 2);
+        ASSERT_EQ(estimatedRows, block.rows());
 
         auto estimatedBytes = segment->getEstimatedBytes();
-        ASSERT_GT(estimatedBytes, num_rows_write * 5 / 2);
-        ASSERT_LT(estimatedBytes, num_rows_write * 5 * 2);
+        ASSERT_EQ(estimatedBytes, block.bytes());
     }
 
     {
@@ -140,7 +135,7 @@ try
     { // Round 1
         {
             // read written data (only in delta)
-            auto   in            = segment->getInputStream(dmContext(), tableColumns());
+            auto   in            = segment->getInputStream(dmContext(), *tableColumns());
             size_t num_rows_read = 0;
             in->readPrefix();
             while (Block block = in->read())
@@ -158,7 +153,7 @@ try
 
         {
             // read written data (only in stable)
-            auto   in            = segment->getInputStream(dmContext(), tableColumns());
+            auto   in            = segment->getInputStream(dmContext(), *tableColumns());
             size_t num_rows_read = 0;
             in->readPrefix();
             while (Block block = in->read())
@@ -181,7 +176,7 @@ try
     { // Round 2
         {
             // read written data (both in delta and stable)
-            auto   in            = segment->getInputStream(dmContext(), tableColumns());
+            auto   in            = segment->getInputStream(dmContext(), *tableColumns());
             size_t num_rows_read = 0;
             in->readPrefix();
             while (Block block = in->read())
@@ -199,7 +194,7 @@ try
 
         {
             // read written data (only in stable)
-            auto   in            = segment->getInputStream(dmContext(), tableColumns());
+            auto   in            = segment->getInputStream(dmContext(), *tableColumns());
             size_t num_rows_read = 0;
             in->readPrefix();
             while (Block block = in->read())
@@ -232,7 +227,7 @@ try
     if (read_before_delete)
     {
         // read written data
-        auto   in            = segment->getInputStream(dmContext(), tableColumns());
+        auto   in            = segment->getInputStream(dmContext(), *tableColumns());
         size_t num_rows_read = 0;
         in->readPrefix();
         while (Block block = in->read())
@@ -259,7 +254,7 @@ try
 
     {
         // read after delete range
-        auto in = segment->getInputStream(dmContext(), tableColumns());
+        auto in = segment->getInputStream(dmContext(), *tableColumns());
         in->readPrefix();
         while (Block block = in->read())
         {
@@ -293,7 +288,7 @@ try
     if (read_before_delete)
     {
         // read written data
-        auto   in            = segment->getInputStream(dmContext(), tableColumns());
+        auto   in            = segment->getInputStream(dmContext(), *tableColumns());
         size_t num_rows_read = 0;
         in->readPrefix();
         while (Block block = in->read())
@@ -328,7 +323,7 @@ try
 
     {
         // read after delete range
-        auto in = segment->getInputStream(dmContext(), tableColumns());
+        auto in = segment->getInputStream(dmContext(), *tableColumns());
         in->readPrefix();
         while (Block block = in->read())
         {
@@ -371,7 +366,7 @@ try
     if (read_before_delete)
     {
         // read written data
-        auto   in            = segment->getInputStream(dmContext(), tableColumns());
+        auto   in            = segment->getInputStream(dmContext(), *tableColumns());
         size_t num_rows_read = 0;
         in->readPrefix();
         while (Block block = in->read())
@@ -398,7 +393,7 @@ try
 
     {
         // read after delete range
-        auto in = segment->getInputStream(dmContext(), tableColumns());
+        auto in = segment->getInputStream(dmContext(), *tableColumns());
         in->readPrefix();
         while (Block block = in->read())
         {
@@ -444,7 +439,7 @@ try
     {
         // Read after deletion
         // The deleted range has no overlap with current data, so there should be no change
-        auto in = segment->getInputStream(dmContext(), tableColumns());
+        auto in = segment->getInputStream(dmContext(), *tableColumns());
         in->readPrefix();
         while (Block block = in->read())
         {
@@ -475,7 +470,7 @@ try
     {
         // Read after deletion
         // The deleted range has overlap range [63, 64) with current data, so the record with Handle 63 should be deleted
-        auto in = segment->getInputStream(dmContext(), tableColumns());
+        auto in = segment->getInputStream(dmContext(), *tableColumns());
         in->readPrefix();
         while (Block block = in->read())
         {
@@ -504,7 +499,7 @@ try
 
     {
         // Read after deletion
-        auto in = segment->getInputStream(dmContext(), tableColumns());
+        auto in = segment->getInputStream(dmContext(), *tableColumns());
         in->readPrefix();
         while (Block block = in->read())
         {
@@ -533,7 +528,7 @@ try
 
     {
         // Read after deletion
-        auto in = segment->getInputStream(dmContext(), tableColumns());
+        auto in = segment->getInputStream(dmContext(), *tableColumns());
         in->readPrefix();
         while (Block block = in->read())
         {
@@ -562,7 +557,7 @@ try
 
     {
         // Read after deletion
-        auto in = segment->getInputStream(dmContext(), tableColumns());
+        auto in = segment->getInputStream(dmContext(), *tableColumns());
         in->readPrefix();
         while (Block block = in->read())
         {
@@ -593,7 +588,7 @@ try
 
     {
         // read written data
-        auto in = segment->getInputStream(dmContext(), tableColumns());
+        auto in = segment->getInputStream(dmContext(), *tableColumns());
 
         size_t num_rows_read = 0;
         in->readPrefix();
@@ -624,7 +619,7 @@ try
     size_t num_rows_seg2 = 0;
     {
         {
-            auto in = segment->getInputStream(dmContext(), tableColumns());
+            auto in = segment->getInputStream(dmContext(), *tableColumns());
             in->readPrefix();
             while (Block block = in->read())
             {
@@ -633,7 +628,7 @@ try
             in->readSuffix();
         }
         {
-            auto in = segment->getInputStream(dmContext(), tableColumns());
+            auto in = segment->getInputStream(dmContext(), *tableColumns());
             in->readPrefix();
             while (Block block = in->read())
             {
@@ -658,7 +653,7 @@ try
         }
         {
             size_t num_rows_read = 0;
-            auto   in            = segment->getInputStream(dmContext(), tableColumns());
+            auto   in            = segment->getInputStream(dmContext(), *tableColumns());
             in->readPrefix();
             while (Block block = in->read())
             {
@@ -678,8 +673,8 @@ try
     // If they are equal, result will be true, otherwise it will be false.
     auto compare = [&](const SegmentPtr & seg1, const SegmentPtr & seg2, bool & result) {
         result   = false;
-        auto in1 = seg1->getInputStream(dmContext(), tableColumns());
-        auto in2 = seg2->getInputStream(dmContext(), tableColumns());
+        auto in1 = seg1->getInputStream(dmContext(), *tableColumns());
+        auto in2 = seg2->getInputStream(dmContext(), *tableColumns());
         in1->readPrefix();
         in2->readPrefix();
         for (;;)
@@ -811,7 +806,7 @@ try
 
         {
             // Read after writing
-            auto   in            = segment->getInputStream(dmContext(), tableColumns());
+            auto   in            = segment->getInputStream(dmContext(), *tableColumns());
             size_t num_rows_read = 0;
             in->readPrefix();
             while (Block block = in->read())
@@ -857,13 +852,13 @@ try
     const ColumnDefine column_i32_after_ddl(column_id_i8_to_i32, column_name_i8_to_i32, DataTypeFactory::instance().get("Int32"));
 
     {
-        ColumnDefines columns_before_ddl = DMTestEnv::getDefaultColumns();
-        columns_before_ddl.emplace_back(column_i8_before_ddl);
+        auto columns_before_ddl = DMTestEnv::getDefaultColumns();
+        columns_before_ddl->emplace_back(column_i8_before_ddl);
         // Not cache any rows
         DB::Settings db_settings;
         db_settings.dm_segment_delta_cache_limit_rows = 0;
 
-        segment = reload(std::move(columns_before_ddl), std::move(db_settings));
+        segment = reload(columns_before_ddl, std::move(db_settings));
     }
 
     const size_t num_rows_write = 100;
@@ -899,7 +894,7 @@ try
         try
         {
             // read written data
-            in = segment->getInputStream(dmContext(), tableColumns());
+            in = segment->getInputStream(dmContext(), *tableColumns());
         }
         catch (const Exception & e)
         {
@@ -944,12 +939,12 @@ try
     new_column_define.default_value             = toField(new_column_default_value_int);
 
     {
-        ColumnDefines columns_before_ddl = DMTestEnv::getDefaultColumns();
+        auto columns_before_ddl = DMTestEnv::getDefaultColumns();
         // Not cache any rows
         DB::Settings db_settings;
         db_settings.dm_segment_delta_cache_limit_rows = 0;
 
-        segment = reload(std::move(columns_before_ddl), std::move(db_settings));
+        segment = reload(columns_before_ddl, std::move(db_settings));
     }
 
     const size_t num_rows_write = 100;
@@ -961,8 +956,8 @@ try
 
     {
         // DDL add new column with default value
-        ColumnDefines columns_after_ddl = DMTestEnv::getDefaultColumns();
-        columns_after_ddl.emplace_back(new_column_define);
+        auto columns_after_ddl = DMTestEnv::getDefaultColumns();
+        columns_after_ddl->emplace_back(new_column_define);
         setColumns(columns_after_ddl);
     }
 
@@ -972,7 +967,7 @@ try
         };
 
         // read written data
-        auto in = segment->getInputStream(dmContext(), tableColumns());
+        auto in = segment->getInputStream(dmContext(), *tableColumns());
 
         // check that we can read correct values
         size_t num_rows_read = 0;

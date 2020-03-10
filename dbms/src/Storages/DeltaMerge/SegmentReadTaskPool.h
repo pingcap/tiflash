@@ -31,7 +31,7 @@ struct SegmentReadTask
 };
 
 using SegmentReadTaskPtr = std::shared_ptr<SegmentReadTask>;
-using SegmentReadTasks   = std::vector<SegmentReadTaskPtr>;
+using SegmentReadTasks   = std::queue<SegmentReadTaskPtr>;
 using AfterSegmentRead   = std::function<void(const DMContextPtr &, const SegmentPtr &)>;
 
 class SegmentReadTaskPool : private boost::noncopyable
@@ -42,12 +42,15 @@ public:
     SegmentReadTaskPtr nextTask()
     {
         std::lock_guard lock(mutex);
-        return index == tasks.size() ? SegmentReadTaskPtr() : tasks[index++];
+        if (tasks.empty())
+            return {};
+        auto task = tasks.front();
+        tasks.pop();
+        return task;
     }
 
 private:
     SegmentReadTasks tasks;
-    size_t           index = 0;
 
     std::mutex mutex;
 };
