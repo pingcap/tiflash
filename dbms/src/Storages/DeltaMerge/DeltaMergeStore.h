@@ -1,23 +1,32 @@
 #pragma once
 
-#include <queue>
-
 #include <Core/Block.h>
+#include <Core/SortDescription.h>
+#include <DataStreams/IBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <Storages/AlterCommands.h>
-#include <Storages/DeltaMerge/DMContext.h>
-#include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TiDB.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
+
+#include <queue>
 
 namespace DB
 {
 
 namespace DM
 {
+class Segment;
+using SegmentPtr  = std::shared_ptr<Segment>;
+using SegmentPair = std::pair<SegmentPtr, SegmentPtr>;
+class RSOperator;
+using RSOperatorPtr = std::shared_ptr<RSOperator>;
+struct DMContext;
+using DMContextPtr = std::shared_ptr<DMContext>;
+using NotCompress  = std::unordered_set<ColId>;
 
 static const PageId DELTA_MERGE_FIRST_SEGMENT_ID = 1;
 
@@ -179,30 +188,9 @@ public:
     public:
         size_t length() { return tasks.size(); }
 
-        void addTask(const BackgroundTask & task, const ThreadType & whom, Logger * log_)
-        {
-            LOG_DEBUG(log_,
-                      "Segment [" << task.segment->segmentId() << "] task [" << toString(task.type) << "] add to background task pool by ["
-                                  << toString(whom) << "]");
+        void addTask(const BackgroundTask & task, const ThreadType & whom, Logger * log_);
 
-            std::scoped_lock lock(mutex);
-            tasks.push(task);
-        }
-
-        BackgroundTask nextTask(Logger * log_)
-        {
-            std::scoped_lock lock(mutex);
-
-            if (tasks.empty())
-                return {};
-            auto task = tasks.front();
-            tasks.pop();
-
-            LOG_DEBUG(log_,
-                      "Segment [" << task.segment->segmentId() << "] task [" << toString(task.type) << "] pop from background task pool");
-
-            return task;
-        }
+        BackgroundTask nextTask(Logger * log_);
     };
 
     DeltaMergeStore(Context &             db_context, //
