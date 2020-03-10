@@ -1,5 +1,6 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Storages/Transaction/ColumnFamily.h>
 #include <Storages/Transaction/RegionData.h>
 
 namespace DB
@@ -9,22 +10,17 @@ void RegionData::insert(ColumnFamilyType cf, TiKVKey && key, const DecodedTiKVKe
 {
     switch (cf)
     {
-        case Write:
+        case ColumnFamilyType::Write:
         {
-            size_t size = key.dataSize() + value.dataSize();
-            auto res = write_cf.insert(std::move(key), std::move(value), raw_key);
-            if (res)
-                cf_data_size += size;
+            cf_data_size += write_cf.insert(std::move(key), std::move(value), raw_key);
             return;
         }
-        case Default:
+        case ColumnFamilyType::Default:
         {
-            size_t size = key.dataSize() + value.dataSize();
-            default_cf.insert(std::move(key), std::move(value), raw_key);
-            cf_data_size += size;
+            cf_data_size += default_cf.insert(std::move(key), std::move(value), raw_key);
             return;
         }
-        case Lock:
+        case ColumnFamilyType::Lock:
         {
             lock_cf.insert(std::move(key), std::move(value), raw_key);
             return;
@@ -63,8 +59,10 @@ RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & writ
 
     std::ignore = ts;
     std::ignore = value;
+    std::ignore = key;
+    std::ignore = short_str;
 
-    if (write_type == PutFlag && !short_str)
+    if (write_type == PutFlag)
     {
         auto & map = default_cf.getDataMut();
 
@@ -73,8 +71,6 @@ RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & writ
             cf_data_size -= RegionDefaultCFData::calcTiKVKeyValueSize(data_it->second);
             map.erase(data_it);
         }
-        else
-            throw Exception(" key [" + key->toString() + "] not found in data cf when removing", ErrorCodes::LOGICAL_ERROR);
     }
 
     cf_data_size -= RegionWriteCFData::calcTiKVKeyValueSize(write_it->second);
@@ -91,21 +87,19 @@ RegionDataReadInfo RegionData::readDataByWriteIt(const ConstWriteCFIter & write_
 
     const auto & [write_type, prewrite_ts, short_value] = decoded_val;
 
+    std::ignore = value;
+    std::ignore = prewrite_ts;
+
     if (!need_value)
         return std::make_tuple(handle, write_type, ts, nullptr);
 
     if (write_type != PutFlag)
         return std::make_tuple(handle, write_type, ts, nullptr);
 
-    if (short_value)
-        return std::make_tuple(handle, write_type, ts, short_value);
+    if (!short_value)
+        throw Exception(" key [" + key->toString() + "] not found in default cf", ErrorCodes::LOGICAL_ERROR);
 
-
-    const auto & map = default_cf.getData();
-    if (auto data_it = map.find({handle, prewrite_ts}); data_it != map.end())
-        return std::make_tuple(handle, write_type, ts, std::get<1>(data_it->second));
-    else
-        throw Exception(" key [" + key->toString() + "] not found in data cf", ErrorCodes::LOGICAL_ERROR);
+    return std::make_tuple(handle, write_type, ts, short_value);
 }
 
 // https://github.com/tikv/tikv/blob/master/components/txn_types/src/lock.rs#L179-L203
@@ -206,22 +200,11 @@ RegionData::RegionData(RegionData && data)
 
 UInt8 RegionData::getWriteType(const ConstWriteCFIter & write_it) { return RegionWriteCFDataTrait::getWriteType(write_it->second); }
 
-void RegionData::deleteRange(const ColumnFamilyType cf, const RegionRange & range)
+const RegionDefaultCFDataTrait::Map & RegionData::getDefaultCFMap(RegionWriteCFData * write)
 {
-    switch (cf)
-    {
-        case Write:
-            cf_data_size -= write_cf.deleteRange(range);
-            break;
-        case Default:
-            cf_data_size -= default_cf.deleteRange(range);
-            break;
-        case Lock:
-            cf_data_size -= lock_cf.deleteRange(range);
-            break;
-        default:
-            throw Exception(std::string(__PRETTY_FUNCTION__) + ": undefined CF, should not happen", ErrorCodes::LOGICAL_ERROR);
-    }
+    auto offset = (size_t) & (((RegionData *)0)->write_cf);
+    RegionData * data_ptr = reinterpret_cast<RegionData *>((char *)write - offset);
+    return data_ptr->defaultCF().getData();
 }
 
 } // namespace DB

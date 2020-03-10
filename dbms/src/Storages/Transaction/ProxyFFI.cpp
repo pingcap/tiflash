@@ -4,11 +4,39 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
 
-#include <iostream>
-
 
 namespace DB
 {
+
+const std::string ColumnFamilyName::Lock = "lock";
+const std::string ColumnFamilyName::Default = "default";
+const std::string ColumnFamilyName::Write = "write";
+
+ColumnFamilyType NameToCF(const std::string & cf)
+{
+    if (cf.empty() || cf == ColumnFamilyName::Default)
+        return ColumnFamilyType::Default;
+    if (cf == ColumnFamilyName::Lock)
+        return ColumnFamilyType::Lock;
+    if (cf == ColumnFamilyName::Write)
+        return ColumnFamilyType::Write;
+    throw Exception("Unsupported cf name " + cf, ErrorCodes::LOGICAL_ERROR);
+}
+
+const std::string & CFToName(const ColumnFamilyType type)
+{
+    switch (type)
+    {
+        case ColumnFamilyType::Default:
+            return ColumnFamilyName::Default;
+        case ColumnFamilyType::Write:
+            return ColumnFamilyName::Write;
+        case ColumnFamilyType::Lock:
+            return ColumnFamilyName::Lock;
+        default:
+            throw Exception("Can not tell cf type " + std::to_string(type), ErrorCodes::LOGICAL_ERROR);
+    }
+}
 
 void GcBuff(BaseBuff * buff)
 {
@@ -18,13 +46,11 @@ void GcBuff(BaseBuff * buff)
 
 static_assert(alignof(TiFlashServerHelper) == alignof(void *));
 
-TiFlashApplyRes HandleWriteRaftCmd(const TiFlashServer * server, BaseBuffView req_buff, RaftCmdHeader header)
+TiFlashApplyRes HandleWriteRaftCmd(const TiFlashServer * server, WriteCmdsView cmds, RaftCmdHeader header)
 {
     try
     {
-        raft_cmdpb::RaftCmdRequest request;
-        request.ParseFromArray(req_buff.data, (int)req_buff.len);
-        return server->tmt.getKVStore()->handleWriteRaftCmd(std::move(request), header.region_id, header.index, header.term, server->tmt);
+        return server->tmt.getKVStore()->handleWriteRaftCmd(cmds, header.region_id, header.index, header.term, server->tmt);
     }
     catch (...)
     {

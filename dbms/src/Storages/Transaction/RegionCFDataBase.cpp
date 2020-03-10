@@ -1,13 +1,10 @@
 #include <Storages/Transaction/RegionCFDataBase.h>
 #include <Storages/Transaction/RegionCFDataTrait.h>
+#include <Storages/Transaction/RegionData.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
 
 namespace DB
 {
-
-const std::string RegionWriteCFDataTrait::name = "write";
-const std::string RegionDefaultCFDataTrait::name = "default";
-const std::string RegionLockCFDataTrait::name = "lock";
 
 template <typename Trait>
 const TiKVKey & RegionCFDataBase<Trait>::getTiKVKey(const Value & val)
@@ -39,9 +36,56 @@ RegionDataRes RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value
 {
     Pair kv_pair = Trait::genKVPair(std::move(key), raw_key, std::move(value));
     if (shouldIgnoreInsert(kv_pair.second))
-        return false;
+        return 0;
 
     return insert(std::move(kv_pair));
+}
+
+template <typename Trait>
+void RegionCFDataBase<Trait>::finishInsert(typename Map::iterator)
+{}
+
+template <>
+void RegionCFDataBase<RegionDefaultCFDataTrait>::finishInsert(typename Map::iterator it)
+{
+    pre_decode.add(getTiKVValuePtr(it->second));
+}
+
+template <>
+void RegionCFDataBase<RegionWriteCFDataTrait>::finishInsert(typename Map::iterator write_it)
+{
+    auto & [key, value, decoded_val] = write_it->second;
+    auto & [handle, ts] = write_it->first;
+    auto & [write_type, prewrite_ts, short_value] = decoded_val;
+
+    std::ignore = value;
+    std::ignore = ts;
+
+    if (write_type == CFModifyFlag::PutFlag)
+    {
+        if (short_value)
+        {
+            pre_decode.add(short_value);
+        }
+        else
+        {
+            auto & default_cf_map = RegionData::getDefaultCFMap(this);
+
+            if (auto data_it = default_cf_map.find({handle, prewrite_ts}); data_it != default_cf_map.end())
+            {
+                short_value = std::get<1>(data_it->second);
+            }
+            else
+                throw Exception("Handle: " + std::to_string(handle) + ", Prewrite ts: " + std::to_string(prewrite_ts)
+                        + " can not found in default cf for key: " + key->toHex(),
+                    ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+    else
+    {
+        if (short_value)
+            throw Exception(std::string(__PRETTY_FUNCTION__) + ": got short value under DelFlag", ErrorCodes::LOGICAL_ERROR);
+    }
 }
 
 template <typename Trait>
@@ -52,11 +96,8 @@ RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair)
     if (!ok)
         throw Exception("Found existing key in hex: " + getTiKVKey(it->second).toHex(), ErrorCodes::LOGICAL_ERROR);
 
-    if constexpr (std::is_same_v<Trait, RegionWriteCFDataTrait>)
-        pre_decode.add(Trait::getRowRawValuePtr(it->second));
-    else
-        pre_decode.add(getTiKVValuePtr(it->second));
-    return true;
+    finishInsert(it);
+    return calcTiKVKeyValueSize(it->second);
 }
 
 template <typename Trait>
@@ -69,7 +110,11 @@ template <typename Trait>
 size_t RegionCFDataBase<Trait>::calcTiKVKeyValueSize(const TiKVKey & key, const TiKVValue & value)
 {
     if constexpr (std::is_same<Trait, RegionLockCFDataTrait>::value)
+    {
+        std::ignore = key;
+        std::ignore = value;
         return 0;
+    }
     else
         return key.dataSize() + value.dataSize();
 }
@@ -239,9 +284,7 @@ size_t RegionCFDataBase<Trait>::deserialize(ReadBuffer & buf, RegionCFDataBase &
     {
         auto key = TiKVKey::deserialize(buf);
         auto value = TiKVValue::deserialize(buf);
-        const auto size = calcTiKVKeyValueSize(key, value);
-        new_region_data.insert(std::move(key), std::move(value));
-        cf_data_size += size;
+        cf_data_size += new_region_data.insert(std::move(key), std::move(value));
     }
     return cf_data_size;
 }
@@ -256,33 +299,6 @@ template <typename Trait>
 typename RegionCFDataBase<Trait>::Data & RegionCFDataBase<Trait>::getDataMut()
 {
     return data;
-}
-
-template <typename Trait>
-size_t RegionCFDataBase<Trait>::deleteRange(const RegionRange & range)
-{
-    size_t size_changed = 0;
-
-    const auto & [start_key, end_key] = range;
-
-    {
-        auto & ori_map = data;
-
-        for (auto it = ori_map.begin(); it != ori_map.end();)
-        {
-            const auto & key = getTiKVKey(it->second);
-
-            if (start_key.compare(key) <= 0 && end_key.compare(key) > 0)
-            {
-                size_changed += calcTiKVKeyValueSize(it->second);
-                it = ori_map.erase(it);
-            }
-            else
-                ++it;
-        }
-    }
-
-    return size_changed;
 }
 
 template <typename Trait>
