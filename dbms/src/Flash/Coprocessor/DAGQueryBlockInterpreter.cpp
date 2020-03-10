@@ -47,13 +47,13 @@ extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
 DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std::vector<BlockInputStreams> & input_streams_vec_,
-    const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const RegionInfo & region_info_, const tipb::DAGRequest & rqst_,
+    const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const std::vector<RegionInfo> & region_infos_, const tipb::DAGRequest & rqst_,
     ASTPtr dummy_query_)
     : context(context_),
       input_streams_vec(input_streams_vec_),
       query_block(query_block_),
       keep_session_timezone_info(keep_session_timezone_info_),
-      region_info(region_info_),
+      region_infos(region_infos_),
       rqst(rqst_),
       dummy_query(std::move(dummy_query_)),
       log(&Logger::get("DAGQueryBlockInterpreter"))
@@ -155,11 +155,12 @@ void constructExprBasedOnRange(Int32 handle_col_id, tipb::Expr & expr, HandleRan
 
 template <typename HandleType>
 bool checkRangeAndGenExprIfNeeded(std::vector<HandleRange<HandleType>> & ranges, const std::vector<HandleRange<HandleType>> & region_ranges,
-    Int32 handle_col_id, tipb::Expr & handle_filter)
+    Int32 handle_col_id, tipb::Expr & handle_filter, Logger *log)
 {
     if (ranges.empty())
     {
         // generate an always false filter
+        LOG_WARNING(log, "income key ranges is empty");
         constructInt64LiteralTiExpr(handle_filter, 0);
         return false;
     }
@@ -204,6 +205,7 @@ bool checkRangeAndGenExprIfNeeded(std::vector<HandleRange<HandleType>> & ranges,
             break;
         }
     }
+    LOG_DEBUG(log, "ret " <<ret);
     if (!ret)
     {
         if (merged_ranges.empty())
@@ -233,10 +235,12 @@ bool checkRangeAndGenExprIfNeeded(std::vector<HandleRange<HandleType>> & ranges,
 }
 
 bool checkKeyRanges(const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges, TableID table_id, bool pk_is_uint64,
-    const ImutRegionRangePtr & region_key_range, Int32 handle_col_id, tipb::Expr & handle_filter)
+    const ImutRegionRangePtr & region_key_range, Int32 handle_col_id, tipb::Expr & handle_filter, Logger * log)
 {
+    LOG_INFO(log, "pk_is_uint: " << pk_is_uint64);
     if (key_ranges.empty())
     {
+        LOG_WARNING(log, "income key ranges is empty1");
         constructInt64LiteralTiExpr(handle_filter, 0);
         return false;
     }
@@ -277,18 +281,18 @@ bool checkKeyRanges(const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>>
                 update_region_handle_ranges.emplace_back(new_range[i]);
             }
         }
-        return checkRangeAndGenExprIfNeeded<UInt64>(update_handle_ranges, update_region_handle_ranges, handle_col_id, handle_filter);
+        return checkRangeAndGenExprIfNeeded<UInt64>(update_handle_ranges, update_region_handle_ranges, handle_col_id, handle_filter, log);
     }
     else
-        return checkRangeAndGenExprIfNeeded<Int64>(handle_ranges, region_handle_ranges, handle_col_id, handle_filter);
+        return checkRangeAndGenExprIfNeeded<Int64>(handle_ranges, region_handle_ranges, handle_col_id, handle_filter, log);
 }
 
 RegionException::RegionReadStatus DAGQueryBlockInterpreter::getRegionReadStatus(const RegionPtr & current_region)
 {
     if (!current_region)
         return RegionException::NOT_FOUND;
-    if (current_region->version() != region_info.region_version || current_region->confVer() != region_info.region_conf_version)
-        return RegionException::VERSION_ERROR;
+    //if (current_region->version() != region_info.region_version || current_region->confVer() != region_info.region_conf_version)
+    //    return RegionException::VERSION_ERROR;
     if (current_region->isPendingRemove())
         return RegionException::PENDING_REMOVE;
     return RegionException::OK;
@@ -355,22 +359,22 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     if (handle_col_id == -1)
         handle_col_id = required_columns.size();
 
-    auto current_region = context.getTMTContext().getKVStore()->getRegion(region_info.region_id);
-    auto region_read_status = getRegionReadStatus(current_region);
-    if (region_read_status != RegionException::OK)
-    {
-        std::vector<RegionID> region_ids;
-        region_ids.push_back(region_info.region_id);
-        LOG_WARNING(log, __PRETTY_FUNCTION__ << " Meet region exception for region " << region_info.region_id);
-        throw RegionException(std::move(region_ids), region_read_status);
-    }
-    const bool pk_is_uint64 = storage->getPKType() == IManageableStorage::PKType::UINT64;
-    if (!checkKeyRanges(region_info.key_ranges, table_id, pk_is_uint64, current_region->getRange(), handle_col_id, handle_filter_expr))
-    {
-        // need to add extra filter on handle column
-        filter_on_handle = true;
-        conditions.push_back(&handle_filter_expr);
-    }
+//    auto current_region = context.getTMTContext().getKVStore()->getRegion(region_info.region_id);
+//    auto region_read_status = getRegionReadStatus(current_region);
+//    if (region_read_status != RegionException::OK)
+//    {
+//        std::vector<RegionID> region_ids;
+//        region_ids.push_back(region_info.region_id);
+//        LOG_WARNING(log, __PRETTY_FUNCTION__ << " Meet region exception for region " << region_info.region_id);
+//        throw RegionException(std::move(region_ids), region_read_status);
+//    }
+//    const bool pk_is_uint64 = storage->getPKType() == IManageableStorage::PKType::UINT64;
+//    if (!checkKeyRanges(region_info.key_ranges, table_id, pk_is_uint64, current_region->getRange(), handle_col_id, handle_filter_expr))
+//    {
+//        // need to add extra filter on handle column
+//        filter_on_handle = true;
+//        conditions.push_back(&handle_filter_expr);
+//    }
 
     bool has_handle_column = (handle_col_id != (Int32)required_columns.size());
 
@@ -434,6 +438,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
             analyzer->makeExplicitSetForIndex(condition, storage);
         }
     }
+
     SelectQueryInfo query_info;
     /// to avoid null point exception
     query_info.query = dummy_query;
@@ -441,13 +446,33 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>();
     query_info.mvcc_query_info->resolve_locks = true;
     query_info.mvcc_query_info->read_tso = settings.read_tso;
-    RegionQueryInfo info;
-    info.region_id = region_info.region_id;
-    info.version = region_info.region_version;
-    info.conf_version = region_info.region_conf_version;
-    info.range_in_table = current_region->getHandleRangeByTable(table_id);
-    query_info.mvcc_query_info->regions_query_info.push_back(info);
-    query_info.mvcc_query_info->concurrent = 0.0;
+    for (auto & r : region_infos)
+    {
+        RegionQueryInfo info;
+        info.region_id = r.region_id;
+        info.version = r.region_version;
+        info.conf_version = r.region_conf_version;
+        auto current_region = context.getTMTContext().getKVStore()->getRegion(info.region_id);
+        if (!current_region)
+        {
+            std::vector<RegionID> region_ids;
+            for (auto & rr : region_infos) {
+                region_ids.push_back(rr.region_id);
+            }
+            throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
+        }
+        info.range_in_table = current_region->getHandleRangeByTable(table_id);
+        query_info.mvcc_query_info->regions_query_info.push_back(info);
+    }
+    query_info.mvcc_query_info->concurrent = region_infos.size() > 1 ? 1.0 : 0.0;
+//    RegionQueryInfo info;
+//    info.region_id = region_info.region_id;
+//    info.version = region_info.region_version;
+//    info.conf_version = region_info.region_conf_version;
+//    info.range_in_table = current_region->getHandleRangeByTable(table_id);
+//    query_info.mvcc_query_info->regions_query_info.push_back(info);
+//    query_info.mvcc_query_info->concurrent = 0.0;
+
     if (ts.next_read_engine() == tipb::EngineType::Local)
     {
         pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
@@ -466,6 +491,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         //}
         //pipeline.streams = storage->remote_read(key_ranges, query_info, ts, context);
     }
+    LOG_INFO(log, "dag execution stream size: " << region_infos.size());
 
     if (pipeline.streams.empty())
     {

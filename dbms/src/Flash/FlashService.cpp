@@ -49,6 +49,25 @@ grpc::Status FlashService::Coprocessor(
     return ret;
 }
 
+::grpc::Status FlashService:: BatchCoprocessor(::grpc::ServerContext* grpc_context, const ::coprocessor::BatchRequest* request, ::grpc::ServerWriter< ::coprocessor::BatchResponse>* writer)
+{
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling batch coprocessor request: " << request->DebugString());
+
+    auto [context, status] = createDBContext(grpc_context);
+    if (!status.ok())
+    {
+        return status;
+    }
+
+    CoprocessorContext cop_context(context, request->context(), *grpc_context);
+    BatchCoprocessorHandler cop_handler(cop_context, request, writer);
+
+    auto ret = cop_handler.execute();
+
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle coprocessor request done: " << ret.error_code() << ", " << ret.error_message());
+    return ret;
+}
+
 grpc::Status FlashService::BatchCommands(
     grpc::ServerContext * grpc_context, grpc::ServerReaderWriter<::tikvpb::BatchCommandsResponse, tikvpb::BatchCommandsRequest> * stream)
 {
