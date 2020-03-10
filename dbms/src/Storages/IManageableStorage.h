@@ -1,9 +1,9 @@
 #pragma once
 
 #include <DataStreams/IBlockInputStream.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
 #include <Storages/IStorage.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/Types.h>
 
@@ -54,8 +54,8 @@ public:
 
     // Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
     virtual void alterFromTiDB(
-            const AlterCommands & commands, const TiDB::TableInfo & table_info, const String & database_name, const Context & context)
-    = 0;
+        const AlterCommands & commands, const TiDB::TableInfo & table_info, const String & database_name, const Context & context)
+        = 0;
 
     PKType getPKType() const
     {

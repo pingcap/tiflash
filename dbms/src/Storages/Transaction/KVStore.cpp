@@ -1,4 +1,5 @@
 #include <Interpreters/Context.h>
+#include <Storages/StorageDeltaMerge-internal.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/KVStore.h>
@@ -94,9 +95,7 @@ void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
                     + " with table id: " + DB::toString(table_id) + ", ignored");
             return;
         }
-        auto range_start = handle_range.first.handle_id;
-        auto range_end = handle_range.second.type == TiKVHandle::HandleIDType::MAX ? DM::HandleRange::MAX : handle_range.second.handle_id;
-        storage->flushCache(tmt.getContext(), range_start, range_end);
+        storage->flushCache(tmt.getContext(), handle_range.first, handle_range.second);
     }
 }
 

@@ -1,6 +1,7 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/MergeTree/TxnMergeTreeBlockOutputStream.h>
 #include <Storages/StorageDeltaMerge.h>
+#include <Storages/StorageDeltaMerge-internal.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionTable.h>
@@ -252,12 +253,9 @@ void RegionTable::removeRegion(const RegionID region_id)
                     return;
                 HandleRange<HandleID> handle_range = region_it->second.range_in_table;
 
-                auto dm_range_start = handle_range.first.handle_id;
-                auto dm_range_end
-                    = handle_range.second.type == TiKVHandle::HandleIDType::MAX ? DM::HandleRange::MAX : handle_range.second.handle_id;
-
-                dm_storage->deleteRange({dm_range_start, dm_range_end}, context->getSettingsRef());
-                dm_storage->flushCache(tmt.getContext(), dm_range_start, dm_range_end);
+                auto dm_handle_range = toDMHandleRange(handle_range);
+                dm_storage->deleteRange(dm_handle_range, context->getSettingsRef());
+                dm_storage->flushCache(*context, dm_handle_range);
             }
         }
 
