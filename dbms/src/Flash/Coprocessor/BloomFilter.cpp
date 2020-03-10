@@ -11,7 +11,7 @@ namespace DB {
     }
 
     void BloomFilter::FinishBuild() {
-        length = BitSet.size();
+        length = BitSet.size() * 64;
         unitSize = 64;
     }
 
@@ -19,6 +19,22 @@ namespace DB {
         auto hash = key % length;
         auto idx = hash / unitSize;
         auto shift = hash % unitSize;
-        return (BitSet[idx]&(1 << shift)) != 0;
+        return ((BitSet[idx]>> shift)&1) != 0;
     }
+
+    void BloomFilter::resetHash() {
+        hashVal = offset64;
+    }
+
+    void BloomFilter::myhash(const UInt8 * data, unsigned int l) {
+        for (unsigned i = 0; i < l; i++) {
+            hashVal *= prime64;
+            hashVal ^= UInt64(data[i]);
+        }
+    }
+
+    UInt64 BloomFilter::sum64() {
+        return hashVal;
+    }
+
 }

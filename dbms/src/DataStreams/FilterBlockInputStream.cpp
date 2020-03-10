@@ -87,6 +87,48 @@ Block FilterBlockInputStream::readImpl()
         size_t rows = res.rows();
         ColumnPtr column_of_filter = res.safeGetByPosition(filter_column).column;
 
+        std::vector<UInt8 > column_of_filter_for_bloom;
+        if (bf != nullptr) {
+            std::vector<ColumnWithTypeAndName > cols;
+            bool canUseBloom = true;
+            for (unsigned i = 0;i < join_key.size();i++) {
+                ColumnWithTypeAndName col = res.safeGetByPosition(join_key[i] + 1);
+                String type = col.type->getName();
+                if (type.compare("Nullable(Int32)") != 0 &&
+                    type.compare("Int32") != 0 ) {
+                    canUseBloom = false;
+                    break;
+                }
+
+                cols.push_back(col);
+            }
+            if (canUseBloom) {
+                for (unsigned i = 0;i < rows;i++) {
+                    if (column_of_filter->get64(i) == 0) {
+                        column_of_filter_for_bloom.push_back(0);
+                        continue;
+                    }
+                    bf->resetHash();
+                    UInt8 flag[1];
+                    flag[0] = 8;
+                    UInt8 tmp[8];
+                    for (unsigned j = 0;j < join_key.size();j++) {
+                        if (cols[j].type->getName().compare("Nullable(Int32)") == 0) {
+                            flag[0] = 8;
+                            *(UInt64 *)(tmp) = cols[j].column->get64(i);
+                            bf->myhash(flag,1);
+                            bf->myhash(tmp,8);
+                        }
+                    }
+                    if (bf->ProbeU64(bf->sum64())) {
+                        column_of_filter_for_bloom.push_back(1);
+                    } else {
+                        column_of_filter_for_bloom.push_back(0);
+                    }
+                }
+            }
+        }
+
         if (unlikely(child_filter && child_filter->size() != rows))
             throw Exception("Unexpected child filter size", ErrorCodes::LOGICAL_ERROR);
 
@@ -130,6 +172,14 @@ Block FilterBlockInputStream::readImpl()
                     ++a;
                     ++b;
                 }
+            }
+        }
+
+        if (!column_of_filter_for_bloom.empty()) {
+            UInt8 *a = filter->data();
+            for (size_t i = 0;i < rows;++i) {
+                *a = *a > 0 && column_of_filter_for_bloom[i] != 0;
+                ++a;
             }
         }
 

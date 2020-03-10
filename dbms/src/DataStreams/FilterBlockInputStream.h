@@ -2,6 +2,7 @@
 
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Columns/FilterDescription.h>
+#include <Flash/Coprocessor/BloomFilter.h>
 
 
 namespace DB
@@ -29,12 +30,15 @@ public:
 protected:
     Block readImpl() override;
 
-private:
+public:
     ExpressionActionsPtr expression;
     Block header;
     ssize_t filter_column;
 
     ConstantFilterDescription constant_filter_description;
+
+    std::shared_ptr<BloomFilter>  bf;
+    std::vector<UInt64> join_key;
 };
 
 }

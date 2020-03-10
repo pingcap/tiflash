@@ -58,8 +58,9 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
     {
         for (auto & condition : dag.getSelection().conditions())
             conditions.push_back(&condition);
-        if (dag.getSelection().has_bloom()) {
-            bf = new BloomFilter();
+        auto tmp = dag.getSelection();
+        if (tmp.has_bloom()) {
+            bf = std::make_shared<BloomFilter>();
             for (auto & uint64 : dag.getSelection().bloom().bit_set())
             {
                 bf->PushU64(uint64);
@@ -422,7 +423,12 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
 
 void InterpreterDAG::executeWhere(Pipeline & pipeline, const ExpressionActionsPtr & expr, String & filter_column)
 {
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, expr, filter_column); });
+    pipeline.transform([&](auto & stream) {
+        const auto & tmp = std::make_shared<FilterBlockInputStream>(stream, expr, filter_column);
+        (*tmp).bf = bf;
+        (*tmp).join_key = join_key;
+        stream = tmp;
+    });
 }
 
 void InterpreterDAG::executeAggregation(
