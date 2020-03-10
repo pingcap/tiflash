@@ -27,14 +27,20 @@ void KVStore::restore(const IndexReaderCreateFunc & index_reader_create)
     auto task_lock = genTaskLock();
     auto manage_lock = genRegionManageLock();
 
-    LOG_INFO(log, "start to restore regions");
     regionsMut() = region_persister.restore(const_cast<IndexReaderCreateFunc *>(&index_reader_create));
 
-    // init range index
-    for (const auto & region : regions())
-        region_range_index.add(region.second);
+    std::stringstream ss;
+    ss << "Restored " << regions().size() << " regions. ";
 
-    LOG_INFO(log, "restore regions done");
+    // init range index
+    for (const auto & [id, region] : regions())
+    {
+        std::ignore = id;
+        region_range_index.add(region);
+        ss << region->toString() << "; ";
+    }
+
+    LOG_INFO(log, ss.str());
 }
 
 RegionPtr KVStore::getRegion(const RegionID region_id) const
@@ -228,6 +234,44 @@ KVStore::RegionManageLock KVStore::genRegionManageLock() const { return RegionMa
 TiFlashApplyRes KVStore::handleWriteRaftCmd(
     raft_cmdpb::RaftCmdRequest && request, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt)
 {
+    std::vector<BaseBuffView> keys;
+    std::vector<BaseBuffView> vals;
+    std::vector<WriteCmdType> cmd_types;
+    std::vector<ColumnFamilyType> cmd_cf;
+    keys.reserve(request.requests_size());
+    vals.reserve(request.requests_size());
+    cmd_types.reserve(request.requests_size());
+    cmd_cf.reserve(request.requests_size());
+
+    for (const auto & req : request.requests())
+    {
+        auto type = req.cmd_type();
+
+        switch (type)
+        {
+            case raft_cmdpb::CmdType::Put:
+                keys.push_back({req.put().key().data(), req.put().key().size()});
+                vals.push_back({req.put().value().data(), req.put().value().size()});
+                cmd_types.push_back(WriteCmdType::Put);
+                cmd_cf.push_back(NameToCF(req.put().cf()));
+                break;
+            case raft_cmdpb::CmdType::Delete:
+                keys.push_back({req.delete_().key().data(), req.delete_().key().size()});
+                vals.push_back({nullptr, 0});
+                cmd_types.push_back(WriteCmdType::Del);
+                cmd_cf.push_back(NameToCF(req.delete_().cf()));
+                break;
+            default:
+                break;
+        }
+    }
+    return handleWriteRaftCmd(
+        WriteCmdsView{.keys = keys.data(), .vals = vals.data(), .cmd_types = cmd_types.data(), .cmd_cf = cmd_cf.data(), .len = keys.size()},
+        region_id, index, term, tmt);
+}
+
+TiFlashApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt)
+{
     auto region_persist_lock = region_manager.genRegionTaskLock(region_id);
 
     const RegionPtr region = getRegion(region_id);
@@ -241,7 +285,7 @@ TiFlashApplyRes KVStore::handleWriteRaftCmd(
 
     bool is_bg_flush_disabled = tmt.isBgFlushDisabled();
     const auto ori_size = region->dataSize();
-    region->handleWriteRaftCmd(std::move(request), index, term, /* set_applied */ !is_bg_flush_disabled);
+    auto res = region->handleWriteRaftCmd(cmds, index, term, /* set_applied */ !is_bg_flush_disabled);
 
     {
         tmt.getRegionTable().updateRegion(*region);
@@ -266,7 +310,7 @@ TiFlashApplyRes KVStore::handleWriteRaftCmd(
         region->notifyApplied();
     }
 
-    return TiFlashApplyRes::None;
+    return res;
 }
 
 void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt)

@@ -8,16 +8,11 @@
 namespace DB
 {
 
-enum ColumnFamilyType
-{
-    Write,
-    Default,
-    Lock,
-};
-
 using RegionWriteCFData = RegionCFDataBase<RegionWriteCFDataTrait>;
 using RegionDefaultCFData = RegionCFDataBase<RegionDefaultCFDataTrait>;
 using RegionLockCFData = RegionCFDataBase<RegionLockCFDataTrait>;
+
+enum ColumnFamilyType : uint8_t;
 
 class RegionData
 {
@@ -63,10 +58,9 @@ public:
 
     RegionData(RegionData && data);
 
-    void deleteRange(const ColumnFamilyType cf, const RegionRange & range);
-
 public:
     static UInt8 getWriteType(const ConstWriteCFIter & write_it);
+    static const RegionDefaultCFDataTrait::Map & getDefaultCFMap(RegionWriteCFData * write);
 
 private:
     RegionWriteCFData write_cf;
