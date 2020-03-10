@@ -140,6 +140,7 @@ public:
         Timestamp start_ts,
         DB::HandleRange<HandleID> & handle_range);
 
+    /// Check if there are any lock should be resolved, if so, throw LockException.
     static void resolveLocks(Region::CommittedScanner & scanner, const Timestamp start_ts);
 
     void checkTableOptimize();
