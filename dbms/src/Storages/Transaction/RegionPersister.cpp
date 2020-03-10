@@ -88,7 +88,6 @@ RegionMap RegionPersister::restore(IndexReaderCreateFunc * func)
     };
     page_storage.traverse(acceptor);
 
-    LOG_INFO(log, "restore " << regions.size() << " regions");
     return regions;
 }
 

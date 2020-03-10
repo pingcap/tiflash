@@ -87,7 +87,13 @@ bool RegionTable::shouldFlush(const InternalRegion & region) const
     for (const auto & [th_bytes, th_duration] : *flush_thresholds.getData())
     {
         if (region.cache_bytes >= th_bytes && period_time >= th_duration)
+        {
+            LOG_INFO(log,
+                __FUNCTION__ << ": region " << region.region_id << ", cache size " << region.cache_bytes << ", seconds since last "
+                             << std::chrono::duration_cast<std::chrono::seconds>(period_time).count());
+
             return true;
+        }
     }
     return false;
 }

@@ -1,8 +1,8 @@
 #pragma once
 
-#include <map>
-
 #include <Storages/Transaction/TiKVRecordFormat.h>
+
+#include <map>
 
 namespace DB
 {
@@ -19,7 +19,6 @@ struct CFKeyHasher
 
 struct RegionWriteCFDataTrait
 {
-    static const std::string name;
     using DecodedWriteCFValue = RecordKVFormat::DecodedWriteCFValue;
     using Key = std::pair<HandleID, Timestamp>;
     using Value = std::tuple<std::shared_ptr<const TiKVKey>, std::shared_ptr<const TiKVValue>, DecodedWriteCFValue>;
@@ -35,7 +34,7 @@ struct RegionWriteCFDataTrait
                 std::move(decoded_val)}};
     }
 
-    static const std::shared_ptr<const TiKVValue> & getRowRawValuePtr(const Value & val) { return std::get<2>(std::get<2>(val)); }
+    static const std::shared_ptr<const TiKVValue> & getRecordRawValuePtr(const Value & val) { return std::get<2>(std::get<2>(val)); }
 
     static UInt8 getWriteType(const Value & value) { return std::get<0>(std::get<2>(value)); }
 };
@@ -43,7 +42,6 @@ struct RegionWriteCFDataTrait
 
 struct RegionDefaultCFDataTrait
 {
-    static const std::string name;
     using Key = std::pair<HandleID, Timestamp>;
     using Value = std::tuple<std::shared_ptr<const TiKVKey>, std::shared_ptr<const TiKVValue>>;
     using Map = std::map<Key, Value>;
@@ -59,7 +57,6 @@ struct RegionDefaultCFDataTrait
 
 struct RegionLockCFDataTrait
 {
-    static const std::string name;
     using DecodedLockCFValue = RecordKVFormat::DecodedLockCFValue;
     using Key = HandleID;
     using Value = std::tuple<std::shared_ptr<const TiKVKey>, std::shared_ptr<const TiKVValue>, DecodedLockCFValue>;
