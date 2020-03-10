@@ -254,7 +254,7 @@ void RegionRaftCommandDelegate::handleAdminRaftCmd(const raft_cmdpb::AdminReques
     result.type = RaftCommandResult::Type::Default;
     if (index <= appliedIndex())
     {
-        LOG_WARNING(log, toString() << " ignore outdated raft log [term: " << term << ", index: " << index << "]");
+        LOG_TRACE(log, toString() << " ignore outdated raft log [term: " << term << ", index: " << index << "]");
         result.type = RaftCommandResult::Type::IndexError;
         return;
     }
@@ -527,7 +527,7 @@ TiFlashApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 in
 
     if (index <= appliedIndex())
     {
-        LOG_WARNING(log, toString() << " ignore outdated raft log [term: " << term << ", index: " << index << "]");
+        LOG_TRACE(log, toString() << " ignore outdated raft log [term: " << term << ", index: " << index << "]");
         return TiFlashApplyRes::Persist;
     }
 
