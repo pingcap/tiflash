@@ -1,5 +1,6 @@
 #pragma once
 
+#include <DataTypes/DataTypeFactory.h>
 #include <Interpreters/Context.h>
 #include <Poco/Path.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -9,6 +10,26 @@ namespace DB
 {
 namespace tests
 {
+
+#define CATCH                                                                                      \
+    catch (const Exception & e)                                                                    \
+    {                                                                                              \
+        std::string text = e.displayText();                                                        \
+                                                                                                   \
+        auto embedded_stack_trace_pos = text.find("Stack trace");                                  \
+        std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;               \
+        if (std::string::npos == embedded_stack_trace_pos)                                         \
+            std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl; \
+                                                                                                   \
+        throw;                                                                                     \
+    }
+
+// A simple helper for getting DataType from type name
+inline DataTypePtr typeFromString(const String & str)
+{
+    auto & data_type_factory = DataTypeFactory::instance();
+    return data_type_factory.get(str);
+}
 
 class TiFlashTestEnv
 {
