@@ -55,7 +55,7 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std
       keep_session_timezone_info(keep_session_timezone_info_),
       region_info(region_info_),
       rqst(rqst_),
-      dummy_query(dummy_query_),
+      dummy_query(std::move(dummy_query_)),
       log(&Logger::get("DAGQueryBlockInterpreter"))
 {
     if (query_block.selection != nullptr)
@@ -594,7 +594,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
             kind, ASTTableJoin::Strictness::All);
     executeUnion(right_pipeline);
     // todo clickhouse use LazyBlockInputStream to initialize the source, need to double check why and
-    //  how to use LazyBlockInputStream here
+    //  if we need to use LazyBlockInputStream here
     right_query.source = right_pipeline.firstStream();
     right_query.join = joinPtr;
     right_query.join->setSampleBlock(right_query.source->getHeader());
