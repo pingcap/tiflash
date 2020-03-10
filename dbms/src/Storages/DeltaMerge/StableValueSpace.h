@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/Page/PageStorage.h>
@@ -10,6 +9,7 @@ namespace DB
 namespace DM
 {
 struct WriteBatches;
+struct DMContext;
 
 class StableValueSpace;
 using StableValueSpacePtr = std::shared_ptr<StableValueSpace>;

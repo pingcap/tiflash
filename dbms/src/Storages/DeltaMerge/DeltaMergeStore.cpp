@@ -10,6 +10,8 @@
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
+#include <Storages/DeltaMerge/WriteBatches.h>
+#include <Storages/PathPool.h>
 #include <Storages/Transaction/TMTContext.h>
 
 #include <ext/scope_guard.h>

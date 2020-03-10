@@ -7,7 +7,6 @@
 #include <Storages/AlterCommands.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
-#include <Storages/Page/PageStorage.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>

@@ -2,12 +2,15 @@
 #include <Functions/FunctionHelpers.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <IO/ReadHelpers.h>
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/Pack.h>
 #include <Storages/DeltaMerge/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/HandleFilter.h>
+#include <Storages/PathPool.h>
 
 #include <ext/scope_guard.h>
 // Some internal cpp file
+
 #include <Storages/DeltaMerge/Delta/CompactDelta.cpp>
 #include <Storages/DeltaMerge/Delta/FlushDelta.cpp>
 #include <Storages/DeltaMerge/Delta/Snapshot.cpp>
