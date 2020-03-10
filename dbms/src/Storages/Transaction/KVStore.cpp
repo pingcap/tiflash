@@ -27,11 +27,10 @@ void KVStore::restore(const IndexReaderCreateFunc & index_reader_create)
     auto task_lock = genTaskLock();
     auto manage_lock = genRegionManageLock();
 
-    LOG_INFO(log, "start to restore regions");
     regionsMut() = region_persister.restore(const_cast<IndexReaderCreateFunc *>(&index_reader_create));
 
     std::stringstream ss;
-    ss << "restored " << regions().size() << " regions. ";
+    ss << "Restored " << regions().size() << " regions. ";
 
     // init range index
     for (const auto & [id, region] : regions())
