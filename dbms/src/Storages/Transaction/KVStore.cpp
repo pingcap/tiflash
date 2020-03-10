@@ -101,7 +101,7 @@ void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
                     + " with table id: " + DB::toString(table_id) + ", ignored");
             return;
         }
-        storage->flushCache(tmt.getContext(), handle_range.first, handle_range.second);
+        storage->flushCache(tmt.getContext(), handle_range);
     }
 }
 
