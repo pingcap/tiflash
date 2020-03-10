@@ -7,9 +7,8 @@
 #include <gperftools/malloc_extension.h>
 #endif
 
-#include <Common/typeid_cast.h>
 #include <Common/formatReadable.h>
-
+#include <Common/typeid_cast.h>
 #include <Core/Defines.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
@@ -671,9 +670,9 @@ BlockInputStreams StorageDeltaMerge::read( //
 
 void StorageDeltaMerge::checkStatus(const Context & context) { store->check(context); }
 
-void StorageDeltaMerge::flushCache(const Context & context, HandleID start, HandleID end)
+void StorageDeltaMerge::flushCache(const Context & context, const DM::HandleRange & range_to_flush)
 {
-    store->flushCache(context, DM::HandleRange(start, end));
+    store->flushCache(context, range_to_flush);
 }
 
 void StorageDeltaMerge::deleteRange(const DM::HandleRange & range_to_delete, const Settings & settings)
@@ -738,8 +737,7 @@ void StorageDeltaMerge::deleteRows(const Context & context, size_t delete_rows)
 
     size_t after_delete_rows = getRows(store, context, DM::HandleRange::newAll());
     if (after_delete_rows != total_rows - delete_rows)
-        LOG_ERROR(log, "Rows after delete range not match, expected: " << (total_rows - delete_rows)
-            << ", got: " << after_delete_rows);
+        LOG_ERROR(log, "Rows after delete range not match, expected: " << (total_rows - delete_rows) << ", got: " << after_delete_rows);
 }
 
 //==========================================================================================
@@ -933,7 +931,7 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     name_col->insert(String(#NAME)); \
     value_col->insert(DB::toString(stat.NAME));
 
-#define INSERT_SIZE(NAME)             \
+#define INSERT_SIZE(NAME)            \
     name_col->insert(String(#NAME)); \
     value_col->insert(formatReadableSizeWithBinarySuffix(stat.NAME, 2));
 

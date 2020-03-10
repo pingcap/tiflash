@@ -34,7 +34,7 @@ using BlockOrDeletes = std::vector<BlockOrDelete>;
 class DeltaValueSpace : public std::enable_shared_from_this<DeltaValueSpace>, private boost::noncopyable
 {
 public:
-    static const Int64 CURRENT_VERSION;
+    static const UInt64 CURRENT_VERSION;
     using BlockPtr = std::shared_ptr<Block>;
     using Lock     = std::unique_lock<std::mutex>;
 
