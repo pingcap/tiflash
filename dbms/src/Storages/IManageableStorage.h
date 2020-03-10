@@ -5,6 +5,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/IStorage.h>
 #include <Storages/Transaction/StorageEngineType.h>
+#include <Storages/Transaction/TiKVHandle.h>
 #include <Storages/Transaction/Types.h>
 
 namespace TiDB
@@ -36,7 +37,7 @@ public:
 
     virtual void flushDelta() {}
 
-    virtual void flushCache(const Context & /*context*/, HandleID /*start*/, HandleID /*end*/) {}
+    virtual void flushCache(const Context & /*context*/, const DB::HandleRange<HandleID> & /* range_to_flush */) {}
 
     virtual BlockInputStreamPtr status() { return {}; }
 

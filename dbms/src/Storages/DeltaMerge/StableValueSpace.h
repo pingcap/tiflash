@@ -9,6 +9,7 @@ namespace DB
 {
 namespace DM
 {
+struct WriteBatches;
 
 class StableValueSpace;
 using StableValueSpacePtr = std::shared_ptr<StableValueSpace>;

@@ -2,6 +2,7 @@
 #include <Storages/DeltaMerge/FilterHelper.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/WriteBatches.h>
 
 namespace DB
 {

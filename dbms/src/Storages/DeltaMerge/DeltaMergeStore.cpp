@@ -177,15 +177,7 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
                                store_columns,
                                /* min_version */ 0,
                                settings.not_compress_columns,
-                               db_settings.dm_segment_limit_rows,
-                               db_settings.dm_segment_delta_limit_rows,
-                               db_settings.dm_segment_delta_cache_limit_rows,
-                               db_settings.dm_segment_delta_small_pack_rows,
-                               db_settings.dm_segment_stable_pack_rows,
-                               db_settings.dm_enable_logical_split,
-                               db_settings.dm_read_delta_only,
-                               db_settings.dm_read_stable_only,
-                               db_settings.dm_enable_skippable_place);
+                               db_settings);
     return DMContextPtr(ctx);
 }
 

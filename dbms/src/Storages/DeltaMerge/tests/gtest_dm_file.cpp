@@ -51,14 +51,7 @@ public:
                                                  cols,
                                                  0,
                                                  settings.not_compress_columns,
-                                                 db_context->getSettingsRef().dm_segment_limit_rows,
-                                                 db_context->getSettingsRef().dm_segment_delta_limit_rows,
-                                                 db_context->getSettingsRef().dm_segment_delta_cache_limit_rows,
-                                                 db_context->getSettingsRef().dm_segment_delta_small_pack_rows,
-                                                 db_context->getSettingsRef().dm_segment_stable_pack_rows,
-                                                 db_context->getSettingsRef().dm_enable_logical_split,
-                                                 false,
-                                                 false);
+                                                 db_context->getSettingsRef());
     }
 
 

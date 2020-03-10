@@ -7,6 +7,7 @@
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
+#include <Storages/StorageDeltaMerge-internal.h>
 #include <Storages/Transaction/TiDB.h>
 #include <common/logger_useful.h>
 
@@ -43,9 +44,9 @@ public:
 
     BlockOutputStreamPtr write(const ASTPtr & query, const Settings & settings) override;
 
-    void flushCache(const Context & context, HandleID start, HandleID end) override
+    void flushCache(const Context & context, const DB::HandleRange<HandleID> & range_to_flush) override
     {
-        flushCache(context, DM::toDMHandleRange(start, end));
+        flushCache(context, toDMHandleRange(range_to_flush));
     }
 
     void flushCache(const Context & context, const DM::HandleRange & range_to_flush);
