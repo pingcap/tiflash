@@ -80,8 +80,9 @@ struct ColumnDefine
     }
 };
 
-using ColumnDefines   = std::vector<ColumnDefine>;
-using ColumnDefineMap = std::unordered_map<ColId, ColumnDefine>;
+using ColumnDefines    = std::vector<ColumnDefine>;
+using ColumnDefinesPtr = std::shared_ptr<ColumnDefines>;
+using ColumnDefineMap  = std::unordered_map<ColId, ColumnDefine>;
 
 using ColumnMap        = std::unordered_map<ColId, ColumnPtr>;
 using MutableColumnMap = std::unordered_map<ColId, MutableColumnPtr>;

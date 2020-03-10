@@ -22,9 +22,9 @@ public:
     String getName() const override { return "Debug"; }
     Block  getHeader() const override
     {
-        ColumnDefines cds = DMTestEnv::getDefaultColumns();
-        cds.push_back(ColumnDefine(100, str_col_name, DataTypeFactory::instance().get("String")));
-        return toEmptyBlock(cds);
+        auto cds = DMTestEnv::getDefaultColumns();
+        cds->push_back(ColumnDefine(100, str_col_name, DataTypeFactory::instance().get("String")));
+        return toEmptyBlock(*cds);
     }
 
 protected:

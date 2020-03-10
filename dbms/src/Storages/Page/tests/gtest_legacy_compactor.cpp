@@ -38,7 +38,15 @@ try
         PageEntry entry1, entry2;
         // Specify magic checksum for test
         entry1.checksum = 0x123;
+        entry1.offset   = 0x111;
         entry2.checksum = 0x321;
+        entry2.offset   = 0x222;
+
+        entry1.field_offsets = {{0, 0x11}, {255, 0xff}};
+        entry1.size          = 1024;
+
+        entry2.field_offsets = {{0, 0xdd}, {16, 0xaa}, {77, 0x77}};
+        entry2.size          = 1010;
 
         PageEntriesEdit edit;
 
@@ -55,9 +63,11 @@ try
 
     PageEntriesVersionSetWithDelta version_restored_with_snapshot("test", config.version_set_config, log);
     // Restore a new version set with snapshot WriteBatch
+    WriteBatch::SequenceID seq_write = 0x1234;
     {
         auto       snapshot = original_version.getSnapshot();
-        WriteBatch wb       = LegacyCompactor::prepareCheckpointWriteBatch(snapshot, 0);
+        WriteBatch wb       = LegacyCompactor::prepareCheckpointWriteBatch(snapshot, seq_write);
+        EXPECT_EQ(wb.getSequence(), seq_write);
 
         PageEntriesEdit edit;
 
@@ -108,9 +118,29 @@ try
             // Use specified checksum to identify page_entry
             ASSERT_EQ(original_page->checksum, restored_page->checksum);
             if (id == 1)
+            {
                 ASSERT_EQ(original_page->checksum, 0x123UL);
+                ASSERT_EQ(original_page->offset, 0x111UL);
+                ASSERT_EQ(original_page->field_offsets.size(), 2UL);
+                ASSERT_EQ(original_page->field_offsets[0].first, 0UL);
+                ASSERT_EQ(original_page->field_offsets[0].second, 0x11UL);
+                ASSERT_EQ(original_page->field_offsets[1].first, 255UL);
+                ASSERT_EQ(original_page->field_offsets[1].second, 0xffUL);
+                ASSERT_EQ(original_page->size, 1024UL);
+            }
             else if (id == 2)
+            {
                 ASSERT_EQ(original_page->checksum, 0x321UL);
+                ASSERT_EQ(original_page->offset, 0x222UL);
+                ASSERT_EQ(original_page->field_offsets.size(), 3UL);
+                ASSERT_EQ(original_page->field_offsets[0].first, 0UL);
+                ASSERT_EQ(original_page->field_offsets[0].second, 0xddUL);
+                ASSERT_EQ(original_page->field_offsets[1].first, 16UL);
+                ASSERT_EQ(original_page->field_offsets[1].second, 0xaaUL);
+                ASSERT_EQ(original_page->field_offsets[2].first, 77UL);
+                ASSERT_EQ(original_page->field_offsets[2].second, 0x77UL);
+                ASSERT_EQ(original_page->size, 1010UL);
+            }
             else
                 FAIL() << "Invalid normal page id";
         }
