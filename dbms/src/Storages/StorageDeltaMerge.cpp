@@ -327,8 +327,7 @@ RegionException::RegionReadStatus isValidRegion(const RegionQueryInfo & region_t
 
 RegionMap doLearnerRead(const TiDB::TableID table_id,           //
     const MvccQueryInfo::RegionsQueryInfo & regions_query_info, //
-    const bool resolve_locks,
-    const Timestamp start_ts,
+    const bool resolve_locks, const Timestamp start_ts,
     size_t concurrent_num, //
     TMTContext & tmt, Poco::Logger * log)
 {
@@ -568,8 +567,8 @@ BlockInputStreams StorageDeltaMerge::read( //
         if (likely(!select_query.no_kvstore))
         {
             /// Learner read.
-            regions_in_learner_read = doLearnerRead(
-                tidb_table_info.id, mvcc_query_info.regions_query_info, mvcc_query_info.resolve_locks, mvcc_query_info.read_tso, concurrent_num, tmt, log);
+            regions_in_learner_read = doLearnerRead(tidb_table_info.id, mvcc_query_info.regions_query_info, mvcc_query_info.resolve_locks,
+                mvcc_query_info.read_tso, concurrent_num, tmt, log);
 
             if (likely(!mvcc_query_info.regions_query_info.empty()))
             {
