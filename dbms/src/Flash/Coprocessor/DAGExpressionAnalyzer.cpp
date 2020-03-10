@@ -631,7 +631,7 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
         }
         const String & func_name = getFunctionName(expr);
         String expr_name;
-        if (function_builder_map.find(func_name) == function_builder_map.end())
+        if (function_builder_map.find(func_name) != function_builder_map.end())
         {
             expr_name = function_builder_map[func_name](this, expr, actions);
         }
