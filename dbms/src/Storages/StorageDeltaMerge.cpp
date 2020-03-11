@@ -23,9 +23,10 @@
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/AlterCommands.h>
+#include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
-#include <Storages/StorageDeltaMerge-internal.h>
+#include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
@@ -37,8 +38,9 @@ namespace DB
 {
 namespace ErrorCodes
 {
+extern const int BAD_ARGUMENTS;
 extern const int DIRECTORY_ALREADY_EXISTS;
-}
+} // namespace ErrorCodes
 
 using namespace DM;
 
@@ -678,9 +680,9 @@ BlockInputStreams StorageDeltaMerge::read( //
 
 void StorageDeltaMerge::checkStatus(const Context & context) { store->check(context); }
 
-void StorageDeltaMerge::flushCache(const Context & context, HandleID start, HandleID end)
+void StorageDeltaMerge::flushCache(const Context & context, const DM::HandleRange & range_to_flush)
 {
-    store->flushCache(context, DM::HandleRange(start, end));
+    store->flushCache(context, range_to_flush);
 }
 
 void StorageDeltaMerge::deleteRange(const DM::HandleRange & range_to_delete, const Settings & settings)

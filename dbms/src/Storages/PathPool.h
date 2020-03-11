@@ -1,6 +1,8 @@
 #pragma once
 
 #include <Core/Types.h>
+#include <common/logger_useful.h>
+
 #include <random>
 #include <unordered_map>
 
@@ -31,7 +33,8 @@ public:
         }
     }
 
-    PathPool(const std::vector<String> & paths_, const String & database_, const String & table_) : database(database_), table(table_), log{&Logger::get("PathPool")}
+    PathPool(const std::vector<String> & paths_, const String & database_, const String & table_)
+        : database(database_), table(table_), log{&Logger::get("PathPool")}
     {
         for (auto & path : paths_)
         {
@@ -55,7 +58,7 @@ public:
         log = path_pool.log;
     }
 
-    PathPool& operator=(const PathPool & path_pool)
+    PathPool & operator=(const PathPool & path_pool)
     {
         path_infos.clear();
         path_map = path_pool.path_map;
@@ -100,7 +103,7 @@ public:
         {
             ratio.push_back((double)(total_size - path_info.total_size) / ((path_infos.size() - 1) * total_size));
         }
-        double rand_number = (double) rand() / RAND_MAX;
+        double rand_number = (double)rand() / RAND_MAX;
         double ratio_sum = 0;
         for (size_t i = 0; i < ratio.size(); i++)
         {
@@ -122,7 +125,7 @@ public:
         return path_infos[path_map.at(file_id)].path;
     }
 
-    void addDMFile(UInt64 file_id, size_t file_size, const String& path)
+    void addDMFile(UInt64 file_id, size_t file_size, const String & path)
     {
         std::lock_guard<std::mutex> lock{mutex};
         if (path_map.find(file_id) != path_map.end())
@@ -180,7 +183,7 @@ private:
 
     std::mutex mutex;
 
-    Logger * log;
+    Poco::Logger * log;
 };
 
 using PathPoolPtr = std::shared_ptr<PathPool>;
