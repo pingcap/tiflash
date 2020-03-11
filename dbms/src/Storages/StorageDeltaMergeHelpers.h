@@ -1,53 +1,58 @@
 #pragma once
 
-#include <algorithm>
-#include <vector>
-
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/RegionQueryInfo.h>
+#include <Storages/Transaction/TiKVHandle.h>
+
+#include <algorithm>
+#include <numeric>
+#include <vector>
 
 namespace DB
 {
 
 namespace
 {
-inline ::DB::HandleID getRangeEndID(const ::DB::TiKVHandle::Handle<HandleID> & end)
+inline DB::HandleID getRangeEndID(const DB::TiKVHandle::Handle<HandleID> & end)
 {
     switch (end.type)
     {
-        case ::DB::TiKVHandle::HandleIDType::NORMAL:
+        case DB::TiKVHandle::HandleIDType::NORMAL:
             return end.handle_id;
-        case ::DB::TiKVHandle::HandleIDType::MAX:
-            return ::DB::DM::HandleRange::MAX;
+        case DB::TiKVHandle::HandleIDType::MAX:
+            return DB::DM::HandleRange::MAX;
         default:
             throw Exception("Unknown TiKVHandle type: " + end.toString(), ErrorCodes::LOGICAL_ERROR);
     }
 }
 } // namespace
 
-inline DM::HandleRanges getQueryRanges(const ::DB::MvccQueryInfo::RegionsQueryInfo & regions)
+inline DM::HandleRange toDMHandleRange(const HandleRange<HandleID> & range)
+{
+    return DM::HandleRange{range.first.handle_id, getRangeEndID(range.second)};
+}
+
+inline DM::HandleRanges getQueryRanges(const DB::MvccQueryInfo::RegionsQueryInfo & regions)
 {
     DM::HandleRanges ranges;
     if (regions.empty())
     {
         // Just for test cases
-        ranges.emplace_back(::DB::DM::HandleRange::newAll());
+        ranges.emplace_back(DB::DM::HandleRange::newAll());
         return ranges;
     }
     else if (regions.size() == 1)
     {
         // Shortcut for only one region info
-        DM::HandleRange range;
         const auto & range_in_table = regions[0].range_in_table;
-        range.start = range_in_table.first.handle_id;
-        range.end = getRangeEndID(range_in_table.second);
-        ranges.emplace_back(range);
+        ranges.emplace_back(toDMHandleRange(range_in_table));
         return ranges;
     }
 
+    // Init index with [0, n)
+    // http: //www.cplusplus.com/reference/numeric/iota/
     std::vector<size_t> sort_index(regions.size());
-    for (size_t i = 0; i < sort_index.size(); ++i)
-        sort_index[i] = i;
+    std::iota(sort_index.begin(), sort_index.end(), 0);
 
     std::sort(sort_index.begin(), sort_index.end(), //
         [&regions](const size_t lhs, const size_t rhs) { return regions[lhs] < regions[rhs]; });

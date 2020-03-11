@@ -2,21 +2,12 @@
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <gtest/gtest.h>
+#include <test_utils/TiflashTestBasic.h>
 
 namespace DB
 {
 namespace tests
 {
-
-namespace
-{
-DataTypePtr typeFromString(const String & str)
-{
-    auto & data_type_factory = DataTypeFactory::instance();
-    return data_type_factory.get(str);
-}
-} // namespace
-
 
 TEST(TypeMapping_test, ColumnInfoToDataType)
 {
@@ -70,16 +61,7 @@ try
     column_info = reverseGetColumnInfo(NameAndTypePair{name, typeFromString("String")}, 1, default_field, true);
     ASSERT_EQ(column_info.tp, TiDB::TypeString);
 }
-catch (const Exception & e)
-{
-    std::string text = e.displayText();
-    auto embedded_stack_trace_pos = text.find("Stack trace");
-    std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
-    if (std::string::npos == embedded_stack_trace_pos)
-        std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString();
-
-    throw;
-}
+CATCH
 
 } // namespace tests
 } // namespace DB
