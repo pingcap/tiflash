@@ -25,12 +25,13 @@ class DAGQueryBlock
 {
 public:
     DAGQueryBlock(UInt32 id, const tipb::Executor * root);
-    DAGQueryBlock(UInt32 id, std::vector<const tipb::Executor *> & executors, int start_index, int end_index);
+    //DAGQueryBlock(UInt32 id, std::vector<const tipb::Executor *> & executors, int start_index, int end_index);
     const tipb::Executor * source = nullptr;
     const tipb::Executor * selection = nullptr;
     const tipb::Executor * aggregation = nullptr;
     const tipb::Executor * limitOrTopN = nullptr;
     UInt32 id;
+    const tipb::Executor * root;
     String qb_column_prefix;
     // todo use unique_ptr instead
     std::vector<std::shared_ptr<DAGQueryBlock>> children;
@@ -39,6 +40,10 @@ public:
     std::vector<Int32> output_offsets;
     void fillOutputFieldTypes();
     bool isRootQueryBlock() const { return id == 1; };
+    bool isRemoteQuery() const
+    {
+        return source->tp() == tipb::ExecType::TypeTableScan && source->tbl_scan().next_read_engine() != tipb::EngineType::Local;
+    }
 };
 
 } // namespace DB

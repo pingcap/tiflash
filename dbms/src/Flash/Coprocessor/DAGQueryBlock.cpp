@@ -60,8 +60,8 @@ void collectOutPutFieldTypesFromAgg(std::vector<tipb::FieldType> & field_type, c
     }
 }
 
-DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor * root)
-: id(id_), qb_column_prefix("___QB_" + std::to_string(id_) + "_")
+DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor * root_)
+    : id(id_), root(root_), qb_column_prefix("___QB_" + std::to_string(id_) + "_")
 {
     const tipb::Executor * current = root;
     while (!isSourceNode(current))
@@ -103,6 +103,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor * root)
     fillOutputFieldTypes();
 }
 
+/*
 DAGQueryBlock::DAGQueryBlock(UInt32 id_, std::vector<const tipb::Executor *> & executors, int start_index, int end_index)
 : id(id_), qb_column_prefix("___QB_" + std::to_string(id_) + "_")
 {
@@ -129,50 +130,49 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, std::vector<const tipb::Executor *> & e
             case tipb::ExecType::TypeLimit:
                 assignOrThrowException(&limitOrTopN, executors[i], LIMIT_NAME);
                 break;
-                /*
-            case tipb::ExecType::TypeJoin:
-                if (i <= start_index)
-                    throw Exception("Join executor without child executor", ErrorCodes::LOGICAL_ERROR);
-                if (executors[i - 1] == &(executors[i]->join().build_exec()))
-                {
-                    build_end_index = i - 1;
-                    build_start_index = build_end_index;
-                    while (build_start_index >= start_index && executors[build_start_index] != &(executors[i]->join().probe_exec()))
-                        build_start_index--;
-                    if (build_start_index < start_index)
-                        throw Exception("Join executor without child executor", ErrorCodes::LOGICAL_ERROR);
-                    probe_end_index = build_start_index;
-                    build_start_index++;
-                    probe_start_index = start_index;
-                }
-                else if (executors[i - 1] == &(executors[i]->join().probe_exec()))
-                {
-                    probe_end_index = i - 1;
-                    probe_start_index = probe_end_index;
-                    while (probe_start_index >= start_index && executors[probe_start_index] != &(executors[i]->join().build_exec()))
-                        probe_start_index--;
-                    if (probe_start_index < start_index)
-                        throw Exception("Join executor without child executor", ErrorCodes::LOGICAL_ERROR);
-                    build_end_index = probe_start_index;
-                    probe_start_index++;
-                    build_start_index = start_index;
-                }
-                else
-                {
-                    throw Exception("Join executor without child executor", ErrorCodes::LOGICAL_ERROR);
-                }
-                children.push_back(std::make_shared<DAGQueryBlock>(id * 2, executors, probe_start_index, probe_end_index));
-                children.push_back(std::make_shared<DAGQueryBlock>(id * 2 + 1, executors, build_start_index, build_end_index));
-                // to break the for loop
-                i = start_index - 1;
-                break;
-                 */
+//            case tipb::ExecType::TypeJoin:
+//                if (i <= start_index)
+//                    throw Exception("Join executor without child executor", ErrorCodes::LOGICAL_ERROR);
+//                if (executors[i - 1] == &(executors[i]->join().build_exec()))
+//                {
+//                    build_end_index = i - 1;
+//                    build_start_index = build_end_index;
+//                    while (build_start_index >= start_index && executors[build_start_index] != &(executors[i]->join().probe_exec()))
+//                        build_start_index--;
+//                    if (build_start_index < start_index)
+//                        throw Exception("Join executor without child executor", ErrorCodes::LOGICAL_ERROR);
+//                    probe_end_index = build_start_index;
+//                    build_start_index++;
+//                    probe_start_index = start_index;
+//                }
+//                else if (executors[i - 1] == &(executors[i]->join().probe_exec()))
+//                {
+//                    probe_end_index = i - 1;
+//                    probe_start_index = probe_end_index;
+//                    while (probe_start_index >= start_index && executors[probe_start_index] != &(executors[i]->join().build_exec()))
+//                        probe_start_index--;
+//                    if (probe_start_index < start_index)
+//                        throw Exception("Join executor without child executor", ErrorCodes::LOGICAL_ERROR);
+//                    build_end_index = probe_start_index;
+//                    probe_start_index++;
+//                    build_start_index = start_index;
+//                }
+//                else
+//                {
+//                    throw Exception("Join executor without child executor", ErrorCodes::LOGICAL_ERROR);
+//                }
+//                children.push_back(std::make_shared<DAGQueryBlock>(id * 2, executors, probe_start_index, probe_end_index));
+//                children.push_back(std::make_shared<DAGQueryBlock>(id * 2 + 1, executors, build_start_index, build_end_index));
+//                // to break the for loop
+//                i = start_index - 1;
+//                break;
             default:
                 throw Exception("Unsupported executor in DAG request: " + executors[i]->DebugString(), ErrorCodes::NOT_IMPLEMENTED);
         }
     }
     fillOutputFieldTypes();
 }
+*/
 
 void DAGQueryBlock::fillOutputFieldTypes()
 {

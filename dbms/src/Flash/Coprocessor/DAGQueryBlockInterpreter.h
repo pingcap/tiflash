@@ -12,11 +12,11 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/IInterpreter.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/TMTStorages.h>
-#include <Interpreters/ExpressionAnalyzer.h>
 
 namespace DB
 {
@@ -86,6 +86,7 @@ public:
     BlockInputStreams execute();
 
 private:
+    void executeRemoteQuery(Pipeline & pipeline);
     void executeImpl(Pipeline & pipeline);
     void executeTS(const tipb::TableScan & ts, Pipeline & pipeline);
     void executeJoin(const tipb::Join & join, Pipeline & pipeline, SubqueryForSet & right_query);

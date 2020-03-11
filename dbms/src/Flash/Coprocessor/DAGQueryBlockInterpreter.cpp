@@ -1,6 +1,7 @@
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/ConcatBlockInputStream.h>
+#include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/LimitBlockInputStream.h>
@@ -16,8 +17,10 @@
 #include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Interpreters/Aggregator.h>
+#include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/StorageMergeTree.h>
@@ -30,9 +33,6 @@
 #include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <Storages/Transaction/Types.h>
-#include <Parsers/ASTTablesInSelectQuery.h>
-#include <Interpreters/ExpressionAnalyzer.h>
-#include <DataStreams/CreatingSetsBlockInputStream.h>
 
 namespace DB
 {
@@ -394,7 +394,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         {
             for (auto i : query_block.output_offsets)
             {
-                if ((size_t) i >= required_columns.size() - extra_col_size)
+                if ((size_t)i >= required_columns.size() - extra_col_size)
                 {
                     // array index out of bound
                     throw Exception("Output offset index is out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
@@ -405,7 +405,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         }
         else
         {
-            for(size_t i = 0; i < required_columns.size() - extra_col_size; i++)
+            for (size_t i = 0; i < required_columns.size() - extra_col_size; i++)
                 /// for child query block, add alias start with qb_column_prefix to avoid column name conflict
                 final_project.emplace_back(required_columns[i], query_block.qb_column_prefix + required_columns[i]);
         }
@@ -448,20 +448,23 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     info.range_in_table = current_region->getHandleRangeByTable(table_id);
     query_info.mvcc_query_info->regions_query_info.push_back(info);
     query_info.mvcc_query_info->concurrent = 0.0;
-    if (ts.next_read_engine() == tipb::EngineType::Local) {
-        pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size,
-                                         max_streams);
-    } else {
-        std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
-        for (auto & range : ts.ranges())
-        {
-            std::string start_key(range.low());
-            DecodedTiKVKey start(std::move(start_key));
-            std::string end_key(range.high());
-            DecodedTiKVKey end(std::move(end_key));
-            key_ranges.emplace_back(std::make_pair(std::move(start), std::move(end)));
-        }
-        pipeline.streams = storage->remote_read(key_ranges, query_info, ts, context);
+    if (ts.next_read_engine() == tipb::EngineType::Local)
+    {
+        pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
+    }
+    else
+    {
+        throw Exception("Should not reach here", ErrorCodes::LOGICAL_ERROR);
+        //std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
+        //for (auto & range : ts.ranges())
+        //{
+        //    std::string start_key(range.low());
+        //    DecodedTiKVKey start(std::move(start_key));
+        //    std::string end_key(range.high());
+        //    DecodedTiKVKey end(std::move(end_key));
+        //    key_ranges.emplace_back(std::make_pair(std::move(start), std::move(end)));
+        //}
+        //pipeline.streams = storage->remote_read(key_ranges, query_info, ts, context);
     }
 
     if (pipeline.streams.empty())
@@ -506,7 +509,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
 void DAGQueryBlockInterpreter::prepareJoinKeys(const tipb::Join & join, Pipeline & pipeline, Names & key_names, bool tiflash_left)
 {
     std::vector<NameAndTypePair> source_columns;
-    for( auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
+    for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
         source_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(std::move(source_columns), context);
     ExpressionActionsChain chain;
@@ -519,10 +522,8 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
 {
     // build
     static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> join_type_map{
-        {tipb::JoinType::TypeInnerJoin, ASTTableJoin::Kind::Inner},
-        {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::Left},
-        {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Right}
-    };
+        {tipb::JoinType::TypeInnerJoin, ASTTableJoin::Kind::Inner}, {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::Left},
+        {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Right}};
     if (input_streams_vec.size() != 2)
     {
         throw Exception("Join query block must have 2 input streams", ErrorCodes::LOGICAL_ERROR);
@@ -559,13 +560,13 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
         right_streams = input_streams_vec[1];
     }
     std::vector<NameAndTypePair> join_output_columns;
-    for( auto const & p : left_streams[0]->getHeader().getNamesAndTypesList())
+    for (auto const & p : left_streams[0]->getHeader().getNamesAndTypesList())
     {
         join_output_columns.emplace_back(p.name, p.type);
     }
     /// all the columns from right table should be added after join, even for the join key
     NamesAndTypesList columns_added_by_join;
-    for( auto const & p : right_streams[0]->getHeader().getNamesAndTypesList())
+    for (auto const & p : right_streams[0]->getHeader().getNamesAndTypesList())
     {
         columns_added_by_join.emplace_back(p.name, p.type);
         join_output_columns.emplace_back(p.name, p.type);
@@ -573,9 +574,9 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
 
     if (!query_block.aggregation)
     {
-        for(auto const & p : input_streams_vec[0][0]->getHeader().getNamesAndTypesList())
+        for (auto const & p : input_streams_vec[0][0]->getHeader().getNamesAndTypesList())
             final_project.emplace_back(p.name, query_block.qb_column_prefix + p.name);
-        for(auto const & p : input_streams_vec[1][0]->getHeader().getNamesAndTypesList())
+        for (auto const & p : input_streams_vec[1][0]->getHeader().getNamesAndTypesList())
             final_project.emplace_back(p.name, query_block.qb_column_prefix + p.name);
     }
 
@@ -592,8 +593,8 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
 
     const Settings & settings = context.getSettingsRef();
     JoinPtr joinPtr = std::make_shared<Join>(left_key_names, right_key_names, true,
-            SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode),
-            kind, ASTTableJoin::Strictness::All);
+        SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode), kind,
+        ASTTableJoin::Strictness::All);
     executeUnion(right_pipeline);
     // todo clickhouse use LazyBlockInputStream to initialize the source, need to double check why and
     //  if we need to use LazyBlockInputStream here
@@ -602,7 +603,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     right_query.join->setSampleBlock(right_query.source->getHeader());
 
     std::vector<NameAndTypePair> source_columns;
-    for(const auto & p : left_streams[0]->getHeader().getNamesAndTypesList())
+    for (const auto & p : left_streams[0]->getHeader().getNamesAndTypesList())
         source_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(std::move(source_columns), context);
     ExpressionActionsChain chain;
@@ -629,8 +630,8 @@ bool DAGQueryBlockInterpreter::addTimeZoneCastAfterTS(std::vector<bool> & is_ts_
     /// 1. the query block is the root query block
     /// 2. keep_session_timezone_info is false
     /// 3. current query block does not have aggregation
-    if (analyzer->appendTimeZoneCastsAfterTS(chain, is_ts_column, rqst,
-            query_block.isRootQueryBlock() && !keep_session_timezone_info && query_block.aggregation == nullptr))
+    if (analyzer->appendTimeZoneCastsAfterTS(
+            chain, is_ts_column, rqst, query_block.isRootQueryBlock() && !keep_session_timezone_info && query_block.aggregation == nullptr))
     {
         pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions()); });
         return true;
@@ -926,13 +927,49 @@ void DAGQueryBlockInterpreter::executeSubqueryInJoin(Pipeline & pipeline, Subque
     executeUnion(pipeline);
     SubqueriesForSets subquries;
     subquries[query_block.qb_column_prefix + "join"] = subquery;
-    pipeline.firstStream() = std::make_shared<CreatingSetsBlockInputStream>(
-            pipeline.firstStream(), subquries,
-            SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode));
+    pipeline.firstStream() = std::make_shared<CreatingSetsBlockInputStream>(pipeline.firstStream(), subquries,
+        SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode));
+}
+
+void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
+{
+    const auto & ts = query_block.source->tbl_scan();
+    TableID table_id = ts.table_id();
+
+    const Settings & settings = context.getSettingsRef();
+
+    if (settings.schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION)
+    {
+        storage = context.getTMTContext().getStorages().get(table_id);
+        if (storage == nullptr)
+        {
+            throw Exception("Table " + std::to_string(table_id) + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
+        }
+        table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+    }
+    else
+    {
+        getAndLockStorageWithSchemaVersion(table_id, settings.schema_version);
+    }
+    std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
+    for (auto & range : ts.ranges())
+    {
+        std::string start_key(range.low());
+        DecodedTiKVKey start(std::move(start_key));
+        std::string end_key(range.high());
+        DecodedTiKVKey end(std::move(end_key));
+        key_ranges.emplace_back(std::make_pair(std::move(start), std::move(end)));
+    }
+    pipeline.streams = storage->remote_read(key_ranges, context.getSettingsRef().read_tso, query_block, context);
 }
 
 void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
 {
+    if (query_block.isRemoteQuery())
+    {
+        executeRemoteQuery(pipeline);
+        return;
+    }
     SubqueryForSet right_query;
     if (query_block.source->tp() == tipb::ExecType::TypeJoin)
     {
@@ -942,49 +979,49 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     {
         executeTS(query_block.source->tbl_scan(), pipeline);
     }
-        // todo enable profile stream info
-        //recordProfileStreams(pipeline, dag.getTSIndex());
+    // todo enable profile stream info
+    //recordProfileStreams(pipeline, dag.getTSIndex());
 
-        auto res = analyzeExpressions();
-        // execute selection
-        if (res.has_where)
-        {
-            executeWhere(pipeline, res.before_where, res.filter_column_name);
-            //if (dag.hasSelection())
-            //recordProfileStreams(pipeline, dag.getSelectionIndex());
-        }
-        if (res.need_aggregate)
-        {
-            // execute aggregation
-            executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregate_descriptions);
-            //recordProfileStreams(pipeline, dag.getAggregationIndex());
-        }
-        if (res.before_order_and_select)
-        {
-            executeExpression(pipeline, res.before_order_and_select);
-        }
+    auto res = analyzeExpressions();
+    // execute selection
+    if (res.has_where)
+    {
+        executeWhere(pipeline, res.before_where, res.filter_column_name);
+        //if (dag.hasSelection())
+        //recordProfileStreams(pipeline, dag.getSelectionIndex());
+    }
+    if (res.need_aggregate)
+    {
+        // execute aggregation
+        executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregate_descriptions);
+        //recordProfileStreams(pipeline, dag.getAggregationIndex());
+    }
+    if (res.before_order_and_select)
+    {
+        executeExpression(pipeline, res.before_order_and_select);
+    }
 
-        if (res.has_order_by)
-        {
-            // execute topN
-            executeOrder(pipeline, res.order_column_names);
-            //recordProfileStreams(pipeline, dag.getTopNIndex());
-        }
+    if (res.has_order_by)
+    {
+        // execute topN
+        executeOrder(pipeline, res.order_column_names);
+        //recordProfileStreams(pipeline, dag.getTopNIndex());
+    }
 
-        // execute projection
-        executeFinalProject(pipeline);
+    // execute projection
+    executeFinalProject(pipeline);
 
-        // execute limit
-        if (query_block.limitOrTopN != nullptr && query_block.limitOrTopN->tp() == tipb::TypeLimit)
-        {
-            executeLimit(pipeline);
-            //recordProfileStreams(pipeline, dag.getLimitIndex());
-        }
-        if (query_block.source->tp() == tipb::ExecType::TypeJoin)
-        {
-            // add the
-            executeSubqueryInJoin(pipeline, right_query);
-        }
+    // execute limit
+    if (query_block.limitOrTopN != nullptr && query_block.limitOrTopN->tp() == tipb::TypeLimit)
+    {
+        executeLimit(pipeline);
+        //recordProfileStreams(pipeline, dag.getLimitIndex());
+    }
+    if (query_block.source->tp() == tipb::ExecType::TypeJoin)
+    {
+        // add the
+        executeSubqueryInJoin(pipeline, right_query);
+    }
 }
 
 void DAGQueryBlockInterpreter::executeFinalProject(Pipeline & pipeline)
