@@ -462,8 +462,9 @@ struct SubstringUTF8Impl
 {
     static void vector(const ColumnString::Chars_t & data,
         const ColumnString::Offsets & offsets,
-        size_t start,
+        Int64 original_start,
         size_t length,
+        bool implicit_length,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
@@ -479,6 +480,30 @@ struct SubstringUTF8Impl
             ColumnString::Offset pos = 1;
             ColumnString::Offset bytes_start = 0;
             ColumnString::Offset bytes_length = 0;
+            size_t start = 0;
+            if(original_start >= 0)
+                start = original_start;
+            else
+            {
+                // set the start as string_length - abs(original_start) + 1
+                std::vector<ColumnString::Offset> start_offsets;
+                ColumnString::Offset current = prev_offset;
+                while (current < offsets[i] -1)
+                {
+                    start_offsets.push_back(current);
+                    if (data[current] < 0xBF)
+                        current += 1;
+                    else if (data[current] < 0xE0)
+                        current += 2;
+                    else if (data[current] < 0xF0)
+                        current += 3;
+                    else
+                        current += 1;
+                }
+                start = start_offsets.size() + original_start + 1;
+                pos = start;
+                j = start_offsets[start-1];
+            }
             while (j < offsets[i] - 1)
             {
                 if (pos == start)
@@ -493,10 +518,18 @@ struct SubstringUTF8Impl
                 else
                     j += 1;
 
-                if (pos >= start && pos < start + length)
+                if (implicit_length)
+                {
+                    // implicit_length means get the substring from start to the end of the string
                     bytes_length = j - prev_offset + 1 - bytes_start;
-                else if (pos >= start + length)
-                    break;
+                }
+                else
+                {
+                    if (pos >= start && pos < start + length)
+                        bytes_length = j - prev_offset + 1 - bytes_start;
+                    else if (pos >= start + length)
+                        break;
+                }
 
                 ++pos;
             }
@@ -934,21 +967,32 @@ public:
         return name;
     }
 
+    bool isVariadic() const override
+    {
+        return true;
+    }
+
     size_t getNumberOfArguments() const override
     {
-        return 3;
+        return 0;
     }
 
     bool useDefaultImplementationForConstants() const override { return true; }
-    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1, 2}; }
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1}; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
+        size_t arguments_size = arguments.size();
+        if(arguments_size != 2 && arguments_size != 3)
+            throw Exception("Function " + getName()
+                            + " requires from 2 or 3 parameters: string, start, [length]. Passed "
+                            + toString(arguments.size()) + ".",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
         if (!arguments[0]->isString())
             throw Exception(
                 "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if (!arguments[1]->isNumber() || !arguments[2]->isNumber())
+        if (!arguments[1]->isNumber() || (arguments_size == 3 && !arguments[2]->isNumber()))
             throw Exception("Illegal type " + (arguments[1]->isNumber() ? arguments[2]->getName() : arguments[1]->getName())
                     + " of argument of function "
                     + getName(),
@@ -960,32 +1004,61 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
     {
         const ColumnPtr column_string = block.getByPosition(arguments[0]).column;
+
         const ColumnPtr column_start = block.getByPosition(arguments[1]).column;
-        const ColumnPtr column_length = block.getByPosition(arguments[2]).column;
-
-        if (!column_start->isColumnConst() || !column_length->isColumnConst())
-            throw Exception("2nd and 3rd arguments of function " + getName() + " must be constants.");
-
+        if (!column_start->isColumnConst())
+            throw Exception("2nd arguments of function " + getName() + " must be constants.");
         Field start_field = (*block.getByPosition(arguments[1]).column)[0];
-        Field length_field = (*block.getByPosition(arguments[2]).column)[0];
+        if (start_field.getType() != Field::Types::UInt64 && start_field.getType() != Field::Types::Int64)
+            throw Exception("2nd argument of function " + getName() + " must have UInt/Int type.");
+        Int64 start;
+        if(start_field.getType() == Field::Types::Int64) {
+            start = start_field.get<Int64>();
+        } else {
+            UInt64 u_start = start_field.get<UInt64>();
+            if (u_start >= 0x8000000000000000ULL)
+                throw Exception("Too large values of 2nd argument provided for function substring.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+            start = (Int64)u_start;
+        }
 
-        if (start_field.getType() != Field::Types::UInt64 || length_field.getType() != Field::Types::UInt64)
-            throw Exception("2nd and 3rd arguments of function " + getName() + " must be non-negative and must have UInt type.");
+        bool implicit_length = true;
+        UInt64 length = 0;
+        if(arguments.size() == 3) {
+            implicit_length = false;
+            const ColumnPtr column_length = block.getByPosition(arguments[2]).column;
+            if (!column_length->isColumnConst())
+                throw Exception("3rd arguments of function " + getName() + " must be constants.");
+            Field length_field = (*block.getByPosition(arguments[2]).column)[0];
+            // tidb will push the 3rd argument as signed int, so have to handle Int64 case
+            if (length_field.getType() != Field::Types::UInt64 && length_field.getType() != Field::Types::Int64)
+                throw Exception(
+                        "3rd argument of function " + getName() + " must have UInt/Int type.");
+            if (length_field.getType() == Field::Types::UInt64)
+            {
+                length = length_field.get<UInt64>();
+                /// Otherwise may lead to overflow and pass bounds check inside inner loop.
+                if (length >= 0x8000000000000000ULL)
+                    throw Exception("Too large values of 3rd argument provided for function substring.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+            } else {
+                Int64 signed_length = length_field.get<Int64>();
+                // according to mysql doc: "If len is less than 1, the result is the empty string."
+                if(signed_length < 0)
+                    length = 0;
+                else
+                    length = signed_length;
+            }
+        }
 
-        UInt64 start = start_field.get<UInt64>();
-        UInt64 length = length_field.get<UInt64>();
 
-        if (start == 0)
-            throw Exception("Second argument of function substring must be greater than 0.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
-
-        /// Otherwise may lead to overflow and pass bounds check inside inner loop.
-        if (start >= 0x8000000000000000ULL || length >= 0x8000000000000000ULL)
-            throw Exception("Too large values of 2nd or 3rd argument provided for function substring.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+        if (start == 0 || length == 0) {
+            block.getByPosition(result).column = DataTypeString().createColumnConst(column_string->size(), toField(String("")));
+            return;
+        }
 
         if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_string.get()))
         {
             auto col_res = ColumnString::create();
-            SubstringUTF8Impl::vector(col->getChars(), col->getOffsets(), start, length, col_res->getChars(), col_res->getOffsets());
+            SubstringUTF8Impl::vector(col->getChars(), col->getOffsets(), start, length, implicit_length, col_res->getChars(), col_res->getOffsets());
             block.getByPosition(result).column = std::move(col_res);
         }
         else
