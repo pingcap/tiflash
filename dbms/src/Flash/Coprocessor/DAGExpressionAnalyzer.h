@@ -44,7 +44,8 @@ public:
         AggregateDescriptions & aggregate_descriptions);
     void appendAggSelect(
         ExpressionActionsChain & chain, const tipb::Aggregation & agg, const tipb::DAGRequest & rqst, bool keep_session_timezone_info);
-    String appendCastIfNeeded(const tipb::Expr & expr, ExpressionActionsPtr & actions, const String & expr_name);
+    String appendCastIfNeeded(const tipb::Expr & expr, ExpressionActionsPtr & actions, const String & expr_name, bool explicit_cast);
+    String alignReturnType(const tipb::Expr & expr, ExpressionActionsPtr & actions, const String & expr_name, bool force_uint8);
     void initChain(ExpressionActionsChain & chain, const std::vector<NameAndTypePair> & columns) const
     {
         if (chain.steps.empty())
@@ -59,8 +60,7 @@ public:
         }
     }
     void appendFinalProject(ExpressionActionsChain & chain, const NamesWithAliases & final_project);
-    String getActions(const tipb::Expr & expr, ExpressionActionsPtr & actions);
-    String getActionsForInOperator(const tipb::Expr & expr, ExpressionActionsPtr & actions);
+    String getActions(const tipb::Expr & expr, ExpressionActionsPtr & actions, bool output_as_uint8_type = false);
     const std::vector<NameAndTypePair> & getCurrentInputColumns();
     void makeExplicitSet(const tipb::Expr & expr, const Block & sample_block, bool create_ordered_set, const String & left_arg_name);
     void makeExplicitSetForIndex(const tipb::Expr & expr, const ManageableStoragePtr & storage);
@@ -68,8 +68,8 @@ public:
     Int32 getImplicitCastCount() { return implicit_cast_count; };
     bool appendTimeZoneCastsAfterTS(ExpressionActionsChain & chain, std::vector<bool> is_ts_column, const tipb::DAGRequest & rqst);
     String appendTimeZoneCast(const String & tz_col, const String & ts_col, const String & func_name, ExpressionActionsPtr & actions);
-    DAGPreparedSets getPreparedSets() { return prepared_sets; }
-    String convertToUInt8ForFilter(ExpressionActionsChain & chain, const String & column_name);
+    DAGPreparedSets & getPreparedSets() { return prepared_sets; }
+    String convertToUInt8(ExpressionActionsPtr & actions, const String & column_name);
 };
 
 } // namespace DB

@@ -25,6 +25,9 @@
 #include <Poco/String.h>
 
 #include <type_traits>
+#include <DataTypes/DataTypeMyDate.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <Columns/ColumnNullable.h>
 
 
 namespace DB
@@ -33,6 +36,85 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+}
+
+static const Int64 SECOND_IN_ONE_DAY = 86400;
+static const Int64 E6 = 1000000;
+
+//calculates days since 0000-00-00(may 0000-01-01??)
+inline int calcDayNum(int year, int month, int day)
+{
+    if(year == 0 || month == 0)
+            return 0;
+    int delsum = 365*year + 31*(month-1) + day;
+    if (month <= 2)
+    {
+        year--;
+    }
+    else
+    {
+        delsum -= (month*4 + 23) / 10;
+    }
+    int temp = ((year/100 + 1) * 3) / 4;
+    return delsum + year/4 - temp;
+}
+
+// day number per 400 years, from the year that year % 400 = 1
+static const int DAY_NUM_PER_400_YEARS = 365 * 400 + 97;
+// day number per 100 years in every 400 years, from the year that year % 100 = 1
+// note the day number of the last 100 years should be DAY_NUM_PER_100_YEARS + 1
+static const int DAY_NUM_PER_100_YEARS = 365 * 100 + 24;
+// day number per 4 years in every 100 years, from the year that year % 4 = 1
+// note the day number of the last 4 years should be DAY_NUM_PER_4_YEARS - 1
+static const int DAY_NUM_PER_4_YEARS = 365 * 4 + 1;
+// day number per years in every 4 years
+// note the day number of the last 1 years maybe DAY_NUM_PER_YEARS + 1
+static const int DAY_NUM_PER_YEARS = 365;
+
+inline void fillMonthAndDay(int day_num, int & month, int & day, const int * accumulated_days_per_month)
+{
+    month = day_num / 31;
+    if (accumulated_days_per_month[month] < day_num)
+        month++;
+    day = day_num - (month == 0 ? 0 : accumulated_days_per_month[month-1] + 1);
+}
+
+inline void fromDayNum(MyDateTime & t, int day_num)
+{
+    // day_num is the days from 0000-01-01
+    if (day_num < 0)
+        throw Exception("MyDate/MyDateTime only support date after 0000-01-01");
+    int year = 0, month = 0, day = 0;
+    if (likely(day_num >= 366))
+    {
+        // year 0000 is leap year
+        day_num -= 366;
+
+        int num_of_400_years = day_num / DAY_NUM_PER_400_YEARS;
+        day_num = day_num % DAY_NUM_PER_400_YEARS;
+
+        int num_of_100_years = day_num / DAY_NUM_PER_100_YEARS;
+        // the day number of the last 100 years should be DAY_NUM_PER_100_YEARS + 1
+        // so can not use day_num % DAY_NUM_PER_100_YEARS
+        day_num = day_num - (num_of_100_years * DAY_NUM_PER_100_YEARS);
+
+        int num_of_4_years = day_num / DAY_NUM_PER_4_YEARS;
+        // can not use day_num % DAY_NUM_PER_4_YEARS
+        day_num = day_num - (num_of_4_years * DAY_NUM_PER_4_YEARS);
+
+        int num_of_years = day_num / DAY_NUM_PER_YEARS;
+        // can not use day_num % DAY_NUM_PER_YEARS
+        day_num = day_num - (num_of_years * DAY_NUM_PER_YEARS);
+
+        year = 1 + num_of_400_years * 400 + num_of_100_years * 100 + num_of_4_years * 4 + num_of_years;
+    }
+    static const int ACCUMULATED_DAYS_PER_MONTH[] = {30,58,89,119,150,180,211,242,272,303,333,364};
+    static const int ACCUMULATED_DAYS_PER_MONTH_LEAP_YEAR[] = {30,59,90,120,151,181,212,243,273,304,334,365};
+    bool is_leap_year = year % 400 == 0 || (year % 4 == 0 && year % 100 != 0);
+    fillMonthAndDay(day_num, month, day, is_leap_year ? ACCUMULATED_DAYS_PER_MONTH_LEAP_YEAR : ACCUMULATED_DAYS_PER_MONTH);
+    t.year = year;
+    t.month = month + 1;
+    t.day = day + 1;
 }
 
 /** Functions for working with date and time.
@@ -90,6 +172,7 @@ struct ZeroTransform
 {
     static inline UInt16 execute(UInt32, const DateLUTImpl &) { return 0; }
     static inline UInt16 execute(UInt16, const DateLUTImpl &) { return 0; }
+    static inline UInt16 execute(UInt64, const DateLUTImpl &) { return 0; }
 };
 
 struct ToDateImpl
@@ -103,6 +186,9 @@ struct ToDateImpl
     static inline UInt16 execute(UInt16 d, const DateLUTImpl &)
     {
         return d;
+    }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toStartOfDay", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     using FactorTransform = ZeroTransform;
@@ -120,6 +206,9 @@ struct ToStartOfDayImpl
     {
         throw Exception("Illegal type Date of argument for function toStartOfDay", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toStartOfDay", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
 
     using FactorTransform = ZeroTransform;
 };
@@ -135,6 +224,9 @@ struct ToMondayImpl
     static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toFirstDayNumOfWeek(DayNum_t(d));
+    }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toMonday", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     using FactorTransform = ZeroTransform;
@@ -152,6 +244,9 @@ struct ToStartOfMonthImpl
     {
         return time_zone.toFirstDayNumOfMonth(DayNum_t(d));
     }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toStartOfMonday", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
 
     using FactorTransform = ZeroTransform;
 };
@@ -168,6 +263,9 @@ struct ToStartOfQuarterImpl
     {
         return time_zone.toFirstDayNumOfQuarter(DayNum_t(d));
     }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toStartOfQuarter", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
 
     using FactorTransform = ZeroTransform;
 };
@@ -183,6 +281,9 @@ struct ToStartOfYearImpl
     static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toFirstDayNumOfYear(DayNum_t(d));
+    }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toStartOfYear", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     using FactorTransform = ZeroTransform;
@@ -203,6 +304,9 @@ struct ToTimeImpl
     {
         throw Exception("Illegal type Date of argument for function toTime", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toTime", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
 
     using FactorTransform = ToDateImpl;
 };
@@ -218,6 +322,9 @@ struct ToStartOfMinuteImpl
     static inline UInt32 execute(UInt16, const DateLUTImpl &)
     {
         throw Exception("Illegal type Date of argument for function toStartOfMinute", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toStartOfMinute", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     using FactorTransform = ZeroTransform;
@@ -235,6 +342,9 @@ struct ToStartOfFiveMinuteImpl
     {
         throw Exception("Illegal type Date of argument for function toStartOfFiveMinute", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toStartOfFiveMinute", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
 
     using FactorTransform = ZeroTransform;
 };
@@ -250,6 +360,9 @@ struct ToStartOfFifteenMinutesImpl
     static inline UInt32 execute(UInt16, const DateLUTImpl &)
     {
         throw Exception("Illegal type Date of argument for function toStartOfFifteenMinutes", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toStartOfFifteenMinutes", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     using FactorTransform = ZeroTransform;
@@ -268,6 +381,9 @@ struct ToStartOfHourImpl
     {
         throw Exception("Illegal type Date of argument for function toStartOfHour", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toStartOfHour", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
 
     using FactorTransform = ZeroTransform;
 };
@@ -283,6 +399,9 @@ struct ToYearImpl
     static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toYear(DayNum_t(d));
+    }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toYear", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     using FactorTransform = ZeroTransform;
@@ -300,6 +419,9 @@ struct ToQuarterImpl
     {
         return time_zone.toQuarter(DayNum_t(d));
     }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toQuarter", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
 
     using FactorTransform = ToStartOfYearImpl;
 };
@@ -315,6 +437,10 @@ struct ToMonthImpl
     static inline UInt8 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toMonth(DayNum_t(d));
+    }
+    // tidb date related type, ignore time_zone info
+    static inline UInt8 execute(UInt64 t, const DateLUTImpl & ) {
+        return (UInt8)((t >> 46u)%13);
     }
 
     using FactorTransform = ToStartOfYearImpl;
@@ -332,6 +458,9 @@ struct ToDayOfMonthImpl
     {
         return time_zone.toDayOfMonth(DayNum_t(d));
     }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toDayOfMonth", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
 
     using FactorTransform = ToStartOfMonthImpl;
 };
@@ -347,6 +476,9 @@ struct ToDayOfWeekImpl
     static inline UInt8 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toDayOfWeek(DayNum_t(d));
+    }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toDayOfWeek", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     using FactorTransform = ToMondayImpl;
@@ -365,6 +497,9 @@ struct ToHourImpl
     {
         throw Exception("Illegal type Date of argument for function toHour", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toHour", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
 
     using FactorTransform = ToDateImpl;
 };
@@ -380,6 +515,9 @@ struct ToMinuteImpl
     static inline UInt8 execute(UInt16, const DateLUTImpl &)
     {
         throw Exception("Illegal type Date of argument for function toMinute", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toMinute", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     using FactorTransform = ToStartOfHourImpl;
@@ -397,6 +535,9 @@ struct ToSecondImpl
     {
         throw Exception("Illegal type Date of argument for function toSecond", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toSecond", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
 
     using FactorTransform = ToStartOfMinuteImpl;
 };
@@ -412,6 +553,9 @@ struct ToRelativeYearNumImpl
     static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toYear(DayNum_t(d));
+    }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toRelativeYearNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     using FactorTransform = ZeroTransform;
@@ -429,6 +573,9 @@ struct ToRelativeQuarterNumImpl
     {
         return time_zone.toRelativeQuarterNum(DayNum_t(d));
     }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toRelativeQuarterNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
 
     using FactorTransform = ZeroTransform;
 };
@@ -444,6 +591,9 @@ struct ToRelativeMonthNumImpl
     static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toRelativeMonthNum(DayNum_t(d));
+    }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toRelativeMonthNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     using FactorTransform = ZeroTransform;
@@ -461,6 +611,9 @@ struct ToRelativeWeekNumImpl
     {
         return time_zone.toRelativeWeekNum(DayNum_t(d));
     }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toRelativeWeekNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
 
     using FactorTransform = ZeroTransform;
 };
@@ -476,6 +629,9 @@ struct ToRelativeDayNumImpl
     static inline UInt16 execute(UInt16 d, const DateLUTImpl &)
     {
         return static_cast<DayNum_t>(d);
+    }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toRelativeDayNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     using FactorTransform = ZeroTransform;
@@ -494,6 +650,9 @@ struct ToRelativeHourNumImpl
     {
         return time_zone.toRelativeHourNum(DayNum_t(d));
     }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toRelativeHourNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
 
     using FactorTransform = ZeroTransform;
 };
@@ -509,6 +668,9 @@ struct ToRelativeMinuteNumImpl
     static inline UInt32 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toRelativeMinuteNum(DayNum_t(d));
+    }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toRelativeMinuteNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     using FactorTransform = ZeroTransform;
@@ -526,6 +688,9 @@ struct ToRelativeSecondNumImpl
     {
         return time_zone.fromDayNum(DayNum_t(d));
     }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toRelativeSecondNum", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
 
     using FactorTransform = ZeroTransform;
 };
@@ -541,6 +706,9 @@ struct ToYYYYMMImpl
     static inline UInt32 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toNumYYYYMM(static_cast<DayNum_t>(d));
+    }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toYYYYMM", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     using FactorTransform = ZeroTransform;
@@ -558,6 +726,9 @@ struct ToYYYYMMDDImpl
     {
         return time_zone.toNumYYYYMMDD(static_cast<DayNum_t>(d));
     }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toYYYYMMDD", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
 
     using FactorTransform = ZeroTransform;
 };
@@ -573,6 +744,9 @@ struct ToYYYYMMDDhhmmssImpl
     static inline UInt64 execute(UInt16 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toNumYYYYMMDDhhmmss(time_zone.toDate(static_cast<DayNum_t>(d)));
+    }
+    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
+        throw Exception("Illegal type MyTime of argument for function toYYYYMMDDhhmmss", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
     using FactorTransform = ZeroTransform;
@@ -676,6 +850,8 @@ public:
             DateTimeTransformImpl<DataTypeDate::FieldType, typename ToDataType::FieldType, Transform>::execute(block, arguments, result);
         else if (checkDataType<DataTypeDateTime>(from_type))
             DateTimeTransformImpl<DataTypeDateTime::FieldType, typename ToDataType::FieldType, Transform>::execute(block, arguments, result);
+        else if (checkDataType<DataTypeMyDateTime>(from_type) || checkDataType<DataTypeMyDate>(from_type))
+            DateTimeTransformImpl<DataTypeMyTimeBase::FieldType, typename ToDataType::FieldType, Transform>::execute(block, arguments, result);
         else
             throw Exception("Illegal type " + block.getByPosition(arguments[0]).type->getName() + " of argument of function " + getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -721,6 +897,42 @@ public:
     }
 };
 
+static inline void addDays(MyDateTime & t, Int64 days)
+{
+    Int32 current_days = calcDayNum(t.year, t.month, t.day);
+    current_days += days;
+    fromDayNum(t, current_days);
+}
+
+static inline void addMonths(MyDateTime & t, Int64 months)
+{
+    // month in my_time start from 1
+    Int64 current_month = t.month -1;
+    current_month += months;
+    if (current_month >= 0)
+    {
+        Int64 year = current_month / 12;
+        current_month = current_month % 12;
+        t.year += year;
+    }
+    else
+    {
+        Int64 year = (-current_month) / 12;
+        if((-current_month) % 12 != 0)
+            year++;
+        current_month += year * 12;
+        t.year -= year;
+    }
+    static const int day_num_in_month[] = {31,28,31,30,31,30,31,31,30,31,30,31};
+    static const int day_num_in_month_leap_year[] = {31,29,31,30,31,30,31,31,30,31,30,31};
+    int max_day = 0;
+    if (t.year % 400 == 0 || (t.year % 100 != 0 && t.year % 4 == 0))
+        max_day = day_num_in_month_leap_year[current_month];
+    else
+        max_day = day_num_in_month[current_month];
+    t.month = current_month + 1;
+    t.day = t.day > max_day ? max_day : t.day;
+}
 
 struct AddSecondsImpl
 {
@@ -734,6 +946,39 @@ struct AddSecondsImpl
     static inline UInt32 execute(UInt16 d, Int64 delta, const DateLUTImpl & time_zone)
     {
         return time_zone.fromDayNum(DayNum_t(d)) + delta;
+    }
+
+    static inline UInt64 execute(UInt64 t, Int64 delta, const DateLUTImpl &)
+    {
+        // todo support zero date
+        if (t == 0)
+        {
+            return t;
+        }
+        MyDateTime my_time(t);
+        Int64 current_second = my_time.hour * 3600 + my_time.minute * 60 + my_time.second;
+        current_second += delta;
+        if (current_second >= 0)
+        {
+            Int64 days = current_second / SECOND_IN_ONE_DAY;
+            current_second = current_second % SECOND_IN_ONE_DAY;
+            if (days != 0)
+                addDays(my_time, days);
+        }
+        else
+        {
+            Int64 days = (-current_second) / SECOND_IN_ONE_DAY;
+            if ((-current_second) % SECOND_IN_ONE_DAY != 0)
+            {
+                days++;
+            }
+            current_second += days * SECOND_IN_ONE_DAY;
+            addDays(my_time, -days);
+        }
+        my_time.hour = current_second / 3600;
+        my_time.minute = (current_second % 3600) / 60;
+        my_time.second = current_second % 60;
+        return my_time.toPackedUInt();
     }
 };
 
@@ -750,6 +995,10 @@ struct AddMinutesImpl
     {
         return time_zone.fromDayNum(DayNum_t(d)) + delta * 60;
     }
+    static inline UInt64 execute(UInt64 t, Int64 delta, const DateLUTImpl & time_zone)
+    {
+        return AddSecondsImpl::execute(t, delta * 60, time_zone);
+    }
 };
 
 struct AddHoursImpl
@@ -764,6 +1013,11 @@ struct AddHoursImpl
     static inline UInt32 execute(UInt16 d, Int64 delta, const DateLUTImpl & time_zone)
     {
         return time_zone.fromDayNum(DayNum_t(d)) + delta * 3600;
+    }
+
+    static inline UInt64 execute(UInt64 t, Int64 delta, const DateLUTImpl & time_zone)
+    {
+        return AddSecondsImpl::execute(t, delta * 3600, time_zone);
     }
 };
 
@@ -780,6 +1034,17 @@ struct AddDaysImpl
     {
         return d + delta;
     }
+
+    static inline UInt64 execute(UInt64 t, Int64 delta, const DateLUTImpl &)
+    {
+        if (t == 0)
+        {
+            return t;
+        }
+        MyDateTime my_time(t);
+        addDays(my_time, delta);
+        return my_time.toPackedUInt();
+    }
 };
 
 struct AddWeeksImpl
@@ -794,6 +1059,11 @@ struct AddWeeksImpl
     static inline UInt16 execute(UInt16 d, Int64 delta, const DateLUTImpl &)
     {
         return d + delta * 7;
+    }
+
+    static inline UInt64 execute(UInt64 t, Int64 delta, const DateLUTImpl & time_zone)
+    {
+        return AddDaysImpl::execute(t, delta * 7, time_zone);
     }
 };
 
@@ -810,6 +1080,17 @@ struct AddMonthsImpl
     {
         return time_zone.addMonths(DayNum_t(d), delta);
     }
+
+    static inline UInt64 execute(UInt64 t, Int64 delta, const DateLUTImpl &)
+    {
+        if (t == 0)
+        {
+            return t;
+        }
+        MyDateTime my_time(t);
+        addMonths(my_time, delta);
+        return my_time.toPackedUInt();
+    }
 };
 
 struct AddYearsImpl
@@ -825,6 +1106,11 @@ struct AddYearsImpl
     {
         return time_zone.addYears(DayNum_t(d), delta);
     }
+
+    static inline UInt64 execute(UInt64 t, Int64 delta, const DateLUTImpl & time_zone)
+    {
+        return AddMonthsImpl::execute(t, delta * 12, time_zone);
+    }
 };
 
 
@@ -839,6 +1125,11 @@ struct SubtractIntervalImpl
     static inline UInt16 execute(UInt16 d, Int64 delta, const DateLUTImpl & time_zone)
     {
         return Transform::execute(d, -delta, time_zone);
+    }
+
+    static inline UInt64 execute(UInt64 t, Int64 delta, const DateLUTImpl & time_zone)
+    {
+        return Transform::execute(t, -delta, time_zone);
     }
 };
 
@@ -883,7 +1174,7 @@ struct Adder
 };
 
 
-template <typename FromType, typename Transform>
+template <typename FromType, typename Transform, bool use_utc_timezone>
 struct DateTimeAddIntervalImpl
 {
     static void execute(Block & block, const ColumnNumbers & arguments, size_t result)
@@ -891,7 +1182,7 @@ struct DateTimeAddIntervalImpl
         using ToType = decltype(Transform::execute(FromType(), 0, std::declval<DateLUTImpl>()));
         using Op = Adder<FromType, ToType, Transform>;
 
-        const DateLUTImpl & time_zone = extractTimeZoneFromFunctionArguments(block, arguments, 2, 0);
+        const DateLUTImpl & time_zone = use_utc_timezone ? DateLUT::instance("UTC") : extractTimeZoneFromFunctionArguments(block, arguments, 2, 0);
 
         const ColumnPtr source_col = block.getByPosition(arguments[0]).column;
 
@@ -946,6 +1237,7 @@ public:
                 + toString(arguments.size()) + ", should be 2 or 3",
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
+        //todo support string as tidb support string
         if (!arguments[1].type->isNumber())
             throw Exception("Second argument for function " + getName() + " (delta) must be number",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -977,12 +1269,22 @@ public:
             else
                 return std::make_shared<DataTypeDateTime>(extractTimeZoneNameFromFunctionArguments(arguments, 2, 0));
         }
-        else
+        else if (checkDataType<DataTypeDateTime>(arguments[0].type.get()))
         {
             if (std::is_same_v<decltype(Transform::execute(DataTypeDateTime::FieldType(), 0, std::declval<DateLUTImpl>())), UInt16>)
                 return std::make_shared<DataTypeDate>();
             else
                 return std::make_shared<DataTypeDateTime>(extractTimeZoneNameFromFunctionArguments(arguments, 2, 0));
+        }
+        else
+        {
+            // for MyDate and MyDateTime, according to TiDB implementation the return type is always return MyDateTime
+            // todo consider the fsp in delta part
+            int fsp = 0;
+            const auto * my_datetime_type = checkAndGetDataType<DataTypeMyDateTime>(arguments[0].type.get());
+            if(my_datetime_type != nullptr)
+                fsp = my_datetime_type->getFraction();
+            return std::make_shared<DataTypeMyDateTime>(fsp);
         }
     }
 
@@ -994,15 +1296,385 @@ public:
         const IDataType * from_type = block.getByPosition(arguments[0]).type.get();
 
         if (checkDataType<DataTypeDate>(from_type))
-            DateTimeAddIntervalImpl<DataTypeDate::FieldType, Transform>::execute(block, arguments, result);
+            DateTimeAddIntervalImpl<DataTypeDate::FieldType, Transform, false>::execute(block, arguments, result);
         else if (checkDataType<DataTypeDateTime>(from_type))
-            DateTimeAddIntervalImpl<DataTypeDateTime::FieldType, Transform>::execute(block, arguments, result);
+            DateTimeAddIntervalImpl<DataTypeDateTime::FieldType, Transform, false>::execute(block, arguments, result);
+        else if (checkDataType<DataTypeMyDate>(from_type) || checkDataType<DataTypeMyDateTime>(from_type))
+            DateTimeAddIntervalImpl<DataTypeMyTimeBase::FieldType, Transform, true>::execute(block, arguments, result);
         else
             throw Exception("Illegal type " + block.getByPosition(arguments[0]).type->getName() + " of argument of function " + getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 };
 
+class FunctionTiDBTimestampDiff : public IFunction
+{
+public:
+    static constexpr auto name = "tidbTimestampDiff";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionTiDBTimestampDiff>(); };
+
+    String getName() const override
+    {
+        return name;
+    }
+
+    bool isVariadic() const override { return false; }
+    size_t getNumberOfArguments() const override { return 3; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!removeNullable(arguments[0])->isString())
+            throw Exception("First argument for function " + getName() + " (unit) must be String",
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        if(!checkDataType<DataTypeMyDateTime>(removeNullable(arguments[1]).get()) &&
+                !checkDataType<DataTypeMyDate>(removeNullable(arguments[1]).get()))
+            throw Exception("Second argument for function " + getName() + " must be MyDate or MyDateTime",
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        if(!checkDataType<DataTypeMyDateTime>(removeNullable(arguments[2]).get()) &&
+           !checkDataType<DataTypeMyDate>(removeNullable(arguments[2]).get()))
+            throw Exception("Third argument for function " + getName() + " must be MyDate or MyDateTime",
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        // to align with tidb, timestampdiff with zeroDate input should return null, so always return nullable type
+        return makeNullable(std::make_shared<DataTypeInt64>());
+    }
+
+    bool useDefaultImplementationForNulls() const override { return false; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {0}; }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    {
+        auto * unit_column = checkAndGetColumnConst<ColumnString>(block.getByPosition(arguments[0]).column.get());
+        if (!unit_column)
+            throw Exception("First argument for function " + getName() + " must be constant String", ErrorCodes::ILLEGAL_COLUMN);
+
+        String unit = Poco::toLower(unit_column->getValue<String>());
+
+        bool has_nullable = false;
+        bool has_null_constant = false;
+        for(const auto & arg : arguments)
+        {
+            const auto & elem = block.getByPosition(arg);
+            has_nullable |= elem.type->isNullable();
+            has_null_constant |= elem.type->onlyNull();
+        }
+
+        if (has_null_constant)
+        {
+            block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
+            return;
+        }
+
+        ColumnPtr x_p = block.getByPosition(arguments[1]).column;
+        ColumnPtr y_p = block.getByPosition(arguments[2]).column;
+        if (has_nullable)
+        {
+            Block temporary_block = createBlockWithNestedColumns(block, arguments, result);
+            x_p = temporary_block.getByPosition(arguments[1]).column;
+            y_p = temporary_block.getByPosition(arguments[2]).column;
+        }
+
+        const IColumn & x = *x_p;
+        const IColumn & y = *y_p;
+
+        size_t rows = block.rows();
+        auto res = ColumnInt64::create(rows);
+        auto result_null_map = ColumnUInt8::create(rows);
+        if (unit == "year")
+            dispatchForColumns<MonthDiffCalculatorImpl, YearDiffResultCalculator>(x, y, res->getData(), result_null_map->getData());
+        else if (unit == "quarter")
+            dispatchForColumns<MonthDiffCalculatorImpl, QuarterDiffResultCalculator>(x, y, res->getData(), result_null_map->getData());
+        else if (unit == "month")
+            dispatchForColumns<MonthDiffCalculatorImpl, MonthDiffResultCalculator>(x, y, res->getData(), result_null_map->getData());
+        else if (unit == "week")
+            dispatchForColumns<DummyMonthDiffCalculatorImpl, WeekDiffResultCalculator>(x, y, res->getData(), result_null_map->getData());
+        else if (unit == "day")
+            dispatchForColumns<DummyMonthDiffCalculatorImpl, DayDiffResultCalculator>(x, y, res->getData(), result_null_map->getData());
+        else if (unit == "hour")
+            dispatchForColumns<DummyMonthDiffCalculatorImpl, HourDiffResultCalculator>(x, y, res->getData(), result_null_map->getData());
+        else if (unit == "minute")
+            dispatchForColumns<DummyMonthDiffCalculatorImpl, MinuteDiffResultCalculator>(x, y, res->getData(), result_null_map->getData());
+        else if (unit == "second")
+            dispatchForColumns<DummyMonthDiffCalculatorImpl, SecondDiffResultCalculator>(x, y, res->getData(), result_null_map->getData());
+        else if (unit == "microsecond")
+            dispatchForColumns<DummyMonthDiffCalculatorImpl, MicroSecondDiffResultCalculator>(x, y, res->getData(), result_null_map->getData());
+        else
+            throw Exception("Function " + getName() + " does not support '" + unit + "' unit", ErrorCodes::BAD_ARGUMENTS);
+        // warp null
+
+        if (block.getByPosition(arguments[1]).type->isNullable()
+        || block.getByPosition(arguments[2]).type->isNullable())
+        {
+            ColumnUInt8::Container &vec_result_null_map = result_null_map->getData();
+            ColumnPtr x_p = block.getByPosition(arguments[1]).column;
+            ColumnPtr y_p = block.getByPosition(arguments[2]).column;
+            for (size_t i = 0; i < rows; i++) {
+                vec_result_null_map[i] |= (x_p->isNullAt(i) || y_p->isNullAt(i));
+            }
+        }
+        block.getByPosition(result).column = ColumnNullable::create(std::move(res), std::move(result_null_map));
+    }
+
+private:
+    template <typename MonthDiffCalculator, typename ResultCalculator>
+    void dispatchForColumns(const IColumn & x, const IColumn & y, ColumnInt64::Container & res, ColumnUInt8::Container & res_null_map)
+    {
+        auto * x_const = checkAndGetColumnConst<ColumnUInt64>(&x);
+        auto * y_const = checkAndGetColumnConst<ColumnUInt64>(&y);
+        if(x_const)
+        {
+            auto * y_vec = checkAndGetColumn<ColumnUInt64>(&y);
+            constant_vector<MonthDiffCalculator, ResultCalculator>(x_const->getValue<UInt64>(), *y_vec, res, res_null_map);
+        }
+        else if (y_const)
+        {
+            auto * x_vec = checkAndGetColumn<ColumnUInt64>(&x);
+            vector_constant<MonthDiffCalculator, ResultCalculator>(*x_vec, y_const->getValue<UInt64>(), res, res_null_map);
+        }
+        else
+        {
+            auto * x_vec = checkAndGetColumn<ColumnUInt64>(&x);
+            auto * y_vec = checkAndGetColumn<ColumnUInt64>(&y);
+            vector_vector<MonthDiffCalculator, ResultCalculator>(*x_vec, *y_vec, res, res_null_map);
+        }
+    }
+
+    template <typename MonthDiffCalculator, typename ResultCalculator>
+    void vector_vector(const ColumnVector<UInt64> & x, const ColumnVector<UInt64> & y,
+            ColumnInt64::Container & result, ColumnUInt8::Container & result_null_map)
+    {
+        const auto & x_data = x.getData();
+        const auto & y_data = y.getData();
+        for (size_t i = 0, size = x.size(); i < size; ++i)
+        {
+            result_null_map[i] = (x_data[i] == 0 || y_data[i] == 0);
+            if (!result_null_map[i])
+                result[i] = calculate<MonthDiffCalculator, ResultCalculator>(x_data[i], y_data[i]);
+        }
+    }
+
+    template <typename MonthDiffCalculator, typename ResultCalculator>
+    void vector_constant(const ColumnVector<UInt64> & x, UInt64 y,
+            ColumnInt64::Container & result, ColumnUInt8::Container & result_null_map)
+    {
+        const auto & x_data = x.getData();
+        if (y == 0)
+        {
+            for (size_t i = 0, size = x.size(); i < size; ++i)
+                result_null_map[i] = 1;
+        }
+        else
+        {
+            for (size_t i = 0, size = x.size(); i < size; ++i)
+            {
+                result_null_map[i] = (x_data[i] == 0);
+                if (!result_null_map[i])
+                    result[i] = calculate<MonthDiffCalculator, ResultCalculator>(x_data[i], y);
+            }
+        }
+    }
+
+    template <typename MonthDiffCalculator, typename ResultCalculator>
+    void constant_vector(UInt64 x, const ColumnVector<UInt64> & y,
+            ColumnInt64::Container & result, ColumnUInt8::Container & result_null_map)
+    {
+        const auto & y_data = y.getData();
+        if (x == 0)
+        {
+            for (size_t i = 0, size = y.size(); i < size; ++i)
+                result_null_map[i] = 1;
+        }
+        else
+        {
+            for (size_t i = 0, size = y.size(); i < size; ++i) {
+                result_null_map[i] = (y_data[i] == 0);
+                if (!result_null_map[i])
+                    result[i] = calculate<MonthDiffCalculator, ResultCalculator>(x, y_data[i]);
+            }
+        }
+    }
+
+    void calculateTimeDiff(const MyDateTime &x, const MyDateTime &y, Int64 & seconds, int & micro_seconds, bool & neg) {
+        Int64 days_x = calcDayNum(x.year, x.month, x.day);
+        Int64 days_y = calcDayNum(y.year, y.month, y.day);
+        Int64 days = days_y - days_x;
+
+        Int64 tmp = (days * SECOND_IN_ONE_DAY + y.hour * 3600LL +
+                y.minute * 60LL + y.second - (x.hour * 3600LL + x.minute * 60LL + x.second)) * E6 +
+                y.micro_second - x.micro_second;
+        if(tmp < 0)
+        {
+            tmp = -tmp;
+            neg = true;
+        }
+        seconds = tmp / E6;
+        micro_seconds = int(tmp % E6);
+    }
+
+    struct MonthDiffCalculatorImpl
+    {
+        static inline UInt32 execute(const MyDateTime & x_time, const MyDateTime & y_time, const bool & neg)
+        {
+            UInt32 months = 0;
+            UInt32 year_begin, year_end, month_begin, month_end, day_begin, day_end;
+            UInt32 second_begin, second_end, micro_second_begin, micro_second_end;
+            if(neg)
+            {
+                year_begin = y_time.year;
+                year_end = x_time.year;
+                month_begin = y_time.month;
+                month_end = x_time.month;
+                day_begin = y_time.day;
+                day_end = y_time.day;
+                second_begin = y_time.hour * 3600 + y_time.minute * 60 + y_time.second;
+                second_end = x_time.hour * 3600 + x_time.minute * 60 + x_time.second;
+                micro_second_begin = y_time.micro_second;
+                micro_second_end = x_time.micro_second;
+            }
+            else
+            {
+                year_begin = x_time.year;
+                year_end = y_time.year;
+                month_begin = x_time.month;
+                month_end = y_time.month;
+                day_begin = x_time.day;
+                day_end = y_time.day;
+                second_begin = x_time.hour * 3600 + x_time.minute * 60 + x_time.second;
+                second_end = y_time.hour * 3600 + y_time.minute * 60 + y_time.second;
+                micro_second_begin = x_time.micro_second;
+                micro_second_end = y_time.micro_second;
+            }
+
+            // calc years
+            UInt32 years = year_end - year_begin;
+            if (month_end < month_begin ||
+                (month_end == month_begin && day_end < day_begin))
+            {
+                years--;
+            }
+
+            // calc months
+            months = 12 * years;
+            if (month_end < month_begin ||
+                (month_end == month_begin && day_end < day_begin))
+            {
+                months += 12 - (month_begin - month_end);
+            }
+            else
+            {
+                months += month_end - month_begin;
+            }
+
+            if (day_end < day_begin)
+            {
+                months--;
+            }
+            else if ((day_end == day_begin) &&
+                       ((second_end < second_begin) ||
+                        (second_end == second_begin && micro_second_end < micro_second_begin)))
+            {
+                months--;
+            }
+            return months;
+        }
+    };
+
+    struct DummyMonthDiffCalculatorImpl
+    {
+        static inline UInt32 execute(const MyDateTime & , const MyDateTime & , const bool )
+        {
+            return 0;
+        }
+    };
+
+    struct YearDiffResultCalculator
+    {
+        static inline Int64 execute(const Int64 , const Int64 , const Int64 months, const int neg_value)
+        {
+            return months / 12 * neg_value;
+        }
+    };
+
+    struct QuarterDiffResultCalculator
+    {
+        static inline Int64 execute(const Int64 , const Int64 , const Int64 months, const int neg_value)
+        {
+            return months / 3 * neg_value;
+        }
+    };
+
+    struct MonthDiffResultCalculator
+    {
+        static inline Int64 execute(const Int64 , const Int64 , const Int64 months, const int neg_value)
+        {
+            return months * neg_value;
+        }
+    };
+
+    struct WeekDiffResultCalculator
+    {
+        static inline Int64 execute(const Int64 seconds, const Int64 , const Int64 , const int neg_value)
+        {
+            return seconds / SECOND_IN_ONE_DAY / 7 * neg_value;
+        }
+    };
+
+    struct DayDiffResultCalculator
+    {
+        static inline Int64 execute(const Int64 seconds, const Int64 , const Int64 , const int neg_value)
+        {
+            return seconds / SECOND_IN_ONE_DAY * neg_value;
+        }
+    };
+
+    struct HourDiffResultCalculator
+    {
+        static inline Int64 execute(const Int64 seconds, const Int64 , const Int64 , const int neg_value)
+        {
+            return seconds / 3600 * neg_value;
+        }
+    };
+
+    struct MinuteDiffResultCalculator
+    {
+        static inline Int64 execute(const Int64 seconds, const Int64 , const Int64 , const int neg_value)
+        {
+            return seconds / 60 * neg_value;
+        }
+    };
+
+    struct SecondDiffResultCalculator
+    {
+        static inline Int64 execute(const Int64 seconds, const Int64 , const Int64 , const int neg_value)
+        {
+            return seconds * neg_value;
+        }
+    };
+
+    struct MicroSecondDiffResultCalculator
+    {
+        static inline Int64 execute(const Int64 seconds, const Int64 micro_seconds, const Int64 , const int neg_value)
+        {
+            return (seconds * E6 + micro_seconds) * neg_value;
+        }
+    };
+
+    template <typename MonthDiffCalculator, typename ResultCalculator>
+    Int64 calculate(UInt64 x, UInt64 y)
+    {
+        MyDateTime x_time(x);
+        MyDateTime y_time(y);
+        Int64 seconds = 0;
+        int micro_seconds = 0;
+        bool neg = false;
+        calculateTimeDiff(x_time, y_time, seconds, micro_seconds, neg);
+        UInt32 months = MonthDiffCalculator::execute(x_time, y_time, neg);
+        return ResultCalculator::execute(seconds, micro_seconds, months, neg ? -1 : 1);
+    }
+};
 
 /** dateDiff('unit', t1, t2, [timezone])
   * t1 and t2 can be Date or DateTime

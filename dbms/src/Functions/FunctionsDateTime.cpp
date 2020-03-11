@@ -38,7 +38,8 @@ std::string extractTimeZoneNameFromFunctionArguments(const ColumnsWithTypeAndNam
     }
 }
 
-const DateLUTImpl & extractTimeZoneFromFunctionArguments(Block & block, const ColumnNumbers & arguments, size_t time_zone_arg_num, size_t datetime_arg_num)
+const DateLUTImpl & extractTimeZoneFromFunctionArguments(Block & block, const ColumnNumbers & arguments,
+        size_t time_zone_arg_num, size_t datetime_arg_num)
 {
     if (arguments.size() == time_zone_arg_num + 1)
         return DateLUT::instance(extractTimeZoneNameFromColumn(*block.getByPosition(arguments[time_zone_arg_num]).column));
@@ -112,6 +113,7 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     factory.registerFunction<FunctionSubtractYears>();
 
     factory.registerFunction<FunctionDateDiff>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionTiDBTimestampDiff>();
 
     factory.registerFunction<FunctionToTimeZone>();
 }

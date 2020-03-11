@@ -9,6 +9,8 @@ namespace DB
 struct MyTimeBase
 {
 
+    static const UInt64 YMD_MASK = ~((1ull << 41) -1);
+
     enum MyTimeType : UInt8
     {
         TypeDate = 0,
