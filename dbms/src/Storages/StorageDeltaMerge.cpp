@@ -329,7 +329,8 @@ RegionException::RegionReadStatus isValidRegion(const RegionQueryInfo & region_t
 
 RegionMap doLearnerRead(const TiDB::TableID table_id,           //
     const MvccQueryInfo::RegionsQueryInfo & regions_query_info, //
-    size_t concurrent_num,                                      //
+    const bool resolve_locks, const Timestamp start_ts,
+    size_t concurrent_num, //
     TMTContext & tmt, Poco::Logger * log)
 {
     assert(log != nullptr);
@@ -375,7 +376,7 @@ RegionMap doLearnerRead(const TiDB::TableID table_id,           //
     const size_t num_regions = regions_info.size();
     const size_t batch_size = num_regions / concurrent_num;
     std::atomic_uint8_t region_status = RegionException::RegionReadStatus::OK;
-    const auto batch_wait_index = [&](const size_t region_begin_idx) -> void {
+    const auto batch_wait_index = [&, resolve_locks, start_ts](const size_t region_begin_idx) -> void {
         const size_t region_end_idx = std::min(region_begin_idx + batch_size, num_regions);
         for (size_t region_idx = region_begin_idx; region_idx < region_end_idx; ++region_idx)
         {
@@ -415,6 +416,12 @@ RegionMap doLearnerRead(const TiDB::TableID table_id,           //
             }
             else
                 region->waitIndex(read_index_result.read_index);
+
+            if (resolve_locks)
+            {
+                auto scanner = region->createCommittedScanner();
+                RegionTable::resolveLocks(scanner, start_ts);
+            }
         }
     };
     auto start_time = Clock::now();
@@ -562,7 +569,8 @@ BlockInputStreams StorageDeltaMerge::read( //
         if (likely(!select_query.no_kvstore))
         {
             /// Learner read.
-            regions_in_learner_read = doLearnerRead(tidb_table_info.id, mvcc_query_info.regions_query_info, concurrent_num, tmt, log);
+            regions_in_learner_read = doLearnerRead(tidb_table_info.id, mvcc_query_info.regions_query_info, mvcc_query_info.resolve_locks,
+                mvcc_query_info.read_tso, concurrent_num, tmt, log);
 
             if (likely(!mvcc_query_info.regions_query_info.empty()))
             {
