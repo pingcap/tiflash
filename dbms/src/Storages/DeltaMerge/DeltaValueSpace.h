@@ -80,11 +80,12 @@ public:
                 colid_to_offset.emplace(schema->getByPosition(i).column_id, i);
         }
 
-        DataTypePtr getDataTypeByColumnID(ColId cid) const
+        std::pair<DataTypePtr, MutableColumnPtr> getDataTypeAndEmptyColumn(ColId column_id) const
         {
-            // Note that cid must exist
-            auto index = colid_to_offset.at(cid);
-            return schema->getByPosition(index).type;
+            // Note that column_id must exist
+            auto index = colid_to_offset.at(column_id);
+            auto col_type = schema->getByPosition(index).type;
+            return { col_type, col_type->createColumn() };
         }
 
         String toString()

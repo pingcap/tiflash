@@ -836,34 +836,51 @@ try
 }
 CATCH
 
+
+enum class SegmentWriteType
+{
+    ToDisk,
+    ToCache
+};
+class Segment_DDL_test : public Segment_test, //
+                         public testing::WithParamInterface<std::tuple<SegmentWriteType, bool>>
+{
+};
+String paramToString(const ::testing::TestParamInfo<Segment_DDL_test::ParamType> & info)
+{
+    const auto [write_type, flush_before_ddl] = info.param;
+
+    String name = (write_type == SegmentWriteType::ToDisk) ? "ToDisk_" : "ToCache";
+    name += (flush_before_ddl ? "_FlushCache" : "_NotFlushCache");
+    return name;
+}
+
 /// Mock a col from i8 -> i32
-TEST_F(Segment_test, DDLAlterInt8ToInt32)
+TEST_P(Segment_DDL_test, AlterInt8ToInt32)
 try
 {
     const String       column_name_i8_to_i32 = "i8_to_i32";
     const ColumnID     column_id_i8_to_i32   = 4;
-    const ColumnDefine column_i8_before_ddl(column_id_i8_to_i32, column_name_i8_to_i32, DataTypeFactory::instance().get("Int8"));
-    const ColumnDefine column_i32_after_ddl(column_id_i8_to_i32, column_name_i8_to_i32, DataTypeFactory::instance().get("Int32"));
+    const ColumnDefine column_i8_before_ddl(column_id_i8_to_i32, column_name_i8_to_i32, typeFromString("Int8"));
+    const ColumnDefine column_i32_after_ddl(column_id_i8_to_i32, column_name_i8_to_i32, typeFromString("Int32"));
 
-    {
-        auto columns_before_ddl = DMTestEnv::getDefaultColumns();
-        columns_before_ddl->emplace_back(column_i8_before_ddl);
-        // Not cache any rows
-        DB::Settings db_settings;
-        db_settings.dm_segment_delta_cache_limit_rows = 0;
+    const auto [write_type, flush_before_ddl] = GetParam();
 
-        segment = reload(columns_before_ddl, std::move(db_settings));
-    }
-
+    // Prepare some data before ddl
     const size_t num_rows_write = 100;
     {
-        // write to segment
-        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+        /// set columns before ddl
+        auto columns_before_ddl = DMTestEnv::getDefaultColumns();
+        columns_before_ddl->emplace_back(column_i8_before_ddl);
+        DB::Settings db_settings;
+        segment = reload(columns_before_ddl, std::move(db_settings));
 
+        /// write to segment
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
         // add int8_col and later read it as int32
         // (mock ddl change int8 -> int32)
         const size_t          num_rows = block.rows();
-        ColumnWithTypeAndName int8_col(column_i8_before_ddl.type, column_i8_before_ddl.name);
+        ColumnWithTypeAndName int8_col(nullptr, column_i8_before_ddl.type, column_i8_before_ddl.name, column_id_i8_to_i32);
         {
             IColumn::MutablePtr m_col       = int8_col.type->createColumn();
             auto &              column_data = typeid_cast<ColumnVector<Int8> &>(*m_col).getData();
@@ -875,16 +892,32 @@ try
             int8_col.column = std::move(m_col);
         }
         block.insert(int8_col);
+        switch (write_type)
+        {
+        case SegmentWriteType::ToDisk:
+            segment->write(dmContext(), std::move(block));
+            break;
+        case SegmentWriteType::ToCache:
+            segment->writeToCache(dmContext(), block, 0, num_rows_write);
+            break;
+        }
+    }
 
-        segment->write(dmContext(), std::move(block));
+    ColumnDefinesPtr columns_to_read = std::make_shared<ColumnDefines>();
+    {
+        *columns_to_read = *DMTestEnv::getDefaultColumns();
+        columns_to_read->emplace_back(column_i32_after_ddl);
+        if (flush_before_ddl)
+        {
+            // If write to cache, before apply ddl changes (change column data type), segment->flushCache must be called.
+            segment->flushCache(dmContext());
+        }
+        setColumns(columns_to_read);
     }
 
     {
-        ColumnDefines columns_to_read = *DMTestEnv::getDefaultColumns();
-        columns_to_read.emplace_back(column_i32_after_ddl);
-
         // read written data
-        BlockInputStreamPtr in = segment->getInputStream(dmContext(), *tableColumns());
+        BlockInputStreamPtr in = segment->getInputStream(dmContext(), *columns_to_read);
 
         // check that we can read correct values
         size_t num_rows_read = 0;
@@ -892,9 +925,9 @@ try
         while (Block block = in->read())
         {
             num_rows_read += block.rows();
+            ASSERT_TRUE(block.has(column_name_i8_to_i32));
             const ColumnWithTypeAndName & col = block.getByName(column_name_i8_to_i32);
-            ASSERT_TRUE(col.type->equals(*column_i32_after_ddl.type))
-                << "col.type: " + col.type->getName() + " expect type: " + column_i32_after_ddl.type->getName();
+            ASSERT_DATATYPE_EQ(col.type, column_i32_after_ddl.type);
             ASSERT_EQ(col.name, column_i32_after_ddl.name);
             ASSERT_EQ(col.column_id, column_i32_after_ddl.id);
             for (size_t i = 0; i < block.rows(); ++i)
@@ -910,7 +943,7 @@ try
 }
 CATCH
 
-TEST_F(Segment_test, DDLAddColumnWithDefaultValue)
+TEST_P(Segment_DDL_test, AddColumn)
 try
 {
     const String   new_column_name = "i8";
@@ -918,6 +951,8 @@ try
     ColumnDefine   new_column_define(new_column_id, new_column_name, DataTypeFactory::instance().get("Int8"));
     const Int8     new_column_default_value_int = 16;
     new_column_define.default_value             = toField(new_column_default_value_int);
+
+    const auto [write_type, flush_before_ddl] = GetParam();
 
     {
         auto columns_before_ddl = DMTestEnv::getDefaultColumns();
@@ -932,13 +967,26 @@ try
     {
         // write to segment
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-        segment->write(dmContext(), std::move(block));
+        switch (write_type)
+        {
+        case SegmentWriteType::ToDisk:
+            segment->write(dmContext(), std::move(block));
+            break;
+        case SegmentWriteType::ToCache:
+            segment->writeToCache(dmContext(), block, 0, num_rows_write);
+            break;
+        }
     }
 
     {
         // DDL add new column with default value
         auto columns_after_ddl = DMTestEnv::getDefaultColumns();
         columns_after_ddl->emplace_back(new_column_define);
+        if (flush_before_ddl)
+        {
+            // If write to cache, before apply ddl changes (change column data type), segment->flushCache must be called.
+            segment->flushCache(dmContext());
+        }
         setColumns(columns_after_ddl);
     }
 
@@ -967,6 +1015,13 @@ try
     }
 }
 CATCH
+
+INSTANTIATE_TEST_CASE_P(SegmentWriteType,
+                        Segment_DDL_test,
+                        ::testing::Combine( //
+                            ::testing::Values(SegmentWriteType::ToDisk, SegmentWriteType::ToCache),
+                            ::testing::Bool()),
+                        paramToString);
 
 } // namespace tests
 } // namespace DM

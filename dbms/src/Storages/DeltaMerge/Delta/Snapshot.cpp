@@ -170,6 +170,7 @@ std::pair<size_t, size_t> findPack(const Packs & packs, size_t rows_offset, size
 
 const Columns & DeltaValueSpace::Snapshot::getColumnsOfPack(size_t pack_index, size_t col_num)
 {
+    // If some columns is already read in this snapshot, we can reuse `packs_data`
     auto & columns = packs_data[pack_index];
     if (columns.size() < col_num)
     {

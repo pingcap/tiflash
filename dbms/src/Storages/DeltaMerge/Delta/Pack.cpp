@@ -177,18 +177,31 @@ Columns readPackFromCache(const PackPtr & pack, const ColumnDefines & column_def
     // TODO: should be able to use cache data directly, without copy.
     std::scoped_lock lock(pack->cache->mutex);
 
-    auto &  cache_block = pack->cache->block;
+    const auto & cache_block = pack->cache->block;
+    if constexpr (DM_RUN_CHECK)
+    {
+        if (pack->schema == nullptr || !checkSchema(cache_block, *pack->schema))
+        {
+            const String pack_schema_str  = pack->schema ? pack->schema->dumpStructure() : "(none)";
+            const String cache_schema_str = cache_block.dumpStructure();
+            throw Exception("Pack[" + pack->toString() + "] schema not match its cache_block! pack: " + pack_schema_str
+                                + ", cache: " + cache_schema_str,
+                            ErrorCodes::LOGICAL_ERROR);
+        }
+    }
     Columns columns;
     for (size_t i = col_start; i < col_end; ++i)
     {
-        auto & cd = column_defines[i];
+        const auto & cd = column_defines[i];
         if (auto it = pack->colid_to_offset.find(cd.id); it != pack->colid_to_offset.end())
         {
-            // TODO: is data type of cd and pack always the same?
             auto col_offset = it->second;
-            auto col_data   = cd.type->createColumn();
+            // Copy data from cache
+            auto [type, col_data] = pack->getDataTypeAndEmptyColumn(cd.id);
             col_data->insertRangeFrom(*cache_block.getByPosition(col_offset).column, pack->cache_offset, pack->rows);
-            columns.push_back(std::move(col_data));
+            // Cast if need
+            auto col_converted = convertColumnByColumnDefineIfNeed(type, std::move(col_data), cd);
+            columns.push_back(std::move(col_converted));
         }
         else
         {
@@ -233,26 +246,24 @@ Columns readPackFromDisk(const PackPtr &       pack, //
                          size_t                col_start,
                          size_t                col_end)
 {
-    size_t num_columns_read = col_end - col_start;
+    const size_t num_columns_read = col_end - col_start;
 
     Columns columns(num_columns_read); // allocate empty columns
 
-    std::vector<PageId> page_ids;
-    PageReadFields      fields;
+    PageReadFields fields;
     fields.first = pack->data_page;
     for (size_t index = col_start; index < col_end; ++index)
     {
         const auto & cd = column_defines[index];
-        auto         it = pack->colid_to_offset.find(cd.id);
-        if (unlikely(it == pack->colid_to_offset.end()))
-        {
-            // New column after ddl is not exist in this pack, fill with default value
-            columns[index - col_start] = createColumnWithDefaultValue(cd, pack->rows);
-        }
-        else
+        if (auto it = pack->colid_to_offset.find(cd.id); it != pack->colid_to_offset.end())
         {
             auto col_index = it->second;
             fields.second.push_back(col_index);
+        }
+        else
+        {
+            // New column after ddl is not exist in this pack, fill with default value
+            columns[index - col_start] = createColumnWithDefaultValue(cd, pack->rows);
         }
     }
 
@@ -271,13 +282,12 @@ Columns readPackFromDisk(const PackPtr &       pack, //
         auto col_index = pack->colid_to_offset[col_id];
         auto data_buf  = page.getFieldData(col_index);
 
-        auto & cd = column_defines[index];
+        const auto & cd = column_defines[index];
         // Deserialize column by pack's schema
-        auto type = pack->getDataTypeByColumnID(cd.id);
-        auto col  = cd.type->createColumn();
-        deserializeColumn(*col, type, data_buf, pack->rows);
+        auto [type, col_data] = pack->getDataTypeAndEmptyColumn(cd.id);
+        deserializeColumn(*col_data, type, data_buf, pack->rows);
 
-        columns[index_in_read_columns] = convertColumnByColumnDefineIfNeed(type, std::move(col), cd);
+        columns[index_in_read_columns] = convertColumnByColumnDefineIfNeed(type, std::move(col_data), cd);
 
         ++id_offset;
     }

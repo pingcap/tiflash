@@ -433,8 +433,10 @@ try
     // Mock that we add new column after ddl
     auto cols_after_ddl = std::make_shared<ColumnDefines>();
     *cols_after_ddl     = cols_before_ddl;
+    // A new string column
     ColumnDefine new_s_col(100, "s", typeFromString("String"));
     cols_after_ddl->emplace_back(new_s_col);
+    // A new int64 column with default value 5
     ColumnDefine new_i_col_with_default(101, "i", typeFromString("Int64"));
     new_i_col_with_default.default_value = Field(Int64(5));
     cols_after_ddl->emplace_back(new_i_col_with_default);

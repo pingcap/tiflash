@@ -1268,7 +1268,7 @@ void DeltaMergeStore::check(const Context & /*db_context*/)
 void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
                                   const OptionTableInfoConstRef table_info,
                                   ColumnID &                    max_column_id_used,
-                                  const Context & /*context*/)
+                                  const Context & /* context */)
 {
     std::unique_lock lock(read_write_mutex);
 

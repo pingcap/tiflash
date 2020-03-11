@@ -1,7 +1,7 @@
 #include <Core/ColumnsWithTypeAndName.h>
+#include <IO/Operators.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
-#include <IO/Operators.h>
 
 
 namespace DB
@@ -9,14 +9,7 @@ namespace DB
 
 ColumnWithTypeAndName ColumnWithTypeAndName::cloneEmpty() const
 {
-    ColumnWithTypeAndName res;
-
-    res.name = name;
-    res.type = type;
-    res.column_id = column_id;
-    if (column)
-        res.column = column->cloneEmpty();
-
+    ColumnWithTypeAndName res{(column != nullptr ? column->cloneEmpty() : nullptr), type, name, column_id, default_value};
     return res;
 }
 
@@ -24,8 +17,7 @@ ColumnWithTypeAndName ColumnWithTypeAndName::cloneEmpty() const
 bool ColumnWithTypeAndName::operator==(const ColumnWithTypeAndName & other) const
 {
     // TODO should we check column_id here?
-    return name == other.name
-        && ((!type && !other.type) || (type && other.type && type->equals(*other.type)))
+    return name == other.name && ((!type && !other.type) || (type && other.type && type->equals(*other.type)))
         && ((!column && !other.column) || (column && other.column && column->getName() == other.column->getName()));
 }
 
@@ -43,6 +35,8 @@ void ColumnWithTypeAndName::dumpStructure(WriteBuffer & out) const
         out << ' ' << column->dumpStructure();
     else
         out << " nullptr";
+
+    out << " " << column_id;
 }
 
 String ColumnWithTypeAndName::dumpStructure() const
@@ -52,4 +46,4 @@ String ColumnWithTypeAndName::dumpStructure() const
     return out.str();
 }
 
-}
+} // namespace DB
