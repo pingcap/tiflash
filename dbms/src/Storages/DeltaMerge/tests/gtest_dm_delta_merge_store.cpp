@@ -1,3 +1,4 @@
+#include <DataTypes/DataTypeString.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
 #include <Poco/ConsoleChannel.h>
@@ -5,6 +6,7 @@
 #include <Poco/FormattingChannel.h>
 #include <Poco/PatternFormatter.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <gtest/gtest.h>
 #include <test_utils/TiflashTestBasic.h>
 

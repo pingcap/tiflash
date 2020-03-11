@@ -1,31 +1,31 @@
 #pragma once
 
 #include <Core/Block.h>
-
 #include <Interpreters/ExpressionActions.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/DeltaValueSpace.h>
-#include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Index/MinMax.h>
 #include <Storages/DeltaMerge/Range.h>
-#include <Storages/DeltaMerge/StableValueSpace.h>
-#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/SkippableBlockInputStream.h>
+#include <Storages/Page/PageDefines.h>
 
 namespace DB
 {
+class WriteBatch;
 namespace DM
 {
 
 class Segment;
 struct SegmentSnapshot;
+class StableValueSpace;
+using StableValueSpacePtr = std::shared_ptr<StableValueSpace>;
+class DeltaValueSpace;
+using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
 
 using SegmentPtr  = std::shared_ptr<Segment>;
 using SegmentPair = std::pair<SegmentPtr, SegmentPtr>;
 using Segments    = std::vector<SegmentPtr>;
-
-using SegmentAndStorageSnap = std::pair<SegmentSnapshot, StorageSnapshot>;
-using SegmentSnapAndPacks   = std::pair<SegmentSnapshot, Packs>;
 
 /// A structure stores the informations to constantly read a segment instance.
 struct SegmentSnapshot

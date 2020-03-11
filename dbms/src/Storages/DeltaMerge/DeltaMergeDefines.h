@@ -1,19 +1,20 @@
 #pragma once
 
-#include <limits>
-#include <memory>
-#include <mutex>
-#include <optional>
-#include <type_traits>
-
 #include <Common/Allocator.h>
 #include <Common/ArenaWithFreeLists.h>
 #include <Common/EventRecorder.h>
 #include <Core/NamesAndTypes.h>
 #include <Core/Types.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <Storages/DeltaMerge/Range.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Types.h>
+
+#include <limits>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <type_traits>
 
 namespace TiDB
 {
@@ -58,9 +59,8 @@ using DeltaTreePtr     = std::shared_ptr<DefaultDeltaTree>;
 using DeltaIndex       = DTEntriesCopy<DT_M, DT_F, DT_S>;
 using DeltaIndexPtr    = std::shared_ptr<DeltaIndex>;
 
-using Handle = Int64;
-using RowId  = UInt64;
-using ColId  = DB::ColumnID;
+using RowId = UInt64;
+using ColId = DB::ColumnID;
 
 using ColIds     = std::vector<ColId>;
 using HandlePair = std::pair<Handle, Handle>;
