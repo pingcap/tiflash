@@ -3,6 +3,7 @@
 #include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTLiteral.h>
+#include <Storages/Transaction/ColumnFamily.h>
 #include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
@@ -83,9 +84,9 @@ void addRequestsToRaftCmd(raft_cmdpb::RaftCmdRequest & request, const TiKVKey & 
         TiKVValue lock_value = RecordKVFormat::encodeLockCfValue(Region::DelFlag, pk, prewrite_ts, 0);
         TiKVValue commit_value = RecordKVFormat::encodeWriteCfValue(Region::DelFlag, prewrite_ts);
 
-        setupPutRequest(request.add_requests(), Region::lock_cf_name, lock_key, lock_value);
-        setupPutRequest(request.add_requests(), Region::write_cf_name, commit_key, commit_value);
-        setupDelRequest(request.add_requests(), Region::lock_cf_name, lock_key);
+        setupPutRequest(request.add_requests(), ColumnFamilyName::Lock, lock_key, lock_value);
+        setupPutRequest(request.add_requests(), ColumnFamilyName::Write, commit_key, commit_value);
+        setupDelRequest(request.add_requests(), ColumnFamilyName::Lock, lock_key);
         return;
     }
 
@@ -95,9 +96,9 @@ void addRequestsToRaftCmd(raft_cmdpb::RaftCmdRequest & request, const TiKVKey & 
 
         TiKVValue commit_value = RecordKVFormat::encodeWriteCfValue(Region::PutFlag, prewrite_ts, value.toString());
 
-        setupPutRequest(request.add_requests(), Region::lock_cf_name, lock_key, lock_value);
-        setupPutRequest(request.add_requests(), Region::write_cf_name, commit_key, commit_value);
-        setupDelRequest(request.add_requests(), Region::lock_cf_name, lock_key);
+        setupPutRequest(request.add_requests(), ColumnFamilyName::Lock, lock_key, lock_value);
+        setupPutRequest(request.add_requests(), ColumnFamilyName::Write, commit_key, commit_value);
+        setupDelRequest(request.add_requests(), ColumnFamilyName::Lock, lock_key);
     }
     else
     {
@@ -108,10 +109,10 @@ void addRequestsToRaftCmd(raft_cmdpb::RaftCmdRequest & request, const TiKVKey & 
 
         TiKVValue commit_value = RecordKVFormat::encodeWriteCfValue(Region::PutFlag, prewrite_ts);
 
-        setupPutRequest(request.add_requests(), Region::lock_cf_name, lock_key, lock_value);
-        setupPutRequest(request.add_requests(), Region::default_cf_name, prewrite_key, prewrite_value);
-        setupPutRequest(request.add_requests(), Region::write_cf_name, commit_key, commit_value);
-        setupDelRequest(request.add_requests(), Region::lock_cf_name, lock_key);
+        setupPutRequest(request.add_requests(), ColumnFamilyName::Lock, lock_key, lock_value);
+        setupPutRequest(request.add_requests(), ColumnFamilyName::Write, commit_key, commit_value);
+        setupPutRequest(request.add_requests(), ColumnFamilyName::Default, prewrite_key, prewrite_value);
+        setupDelRequest(request.add_requests(), ColumnFamilyName::Lock, lock_key);
     }
 }
 

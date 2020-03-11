@@ -148,7 +148,7 @@ void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvo
                                          : RecordKVFormat::encodeWriteCfValue(Region::PutFlag, prewrite_ts, value);
             TiKVKey commit_key = RecordKVFormat::appendTs(key, commit_ts);
 
-            region->insert(Region::write_cf_name, std::move(commit_key), std::move(commit_value));
+            region->insert(ColumnFamilyType::Write, std::move(commit_key), std::move(commit_value));
         }
         ++cnt;
         MockTiKV::instance().getRaftIndex(region_id);
