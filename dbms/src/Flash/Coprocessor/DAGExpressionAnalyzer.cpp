@@ -522,11 +522,18 @@ String DAGExpressionAnalyzer::alignReturnType(
 String DAGExpressionAnalyzer::appendCastIfNeeded(
     const tipb::Expr & expr, ExpressionActionsPtr & actions, const String & expr_name, bool explicit_cast)
 {
-    if (!expr.has_field_type() && (explicit_cast || context.getSettingsRef().dag_expr_field_type_strict_check))
+    // do not append cast for column expr
+    // the main difficulty here is some column expr's field type
+    // does not have enough information, for example the enum type
+    if (isColumnExpr(expr))
+        return expr_name;
+
+    if (isFunctionExpr(expr) && !expr.has_field_type())
     {
-        throw Exception("Expression without field type", ErrorCodes::COP_BAD_DAG_REQUEST);
+        // seems literal expr does not have field type, do not throw exception for literal expr
+        throw Exception("Function Expression without field type", ErrorCodes::COP_BAD_DAG_REQUEST);
     }
-    if (exprHasValidFieldType(expr) && isFunctionExpr(expr))
+    if (exprHasValidFieldType(expr))
     {
         DataTypePtr expected_type = getDataTypeByFieldType(expr.field_type());
         DataTypePtr actual_type = actions->getSampleBlock().getByName(expr_name).type;
@@ -601,27 +608,25 @@ void DAGExpressionAnalyzer::makeExplicitSet(
 
 String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActionsPtr & actions, bool output_as_uint8_type)
 {
+    String ret;
     if (isLiteralExpr(expr))
     {
         Field value = decodeLiteral(expr);
-        DataTypePtr flash_type = applyVisitor(FieldToDataType(), value);
-        DataTypePtr target_type = exprHasValidFieldType(expr) ? getDataTypeByFieldType(expr.field_type()) : flash_type;
-        String name = exprToString(expr, getCurrentInputColumns()) + "_" + target_type->getName();
-        if (actions->getSampleBlock().has(name))
-            return name;
+        DataTypePtr type = applyVisitor(FieldToDataType(), value);
+        ret = exprToString(expr, getCurrentInputColumns()) + "_" + type->getName();
+        if (!actions->getSampleBlock().has(ret))
+        {
+            ColumnWithTypeAndName column;
+            column.column = type->createColumnConst(1, value);
+            column.name = ret;
+            column.type = type;
 
-        ColumnWithTypeAndName column;
-        column.column = target_type->createColumnConst(1, convertFieldToType(value, *target_type, flash_type.get()));
-        column.name = name;
-        column.type = target_type;
-
-        actions->add(ExpressionAction::addColumn(column));
-        return name;
+            actions->add(ExpressionAction::addColumn(column));
+        }
     }
     else if (isColumnExpr(expr))
     {
-        //todo check if the column type need to be cast to field type
-        return getColumnNameForColumnExpr(expr, getCurrentInputColumns());
+        ret = getColumnNameForColumnExpr(expr, getCurrentInputColumns());
     }
     else if (isFunctionExpr(expr))
     {
@@ -630,21 +635,21 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
             throw Exception("agg function is not supported yet", ErrorCodes::UNSUPPORTED_METHOD);
         }
         const String & func_name = getFunctionName(expr);
-        String expr_name;
         if (function_builder_map.find(func_name) != function_builder_map.end())
         {
-            expr_name = function_builder_map[func_name](this, expr, actions);
+            ret = function_builder_map[func_name](this, expr, actions);
         }
         else
         {
-            expr_name = buildFunction(this, expr, actions);
+            ret = buildFunction(this, expr, actions);
         }
-        expr_name = alignReturnType(expr, actions, expr_name, output_as_uint8_type);
-        return expr_name;
     }
     else
     {
         throw Exception("Unsupported expr type: " + getTypeName(expr), ErrorCodes::UNSUPPORTED_METHOD);
     }
+
+    ret = alignReturnType(expr, actions, ret, output_as_uint8_type);
+    return ret;
 }
 } // namespace DB
