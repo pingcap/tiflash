@@ -1,16 +1,15 @@
-#include <ctime>
-#include <memory>
-
-#include "dm_basic_include.h"
-
 #include <Poco/ConsoleChannel.h>
 #include <Poco/File.h>
 #include <Poco/FormattingChannel.h>
 #include <Poco/PatternFormatter.h>
-
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
+
+#include <ctime>
+#include <memory>
+
+#include "dm_basic_include.h"
 
 namespace DB
 {
@@ -78,14 +77,7 @@ protected:
                                                   table_columns_,
                                                   /*min_version_*/ 0,
                                                   settings.not_compress_columns,
-                                                  db_context->getSettingsRef().dm_segment_limit_rows,
-                                                  db_context->getSettingsRef().dm_segment_delta_limit_rows,
-                                                  db_context->getSettingsRef().dm_segment_delta_cache_limit_rows,
-                                                  db_context->getSettingsRef().dm_segment_delta_small_pack_rows,
-                                                  db_context->getSettingsRef().dm_segment_stable_pack_rows,
-                                                  db_context->getSettingsRef().dm_enable_logical_split,
-                                                  false,
-                                                  false);
+                                                  db_context->getSettingsRef());
     }
 
     const ColumnDefinesPtr & tableColumns() const { return table_columns_; }

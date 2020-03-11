@@ -1,7 +1,5 @@
 #pragma once
 
-#include <test_utils/TiflashTestBasic.h>
-
 #include <Columns/ColumnVector.h>
 #include <Common/typeid_cast.h>
 #include <Core/Block.h>
@@ -9,6 +7,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Range.h>
+#include <test_utils/TiflashTestBasic.h>
 
 namespace DB
 {
@@ -17,21 +16,10 @@ namespace DM
 namespace tests
 {
 
-#define CATCH                                                                                      \
-    catch (const Exception & e)                                                                    \
-    {                                                                                              \
-        std::string text = e.displayText();                                                        \
-                                                                                                   \
-        auto embedded_stack_trace_pos = text.find("Stack trace");                                  \
-        std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;               \
-        if (std::string::npos == embedded_stack_trace_pos)                                         \
-            std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl; \
-                                                                                                   \
-        throw;                                                                                     \
-    }
+// Add this so that we can call typeFromString under namespace DB::DM::tests
+using DB::tests::typeFromString;
 
 /// helper functions for comparing HandleRange
-
 inline ::testing::AssertionResult HandleRangeCompare(const char *        lhs_expr,
                                                      const char *        rhs_expr, //
                                                      const HandleRange & lhs,

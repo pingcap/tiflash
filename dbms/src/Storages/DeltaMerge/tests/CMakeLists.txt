@@ -31,14 +31,8 @@ target_link_libraries(dm_test_delta_merge_store dbms gtest_main clickhouse_funct
 add_executable(dm_test_segment EXCLUDE_FROM_ALL gtest_dm_segment.cpp)
 target_link_libraries(dm_test_segment dbms gtest_main clickhouse_functions)
 
-add_executable(dm_test_disk_value_space EXCLUDE_FROM_ALL gtest_dm_disk_value_space.cpp)
-target_link_libraries(dm_test_disk_value_space dbms gtest_main clickhouse_functions)
-
 add_executable(dm_test_delta_tree EXCLUDE_FROM_ALL gtest_dm_delta_tree.cpp)
 target_link_libraries(dm_test_delta_tree dbms gtest_main)
-
-add_executable(dm_test_pack EXCLUDE_FROM_ALL gtest_dm_pack.cpp)
-target_link_libraries(dm_test_pack dbms gtest_main)
 
 add_executable(dm_test_dmfile EXCLUDE_FROM_ALL gtest_dm_file.cpp)
 target_link_libraries(dm_test_dmfile dbms gtest_main clickhouse_functions)
