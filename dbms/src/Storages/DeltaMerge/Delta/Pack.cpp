@@ -174,6 +174,13 @@ Block readPackFromCache(const PackPtr & pack)
 
 Columns readPackFromCache(const PackPtr & pack, const ColumnDefines & column_defines, size_t col_start, size_t col_end)
 {
+    if (unlikely(!(pack->cache)))
+    {
+        String msg = " Not a cache pack: " + pack->toString();
+        LOG_ERROR(&Logger::get(__FUNCTION__), msg);
+        throw Exception(msg);
+    }
+
     // TODO: should be able to use cache data directly, without copy.
     std::scoped_lock lock(pack->cache->mutex);
 
@@ -193,9 +200,12 @@ Columns readPackFromCache(const PackPtr & pack, const ColumnDefines & column_def
             auto   col_offset = it->second;
             auto   col_data   = col.type->createColumn();
             auto & cache_col  = cache_block.getByPosition(col_offset).column;
-            if (unlikely(!cache_col))
+            if (unlikely(col_offset >= cache_block.columns() || !cache_col))
             {
-                String msg = "cache column at " + DB::toString(col_offset) + " is null! col_id: " + DB::toString(col.id)
+                String msg = "read column at " + DB::toString(col_offset)             //
+                    + ", cache block: columns=" + DB::toString(cache_block.columns()) //
+                    + ", rows=" + DB::toString(cache_block.rows())                    //
+                    + ", read col_id: " + DB::toString(col.id)                        //
                     + ", pack: " + pack->toString();
                 LOG_ERROR(&Logger::get(__FUNCTION__), msg);
                 throw Exception(msg);
