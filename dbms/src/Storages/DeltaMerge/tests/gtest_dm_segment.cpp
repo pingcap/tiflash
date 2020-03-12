@@ -45,8 +45,10 @@ public:
 
     void SetUp() override
     {
-        db_context = std::make_unique<Context>(DMTestEnv::getContext(DB::Settings()));
+        db_context     = std::make_unique<Context>(DMTestEnv::getContext(DB::Settings()));
+        table_columns_ = std::make_shared<ColumnDefines>();
         dropDataInDisk();
+
         segment = reload();
         ASSERT_EQ(segment->segmentId(), DELTA_MERGE_FIRST_SEGMENT_ID);
     }
@@ -67,7 +69,7 @@ protected:
     // setColumns should update dm_context at the same time
     void setColumns(const ColumnDefinesPtr & columns)
     {
-        table_columns_ = columns;
+        *table_columns_ = *columns;
 
         dm_context_ = std::make_unique<DMContext>(*db_context,
                                                   path,
@@ -835,7 +837,7 @@ try
 CATCH
 
 /// Mock a col from i8 -> i32
-TEST_F(Segment_test, DISABLED_DDLAlterInt8ToInt32)
+TEST_F(Segment_test, DDLAlterInt8ToInt32)
 try
 {
     const String       column_name_i8_to_i32 = "i8_to_i32";
@@ -878,24 +880,11 @@ try
     }
 
     {
-        ColumnDefines columns_to_read{
-            column_i32_after_ddl,
-        };
+        ColumnDefines columns_to_read = *DMTestEnv::getDefaultColumns();
+        columns_to_read.emplace_back(column_i32_after_ddl);
 
-        BlockInputStreamPtr in;
-        try
-        {
-            // read written data
-            in = segment->getInputStream(dmContext(), *tableColumns());
-        }
-        catch (const Exception & e)
-        {
-            const auto text = e.displayText();
-            std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
-            std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString();
-
-            throw;
-        }
+        // read written data
+        BlockInputStreamPtr in = segment->getInputStream(dmContext(), *tableColumns());
 
         // check that we can read correct values
         size_t num_rows_read = 0;
@@ -912,7 +901,7 @@ try
             {
                 auto       value    = col.column->getInt(i);
                 const auto expected = static_cast<int64_t>(-1 * (i % 2 ? 1 : -1) * i);
-                ASSERT_EQ(value, expected);
+                ASSERT_EQ(value, expected) << "at row: " << i;
             }
         }
         in->readSuffix();
@@ -921,7 +910,7 @@ try
 }
 CATCH
 
-TEST_F(Segment_test, DISABLED_DDLAddColumnWithDefaultValue)
+TEST_F(Segment_test, DDLAddColumnWithDefaultValue)
 try
 {
     const String   new_column_name = "i8";
@@ -954,10 +943,6 @@ try
     }
 
     {
-        ColumnDefines columns_to_read{
-            new_column_define,
-        };
-
         // read written data
         auto in = segment->getInputStream(dmContext(), *tableColumns());
 

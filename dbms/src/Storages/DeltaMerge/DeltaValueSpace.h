@@ -80,6 +80,13 @@ public:
                 colid_to_offset.emplace(schema->getByPosition(i).column_id, i);
         }
 
+        DataTypePtr getDataTypeByColumnID(ColId cid) const
+        {
+            // Note that cid must exist
+            auto index = colid_to_offset.at(cid);
+            return schema->getByPosition(index).type;
+        }
+
         String toString()
         {
             return "{rows:" + DB::toString(rows)                //
@@ -128,19 +135,25 @@ public:
             }
         }
 
-        size_t getPackCount() { return packs.size(); }
-        size_t getRows() { return rows; }
-        size_t getDeletes() { return deletes; }
+        size_t getPackCount() const { return packs.size(); }
+        size_t getRows() const { return rows; }
+        size_t getDeletes() const { return deletes; }
 
         void                prepare(const DMContext & context, const ColumnDefines & column_defines_);
         BlockInputStreamPtr prepareForStream(const DMContext & context, const ColumnDefines & column_defines_);
 
         const Columns & getColumnsOfPack(size_t pack_index, size_t col_num);
 
-        size_t         read(const HandleRange & range, MutableColumns & output_columns, size_t offset, size_t limit);
-        Block          read(size_t col_num, size_t offset, size_t limit);
-        Block          read(size_t pack_index);
+        // Get blocks or delete_ranges of `ExtraHandleColumn` and `VersionColumn`.
+        // If there are continuous blocks, they will be squashed into one block.
+        // We use the result to update DeltaTree.
         BlockOrDeletes getMergeBlocks(size_t rows_begin, size_t deletes_begin, size_t rows_end, size_t deletes_end);
+
+        Block  read(size_t pack_index);
+        size_t read(const HandleRange & range, MutableColumns & output_columns, size_t offset, size_t limit);
+
+    private:
+        Block read(size_t col_num, size_t offset, size_t limit);
     };
     using SnapshotPtr = std::shared_ptr<Snapshot>;
 
@@ -210,7 +223,7 @@ public:
             throw Exception("Try to abandon a already abandoned DeltaValueSpace", ErrorCodes::LOGICAL_ERROR);
     }
 
-    bool hasAbandoned() { return abandoned.load(std::memory_order_relaxed); }
+    bool hasAbandoned() const { return abandoned.load(std::memory_order_relaxed); }
 
     /// Restore the metadata of this instance.
     /// Only called after reboot.

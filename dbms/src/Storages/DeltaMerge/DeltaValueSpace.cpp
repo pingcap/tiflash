@@ -19,7 +19,6 @@ namespace DB
 {
 namespace DM
 {
-
 const UInt64 DeltaValueSpace::CURRENT_VERSION = 1;
 
 using BlockPtr    = DeltaValueSpace::BlockPtr;

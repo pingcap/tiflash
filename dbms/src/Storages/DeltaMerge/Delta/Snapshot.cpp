@@ -4,6 +4,7 @@
 #include <Storages/DeltaMerge/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/HandleFilter.h>
 #include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 
 namespace DB::DM
 {
@@ -206,8 +207,9 @@ size_t DeltaValueSpace::Snapshot::read(const HandleRange & range, MutableColumns
         if (rows_start_in_pack == rows_end_in_pack)
             continue;
 
+        // TODO: this get the full columns of pack, which may cause unnecessary copying
         auto & columns         = getColumnsOfPack(pack_index, output_columns.size());
-        auto & handle_col_data = toColumnVectorData<Handle>(columns[0]);
+        auto & handle_col_data = toColumnVectorData<Handle>(columns[0]); // TODO: Magic number of fixed position of pk
         if (rows_in_pack_limit == 1)
         {
             if (range.check(handle_col_data[rows_start_in_pack]))
