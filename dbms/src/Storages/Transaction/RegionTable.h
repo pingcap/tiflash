@@ -150,6 +150,8 @@ public:
     /// extend range for possible InternalRegion or add one.
     void extendRegionRange(const RegionID region_id, const RegionRangeKeys & region_range_keys);
 
+    RegionDataReadInfoList flushRegion(const RegionPtr & region, bool try_persist) const;
+
 private:
     friend class MockTiDB;
     friend class StorageMergeTree;
@@ -165,7 +167,6 @@ private:
 
     bool shouldFlush(const InternalRegion & region) const;
     RegionID pickRegionToFlush();
-    RegionDataReadInfoList flushRegion(const RegionPtr & region, bool try_persist) const;
 
     void incrDirtyFlag(RegionID region_id);
     void clearDirtyFlag(RegionID region_id);

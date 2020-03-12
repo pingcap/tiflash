@@ -419,8 +419,14 @@ RegionMap doLearnerRead(const TiDB::TableID table_id,           //
 
             if (resolve_locks)
             {
-                auto scanner = region->createCommittedScanner();
-                RegionTable::resolveLocks(scanner, start_ts);
+                {
+                    auto scanner = region->createCommittedScanner();
+                    RegionTable::resolveLocks(scanner, start_ts);
+                }
+
+                // Some rows could be committed after wait index and before resolve locks.
+                // We must also flush those rows, otherwise them could be missed when read.
+                tmt.getRegionTable().flushRegion(region, false);
             }
         }
     };
