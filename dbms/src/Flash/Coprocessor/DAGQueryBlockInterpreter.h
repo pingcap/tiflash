@@ -25,17 +25,17 @@ class Context;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 
-struct RegionInfo
-{
-    RegionInfo(RegionID region_id_, UInt64 region_version_, UInt64 region_conf_version_,
-        const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges_)
-        : region_id(region_id_), region_version(region_version_), region_conf_version(region_conf_version_), key_ranges(key_ranges_)
-    {}
-    const RegionID region_id;
-    const UInt64 region_version;
-    const UInt64 region_conf_version;
-    const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges;
-};
+//struct RegionInfo
+//{
+//    RegionInfo(RegionID region_id_, UInt64 region_version_, UInt64 region_conf_version_,
+//        const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges_)
+//        : region_id(region_id_), region_version(region_version_), region_conf_version(region_conf_version_), key_ranges(key_ranges_)
+//    {}
+//    const RegionID region_id;
+//    const UInt64 region_version;
+//    const UInt64 region_conf_version;
+//    const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges;
+//};
 
 struct Pipeline
 {
