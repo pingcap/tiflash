@@ -1,9 +1,10 @@
+#include <common/logger_useful.h>
+
 #include <IO/CompressedReadBuffer.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Storages/DeltaMerge/Delta/Pack.h>
 #include <Storages/Page/PageStorage.h>
-
 
 namespace DB::DM
 {
@@ -189,9 +190,18 @@ Columns readPackFromCache(const PackPtr & pack, const ColumnDefines & column_def
         }
         else
         {
-            auto col_offset = it->second;
-            auto col_data   = col.type->createColumn();
-            col_data->insertRangeFrom(*cache_block.getByPosition(col_offset).column, pack->cache_offset, pack->rows);
+            auto   col_offset = it->second;
+            auto   col_data   = col.type->createColumn();
+            auto & cache_col  = cache_block.getByPosition(col_offset).column;
+            if (unlikely(!cache_col))
+            {
+                String msg = "cache column at " + DB::toString(col_offset) + " is null! col_id: " + DB::toString(col.id)
+                    + ", pack: " + pack->toString();
+                LOG_ERROR(&Logger::get(__FUNCTION__), msg);
+                throw Exception(msg);
+            }
+
+            col_data->insertRangeFrom(*cache_col, pack->cache_offset, pack->rows);
             columns.push_back(std::move(col_data));
         }
     }
