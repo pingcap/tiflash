@@ -934,6 +934,8 @@ bool DeltaMergeStore::handleBackgroundTask()
                                                                   /* ignore_cache= */ false,
                                                                   global_context.getSettingsRef().safe_point_update_interval_seconds);
 
+        LOG_DEBUG(log, "GC savepoint: " << safe_point);
+
         task.dm_context->min_version = safe_point;
     }
 
@@ -955,13 +957,15 @@ bool DeltaMergeStore::handleBackgroundTask()
             left = segmentMergeDelta(*task.dm_context, task.segment, false);
             type = ThreadType::BG_MergeDelta;
             break;
-        case Compact: {
+        case Compact:
+        {
             task.segment->getDelta()->compact(*task.dm_context);
             left = task.segment;
             type = ThreadType::BG_Compact;
             break;
         }
-        case Flush: {
+        case Flush:
+        {
             task.segment->getDelta()->flush(*task.dm_context);
             left = task.segment;
             type = ThreadType::BG_Flush;
