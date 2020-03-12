@@ -186,6 +186,7 @@ inline bool hasColumn(const ColumnDefines & columns, const ColId & col_id)
     return false;
 }
 
+template <bool check_default_value = false>
 inline bool checkSchema(const Block & a, const Block & b)
 {
     if (a.columns() != b.columns())
@@ -194,7 +195,13 @@ inline bool checkSchema(const Block & a, const Block & b)
     {
         auto & ca = a.getByPosition(i);
         auto & cb = a.getByPosition(i);
-        if (ca.column_id != cb.column_id || ca.name != cb.name || !ca.type->equals(*(cb.type)))
+
+        bool col_ok   = ca.column_id == cb.column_id;
+        bool name_ok  = ca.name == cb.name;
+        bool type_ok  = ca.type->equals(*(cb.type));
+        bool value_ok = !check_default_value || ca.default_value == cb.default_value;
+
+        if (!col_ok || !name_ok || !type_ok || !value_ok)
             return false;
     }
     return true;
@@ -234,26 +241,6 @@ inline size_t blockBytes(const Block & block)
     for (auto & c : block)
         bytes += c.column->byteSize();
     return bytes;
-}
-
-template <class T, bool right_open = true>
-inline String rangeToString(T start, T end)
-{
-    String s = "[" + DB::toString(start) + "," + DB::toString(end);
-    if constexpr (right_open)
-        s += ")";
-    else
-        s += "]";
-    return s;
-}
-
-template <typename T>
-struct Range;
-
-template <typename T>
-inline String rangeToString(const Range<T> & range)
-{
-    return rangeToString<T, true>(range.start, range.end);
 }
 
 } // namespace DM

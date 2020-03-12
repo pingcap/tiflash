@@ -1,14 +1,13 @@
 #pragma once
 
-#include <unordered_map>
-#include <vector>
-
 #include <IO/WriteHelpers.h>
-
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
 #include <Storages/Page/WriteBatch.h>
+
+#include <unordered_map>
+#include <vector>
 
 namespace Poco
 {
@@ -25,7 +24,12 @@ class PageFile : public Allocator<false>
 public:
     using Version = UInt32;
 
-    static const Version CURRENT_VERSION;
+    // Basic binary version
+    static constexpr Version VERSION_BASE = 1;
+    // Support multiple thread-write && read with offset inside page
+    // See FLASH_341 && FLASH-942 for details.
+    static constexpr Version VERSION_FLASH_341 = 2;
+    static constexpr Version CURRENT_VERSION   = VERSION_FLASH_341;
 
     /// Writer can NOT be used by multi threads.
     class Writer : private boost::noncopyable
@@ -36,7 +40,9 @@ public:
         Writer(PageFile &, bool sync_on_write);
         ~Writer();
 
-        void write(const WriteBatch & wb, PageEntriesEdit & edit);
+        void write(WriteBatch & wb, PageEntriesEdit & edit);
+
+        PageFileIdAndLevel fileIdLevel() const;
 
     private:
         PageFile & page_file;
@@ -64,6 +70,17 @@ public:
 
         void read(PageIdAndEntries & to_read, const PageHandler & handler);
 
+        struct FieldReadInfo
+        {
+            PageId              page_id;
+            PageEntry           entry;
+            std::vector<size_t> fields;
+
+            FieldReadInfo(PageId id_, PageEntry entry_, std::vector<size_t> fields_) : page_id(id_), entry(entry_), fields(fields_) {}
+        };
+        using FieldReadInfos = std::vector<FieldReadInfo>;
+        PageMap read(FieldReadInfos & to_read);
+
     private:
         String data_file_path;
         int    data_file_fd;
@@ -73,7 +90,103 @@ public:
     {
         bool operator()(const PageFile & lhs, const PageFile & rhs) const
         {
+            if (lhs.type != rhs.type)
+            {
+                // If any PageFile's type is checkpoint, it is smaller
+                if (lhs.type == PageFile::Type::Checkpoint)
+                    return true;
+                else if (rhs.type == PageFile::Type::Checkpoint)
+                    return false;
+                // else fallback to later compare
+            }
             return std::make_pair(lhs.file_id, lhs.level) < std::make_pair(rhs.file_id, rhs.level);
+        }
+    };
+
+    class MetaMergingReader : private boost::noncopyable
+    {
+
+    public:
+        MetaMergingReader(PageFile & page_file_) : page_file(page_file_) {}
+
+        ~MetaMergingReader();
+
+        enum class Status
+        {
+            Uninitialized = 0,
+            Opened,
+            Finished,
+        };
+
+    public:
+        bool hasNext() const;
+
+        void moveNext();
+
+        PageEntriesEdit getEdits() { return std::move(curr_edit); }
+
+        void setPageFileOffsets() { page_file.setFileAppendPos(meta_file_offset, data_file_offset); }
+
+        String toString() const
+        {
+            return "MergingReader of " + page_file.toString() + ", sequence no: " + DB::toString(curr_write_batch_sequence)
+                + ", meta offset: " + DB::toString(meta_file_offset) + ", data offset: " + DB::toString(data_file_offset);
+        }
+
+        WriteBatch::SequenceID writeBatchSequence() const { return curr_write_batch_sequence; }
+        PageFileIdAndLevel     fileIdLevel() const { return page_file.fileIdLevel(); }
+        PageFile &             belongingPageFile() { return page_file; }
+
+        template <bool legacy_is_smaller>
+        static bool compare(const MetaMergingReader & lhs, const MetaMergingReader & rhs)
+        {
+            if (lhs.page_file.getType() != rhs.page_file.getType())
+            {
+                // If any PageFile's type is checkpoint, it is smaller
+                if (lhs.page_file.getType() == PageFile::Type::Checkpoint)
+                    return true;
+                else if (rhs.page_file.getType() == PageFile::Type::Checkpoint)
+                    return false;
+                if constexpr (legacy_is_smaller)
+                {
+                    if (lhs.page_file.getType() == PageFile::Type::Legacy)
+                        return true;
+                    else if (rhs.page_file.getType() == PageFile::Type::Legacy)
+                        return false;
+                }
+                // else fallback to later compare
+            }
+            if (lhs.curr_write_batch_sequence == rhs.curr_write_batch_sequence)
+                return lhs.page_file.fileIdLevel() < rhs.page_file.fileIdLevel();
+            return lhs.curr_write_batch_sequence < rhs.curr_write_batch_sequence;
+        }
+
+    private:
+        void initialize();
+
+    private:
+        PageFile & page_file;
+
+        Status status = Status::Uninitialized;
+
+        WriteBatch::SequenceID curr_write_batch_sequence = 0;
+        PageEntriesEdit        curr_edit;
+
+        char * meta_buffer = nullptr;
+        size_t meta_size   = 0;
+
+        size_t meta_file_offset = 0;
+        size_t data_file_offset = 0;
+    };
+    using MetaMergingReaderPtr = std::shared_ptr<MetaMergingReader>;
+
+    template <bool is_legacy_smaller>
+    struct MergingPtrComparator
+    {
+        bool operator()(const MetaMergingReaderPtr & lhs, const MetaMergingReaderPtr & rhs) const
+        {
+            // priority_queue always pop the "biggest" elem
+            return MetaMergingReader::compare<is_legacy_smaller>(*rhs, *lhs);
         }
     };
 
@@ -114,11 +227,13 @@ public:
     static PageFile newPageFile(PageFileId file_id, UInt32 level, const String & parent_path, Type type, Poco::Logger * log);
     /// Open an existing page file for read.
     static PageFile openPageFileForRead(PageFileId file_id, UInt32 level, const String & parent_path, Type type, Poco::Logger * log);
+    /// If page file is exist.
+    static bool isPageFileExist(PageFileIdAndLevel file_id, const String & parent_path, Type type, Poco::Logger * log);
 
     /// Get pages' metadata by this method. Will also update file pos.
     /// Call this method after a page file recovered.
     /// if check_page_map_complete is true, do del or ref on non-exist page will throw exception.
-    void readAndSetPageMetas(PageEntriesEdit & edit);
+    void readAndSetPageMetas(PageEntriesEdit & edit, WriteBatch::SequenceID & max_wb_sequence);
 
     /// Rename this page file into formal style.
     void setFormal();
@@ -129,6 +244,7 @@ public:
     /// Destroy underlying system files.
     void destroy() const;
 
+    MetaMergingReaderPtr createMetaMergingReader() { return std::make_unique<MetaMergingReader>(*this); }
     /// Return a writer bound with this PageFile object.
     /// Note that the user MUST keep the PageFile object around before this writer being freed.
     std::unique_ptr<Writer> createWriter(bool sync_on_write) { return std::make_unique<Writer>(*this, sync_on_write); }
@@ -148,13 +264,23 @@ public:
     UInt32             getLevel() const { return level; }
     PageFileIdAndLevel fileIdLevel() const { return std::make_pair(file_id, level); }
     bool               isValid() const { return file_id; }
-    UInt64             getDataFileAppendPos() const { return data_file_pos; }
-    UInt64             getDataFileSize() const;
     bool               isExist() const;
     void               removeDataIfExists() const;
     Type               getType() const { return type; }
 
+    void setFileAppendPos(size_t meta_pos, size_t data_pos)
+    {
+        meta_file_pos = meta_pos;
+        data_file_pos = data_pos;
+    }
+    UInt64 getDataFileAppendPos() const { return data_file_pos; }
+    UInt64 getMetaFileAppendPos() const { return meta_file_pos; }
+    UInt64 getDataFileSize() const;
+    UInt64 getMetaFileSize() const;
+
     String folderPath() const;
+
+    String toString() const { return "PageFile_" + DB::toString(file_id) + "_" + DB::toString(level) + ", type: " + typeToString(type); }
 
 private:
     /// Create a new page file.
@@ -180,5 +306,8 @@ private:
 
     Poco::Logger * log = nullptr;
 };
+using PageFileSet = std::set<PageFile, PageFile::Comparator>;
+
+void removePageFilesIf(PageFileSet & page_files, const std::function<bool(const PageFile &)> & pred);
 
 } // namespace DB

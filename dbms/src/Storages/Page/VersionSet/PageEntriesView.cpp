@@ -10,7 +10,7 @@ std::optional<PageEntry> PageEntriesView::find(PageId page_id) const
     // First we find ref-pairs to get the normal page id
     bool   found          = false;
     PageId normal_page_id = 0;
-    for (auto node = tail; node != nullptr; node = node->prev)
+    for (PageEntriesForDeltaPtr node = tail; node != nullptr; node = node->prev)
     {
         if (node->isRefDeleted(page_id))
         {
@@ -53,7 +53,7 @@ const PageEntry PageEntriesView::at(const PageId page_id) const
 
 std::optional<PageEntry> PageEntriesView::findNormalPageEntry(PageId page_id) const
 {
-    for (auto node = tail; node != nullptr; node = node->prev)
+    for (PageEntriesForDeltaPtr node = tail; node != nullptr; node = node->prev)
     {
         auto iter = node->normal_pages.find(page_id);
         if (iter != node->normal_pages.end())
@@ -66,7 +66,7 @@ std::optional<PageEntry> PageEntriesView::findNormalPageEntry(PageId page_id) co
 
 std::pair<bool, PageId> PageEntriesView::isRefId(PageId page_id) const
 {
-    auto node = tail;
+    PageEntriesForDeltaPtr node = tail;
     // For delta, we need to check if page_id is deleted, then try to find in page_ref
     for (; !node->isBase(); node = node->prev)
     {
@@ -88,8 +88,8 @@ PageId PageEntriesView::resolveRefId(PageId page_id) const
 
 std::set<PageId> PageEntriesView::validPageIds() const
 {
-    std::stack<std::shared_ptr<PageEntriesForDelta>> link_nodes;
-    for (auto node = tail; node != nullptr; node = node->prev)
+    std::stack<PageEntriesForDeltaPtr> link_nodes;
+    for (PageEntriesForDeltaPtr node = tail; node != nullptr; node = node->prev)
     {
         link_nodes.emplace(node);
     }
@@ -97,8 +97,7 @@ std::set<PageId> PageEntriesView::validPageIds() const
     std::set<PageId> valid_pages;
     while (!link_nodes.empty())
     {
-        auto node = link_nodes.top();
-        link_nodes.pop();
+        PageEntriesForDeltaPtr node = link_nodes.top();
         if (!node->isBase())
         {
             for (auto deleted_id : node->ref_deletions)
@@ -110,6 +109,7 @@ std::set<PageId> PageEntriesView::validPageIds() const
         {
             valid_pages.insert(ref_pairs.first);
         }
+        link_nodes.pop();
     }
     return valid_pages;
 }
@@ -117,8 +117,8 @@ std::set<PageId> PageEntriesView::validPageIds() const
 std::set<PageId> PageEntriesView::validNormalPageIds() const
 {
     // TODO: add test cases for this function
-    std::stack<std::shared_ptr<PageEntriesForDelta>> link_nodes;
-    for (auto node = tail; node != nullptr; node = node->prev)
+    std::stack<PageEntriesForDeltaPtr> link_nodes;
+    for (PageEntriesForDeltaPtr node = tail; node != nullptr; node = node->prev)
     {
         link_nodes.emplace(node);
     }
@@ -126,8 +126,7 @@ std::set<PageId> PageEntriesView::validNormalPageIds() const
     std::set<PageId> valid_normal_pages;
     while (!link_nodes.empty())
     {
-        auto node = link_nodes.top();
-        link_nodes.pop();
+        PageEntriesForDeltaPtr node = link_nodes.top();
         for (auto & [page_id, entry] : node->normal_pages)
         {
             if (entry.isTombstone())
@@ -139,6 +138,7 @@ std::set<PageId> PageEntriesView::validNormalPageIds() const
                 valid_normal_pages.insert(page_id);
             }
         }
+        link_nodes.pop();
     }
     return valid_normal_pages;
 }
@@ -146,7 +146,7 @@ std::set<PageId> PageEntriesView::validNormalPageIds() const
 PageId PageEntriesView::maxId() const
 {
     PageId max_id = 0;
-    for (auto node = tail; node != nullptr; node = node->prev)
+    for (PageEntriesForDeltaPtr node = tail; node != nullptr; node = node->prev)
     {
         max_id = std::max(max_id, node->maxId());
     }
@@ -156,8 +156,8 @@ PageId PageEntriesView::maxId() const
 size_t PageEntriesView::numPages() const
 {
     std::unordered_set<PageId>                        page_ids;
-    std::vector<std::shared_ptr<PageEntriesForDelta>> nodes;
-    for (auto node = tail; node != nullptr; node = node->prev)
+    std::vector<PageEntriesForDeltaPtr> nodes;
+    for (PageEntriesForDeltaPtr node = tail; node != nullptr; node = node->prev)
         nodes.emplace_back(node);
 
     for (auto node = nodes.rbegin(); node != nodes.rend(); ++node)

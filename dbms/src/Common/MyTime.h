@@ -41,6 +41,8 @@ struct MyTimeBase
     static const UInt64 FSP_BIT_FIELD_MASK       = 0b1110;
     static const UInt64 CORE_TIME_BIT_FIELD_MASK = ~FSPTT_BIT_FIELD_MASK;
 
+    static const UInt64 YMD_MASK = ~((1ull << 41) -1);
+
     enum MyTimeType : UInt8
     {
         TypeDate = 0,

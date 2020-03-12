@@ -22,6 +22,8 @@ class RegionRaftCommandDelegate;
 class KVStoreTaskLock;
 class Context;
 class TMTContext;
+struct WriteCmdsView;
+enum TiFlashApplyRes : uint32_t;
 
 /// Store all kv data of one region. Including 'write', 'data' and 'lock' column families.
 /// TODO: currently the synchronize mechanism is broken and need to fix.
@@ -30,9 +32,6 @@ class Region : public std::enable_shared_from_this<Region>
 public:
     const static UInt32 CURRENT_VERSION;
 
-    const static std::string lock_cf_name;
-    const static std::string default_cf_name;
-    const static std::string write_cf_name;
     const static std::string log_name;
 
     static const auto PutFlag = CFModifyFlag::PutFlag;
@@ -132,6 +131,9 @@ public:
 
     UInt64 appliedIndex() const;
 
+    void setApplied(UInt64 index, UInt64 term) { meta.setApplied(index, term); }
+    void notifyApplied() { meta.notifyAll(); }
+
     RegionVersion version() const;
     RegionVersion confVer() const;
 
@@ -150,7 +152,6 @@ public:
     /// Traverse all data in source_region and get handle with largest version.
     void compareAndUpdateHandleMaps(const Region & source_region, HandleMap & handle_map);
 
-    static ColumnFamilyType getCfType(const std::string & cf);
     RegionRaftCommandDelegate & makeRaftCommandDelegate(const KVStoreTaskLock &);
     metapb::Region getMetaRegion() const;
     raft_serverpb::MergeState getMergeState() const;
@@ -158,7 +159,7 @@ public:
     void tryPreDecodeTiKVValue(TMTContext & tmt);
 
     TableID getMappedTableID() const;
-    void handleWriteRaftCmd(raft_cmdpb::RaftCmdRequest && request, UInt64 index, UInt64 term);
+    TiFlashApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, bool set_applied = true);
 
 private:
     Region() = delete;
@@ -169,7 +170,6 @@ private:
     void doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value);
     void doCheckTable(const DecodedTiKVKey & key) const;
     void doRemove(ColumnFamilyType type, const TiKVKey & key);
-    void doDeleteRange(const std::string & cf, const RegionRange & range);
 
     RegionDataReadInfo readDataByWriteIt(const RegionData::ConstWriteCFIter & write_it, bool need_value = true) const;
     RegionData::WriteCFIter removeDataByWriteIt(const RegionData::WriteCFIter & write_it);

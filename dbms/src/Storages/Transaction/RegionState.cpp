@@ -58,23 +58,31 @@ const RegionState::Base & RegionState::getBase() const { return *this; }
 const raft_serverpb::MergeState & RegionState::getMergeState() const { return merge_state(); }
 raft_serverpb::MergeState & RegionState::getMutMergeState() { return *mutable_merge_state(); }
 
-TableID computeMappedTableID(const DecodedTiKVKey & key)
+bool computeMappedTableID(const DecodedTiKVKey & key, TableID & table_id)
 {
     // t table_id _r
     if (key.size() >= (1 + 8 + 2) && key[0] == RecordKVFormat::TABLE_PREFIX
         && memcmp(key.data() + 9, RecordKVFormat::RECORD_PREFIX_SEP, 2) == 0)
-        return RecordKVFormat::getTableId(key);
+    {
+        table_id = RecordKVFormat::getTableId(key);
+        return true;
+    }
 
-    throw Exception("Can't tell table id for region, should not happen", ErrorCodes::LOGICAL_ERROR);
+    return false;
 }
 
 RegionRangeKeys::RegionRangeKeys(TiKVKey && start_key, TiKVKey && end_key)
     : ori(RegionRangeKeys::makeComparableKeys(std::move(start_key), std::move(end_key))),
       raw(ori.first.key.empty() ? DecodedTiKVKey() : RecordKVFormat::decodeTiKVKey(ori.first.key),
-          ori.second.key.empty() ? DecodedTiKVKey() : RecordKVFormat::decodeTiKVKey(ori.second.key)),
-      mapped_table_id(computeMappedTableID(raw.first)),
-      mapped_handle_range(TiKVRange::getHandleRangeByTable(rawKeys().first, rawKeys().second, mapped_table_id))
+          ori.second.key.empty() ? DecodedTiKVKey() : RecordKVFormat::decodeTiKVKey(ori.second.key))
 {
+    if (!computeMappedTableID(raw.first, mapped_table_id))
+    {
+        throw Exception(
+            "Can't tell table id for region, should not happen, start key: " + ori.first.key.toHex(), ErrorCodes::LOGICAL_ERROR);
+    }
+    mapped_handle_range = TiKVRange::getHandleRangeByTable(rawKeys().first, rawKeys().second, mapped_table_id);
+
     if (mapped_handle_range.first == mapped_handle_range.second)
         throw Exception(std::string(__PRETTY_FUNCTION__) + " got empty handle range", ErrorCodes::LOGICAL_ERROR);
 }

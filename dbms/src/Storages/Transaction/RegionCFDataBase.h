@@ -1,8 +1,8 @@
 #pragma once
 
-#include <map>
-
 #include <Storages/Transaction/CFDataPreDecode.h>
+
+#include <map>
 
 namespace DB
 {
@@ -22,7 +22,7 @@ enum CFModifyFlag : UInt8
 
 struct TiKVRangeKey;
 using RegionRange = std::pair<TiKVRangeKey, TiKVRangeKey>;
-using RegionDataRes = bool;
+using RegionDataRes = size_t;
 
 template <typename Trait>
 struct RegionCFDataBase
@@ -46,6 +46,8 @@ struct RegionCFDataBase
 
     static size_t calcTiKVKeyValueSize(const TiKVKey & key, const TiKVValue & value);
 
+    void finishInsert(typename Map::iterator);
+
     size_t remove(const Key & key, bool quiet = false);
 
     static bool cmp(const Map & a, const Map & b);
@@ -68,8 +70,6 @@ struct RegionCFDataBase
     const Data & getData() const;
 
     Data & getDataMut();
-
-    size_t deleteRange(const RegionRange & range);
 
     CFDataPreDecode<Trait> & getCFDataPreDecode();
 

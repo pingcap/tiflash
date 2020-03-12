@@ -30,7 +30,9 @@ struct TiKVRangeKey;
 
 class TMTContext;
 
-extern "C" struct SnapshotDataView;
+struct SnapshotDataView;
+struct WriteCmdsView;
+
 enum TiFlashApplyRes : uint32_t;
 
 /// TODO: brief design document.
@@ -55,6 +57,8 @@ public:
 
     void tryPersist(const RegionID region_id);
 
+    static void tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, Poco::Logger * log);
+
     size_t regionSize() const;
     TiFlashApplyRes handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
         raft_cmdpb::AdminResponse && response,
@@ -64,6 +68,7 @@ public:
         TMTContext & tmt);
     TiFlashApplyRes handleWriteRaftCmd(
         raft_cmdpb::RaftCmdRequest && request, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
+    TiFlashApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
     void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, const SnapshotDataView & lock_buff,
         const SnapshotDataView & write_buff, const SnapshotDataView & default_buff, uint64_t index, uint64_t term, TMTContext & tmt);
     bool tryApplySnapshot(RegionPtr new_region, Context & context, bool try_flush_region);

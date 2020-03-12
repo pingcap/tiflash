@@ -680,7 +680,7 @@ void InterpreterDAG::getAndLockStorageWithSchemaVersion(TableID table_id, Int64 
                 return std::make_tuple(nullptr, nullptr, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, false);
         }
 
-        if (storage_->engineType() != ::TiDB::StorageEngine::TMT && storage_->engineType() != ::TiDB::StorageEngine::DM)
+        if (storage_->engineType() != ::TiDB::StorageEngine::TMT && storage_->engineType() != ::TiDB::StorageEngine::DT)
         {
             throw Exception("Specifying schema_version for non-managed storage: " + storage_->getName()
                     + ", table: " + storage_->getTableName() + ", id: " + DB::toString(table_id) + " is not allowed",

@@ -1,5 +1,3 @@
-#include <common/logger_useful.h>
-
 #include <Core/Block.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTInsertQuery.h>
@@ -14,6 +12,7 @@
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -98,7 +97,7 @@ void RegionTable::writeBlockByRegion(Context & context, RegionPtr region, Region
                 output.write(std::move(block));
                 break;
             }
-            case ::TiDB::StorageEngine::DM:
+            case ::TiDB::StorageEngine::DT:
             {
                 auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
                 // imported data from TiDB, ASTInsertQuery.is_import need to be true
@@ -182,17 +181,9 @@ std::tuple<Block, RegionException::RegionReadStatus> RegionTable::readBlockByReg
         }
 
         /// Deal with locks.
+        if (resolve_locks)
         {
-            if (resolve_locks)
-            {
-                LockInfoPtr lock_info = scanner.getLockInfo(start_ts);
-                if (lock_info)
-                {
-                    LockInfos lock_infos;
-                    lock_infos.emplace_back(std::move(lock_info));
-                    throw LockException(std::move(lock_infos));
-                }
-            }
+            resolveLocks(scanner, start_ts);
         }
 
         /// Read raw KVs from region cache.
@@ -224,6 +215,16 @@ std::tuple<Block, RegionException::RegionReadStatus> RegionTable::readBlockByReg
     }
 
     return {std::move(block), RegionException::OK};
+}
+
+void RegionTable::resolveLocks(Region::CommittedScanner & scanner, const Timestamp start_ts)
+{
+    if (LockInfoPtr lock_info = scanner.getLockInfo(start_ts); lock_info)
+    {
+        LockInfos lock_infos;
+        lock_infos.emplace_back(std::move(lock_info));
+        throw LockException(std::move(lock_infos));
+    }
 }
 
 } // namespace DB

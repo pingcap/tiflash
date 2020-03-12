@@ -25,7 +25,7 @@ public:
     void SetUp() override
     {
         dropFiles();
-        storage_pool = std::make_unique<StoragePool>("test.t1", path);
+        storage_pool = std::make_unique<StoragePool>("test.t1", path, DB::Settings());
         dm_file      = DMFile::create(0, path);
         db_context   = std::make_unique<Context>(DMTestEnv::getContext(DB::Settings()));
 
@@ -41,7 +41,7 @@ public:
         }
     }
 
-    void reload(const ColumnDefines & cols = DMTestEnv::getDefaultColumns())
+    void reload(const ColumnDefinesPtr & cols = DMTestEnv::getDefaultColumns())
     {
         dm_context = std::make_unique<DMContext>(*db_context,
                                                  path,
@@ -49,17 +49,9 @@ public:
                                                  *storage_pool,
                                                  0,
                                                  cols,
-                                                 cols.at(0),
                                                  0,
                                                  settings.not_compress_columns,
-                                                 db_context->getSettingsRef().dm_segment_limit_rows,
-                                                 db_context->getSettingsRef().dm_segment_delta_limit_rows,
-                                                 db_context->getSettingsRef().dm_segment_delta_cache_limit_rows,
-                                                 db_context->getSettingsRef().dm_segment_delta_small_pack_rows,
-                                                 db_context->getSettingsRef().dm_segment_stable_pack_rows,
-                                                 db_context->getSettingsRef().dm_enable_logical_split,
-                                                 false,
-                                                 false);
+                                                 db_context->getSettingsRef());
     }
 
 
@@ -91,7 +83,7 @@ try
         // Prepare for write
         Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write / 2, false);
         Block block2 = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write, false);
-        auto  stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, cols);
+        auto  stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
         stream->writePrefix();
         stream->write(block1, 0);
         stream->write(block2, 0);
@@ -105,7 +97,7 @@ try
                                                                false,
                                                                dmContext().hash_salt,
                                                                dm_file,
-                                                               cols,
+                                                               *cols,
                                                                HandleRange::newAll(),
                                                                RSOperatorPtr{},
                                                                IdSetPtr{});
@@ -140,8 +132,8 @@ try
     // Prepare columns
     ColumnDefine i64_col(2, "i64", DataTypeFactory::instance().get("Int64"));
     ColumnDefine f64_col(3, "f64", DataTypeFactory::instance().get("Float64"));
-    cols.push_back(i64_col);
-    cols.push_back(f64_col);
+    cols->push_back(i64_col);
+    cols->push_back(f64_col);
 
     reload(cols);
 
@@ -166,7 +158,7 @@ try
         block.insert(i64);
         block.insert(f64);
 
-        auto stream = std::make_unique<DMFileBlockOutputStream>(dbContext(), dm_file, cols);
+        auto stream = std::make_unique<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
         stream->writePrefix();
         stream->write(block, 0);
         stream->writeSuffix();
@@ -179,7 +171,7 @@ try
                                                                false,
                                                                dmContext().hash_salt,
                                                                dm_file,
-                                                               cols,
+                                                               *cols,
                                                                HandleRange::newAll(),
                                                                RSOperatorPtr{},
                                                                IdSetPtr{});
@@ -222,7 +214,7 @@ TEST_F(DMFile_Test, StringType)
     auto cols = DMTestEnv::getDefaultColumns();
     // Prepare columns
     ColumnDefine fixed_str_col(2, "str", DataTypeFactory::instance().get("FixedString(5)"));
-    cols.push_back(fixed_str_col);
+    cols->push_back(fixed_str_col);
 
     reload(cols);
 
@@ -239,7 +231,7 @@ TEST_F(DMFile_Test, StringType)
 
         block.insert(str);
 
-        auto stream = std::make_unique<DMFileBlockOutputStream>(dbContext(), dm_file, cols);
+        auto stream = std::make_unique<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
         stream->writePrefix();
         stream->write(block, 0);
         stream->writeSuffix();
@@ -252,7 +244,7 @@ TEST_F(DMFile_Test, StringType)
                                                                false,
                                                                dmContext().hash_salt,
                                                                dm_file,
-                                                               cols,
+                                                               *cols,
                                                                HandleRange::newAll(),
                                                                RSOperatorPtr{},
                                                                IdSetPtr{});
@@ -288,7 +280,7 @@ try
     {
         // Prepare columns
         ColumnDefine nullable_col(2, "i32_null", DataTypeFactory::instance().get("Nullable(Int32)"));
-        cols.emplace_back(nullable_col);
+        cols->emplace_back(nullable_col);
     }
 
     reload(cols);
@@ -310,7 +302,7 @@ try
         nullable_col.column = std::move(col);
 
         block.insert(nullable_col);
-        auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, cols);
+        auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
         stream->writePrefix();
         stream->write(block, 0);
         stream->writeSuffix();
@@ -323,7 +315,7 @@ try
                                                                false,
                                                                dmContext().hash_salt,
                                                                dm_file,
-                                                               cols,
+                                                               *cols,
                                                                HandleRange::newAll(),
                                                                RSOperatorPtr{},
                                                                IdSetPtr{});

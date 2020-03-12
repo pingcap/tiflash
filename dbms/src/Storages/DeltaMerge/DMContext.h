@@ -1,39 +1,39 @@
 #pragma once
 
 #include <Core/Types.h>
+#include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/DeltaMerge/Range.h>
-#include <Storages/PathPool.h>
 
 namespace DB
 {
+
+class PathPool;
+
 namespace DM
 {
 
-using NotCompress = std::unordered_set<ColId>;
-
 class StoragePool;
+using NotCompress = std::unordered_set<ColId>;
 
 /**
  * This context object carries table infos. And those infos are only meaningful to current context.
  */
 struct DMContext : private boost::noncopyable
 {
-    const Context &  db_context;
-    const String     store_path;
-    const PathPool & extra_paths;
-    StoragePool &    storage_pool;
-    const UInt64     hash_salt;
+    const Context & db_context;
+    const String &  store_path;
+    PathPool &      extra_paths;
+    StoragePool &   storage_pool;
+    const UInt64    hash_salt;
 
     // The schema snapshot
     // We need a consistent snapshot of columns, copy ColumnsDefines
-    const ColumnDefines store_columns;
-    const ColumnDefine  handle_column;
+    const ColumnDefinesPtr store_columns;
 
     // gc safe-point, maybe update.
     DB::Timestamp min_version;
 
-    const NotCompress & not_compress;
+    const NotCompress & not_compress; // Not used currently.
 
     // The rows of segment.
     const size_t segment_limit_rows;
@@ -41,7 +41,7 @@ struct DMContext : private boost::noncopyable
     const size_t delta_limit_rows;
     // The threshold of cache in delta.
     const size_t delta_cache_limit_rows;
-    // Determine wheter a pack is small or not.
+    // Determine whether a pack is small or not.
     const size_t delta_small_pack_rows;
     // The expected stable pack rows.
     const size_t stable_pack_rows;
@@ -49,41 +49,34 @@ struct DMContext : private boost::noncopyable
     const bool enable_logical_split;
     const bool read_delta_only;
     const bool read_stable_only;
+    const bool enable_skippable_place;
 
-    DMContext(const Context &       db_context_,
-              const String &        store_path_,
-              const PathPool &      extra_paths_,
-              StoragePool &         storage_pool_,
-              const UInt64          hash_salt_,
-              const ColumnDefines & store_columns_,
-              const ColumnDefine &  handle_column_,
-              const UInt64          min_version_,
-              const NotCompress &   not_compress_,
-              const size_t          segment_limit_rows_,
-              const size_t          delta_limit_rows_,
-              const size_t          delta_cache_limit_rows_,
-              const size_t          delta_small_pack_rows_,
-              const size_t          stable_pack_rows_,
-              const bool            enable_logical_split_,
-              const bool            read_delta_only_,
-              const bool            read_stable_only)
+    DMContext(const Context &          db_context_,
+              const String &           store_path_,
+              PathPool &               extra_paths_,
+              StoragePool &            storage_pool_,
+              const UInt64             hash_salt_,
+              const ColumnDefinesPtr & store_columns_,
+              const DB::Timestamp      min_version_,
+              const NotCompress &      not_compress_,
+              const DB::Settings &     settings)
         : db_context(db_context_),
           store_path(store_path_),
           extra_paths(extra_paths_),
           storage_pool(storage_pool_),
           hash_salt(hash_salt_),
           store_columns(store_columns_),
-          handle_column(handle_column_),
           min_version(min_version_),
           not_compress(not_compress_),
-          segment_limit_rows(segment_limit_rows_),
-          delta_limit_rows(delta_limit_rows_),
-          delta_cache_limit_rows(delta_cache_limit_rows_),
-          delta_small_pack_rows(delta_small_pack_rows_),
-          stable_pack_rows(stable_pack_rows_),
-          enable_logical_split(enable_logical_split_),
-          read_delta_only(read_delta_only_),
-          read_stable_only(read_stable_only)
+          segment_limit_rows(settings.dm_segment_limit_rows),
+          delta_limit_rows(settings.dm_segment_delta_limit_rows),
+          delta_cache_limit_rows(settings.dm_segment_delta_cache_limit_rows),
+          delta_small_pack_rows(settings.dm_segment_delta_small_pack_rows),
+          stable_pack_rows(settings.dm_segment_stable_pack_rows),
+          enable_logical_split(settings.dm_enable_logical_split),
+          read_delta_only(settings.dm_read_delta_only),
+          read_stable_only(settings.dm_read_stable_only),
+          enable_skippable_place(settings.dm_enable_skippable_place)
     {
     }
 };

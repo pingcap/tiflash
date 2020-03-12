@@ -1,8 +1,7 @@
+#include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
 #include <Storages/Page/VersionSet/PageEntriesVersionSetWithDelta.h>
 
 #include <stack>
-
-#include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
 
 namespace DB
 {
@@ -11,8 +10,10 @@ namespace DB
 // PageEntriesVersionSetWithDelta
 //==========================================================================================
 
-std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> PageEntriesVersionSetWithDelta::gcApply(PageEntriesEdit & edit,
-                                                                                                  bool              need_scan_page_ids)
+std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> //
+PageEntriesVersionSetWithDelta::gcApply(                  //
+    PageEntriesEdit & edit,
+    bool              need_scan_page_ids)
 {
     std::unique_lock lock(read_write_mutex);
     if (!edit.empty())
@@ -30,29 +31,47 @@ std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> PageEntriesVersionSetW
                 appendVersion(std::move(v), lock);
             }
             auto         view = std::make_shared<PageEntriesView>(current);
-            EditAcceptor builder(view.get());
+            EditAcceptor builder(view.get(), name);
             builder.gcApply(edit);
         }
     }
-    return listAllLiveFiles(lock, need_scan_page_ids);
+    return listAllLiveFiles(std::move(lock), need_scan_page_ids);
 }
 
 std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>>
-PageEntriesVersionSetWithDelta::listAllLiveFiles(const std::unique_lock<std::shared_mutex> & lock, bool need_scan_page_ids) const
+PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mutex> && lock, bool need_scan_page_ids)
 {
+    /// Collect live files is costly, we save SnapshotPtrs and scan them without lock.
     (void)lock; // Note read_write_mutex must be hold.
+    std::vector<SnapshotPtr> valid_snapshots;
+    const size_t             snapshots_size_before_clean = snapshots.size();
+    for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
+    {
+        if (iter->expired())
+        {
+            // Clear free snapshots
+            iter = snapshots.erase(iter);
+        }
+        else
+        {
+            // Save valid snapshot
+            valid_snapshots.emplace_back(iter->lock());
+            iter++;
+        }
+    }
+    // Create a temporary latest snapshot by using `current`
+    valid_snapshots.emplace_back(std::make_shared<Snapshot>(this, current));
 
-    /// TODO: this is costly, maybe we should find a better way not to block generating other snapshot.
+    lock.unlock(); // Notice: unlock
+    LOG_DEBUG(log,
+              name << " gcApply remove " + DB::toString(snapshots_size_before_clean + 1 - valid_snapshots.size()) + " invalid snapshots.");
+    // Iterate all snapshots to collect all PageFile in used.
     std::set<PageFileIdAndLevel> live_files;
     std::set<PageId>             live_normal_pages;
-    // Iterate all snapshot to collect all PageFile in used.
-    for (auto s = snapshots->next; s != snapshots.get(); s = s->next)
+    for (const auto & snap : valid_snapshots)
     {
-        collectLiveFilesFromVersionList(*(s->version()), live_files, live_normal_pages, need_scan_page_ids);
+        collectLiveFilesFromVersionList(*snap->version(), live_files, live_normal_pages, need_scan_page_ids);
     }
-    // Iterate over `current`
-    PageEntriesView latest_view(current);
-    collectLiveFilesFromVersionList(latest_view, live_files, live_normal_pages, need_scan_page_ids);
     return {live_files, live_normal_pages};
 }
 
@@ -77,10 +96,14 @@ void PageEntriesVersionSetWithDelta::collectLiveFilesFromVersionList( //
 // DeltaVersionEditAcceptor
 //==========================================================================================
 
-DeltaVersionEditAcceptor::DeltaVersionEditAcceptor(const PageEntriesView * view_, bool ignore_invalid_ref_, Logger * log_)
+DeltaVersionEditAcceptor::DeltaVersionEditAcceptor(const PageEntriesView * view_,
+                                                   const String &          name_,
+                                                   bool                    ignore_invalid_ref_,
+                                                   Logger *                log_)
     : view(const_cast<PageEntriesView *>(view_)),
       current_version(view->getSharedTailVersion()),
       ignore_invalid_ref(ignore_invalid_ref_),
+      name(name_),
       log(log_)
 {
 #ifndef NDEBUG
@@ -112,7 +135,7 @@ void DeltaVersionEditAcceptor::apply(PageEntriesEdit & edit)
             this->applyRef(rec);
             break;
         case WriteBatch::WriteType::UPSERT:
-            throw Exception("WriteType::MOVE_NORMAL_PAGE should only write by gcApply!", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("WriteType::UPSERT should only write by gcApply!", ErrorCodes::LOGICAL_ERROR);
             break;
         }
     }
@@ -211,8 +234,8 @@ void DeltaVersionEditAcceptor::applyRef(PageEntriesEdit::EditRecord & rec)
         if (ignore_invalid_ref)
         {
             LOG_WARNING(log,
-                        "Ignore invalid RefPage while opening PageStorage: RefPage" + DB::toString(rec.page_id) + " to non-exist Page"
-                            + DB::toString(rec.ori_page_id));
+                        name << " Ignore invalid RefPage in DeltaVersionEditAcceptor::applyRef, RefPage" + DB::toString(rec.page_id)
+                                + " to non-exist Page" + DB::toString(rec.ori_page_id));
         }
         else
         {
@@ -222,7 +245,10 @@ void DeltaVersionEditAcceptor::applyRef(PageEntriesEdit::EditRecord & rec)
     }
 }
 
-void DeltaVersionEditAcceptor::applyInplace(const PageEntriesVersionSetWithDelta::VersionPtr & current, const PageEntriesEdit & edit)
+void DeltaVersionEditAcceptor::applyInplace(const String &                                     name,
+                                            const PageEntriesVersionSetWithDelta::VersionPtr & current,
+                                            const PageEntriesEdit &                            edit,
+                                            Poco::Logger *                                     log)
 {
     assert(current->isBase());
     assert(current.use_count() == 1);
@@ -238,7 +264,16 @@ void DeltaVersionEditAcceptor::applyInplace(const PageEntriesVersionSetWithDelta
             break;
         case WriteBatch::WriteType::REF:
             // Shorten ref-path in case there is RefPage to RefPage
-            current->ref<false>(rec.page_id, rec.ori_page_id);
+            try
+            {
+                current->ref(rec.page_id, rec.ori_page_id);
+            }
+            catch (DB::Exception & e)
+            {
+                LOG_WARNING(log,
+                            name << " Ignore invalid RefPage in DeltaVersionEditAcceptor::applyInplace, RefPage" + DB::toString(rec.page_id)
+                                    + " to non-exist Page" + DB::toString(rec.ori_page_id));
+            }
             break;
         case WriteBatch::WriteType::UPSERT:
             current->upsertPage(rec.page_id, rec.entry);

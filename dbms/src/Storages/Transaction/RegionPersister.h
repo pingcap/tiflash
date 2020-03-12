@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Storages/Page/PageStorage.h>
+#include <Storages/Page/stable/PageStorage.h>
 #include <Storages/Transaction/IndexReaderCreate.h>
 #include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
@@ -18,7 +18,8 @@ class RegionManager;
 class RegionPersister final : private boost::noncopyable
 {
 public:
-    RegionPersister(const std::string & storage_path, const RegionManager & region_manager_, const PageStorage::Config & config = {})
+    RegionPersister(
+        const std::string & storage_path, const RegionManager & region_manager_, const stable::PageStorage::Config & config = {})
         : page_storage("RegionPersister", storage_path, config), region_manager(region_manager_), log(&Logger::get("RegionPersister"))
     {}
 
@@ -36,7 +37,7 @@ private:
     void doPersist(const Region & region, const RegionTaskLock * lock);
 
 private:
-    PageStorage page_storage;
+    DB::stable::PageStorage page_storage;
     const RegionManager & region_manager;
     std::mutex mutex;
     Logger * log;

@@ -183,23 +183,31 @@ public:
 /** There are two cases: for single argument and variadic.
   * Code for single argument is much more efficient.
   */
-template <bool result_is_nullable>
-class AggregateFunctionNullUnary final : public AggregateFunctionNullBase<result_is_nullable, AggregateFunctionNullUnary<result_is_nullable>>
+template <bool result_is_nullable, bool input_is_nullable>
+class AggregateFunctionNullUnary final : public AggregateFunctionNullBase<result_is_nullable, AggregateFunctionNullUnary<result_is_nullable, input_is_nullable>>
 {
 public:
     AggregateFunctionNullUnary(AggregateFunctionPtr nested_function)
-        : AggregateFunctionNullBase<result_is_nullable, AggregateFunctionNullUnary<result_is_nullable>>(nested_function)
+        : AggregateFunctionNullBase<result_is_nullable, AggregateFunctionNullUnary<result_is_nullable, input_is_nullable>>(nested_function)
     {
     }
 
     void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
-        const ColumnNullable * column = static_cast<const ColumnNullable *>(columns[0]);
-        if (!column->isNullAt(row_num))
+        if constexpr (input_is_nullable)
+        {
+            const ColumnNullable * column = static_cast<const ColumnNullable *>(columns[0]);
+            if (!column->isNullAt(row_num))
+            {
+                this->setFlag(place);
+                const IColumn * nested_column = &column->getNestedColumn();
+                this->nested_function->add(this->nestedPlace(place), &nested_column, row_num, arena);
+            }
+        }
+        else
         {
             this->setFlag(place);
-            const IColumn * nested_column = &column->getNestedColumn();
-            this->nested_function->add(this->nestedPlace(place), &nested_column, row_num, arena);
+            this->nested_function->add(this->nestedPlace(place), columns, row_num, arena);
         }
     }
 };

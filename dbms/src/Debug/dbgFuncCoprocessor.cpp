@@ -73,7 +73,7 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
             auto storage = context.getTable(database_name, table_name);
             auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
             if (!managed_storage //
-                || !(managed_storage->engineType() == ::TiDB::StorageEngine::DM
+                || !(managed_storage->engineType() == ::TiDB::StorageEngine::DT
                      || managed_storage->engineType() == ::TiDB::StorageEngine::TMT))
                 throw Exception(database_name + "." + table_name + " is not ManageableStorage", ErrorCodes::BAD_ARGUMENTS);
             return managed_storage->getTableInfo();

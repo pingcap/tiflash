@@ -311,6 +311,7 @@ void SchemaBuilder<Getter>::applyDiff(const SchemaDiff & diff)
         }
         case SchemaActionAddTablePartition:
         case SchemaActionDropTablePartition:
+        case SchemaActionTruncateTablePartition:
         {
             applyAlterPartition(di, diff.table_id);
             break;
@@ -595,7 +596,7 @@ String createTableStmt(const DBInfo & db_info, const TableInfo & table_info, Log
         writeEscapedString(table_info.serialize(), stmt_buf);
         writeString("')", stmt_buf);
     }
-    else if (table_info.engine_type == TiDB::StorageEngine::DM)
+    else if (table_info.engine_type == TiDB::StorageEngine::DT)
     {
         writeString(") Engine = DeltaMerge((", stmt_buf);
         for (size_t i = 0; i < pks.size(); i++)

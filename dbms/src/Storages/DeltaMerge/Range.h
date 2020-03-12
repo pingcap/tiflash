@@ -1,12 +1,17 @@
 #pragma once
-
-#include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/DeltaMerge/DeltaMergeHelpers.h>
+#include <Core/Types.h>
+#include <IO/WriteHelpers.h>
+#include <Storages/Transaction/Types.h>
 
 namespace DB
 {
 namespace DM
 {
+
+template <typename T>
+struct Range;
+template <typename T>
+String rangeToString(const Range<T> & range);
 
 template <typename T>
 struct Range
@@ -37,6 +42,8 @@ struct Range
 
     inline Range shrink(const Range<T> & other) const { return Range(std::max(start, other.start), std::min(end, other.end)); }
 
+    inline Range merge(const Range<T> & other) const { return Range(std::min(start, other.start), std::max(end, other.end)); }
+
     inline bool intersect(const Range<T> & other) const { return std::max(other.start, start) < std::min(other.end, end); }
 
     // [first, last_include]
@@ -58,8 +65,28 @@ struct Range
     inline String toString() const { return rangeToString(*this); }
 
     bool operator==(const Range & rhs) const { return start == rhs.start && end == rhs.end; }
+    bool operator!=(const Range & rhs) const { return !(*this == rhs); }
 };
 
+template <class T, bool right_open = true>
+inline String rangeToString(T start, T end)
+{
+    String s = "[" + DB::toString(start) + "," + DB::toString(end);
+    if constexpr (right_open)
+        s += ")";
+    else
+        s += "]";
+    return s;
+}
+
+template <typename T>
+inline String rangeToString(const Range<T> & range)
+{
+    return rangeToString<T, true>(range.start, range.end);
+}
+
+// DB::DM::Handle
+using Handle       = DB::HandleID;
 using HandleRange  = Range<Handle>;
 using HandleRanges = std::vector<HandleRange>;
 

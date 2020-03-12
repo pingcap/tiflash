@@ -1,5 +1,6 @@
 #include <Core/TMTPKType.h>
 #include <Interpreters/Context.h>
+#include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/CHTableHandle.h>
@@ -92,13 +93,13 @@ bool KVStore::tryApplySnapshot(RegionPtr new_region, Context & context, bool try
                         getHandleMapByRange<Int64>(context, *tmt_storage, handle_range, handle_map);
                     break;
                 }
-                case TiDB::StorageEngine::DM:
+                case TiDB::StorageEngine::DT:
                 {
                     // acquire lock so that no other threads can change storage's structure
                     auto table_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
                     // In StorageDeltaMerge, we use deleteRange to remove old data
                     auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-                    ::DB::DM::HandleRange dm_handle_range(handle_range.first.handle_id, handle_range.second.handle_id);
+                    DM::HandleRange dm_handle_range = toDMHandleRange(handle_range);
                     dm_storage->deleteRange(dm_handle_range, context.getSettingsRef());
                     break;
                 }

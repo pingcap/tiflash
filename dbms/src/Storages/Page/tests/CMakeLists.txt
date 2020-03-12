@@ -1,6 +1,7 @@
 add_headers_and_sources(page_storage ../)
 add_headers_and_sources(page_storage ../mvcc)
 add_headers_and_sources(page_storage ../VersionSet)
+add_headers_and_sources(page_storage ../gc)
 add_library(page_storage
         ${page_storage_headers} ${page_storage_sources})
 target_link_libraries(page_storage clickhouse_common_io kv_client)

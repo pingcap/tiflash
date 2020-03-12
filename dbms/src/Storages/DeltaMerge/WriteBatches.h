@@ -8,7 +8,7 @@ namespace DB
 namespace DM
 {
 
-struct WriteBatches
+struct WriteBatches : private boost::noncopyable
 {
     WriteBatch log;
     WriteBatch data;
@@ -21,21 +21,82 @@ struct WriteBatches
     WriteBatch removed_data;
     WriteBatch removed_meta;
 
-    void writeLogAndData(StoragePool & storage_pool)
+    StoragePool & storage_pool;
+    bool          should_roll_back = false;
+
+    WriteBatches(StoragePool & storage_pool_) : storage_pool(storage_pool_) {}
+
+    ~WriteBatches()
     {
-        storage_pool.log().write(log);
-        storage_pool.data().write(data);
+        if constexpr (DM_RUN_CHECK)
+        {
+            Logger * logger      = &Logger::get("WriteBatches");
+            auto     check_empty = [&](const WriteBatch & wb, const String & name) {
+                if (!wb.empty())
+                {
+                    StackTrace trace;
+                    LOG_ERROR(logger,
+                              "!!!=========================Modifications in " + name
+                                      + " haven't persisted=========================!!! Stack trace: "
+                                  << trace.toString());
+                }
+            };
+            check_empty(log, "log");
+            check_empty(data, "data");
+            check_empty(meta, "meta");
+            check_empty(removed_log, "removed_log");
+            check_empty(removed_data, "removed_data");
+            check_empty(removed_meta, "removed_meta");
+        }
+
+        if (should_roll_back)
+        {
+            rollbackWrittenLogAndData();
+        }
+    }
+
+    void setRollback() { should_roll_back = true; }
+
+    void writeLogAndData()
+    {
+        PageIds log_write_pages, data_write_pages;
+
+        if constexpr (DM_RUN_CHECK)
+        {
+            Logger * logger = &Logger::get("WriteBatches");
+            auto     check  = [](const WriteBatch & wb, const String & what, Logger * logger) {
+                if (wb.empty())
+                    return;
+                for (auto & w : wb.getWrites())
+                {
+                    if (unlikely(w.type == WriteBatch::WriteType::DEL))
+                        throw Exception("Unexpected deletes in " + what);
+                }
+                LOG_TRACE(logger, "Write into " + what + " : " + wb.toString());
+            };
+
+            check(log, "log", logger);
+            check(data, "data", logger);
+        }
 
         for (auto & w : log.getWrites())
-            writtenLog.push_back(w.page_id);
+            log_write_pages.push_back(w.page_id);
         for (auto & w : data.getWrites())
-            writtenData.push_back(w.page_id);
+            data_write_pages.push_back(w.page_id);
+
+        storage_pool.log().write(std::move(log));
+        storage_pool.data().write(std::move(data));
+
+        for (auto page_id : log_write_pages)
+            writtenLog.push_back(page_id);
+        for (auto page_id : data_write_pages)
+            writtenData.push_back(page_id);
 
         log.clear();
         data.clear();
     }
 
-    void rollbackWrittenLogAndData(StoragePool & storage_pool)
+    void rollbackWrittenLogAndData()
     {
         WriteBatch log_wb;
         for (auto p : writtenLog)
@@ -44,32 +105,106 @@ struct WriteBatches
         for (auto p : writtenData)
             data_wb.delPage(p);
 
-        storage_pool.log().write(log_wb);
-        storage_pool.data().write(data_wb);
+        if constexpr (DM_RUN_CHECK)
+        {
+            Logger * logger = &Logger::get("WriteBatches");
+
+            auto check = [](const WriteBatch & wb, const String & what, Logger * logger) {
+                if (wb.empty())
+                    return;
+                for (auto & w : wb.getWrites())
+                {
+                    if (unlikely(w.type != WriteBatch::WriteType::DEL))
+                        throw Exception("Expected deletes in " + what);
+                }
+                LOG_TRACE(logger, "Rollback remove from " + what + " : " + wb.toString());
+            };
+
+            check(log_wb, "log_wb", logger);
+            check(data_wb, "data_wb", logger);
+        }
+
+        storage_pool.log().write(std::move(log_wb));
+        storage_pool.data().write(std::move(data_wb));
+
+        writtenLog.clear();
+        writtenData.clear();
     }
 
-    void writeMeta(StoragePool & storage_pool)
+    void writeMeta()
     {
-        storage_pool.meta().write(meta);
+        if constexpr (DM_RUN_CHECK)
+        {
+            Logger * logger = &Logger::get("WriteBatches");
+
+            auto check = [](const WriteBatch & wb, const String & what, Logger * logger) {
+                if (wb.empty())
+                    return;
+                for (auto & w : wb.getWrites())
+                {
+                    if (unlikely(w.type != WriteBatch::WriteType::PUT))
+                        throw Exception("Expected puts in " + what);
+                }
+                LOG_TRACE(logger, "Write into " + what + " : " + wb.toString());
+            };
+
+            check(meta, "meta", logger);
+        }
+
+        storage_pool.meta().write(std::move(meta));
         meta.clear();
     }
 
-    void writeRemoves(StoragePool & storage_pool)
+    void writeRemoves()
     {
-        storage_pool.log().write(removed_log);
-        storage_pool.data().write(removed_data);
-        storage_pool.meta().write(removed_meta);
+        if constexpr (DM_RUN_CHECK)
+        {
+            Logger * logger = &Logger::get("WriteBatches");
+
+            auto check = [](const WriteBatch & wb, const String & what, Logger * logger) {
+                if (wb.empty())
+                    return;
+                for (auto & w : wb.getWrites())
+                {
+                    if (unlikely(w.type != WriteBatch::WriteType::DEL))
+                        throw Exception("Expected deletes in " + what);
+                }
+                LOG_TRACE(logger, "Write into " + what + " : " + wb.toString());
+            };
+
+            check(removed_log, "removed_log", logger);
+            check(removed_data, "removed_data", logger);
+            check(removed_meta, "removed_meta", logger);
+        }
+
+        storage_pool.log().write(std::move(removed_log));
+        storage_pool.data().write(std::move(removed_data));
+        storage_pool.meta().write(std::move(removed_meta));
 
         removed_log.clear();
         removed_data.clear();
         removed_meta.clear();
     }
 
-    void writeAll(StoragePool & storage_pool)
+    void writeAll()
     {
-        writeLogAndData(storage_pool);
-        writeMeta(storage_pool);
-        writeRemoves(storage_pool);
+        writeLogAndData();
+        writeMeta();
+        writeRemoves();
+    }
+
+    void clear()
+    {
+        log.clear();
+        data.clear();
+        meta.clear();
+
+        writtenLog.clear();
+        writtenData.clear();
+
+        removed_log.clear();
+        removed_data.clear();
+        removed_meta.clear();
     }
 };
 } // namespace DM

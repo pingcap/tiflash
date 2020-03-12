@@ -165,7 +165,8 @@ bool isExtraColumn(const ColumnDefine & cd)
 Block DMFileReader::read()
 {
     // Go to next available pack.
-    for (; next_pack_id < use_packs.size() && !use_packs[next_pack_id]; ++next_pack_id) {}
+    size_t skip_rows;
+    getSkippedRows(skip_rows);
 
     if (next_pack_id >= use_packs.size())
         return {};

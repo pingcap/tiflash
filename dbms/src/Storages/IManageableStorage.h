@@ -10,7 +10,9 @@
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiKVHandle.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
+#include <Storages/Transaction/Types.h>
 #include <pingcap/coprocessor/Client.h>
 #include <tipb/select.pb.h>
 
@@ -42,6 +44,8 @@ public:
     ~IManageableStorage() override = default;
 
     virtual void flushDelta() {}
+
+    virtual void flushCache(const Context & /*context*/, const DB::HandleRange<HandleID> & /* range_to_flush */) {}
 
     virtual BlockInputStreamPtr status() { return {}; }
 

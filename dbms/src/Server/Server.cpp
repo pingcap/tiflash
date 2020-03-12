@@ -6,8 +6,6 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/Macros.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <Common/ZooKeeper/ZooKeeper.h>
-#include <Common/ZooKeeper/ZooKeeperNodeCache.h>
 #include <Common/config.h>
 #include <Common/getFQDNOrHostName.h>
 #include <Common/getMultipleKeysFromConfig.h>
@@ -179,35 +177,20 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     }
 
-    std::vector<std::pair<UInt32, String>> extra_paths;
-    if (config().has("extra_path"))
-    {
-        String s = config().getString("extra_path");
-        Poco::trimInPlace(s);
-        if (s.empty())
-            throw Exception("Extra path configuration parameter is empty");
+    bool path_realtime_mode = config().getBool("path_realtime_mode", false);
+    std::vector<String> extra_paths(all_normal_path.begin(), all_normal_path.end());
+    for (auto & p : extra_paths)
+        p += "/data";
 
-        std::vector<std::string> id_path_list;
-        boost::split(id_path_list, s, boost::is_any_of(";"));
-        for (auto & id_path_s : id_path_list)
-        {
-            std::vector<String> id_path;
-            boost::split(id_path, id_path_s, boost::is_any_of(":"));
-            if (id_path.size() != 2)
-                throw Exception("Illegal id_path format: " + id_path_s);
-            UInt32 id = std::stoul(id_path[0]);
-            String path = id_path[1];
-            extra_paths.emplace_back(id, getCanonicalPath(path));
-            LOG_DEBUG(log, "Extra path add " + DB::toString(id) + ":" + path);
-        }
-    }
+    if (path_realtime_mode && all_normal_path.size() > 1)
+        global_context->setExtraPaths(std::vector<String>(extra_paths.begin() + 1, extra_paths.end()));
+    else
+        global_context->setExtraPaths(extra_paths);
 
     std::string path = all_normal_path[0];
     std::string default_database = config().getString("default_database", "default");
     global_context->setPath(path);
     global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
-    if (!extra_paths.empty())
-        global_context->setExtraPaths(extra_paths);
 
     /// Create directories for 'path' and for default database, if not exist.
     for (const String & candidate_path : global_context->getPartPathSelector().getAllPath())
@@ -326,6 +309,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             buildLoggers(*config);
             global_context->setClustersConfig(config);
             global_context->setMacros(std::make_unique<Macros>(*config, "macros"));
+            global_context->getTMTContext().reloadConfig(*config);
         },
         /* already_loaded = */ true);
 
@@ -456,24 +440,29 @@ int Server::main(const std::vector<std::string> & /*args*/)
             std::transform(s_engine.begin(), s_engine.end(), s_engine.begin(), [](char ch) { return std::tolower(ch); });
             if (s_engine == "tmt")
                 engine = ::TiDB::StorageEngine::TMT;
-            else if (s_engine == "dm")
-                engine = ::TiDB::StorageEngine::DM;
+            else if (s_engine == "dt")
+                engine = ::TiDB::StorageEngine::DT;
             else
                 engine = engine_if_empty;
         }
 
-        if (config().has("raft.disable_bg_flush"))
+        /// "tmt" engine ONLY support disable_bg_flush = false.
+        /// "dm" engine by default disable_bg_flush = true.
+
+        String disable_bg_flush_conf = "raft.disable_bg_flush";
+        if (engine == ::TiDB::StorageEngine::TMT)
         {
-            bool disable = config().getBool("raft.disable_bg_flush");
-            if (disable)
-            {
-                if (engine == ::TiDB::StorageEngine::TMT)
-                {
-                    throw Exception("Illegal arguments: disable background flush while using engine TxnMergeTree.",
-                        ErrorCodes::INVALID_CONFIG_PARAMETER);
-                }
+            if (config().has(disable_bg_flush_conf) && config().getBool(disable_bg_flush_conf))
+                throw Exception(
+                    "Illegal arguments: disable background flush while using engine TxnMergeTree.", ErrorCodes::INVALID_CONFIG_PARAMETER);
+            disable_bg_flush = false;
+        }
+        else if (engine == ::TiDB::StorageEngine::DT)
+        {
+            if (config().has(disable_bg_flush_conf))
+                disable_bg_flush = config().getBool(disable_bg_flush_conf);
+            else
                 disable_bg_flush = true;
-            }
         }
     }
 
@@ -481,9 +470,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_DEBUG(log, "Default storage engine: " << static_cast<Int64>(engine));
         /// create TMTContext
         global_context->createTMTContext(pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, engine, disable_bg_flush);
-        global_context->getTMTContext().getRegionTable().setTableCheckerThreshold(config().getDouble("flash.overlap_threshold", 0.6));
-        global_context->getTMTContext().getKVStore()->setRegionCompactLogPeriod(
-            Seconds{config().getUInt64("flash.compact_log_min_period", 5 * 60)});
+        global_context->getTMTContext().reloadConfig(config());
     }
 
     /// Then, load remaining databases
@@ -574,7 +561,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         // a special number, also defined in proxy
         .magic_number = 0x13579BDF,
-        .version = 1};
+        .version = 2};
 
     auto proxy_runner = std::thread([&proxy_conf, &log, &helper]() {
         if (!proxy_conf.inited)

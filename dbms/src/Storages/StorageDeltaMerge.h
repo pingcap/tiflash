@@ -1,18 +1,18 @@
 #pragma once
 
-#include <ext/shared_ptr_helper.h>
-#include <tuple>
-
-#include <Poco/File.h>
-#include <common/logger_useful.h>
-
 #include <Core/Defines.h>
 #include <Core/SortDescription.h>
+#include <Poco/File.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
+#include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/TiDB.h>
+#include <common/logger_useful.h>
+
+#include <ext/shared_ptr_helper.h>
+#include <tuple>
 
 namespace DB
 {
@@ -44,6 +44,13 @@ public:
 
     BlockOutputStreamPtr write(const ASTPtr & query, const Settings & settings) override;
 
+    void flushCache(const Context & context, const DB::HandleRange<HandleID> & range_to_flush) override
+    {
+        flushCache(context, toDMHandleRange(range_to_flush));
+    }
+
+    void flushCache(const Context & context, const DM::HandleRange & range_to_flush);
+
     void deleteRange(const DM::HandleRange & range_to_delete, const Settings & settings);
 
     void rename(const String & /*new_path_to_db*/, const String & /*new_database_name*/, const String & /*new_table_name*/) override;
@@ -52,7 +59,7 @@ public:
 
     void alter(const AlterCommands & commands, const String & database_name, const String & table_name, const Context & context) override;
 
-    ::TiDB::StorageEngine engineType() const override { return ::TiDB::StorageEngine::DM; }
+    ::TiDB::StorageEngine engineType() const override { return ::TiDB::StorageEngine::DT; }
 
     // Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
     void alterFromTiDB(

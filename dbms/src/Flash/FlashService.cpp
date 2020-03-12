@@ -151,8 +151,6 @@ std::tuple<Context, grpc::Status> FlashService::createDBContext(const grpc::Serv
     {
         context.setSetting("dag_records_per_chunk", dag_records_per_chunk_str);
     }
-    std::string expr_field_type_check = getClientMetaVarWithDefault(grpc_context, "dag_expr_field_type_strict_check", "1");
-    context.setSetting("dag_expr_field_type_strict_check", expr_field_type_check);
 
     return std::make_tuple(context, grpc::Status::OK);
 }

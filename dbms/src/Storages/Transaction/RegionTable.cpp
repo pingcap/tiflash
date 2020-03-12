@@ -1,6 +1,7 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/MergeTree/TxnMergeTreeBlockOutputStream.h>
 #include <Storages/StorageDeltaMerge.h>
+#include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionTable.h>
@@ -86,18 +87,33 @@ bool RegionTable::shouldFlush(const InternalRegion & region) const
     for (const auto & [th_bytes, th_duration] : *flush_thresholds.getData())
     {
         if (region.cache_bytes >= th_bytes && period_time >= th_duration)
+        {
+            LOG_INFO(log,
+                __FUNCTION__ << ": region " << region.region_id << ", cache size " << region.cache_bytes << ", seconds since last "
+                             << std::chrono::duration_cast<std::chrono::seconds>(period_time).count());
+
             return true;
+        }
     }
     return false;
 }
 
 RegionDataReadInfoList RegionTable::flushRegion(const RegionPtr & region, bool try_persist) const
 {
-    const auto & tmt = context->getTMTContext();
+    auto & tmt = context->getTMTContext();
 
-    LOG_INFO(log,
-        __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " original " << region->dataSize()
-                     << " bytes");
+    if (tmt.isBgFlushDisabled())
+    {
+        LOG_TRACE(log,
+            __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " original "
+                         << region->dataSize() << " bytes");
+    }
+    else
+    {
+        LOG_INFO(log,
+            __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " original "
+                         << region->dataSize() << " bytes");
+    }
 
     /// Write region data into corresponding storage.
     RegionDataReadInfoList data_list_to_remove;
@@ -123,12 +139,24 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtr & region, bool t
         if (cache_size == 0)
         {
             if (try_persist)
+            {
+                KVStore::tryFlushRegionCacheInStorage(tmt, *region, log);
                 tmt.getKVStore()->tryPersist(region->id());
+            }
         }
 
-        LOG_INFO(log,
-            __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " after flush " << cache_size
-                         << " bytes");
+        if (tmt.isBgFlushDisabled())
+        {
+            LOG_TRACE(log,
+                __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " after flush " << cache_size
+                             << " bytes");
+        }
+        else
+        {
+            LOG_INFO(log,
+                __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " after flush " << cache_size
+                             << " bytes");
+        }
     }
 
     return data_list_to_remove;
@@ -221,7 +249,7 @@ void RegionTable::removeRegion(const RegionID region_id)
             /// If this block for long time, consider to do this in background threads.
             TMTContext & tmt = context->getTMTContext();
             auto storage = tmt.getStorages().get(table_id);
-            if (storage && storage->engineType() == TiDB::StorageEngine::DM)
+            if (storage && storage->engineType() == TiDB::StorageEngine::DT)
             {
                 // acquire lock so that no other threads can change storage's structure
                 auto storage_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
@@ -230,8 +258,10 @@ void RegionTable::removeRegion(const RegionID region_id)
                 if (region_it == table.regions.end())
                     return;
                 HandleRange<HandleID> handle_range = region_it->second.range_in_table;
-                ::DB::DM::HandleRange dm_handle_range(handle_range.first.handle_id, handle_range.second.handle_id);
+
+                auto dm_handle_range = toDMHandleRange(handle_range);
                 dm_storage->deleteRange(dm_handle_range, context->getSettingsRef());
+                dm_storage->flushCache(*context, dm_handle_range);
             }
         }
 

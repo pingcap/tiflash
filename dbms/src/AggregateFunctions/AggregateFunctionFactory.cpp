@@ -46,11 +46,14 @@ AggregateFunctionPtr AggregateFunctionFactory::get(
     const String & name,
     const DataTypes & argument_types,
     const Array & parameters,
-    int recursion_level) const
+    int recursion_level,
+    bool empty_input_as_null) const
 {
     /// If one of types is Nullable, we apply aggregate function combinator "Null".
 
-    if (std::any_of(argument_types.begin(), argument_types.end(),
+    /// for most aggregation functions except `count`, if the input is empty, the function should return NULL
+    /// so add this flag to make it possible to follow this rule, currently only used by Coprocessor query
+    if (empty_input_as_null || std::any_of(argument_types.begin(), argument_types.end(),
         [](const auto & type) { return type->isNullable(); }))
     {
         AggregateFunctionCombinatorPtr combinator = AggregateFunctionCombinatorFactory::instance().tryFindSuffix("Null");
