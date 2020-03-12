@@ -47,8 +47,8 @@ extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
 DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std::vector<BlockInputStreams> & input_streams_vec_,
-    const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const std::vector<RegionInfo> & region_infos_, const tipb::DAGRequest & rqst_,
-    ASTPtr dummy_query_)
+    const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const std::vector<RegionInfo> & region_infos_,
+    const tipb::DAGRequest & rqst_, ASTPtr dummy_query_)
     : context(context_),
       input_streams_vec(input_streams_vec_),
       query_block(query_block_),
@@ -62,6 +62,12 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std
     {
         for (auto & condition : query_block.selection->selection().conditions())
             conditions.push_back(&condition);
+    }
+    const Settings & settings = context.getSettingsRef();
+    max_streams = settings.max_threads;
+    if (max_streams > 1)
+    {
+        max_streams *= settings.max_streams_to_max_threads_ratio;
     }
 }
 
@@ -155,7 +161,7 @@ void constructExprBasedOnRange(Int32 handle_col_id, tipb::Expr & expr, HandleRan
 
 template <typename HandleType>
 bool checkRangeAndGenExprIfNeeded(std::vector<HandleRange<HandleType>> & ranges, const std::vector<HandleRange<HandleType>> & region_ranges,
-    Int32 handle_col_id, tipb::Expr & handle_filter, Logger *log)
+    Int32 handle_col_id, tipb::Expr & handle_filter, Logger * log)
 {
     if (ranges.empty())
     {
@@ -205,7 +211,7 @@ bool checkRangeAndGenExprIfNeeded(std::vector<HandleRange<HandleType>> & ranges,
             break;
         }
     }
-    LOG_DEBUG(log, "ret " <<ret);
+    LOG_DEBUG(log, "ret " << ret);
     if (!ret)
     {
         if (merged_ranges.empty())
@@ -359,22 +365,22 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     if (handle_col_id == -1)
         handle_col_id = required_columns.size();
 
-//    auto current_region = context.getTMTContext().getKVStore()->getRegion(region_info.region_id);
-//    auto region_read_status = getRegionReadStatus(current_region);
-//    if (region_read_status != RegionException::OK)
-//    {
-//        std::vector<RegionID> region_ids;
-//        region_ids.push_back(region_info.region_id);
-//        LOG_WARNING(log, __PRETTY_FUNCTION__ << " Meet region exception for region " << region_info.region_id);
-//        throw RegionException(std::move(region_ids), region_read_status);
-//    }
-//    const bool pk_is_uint64 = storage->getPKType() == IManageableStorage::PKType::UINT64;
-//    if (!checkKeyRanges(region_info.key_ranges, table_id, pk_is_uint64, current_region->getRange(), handle_col_id, handle_filter_expr))
-//    {
-//        // need to add extra filter on handle column
-//        filter_on_handle = true;
-//        conditions.push_back(&handle_filter_expr);
-//    }
+    //    auto current_region = context.getTMTContext().getKVStore()->getRegion(region_info.region_id);
+    //    auto region_read_status = getRegionReadStatus(current_region);
+    //    if (region_read_status != RegionException::OK)
+    //    {
+    //        std::vector<RegionID> region_ids;
+    //        region_ids.push_back(region_info.region_id);
+    //        LOG_WARNING(log, __PRETTY_FUNCTION__ << " Meet region exception for region " << region_info.region_id);
+    //        throw RegionException(std::move(region_ids), region_read_status);
+    //    }
+    //    const bool pk_is_uint64 = storage->getPKType() == IManageableStorage::PKType::UINT64;
+    //    if (!checkKeyRanges(region_info.key_ranges, table_id, pk_is_uint64, current_region->getRange(), handle_col_id, handle_filter_expr))
+    //    {
+    //        // need to add extra filter on handle column
+    //        filter_on_handle = true;
+    //        conditions.push_back(&handle_filter_expr);
+    //    }
 
     bool has_handle_column = (handle_col_id != (Int32)required_columns.size());
 
@@ -424,12 +430,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     }
 
     size_t max_block_size = settings.max_block_size;
-    max_streams = settings.max_threads;
     QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
-    if (max_streams > 1)
-    {
-        max_streams *= settings.max_streams_to_max_threads_ratio;
-    }
 
     if (query_block.selection)
     {
@@ -456,7 +457,8 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         if (!current_region)
         {
             std::vector<RegionID> region_ids;
-            for (auto & rr : region_infos) {
+            for (auto & rr : region_infos)
+            {
                 region_ids.push_back(rr.region_id);
             }
             throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
@@ -465,13 +467,13 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         query_info.mvcc_query_info->regions_query_info.push_back(info);
     }
     query_info.mvcc_query_info->concurrent = region_infos.size() > 1 ? 1.0 : 0.0;
-//    RegionQueryInfo info;
-//    info.region_id = region_info.region_id;
-//    info.version = region_info.region_version;
-//    info.conf_version = region_info.region_conf_version;
-//    info.range_in_table = current_region->getHandleRangeByTable(table_id);
-//    query_info.mvcc_query_info->regions_query_info.push_back(info);
-//    query_info.mvcc_query_info->concurrent = 0.0;
+    //    RegionQueryInfo info;
+    //    info.region_id = region_info.region_id;
+    //    info.version = region_info.region_version;
+    //    info.conf_version = region_info.region_conf_version;
+    //    info.range_in_table = current_region->getHandleRangeByTable(table_id);
+    //    query_info.mvcc_query_info->regions_query_info.push_back(info);
+    //    query_info.mvcc_query_info->concurrent = 0.0;
 
     if (ts.next_read_engine() == tipb::EngineType::Local)
     {
@@ -586,7 +588,11 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
         right_streams = input_streams_vec[1];
     }
     std::vector<NameAndTypePair> join_output_columns;
-    for (auto const & p : left_streams[0]->getHeader().getNamesAndTypesList())
+    for (auto const & p : input_streams_vec[0][0]->getHeader().getNamesAndTypesList())
+    {
+        join_output_columns.emplace_back(p.name, p.type);
+    }
+    for (auto const & p : input_streams_vec[1][0]->getHeader().getNamesAndTypesList())
     {
         join_output_columns.emplace_back(p.name, p.type);
     }
@@ -595,7 +601,6 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     for (auto const & p : right_streams[0]->getHeader().getNamesAndTypesList())
     {
         columns_added_by_join.emplace_back(p.name, p.type);
-        join_output_columns.emplace_back(p.name, p.type);
     }
 
     if (!query_block.aggregation)
@@ -804,7 +809,7 @@ void DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVersion(TableID table_
                 return std::make_tuple(nullptr, nullptr, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, false);
         }
 
-        if (storage_->engineType() != ::TiDB::StorageEngine::TMT && storage_->engineType() != ::TiDB::StorageEngine::DM)
+        if (storage_->engineType() != ::TiDB::StorageEngine::TMT && storage_->engineType() != ::TiDB::StorageEngine::DT)
         {
             throw Exception("Specifying schema_version for non-managed storage: " + storage_->getName()
                     + ", table: " + storage_->getTableName() + ", id: " + DB::toString(table_id) + " is not allowed",

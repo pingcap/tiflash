@@ -1,9 +1,11 @@
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Flash/Coprocessor/ArrowChunkCodec.h>
+#include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <common/logger_useful.h>
 #include <pingcap/coprocessor/Client.h>
+#include <Flash/Coprocessor/ArrowChunkCodec.h>
+#include <Flash/Coprocessor/DefaultChunkCodec.h>
 
 namespace DB
 {
@@ -51,7 +53,16 @@ public:
         }
         auto chunk = chunk_queue.front();
         chunk_queue.pop();
-        return codec.decode(chunk, schema);
+        switch (resp->encode_type()) {
+            case tipb::EncodeType::TypeCHBlock:
+                return CHBlockChunkCodec().decode(chunk, schema);
+            case tipb::EncodeType::TypeChunk:
+                return ArrowChunkCodec().decode(chunk, schema);
+            case tipb::EncodeType::TypeDefault:
+                return DefaultChunkCodec().decode(chunk, schema);
+            default:
+                throw Exception("Unsupported encode type", ErrorCodes::LOGICAL_ERROR);
+        }
     }
 
 private:
@@ -85,7 +96,6 @@ private:
     pingcap::coprocessor::ResponseIter resp_iter;
     DAGSchema schema;
 
-    ArrowChunkCodec codec;
     std::shared_ptr<tipb::SelectResponse> resp;
 
     std::queue<tipb::Chunk> chunk_queue;

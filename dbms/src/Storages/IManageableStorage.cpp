@@ -1,3 +1,4 @@
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Storages/IManageableStorage.h>
 
 namespace DB
@@ -96,7 +97,7 @@ BlockInputStreams IManageableStorage::remote_read(const std::vector<std::pair<De
     {
         dag_req.add_output_offsets(i);
         ColumnInfo info = fieldTypeToColumnInfo(remote_query_block.output_field_types[i]);
-        String col_name = "col_" + std::to_string(i);
+        String col_name = remote_query_block.qb_column_prefix + "col_" + std::to_string(i);
         schema.push_back(std::make_pair(col_name, info));
         auto tp = getDataTypeByColumnInfo(info);
         ColumnWithTypeAndName col(tp, col_name);
@@ -113,8 +114,8 @@ BlockInputStreams IManageableStorage::remote_read(const std::vector<std::pair<De
 
     pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
     pingcap::kv::StoreType store_type = pingcap::kv::TiFlash;
-    BlockInputStreamPtr input = std::make_shared<LazyBlockInputStream>(
-        sample_block, [cluster, req, schema, store_type]() { return std::make_shared<CoprocessorBlockInputStream>(cluster, req, schema, store_type); });
+    BlockInputStreamPtr input = std::make_shared<LazyBlockInputStream>(sample_block,
+        [cluster, req, schema, store_type]() { return std::make_shared<CoprocessorBlockInputStream>(cluster, req, schema, store_type); });
     return {input};
 };
 } // namespace DB
