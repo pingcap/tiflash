@@ -6,9 +6,6 @@ SLEEP 15
 
 mysql> insert into test.t values (1, 1, 1, 1, 1, 1);
 mysql> insert into test.t values (1, 2, 3, NULL, NULL, 1);
-
-SLEEP 15
-
 mysql> select /*+ read_from_storage(tiflash[t]) */ count(1),count(a),count(b),count(d),count(NULL) from test.t where a > 10;
 +----------+----------+----------+----------+-------------+
 | count(1) | count(a) | count(b) | count(d) | count(NULL) |

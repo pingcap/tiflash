@@ -522,15 +522,11 @@ String DAGExpressionAnalyzer::alignReturnType(
 String DAGExpressionAnalyzer::appendCastIfNeeded(
     const tipb::Expr & expr, ExpressionActionsPtr & actions, const String & expr_name, bool explicit_cast)
 {
-    // do not append cast for column expr
-    // the main difficulty here is some column expr's field type
-    // does not have enough information, for example the enum type
-    if (isColumnExpr(expr))
+    if (!isFunctionExpr(expr))
         return expr_name;
 
-    if (isFunctionExpr(expr) && !expr.has_field_type())
+    if (!expr.has_field_type())
     {
-        // seems literal expr does not have field type, do not throw exception for literal expr
         throw Exception("Function Expression without field type", ErrorCodes::COP_BAD_DAG_REQUEST);
     }
     if (exprHasValidFieldType(expr))
@@ -612,15 +608,15 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
     if (isLiteralExpr(expr))
     {
         Field value = decodeLiteral(expr);
-        DataTypePtr type = applyVisitor(FieldToDataType(), value);
-        ret = exprToString(expr, getCurrentInputColumns()) + "_" + type->getName();
+        DataTypePtr flash_type = applyVisitor(FieldToDataType(), value);
+        DataTypePtr target_type = exprHasValidFieldType(expr) ? getDataTypeByFieldType(expr.field_type()) : flash_type;
+        ret = exprToString(expr, getCurrentInputColumns()) + "_" + target_type->getName();
         if (!actions->getSampleBlock().has(ret))
         {
             ColumnWithTypeAndName column;
-            column.column = type->createColumnConst(1, value);
+            column.column = target_type->createColumnConst(1, convertFieldToType(value, *target_type, flash_type.get()));
             column.name = ret;
-            column.type = type;
-
+            column.type = target_type;
             actions->add(ExpressionAction::addColumn(column));
         }
     }
