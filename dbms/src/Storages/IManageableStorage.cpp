@@ -112,8 +112,9 @@ BlockInputStreams IManageableStorage::remote_read(const std::vector<std::pair<De
     req.ranges = cop_key_ranges;
 
     pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
+    pingcap::kv::StoreType store_type = pingcap::kv::TiFlash;
     BlockInputStreamPtr input = std::make_shared<LazyBlockInputStream>(
-        sample_block, [cluster, req, schema]() { return std::make_shared<CoprocessorBlockInputStream>(cluster, req, schema); });
+        sample_block, [cluster, req, schema, store_type]() { return std::make_shared<CoprocessorBlockInputStream>(cluster, req, schema, store_type); });
     return {input};
 };
 } // namespace DB

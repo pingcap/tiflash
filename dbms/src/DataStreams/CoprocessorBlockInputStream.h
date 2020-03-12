@@ -11,9 +11,10 @@ namespace DB
 class CoprocessorBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    CoprocessorBlockInputStream(pingcap::kv::Cluster * cluster_, const pingcap::coprocessor::Request & req_, const DAGSchema & schema_)
+    CoprocessorBlockInputStream(pingcap::kv::Cluster * cluster_, const pingcap::coprocessor::Request & req_, const DAGSchema & schema_,
+            pingcap::kv::StoreType store_type)
         : req(req_),
-          resp_iter(pingcap::coprocessor::Client::send(cluster_, &req)),
+          resp_iter(pingcap::coprocessor::Client::send(cluster_, &req, store_type)),
           schema(schema_),
           log(&Logger::get("pingcap/coprocessor"))
     {
