@@ -211,7 +211,7 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
                                storage_pool,
                                hash_salt,
                                store_columns,
-                               /* min_version */ 0,
+                               latest_gc_safe_point,
                                settings.not_compress_columns,
                                db_settings);
     return DMContextPtr(ctx);
@@ -934,8 +934,10 @@ bool DeltaMergeStore::handleBackgroundTask()
                                                                   /* ignore_cache= */ false,
                                                                   global_context.getSettingsRef().safe_point_update_interval_seconds);
 
-        LOG_DEBUG(log, "GC savepoint: " << safe_point);
+        LOG_DEBUG(log, "Task" << toString(task.type) << " GC safe point: " << safe_point);
 
+        // Foreground task don't get GC safe point from remote, but we better make it as up to date as possible.
+        latest_gc_safe_point         = safe_point;
         task.dm_context->min_version = safe_point;
     }
 

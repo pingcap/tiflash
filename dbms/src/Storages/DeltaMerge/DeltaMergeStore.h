@@ -5,11 +5,11 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <Storages/AlterCommands.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TiDB.h>
-#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 
 #include <queue>
 
@@ -298,6 +298,8 @@ private:
     SegmentMap id_to_segment;
 
     MergeDeltaTaskPool background_tasks;
+
+    DB::Timestamp latest_gc_safe_point = 0;
 
     // Synchronize between write threads and read threads.
     std::shared_mutex read_write_mutex;
