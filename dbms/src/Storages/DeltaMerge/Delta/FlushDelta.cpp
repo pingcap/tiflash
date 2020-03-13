@@ -13,8 +13,9 @@ struct FlushPackTask
 {
     FlushPackTask(const PackPtr & pack_) : pack(pack_) {}
 
-    PackPtr pack;
-    PageId  data_page = 0;
+    ConstPackPtr pack;
+
+    PageId data_page = 0;
 };
 using FlushPackTasks = std::vector<FlushPackTask>;
 
@@ -143,12 +144,6 @@ bool DeltaValueSpace::flush(DMContext & context)
             // If it's data have been updated, use the new pages info.
             if (task.data_page != 0)
                 shadow->data_page = task.data_page;
-            if (task.pack->rows >= context.delta_small_pack_rows)
-            {
-                // This pack is too large to use cache.
-                task.pack->cache        = {};
-                task.pack->cache_offset = 0;
-            }
 
             packs_copy.push_back(shadow);
         }
@@ -187,6 +182,16 @@ bool DeltaValueSpace::flush(DMContext & context)
 
         /// Commit updates in memory.
         packs.swap(packs_copy);
+
+        for (auto & pack : packs)
+        {
+            if (pack->cache && pack->data_page != 0 && pack->rows >= context.delta_small_pack_rows)
+            {
+                // This pack is too large to use cache.
+                pack->cache        = {};
+                pack->cache_offset = 0;
+            }
+        }
 
         unsaved_rows -= flush_rows;
         unsaved_deletes -= flush_deletes;

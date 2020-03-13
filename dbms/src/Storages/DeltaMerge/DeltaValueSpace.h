@@ -72,8 +72,8 @@ public:
         bool isCached() const { return !isDeleteRange() && (bool)cache; }
         /// Where is column data can be flushed.
         bool dataFlushable() const { return !isDeleteRange() && data_page == 0; }
-        /// This pack is not a delete range, the data in it has not been saved to disk.
-        bool isAppendable() const { return !isDeleteRange() && data_page == 0 && appendable; }
+        /// This pack is the last one, and not a delete range, and can be appended into new rows.
+        bool isAppendable() const { return !isDeleteRange() && data_page == 0 && appendable && (bool)cache; }
         /// This pack's metadata has been saved to disk.
         bool isSaved() const { return saved; }
         void setSchema(const BlockPtr & schema_)
@@ -103,8 +103,9 @@ public:
             return s;
         }
     };
-    using PackPtr = std::shared_ptr<Pack>;
-    using Packs   = std::vector<PackPtr>;
+    using PackPtr      = std::shared_ptr<Pack>;
+    using ConstPackPtr = std::shared_ptr<const Pack>;
+    using Packs        = std::vector<PackPtr>;
 
     struct Snapshot : public std::enable_shared_from_this<Snapshot>, private boost::noncopyable
     {
@@ -284,6 +285,7 @@ public:
 
 using Pack             = DeltaValueSpace::Pack;
 using PackPtr          = DeltaValueSpace::PackPtr;
+using ConstPackPtr     = DeltaValueSpace::ConstPackPtr;
 using Packs            = DeltaValueSpace::Packs;
 using DeltaSnapshot    = DeltaValueSpace::Snapshot;
 using DeltaSnapshotPtr = DeltaValueSpace::SnapshotPtr;

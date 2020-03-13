@@ -64,8 +64,9 @@ inline void serializePack(const Pack & pack, const BlockPtr & schema, WriteBuffe
 
 inline PackPtr deserializePack(ReadBuffer & buf)
 {
-    auto pack   = std::make_shared<Pack>();
-    pack->saved = true; // Must be true, otherwise it should not be here.
+    auto pack        = std::make_shared<Pack>();
+    pack->saved      = true;  // Must be true, otherwise it should not be here.
+    pack->appendable = false; // Must be false, otherwise it should not be here.
     readIntBinary(pack->rows, buf);
     readIntBinary(pack->bytes, buf);
     readPODBinary(pack->delete_range, buf);
