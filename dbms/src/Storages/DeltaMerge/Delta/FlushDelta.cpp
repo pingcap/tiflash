@@ -53,7 +53,7 @@ bool DeltaValueSpace::flush(DMContext & context)
                 auto & task = tasks.emplace_back(pack);
                 // We only write the pack's data if it is not a delete range, and it's data haven't been saved.
                 // Otherwise, simply save it's metadata is enough.
-                if (pack->isMutable())
+                if (pack->dataFlushable())
                 {
                     if (unlikely(!pack->cache))
                         throw Exception("Mutable pack does not have cache", ErrorCodes::LOGICAL_ERROR);
@@ -64,6 +64,9 @@ bool DeltaValueSpace::flush(DMContext & context)
             }
             total_rows += pack->rows;
             total_deletes += pack->isDeleteRange();
+
+            // Stop other threads appending to this pack.
+            pack->appendable = false;
         }
 
         if (unlikely(flush_rows != unsaved_rows || flush_deletes != unsaved_deletes || total_rows != rows || total_deletes != deletes))

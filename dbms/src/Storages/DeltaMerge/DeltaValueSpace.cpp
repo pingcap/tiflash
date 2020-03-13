@@ -244,6 +244,7 @@ PackPtr DeltaValueSpace::writePack(DMContext & context, const Block & block, siz
     pack->bytes     = block.bytes() * ((double)limit / block.rows());
     pack->data_page = writePackData(context, block, offset, limit, wbs);
     pack->setSchema(std::make_shared<Block>(block.cloneEmpty()));
+    pack->appendable = false;
 
     return pack;
 }
@@ -257,6 +258,9 @@ bool DeltaValueSpace::appendToDisk(DMContext & /*context*/, const PackPtr & pack
     auto last_schema = lastSchema();
     if (last_schema && checkSchema(*pack->schema, *last_schema))
         pack->schema = last_schema;
+
+    if (!packs.empty())
+        packs.back()->appendable = false;
 
     packs.push_back(pack);
 
@@ -283,7 +287,7 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
     if (!packs.empty())
     {
         auto & last_pack = packs.back();
-        if (last_pack->isMutable())
+        if (last_pack->isAppendable())
         {
             if constexpr (DM_RUN_CHECK)
             {
@@ -298,6 +302,10 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
                 // The last cache block is available
                 cache        = last_pack->cache;
                 mutable_pack = last_pack;
+            }
+            else
+            {
+                last_pack->appendable = false;
             }
         }
     }
@@ -361,6 +369,7 @@ bool DeltaValueSpace::appendDeleteRange(DMContext & /*context*/, const HandleRan
 
     auto pack          = std::make_shared<Pack>();
     pack->delete_range = delete_range;
+    pack->appendable   = false;
     packs.push_back(pack);
 
     ++deletes;

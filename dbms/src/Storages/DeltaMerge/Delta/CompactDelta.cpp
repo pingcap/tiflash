@@ -57,8 +57,8 @@ bool DeltaValueSpace::compact(DMContext & context)
         {
             if (!pack->isSaved())
                 break;
-            if ((unlikely(pack->isMutable())))
-                throw Exception("Saved pack is mutable", ErrorCodes::LOGICAL_ERROR);
+            if ((unlikely(pack->dataFlushable())))
+                throw Exception("Saved pack is data flushable", ErrorCodes::LOGICAL_ERROR);
 
             bool small_pack = !pack->isDeleteRange() && pack->rows < context.delta_small_pack_rows;
             bool schema_ok  = task.to_compact.empty() || pack->schema == task.to_compact.back()->schema;

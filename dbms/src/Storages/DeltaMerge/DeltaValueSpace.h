@@ -65,11 +65,15 @@ public:
 
         // Already persisted to disk or not.
         bool saved = false;
+        // Can be appended into new rows or not.
+        bool appendable = true;
 
         bool isDeleteRange() const { return !delete_range.none(); }
         bool isCached() const { return !isDeleteRange() && (bool)cache; }
+        /// Where is column data can be flushed.
+        bool dataFlushable() const { return !isDeleteRange() && data_page == 0; }
         /// This pack is not a delete range, the data in it has not been saved to disk.
-        bool isMutable() const { return !isDeleteRange() && data_page == 0; }
+        bool isAppendable() const { return !isDeleteRange() && data_page == 0 && appendable; }
         /// This pack's metadata has been saved to disk.
         bool isSaved() const { return saved; }
         void setSchema(const BlockPtr & schema_)
@@ -89,7 +93,8 @@ public:
                 + ",data_page:" + DB::toString(data_page)       //
                 + ",has_cache:" + DB::toString((bool)cache)     //
                 + ",cache_offset:" + DB::toString(cache_offset) //
-                + ",saved:" + DB::toString(saved);
+                + ",saved:" + DB::toString(saved)               //
+                + ",appendable:" + DB::toString(appendable);
             if (schema)
                 s += ",schema:" + blockInfo(*schema);
             if (cache)
