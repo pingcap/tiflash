@@ -278,24 +278,25 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
     // And, if last pack is mutable (haven't been saved to disk yet), we will merge the newly block into last pack.
     // Otherwise, create a new cache block and write into it.
 
-    PackPtr  mutable_pack;
-    CachePtr cache;
-    if (!packs.empty() && last_cache)
+    PackPtr  mutable_pack{};
+    CachePtr cache{};
+    if (!packs.empty())
     {
-        std::scoped_lock cache_lock(last_cache->mutex);
-
-        auto & last_pack      = packs.back();
-        bool   is_overflow    = last_cache->block.rows() >= context.delta_cache_limit_rows;
-        bool   is_same_schema = checkSchema(block, last_cache->block);
-
-        if (!is_overflow && is_same_schema)
+        auto & last_pack = packs.back();
+        if (last_pack->isMutable())
         {
-            // The last cache block is available
-            cache = last_cache;
-            if (last_pack->isMutable())
+            if constexpr (DM_RUN_CHECK)
             {
-                if (unlikely(last_pack->cache != last_cache))
-                    throw Exception("Last mutable pack's cache is not equal to last cache", ErrorCodes::LOGICAL_ERROR);
+                if (unlikely(!checkSchema(*last_pack->schema, last_pack->cache->block)))
+                    throw Exception("Mutable pack's structure of schema and block are different: " + last_pack->toString());
+            }
+
+            bool is_overflow    = last_pack->cache->block.rows() >= context.delta_cache_limit_rows;
+            bool is_same_schema = checkSchema(block, last_pack->cache->block);
+            if (!is_overflow && is_same_schema)
+            {
+                // The last cache block is available
+                cache        = last_pack->cache;
                 mutable_pack = last_pack;
             }
         }
@@ -303,8 +304,7 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
 
     if (!cache)
     {
-        cache      = std::make_shared<Cache>(block);
-        last_cache = cache;
+        cache = std::make_shared<Cache>(block);
     }
 
     size_t cache_offset;

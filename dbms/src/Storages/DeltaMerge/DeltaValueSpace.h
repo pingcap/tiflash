@@ -82,14 +82,20 @@ public:
 
         String toString()
         {
-            return "{rows:" + DB::toString(rows)                //
+            String s = "{rows:" + DB::toString(rows)            //
                 + ",bytes:" + DB::toString(bytes)               //
                 + ",has_schema:" + DB::toString((bool)schema)   //
                 + ",delete_range:" + delete_range.toString()    //
                 + ",data_page:" + DB::toString(data_page)       //
                 + ",has_cache:" + DB::toString((bool)cache)     //
                 + ",cache_offset:" + DB::toString(cache_offset) //
-                + ",saved:" + DB::toString(saved) + "}";
+                + ",saved:" + DB::toString(saved);
+            if (schema)
+                s += ",schema:" + blockInfo(*schema);
+            if (cache)
+                s += ",cache_block:" + blockInfo(cache->block);
+            s += "}";
+            return s;
         }
     };
     using PackPtr = std::shared_ptr<Pack>;
@@ -167,8 +173,6 @@ private:
     std::atomic<size_t> last_try_compact_packs    = 0;
     std::atomic<size_t> last_try_merge_delta_rows = 0;
     std::atomic<size_t> last_try_split_rows       = 0;
-
-    CachePtr last_cache;
 
     // Protects the operations in this instance.
     mutable std::mutex mutex;

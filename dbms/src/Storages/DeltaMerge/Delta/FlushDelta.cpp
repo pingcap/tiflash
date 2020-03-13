@@ -68,9 +68,6 @@ bool DeltaValueSpace::flush(DMContext & context)
 
         if (unlikely(flush_rows != unsaved_rows || flush_deletes != unsaved_deletes || total_rows != rows || total_deletes != deletes))
             throw Exception("Rows and deletes check failed", ErrorCodes::LOGICAL_ERROR);
-
-        // Must remove the last_cache, so that later append operations won't append to last pack which we are flushing.
-        last_cache = {};
     }
 
     // No update, return successfully.
