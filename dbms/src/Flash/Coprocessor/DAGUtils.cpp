@@ -871,9 +871,9 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::Rpad, "cast"},
     //{tipb::ScalarFuncSig::Space, "cast"},
     //{tipb::ScalarFuncSig::Strcmp, "cast"},
-    {tipb::ScalarFuncSig::Substring2ArgsUTF8, "substringUTF8"}, {tipb::ScalarFuncSig::Substring3ArgsUTF8, "substringUTF8"},
-    //{tipb::ScalarFuncSig::Substring2Args, "cast"},
-    //{tipb::ScalarFuncSig::Substring3Args, "cast"},
+    {tipb::ScalarFuncSig::Substring2Args, "substringUTF8"}, {tipb::ScalarFuncSig::Substring3Args, "substringUTF8"},
+    //{tipb::ScalarFuncSig::SubstringBinary2Args, "cast"},
+    //{tipb::ScalarFuncSig::SubstringBinary3Args, "cast"},
     //{tipb::ScalarFuncSig::SubstringIndex, "cast"},
 
     //{tipb::ScalarFuncSig::ToBase64, "cast"},
