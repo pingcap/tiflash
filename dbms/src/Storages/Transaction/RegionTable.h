@@ -116,6 +116,10 @@ public:
     RegionDataReadInfoList tryFlushRegion(RegionID region_id, bool try_persist = false);
     RegionDataReadInfoList tryFlushRegion(const RegionPtr & region, bool try_persist);
 
+    /// This function is a quick path of tryFlushRegion, and should only be called if background flush is disable.
+    /// It skip the checks in tryFlushRegion, so runs faster. This optimization is neccessary because it is called each time after a KV is committed.
+    RegionDataReadInfoList flushRegion(const RegionPtr & region, bool try_persist) const;
+
     void waitTillRegionFlushed(RegionID region_id);
 
     void handleInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegions &)> && callback) const;
@@ -149,8 +153,6 @@ public:
 
     /// extend range for possible InternalRegion or add one.
     void extendRegionRange(const RegionID region_id, const RegionRangeKeys & region_range_keys);
-
-    RegionDataReadInfoList flushRegion(const RegionPtr & region, bool try_persist) const;
 
 private:
     friend class MockTiDB;
