@@ -54,13 +54,13 @@ try
         dag_response, context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), streams.in->getHeader());
     copyData(*streams.in, *dag_output_stream);
 
-    if (!dag_request.has_collect_execution_summaries() || !dag_request.collect_execution_summaries())
-        return;
     if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streams.in.get()))
     {
         LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": dag request without encode cost: "
-        << p_stream->getProfileInfo().execution_time/(double)1000000000 << " seconds.");
+                                           << p_stream->getProfileInfo().execution_time/(double)1000000000 << " seconds.");
     }
+    if (!dag_request.has_collect_execution_summaries() || !dag_request.collect_execution_summaries())
+        return;
     // add ExecutorExecutionSummary info
     for (auto & p_streams : dag_context.profile_streams_list)
     {
