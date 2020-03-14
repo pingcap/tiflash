@@ -217,7 +217,7 @@ private:
             {
                 auto handle  = handle_column[i];
                 auto version = version_column[i];
-                if (handle < last_handle || handle == last_handle && version < last_version)
+                if (handle < last_handle || (handle == last_handle && version < last_version))
                 {
                     throw Exception("DeltaMerge return wrong result, current handle[" + DB::toString(handle) + "]version["
                                     + DB::toString(version) + "]@read[" + DB::toString(num_read) + "]@pos[" + DB::toString(i)
