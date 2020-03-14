@@ -212,7 +212,7 @@ private:
             ++num_read;
 
             auto & handle_column  = toColumnVectorData<Handle>(block.getByPosition(0).column);
-            auto & version_column = toColumnVectorData<Handle>(block.getByPosition(1).column);
+            auto & version_column = toColumnVectorData<UInt64>(block.getByPosition(1).column);
             for (size_t i = 0; i < handle_column.size(); ++i)
             {
                 auto handle  = handle_column[i];
