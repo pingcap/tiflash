@@ -226,6 +226,7 @@ private:
                                     + DB::toString(last_handle_pos) + "]");
                 }
                 last_handle          = handle;
+                last_version         = version;
                 last_handle_pos      = i;
                 last_handle_read_num = num_read;
             }
