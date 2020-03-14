@@ -5,11 +5,11 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <Storages/AlterCommands.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TiDB.h>
-#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 
 #include <queue>
 
@@ -238,7 +238,7 @@ public:
 
     const ColumnDefines & getTableColumns() const { return original_table_columns; }
     const ColumnDefine &  getHandle() const { return original_table_handle_define; }
-    const Block &         getHeader() const { return original_header; }
+    Block                 getHeader() const;
     const Settings &      getSettings() const { return settings; }
     DataTypePtr           getPKDataType() const { return original_table_handle_define.type; }
     SortDescription       getPrimarySortDescription() const;
@@ -280,7 +280,6 @@ private:
 
     ColumnDefines      original_table_columns;
     const ColumnDefine original_table_handle_define;
-    Block              original_header;
 
     // The columns we actually store.
     ColumnDefinesPtr store_columns;

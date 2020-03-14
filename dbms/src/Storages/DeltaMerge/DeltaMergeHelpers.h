@@ -152,11 +152,16 @@ inline void addColumnToBlock(Block &             block,
     block.insert(std::move(column));
 }
 
-inline Block toEmptyBlock(const ColumnDefines & columns)
+/// Generate a block from column_defines
+inline Block toEmptyBlock(const ColumnDefines & column_defines)
 {
     Block block;
-    for (auto & c : columns)
+    for (const auto & c : column_defines)
+    {
+        /// Usually we use this function to get a header block,
+        /// maybe columns of all nullptr in this block is enough?
         addColumnToBlock(block, c.id, c.name, c.type, c.type->createColumn(), c.default_value);
+    }
     return block;
 }
 

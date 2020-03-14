@@ -71,6 +71,27 @@ DeltaMergeStore::BackgroundTask DeltaMergeStore::MergeDeltaTaskPool::nextTask(Lo
 //   DeltaMergeStore
 // ================================================
 
+namespace
+{
+// Actually we will always store a column of `_tidb_rowid`, no matter it
+// exist in `table_columns` or not.
+ColumnDefinesPtr getStoreColumns(const ColumnDefines & table_columns)
+{
+    auto columns = std::make_shared<ColumnDefines>();
+    // First three columns are always _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
+    columns->emplace_back(getExtraHandleColumnDefine());
+    columns->emplace_back(getVersionColumnDefine());
+    columns->emplace_back(getTagColumnDefine());
+    // Add other columns
+    for (const auto & col : table_columns)
+    {
+        if (col.name != EXTRA_HANDLE_COLUMN_NAME && col.name != VERSION_COLUMN_NAME && col.name != TAG_COLUMN_NAME)
+            columns->emplace_back(col);
+    }
+    return columns;
+}
+} // namespace
+
 DeltaMergeStore::DeltaMergeStore(Context &             db_context,
                                  const String &        path_,
                                  const String &        db_name_,
@@ -99,20 +120,14 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
     original_table_columns.emplace_back(original_table_handle_define);
     original_table_columns.emplace_back(getVersionColumnDefine());
     original_table_columns.emplace_back(getTagColumnDefine());
-
-    store_columns = std::make_shared<ColumnDefines>();
-    store_columns->emplace_back(getExtraHandleColumnDefine());
-    store_columns->emplace_back(getVersionColumnDefine());
-    store_columns->emplace_back(getTagColumnDefine());
-
-    for (auto & col : columns)
+    for (const auto & col : columns)
     {
         if (col.name != original_table_handle_define.name && col.name != VERSION_COLUMN_NAME && col.name != TAG_COLUMN_NAME)
             original_table_columns.emplace_back(col);
-        if (col.name != EXTRA_HANDLE_COLUMN_NAME && col.name != VERSION_COLUMN_NAME && col.name != TAG_COLUMN_NAME)
-            store_columns->emplace_back(col);
     }
-    original_header = toEmptyBlock(original_table_columns);
+
+    store_columns = getStoreColumns(original_table_columns);
+
 
     auto dm_context = newDMContext(db_context, db_context.getSettingsRef());
 
@@ -1265,6 +1280,11 @@ void DeltaMergeStore::check(const Context & /*db_context*/)
 }
 
 
+Block DeltaMergeStore::getHeader() const
+{
+    return toEmptyBlock(original_table_columns);
+}
+
 void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
                                   const OptionTableInfoConstRef table_info,
                                   ColumnID &                    max_column_id_used,
@@ -1272,17 +1292,16 @@ void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
 {
     std::unique_lock lock(read_write_mutex);
 
-    ColumnDefines original_table_columns_copy(original_table_columns.begin(), original_table_columns.end());
-    auto          store_columns_copy = std::make_shared<ColumnDefines>(store_columns->begin(), store_columns->end());
-
+    ColumnDefines new_original_table_columns(original_table_columns.begin(), original_table_columns.end());
     for (const auto & command : commands)
     {
-        applyAlter(original_table_columns_copy, command, table_info, max_column_id_used);
-        applyAlter(*store_columns_copy, command, table_info, max_column_id_used);
+        applyAlter(new_original_table_columns, command, table_info, max_column_id_used);
     }
 
-    original_table_columns.swap(original_table_columns);
-    store_columns.swap(store_columns_copy);
+    auto new_store_columns = getStoreColumns(new_original_table_columns);
+
+    original_table_columns.swap(new_original_table_columns);
+    store_columns.swap(new_store_columns);
 }
 
 
