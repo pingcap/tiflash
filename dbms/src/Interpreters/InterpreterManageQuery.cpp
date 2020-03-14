@@ -3,7 +3,7 @@
 #include <Interpreters/InterpreterManageQuery.h>
 #include <Parsers/ASTManageQuery.h>
 #include <Storages/IStorage.h>
-
+#include <Storages/MutableSupport.h>
 #include <Storages/StorageDeltaMerge.h>
 
 namespace DB
@@ -14,7 +14,7 @@ BlockIO InterpreterManageQuery::execute()
 
     StoragePtr table = context.getTable(ast.database, ast.table);
     IManageableStorage * manageable_storage;
-    if (table->getName() == "DeltaMerge")
+    if (table->getName() == MutableSupport::delta_tree_storage_name)
     {
         manageable_storage = &dynamic_cast<StorageDeltaMerge &>(*table);
     }

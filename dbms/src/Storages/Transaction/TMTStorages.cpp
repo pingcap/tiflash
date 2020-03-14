@@ -19,10 +19,9 @@ ManageableStoragePtr ManagedStorages::get(TableID table_id) const
 {
     std::lock_guard lock(mutex);
 
-    auto it = storages.find(table_id);
-    if (it == storages.end())
-        return nullptr;
-    return it->second;
+    if (auto it = storages.find(table_id); it != storages.end())
+        return it->second;
+    return nullptr;
 }
 
 std::unordered_map<TableID, ManageableStoragePtr> ManagedStorages::getAllStorage() const
@@ -36,7 +35,7 @@ ManageableStoragePtr ManagedStorages::getByName(const std::string & db, const st
     std::lock_guard lock(mutex);
 
     auto it = std::find_if(storages.begin(), storages.end(), [&](const std::pair<TableID, ManageableStoragePtr> & pair) {
-        auto &storage = pair.second;
+        auto & storage = pair.second;
         return storage->getDatabaseName() == db && storage->getTableName() == table;
     });
     if (it == storages.end())
