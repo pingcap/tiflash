@@ -74,7 +74,7 @@ void copyExecutorTreeWithLocalTableScan(tipb::DAGRequest & dag_req, const tipb::
     new_ts->set_next_read_engine(tipb::EngineType::Local);
     exec->set_allocated_tbl_scan(new_ts);
 
-    dag_req.set_encode_type(tipb::EncodeType::TypeChunk);
+    dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
 }
 
 BlockInputStreams IManageableStorage::remote_read(const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges,
