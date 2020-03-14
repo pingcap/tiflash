@@ -304,6 +304,8 @@ private:
     // Synchronize between write threads and read threads.
     std::shared_mutex read_write_mutex;
 
+    std::mutex global_mutex;
+
     UInt64   hash_salt;
     Logger * log;
 }; // namespace DM
