@@ -199,7 +199,7 @@ inline bool checkSchema(const Block & a, const Block & b)
     for (size_t i = 0; i < a.columns(); ++i)
     {
         auto & ca = a.getByPosition(i);
-        auto & cb = a.getByPosition(i);
+        auto & cb = b.getByPosition(i);
 
         bool col_ok   = ca.column_id == cb.column_id;
         bool name_ok  = ca.name == cb.name;

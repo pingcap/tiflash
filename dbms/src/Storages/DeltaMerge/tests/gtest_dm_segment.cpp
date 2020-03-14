@@ -940,6 +940,70 @@ try
         in->readSuffix();
         ASSERT_EQ(num_rows_read, num_rows_write);
     }
+
+
+    /// Write some data after ddl, replacing som origin rows
+    {
+        /// write to segment, replacing some origin rows
+        Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write * 2, false, /* tso= */ 3);
+
+        const size_t          num_rows = block.rows();
+        ColumnWithTypeAndName int32_col(nullptr, column_i32_after_ddl.type, column_i32_after_ddl.name, column_id_i8_to_i32);
+        {
+            IColumn::MutablePtr m_col       = int32_col.type->createColumn();
+            auto &              column_data = typeid_cast<ColumnVector<Int32> &>(*m_col).getData();
+            column_data.resize(num_rows);
+            for (size_t i = 0; i < num_rows; ++i)
+            {
+                column_data[i] = static_cast<int32_t>(-1 * (i % 2 ? 1 : -1) * i);
+            }
+            int32_col.column = std::move(m_col);
+        }
+        block.insert(int32_col);
+        switch (write_type)
+        {
+        case SegmentWriteType::ToDisk:
+            segment->write(dmContext(), std::move(block));
+            break;
+        case SegmentWriteType::ToCache:
+            segment->writeToCache(dmContext(), block, 0, num_rows);
+            break;
+        }
+    }
+
+    {
+        // read written data
+        BlockInputStreamPtr in = segment->getInputStream(dmContext(), *columns_to_read);
+
+        // check that we can read correct values
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            ASSERT_TRUE(block.has(column_name_i8_to_i32));
+            const ColumnWithTypeAndName & col = block.getByName(column_name_i8_to_i32);
+            ASSERT_DATATYPE_EQ(col.type, column_i32_after_ddl.type);
+            ASSERT_EQ(col.name, column_i32_after_ddl.name);
+            ASSERT_EQ(col.column_id, column_i32_after_ddl.id);
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                auto value    = col.column->getInt(i);
+                auto expected = 0;
+                if (i < num_rows_write / 2)
+                    expected = static_cast<int64_t>(-1 * (i % 2 ? 1 : -1) * i);
+                else
+                {
+                    auto r   = i - num_rows_write / 2;
+                    expected = static_cast<int64_t>(-1 * (r % 2 ? 1 : -1) * r);
+                }
+                // std::cerr << " row: " << i << "  "<< value << std::endl;
+                ASSERT_EQ(value, expected) << "at row: " << i;
+            }
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, (size_t)(num_rows_write * 2));
+    }
 }
 CATCH
 
@@ -958,8 +1022,6 @@ try
         auto columns_before_ddl = DMTestEnv::getDefaultColumns();
         // Not cache any rows
         DB::Settings db_settings;
-        db_settings.dm_segment_delta_cache_limit_rows = 0;
-
         segment = reload(columns_before_ddl, std::move(db_settings));
     }
 
@@ -978,9 +1040,9 @@ try
         }
     }
 
+    auto columns_after_ddl = DMTestEnv::getDefaultColumns();
     {
         // DDL add new column with default value
-        auto columns_after_ddl = DMTestEnv::getDefaultColumns();
         columns_after_ddl->emplace_back(new_column_define);
         if (flush_before_ddl)
         {
@@ -992,7 +1054,7 @@ try
 
     {
         // read written data
-        auto in = segment->getInputStream(dmContext(), *tableColumns());
+        auto in = segment->getInputStream(dmContext(), *columns_after_ddl);
 
         // check that we can read correct values
         size_t num_rows_read = 0;
@@ -1012,6 +1074,70 @@ try
         }
         in->readSuffix();
         ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+
+
+    /// Write some data after ddl, replacing som origin rows
+    {
+        /// write to segment, replacing some origin rows
+        Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write * 2, false, /* tso= */ 3);
+
+        const size_t          num_rows = block.rows();
+        ColumnWithTypeAndName int8_col(nullptr, new_column_define.type, new_column_define.name, new_column_id);
+        {
+            IColumn::MutablePtr m_col       = int8_col.type->createColumn();
+            auto &              column_data = typeid_cast<ColumnVector<Int8> &>(*m_col).getData();
+            column_data.resize(num_rows);
+            for (size_t i = 0; i < num_rows; ++i)
+            {
+                column_data[i] = static_cast<int8_t>(-1 * (i % 2 ? 1 : -1) * i);
+            }
+            int8_col.column = std::move(m_col);
+        }
+        block.insert(int8_col);
+        switch (write_type)
+        {
+        case SegmentWriteType::ToDisk:
+            segment->write(dmContext(), std::move(block));
+            break;
+        case SegmentWriteType::ToCache:
+            segment->writeToCache(dmContext(), block, 0, num_rows);
+            break;
+        }
+    }
+
+    {
+        // read written data
+        BlockInputStreamPtr in = segment->getInputStream(dmContext(), *columns_after_ddl);
+
+        // check that we can read correct values
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            ASSERT_TRUE(block.has(new_column_name));
+            const ColumnWithTypeAndName & col = block.getByName(new_column_name);
+            ASSERT_DATATYPE_EQ(col.type, new_column_define.type);
+            ASSERT_EQ(col.name, new_column_define.name);
+            ASSERT_EQ(col.column_id, new_column_define.id);
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                int8_t value    = col.column->getInt(i);
+                int8_t expected = 0;
+                if (i < num_rows_write / 2)
+                    expected = new_column_default_value_int;
+                else
+                {
+                    auto r   = i - num_rows_write / 2;
+                    expected = static_cast<int8_t>(-1 * (r % 2 ? 1 : -1) * r);
+                }
+                // std::cerr << " row: " << i << "  "<< value << std::endl;
+                ASSERT_EQ(value, expected) << "at row: " << i;
+            }
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, (size_t)(num_rows_write * 2));
     }
 }
 CATCH

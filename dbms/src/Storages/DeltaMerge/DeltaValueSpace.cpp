@@ -306,6 +306,18 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
         last_cache = cache;
     }
 
+    if constexpr (DM_RUN_CHECK)
+    {
+        if (unlikely(!checkSchema(cache->block, block)))
+        {
+            const String block_schema_str = block.dumpStructure();
+            const String cache_schema_str = cache->block.dumpStructure();
+            throw Exception("Try to append block(rows:" + DB::toString(block.rows())
+                                + ") to a cache but schema not match! block: " + block_schema_str + ", cache: " + cache_schema_str,
+                            ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+
     size_t cache_offset;
     {
         std::scoped_lock cache_lock(cache->mutex);
