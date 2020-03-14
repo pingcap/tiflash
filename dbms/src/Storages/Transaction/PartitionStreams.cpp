@@ -227,4 +227,149 @@ void RegionTable::resolveLocks(Region::CommittedScanner & scanner, const Timesta
     }
 }
 
+
+RegionException::RegionReadStatus RegionTable::resolveLocksAndFlushRegion(
+    TMTContext & tmt,
+    const TiDB::TableID table_id,
+    const RegionPtr & region,
+    const Timestamp start_ts,
+    RegionVersion region_version,
+    RegionVersion conf_version,
+    DB::HandleRange<HandleID> & handle_range)
+{
+    auto & context = tmt.getContext();
+    RegionDataReadInfoList data_list_read;
+    {
+        auto scanner = region->createCommittedScanner();
+
+        /// Some sanity checks for region meta.
+        {
+            if (region->isPendingRemove())
+                return RegionException::PENDING_REMOVE;
+
+            const auto & [version, conf_ver, key_range] = region->dumpVersionRange();
+            if (version != region_version || conf_ver != conf_version)
+                return RegionException::VERSION_ERROR;
+
+            handle_range = key_range->getHandleRangeByTable(table_id);
+        }
+
+        /// Deal with locks.
+        resolveLocks(scanner, start_ts);
+
+        /// Read raw KVs from region cache.
+        {
+            // Shortcut for empty region.
+            if (!scanner.hasNext())
+                return RegionException::OK;
+
+            data_list_read.reserve(scanner.writeMapSize());
+
+            // Tiny optimization for queries that need only handle, tso, delmark.
+            do
+            {
+                data_list_read.emplace_back(scanner.next());
+            } while (scanner.hasNext());
+        }
+    }
+
+    /// Declare lambda of atomic read then write to call multiple times.
+    auto atomicReadWrite = [&](bool force_decode) {
+        /// Get storage based on table ID.
+        auto storage = tmt.getStorages().get(table_id);
+        if (storage == nullptr)
+        {
+            if (!force_decode) // Need to update.
+                return false;
+            // Table must have just been dropped or truncated.
+            // TODO: What if we support delete range? Do we still want to remove KVs from region cache?
+            return true;
+        }
+
+        /// Lock throughout decode and write, during which schema must not change.
+        auto lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
+
+        /// Read region data as block.
+        auto start_time = Clock::now();
+        auto [block, ok] = readRegionBlock(storage->getTableInfo(),
+                                           storage->getColumns(),
+                                           storage->getColumns().getNamesOfPhysical(),
+                                           data_list_read,
+                                           std::numeric_limits<Timestamp>::max(),
+                                           force_decode);
+        if (!ok)
+            return false;
+
+        /// Write block into storage.
+        start_time = Clock::now();
+        // Note: do NOT use typeid_cast, since Storage is multi-inherite and typeid_cast will return nullptr
+        switch (storage->engineType())
+        {
+        case ::TiDB::StorageEngine::TMT:
+        {
+
+            auto tmt_storage = std::dynamic_pointer_cast<StorageMergeTree>(storage);
+            TxnMergeTreeBlockOutputStream output(*tmt_storage);
+            output.write(std::move(block));
+            break;
+        }
+        case ::TiDB::StorageEngine::DT:
+        {
+            auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+            // imported data from TiDB, ASTInsertQuery.is_import need to be true
+            ASTPtr query(new ASTInsertQuery(dm_storage->getDatabaseName(), dm_storage->getTableName(), /* is_import_= */ true));
+            BlockOutputStreamPtr output = dm_storage->write(query, context.getSettingsRef());
+            output->writePrefix();
+            output->write(block);
+            output->writeSuffix();
+            break;
+        }
+        case ::TiDB::StorageEngine::DEBUGGING_MEMORY:
+        {
+            auto debugging_storage = std::dynamic_pointer_cast<StorageDebugging>(storage);
+            ASTPtr query(new ASTInsertQuery(debugging_storage->getDatabaseName(), debugging_storage->getTableName(), true));
+            BlockOutputStreamPtr output = debugging_storage->write(query, context.getSettingsRef());
+            output->writePrefix();
+            output->write(block);
+            output->writeSuffix();
+            break;
+        }
+        default:
+            throw Exception("Unknown StorageEngine: " + toString(static_cast<Int32>(storage->engineType())), ErrorCodes::LOGICAL_ERROR);
+        }
+
+        return true;
+    };
+
+    /// Try read then write once.
+    {
+        if (atomicReadWrite(false))
+            return RegionException::RegionReadStatus::OK;
+    }
+
+    /// If first try failed, sync schema and force read then write.
+    {
+        tmt.getSchemaSyncer()->syncSchemas(context);
+
+        if (!atomicReadWrite(true))
+            // Failure won't be tolerated this time.
+            // TODO: Enrich exception message.
+            throw Exception("Write region " + std::to_string(region->id()) + " to table " + std::to_string(table_id) + " failed",
+                            ErrorCodes::LOGICAL_ERROR);
+    }
+
+    {
+        auto remover = region->createCommittedRemover();
+        for (const auto & [handle, write_type, commit_ts, value] : data_list_read)
+        {
+            std::ignore = write_type;
+            std::ignore = value;
+
+            remover.remove({handle, commit_ts});
+        }
+    }
+
+    return RegionException::RegionReadStatus::OK;
+}
+
 } // namespace DB

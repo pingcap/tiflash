@@ -116,9 +116,14 @@ public:
     RegionDataReadInfoList tryFlushRegion(RegionID region_id, bool try_persist = false);
     RegionDataReadInfoList tryFlushRegion(const RegionPtr & region, bool try_persist);
 
-    /// This function is a quick path of tryFlushRegion, and should only be called if background flush is disable.
-    /// It skip the checks in tryFlushRegion, so runs faster. This optimization is neccessary because it is called each time after a KV is committed.
-    RegionDataReadInfoList flushRegion(const RegionPtr & region, bool try_persist) const;
+    static RegionException::RegionReadStatus resolveLocksAndFlushRegion(
+        TMTContext & tmt,
+        const TiDB::TableID table_id,
+        const RegionPtr & region,
+        const Timestamp start_ts,
+        RegionVersion region_version,
+        RegionVersion conf_version,
+        DB::HandleRange<HandleID> & handle_range);
 
     void waitTillRegionFlushed(RegionID region_id);
 
@@ -167,6 +172,7 @@ private:
     InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, const RegionID region_id);
     InternalRegion & doGetInternalRegion(TableID table_id, RegionID region_id);
 
+    RegionDataReadInfoList flushRegion(const RegionPtr & region, bool try_persist) const;
     bool shouldFlush(const InternalRegion & region) const;
     RegionID pickRegionToFlush();
 
