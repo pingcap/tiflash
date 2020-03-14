@@ -59,7 +59,7 @@ try
     if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streams.in.get()))
     {
         LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": dag request without encode cost: "
-        << p_stream->getProfileInfo().execution_time/(double)1000000 << " seconds.");
+        << p_stream->getProfileInfo().execution_time/(double)1000000000 << " seconds.");
     }
     // add ExecutorExecutionSummary info
     for (auto & p_streams : dag_context.profile_streams_list)
