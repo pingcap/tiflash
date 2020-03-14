@@ -381,12 +381,12 @@ class DMFile_DDL_Test : public DMFile_Test
 public:
     /// Write some data into DMFile.
     /// return rows write, schema
-    std::pair<size_t, ColumnDefines> prepareSomeDataToDMFile()
+    std::pair<size_t, ColumnDefines> prepareSomeDataToDMFile(bool i8_is_nullable = false)
     {
         size_t num_rows_write  = 128;
         auto   cols_before_ddl = DMTestEnv::getDefaultColumns();
 
-        ColumnDefine i8_col(2, "i8", typeFromString("Int8"));
+        ColumnDefine i8_col(2, "i8", i8_is_nullable ? typeFromString("Nullable(Int8)") : typeFromString("Int8"));
         ColumnDefine f64_col(3, "f64", typeFromString("Float64"));
         cols_before_ddl->push_back(i8_col);
         cols_before_ddl->push_back(f64_col);
@@ -400,7 +400,10 @@ public:
             auto col = i8_col.type->createColumn();
             for (size_t i = 0; i < num_rows_write; i++)
             {
-                col->insert(toField(Int64(i) * (-1 * (i % 2))));
+                Field field; // Null by default
+                if (!i8_is_nullable || (i8_is_nullable && i < num_rows_write / 2))
+                    field = toField(Int64(i) * (-1 * (i % 2)));
+                col->insert(field);
             }
             ColumnWithTypeAndName i64(std::move(col), i8_col.type, i8_col.name, i8_col.id);
 
@@ -530,7 +533,7 @@ try
     ASSERT_TRUE(old_col.type->equals(*typeFromString("Int8")));
     ColumnDefine new_col = old_col;
     new_col.type         = typeFromString("Int32");
-    new_col.name         = "i8_new";
+    new_col.name         = "i32_new";
     (*cols_after_ddl)[3] = new_col;
 
     {
@@ -564,6 +567,156 @@ try
                     {
                         auto value = c->getInt(Int64(i));
                         ASSERT_EQ(value, (Int64)(i * (-1 * (i % 2))));
+                    }
+                }
+                // Check old columns before ddl
+                else if (itr.name == "f64")
+                {
+                    EXPECT_EQ(itr.column_id, 3L);
+                    EXPECT_TRUE(itr.type->equals(*typeFromString("Float64")));
+                    for (size_t i = 0; i < c->size(); i++)
+                    {
+                        Field   value = (*c)[i];
+                        Float64 v     = value.get<Float64>();
+                        EXPECT_EQ(v, 0.125);
+                    }
+                }
+            }
+            num_rows_read += in.rows();
+        }
+        stream->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+}
+CATCH
+
+TEST_F(DMFile_DDL_Test, NotNullToNull)
+try
+{
+    // Prepare some data before ddl
+    const auto [num_rows_write, cols_before_ddl] = prepareSomeDataToDMFile();
+
+    // Mock that we achange a column type from int8 -> Nullable(int32), and its name to "i8_new" after ddl
+    auto cols_after_ddl        = std::make_shared<ColumnDefines>();
+    *cols_after_ddl            = cols_before_ddl;
+    const ColumnDefine old_col = cols_before_ddl[3];
+    ASSERT_TRUE(old_col.type->equals(*typeFromString("Int8")));
+    ColumnDefine new_col = old_col;
+    new_col.type         = typeFromString("Nullable(Int32)");
+    new_col.name         = "i32_nullable";
+    (*cols_after_ddl)[3] = new_col;
+
+    {
+        // Test read with new columns after ddl
+        auto stream = std::make_unique<DMFileBlockInputStream>( //
+            dbContext(),
+            std::numeric_limits<UInt64>::max(),
+            false,
+            dmContext().hash_salt,
+            dm_file,
+            *cols_after_ddl,
+            HandleRange::newAll(),
+            RSOperatorPtr{},
+            IdSetPtr{});
+
+        size_t num_rows_read = 0;
+        stream->readPrefix();
+        while (Block in = stream->read())
+        {
+            ASSERT_TRUE(in.has(new_col.name));
+            ASSERT_TRUE(!in.has("i8"));
+            ASSERT_TRUE(in.has("f64"));
+            for (auto itr : in)
+            {
+                auto c = itr.column;
+                if (itr.name == new_col.name)
+                {
+                    EXPECT_EQ(itr.column_id, new_col.id);
+                    EXPECT_TRUE(itr.type->equals(*new_col.type));
+                    for (size_t i = 0; i < c->size(); i++)
+                    {
+                        auto value = (*c)[i];
+                        ASSERT_FALSE(value.isNull());
+                        ASSERT_EQ(value, (Int64)(i * (-1 * (i % 2))));
+                    }
+                }
+                // Check old columns before ddl
+                else if (itr.name == "f64")
+                {
+                    EXPECT_EQ(itr.column_id, 3L);
+                    EXPECT_TRUE(itr.type->equals(*typeFromString("Float64")));
+                    for (size_t i = 0; i < c->size(); i++)
+                    {
+                        Field   value = (*c)[i];
+                        Float64 v     = value.get<Float64>();
+                        EXPECT_EQ(v, 0.125);
+                    }
+                }
+            }
+            num_rows_read += in.rows();
+        }
+        stream->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+}
+CATCH
+
+TEST_F(DMFile_DDL_Test, NullToNotNull)
+try
+{
+    // Prepare some data before ddl
+    const auto [num_rows_write, cols_before_ddl] = prepareSomeDataToDMFile(true);
+
+    // Mock that we achange a column type from Nullable(int8) -> int32, and its name to "i32" after ddl
+    auto cols_after_ddl        = std::make_shared<ColumnDefines>();
+    *cols_after_ddl            = cols_before_ddl;
+    const ColumnDefine old_col = cols_before_ddl[3];
+    ASSERT_TRUE(old_col.type->equals(*typeFromString("Nullable(Int8)")));
+    ColumnDefine new_col = old_col;
+    new_col.type         = typeFromString("Int32");
+    new_col.name         = "i32";
+    (*cols_after_ddl)[3] = new_col;
+
+    {
+        // Test read with new columns after ddl
+        auto stream = std::make_unique<DMFileBlockInputStream>( //
+            dbContext(),
+            std::numeric_limits<UInt64>::max(),
+            false,
+            dmContext().hash_salt,
+            dm_file,
+            *cols_after_ddl,
+            HandleRange::newAll(),
+            RSOperatorPtr{},
+            IdSetPtr{});
+
+        size_t num_rows_read = 0;
+        stream->readPrefix();
+        while (Block in = stream->read())
+        {
+            ASSERT_TRUE(in.has(new_col.name));
+            ASSERT_TRUE(!in.has("i8"));
+            ASSERT_TRUE(in.has("f64"));
+            for (auto itr : in)
+            {
+                auto c = itr.column;
+                if (itr.name == new_col.name)
+                {
+                    EXPECT_EQ(itr.column_id, new_col.id);
+                    EXPECT_TRUE(itr.type->equals(*new_col.type));
+                    for (size_t i = 0; i < c->size(); i++)
+                    {
+                        auto value = (*c)[i];
+                        if (i < num_rows_write / 2)
+                        {
+                            ASSERT_FALSE(value.isNull()) << " at row: " << i;
+                            ASSERT_EQ(value, (Int64)(i * (-1 * (i % 2)))) << " at row: " << i;
+                        }
+                        else
+                        {
+                            ASSERT_FALSE(value.isNull()) << " at row: " << i;
+                            ASSERT_EQ(value, (Int64)0) << " at row: " << i;
+                        }
                     }
                 }
                 // Check old columns before ddl
