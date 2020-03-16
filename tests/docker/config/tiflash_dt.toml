@@ -12,7 +12,7 @@ http_port = 8123
 interserver_http_port = 9009
 [flash]
 	tidb_status_addr = "tidb0:10080"
-	service_addr = "tiflash1:3930"
+	service_addr = "tiflash0:3930"
 	[flash.flash_cluster]
 		refresh_interval = 20
 		update_rule_interval = 5
@@ -20,7 +20,7 @@ interserver_http_port = 9009
 		cluster_manager_path = "/tiflash/flash_cluster_manager"
 	[flash.proxy]
         addr = "0.0.0.0:20170"
-        advertise-addr = "tiflash1:20170"
+        advertise-addr = "tiflash0:20170"
         data-dir = "/data"
         config = "/tikv.toml"
         log-file = "/log/tikv.log"
