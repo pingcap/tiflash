@@ -1,0 +1,24 @@
+=> DBGInvoke __enable_schema_sync_service('false')
+
+=> DBGInvoke __drop_tidb_table(default, test)
+=> drop table if exists default.test
+
+=> DBGInvoke __drop_tidb_table(default, test1)
+=> drop table if exists default.test1
+
+=> DBGInvoke __set_flush_threshold(1000000, 1000000)
+
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 String', '', 'dt')
+=> DBGInvoke __refresh_schemas()
+=> select * from default.test
+=> DBGInvoke __rename_tidb_table(default, test, test1)
+=> select * from default.test
+=> select * from default.test " --schema_version "1000000
+Received exception from server (version {#WORD}):
+Code: 60. DB::Exception: Received from {#WORD} DB::Exception: Table default.test doesn't exist..
+=> select * from default.test1
+=> select * from default.test1 " --schema_version "1000000
+
+=> DBGInvoke __drop_tidb_table(default, test1)
+=> drop table if exists default.test1
+=> DBGInvoke __enable_schema_sync_service('true')
