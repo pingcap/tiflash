@@ -1,9 +1,10 @@
+#include <common/logger_useful.h>
+
 #include <IO/CompressedReadBuffer.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Storages/DeltaMerge/Delta/Pack.h>
 #include <Storages/Page/PageStorage.h>
-
 
 namespace DB::DM
 {
@@ -63,8 +64,9 @@ inline void serializePack(const Pack & pack, const BlockPtr & schema, WriteBuffe
 
 inline PackPtr deserializePack(ReadBuffer & buf)
 {
-    auto pack   = std::make_shared<Pack>();
-    pack->saved = true; // Must be true, otherwise it should not be here.
+    auto pack        = std::make_shared<Pack>();
+    pack->saved      = true;  // Must be true, otherwise it should not be here.
+    pack->appendable = false; // Must be false, otherwise it should not be here.
     readIntBinary(pack->rows, buf);
     readIntBinary(pack->bytes, buf);
     readPODBinary(pack->delete_range, buf);
@@ -173,6 +175,13 @@ Block readPackFromCache(const PackPtr & pack)
 
 Columns readPackFromCache(const PackPtr & pack, const ColumnDefines & column_defines, size_t col_start, size_t col_end)
 {
+    if (unlikely(!(pack->cache)))
+    {
+        String msg = " Not a cache pack: " + pack->toString();
+        LOG_ERROR(&Logger::get(__FUNCTION__), msg);
+        throw Exception(msg);
+    }
+
     // TODO: should be able to use cache data directly, without copy.
     std::scoped_lock lock(pack->cache->mutex);
 
@@ -189,9 +198,21 @@ Columns readPackFromCache(const PackPtr & pack, const ColumnDefines & column_def
         }
         else
         {
-            auto col_offset = it->second;
-            auto col_data   = col.type->createColumn();
-            col_data->insertRangeFrom(*cache_block.getByPosition(col_offset).column, pack->cache_offset, pack->rows);
+            auto   col_offset = it->second;
+            auto   col_data   = col.type->createColumn();
+            auto & cache_col  = cache_block.getByPosition(col_offset).column;
+            if (unlikely(col_offset >= cache_block.columns() || !cache_col))
+            {
+                String msg = "read column at " + DB::toString(col_offset)             //
+                    + ", cache block: columns=" + DB::toString(cache_block.columns()) //
+                    + ", rows=" + DB::toString(cache_block.rows())                    //
+                    + ", read col_id: " + DB::toString(col.id)                        //
+                    + ", pack: " + pack->toString();
+                LOG_ERROR(&Logger::get(__FUNCTION__), msg);
+                throw Exception(msg);
+            }
+
+            col_data->insertRangeFrom(*cache_col, pack->cache_offset, pack->rows);
             columns.push_back(std::move(col_data));
         }
     }

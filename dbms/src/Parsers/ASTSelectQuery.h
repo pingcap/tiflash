@@ -27,6 +27,7 @@ public:
     ASTPtr select_expression_list;
     ASTPtr tables;
     ASTPtr partition_expression_list;
+    ASTPtr segment_expression_list;
     ASTPtr prewhere_expression;
     ASTPtr where_expression;
     ASTPtr group_expression_list;

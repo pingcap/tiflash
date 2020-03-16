@@ -5,11 +5,11 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <Storages/AlterCommands.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TiDB.h>
-#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 
 #include <queue>
 
@@ -26,8 +26,29 @@ using RSOperatorPtr = std::shared_ptr<RSOperator>;
 struct DMContext;
 using DMContextPtr = std::shared_ptr<DMContext>;
 using NotCompress  = std::unordered_set<ColId>;
+using SegmentIdSet = std::unordered_set<UInt64>;
 
 static const PageId DELTA_MERGE_FIRST_SEGMENT_ID = 1;
+
+struct SegmentStat
+{
+    UInt64      segment_id;
+    HandleRange range;
+
+    UInt64 rows          = 0;
+    UInt64 size          = 0;
+    UInt64 delete_ranges = 0;
+
+    UInt64 delta_pack_count  = 0;
+    UInt64 stable_pack_count = 0;
+
+    Float64 avg_delta_pack_rows  = 0;
+    Float64 avg_stable_pack_rows = 0;
+
+    Float64 delta_rate       = 0;
+    UInt64  delta_cache_size = 0;
+};
+using SegmentStats = std::vector<SegmentStat>;
 
 struct DeltaMergeStoreStat
 {
@@ -205,8 +226,11 @@ public:
 
     void deleteRange(const Context & db_context, const DB::Settings & db_settings, const HandleRange & delete_range);
 
-    BlockInputStreams
-    readRaw(const Context & db_context, const DB::Settings & db_settings, const ColumnDefines & column_defines, size_t num_streams);
+    BlockInputStreams readRaw(const Context &       db_context,
+                              const DB::Settings &  db_settings,
+                              const ColumnDefines & column_defines,
+                              size_t                num_streams,
+                              const SegmentIdSet &  read_segments = {});
 
     /// ranges should be sorted and merged already.
     BlockInputStreams read(const Context &       db_context,
@@ -216,7 +240,8 @@ public:
                            size_t                num_streams,
                            UInt64                max_version,
                            const RSOperatorPtr & filter,
-                           size_t                expected_block_size = DEFAULT_BLOCK_SIZE);
+                           size_t                expected_block_size = DEFAULT_BLOCK_SIZE,
+                           const SegmentIdSet &  read_segments       = {});
 
     /// Force flush all data to disk.
     void flushCache(const Context & context, const HandleRange & range = HandleRange::newAll())
@@ -245,6 +270,7 @@ public:
 
     void                check(const Context & db_context);
     DeltaMergeStoreStat getStat();
+    SegmentStats        getSegmentStats();
 
 private:
     DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings);
@@ -299,8 +325,12 @@ private:
 
     MergeDeltaTaskPool background_tasks;
 
+    DB::Timestamp latest_gc_safe_point = 0;
+
     // Synchronize between write threads and read threads.
     std::shared_mutex read_write_mutex;
+
+    std::mutex global_mutex;
 
     UInt64   hash_salt;
     Logger * log;
