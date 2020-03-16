@@ -79,7 +79,7 @@ class DAGQueryBlockInterpreter
 public:
     DAGQueryBlockInterpreter(Context & context_, const std::vector<BlockInputStreams> & input_streams_vec_,
         const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const std::vector<RegionInfo> & region_infos, const tipb::DAGRequest & rqst,
-        ASTPtr dummp_query);
+        ASTPtr dummp_query, const DAGQuerySource & dag_);
 
     ~DAGQueryBlockInterpreter() = default;
 
@@ -132,6 +132,7 @@ private:
     tipb::Expr handle_filter_expr;
     Int32 handle_col_id = -1;
     std::vector<const tipb::Expr *> conditions;
+    const DAGQuerySource & dag;
 
     Poco::Logger * log;
 };

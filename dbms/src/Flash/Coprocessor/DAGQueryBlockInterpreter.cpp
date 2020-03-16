@@ -16,6 +16,7 @@
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/StreamingDAGBlockOutputStream.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Join.h>
@@ -48,7 +49,7 @@ extern const int COP_BAD_DAG_REQUEST;
 
 DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std::vector<BlockInputStreams> & input_streams_vec_,
     const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const std::vector<RegionInfo> & region_infos_,
-    const tipb::DAGRequest & rqst_, ASTPtr dummy_query_)
+    const tipb::DAGRequest & rqst_, ASTPtr dummy_query_, const DAGQuerySource & dag_)
     : context(context_),
       input_streams_vec(input_streams_vec_),
       query_block(query_block_),
@@ -56,6 +57,7 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std
       region_infos(region_infos_),
       rqst(rqst_),
       dummy_query(std::move(dummy_query_)),
+      dag(dag_),
       log(&Logger::get("DAGQueryBlockInterpreter"))
 {
     if (query_block.selection != nullptr)
@@ -1048,6 +1050,12 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
         executeLimit(pipeline);
         //recordProfileStreams(pipeline, dag.getLimitIndex());
     }
+
+    if (dag.writer != nullptr) {
+        for (auto & stream : pipeline.streams)
+            stream = std::make_shared<StreamingDAGBlockInputStream>(stream, dag.writer, context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), stream->getHeader());
+    }
+
     if (query_block.source->tp() == tipb::ExecType::TypeJoin)
     {
         // add the

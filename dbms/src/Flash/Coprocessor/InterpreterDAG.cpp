@@ -9,7 +9,6 @@
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
-#include <Flash/Coprocessor/StreamingDAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
@@ -912,13 +911,13 @@ BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block,
             input_streams_vec.push_back(child_streams);
         }
         DAGQueryBlockInterpreter query_block_interpreter(
-            context, input_streams_vec, query_block, keep_session_timezone_info, region_infos, dag.getDAGRequest(), dag.getAST());
+            context, input_streams_vec, query_block, keep_session_timezone_info, region_infos, dag.getDAGRequest(), dag.getAST(), dag);
         return query_block_interpreter.execute();
     }
     else
     {
         DAGQueryBlockInterpreter query_block_interpreter(
-            context, {}, query_block, keep_session_timezone_info, region_infos, dag.getDAGRequest(), dag.getAST());
+            context, {}, query_block, keep_session_timezone_info, region_infos, dag.getDAGRequest(), dag.getAST(), dag);
         return query_block_interpreter.execute();
     }
 }
@@ -929,11 +928,6 @@ BlockIO InterpreterDAG::execute()
     /// tidb does not support multi-table dag request yet, so
     /// it is ok to use the same region_info for the whole dag request
     BlockInputStreams streams = executeQueryBlock(*dag.getQueryBlock(), dag.getRegions());
-
-    if (dag.writer != nullptr) {
-        for (auto & stream : streams)
-            stream = std::make_shared<StreamingDAGBlockInputStream>(stream, dag.writer, context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), stream->getHeader());
-    }
 
     Pipeline pipeline;
     pipeline.streams = streams;
