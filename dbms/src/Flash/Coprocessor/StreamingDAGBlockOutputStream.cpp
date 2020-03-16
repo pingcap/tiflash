@@ -13,9 +13,11 @@ extern const int UNSUPPORTED_PARAMETER;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-StreamingDAGBlockOutputStream::StreamingDAGBlockOutputStream(::grpc::ServerWriter< ::coprocessor::BatchResponse>* writer_, Int64 records_per_chunk_, tipb::EncodeType encode_type_,
+StreamingDAGBlockInputStream::StreamingDAGBlockInputStream(BlockInputStreamPtr input_, ::grpc::ServerWriter< ::coprocessor::BatchResponse>* writer_, Int64 records_per_chunk_, tipb::EncodeType encode_type_,
                                            std::vector<tipb::FieldType> && result_field_types_, Block && header_)
-        : writer(writer_),
+        : input(input_),
+          finished(false),
+          writer(writer_),
           result_field_types(std::move(result_field_types_)),
           header(std::move(header_)),
           records_per_chunk(records_per_chunk_),
@@ -41,12 +43,12 @@ StreamingDAGBlockOutputStream::StreamingDAGBlockOutputStream(::grpc::ServerWrite
     }
 }
 
-void StreamingDAGBlockOutputStream::writePrefix()
+void StreamingDAGBlockInputStream::readPrefix()
 {
-    //something to do here?
+    input->readPrefix();
 }
 
-void StreamingDAGBlockOutputStream::encodeChunkToDAGResponse()
+void StreamingDAGBlockInputStream::encodeChunkToDAGResponse()
 {
     ::coprocessor::BatchResponse resp ;
 
@@ -64,43 +66,48 @@ void StreamingDAGBlockOutputStream::encodeChunkToDAGResponse()
     writer->Write(resp);
 }
 
-void StreamingDAGBlockOutputStream::writeSuffix()
+void StreamingDAGBlockInputStream::readSuffix()
 {
     // todo error handle
     if (current_records_num > 0)
     {
         encodeChunkToDAGResponse();
     }
+    input->readSuffix();
 }
 
-void StreamingDAGBlockOutputStream::write(const Block & block)
+Block StreamingDAGBlockInputStream::readImpl()
 {
-    if (block.columns() != result_field_types.size())
-        throw Exception("Output column size mismatch with field type size", ErrorCodes::LOGICAL_ERROR);
-    if (records_per_chunk == -1)
-    {
-        current_records_num = 0;
-        if (block.rows() > 0)
+    if (finished)
+        return {};
+    while(Block block = input->read()) {
+        if (!block)
         {
-            chunk_codec_stream->encode(block, 0, block.rows());
-            encodeChunkToDAGResponse();
+            finished = true;
+            return {};
         }
-    }
-    else
-    {
-        size_t rows = block.rows();
-        for (size_t row_index = 0; row_index < rows;)
-        {
-            if (current_records_num >= records_per_chunk)
-            {
+        if (block.columns() != result_field_types.size())
+            throw Exception("Output column size mismatch with field type size", ErrorCodes::LOGICAL_ERROR);
+        if (records_per_chunk == -1) {
+            current_records_num = 0;
+            if (block.rows() > 0) {
+                chunk_codec_stream->encode(block, 0, block.rows());
                 encodeChunkToDAGResponse();
             }
-            const size_t upper = std::min(row_index + (records_per_chunk - current_records_num), rows);
-            chunk_codec_stream->encode(block, row_index, upper);
-            current_records_num += (upper - row_index);
-            row_index = upper;
+        } else {
+            size_t rows = block.rows();
+            for (size_t row_index = 0; row_index < rows;) {
+                if (current_records_num >= records_per_chunk) {
+                    encodeChunkToDAGResponse();
+                }
+                const size_t upper = std::min(row_index + (records_per_chunk - current_records_num), rows);
+                chunk_codec_stream->encode(block, row_index, upper);
+                current_records_num += (upper - row_index);
+                row_index = upper;
+            }
         }
     }
+    return {};
 }
 
 } // namespace DB

@@ -32,7 +32,8 @@ public:
     //static const String LIMIT_NAME;
 
     DAGQuerySource(Context & context_, DAGContext & dag_context_, const std::vector<RegionInfo> & regions,
-        const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges_, const tipb::DAGRequest & dag_request_);
+        const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges_, const tipb::DAGRequest & dag_request_,
+                   ::grpc::ServerWriter< ::coprocessor::BatchResponse>* writer_ = nullptr);
 
     std::tuple<std::string, ASTPtr> parse(size_t max_query_size) override;
     String str(size_t max_query_size) override;
@@ -89,6 +90,8 @@ public:
     std::shared_ptr<DAGQueryBlock> getQueryBlock() const { return query_block_tree; }
     const std::vector<RegionInfo> & getRegions() const { return regions; }
 
+    ::grpc::ServerWriter< ::coprocessor::BatchResponse>* writer;
+
 protected:
     //void assertValid(Int32 index, const String & name) const
     //{
@@ -121,7 +124,6 @@ protected:
     std::vector<tipb::FieldType> result_field_types;
     tipb::EncodeType encode_type;
     std::shared_ptr<DAGQueryBlock> query_block_tree;
-
     ASTPtr ast;
 };
 

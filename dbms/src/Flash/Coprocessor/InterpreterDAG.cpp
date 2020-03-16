@@ -9,6 +9,7 @@
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
+#include <Flash/Coprocessor/StreamingDAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
@@ -928,8 +929,15 @@ BlockIO InterpreterDAG::execute()
     /// tidb does not support multi-table dag request yet, so
     /// it is ok to use the same region_info for the whole dag request
     BlockInputStreams streams = executeQueryBlock(*dag.getQueryBlock(), dag.getRegions());
+
+    if (dag.writer != nullptr) {
+        for (auto & stream : streams)
+            stream = std::make_shared<StreamingDAGBlockInputStream>(stream, dag.writer, context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), stream->getHeader());
+    }
+
     Pipeline pipeline;
     pipeline.streams = streams;
+
     executeUnion(pipeline);
 
     BlockIO res;

@@ -3,7 +3,6 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/copyData.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
-#include <Flash/Coprocessor/StreamingDAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
@@ -115,16 +114,20 @@ void DAGDriver::batchExecute(::grpc::ServerWriter< ::coprocessor::BatchResponse>
 try
 {
     DAGContext dag_context(dag_request.executors_size());
-    DAGQuerySource dag(context, dag_context, regions, key_ranges, dag_request);
+    DAGQuerySource dag(context, dag_context, regions, key_ranges, dag_request, writer);
 
     BlockIO streams = executeQuery(dag, context, internal, QueryProcessingStage::Complete);
     if (!streams.in || streams.out)
         // Only query is allowed, so streams.in must not be null and streams.out must be null
         throw Exception("DAG is not query.", ErrorCodes::LOGICAL_ERROR);
 
-    BlockOutputStreamPtr dag_output_stream = std::make_shared<StreamingDAGBlockOutputStream>(
-            writer, context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), streams.in->getHeader());
-    copyData(*streams.in, *dag_output_stream);
+    //BlockOutputStreamPtr dag_output_stream = std::make_shared<StreamingDAGBlockOutputStream>(
+    //        writer, context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), streams.in->getHeader());
+    //copyData(*streams.in, *dag_output_stream);
+
+    streams.in->readPrefix();
+    while(streams.in->read());
+    streams.in->readSuffix();
 
     if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streams.in.get()))
     {

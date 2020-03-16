@@ -80,6 +80,7 @@ void copyExecutorTreeWithLocalTableScan(tipb::DAGRequest & dag_req, const tipb::
 BlockInputStreams IManageableStorage::remote_read(const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges,
     UInt64 read_tso, const DAGQueryBlock & remote_query_block, Context & context)
 {
+    std::cout<< "begin remote read" <<std::endl;
     std::vector<pingcap::coprocessor::KeyRange> cop_key_ranges;
     for (const auto & key_range : key_ranges)
     {
@@ -114,6 +115,7 @@ BlockInputStreams IManageableStorage::remote_read(const std::vector<std::pair<De
 
     pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
     pingcap::kv::StoreType store_type = pingcap::kv::TiFlash;
+    std::cout<< "begin remote read 1111" <<std::endl;
     BlockInputStreamPtr input = std::make_shared<LazyBlockInputStream>(sample_block,
         [cluster, req, schema, store_type]() { return std::make_shared<CoprocessorBlockInputStream>(cluster, req, schema, store_type); });
     return {input};

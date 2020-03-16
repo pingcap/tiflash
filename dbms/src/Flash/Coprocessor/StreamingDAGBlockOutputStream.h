@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Core/Types.h>
-#include <DataStreams/IBlockOutputStream.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataTypes/IDataType.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
@@ -17,19 +17,22 @@ namespace DB
 /// Serializes the stream of blocks in TiDB DAG response format.
 /// TODO: May consider using some parallelism.
 /// TODO: Consider using output schema in DAG request, do some conversion or checking between DAG schema and block schema.
-class StreamingDAGBlockOutputStream : public IBlockOutputStream
+class StreamingDAGBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    StreamingDAGBlockOutputStream(::grpc::ServerWriter< ::coprocessor::BatchResponse>* writer_, Int64 records_per_chunk_, tipb::EncodeType encodeType_,
+    StreamingDAGBlockInputStream(BlockInputStreamPtr input_, ::grpc::ServerWriter< ::coprocessor::BatchResponse>* writer_, Int64 records_per_chunk_, tipb::EncodeType encodeType_,
                          std::vector<tipb::FieldType> && result_field_types, Block && header_);
 
     Block getHeader() const override { return header; }
-    void write(const Block & block) override;
-    void writePrefix() override;
-    void writeSuffix() override;
+    Block readImpl() override;
+    String getName() const override { return "StreamingWriter"; }
+    void readPrefix() override;
+    void readSuffix() override;
     void encodeChunkToDAGResponse();
 
 private:
+    BlockInputStreamPtr input;
+    bool finished;
     ::grpc::ServerWriter< ::coprocessor::BatchResponse>* writer;
     std::vector<tipb::FieldType> result_field_types;
     Block header;
