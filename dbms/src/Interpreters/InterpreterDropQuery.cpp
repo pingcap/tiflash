@@ -147,8 +147,8 @@ BlockIO InterpreterDropQuery::execute()
 
             table.first->is_dropped = true;
 
-            // drop is complete, then clean tmt context;
-            if (auto storage = std::static_pointer_cast<StorageMergeTree>(table.first))
+            // drop is complete, then clean tmt context; TODO: should we clean tmt context after its data dir removed?
+            if (auto storage = std::dynamic_pointer_cast<IManageableStorage>(table.first); storage)
                 storage->removeFromTMTContext();
 
             String database_data_path = database->getDataPath();

@@ -1028,9 +1028,12 @@ void StorageDeltaMerge::shutdown()
 {
     if (shutdown_called)
         return;
-
     shutdown_called = true;
+    // TODO: should cancel store's background tasks.
+}
 
+void StorageDeltaMerge::removeFromTMTContext()
+{
     // remove this table from TMTContext
     TMTContext & tmt_context = global_context.getTMTContext();
     tmt_context.getStorages().remove(tidb_table_info.id);

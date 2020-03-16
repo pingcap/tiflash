@@ -198,7 +198,10 @@ void StorageDebugging::shutdown()
         return;
 
     shutdown_called = true;
+}
 
+void StorageDebugging::removeFromTMTContext()
+{
     // remove this table from TMTContext
     TMTContext & tmt_context = global_context.getTMTContext();
     tmt_context.getStorages().remove(tidb_table_info.id);

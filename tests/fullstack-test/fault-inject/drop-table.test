@@ -11,18 +11,35 @@ mysql> insert into test.t values (1, 2)
 
 SLEEP 15
 
+# ensure table is sync to tiflash
+mysql> select table_schema,table_name,replica_count,location_labels,available from information_schema.tiflash_replica where table_schema='test' and table_name='t';
++--------------+------------+---------------+-----------------+-----------+
+| table_schema | table_name | replica_count | location_labels | available |
++--------------+------------+---------------+-----------------+-----------+
+| test         | t          |             1 | rack,host,abc   |         1 |
++--------------+------------+---------------+-----------------+-----------+
+>> select database,name from system.tables where database='test' and name='t';
+┌─database─┬─name─┐
+│ test     │ t    │
+└──────────┴──────┘
 >> DBGInvoke __try_flush()
 >> DBGInvoke __init_fail_point()
+
+# Process crash when drop table metadata is done but not for its data dir.
 >> DBGInvoke __enable_fail_point(exception_between_drop_meta_and_data)
 
 mysql> truncate table test.t ;
 
 SLEEP 15
 
+# After restart, test.t is truncated, it is empty
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+
+
+
 mysql> insert into test.t values (1, 1)
 mysql> insert into test.t values (1, 2)
-mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t;
-
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 +---+---+
 | a | b |
 +---+---+
@@ -37,7 +54,7 @@ SLEEP 15
 
 mysql> insert into test.t values (1, 1)
 mysql> insert into test.t values (1, 2)
-mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t;
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 
 +---+---+
 | a | b |
