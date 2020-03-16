@@ -24,17 +24,27 @@ Code: 36. DB::Exception: Received from {#WORD} DB::Exception: Storage engine Del
 ┌─a─┬─b─┬─c─────────────┬─d─────────────────────────────┐
 │ 1 │ 2 │ hello TiFlash │ hello world\0\0\0\0\0\0\0\0\0 │
 └───┴───┴───────────────┴───────────────────────────────┘
->> show create table dm_test
-┌─statement─────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ CREATE TABLE default.dm_test ( a Int32,  b Int32,  c String,  d FixedString(20)) ENGINE = DeltaMerge((a, b))  │
-└───────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-
+>> desc dm_test
+┌─name──────────────┬─type────────────┬─default_type─┬─default_expression─┐
+│ a                 │ Int32           │              │                    │
+│ b                 │ Int32           │              │                    │
+│ c                 │ String          │              │                    │
+│ d                 │ FixedString(20) │              │                    │
+│ _INTERNAL_VERSION │ UInt64          │              │                    │
+│ _INTERNAL_DELMARK │ UInt8           │              │                    │
+│ _tidb_rowid       │ Int64           │              │                    │
+└───────────────────┴─────────────────┴──────────────┴────────────────────┘
 
 >> alter table dm_test drop column c
-#>> show create table dm_test
-#┌─statement──────────────────────────────────────────────────────────────────────────────────────────┐
-#│ CREATE TABLE default.dm_test ( a Int32,  b Int32,  d FixedString(200)) ENGINE = DeltaMerge((a, b)) │
-#└────────────────────────────────────────────────────────────────────────────────────────────────────┘
+>> desc dm_test
+┌─name──────────────┬─type────────────┬─default_type─┬─default_expression─┐
+│ a                 │ Int32           │              │                    │
+│ b                 │ Int32           │              │                    │
+│ d                 │ FixedString(20) │              │                    │
+│ _INTERNAL_VERSION │ UInt64          │              │                    │
+│ _INTERNAL_DELMARK │ UInt8           │              │                    │
+│ _tidb_rowid       │ Int64           │              │                    │
+└───────────────────┴─────────────────┴──────────────┴────────────────────┘
 >> select * from dm_test
 ┌─a─┬─b─┬─d─────────────────────────────┐
 │ 1 │ 2 │ hello world\0\0\0\0\0\0\0\0\0 │
@@ -46,10 +56,14 @@ Code: 36. DB::Exception: Received from {#WORD} DB::Exception: Storage engine Del
 ┌─a─┬─b─┐
 │ 1 │ 2 │
 └───┴───┘
-#>> show create table dm_test
-#┌─statement─────────────────────────────────────────────────────────────────────┐
-#│ CREATE TABLE default.dm_test ( a Int32,  b Int32) ENGINE = DeltaMerge((a, b)) │
-#└───────────────────────────────────────────────────────────────────────────────┘
+>> desc dm_test
+┌─name──────────────┬─type───┬─default_type─┬─default_expression─┐
+│ a                 │ Int32  │              │                    │
+│ b                 │ Int32  │              │                    │
+│ _INTERNAL_VERSION │ UInt64 │              │                    │
+│ _INTERNAL_DELMARK │ UInt8  │              │                    │
+│ _tidb_rowid       │ Int64  │              │                    │
+└───────────────────┴────────┴──────────────┴────────────────────┘
 
 ## Clean up
 >> drop table if exists dm_test
