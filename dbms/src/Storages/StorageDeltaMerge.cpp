@@ -1,6 +1,8 @@
 #include <common/ThreadPool.h>
 #include <common/config_common.h>
 
+#include <Parsers/ASTPartition.h>
+
 #include <random>
 
 #if USE_TCMALLOC
@@ -510,6 +512,62 @@ RegionMap doLearnerRead(const TiDB::TableID table_id,           //
 
 } // namespace
 
+std::unordered_set<UInt64> parseSegmentSet(const ASTPtr & ast)
+{
+    if (!ast)
+        return {};
+    const auto & partition_ast = typeid_cast<const ASTPartition &>(*ast);
+
+    if (!partition_ast.value)
+        return {parse<UInt64>(partition_ast.id)};
+
+    auto parse_segment_id = [](const ASTLiteral * literal) -> std::pair<bool, UInt64> {
+        if (!literal)
+            return {false, 0};
+        switch (literal->value.getType())
+        {
+            case Field::Types::String:
+                return {true, parse<UInt64>(literal->value.get<String>())};
+            case Field::Types::UInt64:
+                return {true, literal->value.get<UInt64>()};
+            default:
+                return {false, 0};
+        }
+    };
+
+    {
+        const auto * partition_lit = typeid_cast<const ASTLiteral *>(partition_ast.value.get());
+        auto [suc, id] = parse_segment_id(partition_lit);
+        if (suc)
+            return {id};
+    }
+
+    const auto * partition_function = typeid_cast<const ASTFunction *>(partition_ast.value.get());
+    if (partition_function && partition_function->name == "tuple")
+    {
+        std::unordered_set<UInt64> ids;
+        bool ok = true;
+        for (const auto & item : partition_function->arguments->children)
+        {
+            const auto * partition_lit = typeid_cast<const ASTLiteral *>(item.get());
+            auto [suc, id] = parse_segment_id(partition_lit);
+            if (suc)
+            {
+                ids.emplace(id);
+            }
+            else
+            {
+                ok = false;
+                break;
+            }
+        }
+        if (ok)
+            return ids;
+    }
+
+    throw Exception("Unable to parse partition values in literal form: `" + partition_ast.fields_str.toString() + "`");
+}
+
 BlockInputStreams StorageDeltaMerge::read( //
     const Names & column_names,
     const SelectQueryInfo & query_info,
@@ -546,7 +604,8 @@ BlockInputStreams StorageDeltaMerge::read( //
 
     const ASTSelectQuery & select_query = typeid_cast<const ASTSelectQuery &>(*query_info.query);
     if (select_query.raw_for_mutable)
-        return store->readRaw(context, context.getSettingsRef(), columns_to_read, num_streams);
+        return store->readRaw(
+            context, context.getSettingsRef(), columns_to_read, num_streams, parseSegmentSet(select_query.segment_expression_list));
     else
     {
         if (unlikely(!query_info.mvcc_query_info))
@@ -657,7 +716,7 @@ BlockInputStreams StorageDeltaMerge::read( //
 
 
         auto streams = store->read(context, context.getSettingsRef(), columns_to_read, ranges, num_streams,
-            /*max_version=*/mvcc_query_info.read_tso, rs_operator, max_block_size);
+            /*max_version=*/mvcc_query_info.read_tso, rs_operator, max_block_size, parseSegmentSet(select_query.segment_expression_list));
 
         {
             /// Ensure read_tso and regions' info after read.

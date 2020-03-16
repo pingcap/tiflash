@@ -7,6 +7,8 @@
 #include <Storages/System/StorageSystemColumns.h>
 #include <Storages/System/StorageSystemDatabases.h>
 #include <Storages/System/StorageSystemDictionaries.h>
+#include <Storages/System/StorageSystemDTSegments.h>
+#include <Storages/System/StorageSystemDTTables.h>
 #include <Storages/System/StorageSystemEvents.h>
 #include <Storages/System/StorageSystemFunctions.h>
 #include <Storages/System/StorageSystemGraphite.h>
@@ -35,6 +37,8 @@ void attachSystemTablesLocal(IDatabase & system_database)
     system_database.attachTable("numbers", StorageSystemNumbers::create("numbers", false));
     system_database.attachTable("numbers_mt", StorageSystemNumbers::create("numbers_mt", true));
     system_database.attachTable("databases", StorageSystemDatabases::create("databases"));
+    system_database.attachTable("dt_tables", StorageSystemDTTables::create("dt_tables"));
+    system_database.attachTable("dt_segments", StorageSystemDTSegments::create("dt_segments"));
     system_database.attachTable("tables", StorageSystemTables::create("tables"));
     system_database.attachTable("columns", StorageSystemColumns::create("columns"));
     system_database.attachTable("functions", StorageSystemFunctions::create("functions"));

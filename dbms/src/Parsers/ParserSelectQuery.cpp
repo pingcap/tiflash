@@ -32,6 +32,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserKeyword s_distinct("DISTINCT");
     ParserKeyword s_from("FROM");
     ParserKeyword s_partition("PARTITION");
+    ParserKeyword s_segment("SEGMENT");
     ParserKeyword s_prewhere("PREWHERE");
     ParserKeyword s_where("WHERE");
     ParserKeyword s_group_by("GROUP BY");
@@ -87,6 +88,13 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     if (s_partition.ignore(pos, expected))
     {
         if (!ParserPartition().parse(pos, select_query->partition_expression_list, expected))
+            return false;
+    }
+
+    /// SEGMENT p or SEGMENT (p1, p2, ...)
+    if (s_segment.ignore(pos, expected))
+    {
+        if (!ParserPartition().parse(pos, select_query->segment_expression_list, expected))
             return false;
     }
 
