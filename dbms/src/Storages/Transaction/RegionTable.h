@@ -150,8 +150,6 @@ public:
         Timestamp start_ts,
         DB::HandleRange<HandleID> & handle_range);
 
-    static void resolveLocks(Region::CommittedScanner & scanner, const Timestamp start_ts);
-
     void checkTableOptimize();
     void checkTableOptimize(TableID, const double);
     void setTableCheckerThreshold(double);
