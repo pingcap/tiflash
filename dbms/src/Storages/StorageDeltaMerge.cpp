@@ -385,7 +385,7 @@ RegionMap doLearnerRead(const TiDB::TableID table_id,           //
             if (region_status != RegionException::RegionReadStatus::OK)
                 return;
 
-            const RegionQueryInfo & region_to_query = regions_info[region_idx];
+            RegionQueryInfo & region_to_query = regions_info[region_idx];
             const RegionID region_id = region_to_query.region_id;
             auto region = kvstore_region[region_id];
 
@@ -420,8 +420,24 @@ RegionMap doLearnerRead(const TiDB::TableID table_id,           //
 
             if (resolve_locks)
             {
-                auto scanner = region->createCommittedScanner();
-                RegionTable::resolveLocks(scanner, start_ts);
+                status = RegionTable::resolveLocksAndFlushRegion( //
+                    tmt,                                          //
+                    table_id,                                     //
+                    region,                                       //
+                    start_ts,                                     //
+                    region_to_query.version,                      //
+                    region_to_query.conf_version,                 //
+                    region_to_query.range_in_table, log);
+
+                if (status != RegionException::RegionReadStatus::OK)
+                {
+                    LOG_WARNING(log,
+                        "Check memory cache, region " << region_id << ", version " << region_to_query.version << ", handle range ["
+                                                      << region_to_query.range_in_table.first.toString() << ", "
+                                                      << region_to_query.range_in_table.second.toString() << ") , status "
+                                                      << RegionException::RegionReadStatusString(status));
+                    region_status = status;
+                }
             }
         }
     };
