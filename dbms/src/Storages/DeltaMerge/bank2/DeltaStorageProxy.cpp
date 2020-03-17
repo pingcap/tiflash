@@ -61,7 +61,7 @@ namespace DB {
                                              columns,
                                              {HandleRange::newAll()},
                                              /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             /* max_version= */ tso,
                                              EMPTY_FILTER,
                                              /* expected_block_size= */ 1024)[0];
 
@@ -92,6 +92,7 @@ namespace DB {
                     }
                 }
                 in->readSuffix();
+                EXPECT_EQ(found, true);
                 return result;
             }
 
@@ -103,7 +104,7 @@ namespace DB {
                                              columns,
                                              {HandleRange::newAll()},
                                              /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             /* max_version= */ tso,
                                              EMPTY_FILTER,
                                              /* expected_block_size= */ 1024)[0];
 
@@ -140,6 +141,8 @@ namespace DB {
                 }
                 in->readSuffix();
                 UInt64 sum = 0;
+                for (auto f : found_status)
+                    EXPECT_EQ(f, true);
                 for (auto i : result)
                     sum += i;
                 return sum;
