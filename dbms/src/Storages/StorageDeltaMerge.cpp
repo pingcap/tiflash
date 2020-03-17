@@ -574,7 +574,7 @@ std::unordered_set<UInt64> parseSegmentSet(const ASTPtr & ast)
             return ids;
     }
 
-    throw Exception("Unable to parse partition values in literal form: `" + partition_ast.fields_str.toString() + "`");
+    throw Exception("Unable to parse segment IDs in literal form: `" + partition_ast.fields_str.toString() + "`");
 }
 
 BlockInputStreams StorageDeltaMerge::read( //

@@ -16,6 +16,7 @@ StorageSystemDTSegments::StorageSystemDTSegments(const std::string & name_) : na
     setColumns(ColumnsDescription({
         {"database", std::make_shared<DataTypeString>()},
         {"table", std::make_shared<DataTypeString>()},
+        {"table_id", std::make_shared<DataTypeInt64>()},
 
         {"segment_id", std::make_shared<DataTypeUInt64>()},
         {"range", std::make_shared<DataTypeString>()},
@@ -61,26 +62,28 @@ BlockInputStreams StorageSystemDTSegments::read(const Names & column_names,
                 continue;
 
             auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+            auto table_id = dm_storage->getTableInfo().id;
             auto segment_stats = dm_storage->getStore()->getSegmentStats();
             for (auto & stat : segment_stats)
             {
                 res_columns[0]->insert(database_name);
                 res_columns[1]->insert(table_name);
+                res_columns[2]->insert(table_id);
 
-                res_columns[2]->insert(stat.segment_id);
-                res_columns[3]->insert(stat.range.toString());
-                res_columns[4]->insert(stat.rows);
-                res_columns[5]->insert(stat.size);
-                res_columns[6]->insert(stat.delete_ranges);
+                res_columns[3]->insert(stat.segment_id);
+                res_columns[4]->insert(stat.range.toString());
+                res_columns[5]->insert(stat.rows);
+                res_columns[6]->insert(stat.size);
+                res_columns[7]->insert(stat.delete_ranges);
 
-                res_columns[7]->insert(stat.delta_pack_count);
-                res_columns[8]->insert(stat.stable_pack_count);
+                res_columns[8]->insert(stat.delta_pack_count);
+                res_columns[9]->insert(stat.stable_pack_count);
 
-                res_columns[9]->insert(stat.avg_delta_pack_rows);
-                res_columns[10]->insert(stat.avg_stable_pack_rows);
+                res_columns[10]->insert(stat.avg_delta_pack_rows);
+                res_columns[11]->insert(stat.avg_stable_pack_rows);
 
-                res_columns[11]->insert(stat.delta_rate);
-                res_columns[12]->insert(stat.delta_cache_size);
+                res_columns[12]->insert(stat.delta_rate);
+                res_columns[13]->insert(stat.delta_cache_size);
             }
         }
     }

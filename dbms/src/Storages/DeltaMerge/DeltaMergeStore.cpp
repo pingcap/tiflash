@@ -1320,8 +1320,7 @@ void DeltaMergeStore::loadDMFiles()
 
 DeltaMergeStoreStat DeltaMergeStore::getStat()
 {
-    // We can tolerant some inconsistent here.
-    // std::shared_lock lock(read_write_mutex);
+    std::shared_lock lock(read_write_mutex);
 
     DeltaMergeStoreStat stat;
 
@@ -1425,6 +1424,8 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
 
 SegmentStats DeltaMergeStore::getSegmentStats()
 {
+    std::shared_lock lock(read_write_mutex);
+
     SegmentStats stats;
     for (const auto & [handle, segment] : segments)
     {
