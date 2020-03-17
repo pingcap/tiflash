@@ -26,8 +26,9 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
-#include <Storages/StorageDeltaMergeHelpers.h>
+#include <Storages/MutableSupport.h>
 #include <Storages/StorageDeltaMerge.h>
+#include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionException.h>
@@ -838,6 +839,8 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
     setColumns(std::move(new_columns));
 }
 
+String StorageDeltaMerge::getName() const { return MutableSupport::delta_tree_storage_name; }
+
 void StorageDeltaMerge::rename(const String & new_path_to_db, const String & new_database_name, const String & new_table_name)
 {
     const String new_path = new_path_to_db + "/" + new_table_name;
@@ -915,8 +918,8 @@ void updateDeltaMergeTableCreateStatement(                   //
         else if (args.children.size() == 2)
             args.children.back() = literal;
         else
-            throw Exception(
-                "Wrong arguments num:" + DB::toString(args.children.size()) + " in table: " + table_name + " with engine=DeltaMerge",
+            throw Exception("Wrong arguments num:" + DB::toString(args.children.size()) + " in table: " + table_name
+                    + " with engine=" + MutableSupport::delta_tree_storage_name,
                 ErrorCodes::BAD_ARGUMENTS);
     };
 

@@ -51,6 +51,7 @@ public:
 
     static const String mmt_storage_name;
     static const String txn_storage_name;
+    static const String delta_tree_storage_name;
 
     static const String tidb_pk_column_name;
     static const String version_column_name;

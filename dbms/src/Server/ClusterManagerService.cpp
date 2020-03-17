@@ -18,9 +18,20 @@ constexpr long MILLISECOND = 1000;
 constexpr long INIT_DELAY = 5;
 
 void ClusterManagerService::run(const std::string & bin_path, const std::vector<std::string> & args)
+try
 {
     auto proc = ShellCommand::executeDirect(bin_path, args);
     proc->wait();
+}
+catch (DB::Exception & e)
+{
+    std::stringstream ss;
+    ss << bin_path;
+    for (const auto & arg : args)
+    {
+        ss << " " << arg;
+    }
+    e.addMessage("(while running `" + ss.str() + "`)");
 }
 
 ClusterManagerService::ClusterManagerService(DB::Context & context_, const std::string & config_path)
