@@ -328,6 +328,9 @@ void DatabaseOrdinary::removeTable(
 
     try
     {
+        // If tiflash crash before remove metadata, next time it restart, will
+        // full apply schema from TiDB. And the old table's metadata and data
+        // will be removed.
         FAIL_POINT_TRIGGER_EXCEPTION(exception_drop_table_during_remove_meta);
         Poco::File(table_metadata_path).remove();
     }

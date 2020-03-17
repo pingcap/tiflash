@@ -1,15 +1,14 @@
-#include <Poco/File.h>
 #include <Common/FailPoint.h>
-
+#include <Common/escapeForFileName.h>
+#include <Common/typeid_cast.h>
 #include <Databases/IDatabase.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DDLWorker.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Parsers/ASTDropQuery.h>
+#include <Poco/File.h>
 #include <Storages/IStorage.h>
 #include <Storages/StorageMergeTree.h>
-#include <Common/escapeForFileName.h>
-#include <Common/typeid_cast.h>
 
 
 namespace DB
@@ -17,12 +16,12 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int TABLE_WAS_NOT_DROPPED;
-    extern const int DATABASE_NOT_EMPTY;
-    extern const int UNKNOWN_DATABASE;
-    extern const int READONLY;
-    extern const int FAIL_POINT_ERROR;
-}
+extern const int TABLE_WAS_NOT_DROPPED;
+extern const int DATABASE_NOT_EMPTY;
+extern const int UNKNOWN_DATABASE;
+extern const int READONLY;
+extern const int FAIL_POINT_ERROR;
+} // namespace ErrorCodes
 
 
 InterpreterDropQuery::InterpreterDropQuery(const ASTPtr & query_ptr_, Context & context_) : query_ptr(query_ptr_), context(context_) {}
@@ -57,8 +56,8 @@ BlockIO InterpreterDropQuery::execute()
         {
             if (drop.database.empty() && !drop.temporary)
             {
-                LOG_WARNING((&Logger::get("InterpreterDropQuery")),
-                            "It is recommended to use `DROP TEMPORARY TABLE` to delete temporary tables");
+                LOG_WARNING(
+                    (&Logger::get("InterpreterDropQuery")), "It is recommended to use `DROP TEMPORARY TABLE` to delete temporary tables");
             }
             table->shutdown();
             /// If table was already dropped by anyone, an exception will be thrown
@@ -119,7 +118,8 @@ BlockIO InterpreterDropQuery::execute()
         if (!drop.detach)
         {
             if (!table.first->checkTableCanBeDropped())
-                throw Exception("Table " + database_name + "." + table.first->getTableName() + " couldn't be dropped due to failed pre-drop check",
+                throw Exception(
+                    "Table " + database_name + "." + table.first->getTableName() + " couldn't be dropped due to failed pre-drop check",
                     ErrorCodes::TABLE_WAS_NOT_DROPPED);
         }
 
@@ -147,13 +147,8 @@ BlockIO InterpreterDropQuery::execute()
 
             table.first->is_dropped = true;
 
-            // drop is complete, then clean tmt context; TODO: should we clean tmt context after its data dir removed?
-            if (auto storage = std::dynamic_pointer_cast<IManageableStorage>(table.first); storage)
-                storage->removeFromTMTContext();
-
-            String database_data_path = database->getDataPath();
-
             /// If it is not virtual database like Dictionary then drop remaining data dir
+            const String database_data_path = database->getDataPath();
             if (!database_data_path.empty())
             {
                 String table_data_path = database_data_path + "/" + escapeForFileName(current_table_name);
@@ -161,6 +156,10 @@ BlockIO InterpreterDropQuery::execute()
                 if (Poco::File(table_data_path).exists())
                     Poco::File(table_data_path).remove(true);
             }
+
+            // drop is complete, then clean tmt context
+            if (auto storage = std::dynamic_pointer_cast<IManageableStorage>(table.first); storage)
+                storage->removeFromTMTContext();
         }
     }
 
@@ -214,4 +213,4 @@ void InterpreterDropQuery::checkAccess(const ASTDropQuery & drop)
     throw Exception("Cannot drop table in readonly mode", ErrorCodes::READONLY);
 }
 
-}
+} // namespace DB
