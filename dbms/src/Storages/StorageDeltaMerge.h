@@ -82,6 +82,8 @@ public:
     void checkStatus(const Context & context) override;
     void deleteRows(const Context &, size_t rows) override;
 
+    const DM::DeltaMergeStorePtr & getStore() { return store; }
+
 protected:
     StorageDeltaMerge(const String & path_,
         const String & db_name_,

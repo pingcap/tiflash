@@ -216,6 +216,8 @@ bool Segment::writeToDisk(DMContext & dm_context, const PackPtr & pack)
 bool Segment::writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit)
 {
     LOG_TRACE(log, "Segment [" << segment_id << "] write to cache rows: " << limit);
+    if (unlikely(limit == 0))
+        return true;
     return delta->appendToCache(dm_context, block, offset, limit);
 }
 
@@ -717,7 +719,7 @@ Segment::prepareSplitLogical(DMContext & dm_context, SegmentSnapshot & segment_s
 
 Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, SegmentSnapshot & segment_snap, WriteBatches & wbs) const
 {
-    LOG_DEBUG(log, "Segment [" << segment_id << "] physical split physical start");
+    LOG_DEBUG(log, "Segment [" << segment_id << "] prepare split physical start");
 
     EventRecorder recorder(ProfileEvents::DMSegmentSplit, ProfileEvents::DMSegmentSplitNS);
 
@@ -747,6 +749,8 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, Segment
                                                       read_info.index->entryCount(),
                                                       dm_context.stable_pack_rows);
 
+        LOG_DEBUG(log, "Created my placed stream");
+
         my_data = std::make_shared<DMHandleFilterBlockInputStream<true>>(my_data, my_range, 0);
         my_data = std::make_shared<ReorganizeBlockInputStream>(my_data, EXTRA_HANDLE_COLUMN_NAME);
         my_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
@@ -754,6 +758,8 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, Segment
         auto my_stable_id = segment_snap.stable->getId();
         my_new_stable     = createNewStable(dm_context, my_data, my_stable_id, wbs);
     }
+
+    LOG_DEBUG(log, "prepare my_new_stable done");
 
     {
         // Write new segment's data
@@ -768,6 +774,8 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, Segment
                                                          read_info.index->entryCount(),
                                                          dm_context.stable_pack_rows);
 
+        LOG_DEBUG(log, "Created other placed stream");
+
         other_data = std::make_shared<DMHandleFilterBlockInputStream<true>>(other_data, other_range, 0);
         other_data = std::make_shared<ReorganizeBlockInputStream>(other_data, EXTRA_HANDLE_COLUMN_NAME);
         other_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
@@ -775,6 +783,8 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, Segment
         auto other_stable_id = dm_context.storage_pool.newMetaPageId();
         other_stable         = createNewStable(dm_context, other_data, other_stable_id, wbs);
     }
+
+    LOG_DEBUG(log, "prepare other_stable done");
 
     // Remove old stable's files.
     for (auto & file : stable->getDMFiles())
@@ -784,7 +794,7 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, Segment
         wbs.removed_data.delPage(file->refId());
     }
 
-    LOG_DEBUG(log, "Segment [" << segment_id << "] physical split physical end");
+    LOG_DEBUG(log, "Segment [" << segment_id << "] prepare split physical end");
 
     return {false, split_point, my_new_stable, other_stable};
 }
@@ -1024,7 +1034,7 @@ template <bool add_tag_column>
 Segment::ReadInfo
 Segment::getReadInfo(const DMContext & dm_context, const ColumnDefines & read_columns, SegmentSnapshot & segment_snap) const
 {
-    LOG_TRACE(log, "getReadInfo start");
+    LOG_DEBUG(log, "getReadInfo start");
 
     auto new_read_columns = arrangeReadColumns<add_tag_column>(getExtraHandleColumnDefine(), read_columns);
     segment_snap.delta->prepare(dm_context, new_read_columns);
@@ -1034,7 +1044,7 @@ Segment::getReadInfo(const DMContext & dm_context, const ColumnDefines & read_co
     auto index_begin = DeltaIndex::begin(delta_index);
     auto index_end   = DeltaIndex::end(delta_index);
 
-    LOG_TRACE(log, "getReadInfo end");
+    LOG_DEBUG(log, "getReadInfo end");
 
     return {
         .index        = delta_index,

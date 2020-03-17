@@ -65,11 +65,15 @@ public:
 
         // Already persisted to disk or not.
         bool saved = false;
+        // Can be appended into new rows or not.
+        bool appendable = true;
 
         bool isDeleteRange() const { return !delete_range.none(); }
         bool isCached() const { return !isDeleteRange() && (bool)cache; }
-        /// This pack is not a delete range, the data in it has not been saved to disk.
-        bool isMutable() const { return !isDeleteRange() && data_page == 0; }
+        /// Whether its column data can be flushed.
+        bool dataFlushable() const { return !isDeleteRange() && data_page == 0; }
+        /// This pack is the last one, and not a delete range, and can be appended into new rows.
+        bool isAppendable() const { return !isDeleteRange() && data_page == 0 && appendable && (bool)cache; }
         /// This pack's metadata has been saved to disk.
         bool isSaved() const { return saved; }
         void setSchema(const BlockPtr & schema_)
@@ -82,18 +86,23 @@ public:
 
         String toString()
         {
-            return "{rows:" + DB::toString(rows)                //
-                + ",bytes:" + DB::toString(bytes)               //
-                + ",has_schema:" + DB::toString((bool)schema)   //
-                + ",delete_range:" + delete_range.toString()    //
-                + ",data_page:" + DB::toString(data_page)       //
-                + ",has_cache:" + DB::toString((bool)cache)     //
-                + ",cache_offset:" + DB::toString(cache_offset) //
-                + ",saved:" + DB::toString(saved) + "}";
+            String s = "{rows:" + DB::toString(rows)                       //
+                + ",bytes:" + DB::toString(bytes)                          //
+                + ",has_schema:" + DB::toString((bool)schema)              //
+                + ",delete_range:" + delete_range.toString()               //
+                + ",data_page:" + DB::toString(data_page)                  //
+                + ",has_cache:" + DB::toString((bool)cache)                //
+                + ",cache_offset:" + DB::toString(cache_offset)            //
+                + ",saved:" + DB::toString(saved)                          //
+                + ",appendable:" + DB::toString(appendable)                //
+                + ",schema:" + (schema ? schema->dumpStructure() : "none") //
+                + ",cache_block:" + (cache ? cache->block.dumpStructure() : "none") + ")";
+            return s;
         }
     };
-    using PackPtr = std::shared_ptr<Pack>;
-    using Packs   = std::vector<PackPtr>;
+    using PackPtr      = std::shared_ptr<Pack>;
+    using ConstPackPtr = std::shared_ptr<const Pack>;
+    using Packs        = std::vector<PackPtr>;
 
     struct Snapshot : public std::enable_shared_from_this<Snapshot>, private boost::noncopyable
     {
@@ -167,8 +176,6 @@ private:
     std::atomic<size_t> last_try_compact_packs    = 0;
     std::atomic<size_t> last_try_merge_delta_rows = 0;
     std::atomic<size_t> last_try_split_rows       = 0;
-
-    CachePtr last_cache;
 
     // Protects the operations in this instance.
     mutable std::mutex mutex;
@@ -275,6 +282,7 @@ public:
 
 using Pack             = DeltaValueSpace::Pack;
 using PackPtr          = DeltaValueSpace::PackPtr;
+using ConstPackPtr     = DeltaValueSpace::ConstPackPtr;
 using Packs            = DeltaValueSpace::Packs;
 using DeltaSnapshot    = DeltaValueSpace::Snapshot;
 using DeltaSnapshotPtr = DeltaValueSpace::SnapshotPtr;
