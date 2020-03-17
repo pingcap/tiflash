@@ -40,10 +40,33 @@ void work(DeltaStorageProxy & proxy, SimpleLockManager & manager, IDGenerator & 
         UInt64 amount = std::rand() % 100;
         int direction = std::rand() % 2;
         if (direction == 0) {
+            UInt64 old_balance1 = proxy.selectBalance(s_id, tso);
+            UInt64 old_balance2 = proxy.selectBalance(b_id, tso);
             proxy.moveMoney(s_id, b_id, amount, tso);
+            UInt64 new_balance1 = proxy.selectBalance(s_id, tso);
+            UInt64 new_balance2 = proxy.selectBalance(b_id, tso);
+            if (old_balance1 > amount) {
+                EXPECT_EQ(old_balance1 - amount, new_balance1);
+                EXPECT_EQ(old_balance2 + amount, new_balance2);
+            } else {
+                EXPECT_EQ(old_balance1, new_balance1);
+                EXPECT_EQ(old_balance2, new_balance2);
+            }
+
             std::cout << "move money from " << std::to_string(s_id) << " to " << std::to_string(b_id) << " amount " << std::to_string(amount) << std::endl;
         } else {
+            UInt64 old_balance1 = proxy.selectBalance(s_id, tso);
+            UInt64 old_balance2 = proxy.selectBalance(b_id, tso);
             proxy.moveMoney(b_id, s_id, amount, tso);
+            UInt64 new_balance1 = proxy.selectBalance(s_id, tso);
+            UInt64 new_balance2 = proxy.selectBalance(b_id, tso);
+            if (old_balance2 > amount) {
+                EXPECT_EQ(old_balance1 + amount, new_balance1);
+                EXPECT_EQ(old_balance2 - amount, new_balance2);
+            } else {
+                EXPECT_EQ(old_balance1, new_balance1);
+                EXPECT_EQ(old_balance2, new_balance2);
+            }
             std::cout << "move money from " << std::to_string(b_id) << " to " << std::to_string(s_id) << " amount " << std::to_string(amount) << std::endl;
         }
         manager.writeUnlock(s_id, tid);
@@ -88,7 +111,7 @@ void run_bank2()
         proxy.insertBalance(id, initial_balance, tso);
     }
 
-    size_t worker_count = 10;
+    size_t worker_count = 2;
     std::vector<std::thread> workers;
     workers.resize(worker_count);
 
@@ -102,6 +125,9 @@ void run_bank2()
         workers[i].join();
     }
     verify_thread.join();
+
+    std::cout << "Last Verify\n";
+    std::cout << proxy.sumBalance(0, end, UINT64_MAX) << std::endl;
 
     std::cout << "Complete\n";
 }
