@@ -4,7 +4,7 @@ set -xe
 
 # Stop all docker instances if exist.
 # tiflash-dt && tiflash-tmt share the same name "tiflash0", we just need one here
-docker-compose -f gtest.yaml -f cluster.yaml -f tiflash-dt.yaml -f mock-test.yaml down
+docker-compose -f gtest.yaml -f cluster.yaml -f tiflash-dt.yaml -f mock-test-dt.yaml down
 
 rm -rf ./data ./log
 # run gtest cases. (only tics-gtest up)
@@ -26,7 +26,7 @@ docker-compose -f cluster.yaml -f tiflash-dt.yaml down
 # We need to separate mock-test for dt and tmt, since this behavior
 # is different in some tests
 # * "tmt" engine ONLY support disable_bg_flush = false.
-# * "dt" engine by default disable_bg_flush = true.
+# * "dt"  engine ONLY support disable_bg_flush = true.
 rm -rf ./data ./log
 # (only tics0 up) (for engine DetlaTree)
 docker-compose -f mock-test-dt.yaml up -d
