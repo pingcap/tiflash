@@ -53,7 +53,7 @@ SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool is_u
     {
         if (!is_update || pack->isSaved())
         {
-            auto pack_copy = pack->isMutable() ? std::make_shared<Pack>(*pack) : pack;
+            auto pack_copy = pack->isAppendable() ? std::make_shared<Pack>(*pack) : pack;
             snap->packs.push_back(std::move(pack_copy));
 
             check_rows += pack->rows;
@@ -177,9 +177,14 @@ const Columns & DeltaValueSpace::Snapshot::getColumnsOfPack(size_t pack_index, s
         size_t col_start = columns.size();
         size_t col_end   = col_num;
 
-        auto read_columns = packs[pack_index]->isCached()
-            ? readPackFromCache(packs[pack_index], column_defines, col_start, col_end)
-            : readPackFromDisk(packs[pack_index], storage_snap->log_reader, column_defines, col_start, col_end);
+        auto &  pack = packs[pack_index];
+        Columns read_columns;
+        if (pack->isCached())
+            read_columns = readPackFromCache(packs[pack_index], column_defines, col_start, col_end);
+        else if (pack->data_page != 0)
+            read_columns = readPackFromDisk(packs[pack_index], storage_snap->log_reader, column_defines, col_start, col_end);
+        else
+            throw Exception("Pack is in illegal status: " + pack->toString(), ErrorCodes::LOGICAL_ERROR);
 
         columns.insert(columns.end(), read_columns.begin(), read_columns.end());
     }

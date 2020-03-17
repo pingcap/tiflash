@@ -24,7 +24,7 @@ bool ColumnWithTypeAndName::operator==(const ColumnWithTypeAndName & other) cons
 
 void ColumnWithTypeAndName::dumpStructure(WriteBuffer & out) const
 {
-    out << name;
+    out << name << ' ' << column_id;
 
     if (type)
         out << ' ' << type->getName();
