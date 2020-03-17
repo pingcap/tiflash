@@ -120,17 +120,6 @@ void writeDataToStorage(Context & context, const RegionPtr & region, RegionDataR
                      << ", write part " << write_part_cost << "] ms");
 }
 
-/// Check if there are any lock should be resolved, if so, throw LockException.
-void resolveLocks(Region::CommittedScanner & scanner, const Timestamp start_ts)
-{
-    if (LockInfoPtr lock_info = scanner.getLockInfo(start_ts); lock_info)
-    {
-        LockInfos lock_infos;
-        lock_infos.emplace_back(std::move(lock_info));
-        throw LockException(std::move(lock_infos));
-    }
-}
-
 std::pair<RegionDataReadInfoList, RegionException::RegionReadStatus> resolveLocksAndReadData(const TiDB::TableID table_id,
     const RegionPtr & region,
     const Timestamp start_ts,
@@ -159,7 +148,13 @@ std::pair<RegionDataReadInfoList, RegionException::RegionReadStatus> resolveLock
         /// Deal with locks.
         if (resolve_locks)
         {
-            resolveLocks(scanner, start_ts);
+            /// Check if there are any lock should be resolved, if so, throw LockException.
+            if (LockInfoPtr lock_info = scanner.getLockInfo(start_ts); lock_info)
+            {
+                LockInfos lock_infos;
+                lock_infos.emplace_back(std::move(lock_info));
+                throw LockException(std::move(lock_infos));
+            }
         }
 
         /// Read raw KVs from region cache.
