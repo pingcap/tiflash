@@ -909,7 +909,6 @@ try
         columns_to_read->emplace_back(column_i32_after_ddl);
         if (flush_before_ddl)
         {
-            // If write to cache, before apply ddl changes (change column data type), segment->flushCache must be called.
             segment->flushCache(dmContext());
         }
         setColumns(columns_to_read);
