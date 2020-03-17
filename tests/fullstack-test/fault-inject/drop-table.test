@@ -52,6 +52,9 @@ mysql> truncate table test.t ;
 
 SLEEP 15
 
+# After restart, test.t is truncated, it is empty
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+
 mysql> insert into test.t values (1, 1)
 mysql> insert into test.t values (1, 2)
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;

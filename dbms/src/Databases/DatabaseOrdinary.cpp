@@ -413,6 +413,9 @@ void DatabaseOrdinary::renameTable(
         throw Exception{e};
     }
 
+    // TODO: Atomic rename table is not fixed.
+    FAIL_POINT_TRIGGER_EXCEPTION(exception_between_rename_table_data_and_metadata);
+
     ASTPtr ast = getQueryFromMetadata(detail::getTableMetadataPath(metadata_path, table_name));
     if (!ast)
         throw Exception("There is no metadata file for table " + table_name, ErrorCodes::FILE_DOESNT_EXIST);
@@ -420,6 +423,7 @@ void DatabaseOrdinary::renameTable(
     ast_create_query.table = to_table_name;
 
     /// NOTE Non-atomic.
+    // Create new metadata and remove old metadata.
     to_database_concrete->createTable(context, to_table_name, table, ast);
     removeTable(context, table_name);
 }
