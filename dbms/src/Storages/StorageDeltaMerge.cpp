@@ -257,6 +257,7 @@ public:
     Block getHeader() const override { return header; }
 
     void write(const Block & block) override
+    try
     {
         if (db_settings.dm_insert_max_rows == 0)
         {
@@ -282,6 +283,11 @@ public:
                 store->write(db_context, db_settings, write_block);
             }
         }
+    }
+    catch (DB::Exception & e)
+    {
+        e.addMessage("(while writing to table `" + store->getDatabaseName() + "`.`" + store->getTableName() + "`)");
+        throw;
     }
 
 private:
@@ -1028,7 +1034,7 @@ void StorageDeltaMerge::shutdown()
 {
     bool v = false;
     if (!shutdown_called.compare_exchange_strong(v, true))
-        return ;
+        return;
 
     store->shutdown();
 }

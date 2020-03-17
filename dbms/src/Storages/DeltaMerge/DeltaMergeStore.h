@@ -201,6 +201,9 @@ public:
                     const Settings &      settings_);
     ~DeltaMergeStore();
 
+    const String & getDatabaseName() const { return db_name; }
+    const String & getTableName() const { return table_name; }
+
     void shutdown();
 
     void write(const Context & db_context, const DB::Settings & db_settings, const Block & block);
