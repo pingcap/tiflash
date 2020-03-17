@@ -96,9 +96,9 @@ public:
                 + ",saved:" + DB::toString(saved)               //
                 + ",appendable:" + DB::toString(appendable);
             if (schema)
-                s += ",schema:" + blockInfo(*schema);
+                s += ",schema:" + schema->dumpStructure();
             if (cache)
-                s += ",cache_block:" + blockInfo(cache->block);
+                s += ",cache_block:" + cache->block.dumpStructure();
             s += "}";
             return s;
         }

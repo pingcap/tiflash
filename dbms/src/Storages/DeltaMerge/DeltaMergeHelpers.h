@@ -207,19 +207,6 @@ inline bool checkSchema(const Block & a, const Block & b)
     return true;
 }
 
-inline String blockInfo(const Block & block)
-{
-    String s = "{rows:" + DB::toString(block.rows()) + ", columns:[";
-    for (auto & c : block)
-    {
-        s += DB::toString(c.column_id) + "|" + c.name + "|" + c.type->getName() + ",";
-    }
-    if (block.columns())
-        s.erase(s.length() - 1);
-    s += "]}";
-    return s;
-}
-
 /// This method guarantees that the returned valid block is not empty.
 inline Block readNextBlock(const BlockInputStreamPtr & in)
 {
