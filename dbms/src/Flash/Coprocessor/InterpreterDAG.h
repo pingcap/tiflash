@@ -37,7 +37,7 @@ public:
     BlockIO execute();
 
 private:
-    BlockInputStreams executeQueryBlock(DAGQueryBlock & query_block, const std::vector<RegionInfo> & region_infos);
+    BlockInputStreams executeQueryBlock(DAGQueryBlock & query_block);
     void executeUnion(Pipeline & pipeline);
     /*
     void executeImpl(Pipeline & pipeline);

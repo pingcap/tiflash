@@ -900,24 +900,24 @@ void InterpreterDAG::executeUnion(Pipeline & pipeline)
     }
 }
 
-BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block, const std::vector<RegionInfo> & region_infos)
+BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block)
 {
     if (!query_block.children.empty())
     {
         std::vector<BlockInputStreams> input_streams_vec;
         for (auto & child : query_block.children)
         {
-            BlockInputStreams child_streams = executeQueryBlock(*child, region_infos);
+            BlockInputStreams child_streams = executeQueryBlock(*child);
             input_streams_vec.push_back(child_streams);
         }
         DAGQueryBlockInterpreter query_block_interpreter(
-            context, input_streams_vec, query_block, keep_session_timezone_info, region_infos, dag.getDAGRequest(), dag.getAST(), dag);
+            context, input_streams_vec, query_block, keep_session_timezone_info, dag.getDAGRequest(), dag.getAST(), dag);
         return query_block_interpreter.execute();
     }
     else
     {
         DAGQueryBlockInterpreter query_block_interpreter(
-            context, {}, query_block, keep_session_timezone_info, region_infos, dag.getDAGRequest(), dag.getAST(), dag);
+            context, {}, query_block, keep_session_timezone_info, dag.getDAGRequest(), dag.getAST(), dag);
         return query_block_interpreter.execute();
     }
 }
@@ -927,7 +927,7 @@ BlockIO InterpreterDAG::execute()
     /// region_info should based on the source executor, however
     /// tidb does not support multi-table dag request yet, so
     /// it is ok to use the same region_info for the whole dag request
-    BlockInputStreams streams = executeQueryBlock(*dag.getQueryBlock(), dag.getRegions());
+    BlockInputStreams streams = executeQueryBlock(*dag.getQueryBlock());
 
     Pipeline pipeline;
     pipeline.streams = streams;

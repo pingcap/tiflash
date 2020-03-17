@@ -78,8 +78,8 @@ class DAGQueryBlockInterpreter
 {
 public:
     DAGQueryBlockInterpreter(Context & context_, const std::vector<BlockInputStreams> & input_streams_vec_,
-        const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const std::vector<RegionInfo> & region_infos, const tipb::DAGRequest & rqst,
-        ASTPtr dummp_query, const DAGQuerySource & dag_);
+        const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const tipb::DAGRequest & rqst, ASTPtr dummp_query,
+        const DAGQuerySource & dag_);
 
     ~DAGQueryBlockInterpreter() = default;
 
@@ -112,7 +112,6 @@ private:
     std::vector<BlockInputStreams> input_streams_vec;
     const DAGQueryBlock & query_block;
     const bool keep_session_timezone_info;
-    const std::vector<RegionInfo> & region_infos;
     const tipb::DAGRequest & rqst;
     ASTPtr dummy_query;
 

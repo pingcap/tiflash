@@ -48,13 +48,12 @@ extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
 DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std::vector<BlockInputStreams> & input_streams_vec_,
-    const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const std::vector<RegionInfo> & region_infos_,
-    const tipb::DAGRequest & rqst_, ASTPtr dummy_query_, const DAGQuerySource & dag_)
+    const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const tipb::DAGRequest & rqst_, ASTPtr dummy_query_,
+    const DAGQuerySource & dag_)
     : context(context_),
       input_streams_vec(input_streams_vec_),
       query_block(query_block_),
       keep_session_timezone_info(keep_session_timezone_info_),
-      region_infos(region_infos_),
       rqst(rqst_),
       dummy_query(std::move(dummy_query_)),
       dag(dag_),
@@ -449,7 +448,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>();
     query_info.mvcc_query_info->resolve_locks = true;
     query_info.mvcc_query_info->read_tso = settings.read_tso;
-    for (auto & r : region_infos)
+    for (auto & r : dag.getRegions())
     {
         RegionQueryInfo info;
         info.region_id = r.region_id;
@@ -459,7 +458,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         if (!current_region)
         {
             std::vector<RegionID> region_ids;
-            for (auto & rr : region_infos)
+            for (auto & rr : dag.getRegions())
             {
                 region_ids.push_back(rr.region_id);
             }
@@ -468,7 +467,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         info.range_in_table = current_region->getHandleRangeByTable(table_id);
         query_info.mvcc_query_info->regions_query_info.push_back(info);
     }
-    query_info.mvcc_query_info->concurrent = region_infos.size() > 1 ? 1.0 : 0.0;
+    query_info.mvcc_query_info->concurrent = dag.getRegions().size() > 1 ? 1.0 : 0.0;
     //    RegionQueryInfo info;
     //    info.region_id = region_info.region_id;
     //    info.version = region_info.region_version;
@@ -495,7 +494,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         //}
         //pipeline.streams = storage->remote_read(key_ranges, query_info, ts, context);
     }
-    LOG_INFO(log, "dag execution stream size: " << region_infos.size());
+    LOG_INFO(log, "dag execution stream size: " << dag.getRegions().size());
 
     if (pipeline.streams.empty())
     {
@@ -629,8 +628,6 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
         SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode), kind,
         ASTTableJoin::Strictness::All);
     executeUnion(right_pipeline);
-    // todo clickhouse use LazyBlockInputStream to initialize the source, need to double check why and
-    //  if we need to use LazyBlockInputStream here
     right_query.source = right_pipeline.firstStream();
     right_query.join = joinPtr;
     right_query.join->setSampleBlock(right_query.source->getHeader());
@@ -964,26 +961,82 @@ void DAGQueryBlockInterpreter::executeSubqueryInJoin(Pipeline & pipeline, Subque
         SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode));
 }
 
+void copyExecutorTreeWithLocalTableScan(tipb::DAGRequest & dag_req, const tipb::Executor * root)
+{
+    const tipb::Executor * current = root;
+    auto * exec = dag_req.add_executors();
+    while (current->tp() != tipb::ExecType::TypeTableScan)
+    {
+        if (current->tp() == tipb::ExecType::TypeSelection)
+        {
+            exec->set_tp(tipb::ExecType::TypeSelection);
+            auto * sel = exec->mutable_selection();
+            for (auto const & condition : current->selection().conditions())
+            {
+                auto * tmp = sel->add_conditions();
+                tmp->CopyFrom(condition);
+            }
+            exec = sel->mutable_child();
+            current = &current->selection().child();
+        }
+        else if (current->tp() == tipb::ExecType::TypeAggregation || current->tp() == tipb::ExecType::TypeStreamAgg)
+        {
+            exec->set_tp(current->tp());
+            auto * agg = exec->mutable_aggregation();
+            for (auto const & expr : current->aggregation().agg_func())
+            {
+                auto * tmp = agg->add_agg_func();
+                tmp->CopyFrom(expr);
+            }
+            for (auto const & expr : current->aggregation().group_by())
+            {
+                auto * tmp = agg->add_group_by();
+                tmp->CopyFrom(expr);
+            }
+            agg->set_streamed(current->aggregation().streamed());
+            exec = agg->mutable_child();
+            current = &current->aggregation().child();
+        }
+        else if (current->tp() == tipb::ExecType::TypeLimit)
+        {
+            exec->set_tp(current->tp());
+            auto * limit = exec->mutable_limit();
+            limit->set_limit(current->limit().limit());
+            exec = limit->mutable_child();
+            current = &current->limit().child();
+        }
+        else if (current->tp() == tipb::ExecType::TypeTopN)
+        {
+            exec->set_tp(current->tp());
+            auto * topn = exec->mutable_topn();
+            topn->set_limit(current->topn().limit());
+            for (auto const & expr : current->topn().order_by())
+            {
+                auto * tmp = topn->add_order_by();
+                tmp->CopyFrom(expr);
+            }
+            exec = topn->mutable_child();
+            current = &current->topn().child();
+        }
+        else
+        {
+            throw Exception("Not supported yet");
+        }
+    }
+
+    if (current->tp() != tipb::ExecType::TypeTableScan)
+        throw Exception("Only support copy from table scan sourced query block");
+    exec->set_tp(tipb::ExecType::TypeTableScan);
+    auto * new_ts = new tipb::TableScan(current->tbl_scan());
+    new_ts->set_next_read_engine(tipb::EngineType::Local);
+    exec->set_allocated_tbl_scan(new_ts);
+
+    dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
+}
+
 void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
 {
     const auto & ts = query_block.source->tbl_scan();
-    TableID table_id = ts.table_id();
-
-    const Settings & settings = context.getSettingsRef();
-
-    if (settings.schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION)
-    {
-        storage = context.getTMTContext().getStorages().get(table_id);
-        if (storage == nullptr)
-        {
-            throw Exception("Table " + std::to_string(table_id) + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
-        }
-        table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
-    }
-    else
-    {
-        getAndLockStorageWithSchemaVersion(table_id, settings.schema_version);
-    }
     std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
     for (auto & range : ts.ranges())
     {
@@ -993,7 +1046,45 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
         DecodedTiKVKey end(std::move(end_key));
         key_ranges.emplace_back(std::make_pair(std::move(start), std::move(end)));
     }
-    pipeline.streams = storage->remote_read(key_ranges, context.getSettingsRef().read_tso, query_block, context);
+    std::cout << "begin remote read" << std::endl;
+    std::vector<pingcap::coprocessor::KeyRange> cop_key_ranges;
+    for (const auto & key_range : key_ranges)
+    {
+        cop_key_ranges.push_back(
+            pingcap::coprocessor::KeyRange{static_cast<String>(key_range.first), static_cast<String>(key_range.second)});
+    }
+
+    ::tipb::DAGRequest dag_req;
+
+    copyExecutorTreeWithLocalTableScan(dag_req, query_block.root);
+
+    DAGSchema schema;
+    ColumnsWithTypeAndName columns;
+    for (int i = 0; i < (int)query_block.output_field_types.size(); i++)
+    {
+        dag_req.add_output_offsets(i);
+        ColumnInfo info = fieldTypeToColumnInfo(query_block.output_field_types[i]);
+        String col_name = query_block.qb_column_prefix + "col_" + std::to_string(i);
+        schema.push_back(std::make_pair(col_name, info));
+        auto tp = getDataTypeByColumnInfo(info);
+        ColumnWithTypeAndName col(tp, col_name);
+        columns.emplace_back(col);
+    }
+    Block sample_block = Block(columns);
+
+    pingcap::coprocessor::Request req;
+
+    dag_req.SerializeToString(&req.data);
+    req.tp = pingcap::coprocessor::ReqType::DAG;
+    req.start_ts = context.getSettingsRef().read_tso;
+    req.ranges = cop_key_ranges;
+
+    pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
+    pingcap::kv::StoreType store_type = pingcap::kv::TiFlash;
+    std::cout << "begin remote read 1111" << std::endl;
+    BlockInputStreamPtr input = std::make_shared<LazyBlockInputStream>(sample_block,
+        [cluster, req, schema, store_type]() { return std::make_shared<CoprocessorBlockInputStream>(cluster, req, schema, store_type); });
+    pipeline.streams = {input};
 }
 
 void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
@@ -1051,9 +1142,11 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
         //recordProfileStreams(pipeline, dag.getLimitIndex());
     }
 
-    if (dag.writer != nullptr && query_block.isRootQueryBlock()) {
-        for (auto & stream : pipeline.streams )
-            stream = std::make_shared<StreamingDAGBlockInputStream>(stream, dag.writer, context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), stream->getHeader());
+    if (dag.writer != nullptr && query_block.isRootQueryBlock())
+    {
+        for (auto & stream : pipeline.streams)
+            stream = std::make_shared<StreamingDAGBlockInputStream>(stream, dag.writer, context.getSettings().dag_records_per_chunk,
+                dag.getEncodeType(), dag.getResultFieldTypes(), stream->getHeader());
     }
 
     if (query_block.source->tp() == tipb::ExecType::TypeJoin)

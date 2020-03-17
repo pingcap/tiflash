@@ -61,9 +61,6 @@ public:
 
     virtual const TiDB::TableInfo & getTableInfo() const = 0;
 
-    BlockInputStreams remote_read(const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges, UInt64 read_tso,
-        const DAGQueryBlock & remote_query_block, Context & context);
-
     // Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
     virtual void alterFromTiDB(
         const AlterCommands & commands, const TiDB::TableInfo & table_info, const String & database_name, const Context & context)
