@@ -448,7 +448,8 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>();
     query_info.mvcc_query_info->resolve_locks = true;
     query_info.mvcc_query_info->read_tso = settings.read_tso;
-    for (auto & r : dag.getRegions())
+    const auto & regions = dag.getRegions();
+    for (auto & r : regions)
     {
         RegionQueryInfo info;
         info.region_id = r.region_id;
@@ -458,7 +459,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         if (!current_region)
         {
             std::vector<RegionID> region_ids;
-            for (auto & rr : dag.getRegions())
+            for (auto & rr : regions)
             {
                 region_ids.push_back(rr.region_id);
             }
@@ -467,7 +468,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         info.range_in_table = current_region->getHandleRangeByTable(table_id);
         query_info.mvcc_query_info->regions_query_info.push_back(info);
     }
-    query_info.mvcc_query_info->concurrent = dag.getRegions().size() > 1 ? 1.0 : 0.0;
+    query_info.mvcc_query_info->concurrent = regions.size() > 1 ? 1.0 : 0.0;
     //    RegionQueryInfo info;
     //    info.region_id = region_info.region_id;
     //    info.version = region_info.region_version;
@@ -494,7 +495,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         //}
         //pipeline.streams = storage->remote_read(key_ranges, query_info, ts, context);
     }
-    LOG_INFO(log, "dag execution stream size: " << dag.getRegions().size());
+    LOG_INFO(log, "dag execution stream size: " << regions.size());
 
     if (pipeline.streams.empty())
     {
@@ -1046,7 +1047,6 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
         DecodedTiKVKey end(std::move(end_key));
         key_ranges.emplace_back(std::make_pair(std::move(start), std::move(end)));
     }
-    std::cout << "begin remote read" << std::endl;
     std::vector<pingcap::coprocessor::KeyRange> cop_key_ranges;
     for (const auto & key_range : key_ranges)
     {
@@ -1081,7 +1081,6 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
 
     pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
     pingcap::kv::StoreType store_type = pingcap::kv::TiFlash;
-    std::cout << "begin remote read 1111" << std::endl;
     BlockInputStreamPtr input = std::make_shared<LazyBlockInputStream>(sample_block,
         [cluster, req, schema, store_type]() { return std::make_shared<CoprocessorBlockInputStream>(cluster, req, schema, store_type); });
     pipeline.streams = {input};
