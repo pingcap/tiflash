@@ -17,6 +17,7 @@ insert_stmt = Template("mysql> insert into $database.$table($columns) values($da
 update_stmt = Template("mysql> update $database.$table set $exprs $condition\n")
 delete_stmt = Template("mysql> delete from $database.$table $condition\n")
 select_stmt = Template(">> select $columns from $database.$table\n")
+tidb_select_stmt = Template("mysql> set SESSION tidb_isolation_read_engines = 'tiflash' ;select $columns from $database.$table ttt\n")
 sleep_string = "\nSLEEP 15\n\n"
 
 
@@ -154,6 +155,108 @@ def generate_result(names, dataset):
 
     return "\n".join(lines)
 
+def tidb_generate_result(names, dataset):
+    dataset = copy.deepcopy(dataset)
+    for data_point in dataset:
+        for i in range(len(data_point)):
+            if data_point[i] == "null":
+                data_point[i] = "NULL"
+    left_top_corner = "+"
+    right_top_corner = "+"
+    left_bottom_corner = "+"
+    right_bottom_corner = "+"
+    header_split = "+"
+    footer_split = "+"
+    border = "-"
+    body_border = "|"
+    blank = " "
+
+    cell_length = []
+    for name in names:
+        cell_length.append(len(name))
+    for data in dataset:
+        for i, ele in enumerate(data):
+            if len(ele) > cell_length[i]:
+                cell_length[i] = len(ele)
+
+    lines = []
+
+    topline = []
+    for i, name in enumerate(names):
+        topline_cell = ""
+        if i == 0:
+            topline_cell += left_top_corner
+        topline_cell += border
+        j = 0
+        while cell_length[i] > j:
+            topline_cell += border
+            j += 1
+        topline_cell += border
+        if i == len(names) - 1:
+            topline_cell += right_top_corner
+
+        topline.append(topline_cell)
+
+    lines.append(header_split.join(topline))
+
+    header = []
+    for i, name in enumerate(names):
+        header_cell = ""
+        if i == 0:
+            header_cell += body_border
+        header_cell += blank
+        header_cell += name
+        j = 0
+        while cell_length[i] >=  len(name) + j:
+            header_cell += blank
+            j += 1
+        if i == len(names) - 1:
+            header_cell += body_border
+
+        header.append(header_cell)
+
+    lines.append(body_border.join(header))
+
+    lines.append(header_split.join(topline))
+
+    for data in dataset:
+        cur = []
+        for i, ele in enumerate(data):
+            body_cell = ""
+            if i == 0:
+                body_cell += body_border
+            body_cell += blank
+            body_cell += ele
+            j = 0
+            while cell_length[i] > len(ele) + j:
+                body_cell += blank
+                j += 1
+            body_cell += blank
+            if i == len(data) - 1:
+                body_cell += body_border
+            cur.append(body_cell)
+
+        lines.append(body_border.join(cur))
+
+    footer = []
+    for i, _ in enumerate(names):
+        footer_cell = ""
+        if i == 0:
+            footer_cell += left_bottom_corner
+        footer_cell += border
+        j = 0
+        while cell_length[i] > j:
+            footer_cell += border
+            j += 1
+        footer_cell += border
+        if i == len(names) - 1:
+            footer_cell += right_bottom_corner
+
+        footer.append(footer_cell)
+
+    lines.append(footer_split.join(footer))
+
+    return "\n".join(lines)
 
 def generate_cases_inner(database, table, column_names, types, sample_data,
                          schema, primary_key_type, test_cases,  parent_dir):
@@ -211,10 +314,14 @@ def generate_cases_inner(database, table, column_names, types, sample_data,
                                                            "condition": condition}))
                     case_data = new_case_data
                 if op == SELECT:
-                    file.write(select_stmt.substitute({"columns": ", ".join(column_names),
+                    # file.write(select_stmt.substitute({"columns": ", ".join(column_names),
+                    #                                    "database": database,
+                    #                                    "table": table}))
+                    # file.write(generate_result(column_names, case_data) + "\n\n")
+                    file.write(tidb_select_stmt.substitute({"columns": ", ".join(column_names),
                                                        "database": database,
                                                        "table": table}))
-                    file.write(generate_result(column_names, case_data) + "\n\n")
+                    file.write(tidb_generate_result(column_names, case_data) + "\n\n")
 
             file.write(drop_stmt.substitute({"database": database, "table": table}))
 
@@ -261,7 +368,7 @@ def generate_data_for_types(types, sample_data, allow_empty=True, no_duplicate=F
 
 def run():
     if len(sys.argv) != 3:
-        print 'usage: <bin> database table'
+        print('usage: <bin> database table')
         sys.exit(1)
 
     database = sys.argv[1]
@@ -362,7 +469,7 @@ def main():
     try:
         run()
     except KeyboardInterrupt:
-        print 'KeyboardInterrupted'
+        print('KeyboardInterrupted')
         sys.exit(1)
 
 

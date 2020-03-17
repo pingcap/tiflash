@@ -30,7 +30,7 @@ public:
 
     bool supportsModification() const override { return true; }
 
-    String getName() const override { return "DeltaMerge"; }
+    String getName() const override;
     String getTableName() const override { return table_name; }
 
     void drop() override;
