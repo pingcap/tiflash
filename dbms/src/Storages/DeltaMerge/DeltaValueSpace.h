@@ -86,20 +86,17 @@ public:
 
         String toString()
         {
-            String s = "{rows:" + DB::toString(rows)            //
-                + ",bytes:" + DB::toString(bytes)               //
-                + ",has_schema:" + DB::toString((bool)schema)   //
-                + ",delete_range:" + delete_range.toString()    //
-                + ",data_page:" + DB::toString(data_page)       //
-                + ",has_cache:" + DB::toString((bool)cache)     //
-                + ",cache_offset:" + DB::toString(cache_offset) //
-                + ",saved:" + DB::toString(saved)               //
-                + ",appendable:" + DB::toString(appendable);
-            if (schema)
-                s += ",schema:" + schema->dumpStructure();
-            if (cache)
-                s += ",cache_block:" + cache->block.dumpStructure();
-            s += "}";
+            String s = "{rows:" + DB::toString(rows)                       //
+                + ",bytes:" + DB::toString(bytes)                          //
+                + ",has_schema:" + DB::toString((bool)schema)              //
+                + ",delete_range:" + delete_range.toString()               //
+                + ",data_page:" + DB::toString(data_page)                  //
+                + ",has_cache:" + DB::toString((bool)cache)                //
+                + ",cache_offset:" + DB::toString(cache_offset)            //
+                + ",saved:" + DB::toString(saved)                          //
+                + ",appendable:" + DB::toString(appendable)                //
+                + ",schema:" + (schema ? schema->dumpStructure() : "none") //
+                + ",cache_block:" + (cache ? cache->block.dumpStructure() : "none") + ")";
             return s;
         }
     };
