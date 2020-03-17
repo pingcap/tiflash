@@ -244,8 +244,6 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
 {
     LOG_TRACE(log, "Write into " << db_name << "." << table_name << " " << to_write.rows() << " rows.");
 
-    std::scoped_lock global_lock(global_mutex);
-
     EventRecorder write_block_recorder(ProfileEvents::DMWriteBlock, ProfileEvents::DMWriteBlockNS);
 
     const size_t rows = to_write.rows();
@@ -583,8 +581,6 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
                                         const SegmentIdSet &  read_segments)
 {
     LOG_DEBUG(log, "Read with " << sorted_ranges.size() << " ranges");
-
-    std::scoped_lock global_lock(global_mutex);
 
     SegmentReadTasks tasks;
 
