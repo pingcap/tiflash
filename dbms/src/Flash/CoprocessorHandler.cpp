@@ -33,9 +33,7 @@ CoprocessorHandler::CoprocessorHandler(
 grpc::Status CoprocessorHandler::execute()
 {
     Stopwatch watch;
-    SCOPE_EXIT({
-        GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_handle_seconds, type_cop).Observe(watch.elapsedSeconds());
-    });
+    SCOPE_EXIT({ GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_handle_seconds, type_cop).Observe(watch.elapsedSeconds()); });
 
     try
     {
@@ -60,10 +58,13 @@ grpc::Status CoprocessorHandler::execute()
                     throw Exception("DAG request with rpn expression is not supported in TiFlash", ErrorCodes::NOT_IMPLEMENTED);
                 tipb::SelectResponse dag_response;
                 std::vector<RegionInfo> regions;
-                regions.emplace_back(cop_context.kv_context.region_id(),cop_context.kv_context.region_epoch().version(), cop_context.kv_context.region_epoch().conf_ver());
+                //regions.emplace_back(cop_context.kv_context.region_id(),cop_context.kv_context.region_epoch().version(),
+                //        cop_context.kv_context.region_epoch().conf_ver(), key_ranges);
+                regions.emplace_back(RegionInfo(cop_context.kv_context.region_id(), cop_context.kv_context.region_epoch().version(),
+                    cop_context.kv_context.region_epoch().conf_ver(), std::move(key_ranges)));
                 DAGDriver driver(cop_context.db_context, dag_request, regions,
                     cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(),
-                    std::move(key_ranges), dag_response);
+                    dag_response);
                 driver.execute();
                 cop_response->set_data(dag_response.SerializeAsString());
                 LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");

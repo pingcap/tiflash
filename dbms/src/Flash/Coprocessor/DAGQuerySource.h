@@ -10,8 +10,9 @@
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/Types.h>
-#include "DAGQueryBlock.h"
+
 #include "DAGDriver.h"
+#include "DAGQueryBlock.h"
 
 namespace DB
 {
@@ -20,11 +21,12 @@ class Context;
 class TiFlashMetrics;
 using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 
-struct StreamWriter {
-    ::grpc::ServerWriter< ::coprocessor::BatchResponse>* writer;
+struct StreamWriter
+{
+    ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer;
     std::mutex write_mutex;
 
-    StreamWriter(::grpc::ServerWriter< ::coprocessor::BatchResponse>* writer_) : writer(writer_) {}
+    StreamWriter(::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_) : writer(writer_) {}
 
     void write(const ::coprocessor::BatchResponse & data)
     {
@@ -47,16 +49,13 @@ public:
     //static const String LIMIT_NAME;
 
     DAGQuerySource(Context & context_, DAGContext & dag_context_, const std::vector<RegionInfo> & regions,
-        const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges_, const tipb::DAGRequest & dag_request_,
-                   ::grpc::ServerWriter< ::coprocessor::BatchResponse>* writer_ = nullptr);
+        const tipb::DAGRequest & dag_request_, ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_ = nullptr);
 
     std::tuple<std::string, ASTPtr> parse(size_t max_query_size) override;
     String str(size_t max_query_size) override;
     std::unique_ptr<IInterpreter> interpreter(Context & context, QueryProcessingStage::Enum stage) override;
 
     //DAGContext & getDAGContext() const { return dag_context; };
-
-    const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & getKeyRanges() const { return key_ranges; }
 
     //bool hasSelection() const { return sel_index != -1; };
     //bool hasAggregation() const { return agg_index != -1; };
@@ -124,7 +123,6 @@ protected:
     DAGContext & dag_context;
 
     const std::vector<RegionInfo> & regions;
-    const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges;
 
     const tipb::DAGRequest & dag_request;
 

@@ -30,15 +30,11 @@ extern const int COP_BAD_DAG_REQUEST;
 //}
 
 DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, const std::vector<RegionInfo> & regions_,
-    const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges_,
-    const tipb::DAGRequest & dag_request_,
-   ::grpc::ServerWriter< ::coprocessor::BatchResponse>* writer_)
-    :
-        writer(std::make_shared<StreamWriter>(writer_)),
-    context(context_),
+    const tipb::DAGRequest & dag_request_, ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_)
+    : writer(std::make_shared<StreamWriter>(writer_)),
+      context(context_),
       dag_context(dag_context_),
       regions(regions_),
-      key_ranges(key_ranges_),
       dag_request(dag_request_),
       metrics(context.getTiFlashMetrics())
 {

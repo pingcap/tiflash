@@ -21,13 +21,11 @@ extern const int LOGICAL_ERROR;
 extern const int UNKNOWN_EXCEPTION;
 } // namespace ErrorCodes
 
-DAGDriver::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, const std::vector<RegionInfo> & regions_,
-    UInt64 start_ts, UInt64 schema_ver, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> && key_ranges_,
-    tipb::SelectResponse & dag_response_, bool internal_)
+DAGDriver::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, const std::vector<RegionInfo> & regions_, UInt64 start_ts,
+    UInt64 schema_ver, tipb::SelectResponse & dag_response_, bool internal_)
     : context(context_),
       dag_request(dag_request_),
       regions(regions_),
-      key_ranges(std::move(key_ranges_)),
       dag_response(dag_response_),
       internal(internal_),
       log(&Logger::get("DAGDriver"))
@@ -42,7 +40,7 @@ void DAGDriver::execute()
 try
 {
     DAGContext dag_context(dag_request.executors_size());
-    DAGQuerySource dag(context, dag_context, regions, key_ranges, dag_request);
+    DAGQuerySource dag(context, dag_context, regions, dag_request);
 
     BlockIO streams = executeQuery(dag, context, internal, QueryProcessingStage::Complete);
     if (!streams.in || streams.out)
@@ -55,8 +53,9 @@ try
 
     if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streams.in.get()))
     {
-        LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": dag request without encode cost: "
-                                           << p_stream->getProfileInfo().execution_time/(double)1000000000 << " seconds.");
+        LOG_DEBUG(log,
+            __PRETTY_FUNCTION__ << ": dag request without encode cost: " << p_stream->getProfileInfo().execution_time / (double)1000000000
+                                << " seconds.");
     }
     if (!dag_request.has_collect_execution_summaries() || !dag_request.collect_execution_summaries())
         return;
@@ -110,11 +109,11 @@ catch (...)
     recordError(ErrorCodes::UNKNOWN_EXCEPTION, "other exception");
 }
 
-void DAGDriver::batchExecute(::grpc::ServerWriter< ::coprocessor::BatchResponse>* writer)
+void DAGDriver::batchExecute(::grpc::ServerWriter<::coprocessor::BatchResponse> * writer)
 try
 {
     DAGContext dag_context(dag_request.executors_size());
-    DAGQuerySource dag(context, dag_context, regions, key_ranges, dag_request, writer);
+    DAGQuerySource dag(context, dag_context, regions, dag_request, writer);
 
     BlockIO streams = executeQuery(dag, context, internal, QueryProcessingStage::Complete);
     if (!streams.in || streams.out)
@@ -126,13 +125,15 @@ try
     //copyData(*streams.in, *dag_output_stream);
 
     streams.in->readPrefix();
-    while(streams.in->read());
+    while (streams.in->read())
+        ;
     streams.in->readSuffix();
 
     if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streams.in.get()))
     {
-        LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": dag request without encode cost: "
-                                           << p_stream->getProfileInfo().execution_time/(double)1000000000 << " seconds.");
+        LOG_DEBUG(log,
+            __PRETTY_FUNCTION__ << ": dag request without encode cost: " << p_stream->getProfileInfo().execution_time / (double)1000000000
+                                << " seconds.");
     }
     if (!dag_request.has_collect_execution_summaries() || !dag_request.collect_execution_summaries())
         return;
