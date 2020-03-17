@@ -201,6 +201,8 @@ public:
                     const Settings &      settings_);
     ~DeltaMergeStore();
 
+    void shutdown();
+
     void write(const Context & db_context, const DB::Settings & db_settings, const Block & block);
 
     void deleteRange(const Context & db_context, const DB::Settings & db_settings, const HandleRange & delete_range);
@@ -283,6 +285,8 @@ private:
 
     // The columns we actually store.
     ColumnDefinesPtr store_columns;
+
+    std::atomic<bool> shutdown_called{false};
 
     BackgroundProcessingPool &           background_pool;
     BackgroundProcessingPool::TaskHandle gc_handle;

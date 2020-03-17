@@ -1026,10 +1026,11 @@ void StorageDeltaMerge::startup()
 
 void StorageDeltaMerge::shutdown()
 {
-    if (shutdown_called)
-        return;
-    shutdown_called = true;
-    // TODO: should cancel store's background tasks.
+    bool v = false;
+    if (!shutdown_called.compare_exchange_strong(v, true))
+        return ;
+
+    store->shutdown();
 }
 
 void StorageDeltaMerge::removeFromTMTContext()

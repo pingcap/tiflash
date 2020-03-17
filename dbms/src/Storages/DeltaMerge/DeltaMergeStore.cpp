@@ -207,10 +207,22 @@ DeltaMergeStore::~DeltaMergeStore()
 {
     LOG_INFO(log, "Release DeltaMerge Store start [" << db_name << "." << table_name << "]");
 
-    background_pool.removeTask(gc_handle);
-    background_pool.removeTask(background_task_handle);
+    shutdown();
 
     LOG_INFO(log, "Release DeltaMerge Store end [" << db_name << "." << table_name << "]");
+}
+
+void DeltaMergeStore::shutdown()
+{
+    bool v = false;
+    if (!shutdown_called.compare_exchange_strong(v, true))
+        return ;
+
+    background_pool.removeTask(gc_handle);
+    gc_handle = nullptr;
+
+    background_pool.removeTask(background_task_handle);
+    background_task_handle = nullptr;
 }
 
 DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings)
