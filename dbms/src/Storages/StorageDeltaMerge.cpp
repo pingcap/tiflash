@@ -431,7 +431,7 @@ RegionMap doLearnerRead(const TiDB::TableID table_id,           //
             }
             if (resolve_locks)
             {
-                status = RegionTable::resolveLocksAndFlushRegion( //
+                status = RegionTable::resolveLocksAndWriteRegion( //
                     tmt,                                          //
                     table_id,                                     //
                     region,                                       //
