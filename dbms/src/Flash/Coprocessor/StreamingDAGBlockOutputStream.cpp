@@ -13,7 +13,7 @@ extern const int UNSUPPORTED_PARAMETER;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-StreamingDAGBlockInputStream::StreamingDAGBlockInputStream(BlockInputStreamPtr input_, ::grpc::ServerWriter< ::coprocessor::BatchResponse>* writer_, Int64 records_per_chunk_, tipb::EncodeType encode_type_,
+StreamingDAGBlockInputStream::StreamingDAGBlockInputStream(BlockInputStreamPtr input_, StreamWriterPtr writer_, Int64 records_per_chunk_, tipb::EncodeType encode_type_,
                                            std::vector<tipb::FieldType> && result_field_types_, Block && header_)
         : input(input_),
           finished(false),
@@ -63,7 +63,7 @@ void StreamingDAGBlockInputStream::encodeChunkToDAGResponse()
     dag_response.SerializeToString(&dag_data);
     resp.set_data(dag_data);
 
-    writer->Write(resp);
+    writer->write(resp);
 }
 
 void StreamingDAGBlockInputStream::readSuffix()

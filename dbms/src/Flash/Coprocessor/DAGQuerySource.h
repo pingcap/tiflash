@@ -20,6 +20,21 @@ class Context;
 class TiFlashMetrics;
 using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 
+struct StreamWriter {
+    ::grpc::ServerWriter< ::coprocessor::BatchResponse>* writer;
+    std::mutex write_mutex;
+
+    StreamWriter(::grpc::ServerWriter< ::coprocessor::BatchResponse>* writer_) : writer(writer_) {}
+
+    void write(const ::coprocessor::BatchResponse & data)
+    {
+        std::lock_guard<std::mutex> lk(write_mutex);
+        writer->Write(data);
+    }
+};
+
+using StreamWriterPtr = std::shared_ptr<StreamWriter>;
+
 /// Query source of a DAG request via gRPC.
 /// This is also an IR of a DAG.
 class DAGQuerySource : public IQuerySource
@@ -90,7 +105,7 @@ public:
     std::shared_ptr<DAGQueryBlock> getQueryBlock() const { return query_block_tree; }
     const std::vector<RegionInfo> & getRegions() const { return regions; }
 
-    ::grpc::ServerWriter< ::coprocessor::BatchResponse>* writer;
+    StreamWriterPtr writer;
 
 protected:
     //void assertValid(Int32 index, const String & name) const

@@ -20,7 +20,7 @@ namespace DB
 class StreamingDAGBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    StreamingDAGBlockInputStream(BlockInputStreamPtr input_, ::grpc::ServerWriter< ::coprocessor::BatchResponse>* writer_, Int64 records_per_chunk_, tipb::EncodeType encodeType_,
+    StreamingDAGBlockInputStream(BlockInputStreamPtr input_, StreamWriterPtr writer_, Int64 records_per_chunk_, tipb::EncodeType encodeType_,
                          std::vector<tipb::FieldType> && result_field_types, Block && header_);
 
     Block getHeader() const override { return header; }
@@ -33,7 +33,7 @@ public:
 private:
     BlockInputStreamPtr input;
     bool finished;
-    ::grpc::ServerWriter< ::coprocessor::BatchResponse>* writer;
+    StreamWriterPtr writer;
     std::vector<tipb::FieldType> result_field_types;
     Block header;
     Int64 records_per_chunk;

@@ -34,7 +34,7 @@ DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, co
     const tipb::DAGRequest & dag_request_,
    ::grpc::ServerWriter< ::coprocessor::BatchResponse>* writer_)
     :
-        writer(writer_),
+        writer(std::make_shared<StreamWriter>(writer_)),
     context(context_),
       dag_context(dag_context_),
       regions(regions_),
