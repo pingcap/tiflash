@@ -347,7 +347,8 @@ void SchemaBuilder<Getter>::applyAlterPartition(TiDB::DBInfoPtr db_info, TableID
     auto storage = tmt_context.getStorages().get(table_id).get();
     if (storage == nullptr)
     {
-        throw Exception("miss table in Flash " + table_info->name, ErrorCodes::DDL_ERROR);
+        throw Exception("miss table in Flash `" + table_info->db_name + "`.`" + table_info->name + "`, id: " + DB::toString(table_id),
+            ErrorCodes::DDL_ERROR);
     }
     const String & db_name = storage->getDatabaseName();
     const auto & orig_table_info = storage->getTableInfo();
@@ -878,7 +879,7 @@ void SchemaBuilder<Getter>::syncAllSchema()
         std::vector<TableInfoPtr> tables = getter.listTables(db->id);
         for (const auto & table : tables)
         {
-            LOG_DEBUG(log, "collect table: " << table->name << " with id "<< table->id);
+            LOG_DEBUG(log, "collect table: " << table->name << " with id " << table->id);
             all_tables.emplace_back(table, db);
             if (table->isLogicalPartitionTable())
             {
