@@ -125,7 +125,7 @@ public:
     /// Will trigger schema sync on read error for only once,
     /// assuming that newer schema can always apply to older data by setting force_decode to true in readRegionBlock.
     /// Note that table schema must be keep unchanged throughout the process of read then write, we take good care of the lock.
-    static void writeBlockByRegion(Context & context, RegionPtr region, RegionDataReadInfoList & data_list_to_remove, Logger * log);
+    static void writeBlockByRegion(Context & context, const RegionPtr & region, RegionDataReadInfoList & data_list_to_remove, Logger * log);
 
     /// Read the data of the given region into block, take good care of learner read and locks.
     /// Assuming that the schema has been properly synced by outer, i.e. being new enough to decode data before start_ts,
@@ -140,8 +140,17 @@ public:
         Timestamp start_ts,
         DB::HandleRange<HandleID> & handle_range);
 
-    /// Check if there are any lock should be resolved, if so, throw LockException.
-    static void resolveLocks(Region::CommittedScanner & scanner, const Timestamp start_ts);
+    /// Check transaction locks in region, and write committed data in it into storage engine if check passed. Otherwise throw an LockException.
+    /// The write logic is the same as #writeBlockByRegion, with some extra checks about region version and conf_version.
+    static RegionException::RegionReadStatus resolveLocksAndWriteRegion(
+        TMTContext & tmt,
+        const TiDB::TableID table_id,
+        const RegionPtr & region,
+        const Timestamp start_ts,
+        RegionVersion region_version,
+        RegionVersion conf_version,
+        DB::HandleRange<HandleID> & handle_range,
+        Logger * log);
 
     void checkTableOptimize();
     void checkTableOptimize(TableID, const double);
@@ -163,9 +172,9 @@ private:
     InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, const RegionID region_id);
     InternalRegion & doGetInternalRegion(TableID table_id, RegionID region_id);
 
+    RegionDataReadInfoList flushRegion(const RegionPtr & region, bool try_persist) const;
     bool shouldFlush(const InternalRegion & region) const;
     RegionID pickRegionToFlush();
-    RegionDataReadInfoList flushRegion(const RegionPtr & region, bool try_persist) const;
 
     void incrDirtyFlag(RegionID region_id);
     void clearDirtyFlag(RegionID region_id);
