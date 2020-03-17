@@ -30,8 +30,6 @@ Code: 36. DB::Exception: Received from {#WORD} DB::Exception: Storage engine Del
 │ b                 │ Int32           │              │                    │
 │ c                 │ String          │              │                    │
 │ d                 │ FixedString(20) │              │                    │
-│ _INTERNAL_VERSION │ UInt64          │              │                    │
-│ _INTERNAL_DELMARK │ UInt8           │              │                    │
 │ _tidb_rowid       │ Int64           │              │                    │
 └───────────────────┴─────────────────┴──────────────┴────────────────────┘
 
@@ -41,8 +39,6 @@ Code: 36. DB::Exception: Received from {#WORD} DB::Exception: Storage engine Del
 │ a                 │ Int32           │              │                    │
 │ b                 │ Int32           │              │                    │
 │ d                 │ FixedString(20) │              │                    │
-│ _INTERNAL_VERSION │ UInt64          │              │                    │
-│ _INTERNAL_DELMARK │ UInt8           │              │                    │
 │ _tidb_rowid       │ Int64           │              │                    │
 └───────────────────┴─────────────────┴──────────────┴────────────────────┘
 >> select * from dm_test
@@ -60,8 +56,6 @@ Code: 36. DB::Exception: Received from {#WORD} DB::Exception: Storage engine Del
 ┌─name──────────────┬─type───┬─default_type─┬─default_expression─┐
 │ a                 │ Int32  │              │                    │
 │ b                 │ Int32  │              │                    │
-│ _INTERNAL_VERSION │ UInt64 │              │                    │
-│ _INTERNAL_DELMARK │ UInt8  │              │                    │
 │ _tidb_rowid       │ Int64  │              │                    │
 └───────────────────┴────────┴──────────────┴────────────────────┘
 
