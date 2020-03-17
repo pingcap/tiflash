@@ -116,16 +116,6 @@ public:
     RegionDataReadInfoList tryFlushRegion(RegionID region_id, bool try_persist = false);
     RegionDataReadInfoList tryFlushRegion(const RegionPtr & region, bool try_persist);
 
-    static RegionException::RegionReadStatus resolveLocksAndFlushRegion(
-        TMTContext & tmt,
-        const TiDB::TableID table_id,
-        const RegionPtr & region,
-        const Timestamp start_ts,
-        RegionVersion region_version,
-        RegionVersion conf_version,
-        DB::HandleRange<HandleID> & handle_range,
-        Logger * log);
-
     void waitTillRegionFlushed(RegionID region_id);
 
     void handleInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegions &)> && callback) const;
@@ -149,6 +139,18 @@ public:
         bool resolve_locks,
         Timestamp start_ts,
         DB::HandleRange<HandleID> & handle_range);
+
+    /// Check transaction locks in region, and write committed data in it into storage engine if check passed. Otherwise throw an LockException.
+    /// The write logic is the same as #writeBlockByRegion, with some extra checks about region version and conf_version.
+    static RegionException::RegionReadStatus resolveLocksAndWriteRegion(
+        TMTContext & tmt,
+        const TiDB::TableID table_id,
+        const RegionPtr & region,
+        const Timestamp start_ts,
+        RegionVersion region_version,
+        RegionVersion conf_version,
+        DB::HandleRange<HandleID> & handle_range,
+        Logger * log);
 
     void checkTableOptimize();
     void checkTableOptimize(TableID, const double);

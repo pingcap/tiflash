@@ -22,7 +22,7 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-void writeDataToStorage(Context & context, const RegionPtr & region, RegionDataReadInfoList & data_list_read, Logger * log)
+void writeRegionDataToStorage(Context & context, const RegionPtr & region, RegionDataReadInfoList & data_list_read, Logger * log)
 {
     const auto & tmt = context.getTMTContext();
     TableID table_id = region->getMappedTableID();
@@ -120,7 +120,7 @@ void writeDataToStorage(Context & context, const RegionPtr & region, RegionDataR
                      << ", write part " << write_part_cost << "] ms");
 }
 
-std::pair<RegionDataReadInfoList, RegionException::RegionReadStatus> resolveLocksAndReadData(const TiDB::TableID table_id,
+std::pair<RegionDataReadInfoList, RegionException::RegionReadStatus> resolveLocksAndReadRegionData(const TiDB::TableID table_id,
     const RegionPtr & region,
     const Timestamp start_ts,
     RegionVersion region_version,
@@ -203,7 +203,7 @@ void RegionTable::writeBlockByRegion(
         }
     }
 
-    writeDataToStorage(context, region, data_list_read, log);
+    writeRegionDataToStorage(context, region, data_list_read, log);
     /// Move read data to outer to remove.
     data_list_to_remove = std::move(data_list_read);
 }
@@ -223,8 +223,8 @@ std::tuple<Block, RegionException::RegionReadStatus> RegionTable::readBlockByReg
 
     // Tiny optimization for queries that need only handle, tso, delmark.
     bool need_value = column_names_to_read.size() != 3;
-    auto [data_list_read, read_status]
-        = resolveLocksAndReadData(table_info.id, region, start_ts, region_version, conf_version, handle_range, resolve_locks, need_value);
+    auto [data_list_read, read_status] = resolveLocksAndReadRegionData(
+        table_info.id, region, start_ts, region_version, conf_version, handle_range, resolve_locks, need_value);
     if (read_status != RegionException::OK)
         return {Block(), read_status};
 
@@ -242,7 +242,7 @@ std::tuple<Block, RegionException::RegionReadStatus> RegionTable::readBlockByReg
     return {std::move(block), RegionException::OK};
 }
 
-RegionException::RegionReadStatus RegionTable::resolveLocksAndFlushRegion(TMTContext & tmt,
+RegionException::RegionReadStatus RegionTable::resolveLocksAndWriteRegion(TMTContext & tmt,
     const TiDB::TableID table_id,
     const RegionPtr & region,
     const Timestamp start_ts,
@@ -251,13 +251,13 @@ RegionException::RegionReadStatus RegionTable::resolveLocksAndFlushRegion(TMTCon
     DB::HandleRange<HandleID> & handle_range,
     Logger * log)
 {
-    auto [data_list_read, read_status] = resolveLocksAndReadData(
+    auto [data_list_read, read_status] = resolveLocksAndReadRegionData(
         table_id, region, start_ts, region_version, conf_version, handle_range, /* resolve_locks */ true, /* need_data_value */ true);
     if (read_status != RegionException::OK)
         return read_status;
 
     auto & context = tmt.getContext();
-    writeDataToStorage(context, region, data_list_read, log);
+    writeRegionDataToStorage(context, region, data_list_read, log);
 
     /// Remove committed data
     {
