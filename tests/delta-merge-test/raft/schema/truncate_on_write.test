@@ -1,3 +1,6 @@
+#TODO: We can not mock this situation, ignore for now
+#RETURN
+
 => DBGInvoke __clean_up_region()
 => DBGInvoke __enable_schema_sync_service('false')
 

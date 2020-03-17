@@ -1,3 +1,6 @@
+#TODO: For DeltaTree, each write will trigger schema sync. So we can not mock this situation, this test is useless
+#RETURN
+
 => DBGInvoke __clean_up_region()
 => DBGInvoke __enable_schema_sync_service('false')
 

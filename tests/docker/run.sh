@@ -23,6 +23,18 @@ docker-compose -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /
 docker-compose -f cluster.yaml -f tiflash-dt.yaml down
 
 
+# We need to separate mock-test for dt and tmt, since this behavior
+# is different in some tests
+# * "tmt" engine ONLY support disable_bg_flush = false.
+# * "dt" engine by default disable_bg_flush = true.
+rm -rf ./data ./log
+# (only tics0 up) (for engine DetlaTree)
+docker-compose -f mock-test-dt.yaml up -d
+docker-compose -f mock-test-dt.yaml exec -T tics0 bash -c 'cd /tests ; ./run-test.sh delta-merge-test'
+docker-compose -f mock-test-dt.yaml down
+
+
+
 rm -rf ./data ./log
 # run fullstack-tests (for engine TxnMergeTree)
 docker-compose -f cluster.yaml -f tiflash-tmt.yaml up -d
@@ -34,7 +46,7 @@ docker-compose -f cluster.yaml -f tiflash-tmt.yaml down
 
 
 rm -rf ./data ./log
-# (only tics0 up)
-docker-compose -f mock-test.yaml up -d
-docker-compose -f mock-test.yaml exec -T tics0 bash -c 'cd /tests ; ./run-test.sh  delta-merge-test && ./run-test.sh mutable-test'
-docker-compose -f mock-test.yaml down
+# (only tics0 up) (for engine TxnMergeTree)
+docker-compose -f mock-test-tmt.yaml up -d
+docker-compose -f mock-test-tmt.yaml exec -T tics0 bash -c 'cd /tests ; ./run-test.sh mutable-test'
+docker-compose -f mock-test-tmt.yaml down
