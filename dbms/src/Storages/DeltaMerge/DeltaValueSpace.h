@@ -70,7 +70,7 @@ public:
 
         bool isDeleteRange() const { return !delete_range.none(); }
         bool isCached() const { return !isDeleteRange() && (bool)cache; }
-        /// Where is column data can be flushed.
+        /// Whether its column data can be flushed.
         bool dataFlushable() const { return !isDeleteRange() && data_page == 0; }
         /// This pack is the last one, and not a delete range, and can be appended into new rows.
         bool isAppendable() const { return !isDeleteRange() && data_page == 0 && appendable && (bool)cache; }

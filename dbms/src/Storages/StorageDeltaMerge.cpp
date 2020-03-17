@@ -11,6 +11,7 @@
 
 #include <Common/formatReadable.h>
 #include <Common/typeid_cast.h>
+#include <Common/TiFlashMetrics.h>
 #include <Core/Defines.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
@@ -360,6 +361,7 @@ RegionMap doLearnerRead(const TiDB::TableID table_id,           //
     concurrent_num = std::max(1, std::min(concurrent_num, regions_info.size()));
 
     KVStorePtr & kvstore = tmt.getKVStore();
+    Context & context = tmt.getContext();
     RegionMap kvstore_region;
     // check region is not null and store region map.
     for (const auto & info : regions_info)
@@ -403,9 +405,13 @@ RegionMap doLearnerRead(const TiDB::TableID table_id,           //
                 return;
             }
 
+            GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_read_index_count).Increment();
+            Stopwatch read_index_watch;
+
             /// Blocking learner read. Note that learner read must be performed ahead of data read,
             /// otherwise the desired index will be blocked by the lock of data read.
             auto read_index_result = region->learnerRead();
+            GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_read_index_duration_seconds).Observe(read_index_watch.elapsedSeconds());
             if (read_index_result.region_unavailable)
             {
                 // client-c detect region removed. Set region_status and continue.
@@ -418,8 +424,11 @@ RegionMap doLearnerRead(const TiDB::TableID table_id,           //
                 continue;
             }
             else
+            {
+                Stopwatch wait_index_watch;
                 region->waitIndex(read_index_result.read_index);
-
+                GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_wait_index_duration_seconds).Observe(wait_index_watch.elapsedSeconds());
+            }
             if (resolve_locks)
             {
                 status = RegionTable::resolveLocksAndFlushRegion( //
