@@ -7,6 +7,7 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/System/StorageSystemDTTables.h>
+#include <Storages/MutableSupport.h>
 
 namespace DB
 {
@@ -99,7 +100,7 @@ BlockInputStreams StorageSystemDTTables::read(const Names & column_names,
         {
             auto & table_name = it->name();
             auto & storage = it->table();
-            if (storage->getName() != STORAGE_DELTA_MERGE_NAME)
+            if (storage->getName() != MutableSupport::delta_tree_storage_name)
                 continue;
 
             auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
