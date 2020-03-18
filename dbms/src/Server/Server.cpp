@@ -461,7 +461,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         else if (engine == ::TiDB::StorageEngine::DT)
         {
             /// If background flush is enabled, read will not triggle schema sync.
-            /// Which means that we may not get the right result with old schema.
+            /// Which means that we may get the wrong result with outdated schema.
             if (config().has(disable_bg_flush_conf) && !config().getBool(disable_bg_flush_conf))
                 throw Exception("Illegal arguments: enable background flush while using engine " + MutableSupport::delta_tree_storage_name,
                     ErrorCodes::INVALID_CONFIG_PARAMETER);

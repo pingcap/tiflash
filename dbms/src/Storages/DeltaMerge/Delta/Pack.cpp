@@ -187,7 +187,7 @@ Columns readPackFromCache(const PackPtr & pack, const ColumnDefines & column_def
     std::scoped_lock lock(pack->cache->mutex);
 
     const auto & cache_block = pack->cache->block;
-    if constexpr (DM_RUN_CHECK)
+    if constexpr (0)
     {
         if (pack->schema == nullptr || !checkSchema(cache_block, *pack->schema))
         {

@@ -316,7 +316,7 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
         cache = std::make_shared<Cache>(block);
     }
 
-    if constexpr (DM_RUN_CHECK)
+    if constexpr (0)
     {
         if (unlikely(!checkSchema(cache->block, block)))
         {
