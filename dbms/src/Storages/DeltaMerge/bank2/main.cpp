@@ -89,6 +89,10 @@ void verify(DeltaStorageProxy & proxy, SimpleLockManager & manager, IDGenerator 
         }
 
         EXPECT_EQ(proxy.sumBalance(0, max_id, tso), total);
+        if (proxy.sumBalance(0, max_id, tso) != total) {
+            std::cout << "sum balance is wrong" << std::endl;
+            throw std::exception();
+        }
 
         std::cout << proxy.sumBalance(0, max_id, tso) << std::endl;
 
