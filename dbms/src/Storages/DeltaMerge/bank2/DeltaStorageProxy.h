@@ -15,6 +15,7 @@
 #include <cstddef>
 #include <memory>
 #include <iostream>
+#include "SimpleDB.h"
 
 namespace DB {
     namespace DM {
@@ -40,11 +41,13 @@ namespace DB {
             public:
                 void insertBalance(UInt64 id, UInt64 balance, UInt64 tso)
                 {
+                    db.insertBalance(id, balance, tso);
                     upsertRow(id, balance, tso);
                 }
 
                 void updateBalance(UInt64 id, UInt64 balance, UInt64 tso)
                 {
+                    db.updateBalance(id, balance, tso);
                     upsertRow(id, balance, tso);
                 }
 
@@ -60,6 +63,8 @@ namespace DB {
                 std::unique_ptr<Context> context;
                 const ColumnDefine col_balance_define;
                 DeltaMergeStorePtr store;
+
+                SimpleDB db;
 
                 static constexpr const char * pk_name = "_tidb_rowid";
             };
