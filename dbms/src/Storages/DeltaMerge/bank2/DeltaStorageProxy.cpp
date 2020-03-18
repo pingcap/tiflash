@@ -93,6 +93,11 @@ namespace DB {
                 }
                 in->readSuffix();
                 EXPECT_EQ(found, true);
+                UInt64 another_result = db.selectBalance(id, tso);
+                if (another_result != result) {
+                    std::cout << "result between deltamerge and simpledb doesn't match" << std::endl;
+                    throw std::exception();
+                }
                 return result;
             }
 
@@ -145,6 +150,11 @@ namespace DB {
                     EXPECT_EQ(f, true);
                 for (auto i : result)
                     sum += i;
+                UInt64 another_sum = db.sumBalance(begin, end, tso);
+                if (another_sum != sum) {
+                    std::cout << "result between deltamerge and simpledb doesn't match" << std::endl;
+                    throw std::exception();
+                }
                 return sum;
             }
 

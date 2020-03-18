@@ -20,9 +20,9 @@ namespace DM
 {
 namespace tests
 {
-void work(DeltaStorageProxy & proxy, SimpleLockManager & manager, IDGenerator & tso_gen, IDGenerator & trans_id_gen, UInt64 max_id)
+void work(DeltaStorageProxy & proxy, SimpleLockManager & manager, IDGenerator & tso_gen, IDGenerator & trans_id_gen, UInt64 max_id, UInt64 try_num)
 {
-    for(size_t i = 0; i < 100; i++) {
+    for(size_t i = 0; i < try_num; i++) {
         UInt64 tid = trans_id_gen.get();
         UInt64 tso = tso_gen.get();
         UInt64 id1, id2;
@@ -35,8 +35,12 @@ void work(DeltaStorageProxy & proxy, SimpleLockManager & manager, IDGenerator & 
         }
         UInt64 s_id = (id1 > id2) ? id2 : id1;
         UInt64 b_id = (id1 > id2) ? id1 : id2;
-        manager.writeLock(s_id, tid, tso);
-        manager.writeLock(b_id, tid, tso);
+        if (!manager.writeLock(s_id, tid, tso))
+            return;
+        if (!manager.writeLock(b_id, tid, tso)) {
+            manager.writeUnlock(s_id, tid);
+            return;
+        }
         UInt64 amount = std::rand() % 100;
         int direction = std::rand() % 2;
         if (direction == 0) {
@@ -74,9 +78,9 @@ void work(DeltaStorageProxy & proxy, SimpleLockManager & manager, IDGenerator & 
     }
 }
 
-void verify(DeltaStorageProxy & proxy, SimpleLockManager & manager, IDGenerator & tso_gen, IDGenerator & trans_id_gen, UInt64 max_id, UInt64 total)
+void verify(DeltaStorageProxy & proxy, SimpleLockManager & manager, IDGenerator & tso_gen, IDGenerator & trans_id_gen, UInt64 max_id, UInt64 total, UInt64 try_num)
 {
-    for(size_t i = 0; i < 100; i++) {
+    for(size_t i = 0; i < try_num; i++) {
         UInt64 tid = trans_id_gen.get();
         UInt64 tso = tso_gen.get();
 
@@ -94,15 +98,15 @@ void verify(DeltaStorageProxy & proxy, SimpleLockManager & manager, IDGenerator 
     }
 }
 
-void run_bank2()
+void run_bank2(UInt64 account, UInt64 balance, UInt64 worker, UInt64 try_num)
 {
     DeltaStorageProxy proxy;
     SimpleLockManager manager;
     IDGenerator tso_gen;
     IDGenerator trans_id_gen;
     UInt64 start = 0;
-    UInt64 end = 100;
-    UInt64 initial_balance = 1000;
+    UInt64 end = account;
+    UInt64 initial_balance = balance;
     UInt64 total = (end - start) * initial_balance;
 
     for (UInt64 id = start; id < end; id++)
@@ -111,15 +115,15 @@ void run_bank2()
         proxy.insertBalance(id, initial_balance, tso);
     }
 
-    size_t worker_count = 2;
+    size_t worker_count = worker;
     std::vector<std::thread> workers;
     workers.resize(worker_count);
 
     for (size_t i = 0; i < worker_count; i++) {
-        workers[i] = std::thread{work, std::ref(proxy), std::ref(manager), std::ref(tso_gen), std::ref(trans_id_gen), end};
+        workers[i] = std::thread{work, std::ref(proxy), std::ref(manager), std::ref(tso_gen), std::ref(trans_id_gen), end, try_num};
     }
 
-    std::thread verify_thread{verify, std::ref(proxy), std::ref(manager), std::ref(tso_gen), std::ref(trans_id_gen), end, total};
+    std::thread verify_thread{verify, std::ref(proxy), std::ref(manager), std::ref(tso_gen), std::ref(trans_id_gen), end, total, try_num};
 
     for (size_t i = 0; i < worker_count; i++) {
         workers[i].join();
@@ -135,8 +139,15 @@ void run_bank2()
 }
 }
 
-int main()
+int main(int argc, char *argv[])
 {
-    DB::DM::tests::run_bank2();
+    if (argc != 5) {
+        std::cout << "Usage: <cmd> account balance worker try_num" << std::endl;
+    }
+    UInt64 account = std::stoul(argv[1]);
+    UInt64 balance = std::stoul(argv[2]);
+    UInt64 worker = std::stoul(argv[3]);
+    UInt64 try_num = std::stoul(argv[4]);
+    DB::DM::tests::run_bank2(account, balance, worker, try_num);
     return 0;
 }

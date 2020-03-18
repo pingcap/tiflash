@@ -48,20 +48,28 @@ namespace DB {
                     }
                 }
 
-                void writeLock(UInt64 id, UInt64 transaction_id, UInt64 tso) {
+                bool writeLock(UInt64 id, UInt64 transaction_id, UInt64 tso) {
                     std::unique_lock<std::mutex> latch{mutex};
                     if (lock_map.find(id) == lock_map.end()) {
                         lock_map.emplace(std::piecewise_construct, std::make_tuple(id), std::make_tuple());
                     }
+                    if (isWriteLocked(id, UINT64_MAX)) {
+                        latch.unlock();
+                        return false;
+                    }
                     latch.unlock();
                     while (true) {
                         latch.lock();
-                        if (!isWriteLocked(id, UINT64_MAX) && !isReadLocked(id, tso)) {
+                        if (isWriteLocked(id, UINT64_MAX)) {
+                            latch.unlock();
+                            return false;
+                        }
+                        if (!isReadLocked(id, tso)) {
                             auto & locks = lock_map[id];
                             SimpleLock l{transaction_id, tso, LockType::WRITE};
                             locks.emplace_back(l);
                             latch.unlock();
-                            return;
+                            return true;
                         }
                         latch.unlock();
                         std::this_thread::sleep_for(std::chrono::seconds(1));
