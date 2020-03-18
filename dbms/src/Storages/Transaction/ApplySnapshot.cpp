@@ -201,20 +201,27 @@ void KVStore::handleIngestSST(UInt64 region_id, const SnapshotDataView & write_b
     if (region == nullptr)
         throw Exception(std::string(__PRETTY_FUNCTION__) + ": region " + std::to_string(region_id) + " is not found");
 
+    const auto func_try_flush = [&]() {
+        if (!region->writeCFCount())
+            return;
+        try
+        {
+            tmt.getRegionTable().tryFlushRegion(region, false);
+            tryFlushRegionCacheInStorage(tmt, *region, log);
+        }
+        catch (Exception & e)
+        {
+            // sst of write cf may be ingested first, exception may be raised because there is no matched data in default cf.
+            // ignore it.
+            LOG_TRACE(log, __FUNCTION__ << ": catch but ignore exception: " << e.message());
+        }
+    };
+
+    // try to flush remain data in memory.
+    func_try_flush();
     region->handleIngestSST(write_buff, default_buff, index, term);
     region->tryPreDecodeTiKVValue(tmt);
-
-    try
-    {
-        tmt.getRegionTable().tryFlushRegion(region, false);
-        tryFlushRegionCacheInStorage(tmt, *region, log);
-    }
-    catch (Exception & e)
-    {
-        // sst of write cf may be ingested first, exception may be raised because there is no matched data in default cf.
-        // ignore it.
-        LOG_TRACE(log, __FUNCTION__ << ": catch but ignore exception: " << e.message());
-    }
+    func_try_flush();
 
     region_persister.persist(*region, region_task_lock);
 }
