@@ -211,7 +211,7 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
                                storage_pool,
                                hash_salt,
                                store_columns,
-                               /* min_version */ 0,
+                               latest_gc_safe_point,
                                settings.not_compress_columns,
                                db_settings);
     return DMContextPtr(ctx);
@@ -527,7 +527,8 @@ void DeltaMergeStore::compact(const Context & db_context, const HandleRange & ra
 BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
                                            const DB::Settings &  db_settings,
                                            const ColumnDefines & columns_to_read,
-                                           size_t                num_streams)
+                                           size_t                num_streams,
+                                           const SegmentIdSet &  read_segments)
 {
     SegmentReadTasks tasks;
 
@@ -539,7 +540,9 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
         for (const auto & [handle, segment] : segments)
         {
             (void)handle;
-            tasks.push(std::make_shared<SegmentReadTask>(segment, segment->createSnapshot(*dm_context), HandleRanges{segment->getRange()}));
+            if (read_segments.empty() || read_segments.count(segment->segmentId()))
+                tasks.push(
+                    std::make_shared<SegmentReadTask>(segment, segment->createSnapshot(*dm_context), HandleRanges{segment->getRange()}));
         }
     }
 
@@ -574,7 +577,8 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
                                         size_t                num_streams,
                                         UInt64                max_version,
                                         const RSOperatorPtr & filter,
-                                        size_t                expected_block_size)
+                                        size_t                expected_block_size,
+                                        const SegmentIdSet &  read_segments)
 {
     LOG_DEBUG(log, "Read with " << sorted_ranges.size() << " ranges");
 
@@ -599,7 +603,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
         {
             auto & req_range = *range_it;
             auto & seg_range = seg_it->second->getRange();
-            if (req_range.intersect(seg_range))
+            if (req_range.intersect(seg_range) && (read_segments.empty() || read_segments.count(seg_it->second->segmentId())))
             {
                 if (tasks.empty() || tasks.back()->segment != seg_it->second)
                 {
@@ -934,6 +938,10 @@ bool DeltaMergeStore::handleBackgroundTask()
                                                                   /* ignore_cache= */ false,
                                                                   global_context.getSettingsRef().safe_point_update_interval_seconds);
 
+        LOG_DEBUG(log, "Task" << toString(task.type) << " GC safe point: " << safe_point);
+
+        // Foreground task don't get GC safe point from remote, but we better make it as up to date as possible.
+        latest_gc_safe_point         = safe_point;
         task.dm_context->min_version = safe_point;
     }
 
@@ -955,13 +963,15 @@ bool DeltaMergeStore::handleBackgroundTask()
             left = segmentMergeDelta(*task.dm_context, task.segment, false);
             type = ThreadType::BG_MergeDelta;
             break;
-        case Compact: {
+        case Compact:
+        {
             task.segment->getDelta()->compact(*task.dm_context);
             left = task.segment;
             type = ThreadType::BG_Compact;
             break;
         }
-        case Flush: {
+        case Flush:
+        {
             task.segment->getDelta()->flush(*task.dm_context);
             left = task.segment;
             type = ThreadType::BG_Flush;
@@ -1411,5 +1421,40 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
 
     return stat;
 }
+
+SegmentStats DeltaMergeStore::getSegmentStats()
+{
+    std::shared_lock lock(read_write_mutex);
+
+    SegmentStats stats;
+    for (const auto & [handle, segment] : segments)
+    {
+        (void)handle;
+
+        SegmentStat stat;
+        auto &      delta  = segment->getDelta();
+        auto &      stable = segment->getStable();
+
+        stat.segment_id = segment->segmentId();
+        stat.range      = segment->getRange();
+
+        stat.rows          = segment->getEstimatedRows();
+        stat.size          = delta->getBytes() + stable->getBytes();
+        stat.delete_ranges = delta->getDeletes();
+
+        stat.delta_pack_count  = delta->getPackCount();
+        stat.stable_pack_count = stable->getPacks();
+
+        stat.avg_delta_pack_rows  = (Float64)delta->getRows() / stat.delta_pack_count;
+        stat.avg_stable_pack_rows = (Float64)stable->getRows() / stat.stable_pack_count;
+
+        stat.delta_rate       = (Float64)delta->getRows() / stat.rows;
+        stat.delta_cache_size = delta->getTotalCacheBytes();
+
+        stats.push_back(stat);
+    }
+    return stats;
+}
+
 } // namespace DM
 } // namespace DB

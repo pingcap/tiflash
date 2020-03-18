@@ -22,38 +22,11 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-void RegionTable::writeBlockByRegion(Context & context, RegionPtr region, RegionDataReadInfoList & data_list_to_remove, Logger * log)
+void writeRegionDataToStorage(Context & context, const RegionPtr & region, RegionDataReadInfoList & data_list_read, Logger * log)
 {
     const auto & tmt = context.getTMTContext();
     TableID table_id = region->getMappedTableID();
-    UInt64 region_read_cost = -1, region_decode_cost = -1, write_part_cost = -1;
-
-    RegionDataReadInfoList data_list_read;
-    {
-        auto scanner = region->createCommittedScanner();
-
-        /// Some sanity checks for region meta.
-        {
-            if (region->isPendingRemove())
-                return;
-        }
-
-        /// Read raw KVs from region cache.
-        {
-            // Shortcut for empty region.
-            if (!scanner.hasNext())
-                return;
-
-            data_list_read.reserve(scanner.writeMapSize());
-
-            auto start_time = Clock::now();
-            do
-            {
-                data_list_read.emplace_back(scanner.next());
-            } while (scanner.hasNext());
-            region_read_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
-        }
-    }
+    UInt64 region_decode_cost = -1, write_part_cost = -1;
 
     /// Declare lambda of atomic read then write to call multiple times.
     auto atomicReadWrite = [&](bool force_decode) {
@@ -65,7 +38,6 @@ void RegionTable::writeBlockByRegion(Context & context, RegionPtr region, Region
                 return false;
             // Table must have just been dropped or truncated.
             // TODO: What if we support delete range? Do we still want to remove KVs from region cache?
-            data_list_to_remove = std::move(data_list_read);
             return true;
         }
 
@@ -123,9 +95,6 @@ void RegionTable::writeBlockByRegion(Context & context, RegionPtr region, Region
         }
         write_part_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
 
-        /// Move read data to outer to remove.
-        data_list_to_remove = std::move(data_list_read);
-
         return true;
     };
 
@@ -147,8 +116,96 @@ void RegionTable::writeBlockByRegion(Context & context, RegionPtr region, Region
     }
 
     LOG_TRACE(log,
-        __FUNCTION__ << ": table " << table_id << ", region " << region->id() << ", cost [region read " << region_read_cost
-                     << ", region decode " << region_decode_cost << ", write part " << write_part_cost << "] ms");
+        __FUNCTION__ << ": table " << table_id << ", region " << region->id() << ", cost [region decode " << region_decode_cost
+                     << ", write part " << write_part_cost << "] ms");
+}
+
+std::pair<RegionDataReadInfoList, RegionException::RegionReadStatus> resolveLocksAndReadRegionData(const TiDB::TableID table_id,
+    const RegionPtr & region,
+    const Timestamp start_ts,
+    RegionVersion region_version,
+    RegionVersion conf_version,
+    DB::HandleRange<HandleID> & handle_range,
+    bool resolve_locks,
+    bool need_data_value)
+{
+    RegionDataReadInfoList data_list_read;
+    {
+        auto scanner = region->createCommittedScanner();
+
+        /// Some sanity checks for region meta.
+        {
+            if (region->isPendingRemove())
+                return {{}, RegionException::PENDING_REMOVE};
+
+            const auto & [version, conf_ver, key_range] = region->dumpVersionRange();
+            if (version != region_version || conf_ver != conf_version)
+                return {{}, RegionException::VERSION_ERROR};
+
+            handle_range = key_range->getHandleRangeByTable(table_id);
+        }
+
+        /// Deal with locks.
+        if (resolve_locks)
+        {
+            /// Check if there are any lock should be resolved, if so, throw LockException.
+            if (LockInfoPtr lock_info = scanner.getLockInfo(start_ts); lock_info)
+            {
+                LockInfos lock_infos;
+                lock_infos.emplace_back(std::move(lock_info));
+                throw LockException(std::move(lock_infos));
+            }
+        }
+
+        /// Read raw KVs from region cache.
+        {
+            // Shortcut for empty region.
+            if (!scanner.hasNext())
+                return {{}, RegionException::OK};
+
+            data_list_read.reserve(scanner.writeMapSize());
+
+            // Tiny optimization for queries that need only handle, tso, delmark.
+            do
+            {
+                data_list_read.emplace_back(scanner.next(need_data_value));
+            } while (scanner.hasNext());
+        }
+    }
+    return {std::move(data_list_read), RegionException::OK};
+}
+
+void RegionTable::writeBlockByRegion(
+    Context & context, const RegionPtr & region, RegionDataReadInfoList & data_list_to_remove, Logger * log)
+{
+    RegionDataReadInfoList data_list_read;
+    {
+        auto scanner = region->createCommittedScanner();
+
+        /// Some sanity checks for region meta.
+        {
+            if (region->isPendingRemove())
+                return;
+        }
+
+        /// Read raw KVs from region cache.
+        {
+            // Shortcut for empty region.
+            if (!scanner.hasNext())
+                return;
+
+            data_list_read.reserve(scanner.writeMapSize());
+
+            do
+            {
+                data_list_read.emplace_back(scanner.next());
+            } while (scanner.hasNext());
+        }
+    }
+
+    writeRegionDataToStorage(context, region, data_list_read, log);
+    /// Move read data to outer to remove.
+    data_list_to_remove = std::move(data_list_read);
 }
 
 std::tuple<Block, RegionException::RegionReadStatus> RegionTable::readBlockByRegion(const TiDB::TableInfo & table_info,
@@ -164,44 +221,12 @@ std::tuple<Block, RegionException::RegionReadStatus> RegionTable::readBlockByReg
     if (!region)
         throw Exception(std::string(__PRETTY_FUNCTION__) + ": region is null", ErrorCodes::LOGICAL_ERROR);
 
-    RegionDataReadInfoList data_list_read;
-    {
-        auto scanner = region->createCommittedScanner();
-
-        /// Some sanity checks for region meta.
-        {
-            if (region->isPendingRemove())
-                return {Block(), RegionException::PENDING_REMOVE};
-
-            const auto & [version, conf_ver, key_range] = region->dumpVersionRange();
-            if (version != region_version || conf_ver != conf_version)
-                return {Block(), RegionException::VERSION_ERROR};
-
-            handle_range = key_range->getHandleRangeByTable(table_info.id);
-        }
-
-        /// Deal with locks.
-        if (resolve_locks)
-        {
-            resolveLocks(scanner, start_ts);
-        }
-
-        /// Read raw KVs from region cache.
-        {
-            // Shortcut for empty region.
-            if (!scanner.hasNext())
-                return {Block(), RegionException::OK};
-
-            data_list_read.reserve(scanner.writeMapSize());
-
-            // Tiny optimization for queries that need only handle, tso, delmark.
-            bool need_value = column_names_to_read.size() != 3;
-            do
-            {
-                data_list_read.emplace_back(scanner.next(need_value));
-            } while (scanner.hasNext());
-        }
-    }
+    // Tiny optimization for queries that need only handle, tso, delmark.
+    bool need_value = column_names_to_read.size() != 3;
+    auto [data_list_read, read_status] = resolveLocksAndReadRegionData(
+        table_info.id, region, start_ts, region_version, conf_version, handle_range, resolve_locks, need_value);
+    if (read_status != RegionException::OK)
+        return {Block(), read_status};
 
     /// Read region data as block.
     Block block;
@@ -217,14 +242,36 @@ std::tuple<Block, RegionException::RegionReadStatus> RegionTable::readBlockByReg
     return {std::move(block), RegionException::OK};
 }
 
-void RegionTable::resolveLocks(Region::CommittedScanner & scanner, const Timestamp start_ts)
+RegionException::RegionReadStatus RegionTable::resolveLocksAndWriteRegion(TMTContext & tmt,
+    const TiDB::TableID table_id,
+    const RegionPtr & region,
+    const Timestamp start_ts,
+    RegionVersion region_version,
+    RegionVersion conf_version,
+    DB::HandleRange<HandleID> & handle_range,
+    Logger * log)
 {
-    if (LockInfoPtr lock_info = scanner.getLockInfo(start_ts); lock_info)
+    auto [data_list_read, read_status] = resolveLocksAndReadRegionData(
+        table_id, region, start_ts, region_version, conf_version, handle_range, /* resolve_locks */ true, /* need_data_value */ true);
+    if (read_status != RegionException::OK)
+        return read_status;
+
+    auto & context = tmt.getContext();
+    writeRegionDataToStorage(context, region, data_list_read, log);
+
+    /// Remove committed data
     {
-        LockInfos lock_infos;
-        lock_infos.emplace_back(std::move(lock_info));
-        throw LockException(std::move(lock_infos));
+        auto remover = region->createCommittedRemover();
+        for (const auto & [handle, write_type, commit_ts, value] : data_list_read)
+        {
+            std::ignore = write_type;
+            std::ignore = value;
+
+            remover.remove({handle, commit_ts});
+        }
     }
+
+    return RegionException::OK;
 }
 
 } // namespace DB
