@@ -74,6 +74,8 @@ public:
     bool tryApplySnapshot(RegionPtr new_region, Context & context, bool try_flush_region);
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
     void setRegionCompactLogPeriod(Seconds period);
+    void handleIngestSST(UInt64 region_id, const SnapshotDataView & write_buff, const SnapshotDataView & default_buff, UInt64 index,
+        UInt64 term, TMTContext & tmt);
 
 private:
     friend class MockTiDB;

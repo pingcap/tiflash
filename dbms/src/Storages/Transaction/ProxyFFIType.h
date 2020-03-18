@@ -80,6 +80,7 @@ struct TiFlashServerHelper
         const TiFlashServer *, BaseBuffView, uint64_t, SnapshotDataView, SnapshotDataView, SnapshotDataView, uint64_t, uint64_t);
     void (*fn_atomic_update_proxy)(TiFlashServer *, TiFlashRaftProxy *);
     void (*fn_handle_destroy)(TiFlashServer *, RegionId);
+    void (*fn_handle_ingest_sst)(TiFlashServer *, SnapshotDataView, SnapshotDataView, RaftCmdHeader);
     //
     uint32_t magic_number; // use a very special number to check whether this struct is legal
     uint32_t version;      // version of function interface
@@ -101,4 +102,5 @@ void HandleApplySnapshot(const TiFlashServer * server, BaseBuffView region_buff,
 TiFlashApplyRes HandleWriteRaftCmd(const TiFlashServer * server, WriteCmdsView req_buff, RaftCmdHeader header);
 void AtomicUpdateProxy(TiFlashServer * server, TiFlashRaftProxy * proxy);
 void HandleDestroy(TiFlashServer * server, RegionId region_id);
+void HandleIngestSST(TiFlashServer * server, SnapshotDataView write_buff, SnapshotDataView default_buff, RaftCmdHeader header);
 } // namespace DB

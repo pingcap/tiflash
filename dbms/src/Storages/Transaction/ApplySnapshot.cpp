@@ -1,7 +1,7 @@
 #include <Core/TMTPKType.h>
 #include <Interpreters/Context.h>
-#include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/StorageDeltaMerge.h>
+#include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/CHTableHandle.h>
 #include <Storages/Transaction/KVStore.h>
@@ -168,17 +168,18 @@ void KVStore::handleApplySnapshot(metapb::Region && region, UInt64 peer_id, cons
             ColumnFamilyType type;
             const SnapshotDataView & data;
         };
-        CfData cf_data[3]
-            = {{ColumnFamilyType::Lock, (lock_buff)}, {ColumnFamilyType::Default, (default_buff)}, {ColumnFamilyType::Write, (write_buff)}};
-        for (auto i = 0; i < 3; ++i)
+        std::array<CfData, 3> cf_data_list = {CfData{ColumnFamilyType::Lock, (lock_buff)}, CfData{ColumnFamilyType::Write, (write_buff)},
+            CfData{ColumnFamilyType::Default, (default_buff)}};
+
+        for (const auto & cf_data : cf_data_list)
         {
-            for (UInt64 n = 0; n < cf_data[i].data.len; ++n)
+            for (UInt64 n = 0; n < cf_data.data.len; ++n)
             {
-                auto & k = cf_data[i].data.keys[n];
-                auto & v = cf_data[i].data.vals[n];
+                auto & k = cf_data.data.keys[n];
+                auto & v = cf_data.data.vals[n];
                 auto key = std::string(k.data, k.len);
                 auto value = std::string(v.data, v.len);
-                new_region->insert(cf_data[i].type, TiKVKey(std::move(key)), TiKVValue(std::move(value)));
+                new_region->insert(cf_data.type, TiKVKey(std::move(key)), TiKVValue(std::move(value)));
             }
         }
     }
@@ -188,6 +189,33 @@ void KVStore::handleApplySnapshot(metapb::Region && region, UInt64 peer_id, cons
     bool status = tryApplySnapshot(new_region, tmt.getContext(), true);
 
     LOG_INFO(log, new_region->toString(false) << " apply snapshot " << (status ? "success" : "fail"));
+}
+
+void KVStore::handleIngestSST(UInt64 region_id, const SnapshotDataView & write_buff, const SnapshotDataView & default_buff, UInt64 index,
+    UInt64 term, TMTContext & tmt)
+{
+    auto region_task_lock = region_manager.genRegionTaskLock(region_id);
+
+    const RegionPtr region = getRegion(region_id);
+
+    if (region == nullptr)
+        throw Exception(std::string(__PRETTY_FUNCTION__) + ": region " + std::to_string(region_id) + " is not found");
+
+    region->handleIngestSST(write_buff, default_buff, index, term);
+    region->tryPreDecodeTiKVValue(tmt);
+
+    try
+    {
+        tmt.getRegionTable().tryFlushRegion(region, false);
+        tryFlushRegionCacheInStorage(tmt, *region, log);
+    }
+    catch (...)
+    {
+        // sst of write cf may be ingested first, exception may be raised because there is no matched data in default cf.
+        // ignore it.
+    }
+
+    region_persister.persist(*region, region_task_lock);
 }
 
 } // namespace DB

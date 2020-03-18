@@ -561,7 +561,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         // a special number, also defined in proxy
         .magic_number = 0x13579BDF,
-        .version = 2};
+        .version = 3};
 
     auto proxy_runner = std::thread([&proxy_conf, &log, &helper]() {
         if (!proxy_conf.inited)

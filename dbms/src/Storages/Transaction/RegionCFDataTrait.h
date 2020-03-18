@@ -53,6 +53,8 @@ struct RegionDefaultCFDataTrait
         return {Key{handle_id, ts},
             Value{std::make_shared<const TiKVKey>(std::move(key)), std::make_shared<const TiKVValue>(std::move(value))}};
     }
+
+    static std::shared_ptr<const TiKVValue> getTiKVValue(const Map::iterator & it) { return std::get<1>(it->second); }
 };
 
 struct RegionLockCFDataTrait

@@ -125,4 +125,18 @@ void HandleDestroy(TiFlashServer * server, RegionId region_id)
     }
 }
 
+void HandleIngestSST(TiFlashServer * server, SnapshotDataView write_buff, SnapshotDataView default_buff, RaftCmdHeader header)
+{
+    try
+    {
+        auto & kvstore = server->tmt.getKVStore();
+        kvstore->handleIngestSST(header.region_id, write_buff, default_buff, header.index, header.term, server->tmt);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        exit(-1);
+    }
+}
+
 } // namespace DB
