@@ -1,11 +1,11 @@
 //
 // Created by linkmyth on 2020-03-17.
 //
-#include <Core/Types.h>
-#include <mutex>
 
 #ifndef CLICKHOUSE_IDGENERATOR_H
 #define CLICKHOUSE_IDGENERATOR_H
+#include <Core/Types.h>
+#include <mutex>
 
 namespace DB {
     namespace DM {
