@@ -335,4 +335,66 @@ void dbgFuncRemoveRegion(Context & context, const ASTs & args, DBGInvoker::Print
     output(ss.str());
 }
 
+void dbgFuncIngestSST(Context & context, const ASTs & args, DBGInvoker::Printer)
+{
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+    RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
+    RegionID start_handle = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[3]).value);
+    RegionID end_handle = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[4]).value);
+    MockTiDB::TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
+
+    std::vector<std::pair<TiKVKey, TiKVValue>> write_kv_list, default_kv_list;
+
+    for (auto handle_id = start_handle; handle_id < end_handle; ++handle_id)
+    {
+        // make it have only one column Int64 just for test
+        std::vector<Field> fields;
+        fields.emplace_back(-handle_id);
+        {
+            TiKVKey key = RecordKVFormat::genKey(table->id(), handle_id);
+            std::stringstream ss;
+            RegionBench::encodeRow(table->table_info, fields, ss);
+            TiKVValue prewrite_value(ss.str());
+            UInt64 commit_ts = handle_id;
+            UInt64 prewrite_ts = commit_ts;
+            TiKVValue commit_value = RecordKVFormat::encodeWriteCfValue(Region::PutFlag, prewrite_ts);
+            TiKVKey commit_key = RecordKVFormat::appendTs(key, commit_ts);
+            TiKVKey prewrite_key = RecordKVFormat::appendTs(key, prewrite_ts);
+
+            write_kv_list.emplace_back(std::make_pair(std::move(commit_key), std::move(commit_value)));
+            default_kv_list.emplace_back(std::make_pair(std::move(prewrite_key), std::move(prewrite_value)));
+        }
+    }
+
+    {
+        std::vector<BaseBuffView> keys;
+        std::vector<BaseBuffView> vals;
+        for (const auto & kv : write_kv_list)
+        {
+            keys.push_back({kv.first.data(), kv.first.dataSize()});
+            vals.push_back({kv.second.data(), kv.second.dataSize()});
+        }
+        SnapshotDataView write_buff{keys.data(), vals.data(), keys.size()}, default_buff;
+
+        auto & tmt = context.getTMTContext();
+        tmt.getKVStore()->handleIngestSST(region_id, write_buff, default_buff, MockTiKV::instance().getRaftIndex(region_id),
+            MockTiKV::instance().getRaftTerm(region_id), tmt);
+    }
+
+    {
+        std::vector<BaseBuffView> keys;
+        std::vector<BaseBuffView> vals;
+        for (const auto & kv : default_kv_list)
+        {
+            keys.push_back({kv.first.data(), kv.first.dataSize()});
+            vals.push_back({kv.second.data(), kv.second.dataSize()});
+        }
+        SnapshotDataView write_buff, default_buff{keys.data(), vals.data(), keys.size()};
+        auto & tmt = context.getTMTContext();
+        tmt.getKVStore()->handleIngestSST(region_id, write_buff, default_buff, MockTiKV::instance().getRaftIndex(region_id),
+            MockTiKV::instance().getRaftTerm(region_id), tmt);
+    }
+}
+
 } // namespace DB
