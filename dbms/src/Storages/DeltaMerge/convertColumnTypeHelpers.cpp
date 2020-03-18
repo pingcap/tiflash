@@ -218,33 +218,12 @@ bool castNonNullNumericColumn(const DataTypePtr &  disk_type_not_null_,
 
 } // namespace
 
-ColumnPtr convertColumnByColumnDefineIfNeed(const DataTypePtr & from_type, ColumnPtr && from_col, const ColumnDefine & to_column_define)
-{
-    // No need to convert
-    if (likely(from_type->equals(*to_column_define.type)))
-        return std::move(from_col);
-
-    // Check if support
-    if (unlikely(!isSupportedDataTypeCast(from_type, to_column_define.type)))
-    {
-        throw Exception("Reading mismatch data type pack. Cast from " + from_type->getName() + " to " + to_column_define.type->getName()
-                            + " is NOT supported!",
-                        ErrorCodes::NOT_IMPLEMENTED);
-    }
-
-    // Cast column's data from DataType in disk to what we need now
-    auto to_col = to_column_define.type->createColumn();
-    to_col->reserve(from_col->size());
-    castColumnAccordingToColumnDefine(from_type, from_col, to_column_define, to_col->getPtr(), 0, from_col->size());
-    return to_col;
-}
-
-void castColumnAccordingToColumnDefine(const DataTypePtr &  disk_type,
-                                       const ColumnPtr &    disk_col,
-                                       const ColumnDefine & read_define,
-                                       MutableColumnPtr     memory_col,
-                                       size_t               rows_offset,
-                                       size_t               rows_limit)
+void convertColumnByColumnDefine(const DataTypePtr &  disk_type,
+                                 const ColumnPtr &    disk_col,
+                                 const ColumnDefine & read_define,
+                                 MutableColumnPtr     memory_col,
+                                 size_t               rows_offset,
+                                 size_t               rows_limit)
 {
     const DataTypePtr & read_type = read_define.type;
 
@@ -338,6 +317,27 @@ void castColumnAccordingToColumnDefine(const DataTypePtr &  disk_type,
                             + " is NOT supported!",
                         ErrorCodes::NOT_IMPLEMENTED);
     }
+}
+
+ColumnPtr convertColumnByColumnDefineIfNeed(const DataTypePtr & from_type, ColumnPtr && from_col, const ColumnDefine & to_column_define)
+{
+    // No need to convert
+    if (likely(from_type->equals(*to_column_define.type)))
+        return std::move(from_col);
+
+    // Check if support
+    if (unlikely(!isSupportedDataTypeCast(from_type, to_column_define.type)))
+    {
+        throw Exception("Reading mismatch data type pack. Cast from " + from_type->getName() + " to " + to_column_define.type->getName()
+                            + " is NOT supported!",
+                        ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    // Cast column's data from DataType in disk to what we need now
+    auto to_col = to_column_define.type->createColumn();
+    to_col->reserve(from_col->size());
+    convertColumnByColumnDefine(from_type, from_col, to_column_define, to_col->getPtr(), 0, from_col->size());
+    return to_col;
 }
 
 ColumnPtr createColumnWithDefaultValue(const ColumnDefine & column_define, size_t num_rows)

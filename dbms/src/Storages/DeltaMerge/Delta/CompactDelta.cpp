@@ -118,7 +118,7 @@ bool DeltaValueSpace::compact(DMContext & context)
             if (unlikely(pack->isDeleteRange()))
                 throw Exception("Unexpectedly selected a delete range to compact", ErrorCodes::LOGICAL_ERROR);
 
-            // TODO: we should ensure schema of all packs are the same
+            // We ensure schema of all packs are the same
             Block  block      = pack->isCached() ? readPackFromCache(pack) : readPackFromDisk(pack, reader);
             size_t block_rows = block.rows();
             for (size_t i = 0; i < schema.columns(); ++i)
