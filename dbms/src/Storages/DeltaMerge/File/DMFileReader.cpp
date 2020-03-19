@@ -273,7 +273,6 @@ Block DMFileReader::read()
             else
             {
                 // New column after ddl is not exist in this DMFile, fill with default value
-                // Read default value from `column_define.default_value`
                 ColumnPtr column = createColumnWithDefaultValue(cd, read_rows);
                 res.insert(ColumnWithTypeAndName{std::move(column), cd.type, cd.name, cd.id});
             }

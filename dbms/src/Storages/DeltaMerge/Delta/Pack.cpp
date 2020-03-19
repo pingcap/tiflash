@@ -1,11 +1,10 @@
-#include <common/logger_useful.h>
-
 #include <IO/CompressedReadBuffer.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Storages/DeltaMerge/Delta/Pack.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 #include <Storages/Page/PageStorage.h>
+#include <common/logger_useful.h>
 
 namespace DB::DM
 {
@@ -278,8 +277,7 @@ Columns readPackFromDisk(const PackPtr &       pack, //
 
     auto page_map = page_reader.read({fields});
     Page page     = page_map[pack->data_page];
-
-    for (size_t index = col_start, id_offset = 0; index < col_end; ++index)
+    for (size_t index = col_start; index < col_end; ++index)
     {
         const size_t index_in_read_columns = index - col_start;
         if (columns[index_in_read_columns] != nullptr)
@@ -297,8 +295,6 @@ Columns readPackFromDisk(const PackPtr &       pack, //
         deserializeColumn(*col_data, type, data_buf, pack->rows);
 
         columns[index_in_read_columns] = convertColumnByColumnDefineIfNeed(type, std::move(col_data), cd);
-
-        ++id_offset;
     }
 
     return columns;

@@ -243,16 +243,8 @@ void RegionTable::removeRegion(const RegionID region_id)
     {
         TableID table_id = it->second;
         auto & table = tables.find(table_id)->second;
-        regions.erase(it);
-        table.regions.erase(region_id);
-        if (table.regions.empty())
-        {
-            /// All regions of this table is removed, the storage maybe drop or pd
-            /// move it to another node.
-            table_to_optimize.insert(table_id);
-            tables.erase(table_id);
-        }
-        else
+
+        do
         {
             /// Some region of this table is removed, if it is a DeltaTree, write deleteRange.
 
@@ -264,20 +256,30 @@ void RegionTable::removeRegion(const RegionID region_id)
             {
                 // acquire lock so that no other threads can change storage's structure
                 auto storage_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
-                // Check if it dropped by other thread
+                // Check if it has been dropped by other thread
                 if (storage->is_dropped)
-                    return;
+                    break; // continue to remove region on `regions`, `table.regions`
 
                 auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
                 auto region_it = table.regions.find(region_id);
-                if (region_it == table.regions.end())
-                    return;
-                HandleRange<HandleID> handle_range = region_it->second.range_in_table;
+                if (dm_storage == nullptr || region_it == table.regions.end())
+                    break;
 
+                HandleRange<HandleID> handle_range = region_it->second.range_in_table;
                 auto dm_handle_range = toDMHandleRange(handle_range);
                 dm_storage->deleteRange(dm_handle_range, context->getSettingsRef());
-                dm_storage->flushCache(*context, dm_handle_range);
+                dm_storage->flushCache(*context, dm_handle_range); // flush to disk
             }
+        } while (0);
+
+        regions.erase(it);
+        table.regions.erase(region_id);
+        if (table.regions.empty())
+        {
+            /// All regions of this table is removed, the storage maybe drop or pd
+            /// move it to another node, we can optimize outdated data.
+            table_to_optimize.insert(table_id);
+            tables.erase(table_id);
         }
     }
 }
