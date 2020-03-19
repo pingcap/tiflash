@@ -451,27 +451,41 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     const auto & regions = dag.getRegions();
     for (auto & r : regions)
     {
+        if (r.key_ranges.empty())
+        {
+            /// todo should throw exception as it should not happen
+            LOG_WARNING(log, "Income key ranges is empty for region: " + std::to_string(r.region_id) + " ignore this region");
+            continue;
+        }
         RegionQueryInfo info;
         info.region_id = r.region_id;
         info.version = r.region_version;
         info.conf_version = r.region_conf_version;
+        for (const auto & p : r.key_ranges)
+        {
+            TiKVRange::Handle start = TiKVRange::getRangeHandle<true>(p.first, table_id);
+            TiKVRange::Handle end = TiKVRange::getRangeHandle<false>(p.second, table_id);
+            info.required_handle_ranges.emplace_back(std::make_pair(start, end));
+        }
         auto current_region = context.getTMTContext().getKVStore()->getRegion(info.region_id);
-        if (!current_region)
+        auto region_read_status = getRegionReadStatus(current_region);
+        if (region_read_status != RegionException::OK)
         {
             std::vector<RegionID> region_ids;
+            region_ids.reserve(regions.size());
             for (auto & rr : regions)
             {
                 region_ids.push_back(rr.region_id);
             }
+            LOG_WARNING(log, __PRETTY_FUNCTION__ << " Meet region exception for region " << info.region_id);
             throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
         }
         info.range_in_table = current_region->getHandleRangeByTable(table_id);
         query_info.mvcc_query_info->regions_query_info.push_back(info);
     }
-    query_info.mvcc_query_info->concurrent = regions.size() > 1 ? 1.0 : 0.0;
-    //    RegionQueryInfo info;
-    //    info.region_id = region_info.region_id;
-    //    info.version = region_info.region_version;
+    if (query_info.mvcc_query_info->regions_query_info.empty())
+        throw Exception("Dag Request does not have region to read. ", ErrorCodes::COP_BAD_DAG_REQUEST);
+    query_info.mvcc_query_info->concurrent = query_info.mvcc_query_info->regions_query_info.size() > 1 ? 1.0 : 0.0;
     //    info.conf_version = region_info.region_conf_version;
     //    info.range_in_table = current_region->getHandleRangeByTable(table_id);
     //    query_info.mvcc_query_info->regions_query_info.push_back(info);
@@ -484,16 +498,6 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     else
     {
         throw Exception("Should not reach here", ErrorCodes::LOGICAL_ERROR);
-        //std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
-        //for (auto & range : ts.ranges())
-        //{
-        //    std::string start_key(range.low());
-        //    DecodedTiKVKey start(std::move(start_key));
-        //    std::string end_key(range.high());
-        //    DecodedTiKVKey end(std::move(end_key));
-        //    key_ranges.emplace_back(std::make_pair(std::move(start), std::move(end)));
-        //}
-        //pipeline.streams = storage->remote_read(key_ranges, query_info, ts, context);
     }
     LOG_INFO(log, "dag execution stream size: " << regions.size());
 
@@ -563,11 +567,6 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     if (join_type_it == join_type_map.end())
         throw Exception("Unknown join type in dag request", ErrorCodes::COP_BAD_DAG_REQUEST);
     ASTTableJoin::Kind kind = join_type_it->second;
-    if (kind != ASTTableJoin::Kind::Inner)
-    {
-        // todo support left and right join
-        throw Exception("Only Inner join is supported", ErrorCodes::NOT_IMPLEMENTED);
-    }
 
     BlockInputStreams left_streams;
     BlockInputStreams right_streams;
@@ -589,6 +588,13 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
         left_streams = input_streams_vec[0];
         right_streams = input_streams_vec[1];
     }
+
+    if (kind != ASTTableJoin::Kind::Inner)
+    {
+        // todo support left and right join
+        throw Exception("Only Inner join is supported", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     std::vector<NameAndTypePair> join_output_columns;
     for (auto const & p : input_streams_vec[0][0]->getHeader().getNamesAndTypesList())
     {
@@ -640,6 +646,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     ExpressionActionsChain chain;
     dag_analyzer.appendJoin(chain, right_query, columns_added_by_join);
     pipeline.streams = left_streams;
+    /// add join input stream
     for (auto & stream : pipeline.streams)
         stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions());
 
@@ -1048,10 +1055,10 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
         key_ranges.emplace_back(std::make_pair(std::move(start), std::move(end)));
     }
     std::vector<pingcap::coprocessor::KeyRange> cop_key_ranges;
+    cop_key_ranges.reserve(key_ranges.size());
     for (const auto & key_range : key_ranges)
     {
-        cop_key_ranges.push_back(
-            pingcap::coprocessor::KeyRange{static_cast<String>(key_range.first), static_cast<String>(key_range.second)});
+        cop_key_ranges.emplace_back(static_cast<String>(key_range.first), static_cast<String>(key_range.second));
     }
 
     ::tipb::DAGRequest dag_req;

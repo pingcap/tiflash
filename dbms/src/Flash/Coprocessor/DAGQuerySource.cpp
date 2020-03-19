@@ -73,28 +73,28 @@ DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, co
      */
     //if (dag_request.has_executor_tree())
     //{
-    //    query_block_tree = std::make_shared<DAGQueryBlock>(1, &dag_request.executor_tree());
+    //    root_query_block = std::make_shared<DAGQueryBlock>(1, &dag_request.executor_tree());
     //}
     //else
     //{
     //    std::vector<const tipb::Executor *> executors;
     //    for (const tipb::Executor & executor : dag_request.executors())
     //        executors.push_back(&executor);
-    //    query_block_tree = std::make_shared<DAGQueryBlock>(1, executors, 0, (int)executors.size() - 1);
+    //    root_query_block = std::make_shared<DAGQueryBlock>(1, executors, 0, (int)executors.size() - 1);
     //}
-    query_block_tree = std::make_shared<DAGQueryBlock>(1, &dag_request.executors(0));
+    root_query_block = std::make_shared<DAGQueryBlock>(1, &dag_request.executors(0));
     for (Int32 i : dag_request.output_offsets())
-        query_block_tree->output_offsets.push_back(i);
-    if (query_block_tree->aggregation != nullptr)
+        root_query_block->output_offsets.push_back(i);
+    if (root_query_block->aggregation != nullptr)
     {
-        for (auto & field_type : query_block_tree->output_field_types)
+        for (auto & field_type : root_query_block->output_field_types)
             result_field_types.push_back(field_type);
     }
     else
     {
         for (UInt32 i : dag_request.output_offsets())
         {
-            result_field_types.push_back(query_block_tree->output_field_types[i]);
+            result_field_types.push_back(root_query_block->output_field_types[i]);
         }
     }
     //analyzeResultFieldTypes();

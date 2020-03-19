@@ -349,7 +349,7 @@ RegionMap doLearnerRead(const TiDB::TableID table_id,           //
         {
             if (region == nullptr)
                 continue;
-            regions_info.emplace_back(RegionQueryInfo{id, region->version(), region->confVer(), {0, 0}});
+            regions_info.emplace_back(RegionQueryInfo{id, region->version(), region->confVer(), {0, 0}, {}});
         }
     }
 

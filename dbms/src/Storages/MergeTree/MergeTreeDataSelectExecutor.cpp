@@ -183,6 +183,100 @@ struct RegionExecutorData
     bool operator<(const RegionExecutorData & o) const { return info < o.info; }
 };
 
+template <typename HandleType>
+bool isFullRegionScan(std::vector<HandleRange<HandleType>> & dag_required_handle_ranges, std::vector<HandleRange<HandleType>> & region_ranges)
+{
+    std::sort(dag_required_handle_ranges.begin(), dag_required_handle_ranges.end(),
+              [](const HandleRange<HandleType> & a, const HandleRange<HandleType> & b) { return a.first < b.first; });
+    bool need_merge = false;
+    for(size_t i = 0; i < dag_required_handle_ranges.size()-1; i++)
+        need_merge |= dag_required_handle_ranges[i].second >= dag_required_handle_ranges[i+1].first;
+    if (need_merge)
+    {
+        // merge dag_required_handle_ranges
+        size_t new_size = 0;
+        HandleRange<HandleType> current_range;
+        current_range.first = dag_required_handle_ranges[0].first;
+        current_range.second = dag_required_handle_ranges[0].second;
+        for (size_t i = 1; i < dag_required_handle_ranges.size(); i++)
+        {
+            if (current_range.second >= dag_required_handle_ranges[i].first)
+                current_range.second = current_range.second >= dag_required_handle_ranges[i].second ? current_range.second : dag_required_handle_ranges[i].second;
+            else
+            {
+                if (current_range.second > current_range.first)
+                    dag_required_handle_ranges[new_size++] = current_range;
+                current_range.first = dag_required_handle_ranges[i].first;
+                current_range.second = dag_required_handle_ranges[i].second;
+            }
+        }
+        if (current_range.second > current_range.first)
+            dag_required_handle_ranges[new_size++] = current_range;
+        dag_required_handle_ranges.resize(new_size);
+    }
+
+    bool ret = true;
+    for (const auto & region_range : region_ranges)
+    {
+        bool covered = false;
+        for (const auto & range : dag_required_handle_ranges)
+        {
+            if (region_range.first >= range.first && region_range.second <= range.second)
+            {
+                covered = true;
+                break;
+            }
+        }
+        if (!covered && region_range.second > region_range.first)
+        {
+            ret = false;
+            break;
+        }
+    }
+    return ret;
+}
+
+template <typename HandleType>
+void checkAndExtractDAGHandleRanges(std::unordered_map<RegionID, std::vector<HandleRange<HandleType>>> & dag_handle_ranges_map,
+                                   std::vector<RegionExecutorData> & regions)  {
+    for(auto & r : regions)
+    {
+        if (r.info.required_handle_ranges.empty())
+        {
+            dag_handle_ranges_map[r.info.region_id] = {};
+            continue;
+        }
+        if constexpr (std::is_unsigned_v<HandleType>)
+        {
+            std::vector<HandleRange<HandleType>> dag_handle_ranges;
+            for(const auto & dag_range : r.info.required_handle_ranges)
+            {
+                const auto [n, new_range]
+                = CHTableHandle::splitForUInt64TableHandle(dag_range);
+                for (int i = 0; i < n; i++)
+                    dag_handle_ranges.push_back(new_range[i]);
+            }
+            std::vector<HandleRange<HandleType>> region_ranges;
+            const auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(r.info.range_in_table);
+            for(int i = 0; i < n; i++)
+                region_ranges.push_back(new_range[i]);
+            if (isFullRegionScan<HandleType>(dag_handle_ranges, region_ranges))
+                dag_handle_ranges_map[r.info.region_id] = {};
+            else
+                dag_handle_ranges_map[r.info.region_id] = dag_handle_ranges;
+        }
+        else
+        {
+            std::vector<HandleRange<HandleType>> region_ranges;
+            region_ranges.push_back(r.info.range_in_table);
+            if (isFullRegionScan<HandleType>(r.info.required_handle_ranges, region_ranges))
+                dag_handle_ranges_map[r.info.region_id] = {};
+            else
+                dag_handle_ranges_map[r.info.region_id] = r.info.required_handle_ranges;
+        }
+    }
+}
+
 BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_to_return,
     const SelectQueryInfo & query_info,
     const Context & context,
@@ -217,6 +311,12 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
     std::vector<std::vector<HandleRange<HandleID>>> region_group_handle_ranges;
     std::vector<std::vector<HandleRange<UInt64>>> region_group_u64_handle_ranges;
+
+    std::unordered_map<RegionID , std::vector<HandleRange<HandleID>>> dag_handle_ranges_map;
+    std::unordered_map<RegionID , std::vector<HandleRange<UInt64>>> dag_u64_handle_ranges_map;
+
+    std::vector<std::vector<std::vector<HandleRange<HandleID>>>> region_group_handle_ranges_vector;
+    std::vector<std::vector<std::vector<HandleRange<UInt64>>>> region_group_u64_handle_ranges_vector;
 
     Names tmt_column_names_to_read;
 
@@ -303,7 +403,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
             regions_executor_data.reserve(regions.size());
             for (const auto & [id, region] : regions)
             {
-                regions_executor_data.emplace_back(RegionQueryInfo{id, region->version(), region->confVer(), {0, 0}});
+                regions_executor_data.emplace_back(
+                        RegionQueryInfo{id, region->version(), region->confVer(), {0, 0}, {}});
             }
         }
 
@@ -322,6 +423,11 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         // make sure regions are not duplicated.
         if (kvstore_region.size() != regions_executor_data.size())
             throw Exception("Duplicate region id", ErrorCodes::LOGICAL_ERROR);
+
+        if (pk_type == TMTPKType::UINT64)
+            checkAndExtractDAGHandleRanges<UInt64>(dag_u64_handle_ranges_map, regions_executor_data);
+        else
+            checkAndExtractDAGHandleRanges<Int64>(dag_handle_ranges_map, regions_executor_data);
 
         { // learner read
 
@@ -479,9 +585,15 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         region_group_range_parts.assign(concurrent_num, {});
         region_group_mem_block.assign(concurrent_num, {});
         if (pk_type == TMTPKType::UINT64)
+        {
             region_group_u64_handle_ranges.assign(concurrent_num, {});
+            region_group_u64_handle_ranges_vector.assign(concurrent_num, {});
+        }
         else
+        {
             region_group_handle_ranges.assign(concurrent_num, {});
+            region_group_handle_ranges_vector.assign(concurrent_num, {});
+        }
     }
 
     size_t part_index = 0;
@@ -910,8 +1022,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
             if (pk_type == TMTPKType::UINT64)
             {
-                using UInt64RangeElement = std::pair<HandleRange<UInt64>, size_t>;
-                std::vector<UInt64RangeElement> handle_ranges;
+                std::vector<RegionHandleRangeInfo<UInt64>> handle_ranges;
                 handle_ranges.reserve(thread_region_size);
 
                 for (size_t region_index = region_begin, region_end = region_begin + thread_region_size; region_index < region_end;
@@ -923,13 +1034,16 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     if (n != 1)
                         throw Exception("split for uint64 handle should be only 1 ranges", ErrorCodes::LOGICAL_ERROR);
 
-                    handle_ranges.emplace_back(new_range[0], region_index);
+                    auto region_id = regions_executor_data[region_index].info.region_id;
+                    handle_ranges.emplace_back(RegionHandleRangeInfo<UInt64>(new_range[0], region_index,
+                            dag_u64_handle_ranges_map[region_id].empty()));
                     mem_rows += regions_executor_data[region_index].block.rows();
                 }
 
                 // the order of uint64 is different with int64.
                 std::sort(handle_ranges.begin(), handle_ranges.end(),
-                    [](const UInt64RangeElement & a, const UInt64RangeElement & b) { return a.first < b.first; });
+                    [](const RegionHandleRangeInfo<UInt64> & a, const RegionHandleRangeInfo<UInt64> & b)
+                    { return a.handle_range < b.handle_range; });
 
                 computeHandleRanges<UInt64>(region_group_mem_block[thread_idx],
                     handle_ranges,
@@ -943,13 +1057,15 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
             }
             else
             {
-                std::vector<std::pair<HandleRange<HandleID>, size_t>> handle_ranges;
+                std::vector<RegionHandleRangeInfo<Int64>> handle_ranges;
                 handle_ranges.reserve(thread_region_size);
 
                 for (size_t region_index = region_begin, region_end = region_begin + thread_region_size; region_index < region_end;
                      ++region_index)
                 {
-                    handle_ranges.emplace_back(regions_executor_data[region_index].info.range_in_table, region_index);
+                    auto region_id = regions_executor_data[region_index].info.region_id;
+                    handle_ranges.emplace_back(RegionHandleRangeInfo<Int64>(regions_executor_data[region_index].info.range_in_table,
+                            region_index, dag_handle_ranges_map[region_id].empty()));
                     mem_rows += regions_executor_data[region_index].block.rows();
                 }
 

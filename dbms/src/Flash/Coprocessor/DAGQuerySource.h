@@ -101,7 +101,7 @@ public:
 
     tipb::EncodeType getEncodeType() const { return encode_type; }
 
-    std::shared_ptr<DAGQueryBlock> getQueryBlock() const { return query_block_tree; }
+    std::shared_ptr<DAGQueryBlock> getQueryBlock() const { return root_query_block; }
     const std::vector<RegionInfo> & getRegions() const { return regions; }
 
     StreamWriterPtr writer;
@@ -136,7 +136,7 @@ protected:
 
     std::vector<tipb::FieldType> result_field_types;
     tipb::EncodeType encode_type;
-    std::shared_ptr<DAGQueryBlock> query_block_tree;
+    std::shared_ptr<DAGQueryBlock> root_query_block;
     ASTPtr ast;
 };
 
