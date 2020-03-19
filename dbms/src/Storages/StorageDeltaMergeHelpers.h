@@ -34,60 +34,72 @@ inline DM::HandleRange toDMHandleRange(const HandleRange<HandleID> & range)
 
 inline DM::HandleRanges getQueryRanges(const DB::MvccQueryInfo::RegionsQueryInfo & regions)
 {
+    std::vector<HandleRange<HandleID>> handle_ranges;
+    for (const auto & region_info : regions)
+    {
+        if (!region_info.required_handle_ranges.empty())
+        {
+            for (const auto & handle_range : region_info.required_handle_ranges)
+                handle_ranges.push_back(handle_range);
+        }
+        else
+        {
+            handle_ranges.push_back(region_info.range_in_table);
+        }
+    }
     DM::HandleRanges ranges;
-    if (regions.empty())
+    if (handle_ranges.empty())
     {
         // Just for test cases
         ranges.emplace_back(DB::DM::HandleRange::newAll());
         return ranges;
     }
-    else if (regions.size() == 1)
+    else if (handle_ranges.size() == 1)
     {
         // Shortcut for only one region info
-        const auto & range_in_table = regions[0].range_in_table;
+        const auto & range_in_table = handle_ranges[0];
         ranges.emplace_back(toDMHandleRange(range_in_table));
         return ranges;
     }
 
     // Init index with [0, n)
     // http: //www.cplusplus.com/reference/numeric/iota/
-    std::vector<size_t> sort_index(regions.size());
+    std::vector<size_t> sort_index(handle_ranges.size());
     std::iota(sort_index.begin(), sort_index.end(), 0);
 
     std::sort(sort_index.begin(), sort_index.end(), //
-        [&regions](const size_t lhs, const size_t rhs) { return regions[lhs] < regions[rhs]; });
+        [&handle_ranges](const size_t lhs, const size_t rhs) { return handle_ranges[lhs] < handle_ranges[rhs]; });
 
-    ranges.reserve(regions.size());
+    ranges.reserve(handle_ranges.size());
 
     DM::HandleRange current;
-    for (size_t i = 0; i < regions.size(); ++i)
+    for (size_t i = 0; i < handle_ranges.size(); ++i)
     {
         const size_t region_idx = sort_index[i];
-        const auto & region = regions[region_idx];
-        const auto & range_in_table = region.range_in_table;
+        const auto & handle_range = handle_ranges[region_idx];
 
         if (i == 0)
         {
-            current.start = range_in_table.first.handle_id;
-            current.end = getRangeEndID(range_in_table.second);
+            current.start = handle_range.first.handle_id;
+            current.end = getRangeEndID(handle_range.second);
         }
-        else if (current.end == range_in_table.first.handle_id)
+        else if (current.end == handle_range.first.handle_id)
         {
             // concat this range_in_table to current
-            current.end = getRangeEndID(range_in_table.second);
+            current.end = getRangeEndID(handle_range.second);
         }
-        else if (current.end < range_in_table.first.handle_id)
+        else if (current.end < handle_range.first.handle_id)
         {
             ranges.emplace_back(current);
 
             // start a new range
-            current.start = range_in_table.first.handle_id;
-            current.end = getRangeEndID(range_in_table.second);
+            current.start = handle_range.first.handle_id;
+            current.end = getRangeEndID(handle_range.second);
         }
         else
         {
             throw Exception("Overlap region range between " + current.toString() + " and [" //
-                + range_in_table.first.toString() + "," + range_in_table.second.toString() + ")");
+                + handle_range.first.toString() + "," + handle_range.second.toString() + ")");
         }
     }
     ranges.emplace_back(current);
