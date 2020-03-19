@@ -24,7 +24,7 @@ class RegionScanFilter {
     std::vector<HandleRange<Int64>> int64_ranges;
     std::vector<HandleRange<UInt64>> uint64_ranges;
 
-    bool checkRanges(UInt64 handle)
+    bool isValidHandle(UInt64 handle)
     {
         for(const auto & range : uint64_ranges)
         {
@@ -35,7 +35,7 @@ class RegionScanFilter {
         }
         return false;
     }
-    bool checkRanges(Int64 handle)
+    bool isValidHandle(Int64 handle)
     {
         for(const auto & range : int64_ranges)
         {
@@ -51,11 +51,11 @@ public:
     : is_full_range_scan(is_full_range_scan_), int64_ranges(std::move(int64_ranges_)), uint64_ranges(std::move(uint64_ranges_)) {}
     bool filter(UInt64 handle)
     {
-        return !is_full_range_scan && !checkRanges(handle);
+        return !is_full_range_scan && !isValidHandle(handle);
     }
     bool filter(Int64 handle)
     {
-        return !is_full_range_scan && !checkRanges(handle);
+        return !is_full_range_scan && !isValidHandle(handle);
     }
     bool isFullRangeScan()
     {
