@@ -1,4 +1,3 @@
-#include <Common/TiFlashMetrics.h>
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
@@ -24,7 +23,6 @@
 
 namespace ProfileEvents
 {
-extern const Event DMWriteBytes;
 extern const Event DMWriteBlock;
 extern const Event DMWriteBlockNS;
 extern const Event DMPlace;
@@ -50,16 +48,7 @@ extern const Event DMSegmentMergeNS;
 extern const Event DMDeltaMerge;
 extern const Event DMDeltaMergeNS;
 
-extern const Event PSMWriteBytes;
-extern const Event WriteBufferFromFileDescriptorWriteBytes;
-extern const Event WriteBufferAIOWriteBytes;
-
 } // namespace ProfileEvents
-
-namespace CurrentMetrics
-{
-extern const Metric DT_WriteAmplification;
-}
 
 namespace DB
 {
@@ -218,23 +207,9 @@ void Segment::serialize(WriteBatch & wb)
     wb.putPage(segment_id, 0, buf.tryGetReadBuffer(), data_size);
 }
 
-void recordWriteBytes(const Context & context, UInt64 bytes)
-{
-    ProfileEvents::increment(ProfileEvents::DMWriteBytes, bytes);
-
-    // Also update the write amplification
-    auto total_write  = ProfileEvents::counters[ProfileEvents::DMWriteBytes].load(std::memory_order_relaxed);
-    auto actual_write = ProfileEvents::counters[ProfileEvents::PSMWriteBytes].load(std::memory_order_relaxed)
-        + ProfileEvents::counters[ProfileEvents::WriteBufferFromFileDescriptorWriteBytes].load(std::memory_order_relaxed)
-        + ProfileEvents::counters[ProfileEvents::WriteBufferAIOWriteBytes].load(std::memory_order_relaxed);
-
-    GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_write_amplification).Set((double)actual_write / total_write);
-}
-
 bool Segment::writeToDisk(DMContext & dm_context, const PackPtr & pack)
 {
     LOG_TRACE(log, "Segment [" << segment_id << "] write to disk rows: " << pack->rows);
-    recordWriteBytes(dm_context.db_context, pack->bytes);
     return delta->appendToDisk(dm_context, pack);
 }
 
@@ -243,7 +218,6 @@ bool Segment::writeToCache(DMContext & dm_context, const Block & block, size_t o
     LOG_TRACE(log, "Segment [" << segment_id << "] write to cache rows: " << limit);
     if (unlikely(limit == 0))
         return true;
-    recordWriteBytes(dm_context.db_context, block.bytes() * ((double)limit / block.rows()));
     return delta->appendToCache(dm_context, block, offset, limit);
 }
 
