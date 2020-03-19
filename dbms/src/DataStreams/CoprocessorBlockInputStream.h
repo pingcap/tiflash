@@ -21,7 +21,6 @@ class CoprocessorBlockInputStream : public IProfilingBlockInputStream
             ColumnWithTypeAndName col(tp, name_and_column.first);
             columns.emplace_back(col);
         }
-        LOG_DEBUG(log, "header columns: " + std::to_string(columns.size()));
         return Block(columns);
     }
 
@@ -33,7 +32,9 @@ public:
           schema(schema_),
           sample_block(getSampleBlock()),
           log(&Logger::get("pingcap/coprocessor"))
-    {}
+    {
+        resp_iter.open();
+    }
 
     Block getHeader() const override { return sample_block; }
 

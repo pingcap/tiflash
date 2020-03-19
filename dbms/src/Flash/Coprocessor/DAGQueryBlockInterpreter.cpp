@@ -1081,8 +1081,7 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
 
     pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
     pingcap::kv::StoreType store_type = pingcap::kv::TiFlash;
-    BlockInputStreamPtr input = std::make_shared<LazyBlockInputStream>(sample_block,
-        [cluster, req, schema, store_type, this]() { return std::make_shared<CoprocessorBlockInputStream>(cluster, req, schema, context.getSettingsRef().max_threads, store_type); });
+    BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(cluster, req, schema, context.getSettingsRef().max_threads, store_type);
     pipeline.streams = {input};
 }
 
