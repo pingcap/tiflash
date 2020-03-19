@@ -24,7 +24,7 @@ class Context;
 class TMTContext;
 struct WriteCmdsView;
 enum TiFlashApplyRes : uint32_t;
-struct SnapshotDataView;
+struct SnapshotViewArray;
 
 /// Store all kv data of one region. Including 'write', 'data' and 'lock' column families.
 class Region : public std::enable_shared_from_this<Region>
@@ -160,7 +160,7 @@ public:
 
     TableID getMappedTableID() const;
     TiFlashApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, bool set_applied = true);
-    void handleIngestSST(const SnapshotDataView & write_buff, const SnapshotDataView & default_buff, UInt64 index, UInt64 term);
+    void handleIngestSST(const SnapshotViewArray snaps, UInt64 index, UInt64 term);
 
 private:
     Region() = delete;

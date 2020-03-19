@@ -182,9 +182,6 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
     TMTContext & tmt = context.getTMTContext();
 
     metapb::Region region_info;
-    SnapshotDataView lock_cf;
-    SnapshotDataView write_cf;
-    SnapshotDataView default_cf;
 
     region_info.set_id(region_id);
     region_info.set_start_key(RecordKVFormat::genKey(table_id, start).getStr());
@@ -194,14 +191,8 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
     *region_info.add_peers() = createPeer(2, true);
     auto peer_id = 1;
 
-    tmt.getKVStore()->handleApplySnapshot(std::move(region_info),
-        peer_id,
-        (lock_cf),
-        (write_cf),
-        (default_cf),
-        MockTiKV::instance().getRaftIndex(region_id),
-        RAFT_INIT_LOG_TERM,
-        tmt);
+    tmt.getKVStore()->handleApplySnapshot(
+        std::move(region_info), peer_id, SnapshotViewArray(), MockTiKV::instance().getRaftIndex(region_id), RAFT_INIT_LOG_TERM, tmt);
 
     std::stringstream ss;
     ss << "put region #" << region_id << ", range[" << start << ", " << end << ")"
@@ -375,11 +366,12 @@ void dbgFuncIngestSST(Context & context, const ASTs & args, DBGInvoker::Printer)
             keys.push_back({kv.first.data(), kv.first.dataSize()});
             vals.push_back({kv.second.data(), kv.second.dataSize()});
         }
-        SnapshotDataView write_buff{keys.data(), vals.data(), keys.size()}, default_buff;
+        std::vector<SnapshotView> snaps;
+        snaps.push_back(SnapshotView{keys.data(), vals.data(), ColumnFamilyType::Write, keys.size()});
 
         auto & tmt = context.getTMTContext();
-        tmt.getKVStore()->handleIngestSST(region_id, write_buff, default_buff, MockTiKV::instance().getRaftIndex(region_id),
-            MockTiKV::instance().getRaftTerm(region_id), tmt);
+        tmt.getKVStore()->handleIngestSST(region_id, SnapshotViewArray{snaps.data(), snaps.size()},
+            MockTiKV::instance().getRaftIndex(region_id), MockTiKV::instance().getRaftTerm(region_id), tmt);
     }
 
     {
@@ -390,10 +382,11 @@ void dbgFuncIngestSST(Context & context, const ASTs & args, DBGInvoker::Printer)
             keys.push_back({kv.first.data(), kv.first.dataSize()});
             vals.push_back({kv.second.data(), kv.second.dataSize()});
         }
-        SnapshotDataView write_buff, default_buff{keys.data(), vals.data(), keys.size()};
+        std::vector<SnapshotView> snaps;
+        snaps.push_back(SnapshotView{keys.data(), vals.data(), ColumnFamilyType::Default, keys.size()});
         auto & tmt = context.getTMTContext();
-        tmt.getKVStore()->handleIngestSST(region_id, write_buff, default_buff, MockTiKV::instance().getRaftIndex(region_id),
-            MockTiKV::instance().getRaftTerm(region_id), tmt);
+        tmt.getKVStore()->handleIngestSST(region_id, SnapshotViewArray{snaps.data(), snaps.size()},
+            MockTiKV::instance().getRaftIndex(region_id), MockTiKV::instance().getRaftTerm(region_id), tmt);
     }
 }
 

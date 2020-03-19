@@ -612,7 +612,7 @@ TiFlashApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 in
     return TiFlashApplyRes::None;
 }
 
-void Region::handleIngestSST(const SnapshotDataView & write_buff, const SnapshotDataView & default_buff, UInt64 index, UInt64 term)
+void Region::handleIngestSST(const SnapshotViewArray snaps, UInt64 index, UInt64 term)
 {
     if (index <= appliedIndex())
         return;
@@ -621,28 +621,18 @@ void Region::handleIngestSST(const SnapshotDataView & write_buff, const Snapshot
         std::unique_lock<std::shared_mutex> lock(mutex);
         std::lock_guard<std::mutex> predecode_lock(predecode_mutex);
 
-        struct CfData
+        for (UInt64 i = 0; i < snaps.len; ++i)
         {
-            ColumnFamilyType type;
-            const SnapshotDataView & data;
-        };
-        std::array<CfData, 2> cf_data_list
-            = {CfData{ColumnFamilyType::Write, (write_buff)}, CfData{ColumnFamilyType::Default, (default_buff)}};
-        for (const auto & cf_data : cf_data_list)
-        {
-            if (!cf_data.data.len)
-                continue;
+            auto & snapshot = snaps.views[i];
 
             LOG_INFO(log,
-                __FUNCTION__ << ": " << toString(false) << " begin to ingest sst of cf " << CFToName(cf_data.type) << " at [term: " << term
-                             << ", index: " << index << "], kv count " << cf_data.data.len);
-            for (UInt64 n = 0; n < cf_data.data.len; ++n)
+                __FUNCTION__ << ": " << toString(false) << " begin to ingest sst of cf " << CFToName(snapshot.cf) << " at [term: " << term
+                             << ", index: " << index << "], kv count " << snapshot.len);
+            for (UInt64 n = 0; n < snapshot.len; ++n)
             {
-                auto & k = cf_data.data.keys[n];
-                auto & v = cf_data.data.vals[n];
-                auto key = std::string(k.data, k.len);
-                auto value = std::string(v.data, v.len);
-                doInsert(cf_data.type, TiKVKey(std::move(key)), TiKVValue(std::move(value)));
+                auto & k = snapshot.keys[n];
+                auto & v = snapshot.vals[n];
+                doInsert(snapshot.cf, TiKVKey(k.data, k.len), TiKVValue(v.data, v.len));
             }
         }
         meta.setApplied(index, term);
