@@ -105,7 +105,8 @@ void setPKVersionDel(ColumnUInt8 & delmark_col,
     ColumnUInt64 & version_col,
     MutableColumnPtr & pk_column,
     const RegionDataReadInfoList & data_list,
-    const Timestamp tso)
+    const Timestamp tso,
+    RegionScanFilterPtr scan_filter)
 {
     ColumnUInt8::Container & delmark_data = delmark_col.getData();
     ColumnUInt64::Container & version_data = version_col.getData();
@@ -119,6 +120,18 @@ void setPKVersionDel(ColumnUInt8 & delmark_col,
 
         // Ignore data after the start_ts.
         if (commit_ts > tso)
+            continue;
+
+        bool should_skip;
+        if constexpr (pk_type == TMTPKType::INT64)
+        {
+            should_skip = scan_filter != nullptr && scan_filter->filter(static_cast<Int64>(handle));
+        }
+        else
+        {
+            should_skip = scan_filter != nullptr && scan_filter->filter(static_cast<UInt64>(handle));
+        }
+        if(should_skip)
             continue;
 
         delmark_data.emplace_back(write_type == Region::DelFlag);
@@ -138,7 +151,8 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
     const Names & column_names_to_read,
     RegionDataReadInfoList & data_list,
     Timestamp start_ts,
-    bool force_decode)
+    bool force_decode,
+    RegionScanFilterPtr scan_filter)
 {
     auto delmark_col = ColumnUInt8::create();
     auto version_col = ColumnUInt64::create();
@@ -217,7 +231,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                 break;
         }
 
-        func(*delmark_col, *version_col, column_map.getMutableColumnPtr(handle_col_id), data_list, start_ts);
+        func(*delmark_col, *version_col, column_map.getMutableColumnPtr(handle_col_id), data_list, start_ts, scan_filter);
     }
 
     // optimize for only need handle, tso, delmark.
