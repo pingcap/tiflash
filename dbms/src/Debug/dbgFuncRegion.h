@@ -50,5 +50,6 @@ void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Pri
 //   ./storage-client.sh "DBGInvoke remove_region(region_id)"
 void dbgFuncRemoveRegion(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
+void dbgFuncIngestSST(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
 } // namespace DB

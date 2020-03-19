@@ -561,10 +561,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         .fn_handle_apply_snapshot = HandleApplySnapshot,
         .fn_atomic_update_proxy = AtomicUpdateProxy,
         .fn_handle_destroy = HandleDestroy,
+        .fn_handle_ingest_sst = HandleIngestSST,
 
         // a special number, also defined in proxy
         .magic_number = 0x13579BDF,
-        .version = 2};
+        .version = 3};
 
     auto proxy_runner = std::thread([&proxy_conf, &log, &helper]() {
         if (!proxy_conf.inited)
