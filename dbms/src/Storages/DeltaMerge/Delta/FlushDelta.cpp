@@ -1,10 +1,25 @@
+#include <Common/TiFlashMetrics.h>
 #include <IO/CompressedReadBuffer.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <IO/MemoryReadWriteBuffer.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/Pack.h>
 #include <Storages/DeltaMerge/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
+
+namespace ProfileEvents
+{
+extern const Event DMWriteBytes;
+extern const Event PSMWriteBytes;
+extern const Event WriteBufferFromFileDescriptorWriteBytes;
+extern const Event WriteBufferAIOWriteBytes;
+} // namespace ProfileEvents
+
+namespace CurrentMetrics
+{
+extern const Metric DT_WriteAmplification;
+}
 
 namespace DB::DM
 {
@@ -27,6 +42,7 @@ bool DeltaValueSpace::flush(DMContext & context)
     WriteBatches   wbs(context.storage_pool);
 
     size_t flush_rows    = 0;
+    size_t flush_bytes   = 0;
     size_t flush_deletes = 0;
     {
         /// Prepare data which will be written to disk.
@@ -61,6 +77,7 @@ bool DeltaValueSpace::flush(DMContext & context)
                     task.data_page = writePackData(context, pack->cache->block, pack->cache_offset, pack->rows, wbs);
                 }
                 flush_rows += pack->rows;
+                flush_bytes += pack->bytes;
                 flush_deletes += pack->isDeleteRange();
             }
             total_rows += pack->rows;
@@ -200,6 +217,18 @@ bool DeltaValueSpace::flush(DMContext & context)
                   simpleInfo() << " Flush end. Flushed " << tasks.size() << " packs, " << flush_rows << " rows and " << flush_deletes
                                << " deletes.");
     }
+
+
+    ProfileEvents::increment(ProfileEvents::DMWriteBytes, flush_bytes);
+
+    // Also update the write amplification
+    auto total_write  = ProfileEvents::counters[ProfileEvents::DMWriteBytes].load(std::memory_order_relaxed);
+    auto actual_write = ProfileEvents::counters[ProfileEvents::PSMWriteBytes].load(std::memory_order_relaxed)
+        + ProfileEvents::counters[ProfileEvents::WriteBufferFromFileDescriptorWriteBytes].load(std::memory_order_relaxed)
+        + ProfileEvents::counters[ProfileEvents::WriteBufferAIOWriteBytes].load(std::memory_order_relaxed);
+
+    GET_METRIC(const_cast<Context &>(context.db_context).getTiFlashMetrics(), tiflash_write_amplification)
+        .Set((double)(actual_write / 1024 / 1024) / (total_write / 1024 / 1024));
 
     return true;
 }
