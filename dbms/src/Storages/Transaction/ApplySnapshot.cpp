@@ -1,7 +1,7 @@
 #include <Core/TMTPKType.h>
 #include <Interpreters/Context.h>
-#include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/StorageDeltaMerge.h>
+#include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/CHTableHandle.h>
 #include <Storages/Transaction/KVStore.h>
@@ -144,8 +144,8 @@ static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 peer_
     throw Exception(std::string(__PRETTY_FUNCTION__) + ": peer " + DB::toString(peer_id) + " not found", ErrorCodes::LOGICAL_ERROR);
 }
 
-void KVStore::handleApplySnapshot(metapb::Region && region, UInt64 peer_id, const SnapshotDataView & lock_buff,
-    const SnapshotDataView & write_buff, const SnapshotDataView & default_buff, UInt64 index, UInt64 term, TMTContext & tmt)
+void KVStore::handleApplySnapshot(
+    metapb::Region && region, UInt64 peer_id, const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt)
 {
     auto meta = ({
         auto peer = findPeer(region, peer_id);
@@ -163,24 +163,23 @@ void KVStore::handleApplySnapshot(metapb::Region && region, UInt64 peer_id, cons
     LOG_INFO(log, "Try to apply snapshot: " << new_region->toString(true));
 
     {
-        struct CfData
+        std::stringstream ss;
+
+        for (UInt64 i = 0; i < snaps.len; ++i)
         {
-            ColumnFamilyType type;
-            const SnapshotDataView & data;
-        };
-        CfData cf_data[3]
-            = {{ColumnFamilyType::Lock, (lock_buff)}, {ColumnFamilyType::Default, (default_buff)}, {ColumnFamilyType::Write, (write_buff)}};
-        for (auto i = 0; i < 3; ++i)
-        {
-            for (UInt64 n = 0; n < cf_data[i].data.len; ++n)
+            auto & snapshot = snaps.views[i];
+            for (UInt64 n = 0; n < snapshot.len; ++n)
             {
-                auto & k = cf_data[i].data.keys[n];
-                auto & v = cf_data[i].data.vals[n];
-                auto key = std::string(k.data, k.len);
-                auto value = std::string(v.data, v.len);
-                new_region->insert(cf_data[i].type, TiKVKey(std::move(key)), TiKVValue(std::move(value)));
+                auto & k = snapshot.keys[n];
+                auto & v = snapshot.vals[n];
+                new_region->insert(snapshot.cf, TiKVKey(k.data, k.len), TiKVValue(v.data, v.len));
             }
+
+            ss << "[cf: " << CFToName(snapshot.cf) << ", kv size: " << snapshot.len << "]; ";
         }
+
+        if (snaps.len)
+            LOG_INFO(log, "Insert snapshot " << ss.str());
     }
 
     new_region->tryPreDecodeTiKVValue(tmt);
@@ -188,6 +187,40 @@ void KVStore::handleApplySnapshot(metapb::Region && region, UInt64 peer_id, cons
     bool status = tryApplySnapshot(new_region, tmt.getContext(), true);
 
     LOG_INFO(log, new_region->toString(false) << " apply snapshot " << (status ? "success" : "fail"));
+}
+
+void KVStore::handleIngestSST(UInt64 region_id, const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt)
+{
+    auto region_task_lock = region_manager.genRegionTaskLock(region_id);
+
+    const RegionPtr region = getRegion(region_id);
+
+    if (region == nullptr)
+        throw Exception(std::string(__PRETTY_FUNCTION__) + ": region " + std::to_string(region_id) + " is not found");
+
+    const auto func_try_flush = [&]() {
+        if (!region->writeCFCount())
+            return;
+        try
+        {
+            tmt.getRegionTable().tryFlushRegion(region, false);
+            tryFlushRegionCacheInStorage(tmt, *region, log);
+        }
+        catch (Exception & e)
+        {
+            // sst of write cf may be ingested first, exception may be raised because there is no matched data in default cf.
+            // ignore it.
+            LOG_DEBUG(log, __FUNCTION__ << ": catch but ignore exception: " << e.message());
+        }
+    };
+
+    // try to flush remain data in memory.
+    func_try_flush();
+    region->handleIngestSST(snaps, index, term);
+    region->tryPreDecodeTiKVValue(tmt);
+    func_try_flush();
+
+    region_persister.persist(*region, region_task_lock);
 }
 
 } // namespace DB
