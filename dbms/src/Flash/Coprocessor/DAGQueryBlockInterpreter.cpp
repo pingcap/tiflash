@@ -1148,7 +1148,7 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
         //recordProfileStreams(pipeline, dag.getLimitIndex());
     }
 
-    if (dag.writer != nullptr && query_block.isRootQueryBlock())
+    if (dag.writer->writer != nullptr && query_block.isRootQueryBlock())
     {
         for (auto & stream : pipeline.streams)
             stream = std::make_shared<StreamingDAGBlockInputStream>(stream, dag.writer, context.getSettings().dag_records_per_chunk,

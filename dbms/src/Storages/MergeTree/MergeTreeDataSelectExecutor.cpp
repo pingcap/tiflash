@@ -1187,7 +1187,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
                 auto & range_parts = region_group_range_parts[thread_idx];
                 auto & read_groups = region_group_read_groups[thread_idx];
-                for (size_t read_group_idx = 0; read_groups.size(); ++read_group_idx)
+                for (size_t read_group_idx = 0; read_group_idx < read_groups.size(); ++read_group_idx)
                 {
                     auto & read_group = read_groups[read_group_idx];
                     BlockInputStreams merging;
