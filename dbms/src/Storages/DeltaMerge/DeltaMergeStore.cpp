@@ -389,7 +389,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         offset += limit;
     }
 
-    if (db_settings.dm_flush_after_write)
+    if (db_settings.dt_flush_after_write)
     {
         HandleRange merge_range = HandleRange::newNone();
         for (auto & segment : updated_segments)
@@ -595,7 +595,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
             MAX_UINT64,
             DEFAULT_BLOCK_SIZE,
             true,
-            db_settings.dm_raw_filter_range);
+            db_settings.dt_raw_filter_range);
         res.push_back(stream);
     }
     return res;
@@ -718,7 +718,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
             max_version,
             expected_block_size,
             false,
-            db_settings.dm_raw_filter_range);
+            db_settings.dt_raw_filter_range);
         res.push_back(stream);
     }
 
