@@ -41,7 +41,7 @@ mkdir -p ${SRCPATH}/libs/libtiflash-proxy
 # upload: curl -F builds/pingcap/tiflash-proxy/{commit-hash}/libtiflash_proxy.so=@libtiflash_proxy.so http://fileserver.pingcap.net/upload
 
 curl -o "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" \
-http://fileserver.pingcap.net/download/builds/pingcap/tiflash-proxy/c766f4f5299b0dea931c270a27ea19627f236715/libtiflash_proxy.so
+http://fileserver.pingcap.net/download/builds/pingcap/tiflash-proxy/438f932f1fd9576c2ccc57c7b60efe00a298485d/libtiflash_proxy.so
 chmod 0731 "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so"
 
 build_dir="$SRCPATH/release-centos7/build-release"
