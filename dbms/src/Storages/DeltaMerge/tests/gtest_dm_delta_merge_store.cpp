@@ -496,7 +496,7 @@ try
     // Mock dm_segment_rows for test
     // if rows > 8 will split
     // if left->rows < 2 && right->rows + left->rows < 4 will merge
-    settings.dm_segment_limit_rows = 4;
+    settings.dt_segment_limit_rows = 4;
 
     {
         store->check(*context);
@@ -698,10 +698,10 @@ try
 {
     // set some params to smaller threshold so that we can trigger split faster
     auto settings                              = context->getSettings();
-    settings.dm_segment_limit_rows             = 11;
-    settings.dm_segment_delta_limit_rows       = 7;
-    settings.dm_segment_delta_cache_limit_rows = 4;
-    settings.dm_segment_stable_pack_rows       = 10;
+    settings.dt_segment_limit_rows             = 11;
+    settings.dt_segment_delta_limit_rows       = 7;
+    settings.dt_segment_delta_cache_limit_rows = 4;
+    settings.dt_segment_stable_pack_rows       = 10;
 
     size_t num_rows_write_in_total = 0;
 
