@@ -1002,7 +1002,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 {
     LOG_DEBUG(log, "Split segment " << segment->info());
 
-    SegmentSnapshot segment_snap;
+    SegmentSnapshotPtr segment_snap;
 
     {
         std::shared_lock lock(read_write_mutex);
@@ -1079,8 +1079,8 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
 {
     LOG_DEBUG(log, "Merge Segment [" << left->info() << "] and [" << right->info() << "]");
 
-    SegmentSnapshot left_snap;
-    SegmentSnapshot right_snap;
+    SegmentSnapshotPtr left_snap;
+    SegmentSnapshotPtr right_snap;
 
     {
         std::shared_lock lock(read_write_mutex);
@@ -1161,7 +1161,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
 {
     LOG_DEBUG(log, (is_foreground ? "Foreground" : "Background") << " merge delta, segment [" << segment->segmentId() << "]");
 
-    SegmentSnapshot segment_snap;
+    SegmentSnapshotPtr segment_snap;
 
     {
         std::shared_lock lock(read_write_mutex);
