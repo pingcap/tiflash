@@ -317,7 +317,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
     const std::string handle_col_name = is_txn_engine ? data.getPrimarySortDescription()[0].column_name : "";
     size_t region_cnt = 0;
     std::vector<std::vector<RangesInDataParts>> region_group_range_parts;
-    std::vector<std::vector<std::deque<size_t>>> region_group_mem_block;
+    std::vector<std::vector<ReadGroup>> region_group_read_groups;
 
     std::vector<std::vector<HandleRange<HandleID>>> region_group_handle_ranges;
     std::vector<std::vector<HandleRange<UInt64>>> region_group_u64_handle_ranges;
@@ -585,7 +585,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         }
 
         region_group_range_parts.assign(concurrent_num, {});
-        region_group_mem_block.assign(concurrent_num, {});
+        region_group_read_groups.assign(concurrent_num, {});
         if (pk_type == TMTPKType::UINT64)
             region_group_u64_handle_ranges.assign(concurrent_num, {});
         else
@@ -1018,29 +1018,39 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
             if (pk_type == TMTPKType::UINT64)
             {
-                std::vector<RegionHandleRangeInfo<UInt64>> handle_ranges;
+                using UInt64RangeElement = std::pair<HandleRange<UInt64>, size_t>;
+                std::vector<UInt64RangeElement> handle_ranges;
                 handle_ranges.reserve(thread_region_size);
 
                 for (size_t region_index = region_begin, region_end = region_begin + thread_region_size; region_index < region_end;
                      ++region_index)
                 {
-                    auto & region_data = regions_executor_data[region_index];
-                    const auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(region_data.info.range_in_table);
+                    const auto & region_data = regions_executor_data[region_index];
+                    if (region_data.range_scan_filter->isFullRangeScan())
+                    {
+                        const auto[n, new_range]
+                        = CHTableHandle::splitForUInt64TableHandle(
+                                region_data.info.range_in_table);
 
-                    if (n != 1)
-                        throw Exception("split for uint64 handle should be only 1 ranges", ErrorCodes::LOGICAL_ERROR);
+                        if (n != 1)
+                            throw Exception("split for uint64 handle should be only 1 ranges",
+                                            ErrorCodes::LOGICAL_ERROR);
 
-                    handle_ranges.emplace_back(RegionHandleRangeInfo<UInt64>(new_range[0], region_index,
-                            region_data.range_scan_filter->isFullRangeScan()));
+                        handle_ranges.emplace_back(new_range[0], region_index);
+                    }
+                    else
+                    {
+                        for (const HandleRange<UInt64> & handle_range : region_data.range_scan_filter->getUInt64Ranges())
+                            handle_ranges.emplace_back(handle_range, region_index);
+                    }
                     mem_rows += region_data.block.rows();
                 }
 
                 // the order of uint64 is different with int64.
                 std::sort(handle_ranges.begin(), handle_ranges.end(),
-                    [](const RegionHandleRangeInfo<UInt64> & a, const RegionHandleRangeInfo<UInt64> & b)
-                    { return a.handle_range < b.handle_range; });
+                    [](const UInt64RangeElement & a, const UInt64RangeElement & b) { return a.first < b.first; });
 
-                computeHandleRanges<UInt64>(region_group_mem_block[thread_idx],
+                computeHandleRanges<UInt64>(region_group_read_groups[thread_idx],
                     handle_ranges,
                     region_group_range_parts[thread_idx],
                     region_group_u64_handle_ranges[thread_idx],
@@ -1052,21 +1062,26 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
             }
             else
             {
-                std::vector<RegionHandleRangeInfo<Int64>> handle_ranges;
+                std::vector<std::pair<HandleRange<HandleID>, size_t>> handle_ranges;
                 handle_ranges.reserve(thread_region_size);
 
                 for (size_t region_index = region_begin, region_end = region_begin + thread_region_size; region_index < region_end;
                      ++region_index)
                 {
-                    auto & region_data = regions_executor_data[region_index];
-                    handle_ranges.emplace_back(RegionHandleRangeInfo<Int64>(region_data.info.range_in_table,
-                            region_index, region_data.range_scan_filter->isFullRangeScan()));
+                    const auto & region_data = regions_executor_data[region_index];
+                    if (region_data.range_scan_filter->isFullRangeScan())
+                        handle_ranges.emplace_back(region_data.info.range_in_table, region_index);
+                    else
+                    {
+                        for (const HandleRange<Int64> &handle_range : region_data.range_scan_filter->getInt64Ranges())
+                            handle_ranges.emplace_back(handle_range, region_index);
+                    }
                     mem_rows += region_data.block.rows();
                 }
 
                 // handle_ranges is sorted.
 
-                computeHandleRanges<Int64>(region_group_mem_block[thread_idx],
+                computeHandleRanges<Int64>(region_group_read_groups[thread_idx],
                     handle_ranges,
                     region_group_range_parts[thread_idx],
                     region_group_handle_ranges[thread_idx],
@@ -1171,30 +1186,32 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                 BlockInputStreams union_regions_stream;
 
                 auto & range_parts = region_group_range_parts[thread_idx];
-                auto & mem_blocks = region_group_mem_block[thread_idx];
-                for (size_t range_idx = 0; range_idx < range_parts.size(); ++range_idx)
+                auto & read_groups = region_group_read_groups[thread_idx];
+                for (size_t read_group_idx = 0; read_groups.size(); ++read_group_idx)
                 {
-                    auto & data_parts = range_parts[range_idx];
-                    auto & block_indexes = mem_blocks[range_idx];
-
+                    auto & read_group = read_groups[read_group_idx];
                     BlockInputStreams merging;
 
-                    for (size_t part_idx = 0; part_idx < data_parts.size(); ++part_idx)
+                    for (size_t range_idx = read_group.start_range_index; range_idx <= read_group.end_range_index; ++range_idx)
                     {
-                        const auto & part = data_parts[part_idx];
-                        BlockInputStreamPtr source_stream = func_make_merge_tree_input(part, part.ranges);
+                        auto & data_parts = range_parts[range_idx];
+                        for (size_t part_idx = 0; part_idx < data_parts.size(); ++part_idx)
+                        {
+                            const auto & part = data_parts[part_idx];
+                            BlockInputStreamPtr source_stream = func_make_merge_tree_input(part, part.ranges);
 
-                        if (pk_type == TMTPKType::UINT64)
-                            source_stream
-                                = func_make_uint64_range_filter_input(source_stream, region_group_u64_handle_ranges[thread_idx][range_idx]);
-                        else
-                            source_stream = func_make_range_filter_input(source_stream, region_group_handle_ranges[thread_idx][range_idx]);
+                            if (pk_type == TMTPKType::UINT64)
+                                source_stream
+                                        = func_make_uint64_range_filter_input(source_stream, region_group_u64_handle_ranges[thread_idx][range_idx]);
+                            else
+                                source_stream = func_make_range_filter_input(source_stream, region_group_handle_ranges[thread_idx][range_idx]);
 
-                        source_stream = func_make_version_filter_input(source_stream);
+                            source_stream = func_make_version_filter_input(source_stream);
 
-                        merging.emplace_back(source_stream);
+                            merging.emplace_back(source_stream);
+                        }
                     }
-
+                    auto & block_indexes = read_group.mem_block_indexes;
                     {
                         BlocksList blocks;
                         for (size_t idx : block_indexes)
@@ -1221,12 +1238,23 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     size_t region_sum_ranges = 0, region_sum_marks = 0;
                     BlockInputStreams merging;
 
+                    std::vector<HandleRange<UInt64>> ranges;
                     const auto & special_region_info = regions_executor_data[special_region_index];
-                    const auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(special_region_info.info.range_in_table);
-
-                    for (int i = 0; i < n; ++i)
+                    if (special_region_info.range_scan_filter->isFullRangeScan())
                     {
-                        const auto & handle_range = new_range[i];
+                        const auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(special_region_info.info.range_in_table);
+                        for (int i = 0; i < n; ++i)
+                            ranges.push_back(new_range[i]);
+                    }
+                    else
+                    {
+                        for (const HandleRange<UInt64> & range : special_region_info.range_scan_filter->getUInt64Ranges())
+                            ranges.push_back(range);
+                    }
+
+                    for (size_t i = 0; i < ranges.size(); ++i)
+                    {
+                        const auto & handle_range = ranges[i];
 
                         for (const RangesInDataPart & part : parts_with_ranges)
                         {
@@ -1254,17 +1282,17 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     {
                         std::stringstream ss;
 
-                        for (auto i = 0; i < n; ++i)
+                        for (size_t i = 0; i < ranges.size(); ++i)
                         {
                             ss << "[";
-                            new_range[i].first.toString(ss);
+                            ranges[i].first.toString(ss);
                             ss << ",";
-                            new_range[i].second.toString(ss);
+                            ranges[i].second.toString(ss);
                             ss << ") ";
                         }
                         LOG_DEBUG(log,
                             "[PK_IS_UINT64] special region "
-                                << special_region_info.info.region_id << ", split range into " << n << ": " << ss.str() << ", "
+                                << special_region_info.info.region_id << ", split range into " << ranges.size() << ": " << ss.str() << ", "
                                 << region_sum_marks << " marks to read from " << region_sum_ranges << " ranges, read "
                                 << regions_executor_data[special_region_index].block.rows() << " rows from memory");
                     }

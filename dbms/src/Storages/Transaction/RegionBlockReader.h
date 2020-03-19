@@ -61,6 +61,8 @@ public:
     {
         return is_full_range_scan;
     }
+    const std::vector<HandleRange<UInt64>> & getUInt64Ranges() { return uint64_ranges; }
+    const std::vector<HandleRange<Int64>> & getInt64Ranges() { return int64_ranges; }
 };
 
 using RegionScanFilterPtr = std::shared_ptr<RegionScanFilter>;

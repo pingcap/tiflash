@@ -111,20 +111,15 @@ static inline MarkRanges markRangesFromRegionRange(const MergeTreeData::DataPart
     return res;
 }
 
-template <typename HandleType>
-class RegionHandleRangeInfo {
-public:
-    HandleRange<HandleType> handle_range;
-    size_t region_index{};
-    bool is_full_range_scan{};
-    RegionHandleRangeInfo() = default;
-    RegionHandleRangeInfo(HandleRange<HandleType> handle_range_, size_t region_index_, bool is_full_range_scan_)
-    : handle_range(handle_range_), region_index(region_index_), is_full_range_scan(is_full_range_scan_) {};
+struct ReadGroup {
+    std::deque<size_t> mem_block_indexes;
+    size_t start_range_index;
+    size_t end_range_index;
 };
 
 template <typename TargetType>
-static inline void computeHandleRanges(std::vector<std::deque<size_t>> & block_data,
-    std::vector<RegionHandleRangeInfo<TargetType>> & handle_range_infos,
+static inline void computeHandleRanges(std::vector<ReadGroup> & read_groups,
+    std::vector<std::pair<DB::HandleRange<TargetType>, size_t>> & handle_ranges,
     std::vector<RangesInDataParts> & region_group_range_parts,
     std::vector<DB::HandleRange<TargetType>> & region_group_handle_ranges,
     const RangesInDataParts & parts_with_ranges,
@@ -133,37 +128,57 @@ static inline void computeHandleRanges(std::vector<std::deque<size_t>> & block_d
     const Settings & settings,
     const size_t min_marks_for_seek)
 {
-    block_data.resize(handle_range_infos.size());
+    read_groups.resize(handle_ranges.size());
     {
         size_t size = 0;
+        size_t read_group_size = 0;
+        std::unordered_set<size_t> current_region_indexes;
 
-        block_data[0].emplace_back(handle_range_infos[0].region_index);
+        read_groups[0].mem_block_indexes.emplace_back(handle_ranges[0].second);
+        read_groups[0].start_range_index = 0;
+        current_region_indexes.insert(handle_ranges[0].second);
 
-        for (size_t i = 1; i < handle_range_infos.size(); ++i)
+        for (size_t i = 1; i < handle_ranges.size(); ++i)
         {
-            if (handle_range_infos[i].handle_range.first == handle_range_infos[size].handle_range.second
-            && handle_range_infos[i].is_full_range_scan && handle_range_infos[size].is_full_range_scan)
-                handle_range_infos[size].handle_range.second = handle_range_infos[i].handle_range.second;
+            if (handle_ranges[i].first.first == handle_ranges[size].first.second)
+                handle_ranges[size].first.second = handle_ranges[i].first.second;
             else
-                handle_range_infos[++size] = handle_range_infos[i];
+            {
+                handle_ranges[++size] = handle_ranges[i];
+                /// check if it is ok to start new read group
+                /// the rule is a mem_block_index should only exists in a single read group
+                if (current_region_indexes.find(handle_ranges[i].second) == current_region_indexes.end())
+                {
+                    /// if the region index in handle_ranges[i] is not in current_region_indexes
+                    /// then it is safe to start a new read group
+                    /// NOTE this assumes region index in handle_ranges is monotonous
+                    read_groups[read_group_size++].end_range_index = size - 1;
+                    read_groups[read_group_size].start_range_index = size;
+                    current_region_indexes.clear();
+                }
+            }
 
-            block_data[size].emplace_back(handle_range_infos[i].region_index);
+            // to avoid duplicate mem_block_index
+            if (current_region_indexes.find(handle_ranges[i].second) == current_region_indexes.end())
+                read_groups[read_group_size].mem_block_indexes.emplace_back(handle_ranges[i].second);
         }
+        read_groups[read_group_size].end_range_index = size;
         size = size + 1;
-        handle_range_infos.resize(size);
-        block_data.resize(size);
+        read_group_size = read_group_size + 1;
+        handle_ranges.resize(size);
+        read_groups.resize(read_group_size);
     }
 
-    region_group_range_parts.assign(handle_range_infos.size(), {});
-    region_group_handle_ranges.resize(handle_range_infos.size());
+    region_group_range_parts.assign(handle_ranges.size(), {});
+    region_group_handle_ranges.resize(handle_ranges.size());
 
-    for (size_t idx = 0; idx < handle_range_infos.size(); ++idx)
+    for (size_t idx = 0; idx < handle_ranges.size(); ++idx)
     {
-        const auto & handle_range_info = handle_range_infos[idx];
+        const auto & handle_range = handle_ranges[idx];
         for (const RangesInDataPart & ranges : parts_with_ranges)
         {
             MarkRanges mark_ranges = markRangesFromRegionRange<TargetType>(
-                *ranges.data_part, handle_range_info.handle_range.first, handle_range_info.handle_range.second, ranges.ranges, min_marks_for_seek, settings);
+                *ranges.data_part, handle_range.first.first, handle_range.first.second, ranges.ranges, min_marks_for_seek, settings);
 
             if (mark_ranges.empty())
                 continue;
@@ -173,7 +188,7 @@ static inline void computeHandleRanges(std::vector<std::deque<size_t>> & block_d
             for (const auto & range : mark_ranges)
                 region_sum_marks += range.end - range.begin;
         }
-        region_group_handle_ranges[idx] = handle_range_info.handle_range;
+        region_group_handle_ranges[idx] = handle_range.first;
     }
 }
 
