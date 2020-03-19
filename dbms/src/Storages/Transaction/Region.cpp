@@ -612,6 +612,34 @@ TiFlashApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 in
     return TiFlashApplyRes::None;
 }
 
+void Region::handleIngestSST(const SnapshotViewArray snaps, UInt64 index, UInt64 term)
+{
+    if (index <= appliedIndex())
+        return;
+
+    {
+        std::unique_lock<std::shared_mutex> lock(mutex);
+        std::lock_guard<std::mutex> predecode_lock(predecode_mutex);
+
+        for (UInt64 i = 0; i < snaps.len; ++i)
+        {
+            auto & snapshot = snaps.views[i];
+
+            LOG_INFO(log,
+                __FUNCTION__ << ": " << toString(false) << " begin to ingest sst of cf " << CFToName(snapshot.cf) << " at [term: " << term
+                             << ", index: " << index << "], kv count " << snapshot.len);
+            for (UInt64 n = 0; n < snapshot.len; ++n)
+            {
+                auto & k = snapshot.keys[n];
+                auto & v = snapshot.vals[n];
+                doInsert(snapshot.cf, TiKVKey(k.data, k.len), TiKVValue(v.data, v.len));
+            }
+        }
+        meta.setApplied(index, term);
+    }
+    meta.notifyAll();
+}
+
 RegionRaftCommandDelegate & Region::makeRaftCommandDelegate(const KVStoreTaskLock & lock)
 {
     static_assert(sizeof(RegionRaftCommandDelegate) == sizeof(Region));
