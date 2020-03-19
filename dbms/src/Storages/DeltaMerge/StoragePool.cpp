@@ -15,13 +15,13 @@ PageStorage::Config extractConfig(const Settings & settings, UInt64 subtype)
     switch (subtype)
     {
     case STORAGE_LOG:
-        config.num_write_slots = settings.dm_storage_pool_log_write_slots;
+        config.num_write_slots = settings.dt_storage_pool_log_write_slots;
         break;
     case STORAGE_DATA:
-        config.num_write_slots = settings.dm_storage_pool_data_write_slots;
+        config.num_write_slots = settings.dt_storage_pool_data_write_slots;
         break;
     case STORAGE_META:
-        config.num_write_slots = settings.dm_storage_pool_meta_write_slots;
+        config.num_write_slots = settings.dt_storage_pool_meta_write_slots;
         break;
     default:
         throw Exception("Unknown subtype in extractConfig: " + DB::toString(subtype));
