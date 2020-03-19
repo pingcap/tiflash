@@ -12,6 +12,13 @@ namespace DB
 namespace DM
 {
 
+String astToDebugString(const IAST * const ast)
+{
+    std::stringstream ss;
+    ast->dumpTree(ss);
+    return ss.str();
+}
+
 inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & define)
 {
     std::function<Field(const Field &, const DataTypePtr &)> castDefaultValue; // for lazy bind
@@ -127,37 +134,61 @@ inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefi
 
     if (command.default_expression)
     {
-        // a cast function
-        // change column_define.default_value
+        try
+        {
+            // a cast function
+            // change column_define.default_value
 
-        if (auto default_literal = typeid_cast<const ASTLiteral *>(command.default_expression.get());
-            default_literal && default_literal->value.getType() == Field::Types::String)
-        {
-            define.default_value = default_literal->value;
-        }
-        else if (auto default_cast_expr = typeid_cast<const ASTFunction *>(command.default_expression.get());
-                 default_cast_expr && default_cast_expr->name == "CAST" /* ParserCastExpression::name */)
-        {
-            // eg. CAST('1.234' AS Float32); CAST(999 AS Int32)
-            if (default_cast_expr->arguments->children.size() != 2)
+            if (auto default_literal = typeid_cast<const ASTLiteral *>(command.default_expression.get());
+                default_literal && default_literal->value.getType() == Field::Types::String)
             {
-                throw Exception("Unknown CAST expression in default expr", ErrorCodes::NOT_IMPLEMENTED);
+                define.default_value = default_literal->value;
             }
-
-            auto default_literal_in_cast = typeid_cast<const ASTLiteral *>(default_cast_expr->arguments->children[0].get());
-            if (default_literal_in_cast)
+            else if (auto default_cast_expr = typeid_cast<const ASTFunction *>(command.default_expression.get());
+                     default_cast_expr && default_cast_expr->name == "CAST" /* ParserCastExpression::name */)
             {
-                Field default_value  = castDefaultValue(default_literal_in_cast->value, define.type);
-                define.default_value = default_value;
+                // eg. CAST('1.234' AS Float32); CAST(999 AS Int32)
+                if (default_cast_expr->arguments->children.size() != 2)
+                {
+                    throw Exception("Unknown CAST expression in default expr", ErrorCodes::NOT_IMPLEMENTED);
+                }
+
+                auto default_literal_in_cast = typeid_cast<const ASTLiteral *>(default_cast_expr->arguments->children[0].get());
+                if (default_literal_in_cast)
+                {
+                    Field default_value  = castDefaultValue(default_literal_in_cast->value, define.type);
+                    define.default_value = default_value;
+                }
+                else
+                {
+                    throw Exception("Invalid CAST expression", ErrorCodes::BAD_ARGUMENTS);
+                }
             }
             else
             {
-                throw Exception("Invalid CAST expression", ErrorCodes::BAD_ARGUMENTS);
+                throw Exception("Default value must be a string or CAST('...' AS WhatType)", ErrorCodes::BAD_ARGUMENTS);
             }
         }
-        else
+        catch (DB::Exception & e)
         {
-            throw Exception("Default value must be a string or CAST('...' AS WhatType)", ErrorCodes::BAD_ARGUMENTS);
+            e.addMessage("(in setColumnDefineDefaultValue for default_expression:" + astToDebugString(command.default_expression.get())
+                         + ")");
+            throw;
+        }
+        catch (const Poco::Exception & e)
+        {
+            DB::Exception ex(e);
+            ex.addMessage("(in setColumnDefineDefaultValue for default_expression:" + astToDebugString(command.default_expression.get())
+                          + ")");
+            throw ex;
+        }
+        catch (std::exception & e)
+        {
+            std::stringstream ss;
+            ss << "std::exception: " << e.what()
+               << " (in setColumnDefineDefaultValue for default_expression:" + astToDebugString(command.default_expression.get()) << ")";
+            DB::Exception ex(ss.str(), ErrorCodes::LOGICAL_ERROR);
+            throw ex;
         }
     }
 }
