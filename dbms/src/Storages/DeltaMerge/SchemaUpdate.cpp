@@ -70,26 +70,30 @@ inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefi
             return toField((Int64)time);
         }
         case TypeIndex::Decimal32: {
-            auto      dec   = std::dynamic_pointer_cast<const DataTypeDecimal32>(type);
-            Int64     v     = applyVisitor(FieldVisitorConvertToNumber<Int64>(), value);
+            auto dec = std::dynamic_pointer_cast<const DataTypeDecimal32>(type);
+            static_assert(std::is_same_v<Decimal32::NativeType, Int32>);
+            auto      v     = (value.template get<DecimalField<Decimal32>>()).getValue().value;
             ScaleType scale = dec->getScale();
             return DecimalField(Decimal32(v), scale);
         }
         case TypeIndex::Decimal64: {
-            auto      dec   = std::dynamic_pointer_cast<const DataTypeDecimal64>(type);
-            Int64     v     = applyVisitor(FieldVisitorConvertToNumber<Int64>(), value);
+            auto dec = std::dynamic_pointer_cast<const DataTypeDecimal64>(type);
+            static_assert(std::is_same_v<Decimal64::NativeType, Int64>);
+            auto      v     = (value.template get<DecimalField<Decimal64>>()).getValue().value;
             ScaleType scale = dec->getScale();
             return DecimalField(Decimal64(v), scale);
         }
         case TypeIndex::Decimal128: {
-            auto      dec   = std::dynamic_pointer_cast<const DataTypeDecimal128>(type);
-            Int64     v     = applyVisitor(FieldVisitorConvertToNumber<Int64>(), value);
+            auto dec = std::dynamic_pointer_cast<const DataTypeDecimal128>(type);
+            static_assert(std::is_same_v<Decimal128::NativeType, Int128>);
+            auto      v     = (value.template get<DecimalField<Decimal128>>()).getValue().value;
             ScaleType scale = dec->getScale();
             return DecimalField(Decimal128(v), scale);
         }
         case TypeIndex::Decimal256: {
-            auto      dec   = std::dynamic_pointer_cast<const DataTypeDecimal256>(type);
-            Int64     v     = applyVisitor(FieldVisitorConvertToNumber<Int64>(), value);
+            auto dec = std::dynamic_pointer_cast<const DataTypeDecimal256>(type);
+            static_assert(std::is_same_v<Decimal256::NativeType, Int256>);
+            auto      v     = (value.template get<DecimalField<Decimal256>>()).getValue().value;
             ScaleType scale = dec->getScale();
             return DecimalField(Decimal256(v), scale);
         }
