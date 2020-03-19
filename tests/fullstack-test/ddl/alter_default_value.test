@@ -6,10 +6,10 @@ SLEEP 15
 
 mysql> insert into test.t values (1);
 # Two fail cases, maybe add more case later.
-mysql> alter table t add s varchar(999) default 'sss'
-mysql> alter table t add e enum('unknown', 'male','female') default 'unknown'
-mysql> alter table t ADD COLUMN `96c0` DECIMAL(65,0) NULL DEFAULT '99999999999999999999999999999999999999999999999999999999999999999'
-mysql> alter table t ADD COLUMN `96c1` DECIMAL(65,30) NULL DEFAULT '99999999999999999999999999999999999.999999999999999999999999999999'
+mysql> alter table test.t add s varchar(999) default 'sss'
+mysql> alter table test.t add e enum('unknown', 'male','female') default 'unknown'
+mysql> alter table test.t ADD COLUMN `96c0` DECIMAL(65,0) NULL DEFAULT '99999999999999999999999999999999999999999999999999999999999999999'
+mysql> alter table test.t ADD COLUMN `96c1` DECIMAL(65,30) NULL DEFAULT '99999999999999999999999999999999999.999999999999999999999999999999'
 
 SLEEP 15
 
