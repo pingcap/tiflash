@@ -5,6 +5,7 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
+#include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageDefines.h>
 
 namespace DB
@@ -17,8 +18,6 @@ class DeltaValueSpace;
 using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
 struct WriteBatches;
 class StoragePool;
-struct StorageSnapshot;
-using StorageSnapshotPtr = std::shared_ptr<StorageSnapshot>;
 struct DMContext;
 
 struct BlockOrDelete
