@@ -44,6 +44,7 @@ inline DM::HandleRanges getQueryRanges(const DB::MvccQueryInfo::RegionsQueryInfo
         }
         else
         {
+            /// only used for test cases
             handle_ranges.push_back(region_info.range_in_table);
         }
     }

@@ -350,62 +350,25 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
             auto pair = storage->getColumns().getPhysical(handle_column_name);
             source_columns.push_back(pair);
             is_ts_column.push_back(false);
-            handle_col_id = i;
             continue;
         }
 
         String name = storage->getTableInfo().getColumnName(cid);
         required_columns.push_back(name);
-        if (name == handle_column_name)
-            handle_col_id = i;
         auto pair = storage->getColumns().getPhysical(name);
         source_columns.emplace_back(std::move(pair));
         is_ts_column.push_back(ci.tp() == TiDB::TypeTimestamp);
-    }
-
-    if (handle_col_id == -1)
-        handle_col_id = required_columns.size();
-
-    //    auto current_region = context.getTMTContext().getKVStore()->getRegion(region_info.region_id);
-    //    auto region_read_status = getRegionReadStatus(current_region);
-    //    if (region_read_status != RegionException::OK)
-    //    {
-    //        std::vector<RegionID> region_ids;
-    //        region_ids.push_back(region_info.region_id);
-    //        LOG_WARNING(log, __PRETTY_FUNCTION__ << " Meet region exception for region " << region_info.region_id);
-    //        throw RegionException(std::move(region_ids), region_read_status);
-    //    }
-    //    const bool pk_is_uint64 = storage->getPKType() == IManageableStorage::PKType::UINT64;
-    //    if (!checkKeyRanges(region_info.key_ranges, table_id, pk_is_uint64, current_region->getRange(), handle_col_id, handle_filter_expr))
-    //    {
-    //        // need to add extra filter on handle column
-    //        filter_on_handle = true;
-    //        conditions.push_back(&handle_filter_expr);
-    //    }
-
-    bool has_handle_column = (handle_col_id != (Int32)required_columns.size());
-
-    if (filter_on_handle && !has_handle_column)
-    {
-        // if need to add filter on handle column, and
-        // the handle column is not selected in ts, add
-        // the handle column
-        required_columns.push_back(handle_column_name);
-        auto pair = storage->getColumns().getPhysical(handle_column_name);
-        source_columns.push_back(pair);
-        is_ts_column.push_back(false);
     }
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
     if (query_block.aggregation == nullptr)
     {
-        int extra_col_size = (filter_on_handle && !has_handle_column) ? 1 : 0;
         if (query_block.isRootQueryBlock())
         {
             for (auto i : query_block.output_offsets)
             {
-                if ((size_t)i >= required_columns.size() - extra_col_size)
+                if ((size_t)i >= required_columns.size())
                 {
                     // array index out of bound
                     throw Exception("Output offset index is out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
@@ -416,7 +379,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         }
         else
         {
-            for (size_t i = 0; i < required_columns.size() - extra_col_size; i++)
+            for (size_t i = 0; i < required_columns.size(); i++)
                 /// for child query block, add alias start with qb_column_prefix to avoid column name conflict
                 final_project.emplace_back(required_columns[i], query_block.qb_column_prefix + required_columns[i]);
         }
@@ -486,10 +449,6 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     if (query_info.mvcc_query_info->regions_query_info.empty())
         throw Exception("Dag Request does not have region to read. ", ErrorCodes::COP_BAD_DAG_REQUEST);
     query_info.mvcc_query_info->concurrent = query_info.mvcc_query_info->regions_query_info.size() > 1 ? 1.0 : 0.0;
-    //    info.conf_version = region_info.region_conf_version;
-    //    info.range_in_table = current_region->getHandleRangeByTable(table_id);
-    //    query_info.mvcc_query_info->regions_query_info.push_back(info);
-    //    query_info.mvcc_query_info->concurrent = 0.0;
 
     if (ts.next_read_engine() == tipb::EngineType::Local)
     {
