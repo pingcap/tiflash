@@ -166,7 +166,7 @@ static inline void computeHandleRanges(std::vector<ReadGroup> & read_groups,
             if (current_region_indexes.find(handle_ranges[i].second) == current_region_indexes.end())
             {
                 read_groups[read_group_size].mem_block_indexes.emplace_back(handle_ranges[i].second);
-                current_region_indexes.insert(handle_ranges[0].second);
+                current_region_indexes.insert(handle_ranges[i].second);
             }
         }
         read_groups[read_group_size].end_range_index = size;
