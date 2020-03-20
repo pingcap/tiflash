@@ -1,6 +1,3 @@
-#TODO: enable ddl tests for DeltaMerge
-#RETURN
-
 # Preparation.
 => DBGInvoke __enable_schema_sync_service('false')
 
