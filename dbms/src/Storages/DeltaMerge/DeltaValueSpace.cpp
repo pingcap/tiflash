@@ -19,7 +19,6 @@ namespace DB
 {
 namespace DM
 {
-
 const UInt64 DeltaValueSpace::CURRENT_VERSION = 1;
 
 using BlockPtr    = DeltaValueSpace::BlockPtr;
@@ -315,6 +314,18 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
     if (!cache)
     {
         cache = std::make_shared<Cache>(block);
+    }
+
+    if constexpr (0)
+    {
+        if (unlikely(!checkSchema(cache->block, block)))
+        {
+            const String block_schema_str = block.dumpStructure();
+            const String cache_schema_str = cache->block.dumpStructure();
+            throw Exception("Try to append block(rows:" + DB::toString(block.rows())
+                                + ") to a cache but schema not match! block: " + block_schema_str + ", cache: " + cache_schema_str,
+                            ErrorCodes::LOGICAL_ERROR);
+        }
     }
 
     size_t cache_offset;

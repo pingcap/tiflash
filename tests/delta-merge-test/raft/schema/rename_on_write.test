@@ -1,0 +1,32 @@
+#TODO: We can not mock this situation, ignore for now
+#RETURN
+
+=> DBGInvoke __enable_schema_sync_service('false')
+
+=> DBGInvoke __drop_tidb_table(default, test)
+=> drop table if exists default.test
+
+=> DBGInvoke __drop_tidb_table(default, test1)
+=> drop table if exists default.test1
+
+=> DBGInvoke __set_flush_threshold(1000000, 1000000)
+
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 String', '', 'dt')
+=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __put_region(4, 0, 100, default, test)
+=> select col_1 from default.test
+=> DBGInvoke __add_column_to_tidb_table(default, test, 'col_2 Nullable(Int8)')
+=> DBGInvoke __rename_tidb_table(default, test, test1)
+#For DeltaTree, each write will trigger schema sync.
+=> DBGInvoke __raft_insert_row(default, test1, 4, 50, 'test1', 1)
+=> select * from default.test
+Received exception from server (version {#WORD}):
+Code: 60. DB::Exception: Received from {#WORD} DB::Exception: Table default.test doesn't exist..
+=> select * from default.test1
+┌─col_1─┬─_tidb_rowid─┬─col_2─┐
+│ test1 │          50 │     1 │
+└───────┴─────────────┴───────┘
+
+=> DBGInvoke __drop_tidb_table(default, test1)
+=> drop table if exists default.test1
+=> DBGInvoke __enable_schema_sync_service('true')

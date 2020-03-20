@@ -60,6 +60,10 @@ public:
         const AlterCommands & commands, const TiDB::TableInfo & table_info, const String & database_name, const Context & context)
         = 0;
 
+    
+    /// Remove this storage from TMTContext. Should be called after its metadata and data have been removed from disk.
+    virtual void removeFromTMTContext() = 0;
+
     PKType getPKType() const
     {
         static const DataTypeInt64 & dataTypeInt64 = {};
