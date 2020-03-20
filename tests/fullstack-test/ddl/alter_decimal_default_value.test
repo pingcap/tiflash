@@ -36,26 +36,5 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 | 1 | 999999999 | 0.999999999 | 9       | 0.900000000 | 999999999999999999 | 0.999999999999999999 | 9       | 0.900000000000000000 | 99999999999999999999999999999999999999 | 99999999.999999999999999999999999999999 | 9        | 0.900000000000000000000000000000 | 99999999999999999999999999999999999999999999999999999999999999999 | 99999999999999999999999999999999999.999999999999999999999999999999 | 9        | 0.900000000000000000000000000000 |
 +---+-----------+-------------+---------+-------------+--------------------+----------------------+---------+----------------------+----------------------------------------+-----------------------------------------+----------+----------------------------------+-------------------------------------------------------------------+--------------------------------------------------------------------+----------+----------------------------------+
 
->> desc test.t
-┌─name────────┬─type─────────────────────┬─default_type─┬─default_expression───────────────────────────────────────────────────────────────────────────────────────┐
-│ a           │ Nullable(Int32)          │              │                                                                                                          │
-│ _tidb_rowid │ Int64                    │              │                                                                                                          │
-│ dec32_0     │ Nullable(Decimal(9,0))   │ DEFAULT      │ CAST(\'999999999\' AS Nullable(Decimal(9,0)))                                                            │
-│ dec32_1     │ Nullable(Decimal(9,9))   │ DEFAULT      │ CAST(\'0.999999999\' AS Nullable(Decimal(9,9)))                                                          │
-│ dec32_3     │ Nullable(Decimal(9,0))   │ DEFAULT      │ CAST(\'9\' AS Nullable(Decimal(9,0)))                                                                    │
-│ dec32_4     │ Nullable(Decimal(9,9))   │ DEFAULT      │ CAST(\'0.900000000\' AS Nullable(Decimal(9,9)))                                                          │
-│ dec64_0     │ Nullable(Decimal(18,0))  │ DEFAULT      │ CAST(\'999999999999999999\' AS Nullable(Decimal(18,0)))                                                  │
-│ dec64_1     │ Nullable(Decimal(18,18)) │ DEFAULT      │ CAST(\'0.999999999999999999\' AS Nullable(Decimal(18,18)))                                               │
-│ dec64_3     │ Nullable(Decimal(18,0))  │ DEFAULT      │ CAST(\'9\' AS Nullable(Decimal(18,0)))                                                                   │
-│ dec64_4     │ Nullable(Decimal(18,18)) │ DEFAULT      │ CAST(\'0.900000000000000000\' AS Nullable(Decimal(18,18)))                                               │
-│ dec128_0    │ Nullable(Decimal(38,0))  │ DEFAULT      │ CAST(\'99999999999999999999999999999999999999\' AS Nullable(Decimal(38,0)))                              │
-│ dec128_1    │ Nullable(Decimal(38,30)) │ DEFAULT      │ CAST(\'99999999.999999999999999999999999999999\' AS Nullable(Decimal(38,30)))                            │
-│ dec128_3    │ Nullable(Decimal(38,0))  │ DEFAULT      │ CAST(\'9\' AS Nullable(Decimal(38,0)))                                                                   │
-│ dec128_4    │ Nullable(Decimal(38,30)) │ DEFAULT      │ CAST(\'0.900000000000000000000000000000\' AS Nullable(Decimal(38,30)))                                   │
-│ dec256_0    │ Nullable(Decimal(65,0))  │ DEFAULT      │ CAST(\'99999999999999999999999999999999999999999999999999999999999999999\' AS Nullable(Decimal(65,0)))   │
-│ dec256_1    │ Nullable(Decimal(65,30)) │ DEFAULT      │ CAST(\'99999999999999999999999999999999999.999999999999999999999999999999\' AS Nullable(Decimal(65,30))) │
-│ dec256_3    │ Nullable(Decimal(65,0))  │ DEFAULT      │ CAST(\'9\' AS Nullable(Decimal(65,0)))                                                                   │
-│ dec256_4    │ Nullable(Decimal(65,30)) │ DEFAULT      │ CAST(\'0.900000000000000000000000000000\' AS Nullable(Decimal(65,30)))                                   │
-└─────────────┴──────────────────────────┴──────────────┴──────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
 mysql> drop table if exists test.t

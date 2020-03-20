@@ -37,25 +37,6 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 |    1 | 1000-01-01 | 9999-12-31 | 0000-00-00 | 00:00:59 | -838:59:59.000000 | 838:59:59.000000 | 00:00:00.000000 | 00:00:00 | 00:00:00.000000 | 1000-01-01 00:00:00.000000 | 9999-12-31 23:59:59.000000 | 0000-00-00 00:00:00 | 0000-00-00 00:00:00.000000 |
 +------+------------+------------+------------+----------+-------------------+------------------+-----------------+----------+-----------------+----------------------------+----------------------------+---------------------+----------------------------+
 
->> desc test.t
-┌─name────────┬─type────────────────────┬─default_type─┬─default_expression───────────────────────────────────┐
-│ a           │ Nullable(Int32)         │              │                                                      │
-│ _tidb_rowid │ Int64                   │              │                                                      │
-│ date_0      │ Nullable(MyDate)        │ DEFAULT      │ CAST(914866242077065216 AS Nullable(MyDate))         │
-│ date_1      │ Nullable(MyDate)        │ DEFAULT      │ CAST(9147934544073064448 AS Nullable(MyDate))        │
-│ date_a      │ MyDate                  │ DEFAULT      │ CAST(0 AS MyDate)                                    │
-│ time_0      │ Nullable(Int64)         │ DEFAULT      │ CAST(59000000000 AS Nullable(Int64))                 │
-│ time_1      │ Nullable(Int64)         │ DEFAULT      │ CAST(-3020399000000000 AS Nullable(Int64))           │
-│ time_2      │ Nullable(Int64)         │ DEFAULT      │ CAST(3020399000000000 AS Nullable(Int64))            │
-│ time_3      │ Nullable(Int64)         │ DEFAULT      │ CAST(0 AS Nullable(Int64))                           │
-│ time_a      │ Int64                   │ DEFAULT      │ CAST(0 AS Int64)                                     │
-│ time_b      │ Int64                   │ DEFAULT      │ CAST(0 AS Int64)                                     │
-│ datetime_0  │ Nullable(MyDateTime(6)) │ DEFAULT      │ CAST(914866242077065216 AS Nullable(MyDateTime(6)))  │
-│ datetime_1  │ Nullable(MyDateTime(6)) │ DEFAULT      │ CAST(9147936188961652736 AS Nullable(MyDateTime(6))) │
-│ datetime_a  │ MyDateTime(0)           │ DEFAULT      │ CAST(0 AS MyDateTime(0))                             │
-│ datetime_b  │ MyDateTime(6)           │ DEFAULT      │ CAST(0 AS MyDateTime(6))                             │
-└─────────────┴─────────────────────────┴──────────────┴──────────────────────────────────────────────────────┘
-
 
 ### tests for timestamp
 mysql> drop table if exists test.t
@@ -83,14 +64,6 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 |    1 | 0000-00-00 00:00:00 | 0000-00-00 00:00:00.000000 |
 +------+---------------------+----------------------------+
 
->> desc test.t
-┌─name────────┬─type────────────┬─default_type─┬─default_expression───────┐
-│ a           │ Nullable(Int32) │              │                          │
-│ _tidb_rowid │ Int64           │              │                          │
-│ timestamp_a │ MyDateTime(0)   │ DEFAULT      │ CAST(0 AS MyDateTime(0)) │
-│ timestamp_b │ MyDateTime(6)   │ DEFAULT      │ CAST(0 AS MyDateTime(6)) │
-└─────────────┴─────────────────┴──────────────┴──────────────────────────┘
-
 mysql> drop table if exists test.t
 
 ### tests for year
@@ -115,4 +88,3 @@ mysql> alter table test.t add year_a YEAR NOT NULL
 #|    1 |   1901 |   2155 |   0000 |   2000 |
 #+------+--------+--------+--------+--------+
 
-#>> desc test.t
