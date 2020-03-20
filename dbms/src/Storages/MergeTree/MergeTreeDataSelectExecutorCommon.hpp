@@ -117,6 +117,10 @@ struct ReadGroup {
     size_t end_range_index;
 };
 
+/// computeHandleRanges divide the input handle ranges into one or more read groups
+/// the basic rule is
+/// 1. the handle ranges will be combined if adjacent handle ranges is combinable
+/// 2. a mem block only exists in a single read groups
 template <typename TargetType>
 static inline void computeHandleRanges(std::vector<ReadGroup> & read_groups,
     std::vector<std::pair<DB::HandleRange<TargetType>, size_t>> & handle_ranges,
@@ -135,8 +139,8 @@ static inline void computeHandleRanges(std::vector<ReadGroup> & read_groups,
         std::unordered_set<size_t> current_region_indexes;
 
         read_groups[0].mem_block_indexes.emplace_back(handle_ranges[0].second);
-        read_groups[0].start_range_index = 0;
         current_region_indexes.insert(handle_ranges[0].second);
+        read_groups[0].start_range_index = 0;
 
         for (size_t i = 1; i < handle_ranges.size(); ++i)
         {
@@ -146,7 +150,7 @@ static inline void computeHandleRanges(std::vector<ReadGroup> & read_groups,
             {
                 handle_ranges[++size] = handle_ranges[i];
                 /// check if it is ok to start new read group
-                /// the rule is a mem_block_index should only exists in a single read group
+                /// a mem block should only exists in a single read group
                 if (current_region_indexes.find(handle_ranges[i].second) == current_region_indexes.end())
                 {
                     /// if the region index in handle_ranges[i] is not in current_region_indexes
@@ -158,9 +162,12 @@ static inline void computeHandleRanges(std::vector<ReadGroup> & read_groups,
                 }
             }
 
-            // to avoid duplicate mem_block_index
+            /// to avoid duplicate mem block in one read group
             if (current_region_indexes.find(handle_ranges[i].second) == current_region_indexes.end())
+            {
                 read_groups[read_group_size].mem_block_indexes.emplace_back(handle_ranges[i].second);
+                current_region_indexes.insert(handle_ranges[0].second);
+            }
         }
         read_groups[read_group_size].end_range_index = size;
         size = size + 1;
