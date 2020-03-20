@@ -123,13 +123,13 @@ void setPKVersionDel(ColumnUInt8 & delmark_col,
             continue;
 
         bool should_skip;
-        if constexpr (pk_type == TMTPKType::INT64)
+        if constexpr (pk_type == TMTPKType::UINT64)
         {
-            should_skip = scan_filter != nullptr && scan_filter->filter(static_cast<Int64>(handle));
+            should_skip = scan_filter != nullptr && scan_filter->filter(static_cast<UInt64>(handle));
         }
         else
         {
-            should_skip = scan_filter != nullptr && scan_filter->filter(static_cast<UInt64>(handle));
+            should_skip = scan_filter != nullptr && scan_filter->filter(static_cast<Int64>(handle));
         }
         if(should_skip)
             continue;

@@ -269,7 +269,7 @@ void checkAndSetRangeScanFilter(TMTPKType pk_type, std::vector<RegionExecutorDat
                 r.range_scan_filter = std::make_shared<RegionScanFilter>(true,
                         (std::vector<HandleRange<Int64>>){}, (std::vector<HandleRange<UInt64>>){});
             else
-                r.range_scan_filter = std::make_shared<RegionScanFilter>(true,
+                r.range_scan_filter = std::make_shared<RegionScanFilter>(false,
                         (std::vector<HandleRange<Int64>>){}, dag_handle_ranges);
         }
         else
@@ -281,7 +281,7 @@ void checkAndSetRangeScanFilter(TMTPKType pk_type, std::vector<RegionExecutorDat
                 r.range_scan_filter = std::make_shared<RegionScanFilter>(true,
                                       (std::vector<HandleRange<Int64>>){}, (std::vector<HandleRange<UInt64>>){});
             else
-                r.range_scan_filter = std::make_shared<RegionScanFilter>(true,
+                r.range_scan_filter = std::make_shared<RegionScanFilter>(false,
                                       r.info.required_handle_ranges, (std::vector<HandleRange<UInt64>>){});
         }
     }
