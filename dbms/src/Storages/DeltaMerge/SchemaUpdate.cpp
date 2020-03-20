@@ -77,32 +77,20 @@ inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefi
             return toField((Int64)time);
         }
         case TypeIndex::Decimal32: {
-            auto dec = std::dynamic_pointer_cast<const DataTypeDecimal32>(type);
-            static_assert(std::is_same_v<Decimal32::NativeType, Int32>);
-            auto      v     = (value.template get<DecimalField<Decimal32>>()).getValue().value;
-            ScaleType scale = dec->getScale();
-            return DecimalField(Decimal32(v), scale);
+            auto v = safeGet<DecimalField<Decimal32>>(value);
+            return v;
         }
         case TypeIndex::Decimal64: {
-            auto dec = std::dynamic_pointer_cast<const DataTypeDecimal64>(type);
-            static_assert(std::is_same_v<Decimal64::NativeType, Int64>);
-            auto      v     = (value.template get<DecimalField<Decimal64>>()).getValue().value;
-            ScaleType scale = dec->getScale();
-            return DecimalField(Decimal64(v), scale);
+            auto v = safeGet<DecimalField<Decimal64>>(value);
+            return v;
         }
         case TypeIndex::Decimal128: {
-            auto dec = std::dynamic_pointer_cast<const DataTypeDecimal128>(type);
-            static_assert(std::is_same_v<Decimal128::NativeType, Int128>);
-            auto      v     = (value.template get<DecimalField<Decimal128>>()).getValue().value;
-            ScaleType scale = dec->getScale();
-            return DecimalField(Decimal128(v), scale);
+            auto v = safeGet<DecimalField<Decimal128>>(value);
+            return v;
         }
         case TypeIndex::Decimal256: {
-            auto dec = std::dynamic_pointer_cast<const DataTypeDecimal256>(type);
-            static_assert(std::is_same_v<Decimal256::NativeType, Int256>);
-            auto      v     = (value.template get<DecimalField<Decimal256>>()).getValue().value;
-            ScaleType scale = dec->getScale();
-            return DecimalField(Decimal256(v), scale);
+            auto v = safeGet<DecimalField<Decimal256>>(value);
+            return v;
         }
         case TypeIndex::Enum16: {
             // According to `Storages/Transaction/TiDB.h` and MySQL 5.7
@@ -194,6 +182,12 @@ inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefi
 }
 
 
+inline void setColumnDefineDefaultValue(const OptionTableInfoConstRef table_info, ColumnDefine & define)
+{
+    const auto col_info  = table_info->get().getColumnInfo(define.id);
+    define.default_value = col_info.defaultValueToField();
+}
+
 void applyAlter(ColumnDefines &               table_columns,
                 const AlterCommand &          command,
                 const OptionTableInfoConstRef table_info,
@@ -214,7 +208,14 @@ void applyAlter(ColumnDefines &               table_columns,
             {
                 exist_column       = true;
                 column_define.type = command.data_type;
-                setColumnDefineDefaultValue(command, column_define);
+                if (table_info)
+                {
+                    setColumnDefineDefaultValue(table_info, column_define);
+                }
+                else
+                {
+                    setColumnDefineDefaultValue(command, column_define);
+                }
                 break;
             }
         }
@@ -250,12 +251,13 @@ void applyAlter(ColumnDefines &               table_columns,
         if (table_info)
         {
             define.id = table_info->get().getColumnID(command.column_name);
+            setColumnDefineDefaultValue(table_info, define);
         }
         else
         {
             define.id = max_column_id_used++;
+            setColumnDefineDefaultValue(command, define);
         }
-        setColumnDefineDefaultValue(command, define);
         table_columns.emplace_back(std::move(define));
     }
     else if (command.type == AlterCommand::DROP_COLUMN)

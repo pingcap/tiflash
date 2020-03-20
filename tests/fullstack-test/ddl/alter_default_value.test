@@ -5,20 +5,17 @@ mysql> alter table test.t set tiflash replica 1 location labels 'rack', 'host', 
 SLEEP 15
 
 mysql> insert into test.t values (1);
-# Two fail cases, maybe add more case later.
 mysql> alter table test.t add s varchar(999) default 'sss'
 mysql> alter table test.t add e enum('unknown', 'male','female') default 'unknown'
-mysql> alter table test.t ADD COLUMN `96c0` DECIMAL(65,0) NULL DEFAULT '99999999999999999999999999999999999999999999999999999999999999999'
-mysql> alter table test.t ADD COLUMN `96c1` DECIMAL(65,30) NULL DEFAULT '99999999999999999999999999999999999.999999999999999999999999999999'
 
 SLEEP 15
 
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
-+---+-----+---------+-------------------------------------------------------------------+--------------------------------------------------------------------+
-| a | s   | e       | 96c0                                                              | 96c1                                                               |
-+---+-----+---------+-------------------------------------------------------------------+--------------------------------------------------------------------+
-| 1 | sss | unknown | 99999999999999999999999999999999999999999999999999999999999999999 | 99999999999999999999999999999999999.999999999999999999999999999999 |
-+---+-----+---------+-------------------------------------------------------------------+--------------------------------------------------------------------+
++---+-----+---------+
+| a | s   | e       |
++---+-----+---------+
+| 1 | sss | unknown |
++---+-----+---------+
 
 >> desc test.t
 ┌─name────────┬─type────────────────────────────────────────────────────────────┬─default_type─┬─default_expression───────────────────────────────────────────────────────────────────────────────────────┐
@@ -26,8 +23,6 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 │ _tidb_rowid │ Int64                                                           │              │                                                                                                          │
 │ s           │ Nullable(String)                                                │ DEFAULT      │ CAST(\'sss\' AS Nullable(String))                                                                        │
 │ e           │ Nullable(Enum16(\'unknown\' = 1, \'male\' = 2, \'female\' = 3)) │ DEFAULT      │ CAST(1 AS Nullable(Enum16(\'unknown\' = 1, \'male\' = 2, \'female\' = 3)))                               │
-│ 96c0        │ Nullable(Decimal(65,0))                                         │ DEFAULT      │ CAST(\'99999999999999999999999999999999999999999999999999999999999999999\' AS Nullable(Decimal(65,0)))   │
-│ 96c1        │ Nullable(Decimal(65,30))                                        │ DEFAULT      │ CAST(\'99999999999999999999999999999999999.999999999999999999999999999999\' AS Nullable(Decimal(65,30))) │
 └─────────────┴─────────────────────────────────────────────────────────────────┴──────────────┴──────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
 mysql> drop table if exists test.t
