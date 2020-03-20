@@ -9,7 +9,7 @@ SLEEP 15
 
 >> DBGInvoke __try_flush()
 
-mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t;
+mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_storage(tiflash[t]) */ * from test.t;
 +------+
 | a    |
 +------+
@@ -18,7 +18,7 @@ mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t;
 +------+
 
 mysql> alter table test.t add column b datetime default '8124-05-31 23:47:33';
-mysql>  select /*+ read_from_storage(t) */ * from test.t;
+mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_storage(t) */ * from test.t;
 +------+---------------------+
 | a    | b                   |
 +------+---------------------+
@@ -27,7 +27,7 @@ mysql>  select /*+ read_from_storage(t) */ * from test.t;
 +------+---------------------+
 
 mysql> alter table test.t add column c datetime default 19910905;
-mysql>  select /*+ read_from_storage(t) */ * from test.t;
+mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_storage(t) */ * from test.t;
 +------+---------------------+---------------------+
 | a    | b                   | c                   |
 +------+---------------------+---------------------+
