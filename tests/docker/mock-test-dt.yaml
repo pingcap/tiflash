@@ -10,10 +10,10 @@ services:
       - "8123:8123"
       - "9009:9009"
     volumes:
-      - ./config/config.toml:/config.toml:ro
+      - ./config/tics_dt.toml:/config.toml:ro
       - ./config/users.toml:/users.toml:ro
-      - ./data/tics0:/tmp/tiflash/data
-      - ./log/tics0:/tmp/tiflash/log
+      - ./data/tics_dt:/tmp/tiflash/data
+      - ./log/tics_dt:/tmp/tiflash/log
       - ..:/tests
       - ./_env.sh:/tests/_env.sh
     command:

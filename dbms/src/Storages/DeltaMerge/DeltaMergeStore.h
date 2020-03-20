@@ -222,6 +222,12 @@ public:
                     const Settings &      settings_);
     ~DeltaMergeStore();
 
+    const String & getDatabaseName() const { return db_name; }
+    const String & getTableName() const { return table_name; }
+
+    // Stop all background tasks.
+    void shutdown();
+
     void write(const Context & db_context, const DB::Settings & db_settings, const Block & block);
 
     void deleteRange(const Context & db_context, const DB::Settings & db_settings, const HandleRange & delete_range);
@@ -263,7 +269,7 @@ public:
 
     const ColumnDefines & getTableColumns() const { return original_table_columns; }
     const ColumnDefine &  getHandle() const { return original_table_handle_define; }
-    const Block &         getHeader() const { return original_header; }
+    Block                 getHeader() const;
     const Settings &      getSettings() const { return settings; }
     DataTypePtr           getPKDataType() const { return original_table_handle_define.type; }
     SortDescription       getPrimarySortDescription() const;
@@ -306,10 +312,11 @@ private:
 
     ColumnDefines      original_table_columns;
     const ColumnDefine original_table_handle_define;
-    Block              original_header;
 
     // The columns we actually store.
     ColumnDefinesPtr store_columns;
+
+    std::atomic<bool> shutdown_called{false};
 
     BackgroundProcessingPool &           background_pool;
     BackgroundProcessingPool::TaskHandle gc_handle;

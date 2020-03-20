@@ -10,15 +10,30 @@ mysql> insert into test.t values (1, 2)
 
 SLEEP 15
 
+# ensure table is sync to tiflash
+mysql> select table_schema,table_name,replica_count,location_labels,available from information_schema.tiflash_replica where table_schema='test' and table_name='t';
++--------------+------------+---------------+-----------------+-----------+
+| table_schema | table_name | replica_count | location_labels | available |
++--------------+------------+---------------+-----------------+-----------+
+| test         | t          |             1 | rack,host,abc   |         1 |
++--------------+------------+---------------+-----------------+-----------+
+>> select database,name from system.tables where database='test' and name='t';
+┌─database─┬─name─┐
+│ test     │ t    │
+└──────────┴──────┘
 >> DBGInvoke __try_flush()
 >> DBGInvoke __init_fail_point()
+
+# Process crash when rename column data is done but not for meta.
+# Note that this only affect TxnMergeTree. DeltaTree don't care this since we store
+# column data according to its column-id in TiDB.
 >> DBGInvoke __enable_fail_point(exception_between_alter_data_and_meta)
 
 mysql> alter table test.t change a c int
 
 SLEEP 15
 
-mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t;
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 +---+---+
 | c | b |
 +---+---+
