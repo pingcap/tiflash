@@ -541,8 +541,12 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
         {
             (void)handle;
             if (read_segments.empty() || read_segments.count(segment->segmentId()))
-                tasks.push(
-                    std::make_shared<SegmentReadTask>(segment, segment->createSnapshot(*dm_context), HandleRanges{segment->getRange()}));
+            {
+                auto segment_snap = segment->createSnapshot(*dm_context);
+                if (unlikely(!segment_snap))
+                    throw Exception("Failed to get segment snap", ErrorCodes::LOGICAL_ERROR);
+                tasks.push(std::make_shared<SegmentReadTask>(segment, segment_snap, HandleRanges{segment->getRange()}));
+            }
         }
     }
 
@@ -607,8 +611,11 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
             {
                 if (tasks.empty() || tasks.back()->segment != seg_it->second)
                 {
-                    auto segment = seg_it->second;
-                    tasks.push(std::make_shared<SegmentReadTask>(segment, segment->createSnapshot(*dm_context)));
+                    auto segment      = seg_it->second;
+                    auto segment_snap = segment->createSnapshot(*dm_context);
+                    if (unlikely(!segment_snap))
+                        throw Exception("Failed to get segment snap", ErrorCodes::LOGICAL_ERROR);
+                    tasks.push(std::make_shared<SegmentReadTask>(segment, segment_snap));
                 }
 
                 tasks.back()->addRange(req_range);
