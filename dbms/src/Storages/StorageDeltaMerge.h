@@ -73,6 +73,8 @@ public:
 
     void shutdown() override;
 
+    void removeFromTMTContext() override;
+
     SortDescription getPrimarySortDescription() const override;
 
     const OrderedNameSet & getHiddenColumnsImpl() const override { return hidden_columns; }

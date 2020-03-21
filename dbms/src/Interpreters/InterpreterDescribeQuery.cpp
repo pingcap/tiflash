@@ -109,7 +109,7 @@ BlockInputStreamPtr InterpreterDescribeQuery::executeImpl()
     Block sample_block = getSampleBlock();
     MutableColumns res_columns = sample_block.cloneEmptyColumns();
 
-    OrderedNameSet filtered_names = MutableSupport::instance().hiddenColumns(table->getName());
+    const OrderedNameSet filtered_names = MutableSupport::instance().hiddenColumns(table->getName());
 
     for (const auto & column : columns)
     {

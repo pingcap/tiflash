@@ -23,10 +23,17 @@ void serializeColumn(MemoryWriteBuffer & buf, const IColumn & column, const Data
 void  serializeSavedPacks(WriteBuffer & buf, const Packs & packs);
 Packs deserializePacks(ReadBuffer & buf);
 
-String  packsToString(const Packs & packs);
-Block   readPackFromCache(const PackPtr & pack);
+// Debugging string
+String packsToString(const Packs & packs);
+
+// Read a block from cache / disk according to `pack->schema`
+Block readPackFromCache(const PackPtr & pack);
+Block readPackFromDisk(const PackPtr & pack, const PageReader & page_reader);
+
+// Read a block of columns in `column_defines` from cache / disk,
+// if `pack->schema` is not match with `column_defines`, take good care of
+// ddl cast
 Columns readPackFromCache(const PackPtr & pack, const ColumnDefines & column_defines, size_t col_start, size_t col_end);
-Block   readPackFromDisk(const PackPtr & pack, const PageReader & page_reader);
 Columns readPackFromDisk(const PackPtr &       pack, //
                          const PageReader &    page_reader,
                          const ColumnDefines & column_defines,

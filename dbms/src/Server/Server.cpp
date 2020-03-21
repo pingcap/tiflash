@@ -21,6 +21,7 @@
 #include <Poco/Net/HTTPServer.h>
 #include <Poco/Net/NetException.h>
 #include <Poco/StringTokenizer.h>
+#include <Storages/MutableSupport.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/Transaction/KVStore.h>
@@ -447,22 +448,24 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
 
         /// "tmt" engine ONLY support disable_bg_flush = false.
-        /// "dm" engine by default disable_bg_flush = true.
+        /// "dt" engine ONLY support disable_bg_flush = true.
 
         String disable_bg_flush_conf = "raft.disable_bg_flush";
         if (engine == ::TiDB::StorageEngine::TMT)
         {
             if (config().has(disable_bg_flush_conf) && config().getBool(disable_bg_flush_conf))
-                throw Exception(
-                    "Illegal arguments: disable background flush while using engine TxnMergeTree.", ErrorCodes::INVALID_CONFIG_PARAMETER);
+                throw Exception("Illegal arguments: disable background flush while using engine " + MutableSupport::txn_storage_name,
+                    ErrorCodes::INVALID_CONFIG_PARAMETER);
             disable_bg_flush = false;
         }
         else if (engine == ::TiDB::StorageEngine::DT)
         {
-            if (config().has(disable_bg_flush_conf))
-                disable_bg_flush = config().getBool(disable_bg_flush_conf);
-            else
-                disable_bg_flush = true;
+            /// If background flush is enabled, read will not triggle schema sync.
+            /// Which means that we may get the wrong result with outdated schema.
+            if (config().has(disable_bg_flush_conf) && !config().getBool(disable_bg_flush_conf))
+                throw Exception("Illegal arguments: enable background flush while using engine " + MutableSupport::delta_tree_storage_name,
+                    ErrorCodes::INVALID_CONFIG_PARAMETER);
+            disable_bg_flush = true;
         }
     }
 
