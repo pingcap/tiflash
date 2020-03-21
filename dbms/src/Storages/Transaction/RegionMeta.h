@@ -61,7 +61,7 @@ public:
 
     friend bool operator==(const RegionMeta & meta1, const RegionMeta & meta2);
 
-    void waitIndex(UInt64 index) const;
+    void waitIndex(UInt64 index, const std::atomic_bool & terminated) const;
     bool checkIndex(UInt64 index) const;
 
     bool isPeerRemoved() const;

@@ -127,7 +127,7 @@ public:
 
     ReadIndexResult learnerRead();
 
-    void waitIndex(UInt64 index);
+    void waitIndex(UInt64 index, const std::atomic_bool & terminated);
 
     UInt64 appliedIndex() const;
 

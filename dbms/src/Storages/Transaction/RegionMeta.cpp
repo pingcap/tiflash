@@ -144,10 +144,14 @@ void RegionMeta::setPeerState(const raft_serverpb::PeerState peer_state_)
     region_state.setState(peer_state_);
 }
 
-void RegionMeta::waitIndex(UInt64 index) const
+void RegionMeta::waitIndex(UInt64 index, const std::atomic_bool & terminated) const
 {
     std::unique_lock<std::mutex> lock(mutex);
-    cv.wait(lock, [this, index] { return doCheckIndex(index); });
+    cv.wait(lock, [&] {
+        if (terminated.load(std::memory_order_relaxed))
+            throw Exception("Service is terminating, reject all request");
+        return doCheckIndex(index);
+    });
 }
 
 bool RegionMeta::checkIndex(UInt64 index) const

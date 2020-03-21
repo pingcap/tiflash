@@ -64,6 +64,7 @@ struct numeric_limits<__uint128_t>
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/VirtualColumnUtils.h>
+
 #include <Storages/MergeTree/MergeTreeDataSelectExecutorCommon.hpp>
 
 namespace ProfileEvents
@@ -355,7 +356,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     /// Blocking learner read. Note that learner read must be performed ahead of data read,
                     /// otherwise the desired index will be blocked by the lock of data read.
                     auto read_index_result = region->learnerRead();
-                    GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_read_index_duration_seconds).Observe(read_index_watch.elapsedSeconds());
+                    GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_read_index_duration_seconds)
+                        .Observe(read_index_watch.elapsedSeconds());
 
                     if (read_index_result.region_unavailable)
                     {
@@ -371,8 +373,9 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     else
                     {
                         Stopwatch wait_index_watch;
-                        region->waitIndex(read_index_result.read_index);
-                        GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_wait_index_duration_seconds).Observe(wait_index_watch.elapsedSeconds());
+                        region->waitIndex(read_index_result.read_index, tmt.getTerminated());
+                        GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_wait_index_duration_seconds)
+                            .Observe(wait_index_watch.elapsedSeconds());
                     }
 
                     auto [block, status] = RegionTable::readBlockByRegion(*data.table_info, data.getColumns(), tmt_column_names_to_read,
@@ -563,7 +566,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
             if (minmax_idx_condition
                 && !minmax_idx_condition->mayBeTrueInRange(data.minmax_idx_columns.size(), &part->minmax_idx.min_values[0],
-                       &part->minmax_idx.max_values[0], data.minmax_idx_column_types))
+                    &part->minmax_idx.max_values[0], data.minmax_idx_column_types))
                 continue;
 
             if (max_block_number_to_read && part->info.max_block > max_block_number_to_read)
