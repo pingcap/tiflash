@@ -5,6 +5,7 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
+#include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageDefines.h>
 
 namespace DB
@@ -17,8 +18,6 @@ class DeltaValueSpace;
 using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
 struct WriteBatches;
 class StoragePool;
-struct StorageSnapshot;
-using StorageSnapshotPtr = std::shared_ptr<StorageSnapshot>;
 struct DMContext;
 
 struct BlockOrDelete
@@ -65,11 +64,15 @@ public:
 
         // Already persisted to disk or not.
         bool saved = false;
+        // Can be appended into new rows or not.
+        bool appendable = true;
 
         bool isDeleteRange() const { return !delete_range.none(); }
         bool isCached() const { return !isDeleteRange() && (bool)cache; }
-        /// This pack is not a delete range, the data in it has not been saved to disk.
-        bool isMutable() const { return !isDeleteRange() && data_page == 0; }
+        /// Whether its column data can be flushed.
+        bool dataFlushable() const { return !isDeleteRange() && data_page == 0; }
+        /// This pack is the last one, and not a delete range, and can be appended into new rows.
+        bool isAppendable() const { return !isDeleteRange() && data_page == 0 && appendable && (bool)cache; }
         /// This pack's metadata has been saved to disk.
         bool isSaved() const { return saved; }
         void setSchema(const BlockPtr & schema_)
@@ -80,20 +83,33 @@ public:
                 colid_to_offset.emplace(schema->getByPosition(i).column_id, i);
         }
 
+        std::pair<DataTypePtr, MutableColumnPtr> getDataTypeAndEmptyColumn(ColId column_id) const
+        {
+            // Note that column_id must exist
+            auto index = colid_to_offset.at(column_id);
+            auto col_type = schema->getByPosition(index).type;
+            return { col_type, col_type->createColumn() };
+        }
+
         String toString()
         {
-            return "{rows:" + DB::toString(rows)                //
-                + ",bytes:" + DB::toString(bytes)               //
-                + ",has_schema:" + DB::toString((bool)schema)   //
-                + ",delete_range:" + delete_range.toString()    //
-                + ",data_page:" + DB::toString(data_page)       //
-                + ",has_cache:" + DB::toString((bool)cache)     //
-                + ",cache_offset:" + DB::toString(cache_offset) //
-                + ",saved:" + DB::toString(saved) + "}";
+            String s = "{rows:" + DB::toString(rows)                       //
+                + ",bytes:" + DB::toString(bytes)                          //
+                + ",has_schema:" + DB::toString((bool)schema)              //
+                + ",delete_range:" + delete_range.toString()               //
+                + ",data_page:" + DB::toString(data_page)                  //
+                + ",has_cache:" + DB::toString((bool)cache)                //
+                + ",cache_offset:" + DB::toString(cache_offset)            //
+                + ",saved:" + DB::toString(saved)                          //
+                + ",appendable:" + DB::toString(appendable)                //
+                + ",schema:" + (schema ? schema->dumpStructure() : "none") //
+                + ",cache_block:" + (cache ? cache->block.dumpStructure() : "none") + ")";
+            return s;
         }
     };
-    using PackPtr = std::shared_ptr<Pack>;
-    using Packs   = std::vector<PackPtr>;
+    using PackPtr      = std::shared_ptr<Pack>;
+    using ConstPackPtr = std::shared_ptr<const Pack>;
+    using Packs        = std::vector<PackPtr>;
 
     struct Snapshot : public std::enable_shared_from_this<Snapshot>, private boost::noncopyable
     {
@@ -128,19 +144,25 @@ public:
             }
         }
 
-        size_t getPackCount() { return packs.size(); }
-        size_t getRows() { return rows; }
-        size_t getDeletes() { return deletes; }
+        size_t getPackCount() const { return packs.size(); }
+        size_t getRows() const { return rows; }
+        size_t getDeletes() const { return deletes; }
 
         void                prepare(const DMContext & context, const ColumnDefines & column_defines_);
         BlockInputStreamPtr prepareForStream(const DMContext & context, const ColumnDefines & column_defines_);
 
         const Columns & getColumnsOfPack(size_t pack_index, size_t col_num);
 
-        size_t         read(const HandleRange & range, MutableColumns & output_columns, size_t offset, size_t limit);
-        Block          read(size_t col_num, size_t offset, size_t limit);
-        Block          read(size_t pack_index);
+        // Get blocks or delete_ranges of `ExtraHandleColumn` and `VersionColumn`.
+        // If there are continuous blocks, they will be squashed into one block.
+        // We use the result to update DeltaTree.
         BlockOrDeletes getMergeBlocks(size_t rows_begin, size_t deletes_begin, size_t rows_end, size_t deletes_end);
+
+        Block  read(size_t pack_index);
+        size_t read(const HandleRange & range, MutableColumns & output_columns, size_t offset, size_t limit);
+
+    private:
+        Block read(size_t col_num, size_t offset, size_t limit);
     };
     using SnapshotPtr = std::shared_ptr<Snapshot>;
 
@@ -167,8 +189,6 @@ private:
     std::atomic<size_t> last_try_compact_packs    = 0;
     std::atomic<size_t> last_try_merge_delta_rows = 0;
     std::atomic<size_t> last_try_split_rows       = 0;
-
-    CachePtr last_cache;
 
     // Protects the operations in this instance.
     mutable std::mutex mutex;
@@ -210,7 +230,7 @@ public:
             throw Exception("Try to abandon a already abandoned DeltaValueSpace", ErrorCodes::LOGICAL_ERROR);
     }
 
-    bool hasAbandoned() { return abandoned.load(std::memory_order_relaxed); }
+    bool hasAbandoned() const { return abandoned.load(std::memory_order_relaxed); }
 
     /// Restore the metadata of this instance.
     /// Only called after reboot.
@@ -275,6 +295,7 @@ public:
 
 using Pack             = DeltaValueSpace::Pack;
 using PackPtr          = DeltaValueSpace::PackPtr;
+using ConstPackPtr     = DeltaValueSpace::ConstPackPtr;
 using Packs            = DeltaValueSpace::Packs;
 using DeltaSnapshot    = DeltaValueSpace::Snapshot;
 using DeltaSnapshotPtr = DeltaValueSpace::SnapshotPtr;

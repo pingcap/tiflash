@@ -1,6 +1,3 @@
-#TODO: enable ddl tests for DeltaMerge
-#RETURN
-
 >> drop table if exists dm_test
 
 ## Prepare table
@@ -19,22 +16,14 @@
 >> alter table dm_test drop column a
 Received exception from server (version {#WORD}):
 Code: 36. DB::Exception: Received from {#WORD} DB::Exception: Storage engine DeltaMerge doesn't support drop primary key / hidden column: a.
-#>> show create table dm_test
-#┌─statement───────────────────────────────────────────────────────────────┐
-#│ CREATE TABLE default.dm_test ( a Int8,  b Int32) ENGINE = DeltaMerge(a) │
-#└─────────────────────────────────────────────────────────────────────────┘
 
 >> alter table dm_test drop column b
-#>> show create table dm_test
-#┌─statement─────────────────────────────────────────────────────┐
-#│ CREATE TABLE default.dm_test ( a Int8) ENGINE = DeltaMerge(a) │
-#└───────────────────────────────────────────────────────────────┘
 >> select * from dm_test
 ┌─a─┐
 │ 1 │
 └───┘
 
-# add a column which name is the same as before
+# add a column which name is the same as before, but column b value should be default value(0)
 >> alter table dm_test add column b Int32
 >> select * from dm_test
 ┌─a─┬─b─┐

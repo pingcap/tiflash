@@ -19,7 +19,6 @@ namespace DB
 {
 namespace DM
 {
-
 const UInt64 DeltaValueSpace::CURRENT_VERSION = 1;
 
 using BlockPtr    = DeltaValueSpace::BlockPtr;
@@ -157,7 +156,9 @@ Packs DeltaValueSpace::checkHeadAndCloneTail(DMContext &         context,
                 wbs.log.putRefPage(new_page_id, pack->data_page);
                 new_pack->data_page = new_page_id;
             }
-
+            // No matter or what, don't append to packs which cloned from old packs again.
+            // Because they could shared the same cache. And the cache can NOT be inserted from different packs in different delta.
+            new_pack->appendable = false;
             tail_clone.push_back(new_pack);
         }
     }
@@ -244,6 +245,7 @@ PackPtr DeltaValueSpace::writePack(DMContext & context, const Block & block, siz
     pack->bytes     = block.bytes() * ((double)limit / block.rows());
     pack->data_page = writePackData(context, block, offset, limit, wbs);
     pack->setSchema(std::make_shared<Block>(block.cloneEmpty()));
+    pack->appendable = false;
 
     return pack;
 }
@@ -257,6 +259,9 @@ bool DeltaValueSpace::appendToDisk(DMContext & /*context*/, const PackPtr & pack
     auto last_schema = lastSchema();
     if (last_schema && checkSchema(*pack->schema, *last_schema))
         pack->schema = last_schema;
+
+    if (!packs.empty())
+        packs.back()->appendable = false;
 
     packs.push_back(pack);
 
@@ -278,33 +283,49 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
     // And, if last pack is mutable (haven't been saved to disk yet), we will merge the newly block into last pack.
     // Otherwise, create a new cache block and write into it.
 
-    PackPtr  mutable_pack;
-    CachePtr cache;
-    if (!packs.empty() && last_cache)
+    PackPtr  mutable_pack{};
+    CachePtr cache{};
+    if (!packs.empty())
     {
-        std::scoped_lock cache_lock(last_cache->mutex);
-
-        auto & last_pack      = packs.back();
-        bool   is_overflow    = last_cache->block.rows() >= context.delta_cache_limit_rows;
-        bool   is_same_schema = checkSchema(block, last_cache->block);
-
-        if (!is_overflow && is_same_schema)
+        auto & last_pack = packs.back();
+        if (last_pack->isAppendable())
         {
-            // The last cache block is available
-            cache = last_cache;
-            if (last_pack->isMutable())
+            if constexpr (DM_RUN_CHECK)
             {
-                if (unlikely(last_pack->cache != last_cache))
-                    throw Exception("Last mutable pack's cache is not equal to last cache", ErrorCodes::LOGICAL_ERROR);
+                if (unlikely(!checkSchema(*last_pack->schema, last_pack->cache->block)))
+                    throw Exception("Mutable pack's structure of schema and block are different: " + last_pack->toString());
+            }
+
+            bool is_overflow    = last_pack->cache->block.rows() >= context.delta_cache_limit_rows;
+            bool is_same_schema = checkSchema(block, last_pack->cache->block);
+            if (!is_overflow && is_same_schema)
+            {
+                // The last cache block is available
+                cache        = last_pack->cache;
                 mutable_pack = last_pack;
+            }
+            else
+            {
+                last_pack->appendable = false;
             }
         }
     }
 
     if (!cache)
     {
-        cache      = std::make_shared<Cache>(block);
-        last_cache = cache;
+        cache = std::make_shared<Cache>(block);
+    }
+
+    if constexpr (0)
+    {
+        if (unlikely(!checkSchema(cache->block, block)))
+        {
+            const String block_schema_str = block.dumpStructure();
+            const String cache_schema_str = cache->block.dumpStructure();
+            throw Exception("Try to append block(rows:" + DB::toString(block.rows())
+                                + ") to a cache but schema not match! block: " + block_schema_str + ", cache: " + cache_schema_str,
+                            ErrorCodes::LOGICAL_ERROR);
+        }
     }
 
     size_t cache_offset;
@@ -361,6 +382,7 @@ bool DeltaValueSpace::appendDeleteRange(DMContext & /*context*/, const HandleRan
 
     auto pack          = std::make_shared<Pack>();
     pack->delete_range = delete_range;
+    pack->appendable   = false;
     packs.push_back(pack);
 
     ++deletes;

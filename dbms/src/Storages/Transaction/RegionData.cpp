@@ -97,7 +97,15 @@ RegionDataReadInfo RegionData::readDataByWriteIt(const ConstWriteCFIter & write_
         return std::make_tuple(handle, write_type, ts, nullptr);
 
     if (!short_value)
-        throw Exception(" key [" + key->toString() + "] not found in default cf", ErrorCodes::LOGICAL_ERROR);
+    {
+        const auto & map = default_cf.getData();
+        if (auto data_it = map.find({handle, prewrite_ts}); data_it != map.end())
+            return std::make_tuple(handle, write_type, ts, RegionDefaultCFDataTrait::getTiKVValue(data_it));
+        else
+            throw Exception("Handle: " + std::to_string(handle) + ", Prewrite ts: " + std::to_string(prewrite_ts)
+                    + " can not found in default cf for key: " + key->toHex(),
+                ErrorCodes::LOGICAL_ERROR);
+    }
 
     return std::make_tuple(handle, write_type, ts, short_value);
 }

@@ -73,6 +73,8 @@ public:
 
     void shutdown() override;
 
+    void removeFromTMTContext() override;
+
     SortDescription getPrimarySortDescription() const override;
 
     const OrderedNameSet & getHiddenColumnsImpl() const override { return hidden_columns; }
@@ -81,6 +83,8 @@ public:
 
     void checkStatus(const Context & context) override;
     void deleteRows(const Context &, size_t rows) override;
+
+    const DM::DeltaMergeStorePtr & getStore() { return store; }
 
 protected:
     StorageDeltaMerge(const String & path_,
