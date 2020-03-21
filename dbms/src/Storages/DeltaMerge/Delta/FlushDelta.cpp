@@ -227,7 +227,7 @@ bool DeltaValueSpace::flush(DMContext & context)
         + ProfileEvents::counters[ProfileEvents::WriteBufferFromFileDescriptorWriteBytes].load(std::memory_order_relaxed)
         + ProfileEvents::counters[ProfileEvents::WriteBufferAIOWriteBytes].load(std::memory_order_relaxed);
 
-    GET_METRIC(const_cast<Context &>(context.db_context).getTiFlashMetrics(), tiflash_write_amplification)
+    GET_METRIC(const_cast<Context &>(context.db_context).getTiFlashMetrics(), tiflash_storage_write_amplification)
         .Set((double)(actual_write / 1024 / 1024) / (total_write / 1024 / 1024));
 
     return true;
