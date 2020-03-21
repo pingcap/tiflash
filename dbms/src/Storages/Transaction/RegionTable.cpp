@@ -121,19 +121,7 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtr & region, bool t
         writeBlockByRegion(*context, region, data_list_to_remove, log);
     }
 
-    /// Remove data in region.
     {
-        {
-            auto remover = region->createCommittedRemover();
-            for (const auto & [handle, write_type, commit_ts, value] : data_list_to_remove)
-            {
-                std::ignore = write_type;
-                std::ignore = value;
-
-                remover.remove({handle, commit_ts});
-            }
-        }
-
         size_t cache_size = region->dataSize();
 
         if (cache_size == 0)
