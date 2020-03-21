@@ -176,11 +176,11 @@ std::pair<RegionDataReadInfoList, RegionException::RegionReadStatus> resolveLock
 }
 
 void RegionTable::writeBlockByRegion(
-    Context & context, const RegionPtr & region, RegionDataReadInfoList & data_list_to_remove, Logger * log)
+    Context & context, const RegionPtr & region, RegionDataReadInfoList & data_list_to_remove, Logger * log, bool lock_region)
 {
     RegionDataReadInfoList data_list_read;
     {
-        auto scanner = region->createCommittedScanner();
+        auto scanner = region->createCommittedScanner(lock_region);
 
         /// Some sanity checks for region meta.
         {
@@ -206,6 +206,18 @@ void RegionTable::writeBlockByRegion(
     writeRegionDataToStorage(context, region, data_list_read, log);
     /// Move read data to outer to remove.
     data_list_to_remove = std::move(data_list_read);
+
+    /// Remove data in region.
+    {
+        auto remover = region->createCommittedRemover(lock_region);
+        for (const auto & [handle, write_type, commit_ts, value] : data_list_to_remove)
+        {
+            std::ignore = write_type;
+            std::ignore = value;
+
+            remover.remove({handle, commit_ts});
+        }
+    }
 }
 
 std::tuple<Block, RegionException::RegionReadStatus> RegionTable::readBlockByRegion(const TiDB::TableInfo & table_info,
