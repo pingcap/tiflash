@@ -55,7 +55,7 @@ namespace DB
         F(type_raft_read_index_duration, {{"type", "tmt_raft_read_index_duration"}}, ExpBuckets{0.0005, 2, 20}))                          \
     M(tiflash_raft_wait_index_duration_seconds, "Bucketed histogram of raft wait index duration", Histogram,                              \
         F(type_raft_wait_index_duration, {{"type", "tmt_raft_wait_index_duration"}}, ExpBuckets{0.0005, 2, 20}))                          \
-    M(tiflash_write_amplification, "The data write amplification", Gauge)                                                                 \
+    M(tiflash_write_amplification, "The data write amplification", Gauge)
 
 
 struct ExpBuckets
