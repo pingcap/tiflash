@@ -3,10 +3,11 @@
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test
 
-=> DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64')
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64', '', 'dt')
 
 => DBGInvoke __region_snapshot(4, 0, 100, default, test)
 
+# raft_insert_row_full(database_name, table_name, region_id, handle_id, tso, del, val1, val2, ...)
 => DBGInvoke __raft_insert_row_full(default, test, 4, 2, 1, 0, 10)
 => DBGInvoke __raft_insert_row_full(default, test, 4, 1, 1, 0, 12)
 => DBGInvoke __raft_insert_row_full(default, test, 4, 3, 1, 0, 14)
@@ -16,13 +17,11 @@
 => select (*) from default.test " --schema_version "10000000
 ┌─col_1─┬─_tidb_rowid─┐
 │    12 │           1 │
-└───────┴─────────────┘
-┌─col_1─┬─_tidb_rowid─┐
 │    10 │           2 │
 │    14 │           3 │
 │    16 │           5 │
 └───────┴─────────────┘
-=> selraw (*) from default.test order by _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
+=> selraw (*),_INTERNAL_VERSION, _INTERNAL_DELMARK from default.test order by _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
 ┌─col_1─┬─_tidb_rowid─┬─_INTERNAL_VERSION─┬─_INTERNAL_DELMARK─┐
 │    12 │           1 │                 1 │                 0 │
 │    10 │           2 │                 1 │                 0 │
@@ -31,12 +30,11 @@
 │     0 │           4 │                 4 │                 1 │
 │    16 │           5 │                 1 │                 0 │
 └───────┴─────────────┴───────────────────┴───────────────────┘
-=> selraw nokvstore (*) from default.test order by _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
 => DBGInvoke dump_all_mock_region(default, test)
-┌─dump_all_mock_region(default, test)────────────────────┐
-│ [region 4] ranges: [0, 100), state: Normal, [write 6 ] │
-│ total size: 1                                          │
-└────────────────────────────────────────────────────────┘
+┌─dump_all_mock_region(default, test)────────┐
+│ [region 4] ranges: [0, 100), state: Normal │
+│ total size: 1                              │
+└────────────────────────────────────────────┘
 => DBGInvoke region_split(4, default, test, 0, 4, 4, 100, 5)
 ┌─region_split(4, default, test, 0, 4, 4, 100, 5)─┐
 │ execute batch split, region 4 into (4,5)        │
@@ -49,17 +47,11 @@
 │    12 │           1 │
 │    10 │           2 │
 │    14 │           3 │
-└───────┴─────────────┘
-┌─col_1─┬─_tidb_rowid─┐
 │    16 │           5 │
-└───────┴─────────────┘
-┌─col_1─┬─_tidb_rowid─┐
 │    19 │          10 │
-└───────┴─────────────┘
-┌─col_1─┬─_tidb_rowid─┐
 │    18 │          11 │
 └───────┴─────────────┘
-=> selraw (*) from default.test order by _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
+=> selraw (*), _INTERNAL_VERSION, _INTERNAL_DELMARK from default.test order by _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
 ┌─col_1─┬─_tidb_rowid─┬─_INTERNAL_VERSION─┬─_INTERNAL_DELMARK─┐
 │    12 │           1 │                 1 │                 0 │
 │    10 │           2 │                 1 │                 0 │
@@ -72,30 +64,30 @@
 │    18 │          11 │                 1 │                 0 │
 └───────┴─────────────┴───────────────────┴───────────────────┘
 => DBGInvoke dump_all_mock_region(default, test)
-┌─dump_all_mock_region(default, test)────────────────────┐
-│ [region 5] ranges: [4, 100), state: Normal, [write 6 ] │
-│ [region 4] ranges: [0, 4), state: Normal, [write 3 ]   │
-│ total size: 2                                          │
-└────────────────────────────────────────────────────────┘
+┌─dump_all_mock_region(default, test)────────┐
+│ [region 5] ranges: [4, 100), state: Normal │
+│ [region 4] ranges: [0, 4), state: Normal   │
+│ total size: 2                              │
+└────────────────────────────────────────────┘
 => DBGInvoke region_prepare_merge(4, 5);
 ┌─region_prepare_merge(4, 5)───────────────┐
 │ execute prepare merge, source 4 target 5 │
 └──────────────────────────────────────────┘
 => DBGInvoke dump_all_mock_region(default, test)
-┌─dump_all_mock_region(default, test)────────────────────┐
-│ [region 5] ranges: [4, 100), state: Normal, [write 6 ] │
-│ [region 4] ranges: [0, 4), state: Merging, [write 3 ]  │
-│ total size: 2                                          │
-└────────────────────────────────────────────────────────┘
+┌─dump_all_mock_region(default, test)────────┐
+│ [region 5] ranges: [4, 100), state: Normal │
+│ [region 4] ranges: [0, 4), state: Merging  │
+│ total size: 2                              │
+└────────────────────────────────────────────┘
 => DBGInvoke region_commit_merge(4, 5);
 ┌─region_commit_merge(4, 5)────────────────┐
 │ execute commit merge, source 4 current 5 │
 └──────────────────────────────────────────┘
 => DBGInvoke dump_all_mock_region(default, test)
-┌─dump_all_mock_region(default, test)────────────────────┐
-│ [region 5] ranges: [0, 100), state: Normal, [write 9 ] │
-│ total size: 1                                          │
-└────────────────────────────────────────────────────────┘
+┌─dump_all_mock_region(default, test)────────┐
+│ [region 5] ranges: [0, 100), state: Normal │
+│ total size: 1                              │
+└────────────────────────────────────────────┘
 => DBGInvoke __try_flush_region(5)
 => DBGInvoke dump_all_mock_region(default, test)
 ┌─dump_all_mock_region(default, test)────────┐
