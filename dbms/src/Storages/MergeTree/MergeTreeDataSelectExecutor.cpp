@@ -61,6 +61,7 @@ struct numeric_limits<__uint128_t>
 #include <Storages/Transaction/CHTableHandle.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/VirtualColumnUtils.h>
@@ -167,6 +168,7 @@ struct RegionExecutorData
 {
     RegionQueryInfo info;
     Block block;
+    RegionScanFilterPtr range_scan_filter;
 
     RegionExecutorData() = default;
     RegionExecutorData(const RegionQueryInfo & info_) : info(info_) {}
@@ -176,12 +178,114 @@ struct RegionExecutorData
             return *this;
         info = std::move(data.info);
         block = std::move(data.block);
+        range_scan_filter = std::move(data.range_scan_filter);
         return *this;
     }
     RegionExecutorData(const RegionExecutorData &) = delete;
-    RegionExecutorData(RegionExecutorData && data) : info(std::move(data.info)), block(std::move(data.block)) {}
+    RegionExecutorData(RegionExecutorData && data) :
+    info(std::move(data.info)), block(std::move(data.block)), range_scan_filter(std::move(data.range_scan_filter)) {}
     bool operator<(const RegionExecutorData & o) const { return info < o.info; }
 };
+
+template <typename HandleType>
+bool isFullRegionScan(std::vector<HandleRange<HandleType>> & dag_required_handle_ranges, std::vector<HandleRange<HandleType>> & region_ranges)
+{
+    std::sort(dag_required_handle_ranges.begin(), dag_required_handle_ranges.end(),
+              [](const HandleRange<HandleType> & a, const HandleRange<HandleType> & b) { return a.first < b.first; });
+    bool need_merge = false;
+    for(size_t i = 0; i < dag_required_handle_ranges.size()-1; i++)
+        need_merge |= dag_required_handle_ranges[i].second >= dag_required_handle_ranges[i+1].first;
+    if (need_merge)
+    {
+        // merge dag_required_handle_ranges
+        size_t new_size = 0;
+        HandleRange<HandleType> current_range;
+        current_range.first = dag_required_handle_ranges[0].first;
+        current_range.second = dag_required_handle_ranges[0].second;
+        for (size_t i = 1; i < dag_required_handle_ranges.size(); i++)
+        {
+            if (current_range.second >= dag_required_handle_ranges[i].first)
+                current_range.second = current_range.second >= dag_required_handle_ranges[i].second ? current_range.second : dag_required_handle_ranges[i].second;
+            else
+            {
+                if (current_range.second > current_range.first)
+                    dag_required_handle_ranges[new_size++] = current_range;
+                current_range.first = dag_required_handle_ranges[i].first;
+                current_range.second = dag_required_handle_ranges[i].second;
+            }
+        }
+        if (current_range.second > current_range.first)
+            dag_required_handle_ranges[new_size++] = current_range;
+        dag_required_handle_ranges.resize(new_size);
+    }
+
+    bool ret = true;
+    for (const auto & region_range : region_ranges)
+    {
+        bool covered = false;
+        for (const auto & range : dag_required_handle_ranges)
+        {
+            if (region_range.first >= range.first && region_range.second <= range.second)
+            {
+                covered = true;
+                break;
+            }
+        }
+        if (!covered && region_range.second > region_range.first)
+        {
+            ret = false;
+            break;
+        }
+    }
+    return ret;
+}
+
+void checkAndSetRangeScanFilter(TMTPKType pk_type, std::vector<RegionExecutorData> & regions)  {
+    for(auto & r : regions)
+    {
+        if (r.info.required_handle_ranges.empty())
+        {
+            r.range_scan_filter = std::make_shared<RegionScanFilter>(true,
+                                  (std::vector<HandleRange<Int64>>){}, (std::vector<HandleRange<UInt64>>){});
+            continue;
+        }
+        if (pk_type == TMTPKType::UINT64)
+        {
+            std::vector<HandleRange<UInt64 >> dag_handle_ranges;
+            for(const auto & dag_range : r.info.required_handle_ranges)
+            {
+                const auto [n, new_range]
+                = CHTableHandle::splitForUInt64TableHandle(dag_range);
+                for (int i = 0; i < n; i++)
+                    dag_handle_ranges.push_back(new_range[i]);
+            }
+            std::vector<HandleRange<UInt64>> region_ranges;
+            // range_in_table should be initialized before calling this
+            const auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(r.info.range_in_table);
+            region_ranges.reserve(n);
+            for(int i = 0; i < n; i++)
+                region_ranges.push_back(new_range[i]);
+            if (isFullRegionScan<UInt64>(dag_handle_ranges, region_ranges))
+                r.range_scan_filter = std::make_shared<RegionScanFilter>(true,
+                        (std::vector<HandleRange<Int64>>){}, (std::vector<HandleRange<UInt64>>){});
+            else
+                r.range_scan_filter = std::make_shared<RegionScanFilter>(false,
+                        (std::vector<HandleRange<Int64>>){}, dag_handle_ranges);
+        }
+        else
+        {
+            std::vector<HandleRange<Int64>> region_ranges;
+            // range_in_table should be initialized before calling this
+            region_ranges.push_back(r.info.range_in_table);
+            if (isFullRegionScan<Int64>(r.info.required_handle_ranges, region_ranges))
+                r.range_scan_filter = std::make_shared<RegionScanFilter>(true,
+                                      (std::vector<HandleRange<Int64>>){}, (std::vector<HandleRange<UInt64>>){});
+            else
+                r.range_scan_filter = std::make_shared<RegionScanFilter>(false,
+                                      r.info.required_handle_ranges, (std::vector<HandleRange<UInt64>>){});
+        }
+    }
+}
 
 BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_to_return,
     const SelectQueryInfo & query_info,
@@ -213,7 +317,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
     const std::string handle_col_name = is_txn_engine ? data.getPrimarySortDescription()[0].column_name : "";
     size_t region_cnt = 0;
     std::vector<std::vector<RangesInDataParts>> region_group_range_parts;
-    std::vector<std::vector<std::deque<size_t>>> region_group_mem_block;
+    std::vector<std::vector<ReadGroup>> region_group_read_groups;
 
     std::vector<std::vector<HandleRange<HandleID>>> region_group_handle_ranges;
     std::vector<std::vector<HandleRange<UInt64>>> region_group_u64_handle_ranges;
@@ -303,7 +407,9 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
             regions_executor_data.reserve(regions.size());
             for (const auto & [id, region] : regions)
             {
-                regions_executor_data.emplace_back(RegionQueryInfo{id, region->version(), region->confVer(), {0, 0}});
+                regions_executor_data.emplace_back(
+                        RegionQueryInfo{id, region->version(), region->confVer(),
+                                        region->getHandleRangeByTable(data.table_info->id), {}});
             }
         }
 
@@ -322,6 +428,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         // make sure regions are not duplicated.
         if (kvstore_region.size() != regions_executor_data.size())
             throw Exception("Duplicate region id", ErrorCodes::LOGICAL_ERROR);
+
+        checkAndSetRangeScanFilter(pk_type, regions_executor_data);
 
         { // learner read
 
@@ -376,8 +484,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     }
 
                     auto [block, status] = RegionTable::readBlockByRegion(*data.table_info, data.getColumns(), tmt_column_names_to_read,
-                        kvstore_region[region_query_info.region_id], region_query_info.version, region_query_info.conf_version,
-                        mvcc_query_info.resolve_locks, mvcc_query_info.read_tso, region_query_info.range_in_table);
+                        kvstore_region[region_query_info.region_id], region_query_info.version, region_query_info.conf_version, mvcc_query_info.resolve_locks,
+                        mvcc_query_info.read_tso, region_query_info.range_in_table, regions_executor_data[region_index].range_scan_filter);
 
                     if (status != RegionException::RegionReadStatus::OK)
                     {
@@ -477,7 +585,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         }
 
         region_group_range_parts.assign(concurrent_num, {});
-        region_group_mem_block.assign(concurrent_num, {});
+        region_group_read_groups.assign(concurrent_num, {});
         if (pk_type == TMTPKType::UINT64)
             region_group_u64_handle_ranges.assign(concurrent_num, {});
         else
@@ -917,21 +1025,32 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                 for (size_t region_index = region_begin, region_end = region_begin + thread_region_size; region_index < region_end;
                      ++region_index)
                 {
-                    const auto [n, new_range]
-                        = CHTableHandle::splitForUInt64TableHandle(regions_executor_data[region_index].info.range_in_table);
+                    const auto & region_data = regions_executor_data[region_index];
+                    if (region_data.range_scan_filter->isFullRangeScan())
+                    {
+                        const auto[n, new_range]
+                        = CHTableHandle::splitForUInt64TableHandle(
+                                region_data.info.range_in_table);
 
-                    if (n != 1)
-                        throw Exception("split for uint64 handle should be only 1 ranges", ErrorCodes::LOGICAL_ERROR);
+                        if (n != 1)
+                            throw Exception("split for uint64 handle should be only 1 range",
+                                            ErrorCodes::LOGICAL_ERROR);
 
-                    handle_ranges.emplace_back(new_range[0], region_index);
-                    mem_rows += regions_executor_data[region_index].block.rows();
+                        handle_ranges.emplace_back(new_range[0], region_index);
+                    }
+                    else
+                    {
+                        for (const HandleRange<UInt64> & handle_range : region_data.range_scan_filter->getUInt64Ranges())
+                            handle_ranges.emplace_back(handle_range, region_index);
+                    }
+                    mem_rows += region_data.block.rows();
                 }
 
                 // the order of uint64 is different with int64.
                 std::sort(handle_ranges.begin(), handle_ranges.end(),
                     [](const UInt64RangeElement & a, const UInt64RangeElement & b) { return a.first < b.first; });
 
-                computeHandleRanges<UInt64>(region_group_mem_block[thread_idx],
+                computeHandleRanges<UInt64>(region_group_read_groups[thread_idx],
                     handle_ranges,
                     region_group_range_parts[thread_idx],
                     region_group_u64_handle_ranges[thread_idx],
@@ -949,13 +1068,20 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                 for (size_t region_index = region_begin, region_end = region_begin + thread_region_size; region_index < region_end;
                      ++region_index)
                 {
-                    handle_ranges.emplace_back(regions_executor_data[region_index].info.range_in_table, region_index);
-                    mem_rows += regions_executor_data[region_index].block.rows();
+                    const auto & region_data = regions_executor_data[region_index];
+                    if (region_data.range_scan_filter->isFullRangeScan())
+                        handle_ranges.emplace_back(region_data.info.range_in_table, region_index);
+                    else
+                    {
+                        for (const HandleRange<Int64> &handle_range : region_data.range_scan_filter->getInt64Ranges())
+                            handle_ranges.emplace_back(handle_range, region_index);
+                    }
+                    mem_rows += region_data.block.rows();
                 }
 
                 // handle_ranges is sorted.
 
-                computeHandleRanges<Int64>(region_group_mem_block[thread_idx],
+                computeHandleRanges<Int64>(region_group_read_groups[thread_idx],
                     handle_ranges,
                     region_group_range_parts[thread_idx],
                     region_group_handle_ranges[thread_idx],
@@ -1060,30 +1186,32 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                 BlockInputStreams union_regions_stream;
 
                 auto & range_parts = region_group_range_parts[thread_idx];
-                auto & mem_blocks = region_group_mem_block[thread_idx];
-                for (size_t range_idx = 0; range_idx < range_parts.size(); ++range_idx)
+                auto & read_groups = region_group_read_groups[thread_idx];
+                for (size_t read_group_idx = 0; read_group_idx < read_groups.size(); ++read_group_idx)
                 {
-                    auto & data_parts = range_parts[range_idx];
-                    auto & block_indexes = mem_blocks[range_idx];
-
+                    auto & read_group = read_groups[read_group_idx];
                     BlockInputStreams merging;
 
-                    for (size_t part_idx = 0; part_idx < data_parts.size(); ++part_idx)
+                    for (size_t range_idx = read_group.start_range_index; range_idx <= read_group.end_range_index; ++range_idx)
                     {
-                        const auto & part = data_parts[part_idx];
-                        BlockInputStreamPtr source_stream = func_make_merge_tree_input(part, part.ranges);
+                        auto & data_parts = range_parts[range_idx];
+                        for (size_t part_idx = 0; part_idx < data_parts.size(); ++part_idx)
+                        {
+                            const auto & part = data_parts[part_idx];
+                            BlockInputStreamPtr source_stream = func_make_merge_tree_input(part, part.ranges);
 
-                        if (pk_type == TMTPKType::UINT64)
-                            source_stream
-                                = func_make_uint64_range_filter_input(source_stream, region_group_u64_handle_ranges[thread_idx][range_idx]);
-                        else
-                            source_stream = func_make_range_filter_input(source_stream, region_group_handle_ranges[thread_idx][range_idx]);
+                            if (pk_type == TMTPKType::UINT64)
+                                source_stream
+                                        = func_make_uint64_range_filter_input(source_stream, region_group_u64_handle_ranges[thread_idx][range_idx]);
+                            else
+                                source_stream = func_make_range_filter_input(source_stream, region_group_handle_ranges[thread_idx][range_idx]);
 
-                        source_stream = func_make_version_filter_input(source_stream);
+                            source_stream = func_make_version_filter_input(source_stream);
 
-                        merging.emplace_back(source_stream);
+                            merging.emplace_back(source_stream);
+                        }
                     }
-
+                    auto & block_indexes = read_group.mem_block_indexes;
                     {
                         BlocksList blocks;
                         for (size_t idx : block_indexes)
@@ -1110,12 +1238,23 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     size_t region_sum_ranges = 0, region_sum_marks = 0;
                     BlockInputStreams merging;
 
+                    std::vector<HandleRange<UInt64>> ranges;
                     const auto & special_region_info = regions_executor_data[special_region_index];
-                    const auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(special_region_info.info.range_in_table);
-
-                    for (int i = 0; i < n; ++i)
+                    if (special_region_info.range_scan_filter->isFullRangeScan())
                     {
-                        const auto & handle_range = new_range[i];
+                        const auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(special_region_info.info.range_in_table);
+                        for (int i = 0; i < n; ++i)
+                            ranges.push_back(new_range[i]);
+                    }
+                    else
+                    {
+                        for (const HandleRange<UInt64> & range : special_region_info.range_scan_filter->getUInt64Ranges())
+                            ranges.push_back(range);
+                    }
+
+                    for (size_t i = 0; i < ranges.size(); ++i)
+                    {
+                        const auto & handle_range = ranges[i];
 
                         for (const RangesInDataPart & part : parts_with_ranges)
                         {
@@ -1143,17 +1282,17 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     {
                         std::stringstream ss;
 
-                        for (auto i = 0; i < n; ++i)
+                        for (size_t i = 0; i < ranges.size(); ++i)
                         {
                             ss << "[";
-                            new_range[i].first.toString(ss);
+                            ranges[i].first.toString(ss);
                             ss << ",";
-                            new_range[i].second.toString(ss);
+                            ranges[i].second.toString(ss);
                             ss << ") ";
                         }
                         LOG_DEBUG(log,
                             "[PK_IS_UINT64] special region "
-                                << special_region_info.info.region_id << ", split range into " << n << ": " << ss.str() << ", "
+                                << special_region_info.info.region_id << ", split range into " << ranges.size() << ": " << ss.str() << ", "
                                 << region_sum_marks << " marks to read from " << region_sum_ranges << " ranges, read "
                                 << regions_executor_data[special_region_index].block.rows() << " rows from memory");
                     }

@@ -2,6 +2,7 @@
 
 #include <Core/Names.h>
 #include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/TiKVHandle.h>
@@ -138,7 +139,8 @@ public:
         RegionVersion conf_version,
         bool resolve_locks,
         Timestamp start_ts,
-        DB::HandleRange<HandleID> & handle_range);
+        DB::HandleRange<HandleID> & handle_range,
+        RegionScanFilterPtr scan_filter = nullptr);
 
     /// Check transaction locks in region, and write committed data in it into storage engine if check passed. Otherwise throw an LockException.
     /// The write logic is the same as #writeBlockByRegion, with some extra checks about region version and conf_version.

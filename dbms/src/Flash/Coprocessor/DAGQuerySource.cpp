@@ -70,6 +70,7 @@ DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, co
                     "Unsupported executor in DAG request: " + dag_request.executors(i).DebugString(), ErrorCodes::NOT_IMPLEMENTED);
         }
     }
+
     analyzeResultFieldTypes();
     analyzeDAGEncodeType();
 }

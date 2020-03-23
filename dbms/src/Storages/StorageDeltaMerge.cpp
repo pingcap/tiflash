@@ -359,7 +359,8 @@ RegionMap doLearnerRead(const TiDB::TableID table_id,           //
         {
             if (region == nullptr)
                 continue;
-            regions_info.emplace_back(RegionQueryInfo{id, region->version(), region->confVer(), {0, 0}});
+            regions_info.emplace_back(
+                RegionQueryInfo{id, region->version(), region->confVer(), region->getHandleRangeByTable(table_id), {}});
         }
     }
 
@@ -678,8 +679,17 @@ BlockInputStreams StorageDeltaMerge::read( //
                 std::stringstream ss;
                 for (const auto & region : mvcc_query_info.regions_query_info)
                 {
-                    const auto & range = region.range_in_table;
-                    ss << region.region_id << "[" << range.first.toString() << "," << range.second.toString() << "),";
+                    if (!region.required_handle_ranges.empty())
+                    {
+                        for (const auto & range : region.required_handle_ranges)
+                            ss << region.region_id << "[" << range.first.toString() << "," << range.second.toString() << "),";
+                    }
+                    else
+                    {
+                        /// only used for test cases
+                        const auto & range = region.range_in_table;
+                        ss << region.region_id << "[" << range.first.toString() << "," << range.second.toString() << "),";
+                    }
                 }
                 std::stringstream ss_merged_range;
                 for (const auto & range : ranges)
