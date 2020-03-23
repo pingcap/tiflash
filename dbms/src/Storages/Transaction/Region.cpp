@@ -418,7 +418,7 @@ ReadIndexResult Region::learnerRead()
     return {};
 }
 
-void Region::waitIndex(UInt64 index)
+TerminateWaitIndex Region::waitIndex(UInt64 index, const std::atomic_bool & terminated)
 {
     if (index_reader != nullptr)
     {
@@ -426,10 +426,12 @@ void Region::waitIndex(UInt64 index)
         if (index != 1 + RAFT_INIT_LOG_INDEX && !meta.checkIndex(index))
         {
             LOG_DEBUG(log, toString() << " need to wait learner index: " << index);
-            meta.waitIndex(index);
+            if (meta.waitIndex(index, terminated))
+                return true;
             LOG_DEBUG(log, toString(false) << " wait learner index " << index << " done");
         }
     }
+    return false;
 }
 
 UInt64 Region::version() const { return meta.version(); }
