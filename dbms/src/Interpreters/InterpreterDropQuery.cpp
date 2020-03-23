@@ -123,10 +123,10 @@ BlockIO InterpreterDropQuery::execute()
                     ErrorCodes::TABLE_WAS_NOT_DROPPED);
         }
 
-        table.first->shutdown();
-
         /// If table was already dropped by anyone, an exception will be thrown
         auto table_lock = table.first->lockForAlter(__PRETTY_FUNCTION__);
+
+        table.first->shutdown();
 
         String current_table_name = table.first->getTableName();
 
