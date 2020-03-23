@@ -418,7 +418,7 @@ ReadIndexResult Region::learnerRead()
     return {};
 }
 
-bool Region::waitIndex(UInt64 index, const std::atomic_bool & terminated)
+TerminateWaitIndex Region::waitIndex(UInt64 index, const std::atomic_bool & terminated)
 {
     if (index_reader != nullptr)
     {

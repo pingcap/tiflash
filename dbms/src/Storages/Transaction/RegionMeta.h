@@ -16,6 +16,7 @@ struct RegionMergeResult;
 class Region;
 class MetaRaftCommandDelegate;
 class RegionRaftCommandDelegate;
+using TerminateWaitIndex = bool;
 
 class RegionMeta
 {
@@ -61,7 +62,7 @@ public:
 
     friend bool operator==(const RegionMeta & meta1, const RegionMeta & meta2);
 
-    bool waitIndex(UInt64 index, const std::atomic_bool & terminated) const;
+    TerminateWaitIndex waitIndex(UInt64 index, const std::atomic_bool & terminated) const;
     bool checkIndex(UInt64 index) const;
 
     bool isPeerRemoved() const;
