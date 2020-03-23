@@ -33,7 +33,6 @@ public:
     UInt32 id;
     const tipb::Executor * root;
     String qb_column_prefix;
-    // todo use unique_ptr instead
     std::vector<std::shared_ptr<DAGQueryBlock>> children;
     std::vector<tipb::FieldType> output_field_types;
     // kinds of project

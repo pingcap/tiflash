@@ -2,6 +2,7 @@
 
 #include <Core/Names.h>
 #include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/TiKVHandle.h>
@@ -138,7 +139,8 @@ public:
         RegionVersion conf_version,
         bool resolve_locks,
         Timestamp start_ts,
-        DB::HandleRange<HandleID> & handle_range);
+        DB::HandleRange<HandleID> & handle_range,
+        RegionScanFilterPtr scan_filter = nullptr);
 
     /// Check if there are any lock should be resolved, if so, throw LockException.
     static void resolveLocks(Region::CommittedScanner & scanner, const Timestamp start_ts);
