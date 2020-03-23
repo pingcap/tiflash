@@ -1033,7 +1033,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                                 region_data.info.range_in_table);
 
                         if (n != 1)
-                            throw Exception("split for uint64 handle should be only 1 ranges",
+                            throw Exception("split for uint64 handle should be only 1 range",
                                             ErrorCodes::LOGICAL_ERROR);
 
                         handle_ranges.emplace_back(new_range[0], region_index);

@@ -416,9 +416,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     {
         if (r.key_ranges.empty())
         {
-            /// todo should throw exception as it should not happen
-            LOG_WARNING(log, "Income key ranges is empty for region: " + std::to_string(r.region_id) + " ignore this region");
-            continue;
+            throw Exception("Income key ranges is empty for region: " + std::to_string(r.region_id), ErrorCodes::COP_BAD_DAG_REQUEST);
         }
         RegionQueryInfo info;
         info.region_id = r.region_id;
