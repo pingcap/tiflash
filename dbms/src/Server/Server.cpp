@@ -396,7 +396,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     bool disable_bg_flush = false;
 
-    ::TiDB::StorageEngine engine_if_empty = ::TiDB::StorageEngine::TMT;
+    ::TiDB::StorageEngine engine_if_empty = ::TiDB::StorageEngine::DT;
     ::TiDB::StorageEngine engine = engine_if_empty;
 
     if (config().has("raft"))
