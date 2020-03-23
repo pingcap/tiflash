@@ -373,7 +373,11 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     else
                     {
                         Stopwatch wait_index_watch;
-                        region->waitIndex(read_index_result.read_index, tmt.getTerminated());
+                        if (region->waitIndex(read_index_result.read_index, tmt.getTerminated()))
+                        {
+                            region_status = RegionException::RegionReadStatus::NOT_FOUND;
+                            continue;
+                        }
                         GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_wait_index_duration_seconds)
                             .Observe(wait_index_watch.elapsedSeconds());
                     }
