@@ -8,7 +8,7 @@ mysql> alter table test.t add column b year not null;
 SLEEP 15
 
 >> DBGInvoke __try_flush()
-mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_storage(t) */ * from test.t;
+mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_storage(tiflash[t]) */ * from test.t;
 +------+------+
 | a    | b    |
 +------+------+
@@ -17,7 +17,7 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_s
 +------+------+
 
 mysql> alter table test.t add column c year not null;
-mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_storage(t) */ * from test.t;
+mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_storage(tiflash[t]) */ * from test.t;
 +------+------+------+
 | a    | b    | c    |
 +------+------+------+
