@@ -77,14 +77,17 @@ mysql> insert into test.t values (1);
 mysql> alter table test.t add year_0 YEAR NULL DEFAULT '1901' 
 mysql> alter table test.t add year_1 YEAR NULL DEFAULT '2155' 
 mysql> alter table test.t add year_2 YEAR NULL DEFAULT '0000' 
-mysql> alter table test.t add year_a YEAR NOT NULL
+mysql> alter table test.t add year_3 YEAR NULL DEFAULT '01' 
+mysql> alter table test.t add year_4 YEAR NULL DEFAULT '70' 
+mysql> alter table test.t add year_5 YEAR NULL DEFAULT '00' 
+## different behavior for tikv and tiflash, in tiflash, the default value is 0000, which is the same as mysql-5.6, and in tikv, the default value is 2000
+#mysql> alter table test.t add year_a YEAR NOT NULL
 
-#TODO: fix zero value for year
-#SLEEP 15
-#mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
-#+------+--------+--------+--------+--------+
-#| a    | year_0 | year_1 | year_2 | year_a |
-#+------+--------+--------+--------+--------+
-#|    1 |   1901 |   2155 |   0000 |   2000 |
-#+------+--------+--------+--------+--------+
+SLEEP 15
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
++------+--------+--------+--------+--------+--------+--------+
+| a    | year_0 | year_1 | year_2 | year_3 | year_4 | year_5 |
++------+--------+--------+--------+--------+--------+--------+
+|    1 |   1901 |   2155 |   0000 |   2001 |   1970 |   2000 |
++------+--------+--------+--------+--------+--------+--------+
 
