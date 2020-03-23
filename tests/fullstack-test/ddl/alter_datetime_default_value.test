@@ -80,7 +80,7 @@ mysql> alter table test.t add year_2 YEAR NULL DEFAULT '0000'
 mysql> alter table test.t add year_3 YEAR NULL DEFAULT '01' 
 mysql> alter table test.t add year_4 YEAR NULL DEFAULT '70' 
 mysql> alter table test.t add year_5 YEAR NULL DEFAULT '00' 
-## different behavior for tikv and tiflash, in tiflash, the default value is 0000, which is the same as mysql-5.6, and in tikv, the default value is 2000
+## for tiflash, the value of year_a is un-stable(FLASH-1030)
 #mysql> alter table test.t add year_a YEAR NOT NULL
 
 SLEEP 15
