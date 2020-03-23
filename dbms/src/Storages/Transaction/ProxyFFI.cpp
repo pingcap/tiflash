@@ -139,4 +139,6 @@ void HandleIngestSST(TiFlashServer * server, SnapshotViewArray snaps, RaftCmdHea
     }
 }
 
+uint8_t HandleCheckTerminated(TiFlashServer * server) { return server->tmt.getTerminated().load(std::memory_order_relaxed) ? 1 : 0; }
+
 } // namespace DB
