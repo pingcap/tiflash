@@ -426,7 +426,8 @@ bool Region::waitIndex(UInt64 index, const std::atomic_bool & terminated)
         if (index != 1 + RAFT_INIT_LOG_INDEX && !meta.checkIndex(index))
         {
             LOG_DEBUG(log, toString() << " need to wait learner index: " << index);
-            return meta.waitIndex(index, terminated);
+            if (meta.waitIndex(index, terminated))
+                return true;
             LOG_DEBUG(log, toString(false) << " wait learner index " << index << " done");
         }
     }
