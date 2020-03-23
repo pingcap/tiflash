@@ -92,4 +92,13 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
     getKVStore()->setRegionCompactLogPeriod(Seconds{config.getUInt64(COMPACT_LOG_MIN_PERIOD, 200)});
 }
 
+const std::atomic_bool & TMTContext::getTerminated() const { return terminated; }
+
+void TMTContext::setTerminated()
+{
+    terminated = true;
+    // notify all region to stop learner read.
+    kvstore->traverseRegions([](const RegionID, const RegionPtr & region) { region->notifyApplied(); });
+}
+
 } // namespace DB
