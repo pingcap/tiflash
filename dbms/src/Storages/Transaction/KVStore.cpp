@@ -198,7 +198,8 @@ void KVStore::mockRemoveRegion(const DB::RegionID region_id, RegionTable & regio
 {
     auto task_lock = genTaskLock();
     auto region_lock = region_manager.genRegionTaskLock(region_id);
-    removeRegion(region_id, /* remove_data */ false, region_table, task_lock, region_lock);
+    // mock remove region should remove data by default
+    removeRegion(region_id, /* remove_data */ true, region_table, task_lock, region_lock);
 }
 
 void KVStore::removeRegion(const RegionID region_id, bool remove_data, RegionTable & region_table, const KVStoreTaskLock & task_lock,
