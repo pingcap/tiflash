@@ -613,6 +613,7 @@ TiFlashApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 in
 
         if (tmt.isBgFlushDisabled())
         {
+            /// Flush data right after they are committed.
             RegionDataReadInfoList data_list_to_remove;
             RegionTable::writeBlockByRegion(tmt.getContext(), shared_from_this(), data_list_to_remove, log, false);
 

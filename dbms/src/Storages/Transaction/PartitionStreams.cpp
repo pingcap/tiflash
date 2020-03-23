@@ -204,13 +204,11 @@ void RegionTable::writeBlockByRegion(
     }
 
     writeRegionDataToStorage(context, region, data_list_read, log);
-    /// Move read data to outer to remove.
-    data_list_to_remove = std::move(data_list_read);
 
     /// Remove data in region.
     {
         auto remover = region->createCommittedRemover(lock_region);
-        for (const auto & [handle, write_type, commit_ts, value] : data_list_to_remove)
+        for (const auto & [handle, write_type, commit_ts, value] : data_list_read)
         {
             std::ignore = write_type;
             std::ignore = value;
@@ -218,6 +216,9 @@ void RegionTable::writeBlockByRegion(
             remover.remove({handle, commit_ts});
         }
     }
+
+    /// Save removed data to outer.
+    data_list_to_remove = std::move(data_list_read);
 }
 
 std::tuple<Block, RegionException::RegionReadStatus> RegionTable::readBlockByRegion(const TiDB::TableInfo & table_info,
