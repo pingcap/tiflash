@@ -149,7 +149,7 @@ TerminateWaitIndex RegionMeta::waitIndex(UInt64 index, const std::atomic_bool & 
     std::unique_lock<std::mutex> lock(mutex);
     TerminateWaitIndex res = false;
     cv.wait(lock, [&] {
-        if (terminated.load(std::memory_order_relaxed))
+        if (terminated)
         {
             res = true;
             return true;
