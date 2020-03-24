@@ -150,7 +150,7 @@ catchError {
                                         if (firstTrial) {
                                             firstTrial = false
                                         } else {
-                                            sleep time: 5, unit: "SECONDS"
+                                            sleep time: 1, unit: "MINUTES"
                                         }
                                         sh "docker pull hub.pingcap.net/tiflash/tics:${params.ghprbActualCommit}"
                                     }
