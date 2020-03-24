@@ -26,7 +26,7 @@ public:
 
     const OrderedNameSet & hiddenColumns(const String& table_type_name)
     {
-        if (mmt_storage_name == table_type_name || txn_storage_name == table_type_name)
+        if (mmt_storage_name == table_type_name || txn_storage_name == table_type_name || delta_tree_storage_name == table_type_name)
             return mutable_hidden;
         return empty;
     }
@@ -51,6 +51,7 @@ public:
 
     static const String mmt_storage_name;
     static const String txn_storage_name;
+    static const String delta_tree_storage_name;
 
     static const String tidb_pk_column_name;
     static const String version_column_name;

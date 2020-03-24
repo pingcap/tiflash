@@ -30,7 +30,7 @@ struct TiKVRangeKey;
 
 class TMTContext;
 
-struct SnapshotDataView;
+struct SnapshotViewArray;
 struct WriteCmdsView;
 
 enum TiFlashApplyRes : uint32_t;
@@ -69,18 +69,26 @@ public:
     TiFlashApplyRes handleWriteRaftCmd(
         raft_cmdpb::RaftCmdRequest && request, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
     TiFlashApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
-    void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, const SnapshotDataView & lock_buff,
-        const SnapshotDataView & write_buff, const SnapshotDataView & default_buff, uint64_t index, uint64_t term, TMTContext & tmt);
+    void handleApplySnapshot(
+        metapb::Region && region, uint64_t peer_id, const SnapshotViewArray snaps, uint64_t index, uint64_t term, TMTContext & tmt);
     bool tryApplySnapshot(RegionPtr new_region, Context & context, bool try_flush_region);
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
     void setRegionCompactLogPeriod(Seconds period);
+    void handleIngestSST(UInt64 region_id, const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt);
 
 private:
     friend class MockTiDB;
     friend struct MockTiDBTable;
     friend void dbgFuncRemoveRegion(Context &, const ASTs &, /*DBGInvoker::Printer*/ std::function<void(const std::string &)>);
-    void removeRegion(
-        const RegionID region_id, RegionTable & region_table, const KVStoreTaskLock & task_lock, const RegionTaskLock & region_lock);
+
+    // Remove region from this TiFlash node.
+    // If region is destroy or moved to another node(change peer),
+    // set `remove_data` true to remove obsolete data from storage.
+    void removeRegion(const RegionID region_id,
+        bool remove_data,
+        RegionTable & region_table,
+        const KVStoreTaskLock & task_lock,
+        const RegionTaskLock & region_lock);
     void mockRemoveRegion(const RegionID region_id, RegionTable & region_table);
     KVStoreTaskLock genTaskLock() const;
 

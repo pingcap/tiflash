@@ -1,13 +1,13 @@
 #pragma once
 
-#include <optional>
-
 #include <Core/Field.h>
 #include <Core/Types.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
-#include <Storages/Transaction/Types.h>
 #include <Storages/Transaction/StorageEngineType.h>
+#include <Storages/Transaction/Types.h>
+
+#include <optional>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -288,6 +288,8 @@ struct TableInfo
     ColumnID getColumnID(const String & name) const;
     String getColumnName(const ColumnID id) const;
     ColumnInfo getColumnInfoByID(const ColumnID id) const;
+
+    const ColumnInfo & getColumnInfo(const ColumnID id) const;
 
     std::optional<std::reference_wrapper<const ColumnInfo>> getPKHandleColumn() const;
 

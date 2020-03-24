@@ -57,8 +57,8 @@ bool DeltaValueSpace::compact(DMContext & context)
         {
             if (!pack->isSaved())
                 break;
-            if ((unlikely(pack->isMutable())))
-                throw Exception("Saved pack is mutable", ErrorCodes::LOGICAL_ERROR);
+            if ((unlikely(pack->dataFlushable())))
+                throw Exception("Saved pack is data flushable", ErrorCodes::LOGICAL_ERROR);
 
             bool small_pack = !pack->isDeleteRange() && pack->rows < context.delta_small_pack_rows;
             bool schema_ok  = task.to_compact.empty() || pack->schema == task.to_compact.back()->schema;
@@ -118,10 +118,13 @@ bool DeltaValueSpace::compact(DMContext & context)
             if (unlikely(pack->isDeleteRange()))
                 throw Exception("Unexpectedly selected a delete range to compact", ErrorCodes::LOGICAL_ERROR);
 
+            // We ensure schema of all packs are the same
             Block  block      = pack->isCached() ? readPackFromCache(pack) : readPackFromDisk(pack, reader);
             size_t block_rows = block.rows();
             for (size_t i = 0; i < schema.columns(); ++i)
+            {
                 compact_columns[i]->insertRangeFrom(*block.getByPosition(i).column, 0, block_rows);
+            }
 
             wbs.removed_log.delPage(pack->data_page);
         }

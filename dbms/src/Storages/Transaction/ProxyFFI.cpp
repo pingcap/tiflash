@@ -79,15 +79,15 @@ TiFlashApplyRes HandleAdminRaftCmd(const TiFlashServer * server, BaseBuffView re
     }
 }
 
-void HandleApplySnapshot(const TiFlashServer * server, BaseBuffView region_buff, uint64_t peer_id, SnapshotDataView lock_cf_view,
-    SnapshotDataView write_cf_view, SnapshotDataView default_cf_view, uint64_t index, uint64_t term)
+void HandleApplySnapshot(
+    const TiFlashServer * server, BaseBuffView region_buff, uint64_t peer_id, SnapshotViewArray snaps, uint64_t index, uint64_t term)
 {
     try
     {
         metapb::Region region;
         region.ParseFromArray(region_buff.data, (int)region_buff.len);
         auto & kvstore = server->tmt.getKVStore();
-        kvstore->handleApplySnapshot(std::move(region), peer_id, lock_cf_view, write_cf_view, default_cf_view, index, term, server->tmt);
+        kvstore->handleApplySnapshot(std::move(region), peer_id, snaps, index, term, server->tmt);
     }
     catch (...)
     {
@@ -124,5 +124,21 @@ void HandleDestroy(TiFlashServer * server, RegionId region_id)
         exit(-1);
     }
 }
+
+void HandleIngestSST(TiFlashServer * server, SnapshotViewArray snaps, RaftCmdHeader header)
+{
+    try
+    {
+        auto & kvstore = server->tmt.getKVStore();
+        kvstore->handleIngestSST(header.region_id, snaps, header.index, header.term, server->tmt);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        exit(-1);
+    }
+}
+
+uint8_t HandleCheckTerminated(TiFlashServer * server) { return server->tmt.getTerminated().load(std::memory_order_relaxed) ? 1 : 0; }
 
 } // namespace DB

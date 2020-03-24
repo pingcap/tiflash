@@ -191,7 +191,7 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
     else if (engine_type == "buggy")
         table_info.engine_type = TiDB::StorageEngine::DEBUGGING_MEMORY;
     else
-        throw Exception("Unknown engine type : " + engine_type + ", must be 'tmt' or 'dm'", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception("Unknown engine type : " + engine_type + ", must be 'tmt' or 'dt'", ErrorCodes::BAD_ARGUMENTS);
 
     auto table = std::make_shared<Table>(database_name, table_name, std::move(table_info));
     tables_by_id.emplace(table->table_info.id, table);

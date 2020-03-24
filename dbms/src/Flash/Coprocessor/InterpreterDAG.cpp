@@ -451,6 +451,7 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     info.range_in_table = current_region->getHandleRangeByTable(table_id);
     query_info.mvcc_query_info->regions_query_info.push_back(info);
     query_info.mvcc_query_info->concurrent = 0.0;
+<<<<<<< HEAD
     if (ts.next_read_engine() == tipb::EngineType::Local) {
         pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size,
                                          max_streams);
@@ -483,6 +484,18 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
 >>>>>>> c2d620553... support batch cop
 
     LOG_INFO(log, "dag execution stream size: " << dag.getRegions().size());
+=======
+    try
+    {
+        pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
+    }
+    catch (DB::Exception & e)
+    {
+        e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
+            + "`, table_id: " + DB::toString(table_id) + ")");
+        throw;
+    }
+>>>>>>> b7776d3a8452a4288445a91a364f2e88c66f0fe6
 
     if (pipeline.streams.empty())
     {

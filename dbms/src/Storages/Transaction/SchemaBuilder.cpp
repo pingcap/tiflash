@@ -36,7 +36,12 @@ inline void setAlterCommandColumn(Logger * log, AlterCommand & command, const Co
     if (!column_info.origin_default_value.isEmpty())
     {
         LOG_DEBUG(log, "add default value for column: " << column_info.name);
-        auto arg0 = std::make_shared<ASTLiteral>(column_info.defaultValueToField());
+        ASTPtr arg0;
+        // If it's date time types, we should use string literal to generate default value.
+        if (column_info.tp == TypeDatetime || column_info.tp == TypeTimestamp || column_info.tp == TypeDate)
+            arg0 = std::make_shared<ASTLiteral>(Field(column_info.origin_default_value.convert<String>()));
+        else
+            arg0 = std::make_shared<ASTLiteral>(column_info.defaultValueToField());
         auto arg1 = std::make_shared<ASTLiteral>(command.data_type->getName());
         auto args = std::make_shared<ASTExpressionList>();
         args->children.emplace_back(arg0);
@@ -347,7 +352,8 @@ void SchemaBuilder<Getter>::applyAlterPartition(TiDB::DBInfoPtr db_info, TableID
     auto storage = tmt_context.getStorages().get(table_id).get();
     if (storage == nullptr)
     {
-        throw Exception("miss table in Flash " + table_info->name, ErrorCodes::DDL_ERROR);
+        throw Exception("miss table in Flash `" + table_info->db_name + "`.`" + table_info->name + "`, id: " + DB::toString(table_id),
+            ErrorCodes::DDL_ERROR);
     }
     const String & db_name = storage->getDatabaseName();
     const auto & orig_table_info = storage->getTableInfo();
@@ -878,7 +884,7 @@ void SchemaBuilder<Getter>::syncAllSchema()
         std::vector<TableInfoPtr> tables = getter.listTables(db->id);
         for (const auto & table : tables)
         {
-            LOG_DEBUG(log, "collect table: " << table->name << " with id "<< table->id);
+            LOG_DEBUG(log, "collect table: " << table->name << " with id " << table->id);
             all_tables.emplace_back(table, db);
             if (table->isLogicalPartitionTable())
             {

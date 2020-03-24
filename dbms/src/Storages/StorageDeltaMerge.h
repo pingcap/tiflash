@@ -30,7 +30,7 @@ public:
 
     bool supportsModification() const override { return true; }
 
-    String getName() const override { return "DeltaMerge"; }
+    String getName() const override;
     String getTableName() const override { return table_name; }
 
     void drop() override;
@@ -73,6 +73,8 @@ public:
 
     void shutdown() override;
 
+    void removeFromTMTContext() override;
+
     SortDescription getPrimarySortDescription() const override;
 
     const OrderedNameSet & getHiddenColumnsImpl() const override { return hidden_columns; }
@@ -81,6 +83,8 @@ public:
 
     void checkStatus(const Context & context) override;
     void deleteRows(const Context &, size_t rows) override;
+
+    const DM::DeltaMergeStorePtr & getStore() { return store; }
 
 protected:
     StorageDeltaMerge(const String & path_,

@@ -667,6 +667,7 @@ const char * ParserAliasBase::restricted_keywords[] =
     "UNION",
     "INTO",
     "PARTITION",
+    "SEGMENT",
     nullptr
 };
 

@@ -4,6 +4,7 @@
 #include <Storages/Transaction/RaftCommandResult.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionTable.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
 
 #include <memory>
@@ -403,9 +404,15 @@ void Region::markCompactLog() const { last_compact_log_time = Clock::now(); }
 
 Timepoint Region::lastCompactLogTime() const { return last_compact_log_time; }
 
-Region::CommittedScanner Region::createCommittedScanner() { return Region::CommittedScanner(this->shared_from_this()); }
+Region::CommittedScanner Region::createCommittedScanner(bool use_lock)
+{
+    return Region::CommittedScanner(this->shared_from_this(), use_lock);
+}
 
-Region::CommittedRemover Region::createCommittedRemover() { return Region::CommittedRemover(this->shared_from_this()); }
+Region::CommittedRemover Region::createCommittedRemover(bool use_lock)
+{
+    return Region::CommittedRemover(this->shared_from_this(), use_lock);
+}
 
 std::string Region::toString(bool dump_status) const { return meta.toString(dump_status); }
 
@@ -418,7 +425,7 @@ ReadIndexResult Region::learnerRead()
     return {};
 }
 
-void Region::waitIndex(UInt64 index)
+TerminateWaitIndex Region::waitIndex(UInt64 index, const std::atomic_bool & terminated)
 {
     if (index_reader != nullptr)
     {
@@ -426,10 +433,12 @@ void Region::waitIndex(UInt64 index)
         if (index != 1 + RAFT_INIT_LOG_INDEX && !meta.checkIndex(index))
         {
             LOG_DEBUG(log, toString() << " need to wait learner index: " << index);
-            meta.waitIndex(index);
+            if (meta.waitIndex(index, terminated))
+                return true;
             LOG_DEBUG(log, toString(false) << " wait learner index " << index << " done");
         }
     }
+    return false;
 }
 
 UInt64 Region::version() const { return meta.version(); }
@@ -516,7 +525,7 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const Timestamp 
         LOG_INFO(log, __FUNCTION__ << ": add deleted gc: " << deleted_gc_cnt);
 }
 
-TiFlashApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, bool set_applied)
+TiFlashApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt)
 {
     if (index == 1 + RAFT_INIT_LOG_INDEX)
     {
@@ -602,14 +611,51 @@ TiFlashApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 in
 
         handle_write_cmd_func();
 
-        if (set_applied)
-            meta.setApplied(index, term);
+        if (tmt.isBgFlushDisabled())
+        {
+            /// Flush data right after they are committed.
+            RegionDataReadInfoList data_list_to_remove;
+            RegionTable::writeBlockByRegion(tmt.getContext(), shared_from_this(), data_list_to_remove, log, false);
+
+            /// Do not need to run predecode.
+            data.writeCF().getCFDataPreDecode().popAll();
+            data.defaultCF().getCFDataPreDecode().popAll();
+        }
+
+        meta.setApplied(index, term);
     }
 
-    if (set_applied)
-        meta.notifyAll();
+    meta.notifyAll();
 
     return TiFlashApplyRes::None;
+}
+
+void Region::handleIngestSST(const SnapshotViewArray snaps, UInt64 index, UInt64 term)
+{
+    if (index <= appliedIndex())
+        return;
+
+    {
+        std::unique_lock<std::shared_mutex> lock(mutex);
+        std::lock_guard<std::mutex> predecode_lock(predecode_mutex);
+
+        for (UInt64 i = 0; i < snaps.len; ++i)
+        {
+            auto & snapshot = snaps.views[i];
+
+            LOG_INFO(log,
+                __FUNCTION__ << ": " << toString(false) << " begin to ingest sst of cf " << CFToName(snapshot.cf) << " at [term: " << term
+                             << ", index: " << index << "], kv count " << snapshot.len);
+            for (UInt64 n = 0; n < snapshot.len; ++n)
+            {
+                auto & k = snapshot.keys[n];
+                auto & v = snapshot.vals[n];
+                doInsert(snapshot.cf, TiKVKey(k.data, k.len), TiKVValue(v.data, v.len));
+            }
+        }
+        meta.setApplied(index, term);
+    }
+    meta.notifyAll();
 }
 
 RegionRaftCommandDelegate & Region::makeRaftCommandDelegate(const KVStoreTaskLock & lock)
