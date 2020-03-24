@@ -225,8 +225,6 @@ namespace
 /// Note that this function will try to acquire lock by `IStorage->lockStructure` with will_modify_data = true
 void removeObsoleteDataInStorage(Context * const context, const TableID table_id, const HandleRange<HandleID> & handle_range)
 {
-    /// Some region of this table is removed, if it is a DeltaTree, write deleteRange.
-
     TMTContext & tmt = context->getTMTContext();
     auto storage = tmt.getStorages().get(table_id);
     // For DT only now
@@ -236,15 +234,14 @@ void removeObsoleteDataInStorage(Context * const context, const TableID table_id
     try
     {
         // acquire lock so that no other threads can change storage's structure
+        // if storage is dropped, this will throw exception
         auto storage_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
-        // Check if it has been dropped by other thread
 
         auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
         if (dm_storage == nullptr)
             return;
 
-        /// Now we assume that StorageDeltaMerge::deleteRange do not block for long time and do it in sync mode.
-        /// If this block for long time, consider to do this in background threads.
+        /// Now we assume that these won't block for long time.
         auto dm_handle_range = toDMHandleRange(handle_range);
         dm_storage->deleteRange(dm_handle_range, context->getSettingsRef());
         dm_storage->flushCache(*context, dm_handle_range); // flush to disk
@@ -300,7 +297,7 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
         // `IStorage->lockStructure` with will_modify_data = true.
         // But caller(KVStore) should ensure that no new data write into this handle_range
         // before `removeObsoleteDataInStorage` is done. (by param `RegionTaskLock`)
-        // And this should not block for long time.
+        // And this is expected not to block for long time.
         removeObsoleteDataInStorage(context, table_id, handle_range);
     }
 }
