@@ -121,19 +121,7 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtr & region, bool t
         writeBlockByRegion(*context, region, data_list_to_remove, log);
     }
 
-    /// Remove data in region.
     {
-        {
-            auto remover = region->createCommittedRemover();
-            for (const auto & [handle, write_type, commit_ts, value] : data_list_to_remove)
-            {
-                std::ignore = write_type;
-                std::ignore = value;
-
-                remover.remove({handle, commit_ts});
-            }
-        }
-
         size_t cache_size = region->dataSize();
 
         if (cache_size == 0)
@@ -230,7 +218,7 @@ TableID RegionTable::popOneTableToOptimize()
     return res;
 }
 
-void RegionTable::removeRegion(const RegionID region_id)
+void RegionTable::removeRegion(const RegionID region_id, bool remove_data)
 {
     std::lock_guard<std::mutex> lock(mutex);
 
@@ -246,6 +234,9 @@ void RegionTable::removeRegion(const RegionID region_id)
 
         do
         {
+            // Sometime we don't need to remove data. e.g. remove region after region merge.
+            if (!remove_data)
+                break;
             /// Some region of this table is removed, if it is a DeltaTree, write deleteRange.
 
             /// Now we assume that StorageDeltaMerge::deleteRange do not block for long time and do it in sync mode.
