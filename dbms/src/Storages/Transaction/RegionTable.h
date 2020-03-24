@@ -108,7 +108,7 @@ public:
     /// This functional only shrink the table range of this region_id
     void shrinkRegionRange(const Region & region);
 
-    void removeRegion(const RegionID region_id);
+    void removeRegion(const RegionID region_id, bool remove_data);
 
     TableID popOneTableToOptimize();
 

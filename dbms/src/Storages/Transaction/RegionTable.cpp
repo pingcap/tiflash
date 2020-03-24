@@ -218,7 +218,7 @@ TableID RegionTable::popOneTableToOptimize()
     return res;
 }
 
-void RegionTable::removeRegion(const RegionID region_id)
+void RegionTable::removeRegion(const RegionID region_id, bool remove_data)
 {
     std::lock_guard<std::mutex> lock(mutex);
 
@@ -234,6 +234,9 @@ void RegionTable::removeRegion(const RegionID region_id)
 
         do
         {
+            // Sometime we don't need to remove data. e.g. remove region after region merge.
+            if (!remove_data)
+                break;
             /// Some region of this table is removed, if it is a DeltaTree, write deleteRange.
 
             /// Now we assume that StorageDeltaMerge::deleteRange do not block for long time and do it in sync mode.
