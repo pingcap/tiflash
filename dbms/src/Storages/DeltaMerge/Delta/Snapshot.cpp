@@ -64,7 +64,19 @@ SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool is_u
     }
 
     if (unlikely(check_rows != snap->rows || check_deletes != snap->deletes || total_rows != rows || total_deletes != deletes))
-        throw Exception("Rows and deletes check failed!", ErrorCodes::LOGICAL_ERROR);
+    {
+        std::stringstream s;
+        s << "Rows and deletes check failed! "  //
+          << "check_rows:" << check_rows        //
+          << ",check_deletes:" << check_deletes //
+          << ",total_rows:" << total_rows       //
+          << ",total_deletes:" << total_deletes //
+          << ",snap->rows:" << snap->rows       //
+          << ",snap->deletes:" << snap->deletes //
+          << ",rows:" << rows                   //
+          << ",deletes:" << deletes;
+        throw Exception(s.str(), ErrorCodes::LOGICAL_ERROR);
+    }
 
     return snap;
 }
