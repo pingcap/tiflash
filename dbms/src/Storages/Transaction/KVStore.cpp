@@ -281,33 +281,15 @@ TiFlashApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 r
         return TiFlashApplyRes::NotFound;
     }
 
-    /// If isBgFlushDisabled = true, then only set region's applied index and term after region is flushed.
-
-    bool is_bg_flush_disabled = tmt.isBgFlushDisabled();
     const auto ori_size = region->dataSize();
-    auto res = region->handleWriteRaftCmd(cmds, index, term, /* set_applied */ !is_bg_flush_disabled);
+    auto res = region->handleWriteRaftCmd(cmds, index, term, tmt);
 
     {
         tmt.getRegionTable().updateRegion(*region);
-        if (region->dataSize() != ori_size)
+        if (region->dataSize() != ori_size && !tmt.isBgFlushDisabled())
         {
-            if (is_bg_flush_disabled)
-            {
-                // Decode data in region and then flush
-                region->tryPreDecodeTiKVValue(tmt);
-                tmt.getRegionTable().tryFlushRegion(region, false);
-            }
-            else
-            {
-                tmt.getBackgroundService().addRegionToDecode(region);
-            }
+            tmt.getBackgroundService().addRegionToDecode(region);
         }
-    }
-
-    if (is_bg_flush_disabled)
-    {
-        region->setApplied(index, term);
-        region->notifyApplied();
     }
 
     return res;
