@@ -287,7 +287,6 @@ struct TableInfo
 
     ColumnID getColumnID(const String & name) const;
     String getColumnName(const ColumnID id) const;
-    ColumnInfo getColumnInfoByID(const ColumnID id) const;
 
     const ColumnInfo & getColumnInfo(const ColumnID id) const;
 
