@@ -1,6 +1,6 @@
 #include <Interpreters/Context.h>
-#include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/StorageDeltaMerge.h>
+#include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFIType.h>
@@ -198,11 +198,12 @@ void KVStore::mockRemoveRegion(const DB::RegionID region_id, RegionTable & regio
 {
     auto task_lock = genTaskLock();
     auto region_lock = region_manager.genRegionTaskLock(region_id);
-    removeRegion(region_id, region_table, task_lock, region_lock);
+    // mock remove region should remove data by default
+    removeRegion(region_id, /* remove_data */ true, region_table, task_lock, region_lock);
 }
 
-void KVStore::removeRegion(
-    const RegionID region_id, RegionTable & region_table, const KVStoreTaskLock & task_lock, const RegionTaskLock & region_lock)
+void KVStore::removeRegion(const RegionID region_id, bool remove_data, RegionTable & region_table, const KVStoreTaskLock & task_lock,
+    const RegionTaskLock & region_lock)
 {
     LOG_INFO(log, "Start to remove [region " << region_id << "]");
 
@@ -220,7 +221,7 @@ void KVStore::removeRegion(
 
     region_persister.drop(region_id, region_lock);
 
-    region_table.removeRegion(region_id);
+    region_table.removeRegion(region_id, remove_data);
 
     LOG_INFO(log, "Remove [region " << region_id << "] done");
 }
@@ -305,7 +306,7 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt)
     }
     LOG_INFO(log, "Handle destroy " << region->toString());
     region->setPendingRemove();
-    removeRegion(region_id, tmt.getRegionTable(), task_lock, region_manager.genRegionTaskLock(region_id));
+    removeRegion(region_id, /* remove_data */ true, tmt.getRegionTable(), task_lock, region_manager.genRegionTaskLock(region_id));
 }
 
 void KVStore::setRegionCompactLogPeriod(Seconds period) { REGION_COMPACT_LOG_PERIOD = period; }
@@ -439,7 +440,10 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
 
         const auto handle_change_peer = [&]() {
             if (curr_region.isPendingRemove())
-                removeRegion(curr_region_id, region_table, task_lock, region_task_lock);
+            {
+                // remove `curr_region` from this node, we can remove its data.
+                removeRegion(curr_region_id, /* remove_data */ true, region_table, task_lock, region_task_lock);
+            }
             else
                 persist_and_sync();
         };
@@ -452,7 +456,9 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
             {
                 auto source_region = getRegion(source_region_id);
                 source_region->setPendingRemove();
-                removeRegion(source_region_id, region_table, task_lock, region_manager.genRegionTaskLock(source_region_id));
+                // `source_region` is merged, don't remove its data in storage.
+                removeRegion(
+                    source_region_id, /* remove_data */ false, region_table, task_lock, region_manager.genRegionTaskLock(source_region_id));
             }
             region_range_index.remove(result.ori_region_range->comparableKeys(), curr_region_id);
             region_range_index.add(curr_region_ptr);
@@ -471,7 +477,9 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
                             "Admin cmd " << raft_cmdpb::AdminCmdType_Name(type) << " has been applied, try to remove source "
                                          << source_region->toString(false));
                         source_region->setPendingRemove();
-                        removeRegion(source_region->id(), region_table, task_lock, region_manager.genRegionTaskLock(source_region->id()));
+                        // `source_region` is merged, don't remove its data in storage.
+                        removeRegion(source_region->id(), /* remove_data */ false, region_table, task_lock,
+                            region_manager.genRegionTaskLock(source_region->id()));
                     }
                 }
                 break;

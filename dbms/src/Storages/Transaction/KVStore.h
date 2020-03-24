@@ -80,8 +80,15 @@ private:
     friend class MockTiDB;
     friend struct MockTiDBTable;
     friend void dbgFuncRemoveRegion(Context &, const ASTs &, /*DBGInvoker::Printer*/ std::function<void(const std::string &)>);
-    void removeRegion(
-        const RegionID region_id, RegionTable & region_table, const KVStoreTaskLock & task_lock, const RegionTaskLock & region_lock);
+
+    // Remove region from this TiFlash node.
+    // If region is destroy or moved to another node(change peer),
+    // set `remove_data` true to remove obsolete data from storage.
+    void removeRegion(const RegionID region_id,
+        bool remove_data,
+        RegionTable & region_table,
+        const KVStoreTaskLock & task_lock,
+        const RegionTaskLock & region_lock);
     void mockRemoveRegion(const RegionID region_id, RegionTable & region_table);
     KVStoreTaskLock genTaskLock() const;
 

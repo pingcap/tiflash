@@ -15,7 +15,12 @@ public:
         std::lock_guard lock(mutex);
         auto it = raft_index.find(region_id);
         if (it == raft_index.end())
-            it = raft_index.emplace_hint(it, region_id, RAFT_INIT_LOG_INDEX);
+        {
+            // Usually index 6 is empty and we ignore it. 
+            // https://github.com/tikv/tikv/issues/7047
+            auto init_index = RAFT_INIT_LOG_INDEX +  1;
+            it = raft_index.emplace_hint(it, region_id, init_index);
+        }
         ++(it->second);
         return it->second;
     }
