@@ -71,7 +71,19 @@ bool DeltaValueSpace::flush(DMContext & context)
         }
 
         if (unlikely(flush_rows != unsaved_rows || flush_deletes != unsaved_deletes || total_rows != rows || total_deletes != deletes))
-            throw Exception("Rows and deletes check failed", ErrorCodes::LOGICAL_ERROR);
+        {
+            std::stringstream s;
+            s << "Rows and deletes check failed! "     //
+              << "flush_rows:" << flush_rows           //
+              << "flush_deletes:" << flush_deletes     //
+              << "total_rows:" << total_rows           //
+              << "total_deletes:" << total_deletes     //
+              << "unsaved_rows:" << unsaved_rows       //
+              << "unsaved_deletes:" << unsaved_deletes //
+              << "rows:" << rows                       //
+              << "deletes:" << deletes;
+            throw Exception(s.str(), ErrorCodes::LOGICAL_ERROR);
+        }
     }
 
     // No update, return successfully.
@@ -169,7 +181,19 @@ bool DeltaValueSpace::flush(DMContext & context)
                          || check_unsaved_deletes + flush_deletes != unsaved_deletes //
                          || total_rows != rows                                       //
                          || total_deletes != deletes))
-                throw Exception("Rows and deletes check failed", ErrorCodes::LOGICAL_ERROR);
+            {
+                std::stringstream s;
+                s << "Rows and deletes check failed! "                 //
+                  << "check_unsaved_rows:" << check_unsaved_rows       //
+                  << "check_unsaved_deletes:" << check_unsaved_deletes //
+                  << "total_rows:" << total_rows                       //
+                  << "total_deletes:" << total_deletes                 //
+                  << "unsaved_rows:" << unsaved_rows                   //
+                  << "unsaved_deletes:" << unsaved_deletes             //
+                  << "rows:" << rows                                   //
+                  << "deletes:" << deletes;
+                throw Exception(s.str(), ErrorCodes::LOGICAL_ERROR);
+            }
         }
 
         /// Save the new metadata of packs to disk.
