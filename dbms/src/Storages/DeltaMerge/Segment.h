@@ -2,6 +2,7 @@
 
 #include <Core/Block.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Storages/DeltaMerge/Delta/Snapshot.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>

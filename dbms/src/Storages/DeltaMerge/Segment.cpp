@@ -255,7 +255,7 @@ bool Segment::write(DMContext & dm_context, const HandleRange & delete_range)
 
 SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool is_update) const
 {
-    auto delta_snap = delta->createSnapshot(dm_context, is_update);
+    auto delta_snap = DeltaSnapshot::create(dm_context, delta, is_update);
     if (!delta_snap)
         return {};
     return std::make_shared<SegmentSnapshot>(delta_snap, stable);
@@ -372,7 +372,8 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &          dm_con
         }
     }
 
-    BlockInputStreamPtr delta_stream = segment_snap->delta->prepareForStream(dm_context, new_columns_to_read);
+    segment_snap->delta->prepare(dm_context, new_columns_to_read);
+    BlockInputStreamPtr delta_stream = std::make_shared<DeltaSnapshotInputStream>(segment_snap->delta);
 
     BlockInputStreamPtr stable_stream
         = segment_snap->stable->getInputStream(dm_context, new_columns_to_read, range, EMPTY_FILTER, MAX_UINT64, false);

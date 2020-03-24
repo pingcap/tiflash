@@ -31,7 +31,7 @@ struct BlockOrDelete
 };
 using BlockOrDeletes = std::vector<BlockOrDelete>;
 
-class DeltaValueSpace : public std::enable_shared_from_this<DeltaValueSpace>, private boost::noncopyable
+class DeltaValueSpace : private boost::noncopyable
 {
 public:
     static const UInt64 CURRENT_VERSION;
@@ -86,9 +86,9 @@ public:
         std::pair<DataTypePtr, MutableColumnPtr> getDataTypeAndEmptyColumn(ColId column_id) const
         {
             // Note that column_id must exist
-            auto index = colid_to_offset.at(column_id);
+            auto index    = colid_to_offset.at(column_id);
             auto col_type = schema->getByPosition(index).type;
-            return { col_type, col_type->createColumn() };
+            return {col_type, col_type->createColumn()};
         }
 
         String toString()
@@ -110,61 +110,6 @@ public:
     using PackPtr      = std::shared_ptr<Pack>;
     using ConstPackPtr = std::shared_ptr<const Pack>;
     using Packs        = std::vector<PackPtr>;
-
-    struct Snapshot : public std::enable_shared_from_this<Snapshot>, private boost::noncopyable
-    {
-        bool is_update;
-
-        DeltaValueSpacePtr delta;
-        StorageSnapshotPtr storage_snap;
-
-        Packs  packs;
-        size_t rows;
-        size_t deletes;
-
-        ColumnDefines       column_defines;
-        std::vector<size_t> pack_rows;
-        std::vector<size_t> pack_rows_end; // Speed up pack search.
-
-        // The data of packs when reading.
-        std::vector<Columns> packs_data;
-
-        ~Snapshot()
-        {
-            if (is_update)
-            {
-                bool v = true;
-                if (!delta->is_updating.compare_exchange_strong(v, false))
-                {
-                    Logger * logger = &Logger::get("DeltaValueSpace::Snapshot");
-                    LOG_ERROR(logger,
-                              "!!!=========================delta [" << delta->getId()
-                                                                    << "] is expected to be updating=========================!!!");
-                }
-            }
-        }
-
-        size_t getPackCount() const { return packs.size(); }
-        size_t getRows() const { return rows; }
-        size_t getDeletes() const { return deletes; }
-
-        void                prepare(const DMContext & context, const ColumnDefines & column_defines_);
-        BlockInputStreamPtr prepareForStream(const DMContext & context, const ColumnDefines & column_defines_);
-
-        const Columns & getColumnsOfPack(size_t pack_index, size_t col_num);
-
-        // Get blocks or delete_ranges of `ExtraHandleColumn` and `VersionColumn`.
-        // If there are continuous blocks, they will be squashed into one block.
-        // We use the result to update DeltaTree.
-        BlockOrDeletes getMergeBlocks(size_t rows_begin, size_t deletes_begin, size_t rows_end, size_t deletes_end);
-
-        Block  read(size_t pack_index);
-        size_t read(const HandleRange & range, MutableColumns & output_columns, size_t offset, size_t limit);
-
-    private:
-        Block read(size_t col_num, size_t offset, size_t limit);
-    };
-    using SnapshotPtr = std::shared_ptr<Snapshot>;
 
 private:
     PageId id;
@@ -288,17 +233,13 @@ public:
     /// Compacts the fragment packs into bigger one, to save some IOPS during reading.
     bool compact(DMContext & context);
 
-    /// Create a constant snapshot for read.
-    /// Returns empty if this instance is abandoned, you should try again.
-    SnapshotPtr createSnapshot(const DMContext & context, bool is_update = false);
+    friend struct DeltaSnapshot;
 };
 
-using Pack             = DeltaValueSpace::Pack;
-using PackPtr          = DeltaValueSpace::PackPtr;
-using ConstPackPtr     = DeltaValueSpace::ConstPackPtr;
-using Packs            = DeltaValueSpace::Packs;
-using DeltaSnapshot    = DeltaValueSpace::Snapshot;
-using DeltaSnapshotPtr = DeltaValueSpace::SnapshotPtr;
+using Pack         = DeltaValueSpace::Pack;
+using PackPtr      = DeltaValueSpace::PackPtr;
+using ConstPackPtr = DeltaValueSpace::ConstPackPtr;
+using Packs        = DeltaValueSpace::Packs;
 
 } // namespace DM
 } // namespace DB

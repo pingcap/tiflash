@@ -1,7 +1,7 @@
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/Pack.h>
-#include <Storages/DeltaMerge/DeltaValueSpace.h>
+#include <Storages/DeltaMerge/Delta/Snapshot.h>
 #include <Storages/DeltaMerge/HandleFilter.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
@@ -12,44 +12,41 @@ namespace DB::DM
 // ================================================
 // DeltaValueSpace::Snapshot
 // ================================================
-using Snapshot    = DeltaValueSpace::Snapshot;
-using SnapshotPtr = std::shared_ptr<Snapshot>;
-
-SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool is_update)
+DeltaSnapshotPtr DeltaSnapshot::create(const DMContext & context, const DeltaValueSpacePtr & delta, bool is_update)
 {
     if (is_update)
     {
         bool v = false;
         // Other thread is doing structure update, just return.
-        if (!is_updating.compare_exchange_strong(v, true))
+        if (!delta->is_updating.compare_exchange_strong(v, true))
         {
-            LOG_DEBUG(log, simpleInfo() << " Stop create snapshot because updating");
+            LOG_DEBUG(delta->log, delta->simpleInfo() << " Stop create snapshot because updating");
             return {};
         }
     }
-    std::scoped_lock lock(mutex);
-    if (abandoned.load(std::memory_order_relaxed))
+    std::scoped_lock lock(delta->mutex);
+    if (delta->abandoned.load(std::memory_order_relaxed))
         return {};
 
-    auto snap          = std::make_shared<Snapshot>();
+    auto snap          = std::make_shared<DeltaSnapshot>();
     snap->is_update    = is_update;
-    snap->delta        = this->shared_from_this();
+    snap->delta        = delta;
     snap->storage_snap = std::make_shared<StorageSnapshot>(context.storage_pool, true);
-    snap->rows         = rows;
-    snap->deletes      = deletes;
-    snap->packs.reserve(packs.size());
+    snap->rows         = delta->rows;
+    snap->deletes      = delta->deletes;
+    snap->packs.reserve(delta->packs.size());
 
     if (is_update)
     {
-        snap->rows -= unsaved_rows;
-        snap->deletes -= unsaved_deletes;
+        snap->rows -= delta->unsaved_rows;
+        snap->deletes -= delta->unsaved_deletes;
     }
 
     size_t check_rows    = 0;
     size_t check_deletes = 0;
     size_t total_rows    = 0;
     size_t total_deletes = 0;
-    for (auto & pack : packs)
+    for (auto & pack : delta->packs)
     {
         if (!is_update || pack->isSaved())
         {
@@ -63,7 +60,8 @@ SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool is_u
         total_deletes += pack->isDeleteRange();
     }
 
-    if (unlikely(check_rows != snap->rows || check_deletes != snap->deletes || total_rows != rows || total_deletes != deletes))
+    if (unlikely(check_rows != snap->rows || check_deletes != snap->deletes || total_rows != delta->rows
+                 || total_deletes != delta->deletes))
     {
         std::stringstream s;
         s << "Rows and deletes check failed! "  //
@@ -73,39 +71,15 @@ SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool is_u
           << ",total_deletes:" << total_deletes //
           << ",snap->rows:" << snap->rows       //
           << ",snap->deletes:" << snap->deletes //
-          << ",rows:" << rows                   //
-          << ",deletes:" << deletes;
+          << ",delta->rows:" << delta->rows     //
+          << ",delta->deletes:" << delta->deletes;
         throw Exception(s.str(), ErrorCodes::LOGICAL_ERROR);
     }
 
     return snap;
 }
 
-class DeltaSnapshotInputStream : public IBlockInputStream
-{
-    DeltaSnapshotPtr delta_snap;
-    size_t           next_pack_index = 0;
-
-public:
-    DeltaSnapshotInputStream(const DeltaSnapshotPtr & delta_snap_) : delta_snap(delta_snap_) {}
-
-    String getName() const override { return "DeltaSnapshot"; }
-    Block  getHeader() const override { return toEmptyBlock(delta_snap->column_defines); }
-
-    Block read() override
-    {
-        for (; next_pack_index < delta_snap->packs.size(); ++next_pack_index)
-        {
-            if (!(delta_snap->packs[next_pack_index]->isDeleteRange()))
-                break;
-        }
-        if (next_pack_index >= delta_snap->packs.size())
-            return {};
-        return delta_snap->read(next_pack_index++);
-    }
-};
-
-void DeltaValueSpace::Snapshot::prepare(const DMContext & /*context*/, const ColumnDefines & column_defines_)
+void DeltaSnapshot::prepare(const DMContext & /*context*/, const ColumnDefines & column_defines_)
 {
     column_defines = column_defines_;
     pack_rows.reserve(packs.size());
@@ -120,13 +94,6 @@ void DeltaValueSpace::Snapshot::prepare(const DMContext & /*context*/, const Col
         packs_data.emplace_back();
     }
 }
-
-BlockInputStreamPtr DeltaValueSpace::Snapshot::prepareForStream(const DMContext & context, const ColumnDefines & column_defines_)
-{
-    prepare(context, column_defines_);
-    return std::make_shared<DeltaSnapshotInputStream>(this->shared_from_this());
-}
-
 
 std::pair<size_t, size_t> findPack(const std::vector<size_t> & rows_end, size_t find_offset)
 {
@@ -180,7 +147,7 @@ std::pair<size_t, size_t> findPack(const Packs & packs, size_t rows_offset, size
     return {pack_index, 0};
 }
 
-const Columns & DeltaValueSpace::Snapshot::getColumnsOfPack(size_t pack_index, size_t col_num)
+const Columns & DeltaSnapshot::getColumnsOfPack(size_t pack_index, size_t col_num)
 {
     // If some columns is already read in this snapshot, we can reuse `packs_data`
     auto & columns = packs_data[pack_index];
@@ -203,7 +170,7 @@ const Columns & DeltaValueSpace::Snapshot::getColumnsOfPack(size_t pack_index, s
     return columns;
 }
 
-size_t DeltaValueSpace::Snapshot::read(const HandleRange & range, MutableColumns & output_columns, size_t offset, size_t limit)
+size_t DeltaSnapshot::read(const HandleRange & range, MutableColumns & output_columns, size_t offset, size_t limit)
 {
     auto start = std::min(offset, rows);
     auto end   = std::min(offset + limit, rows);
@@ -252,7 +219,7 @@ size_t DeltaValueSpace::Snapshot::read(const HandleRange & range, MutableColumns
     return actually_read;
 }
 
-Block DeltaValueSpace::Snapshot::read(size_t col_num, size_t offset, size_t limit)
+Block DeltaSnapshot::read(size_t col_num, size_t offset, size_t limit)
 {
     MutableColumns columns;
     for (size_t i = 0; i < col_num; ++i)
@@ -269,7 +236,7 @@ Block DeltaValueSpace::Snapshot::read(size_t col_num, size_t offset, size_t limi
     return block;
 }
 
-Block DeltaValueSpace::Snapshot::read(size_t pack_index)
+Block DeltaSnapshot::read(size_t pack_index)
 {
     Block  block;
     auto & pack_columns = getColumnsOfPack(pack_index, column_defines.size());
@@ -281,7 +248,7 @@ Block DeltaValueSpace::Snapshot::read(size_t pack_index)
     return block;
 }
 
-BlockOrDeletes DeltaValueSpace::Snapshot::getMergeBlocks(size_t rows_begin, size_t deletes_begin, size_t rows_end, size_t deletes_end)
+BlockOrDeletes DeltaSnapshot::getMergeBlocks(size_t rows_begin, size_t deletes_begin, size_t rows_end, size_t deletes_end)
 {
     BlockOrDeletes res;
 

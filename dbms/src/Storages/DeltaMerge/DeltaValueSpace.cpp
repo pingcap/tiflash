@@ -22,8 +22,6 @@ namespace DM
 const UInt64 DeltaValueSpace::CURRENT_VERSION = 1;
 
 using BlockPtr    = DeltaValueSpace::BlockPtr;
-using Snapshot    = DeltaValueSpace::Snapshot;
-using SnapshotPtr = std::shared_ptr<Snapshot>;
 
 // ================================================
 // Private methods
