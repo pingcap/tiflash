@@ -186,17 +186,16 @@ Columns readPackFromCache(const PackPtr & pack, const ColumnDefines & column_def
     std::scoped_lock lock(pack->cache->mutex);
 
     const auto & cache_block = pack->cache->block;
-    if constexpr (0)
+
+    if (unlikely(pack->schema == nullptr || !checkSchema(cache_block, *pack->schema)))
     {
-        if (pack->schema == nullptr || !checkSchema(cache_block, *pack->schema))
-        {
-            const String pack_schema_str  = pack->schema ? pack->schema->dumpStructure() : "(none)";
-            const String cache_schema_str = cache_block.dumpStructure();
-            throw Exception("Pack[" + pack->toString() + "] schema not match its cache_block! pack: " + pack_schema_str
-                                + ", cache: " + cache_schema_str,
-                            ErrorCodes::LOGICAL_ERROR);
-        }
+        const String pack_schema_str  = pack->schema ? pack->schema->dumpStructure() : "(none)";
+        const String cache_schema_str = cache_block.dumpStructure();
+        throw Exception("Pack[" + pack->toString() + "] schema not match its cache_block! pack: " + pack_schema_str
+                            + ", cache: " + cache_schema_str,
+                        ErrorCodes::LOGICAL_ERROR);
     }
+
     Columns columns;
     for (size_t i = col_start; i < col_end; ++i)
     {
