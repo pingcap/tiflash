@@ -204,6 +204,11 @@ Columns readPackFromCache(const PackPtr & pack, const ColumnDefines & column_def
         if (auto it = pack->colid_to_offset.find(cd.id); it != pack->colid_to_offset.end())
         {
             auto col_offset = it->second;
+            if (unlikely(col_offset >= cache_block.columns()))
+            {
+                throw Exception("col_offset:" + DB::toString(col_offset) + ", cache_block:" + cache_block.dumpStructure(),
+                                ErrorCodes::LOGICAL_ERROR);
+            }
             // Copy data from cache
             auto [type, col_data] = pack->getDataTypeAndEmptyColumn(cd.id);
             col_data->insertRangeFrom(*cache_block.getByPosition(col_offset).column, pack->cache_offset, pack->rows);
