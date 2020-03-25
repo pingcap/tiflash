@@ -40,8 +40,11 @@ public:
     class CommittedScanner : private boost::noncopyable
     {
     public:
-        CommittedScanner(const RegionPtr & store_) : store(store_), lock(store_->mutex)
+        CommittedScanner(const RegionPtr & store_, bool use_lock = true) : store(store_)
         {
+            if (use_lock)
+                lock = std::shared_lock<std::shared_mutex>(store_->mutex);
+
             const auto & data = store->data.writeCF().getData();
 
             write_map_size = data.size();
@@ -69,7 +72,11 @@ public:
     class CommittedRemover : private boost::noncopyable
     {
     public:
-        CommittedRemover(const RegionPtr & store_) : store(store_), lock(store_->mutex) {}
+        CommittedRemover(const RegionPtr & store_, bool use_lock = true) : store(store_)
+        {
+            if (use_lock)
+                lock = std::unique_lock<std::shared_mutex>(store_->mutex);
+        }
 
         void remove(const RegionWriteCFData::Key & key)
         {
@@ -91,8 +98,8 @@ public:
     void insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value);
     void remove(const std::string & cf, const TiKVKey & key);
 
-    CommittedScanner createCommittedScanner();
-    CommittedRemover createCommittedRemover();
+    CommittedScanner createCommittedScanner(bool use_lock = true);
+    CommittedRemover createCommittedRemover(bool use_lock = true);
 
     std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
     static RegionPtr deserialize(ReadBuffer & buf, const IndexReaderCreateFunc * index_reader_create = nullptr);
@@ -127,11 +134,11 @@ public:
 
     ReadIndexResult learnerRead();
 
-    void waitIndex(UInt64 index);
+    /// If server is terminating, return true (read logic should throw NOT_FOUND exception and let upper layer retry other store).
+    TerminateWaitIndex waitIndex(UInt64 index, const std::atomic_bool & terminated);
 
     UInt64 appliedIndex() const;
 
-    void setApplied(UInt64 index, UInt64 term) { meta.setApplied(index, term); }
     void notifyApplied() { meta.notifyAll(); }
 
     RegionVersion version() const;
@@ -159,7 +166,7 @@ public:
     void tryPreDecodeTiKVValue(TMTContext & tmt);
 
     TableID getMappedTableID() const;
-    TiFlashApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, bool set_applied = true);
+    TiFlashApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt);
     void handleIngestSST(const SnapshotViewArray snaps, UInt64 index, UInt64 term);
 
 private:

@@ -1,7 +1,6 @@
+#include <Parsers/ASTPartition.h>
 #include <common/ThreadPool.h>
 #include <common/config_common.h>
-
-#include <Parsers/ASTPartition.h>
 
 #include <random>
 
@@ -9,9 +8,9 @@
 #include <gperftools/malloc_extension.h>
 #endif
 
+#include <Common/TiFlashMetrics.h>
 #include <Common/formatReadable.h>
 #include <Common/typeid_cast.h>
-#include <Common/TiFlashMetrics.h>
 #include <Core/Defines.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
@@ -262,7 +261,7 @@ public:
     void write(const Block & block) override
     try
     {
-        if (db_settings.dm_insert_max_rows == 0)
+        if (db_settings.dt_insert_max_rows == 0)
         {
             store->write(db_context, db_settings, decorator(block));
         }
@@ -270,7 +269,7 @@ public:
         {
             Block new_block = decorator(block);
             auto rows = new_block.rows();
-            size_t step = db_settings.dm_insert_max_rows;
+            size_t step = db_settings.dt_insert_max_rows;
 
             for (size_t offset = 0; offset < rows; offset += step)
             {
@@ -417,7 +416,8 @@ RegionMap doLearnerRead(const TiDB::TableID table_id,           //
             /// Blocking learner read. Note that learner read must be performed ahead of data read,
             /// otherwise the desired index will be blocked by the lock of data read.
             auto read_index_result = region->learnerRead();
-            GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_read_index_duration_seconds).Observe(read_index_watch.elapsedSeconds());
+            GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_read_index_duration_seconds)
+                .Observe(read_index_watch.elapsedSeconds());
             if (read_index_result.region_unavailable)
             {
                 // client-c detect region removed. Set region_status and continue.
@@ -432,8 +432,13 @@ RegionMap doLearnerRead(const TiDB::TableID table_id,           //
             else
             {
                 Stopwatch wait_index_watch;
-                region->waitIndex(read_index_result.read_index);
-                GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_wait_index_duration_seconds).Observe(wait_index_watch.elapsedSeconds());
+                if (region->waitIndex(read_index_result.read_index, tmt.getTerminated()))
+                {
+                    region_status = RegionException::RegionReadStatus::NOT_FOUND;
+                    continue;
+                }
+                GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_wait_index_duration_seconds)
+                    .Observe(wait_index_watch.elapsedSeconds());
             }
             if (resolve_locks)
             {
@@ -690,7 +695,7 @@ BlockInputStreams StorageDeltaMerge::read( //
 
         /// Get Rough set filter from query
         DM::RSOperatorPtr rs_operator = DM::EMPTY_FILTER;
-        const bool enable_rs_filter = context.getSettingsRef().dm_enable_rough_set_filter;
+        const bool enable_rs_filter = context.getSettingsRef().dt_enable_rough_set_filter;
         if (enable_rs_filter)
         {
             if (likely(query_info.dag_query))

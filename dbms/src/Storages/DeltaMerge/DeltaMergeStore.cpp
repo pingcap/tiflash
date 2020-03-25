@@ -216,13 +216,15 @@ void DeltaMergeStore::shutdown()
 {
     bool v = false;
     if (!shutdown_called.compare_exchange_strong(v, true))
-        return ;
+        return;
 
+    LOG_DEBUG(log, "Shutdown DeltaMerge Store start [" << db_name << "." << table_name << "]");
     background_pool.removeTask(gc_handle);
     gc_handle = nullptr;
 
     background_pool.removeTask(background_task_handle);
     background_task_handle = nullptr;
+    LOG_DEBUG(log, "Shutdown DeltaMerge Store start [" << db_name << "." << table_name << "]");
 }
 
 DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings)
@@ -389,7 +391,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         offset += limit;
     }
 
-    if (db_settings.dm_flush_after_write)
+    if (db_settings.dt_flush_after_write)
     {
         HandleRange merge_range = HandleRange::newNone();
         for (auto & segment : updated_segments)
@@ -595,7 +597,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
             MAX_UINT64,
             DEFAULT_BLOCK_SIZE,
             true,
-            db_settings.dm_raw_filter_range);
+            db_settings.dt_raw_filter_range);
         res.push_back(stream);
     }
     return res;
@@ -718,7 +720,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
             max_version,
             expected_block_size,
             false,
-            db_settings.dm_raw_filter_range);
+            db_settings.dt_raw_filter_range);
         res.push_back(stream);
     }
 
@@ -811,6 +813,9 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     auto try_add_background_task = [&](const BackgroundTask & task) {
         if (background_tasks.length() <= std::max(id_to_segment.size() * 2, background_pool.getNumberOfThreads() * 5))
         {
+            if (shutdown_called.load(std::memory_order_relaxed))
+                return;
+
             // Prevent too many tasks.
             background_tasks.addTask(task, thread_type, log);
             background_task_handle->wake();
@@ -997,15 +1002,13 @@ bool DeltaMergeStore::handleBackgroundTask()
             left = segmentMergeDelta(*task.dm_context, task.segment, false);
             type = ThreadType::BG_MergeDelta;
             break;
-        case Compact:
-        {
+        case Compact: {
             task.segment->getDelta()->compact(*task.dm_context);
             left = task.segment;
             type = ThreadType::BG_Compact;
             break;
         }
-        case Flush:
-        {
+        case Flush: {
             task.segment->getDelta()->flush(*task.dm_context);
             left = task.segment;
             type = ThreadType::BG_Flush;
