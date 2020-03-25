@@ -391,7 +391,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         offset += limit;
     }
 
-    if (db_settings.dm_flush_after_write)
+    if (db_settings.dt_flush_after_write)
     {
         HandleRange merge_range = HandleRange::newNone();
         for (auto & segment : updated_segments)
@@ -597,7 +597,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
             MAX_UINT64,
             DEFAULT_BLOCK_SIZE,
             true,
-            db_settings.dm_raw_filter_range);
+            db_settings.dt_raw_filter_range);
         res.push_back(stream);
     }
     return res;
@@ -720,7 +720,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
             max_version,
             expected_block_size,
             false,
-            db_settings.dm_raw_filter_range);
+            db_settings.dt_raw_filter_range);
         res.push_back(stream);
     }
 
@@ -1002,13 +1002,15 @@ bool DeltaMergeStore::handleBackgroundTask()
             left = segmentMergeDelta(*task.dm_context, task.segment, false);
             type = ThreadType::BG_MergeDelta;
             break;
-        case Compact: {
+        case Compact:
+        {
             task.segment->getDelta()->compact(*task.dm_context);
             left = task.segment;
             type = ThreadType::BG_Compact;
             break;
         }
-        case Flush: {
+        case Flush:
+        {
             task.segment->getDelta()->flush(*task.dm_context);
             left = task.segment;
             type = ThreadType::BG_Flush;
@@ -1037,7 +1039,7 @@ bool DeltaMergeStore::handleBackgroundTask()
 
 SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentPtr & segment)
 {
-    LOG_DEBUG(log, "Split segment " << segment->info());
+    LOG_DEBUG(log, "Split segment " << segment->info() << ", safe point:" << dm_context.min_version);
 
     SegmentSnapshotPtr segment_snap;
 
@@ -1114,7 +1116,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 
 void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right)
 {
-    LOG_DEBUG(log, "Merge Segment [" << left->info() << "] and [" << right->info() << "]");
+    LOG_DEBUG(log, "Merge Segment [" << left->info() << "] and [" << right->info() << "], safe point:" << dm_context.min_version);
 
     SegmentSnapshotPtr left_snap;
     SegmentSnapshotPtr right_snap;
@@ -1196,7 +1198,9 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
 
 SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground)
 {
-    LOG_DEBUG(log, (is_foreground ? "Foreground" : "Background") << " merge delta, segment [" << segment->segmentId() << "]");
+    LOG_DEBUG(log,
+              (is_foreground ? "Foreground" : "Background")
+                  << " merge delta, segment [" << segment->segmentId() << "], safe point:" << dm_context.min_version);
 
     SegmentSnapshotPtr segment_snap;
 
