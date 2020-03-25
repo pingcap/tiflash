@@ -53,7 +53,7 @@ SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool is_u
     {
         if (!is_update || pack->isSaved())
         {
-            auto pack_copy = pack->isAppendable() ? std::make_shared<Pack>(*pack) : pack;
+            auto pack_copy = std::make_shared<Pack>(*pack);
             snap->packs.push_back(std::move(pack_copy));
 
             check_rows += pack->rows;
