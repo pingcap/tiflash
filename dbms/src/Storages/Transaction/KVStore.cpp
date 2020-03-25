@@ -221,7 +221,7 @@ void KVStore::removeRegion(const RegionID region_id, bool remove_data, RegionTab
 
     region_persister.drop(region_id, region_lock);
 
-    region_table.removeRegion(region_id, remove_data);
+    region_table.removeRegion(region_id, remove_data, region_lock);
 
     LOG_INFO(log, "Remove [region " << region_id << "] done");
 }
