@@ -4,6 +4,7 @@
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -218,53 +219,65 @@ TableID RegionTable::popOneTableToOptimize()
     return res;
 }
 
-void RegionTable::removeRegion(const RegionID region_id, bool remove_data)
+namespace
 {
-    std::lock_guard<std::mutex> lock(mutex);
-
-    if (auto it = regions.find(region_id); it == regions.end())
-    {
-        LOG_WARNING(log, __FUNCTION__ << ": region " << region_id << " does not exist.");
+/// Remove obsolete data for table after data of `handle_range` is removed from this TiFlash node.
+/// Note that this function will try to acquire lock by `IStorage->lockStructure` with will_modify_data = true
+void removeObsoleteDataInStorage(Context * const context, const TableID table_id, const HandleRange<HandleID> & handle_range)
+{
+    TMTContext & tmt = context->getTMTContext();
+    auto storage = tmt.getStorages().get(table_id);
+    // For DT only now
+    if (!storage || storage->engineType() != TiDB::StorageEngine::DT)
         return;
-    }
-    else
+
+    try
     {
-        TableID table_id = it->second;
-        auto & table = tables.find(table_id)->second;
+        // acquire lock so that no other threads can change storage's structure
+        // if storage is dropped, this will throw exception
+        auto storage_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
 
-        do
+        auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+        if (dm_storage == nullptr)
+            return;
+
+        /// Now we assume that these won't block for long time.
+        auto dm_handle_range = toDMHandleRange(handle_range);
+        dm_storage->deleteRange(dm_handle_range, context->getSettingsRef());
+        dm_storage->flushCache(*context, dm_handle_range); // flush to disk
+    }
+    catch (DB::Exception & e)
+    {
+        // We can ignore if storage is dropped.
+        if (e.code() != ErrorCodes::TABLE_IS_DROPPED)
+            throw;
+    }
+}
+} // namespace
+
+void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const RegionTaskLock &)
+{
+    TableID table_id = 0;
+    HandleRange<HandleID> handle_range;
+
+    {
+        /// We need to protect `regions` and `table` under mutex lock
+        std::lock_guard<std::mutex> lock(mutex);
+
+        auto it = regions.find(region_id);
+        if (it == regions.end())
         {
-            // Sometime we don't need to remove data. e.g. remove region after region merge.
-            if (!remove_data)
-                break;
-            /// Some region of this table is removed, if it is a DeltaTree, write deleteRange.
+            LOG_WARNING(log, __FUNCTION__ << ": region " << region_id << " does not exist.");
+            return;
+        }
 
-            /// Now we assume that StorageDeltaMerge::deleteRange do not block for long time and do it in sync mode.
-            /// If this block for long time, consider to do this in background threads.
-            TMTContext & tmt = context->getTMTContext();
-            auto storage = tmt.getStorages().get(table_id);
-            if (storage && storage->engineType() == TiDB::StorageEngine::DT)
-            {
-                // acquire lock so that no other threads can change storage's structure
-                auto storage_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
-                // Check if it has been dropped by other thread
-                if (storage->is_dropped)
-                    break; // continue to remove region on `regions`, `table.regions`
-
-                auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-                auto region_it = table.regions.find(region_id);
-                if (dm_storage == nullptr || region_it == table.regions.end())
-                    break;
-
-                HandleRange<HandleID> handle_range = region_it->second.range_in_table;
-                auto dm_handle_range = toDMHandleRange(handle_range);
-                dm_storage->deleteRange(dm_handle_range, context->getSettingsRef());
-                dm_storage->flushCache(*context, dm_handle_range); // flush to disk
-            }
-        } while (0);
+        table_id = it->second;
+        auto & table = tables.find(table_id)->second;
+        auto internal_region_it = table.regions.find(region_id);
+        handle_range = internal_region_it->second.range_in_table;
 
         regions.erase(it);
-        table.regions.erase(region_id);
+        table.regions.erase(internal_region_it);
         if (table.regions.empty())
         {
             /// All regions of this table is removed, the storage maybe drop or pd
@@ -272,6 +285,20 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data)
             table_to_optimize.insert(table_id);
             tables.erase(table_id);
         }
+    }
+
+    // Sometime we don't need to remove data. e.g. remove region after region merge.
+    if (remove_data)
+    {
+        // Try to remove obsolete data in storage
+
+        // Note that we should do this without lock on RegionTable, or apply DDL changes
+        // may meet deadlock since `removeObsoleteDataInStorage` acquire lock by
+        // `IStorage->lockStructure` with will_modify_data = true.
+        // But caller(KVStore) should ensure that no new data write into this handle_range
+        // before `removeObsoleteDataInStorage` is done. (by param `RegionTaskLock`)
+        // And this is expected not to block for long time.
+        removeObsoleteDataInStorage(context, table_id, handle_range);
     }
 }
 
