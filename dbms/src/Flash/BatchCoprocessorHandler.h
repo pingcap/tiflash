@@ -1,14 +1,14 @@
 #pragma once
 
-#include <common/logger_useful.h>
-
 #include <DataStreams/BlockIO.h>
+#include <common/logger_useful.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <kvproto/coprocessor.pb.h>
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 #include <grpcpp/server_context.h>
+
 #include "CoprocessorHandler.h"
 
 namespace DB
@@ -21,7 +21,8 @@ namespace DB
 class BatchCoprocessorHandler
 {
 public:
-    BatchCoprocessorHandler(CoprocessorContext & cop_context_, const coprocessor::BatchRequest * cop_request_, ::grpc::ServerWriter< ::coprocessor::BatchResponse>* writer_);
+    BatchCoprocessorHandler(CoprocessorContext & cop_context_, const coprocessor::BatchRequest * cop_request_,
+        ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_);
 
     ~BatchCoprocessorHandler() = default;
 
@@ -40,7 +41,7 @@ protected:
 
     CoprocessorContext & cop_context;
     const coprocessor::BatchRequest * cop_request;
-    ::grpc::ServerWriter< ::coprocessor::BatchResponse>* writer;
+    ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer;
 
     ::coprocessor::BatchResponse err_response;
 
