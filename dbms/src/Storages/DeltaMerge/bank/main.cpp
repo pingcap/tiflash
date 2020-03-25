@@ -70,7 +70,7 @@ void work(DeltaStorageProxy & proxy,
                 EXPECT_EQ(old_balance2, new_balance2);
             }
 
-            std::cout << "move money from " << std::to_string(s_id) << " to " << std::to_string(b_id) << " amount "
+            std::cout << "Move money from " << std::to_string(s_id) << " to " << std::to_string(b_id) << " amount "
                       << std::to_string(amount) << std::endl;
         }
         else
@@ -90,7 +90,7 @@ void work(DeltaStorageProxy & proxy,
                 EXPECT_EQ(old_balance1, new_balance1);
                 EXPECT_EQ(old_balance2, new_balance2);
             }
-            std::cout << "move money from " << std::to_string(b_id) << " to " << std::to_string(s_id) << " amount "
+            std::cout << "Move money from " << std::to_string(b_id) << " to " << std::to_string(s_id) << " amount "
                       << std::to_string(amount) << std::endl;
         }
         manager.writeUnlock(s_id, tid);
@@ -119,7 +119,7 @@ void verify(DeltaStorageProxy & proxy,
         EXPECT_EQ(proxy.sumBalance(0, max_id, tso), total);
         if (proxy.sumBalance(0, max_id, tso) != total)
         {
-            std::cout << "sum balance is wrong" << std::endl;
+            std::cout << "Sum balance is wrong" << std::endl;
             throw std::exception();
         }
 
@@ -132,7 +132,7 @@ void verify(DeltaStorageProxy & proxy,
     }
 }
 
-void run_bank2(UInt64 account, UInt64 balance, UInt64 worker, UInt64 try_num)
+void run_bank(UInt64 account, UInt64 balance, UInt64 worker, UInt64 try_num)
 {
     DeltaStorageProxy proxy;
     SimpleLockManager manager;
@@ -185,6 +185,6 @@ int main(int argc, char * argv[])
     UInt64 balance = std::stoul(argv[2]);
     UInt64 worker  = std::stoul(argv[3]);
     UInt64 try_num = std::stoul(argv[4]);
-    DB::DM::tests::run_bank2(account, balance, worker, try_num);
+    DB::DM::tests::run_bank(account, balance, worker, try_num);
     return 0;
 }
