@@ -47,8 +47,8 @@ extern const Event DMSegmentMerge;
 extern const Event DMSegmentMergeNS;
 extern const Event DMDeltaMerge;
 extern const Event DMDeltaMergeNS;
-} // namespace ProfileEvents
 
+} // namespace ProfileEvents
 
 namespace DB
 {
@@ -224,7 +224,6 @@ bool Segment::writeToCache(DMContext & dm_context, const Block & block, size_t o
 bool Segment::write(DMContext & dm_context, const Block & block)
 {
     LOG_TRACE(log, "Segment [" << segment_id << "] write to disk rows: " << block.rows());
-
     WriteBatches wbs(dm_context.storage_pool);
     PackPtr      pack = DeltaValueSpace::writePack(dm_context, block, 0, block.rows(), wbs);
     wbs.writeAll();
@@ -271,7 +270,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
 {
     LOG_TRACE(log, "Segment [" << segment_id << "] create InputStream");
 
-    auto read_info = getReadInfo<true>(dm_context, columns_to_read, segment_snap);
+    auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap);
 
     auto create_stream = [&](const HandleRange & read_range) -> BlockInputStreamPtr {
         BlockInputStreamPtr stream;
@@ -440,7 +439,7 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext & dm_context, const Seg
 
     EventRecorder recorder(ProfileEvents::DMDeltaMerge, ProfileEvents::DMDeltaMergeNS);
 
-    auto read_info = getReadInfo<false>(dm_context, *dm_context.store_columns, segment_snap);
+    auto read_info = getReadInfo(dm_context, *dm_context.store_columns, segment_snap);
 
     BlockInputStreamPtr data_stream = getPlacedStream(dm_context,
                                                       read_info.read_columns,
@@ -730,7 +729,7 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, const S
 
     EventRecorder recorder(ProfileEvents::DMSegmentSplit, ProfileEvents::DMSegmentSplitNS);
 
-    auto read_info   = getReadInfo<false>(dm_context, *dm_context.store_columns, segment_snap);
+    auto read_info   = getReadInfo(dm_context, *dm_context.store_columns, segment_snap);
     auto split_point = getSplitPointSlow(dm_context, read_info, segment_snap);
 
     HandleRange my_range    = {range.start, split_point};
@@ -900,7 +899,7 @@ StableValueSpacePtr Segment::prepareMerge(DMContext &                dm_context,
                         + ", second start: " + DB::toString(right->range.start));
 
     auto getStream = [&](const SegmentPtr & segment, const SegmentSnapshotPtr & segment_snap) {
-        auto                read_info = segment->getReadInfo<false>(dm_context, *dm_context.store_columns, segment_snap);
+        auto                read_info = segment->getReadInfo(dm_context, *dm_context.store_columns, segment_snap);
         BlockInputStreamPtr stream    = segment->getPlacedStream(dm_context,
                                                               read_info.read_columns,
                                                               segment->range,
@@ -1037,13 +1036,12 @@ String Segment::info() const
         + ", stable(" + DB::toString(stable->getDMFilesString()) + "): " + DB::toString(stableRows()) + "}";
 }
 
-template <bool add_tag_column>
 Segment::ReadInfo
 Segment::getReadInfo(const DMContext & dm_context, const ColumnDefines & read_columns, const SegmentSnapshotPtr & segment_snap) const
 {
     LOG_DEBUG(log, "getReadInfo start");
 
-    auto new_read_columns = arrangeReadColumns<add_tag_column>(getExtraHandleColumnDefine(), read_columns);
+    auto new_read_columns = arrangeReadColumns(getExtraHandleColumnDefine(), read_columns);
     segment_snap->delta->prepare(dm_context, new_read_columns);
 
     DeltaIndexPtr delta_index = ensurePlace(dm_context, segment_snap->stable, segment_snap->delta);
@@ -1061,7 +1059,6 @@ Segment::getReadInfo(const DMContext & dm_context, const ColumnDefines & read_co
     };
 }
 
-template <bool add_tag_column>
 ColumnDefines Segment::arrangeReadColumns(const ColumnDefine & handle, const ColumnDefines & columns_to_read)
 {
     // We always put handle, version and tag column at the beginning of columns.
@@ -1069,17 +1066,12 @@ ColumnDefines Segment::arrangeReadColumns(const ColumnDefine & handle, const Col
 
     new_columns_to_read.push_back(handle);
     new_columns_to_read.push_back(getVersionColumnDefine());
-    if constexpr (add_tag_column)
-        new_columns_to_read.push_back(getTagColumnDefine());
+    new_columns_to_read.push_back(getTagColumnDefine());
 
     for (size_t i = 0; i < columns_to_read.size(); ++i)
     {
-        auto & c  = columns_to_read[i];
-        bool   ok = c.id != handle.id && c.id != VERSION_COLUMN_ID;
-        if constexpr (add_tag_column)
-            ok = ok && c.id != TAG_COLUMN_ID;
-
-        if (ok)
+        auto & c = columns_to_read[i];
+        if (c.id != handle.id && c.id != VERSION_COLUMN_ID && c.id != TAG_COLUMN_ID)
             new_columns_to_read.push_back(c);
     }
 
