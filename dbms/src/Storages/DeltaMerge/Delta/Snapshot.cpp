@@ -53,7 +53,9 @@ SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool is_u
     {
         if (!is_update || pack->isSaved())
         {
-            auto pack_copy = std::make_shared<Pack>(*pack);
+            // Because flush/compact threads could update the Pack::cache instance during read operation.
+            // We better make a copy.
+            auto pack_copy = pack->isCached() ? std::make_shared<Pack>(*pack) : pack;
             snap->packs.push_back(std::move(pack_copy));
 
             check_rows += pack->rows;
