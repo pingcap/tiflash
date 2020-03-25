@@ -76,7 +76,7 @@ protected:
                         task->ranges,
                         filter,
                         max_version,
-                        std::max(expected_block_size, (size_t)(dm_context->db_context.getSettingsRef().dm_segment_stable_pack_rows)));
+                        std::max(expected_block_size, (size_t)(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows)));
                 }
                 LOG_TRACE(log, "Start to read segment [" + DB::toString(cur_segment->segmentId()) + "]");
             }

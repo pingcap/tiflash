@@ -47,8 +47,8 @@ extern const Event DMSegmentMerge;
 extern const Event DMSegmentMergeNS;
 extern const Event DMDeltaMerge;
 extern const Event DMDeltaMergeNS;
-} // namespace ProfileEvents
 
+} // namespace ProfileEvents
 
 namespace DB
 {
@@ -224,7 +224,6 @@ bool Segment::writeToCache(DMContext & dm_context, const Block & block, size_t o
 bool Segment::write(DMContext & dm_context, const Block & block)
 {
     LOG_TRACE(log, "Segment [" << segment_id << "] write to disk rows: " << block.rows());
-
     WriteBatches wbs(dm_context.storage_pool);
     PackPtr      pack = DeltaValueSpace::writePack(dm_context, block, 0, block.rows(), wbs);
     wbs.writeAll();
