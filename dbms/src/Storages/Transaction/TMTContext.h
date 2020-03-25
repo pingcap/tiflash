@@ -8,6 +8,8 @@
 
 #include <unordered_set>
 
+#include <Flash/BatchCoprocessorHandler.h>
+
 namespace DB
 {
 

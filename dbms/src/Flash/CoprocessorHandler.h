@@ -8,6 +8,8 @@
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 #include <grpcpp/server_context.h>
+#include <kvproto/coprocessor.pb.h>
+#include <kvproto/tikvpb.grpc.pb.h>
 
 namespace DB
 {

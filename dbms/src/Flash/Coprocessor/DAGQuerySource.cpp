@@ -29,14 +29,12 @@ static void assignOrThrowException(Int32 & index, Int32 value, const String & na
     index = value;
 }
 
-DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, RegionID region_id_, UInt64 region_version_,
-    UInt64 region_conf_version_, const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges_,
+DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, const std::vector<RegionInfo> & regions_,
+    const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges_,
     const tipb::DAGRequest & dag_request_)
     : context(context_),
       dag_context(dag_context_),
-      region_id(region_id_),
-      region_version(region_version_),
-      region_conf_version(region_conf_version_),
+      regions(regions_),
       key_ranges(key_ranges_),
       dag_request(dag_request_),
       metrics(context.getTiFlashMetrics())
