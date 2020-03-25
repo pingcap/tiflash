@@ -200,10 +200,9 @@ public:
     bool hasAbandoned() { return delta->hasAbandoned(); }
 
 private:
-    template <bool add_tag_column>
+
     ReadInfo getReadInfo(const DMContext & dm_context, const ColumnDefines & read_columns, const SegmentSnapshotPtr & segment_snap) const;
 
-    template <bool add_tag_column>
     static ColumnDefines arrangeReadColumns(const ColumnDefine & handle, const ColumnDefines & columns_to_read);
 
     template <class IndexIterator = DeltaIndex::Iterator, bool skippable_place = false>
