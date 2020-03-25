@@ -47,15 +47,16 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mu
     const size_t             snapshots_size_before_clean = snapshots.size();
     for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
     {
-        if (iter->expired())
+        auto snapshot_or_invalid = iter->lock();
+        if (snapshot_or_invalid == nullptr)
         {
             // Clear free snapshots
             iter = snapshots.erase(iter);
         }
         else
         {
-            // Save valid snapshot
-            valid_snapshots.emplace_back(iter->lock());
+            // Save valid snapshot.
+            valid_snapshots.emplace_back(snapshot_or_invalid);
             iter++;
         }
     }
@@ -70,6 +71,11 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mu
     std::set<PageId>             live_normal_pages;
     for (const auto & snap : valid_snapshots)
     {
+        if (unlikely(snap == nullptr))
+        {
+            LOG_WARNING(log, name << " gcApply get invalid snapshot for collectLiveFilesFromVersionList, ignored.");
+            continue;
+        }
         collectLiveFilesFromVersionList(*snap->version(), live_files, live_normal_pages, need_scan_page_ids);
     }
     return {live_files, live_normal_pages};
