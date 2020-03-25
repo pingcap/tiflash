@@ -5,11 +5,11 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <test_utils/TiflashTestBasic.h>
 
+#include <Storages/DeltaMerge/bank/DeltaStorageProxy.h>
 #include <Storages/DeltaMerge/tests/dm_basic_include.h>
-#include <Storages/DeltaMerge/bank2/DeltaStorageProxy.h>
 
-#include <memory>
 #include <iostream>
+#include <memory>
 #include <thread>
 #include "SimpleLockManager.h"
 
@@ -20,16 +20,24 @@ namespace DM
 {
 namespace tests
 {
-void work(DeltaStorageProxy & proxy, SimpleLockManager & manager, IDGenerator & tso_gen, IDGenerator & trans_id_gen, UInt64 max_id, UInt64 try_num)
+void work(DeltaStorageProxy & proxy,
+          SimpleLockManager & manager,
+          IDGenerator &       tso_gen,
+          IDGenerator &       trans_id_gen,
+          UInt64              max_id,
+          UInt64              try_num)
 {
-    for(size_t i = 0; i < try_num; i++) {
+    for (size_t i = 0; i < try_num; i++)
+    {
         UInt64 tid = trans_id_gen.get();
         UInt64 tso = tso_gen.get();
         UInt64 id1, id2;
-        while (true) {
+        while (true)
+        {
             id1 = std::rand() % max_id;
             id2 = std::rand() % max_id;
-            if (id1 != id2) {
+            if (id1 != id2)
+            {
                 break;
             }
         }
@@ -37,66 +45,88 @@ void work(DeltaStorageProxy & proxy, SimpleLockManager & manager, IDGenerator & 
         UInt64 b_id = (id1 > id2) ? id1 : id2;
         if (!manager.writeLock(s_id, tid, tso))
             return;
-        if (!manager.writeLock(b_id, tid, tso)) {
+        if (!manager.writeLock(b_id, tid, tso))
+        {
             manager.writeUnlock(s_id, tid);
             return;
         }
-        UInt64 amount = std::rand() % 100;
-        int direction = std::rand() % 2;
-        if (direction == 0) {
+        UInt64 amount    = std::rand() % 100;
+        int    direction = std::rand() % 2;
+        if (direction == 0)
+        {
             UInt64 old_balance1 = proxy.selectBalance(s_id, tso);
             UInt64 old_balance2 = proxy.selectBalance(b_id, tso);
             proxy.moveMoney(s_id, b_id, amount, tso);
             UInt64 new_balance1 = proxy.selectBalance(s_id, tso);
             UInt64 new_balance2 = proxy.selectBalance(b_id, tso);
-            if (old_balance1 > amount) {
+            if (old_balance1 > amount)
+            {
                 EXPECT_EQ(old_balance1 - amount, new_balance1);
                 EXPECT_EQ(old_balance2 + amount, new_balance2);
-            } else {
+            }
+            else
+            {
                 EXPECT_EQ(old_balance1, new_balance1);
                 EXPECT_EQ(old_balance2, new_balance2);
             }
 
-            std::cout << "move money from " << std::to_string(s_id) << " to " << std::to_string(b_id) << " amount " << std::to_string(amount) << std::endl;
-        } else {
+            std::cout << "move money from " << std::to_string(s_id) << " to " << std::to_string(b_id) << " amount "
+                      << std::to_string(amount) << std::endl;
+        }
+        else
+        {
             UInt64 old_balance1 = proxy.selectBalance(s_id, tso);
             UInt64 old_balance2 = proxy.selectBalance(b_id, tso);
             proxy.moveMoney(b_id, s_id, amount, tso);
             UInt64 new_balance1 = proxy.selectBalance(s_id, tso);
             UInt64 new_balance2 = proxy.selectBalance(b_id, tso);
-            if (old_balance2 > amount) {
+            if (old_balance2 > amount)
+            {
                 EXPECT_EQ(old_balance1 + amount, new_balance1);
                 EXPECT_EQ(old_balance2 - amount, new_balance2);
-            } else {
+            }
+            else
+            {
                 EXPECT_EQ(old_balance1, new_balance1);
                 EXPECT_EQ(old_balance2, new_balance2);
             }
-            std::cout << "move money from " << std::to_string(b_id) << " to " << std::to_string(s_id) << " amount " << std::to_string(amount) << std::endl;
+            std::cout << "move money from " << std::to_string(b_id) << " to " << std::to_string(s_id) << " amount "
+                      << std::to_string(amount) << std::endl;
         }
         manager.writeUnlock(s_id, tid);
         manager.writeUnlock(b_id, tid);
     }
 }
 
-void verify(DeltaStorageProxy & proxy, SimpleLockManager & manager, IDGenerator & tso_gen, IDGenerator & trans_id_gen, UInt64 max_id, UInt64 total, UInt64 try_num)
+void verify(DeltaStorageProxy & proxy,
+            SimpleLockManager & manager,
+            IDGenerator &       tso_gen,
+            IDGenerator &       trans_id_gen,
+            UInt64              max_id,
+            UInt64              total,
+            UInt64              try_num)
 {
-    for(size_t i = 0; i < try_num; i++) {
+    for (size_t i = 0; i < try_num; i++)
+    {
         UInt64 tid = trans_id_gen.get();
         UInt64 tso = tso_gen.get();
 
-        for (UInt64 id = 0; id < max_id; id++) {
+        for (UInt64 id = 0; id < max_id; id++)
+        {
             manager.readLock(id, tid, tso);
         }
 
         EXPECT_EQ(proxy.sumBalance(0, max_id, tso), total);
-        if (proxy.sumBalance(0, max_id, tso) != total) {
+        if (proxy.sumBalance(0, max_id, tso) != total)
+        {
             std::cout << "sum balance is wrong" << std::endl;
             throw std::exception();
         }
 
         std::cout << proxy.sumBalance(0, max_id, tso) << std::endl;
 
-        for (UInt64 id = 0; id < max_id; id++) {
+        for (UInt64 id = 0; id < max_id; id++)
+        {
             manager.readUnlock(id, tid);
         }
     }
@@ -106,12 +136,12 @@ void run_bank2(UInt64 account, UInt64 balance, UInt64 worker, UInt64 try_num)
 {
     DeltaStorageProxy proxy;
     SimpleLockManager manager;
-    IDGenerator tso_gen;
-    IDGenerator trans_id_gen;
-    UInt64 start = 0;
-    UInt64 end = account;
-    UInt64 initial_balance = balance;
-    UInt64 total = (end - start) * initial_balance;
+    IDGenerator       tso_gen;
+    IDGenerator       trans_id_gen;
+    UInt64            start           = 0;
+    UInt64            end             = account;
+    UInt64            initial_balance = balance;
+    UInt64            total           = (end - start) * initial_balance;
 
     for (UInt64 id = start; id < end; id++)
     {
@@ -119,17 +149,19 @@ void run_bank2(UInt64 account, UInt64 balance, UInt64 worker, UInt64 try_num)
         proxy.insertBalance(id, initial_balance, tso);
     }
 
-    size_t worker_count = worker;
+    size_t                   worker_count = worker;
     std::vector<std::thread> workers;
     workers.resize(worker_count);
 
-    for (size_t i = 0; i < worker_count; i++) {
+    for (size_t i = 0; i < worker_count; i++)
+    {
         workers[i] = std::thread{work, std::ref(proxy), std::ref(manager), std::ref(tso_gen), std::ref(trans_id_gen), end, try_num};
     }
 
     std::thread verify_thread{verify, std::ref(proxy), std::ref(manager), std::ref(tso_gen), std::ref(trans_id_gen), end, total, try_num};
 
-    for (size_t i = 0; i < worker_count; i++) {
+    for (size_t i = 0; i < worker_count; i++)
+    {
         workers[i].join();
     }
     verify_thread.join();
@@ -139,18 +171,19 @@ void run_bank2(UInt64 account, UInt64 balance, UInt64 worker, UInt64 try_num)
 
     std::cout << "Complete\n";
 }
-}
-}
-}
+} // namespace tests
+} // namespace DM
+} // namespace DB
 
-int main(int argc, char *argv[])
+int main(int argc, char * argv[])
 {
-    if (argc != 5) {
+    if (argc != 5)
+    {
         std::cout << "Usage: <cmd> account balance worker try_num" << std::endl;
     }
     UInt64 account = std::stoul(argv[1]);
     UInt64 balance = std::stoul(argv[2]);
-    UInt64 worker = std::stoul(argv[3]);
+    UInt64 worker  = std::stoul(argv[3]);
     UInt64 try_num = std::stoul(argv[4]);
     DB::DM::tests::run_bank2(account, balance, worker, try_num);
     return 0;
