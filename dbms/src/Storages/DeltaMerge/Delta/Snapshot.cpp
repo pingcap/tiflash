@@ -171,18 +171,18 @@ std::pair<size_t, size_t> findPack(const Packs & packs, size_t rows_offset, size
 const Columns & DeltaValueSpace::Snapshot::getColumnsOfPack(size_t pack_index, size_t col_num)
 {
     // If some columns is already read in this snapshot, we can reuse `packs_data`
-    auto & columns = packs_data[pack_index];
+    auto & columns = packs_data.at(pack_index);
     if (columns.size() < col_num)
     {
         size_t col_start = columns.size();
         size_t col_end   = col_num;
 
-        auto &  pack = packs[pack_index];
+        auto &  pack = packs.at(pack_index);
         Columns read_columns;
         if (pack->isCached())
-            read_columns = readPackFromCache(packs[pack_index], column_defines, col_start, col_end);
+            read_columns = readPackFromCache(pack, column_defines, col_start, col_end);
         else if (pack->data_page != 0)
-            read_columns = readPackFromDisk(packs[pack_index], storage_snap->log_reader, column_defines, col_start, col_end);
+            read_columns = readPackFromDisk(pack, storage_snap->log_reader, column_defines, col_start, col_end);
         else
             throw Exception("Pack is in illegal status: " + pack->toString(), ErrorCodes::LOGICAL_ERROR);
 

@@ -261,7 +261,7 @@ public:
     void write(const Block & block) override
     try
     {
-        if (db_settings.dm_insert_max_rows == 0)
+        if (db_settings.dt_insert_max_rows == 0)
         {
             store->write(db_context, db_settings, decorator(block));
         }
@@ -269,7 +269,7 @@ public:
         {
             Block new_block = decorator(block);
             auto rows = new_block.rows();
-            size_t step = db_settings.dm_insert_max_rows;
+            size_t step = db_settings.dt_insert_max_rows;
 
             for (size_t offset = 0; offset < rows; offset += step)
             {
@@ -695,7 +695,7 @@ BlockInputStreams StorageDeltaMerge::read( //
 
         /// Get Rough set filter from query
         DM::RSOperatorPtr rs_operator = DM::EMPTY_FILTER;
-        const bool enable_rs_filter = context.getSettingsRef().dm_enable_rough_set_filter;
+        const bool enable_rs_filter = context.getSettingsRef().dt_enable_rough_set_filter;
         if (enable_rs_filter)
         {
             if (likely(query_info.dag_query))
