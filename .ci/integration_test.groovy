@@ -77,9 +77,10 @@ catchError {
     println "[debug] tiflashTag: $tiflashTag"
     println "[debug] tidbBranch: $tidbBranch"
 
+    parallelsAlwaysFailFast true
     parallel(
         "TiCS Test": {
-            run(label) {
+            run(label+"-self") {
                 dir("tics") {
                     stage("Checkout") {
                         container("docker") {
@@ -88,19 +89,11 @@ catchError {
                             if [ ! -d contrib ]; then curl -sL \$archive_url | tar -zx --strip-components=1 || true; fi
                             """
                             sh "chown -R 1000:1000 ./"
-                            sh """
-                            # if ! grep -q hub.pingcap.net /etc/hosts ; then echo '172.16.10.5 hub.pingcap.net' >> /etc/hosts; fi
-                            if [ -d '../tiflash/tests/maven' ]; then
-                                cd '../tiflash/tests/maven'
-                                docker-compose down || true
-                                cd -
-                            fi
-                            """
                         }
                         checkoutTiCS("${params.ghprbActualCommit}", "${params.ghprbPullId}")
                     }
                     stage("Test") {
-                        timeout(time: 90, unit: 'MINUTES') {
+                        timeout(120) {
                             container("docker") {
                                 sh """
                                 while ! docker pull hub.pingcap.net/tiflash/tics:${params.ghprbActualCommit}; do sleep 60; done
@@ -122,9 +115,9 @@ catchError {
             }
         },
         "TiFlash Test": {
-            run(label)  {
+            run(label+"-tiflash")  {
                 stage("Test via TiFlash") {
-                    timeout(60) {
+                    timeout(120) {
                         dir("tispark") {
                             container("docker") {
                                 sh """
@@ -145,15 +138,9 @@ catchError {
                             checkoutTiFlash(tiflashTag)
                             container("docker") {
                                 dir("tests/maven") {
-                                    def firstTrial = true
-                                    retry(20) {
-                                        if (firstTrial) {
-                                            firstTrial = false
-                                        } else {
-                                            sleep time: 1, unit: "MINUTES"
-                                        }
-                                        sh "docker pull hub.pingcap.net/tiflash/tics:${params.ghprbActualCommit}"
-                                    }
+                                    sh """
+                                    while ! docker pull hub.pingcap.net/tiflash/tics:${params.ghprbActualCommit}; do sleep 60; done
+                                    """
                                     try {
                                         sh "TAG=${params.ghprbActualCommit} BRANCH=${tidbBranch} sh -xe run.sh"
                                     } catch(e) {
