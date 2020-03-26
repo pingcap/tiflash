@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <iostream>
 #include <memory>
+#include <mutex>
 
 namespace DB
 {
@@ -20,10 +21,10 @@ namespace DM
 {
 namespace tests
 {
-class DeltaStorageProxy
+class DeltaMergeStoreProxy
 {
 public:
-    DeltaStorageProxy() : name{"bank"}, col_balance_define{2, "balance", std::make_shared<DataTypeUInt64>()}
+    DeltaMergeStoreProxy() : name{"bank"}, col_balance_define{2, "balance", std::make_shared<DataTypeUInt64>()}
     {
         // construct DeltaMergeStore
         String     path = DB::tests::TiFlashTestEnv::getTemporaryPath() + name;
@@ -67,7 +68,9 @@ private:
 
     SimpleDB db;
 
-    static constexpr const char * pk_name = "_tidb_rowid";
+    const String pk_name = EXTRA_HANDLE_COLUMN_NAME;
+
+    std::mutex mutex;
 };
 } // namespace tests
 } // namespace DM
