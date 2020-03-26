@@ -10,7 +10,7 @@ std::optional<PageEntry> PageEntriesView::find(PageId page_id) const
     // First we find ref-pairs to get the normal page id
     bool   found          = false;
     PageId normal_page_id = 0;
-    for (auto node = tail; node != nullptr; node = node->prev)
+    for (PageEntriesForDeltaPtr node = tail; node != nullptr; node = std::atomic_load(&node->prev))
     {
         if (node->isRefDeleted(page_id))
         {
@@ -53,7 +53,7 @@ const PageEntry PageEntriesView::at(const PageId page_id) const
 
 std::optional<PageEntry> PageEntriesView::findNormalPageEntry(PageId page_id) const
 {
-    for (auto node = tail; node != nullptr; node = node->prev)
+    for (PageEntriesForDeltaPtr node = tail; node != nullptr; node = std::atomic_load(&node->prev))
     {
         auto iter = node->normal_pages.find(page_id);
         if (iter != node->normal_pages.end())
@@ -68,7 +68,7 @@ std::pair<bool, PageId> PageEntriesView::isRefId(PageId page_id) const
 {
     auto node = tail;
     // For delta, we need to check if page_id is deleted, then try to find in page_ref
-    for (; !node->isBase(); node = node->prev)
+    for (; !node->isBase(); node = std::atomic_load(&node->prev))
     {
         if (node->ref_deletions.count(page_id) > 0)
             return {false, 0};
@@ -89,7 +89,7 @@ PageId PageEntriesView::resolveRefId(PageId page_id) const
 std::set<PageId> PageEntriesView::validPageIds() const
 {
     std::stack<std::shared_ptr<PageEntriesForDelta>> link_nodes;
-    for (auto node = tail; node != nullptr; node = node->prev)
+    for (auto node = tail; node != nullptr; node = std::atomic_load(&node->prev))
     {
         link_nodes.emplace(node);
     }
@@ -118,7 +118,7 @@ std::set<PageId> PageEntriesView::validNormalPageIds() const
 {
     // TODO: add test cases for this function
     std::stack<std::shared_ptr<PageEntriesForDelta>> link_nodes;
-    for (auto node = tail; node != nullptr; node = node->prev)
+    for (auto node = tail; node != nullptr; node = std::atomic_load(&node->prev))
     {
         link_nodes.emplace(node);
     }
@@ -146,7 +146,7 @@ std::set<PageId> PageEntriesView::validNormalPageIds() const
 PageId PageEntriesView::maxId() const
 {
     PageId max_id = 0;
-    for (auto node = tail; node != nullptr; node = node->prev)
+    for (auto node = tail; node != nullptr; std::atomic_load(&node->prev))
     {
         max_id = std::max(max_id, node->maxId());
     }
@@ -157,7 +157,7 @@ size_t PageEntriesView::numPages() const
 {
     std::unordered_set<PageId>                        page_ids;
     std::vector<std::shared_ptr<PageEntriesForDelta>> nodes;
-    for (auto node = tail; node != nullptr; node = node->prev)
+    for (auto node = tail; node != nullptr; node = std::atomic_load(&node->prev))
         nodes.emplace_back(node);
 
     for (auto node = nodes.rbegin(); node != nodes.rend(); ++node)
