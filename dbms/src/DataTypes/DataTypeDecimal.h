@@ -207,4 +207,40 @@ typename std::enable_if_t<(sizeof(T) < sizeof(U)), const DataTypeDecimal<U>> dec
     return DataTypeDecimal<U>(maxDecimalPrecision<U>(), scale);
 }
 
+inline UInt32 getDecimalScale(const IDataType & data_type, UInt32 default_value = std::numeric_limits<UInt32>::max())
+{
+    if (auto * decimal_type = checkDecimal<Decimal32>(data_type))
+        return decimal_type->getScale();
+    if (auto * decimal_type = checkDecimal<Decimal64>(data_type))
+        return decimal_type->getScale();
+    if (auto * decimal_type = checkDecimal<Decimal128>(data_type))
+        return decimal_type->getScale();
+    if (auto * decimal_type = checkDecimal<Decimal256>(data_type))
+        return decimal_type->getScale();
+    return default_value;
+}
+
+inline UInt32 leastDecimalPrecisionFor(TypeIndex int_type)
+{
+    switch (int_type)
+    {
+        case TypeIndex::Int8: [[fallthrough]];
+        case TypeIndex::UInt8:
+            return 3;
+        case TypeIndex::Int16: [[fallthrough]];
+        case TypeIndex::UInt16:
+            return 5;
+        case TypeIndex::Int32: [[fallthrough]];
+        case TypeIndex::UInt32:
+            return 10;
+        case TypeIndex::Int64:
+            return 19;
+        case TypeIndex::UInt64:
+            return 20;
+        default:
+            break;
+    }
+    return 0;
+}
+
 } // namespace DB

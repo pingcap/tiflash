@@ -59,6 +59,15 @@ TEST(DataType_test, getLeastSuperType)
         ASSERT_TRUE(getLeastSupertype(typesFromString("Date Date"))->equals(*typeFromString("Date")));
         ASSERT_TRUE(getLeastSupertype(typesFromString("Date DateTime"))->equals(*typeFromString("DateTime")));
 
+        ASSERT_TRUE(getLeastSupertype(typesFromString("MyDate MyDate"))->equals(*typeFromString("MyDate")));
+        ASSERT_TRUE(getLeastSupertype(typesFromString("MyDate MyDateTime"))->equals(*typeFromString("MyDateTime")));
+
+        ASSERT_TRUE(getLeastSupertype(typesFromString("MyDate MyDate"))->equals(*typeFromString("MyDate")));
+        ASSERT_TRUE(getLeastSupertype(typesFromString("MyDate MyDateTime"))->equals(*typeFromString("MyDateTime")));
+
+        ASSERT_TRUE(getLeastSupertype(typesFromString("Decimal(43,4) Decimal(20,0)"))->equals(*typeFromString("Decimal(65,4)")));
+        ASSERT_TRUE(getLeastSupertype(typesFromString("Decimal(43,4) Int64"))->equals(*typeFromString("Decimal(65,4)")));
+
         ASSERT_TRUE(getLeastSupertype(typesFromString("String FixedString(32) FixedString(8)"))->equals(*typeFromString("String")));
 
         ASSERT_TRUE(getLeastSupertype(typesFromString("Array(UInt8) Array(UInt8)"))->equals(*typeFromString("Array(UInt8)")));
@@ -88,6 +97,8 @@ TEST(DataType_test, getLeastSuperType)
         EXPECT_ANY_THROW(getLeastSupertype(typesFromString("Tuple(Int64) Tuple(UInt64)")));
         EXPECT_ANY_THROW(getLeastSupertype(typesFromString("Tuple(Int64, Int8) Tuple(UInt64)")));
         EXPECT_ANY_THROW(getLeastSupertype(typesFromString("Array(Int64) Array(String)")));
+        EXPECT_ANY_THROW(getLeastSupertype(typesFromString("Date MyDate")));
+        EXPECT_ANY_THROW(getLeastSupertype(typesFromString("Decimal(43,4) Float")));
     }
     catch (const Exception & e)
     {
