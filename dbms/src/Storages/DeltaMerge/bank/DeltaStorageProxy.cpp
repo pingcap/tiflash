@@ -7,39 +7,25 @@ namespace DM
 namespace tests
 {
 
+template <typename T>
+void insertColumn(Block & block, const DataTypePtr & type, String name, Int64 col_id, T value)
+{
+    ColumnWithTypeAndName col({}, type, name, col_id);
+    IColumn::MutablePtr   m_col = col.type->createColumn();
+    Field                 field = value;
+    m_col->insert(field);
+    col.column = std::move(m_col);
+    block.insert(std::move(col));
+}
+
 void DeltaStorageProxy::upsertRow(UInt64 id, UInt64 balance, UInt64 tso)
 {
     Block block;
-    auto  makeColumn = [](ColumnWithTypeAndName & col, Field & field) {
-        IColumn::MutablePtr m_col = col.type->createColumn();
-        m_col->insert(field);
-        col.column = std::move(m_col);
-        return col;
-    };
 
-    {
-        ColumnWithTypeAndName col1({}, std::make_shared<DataTypeInt64>(), pk_name, EXTRA_HANDLE_COLUMN_ID);
-        Field                 field = Int64(id);
-        block.insert(makeColumn(col1, field));
-    }
-
-    {
-        ColumnWithTypeAndName version_col({}, VERSION_COLUMN_TYPE, VERSION_COLUMN_NAME, VERSION_COLUMN_ID);
-        Field                 field = tso;
-        block.insert(makeColumn(version_col, field));
-    }
-
-    {
-        ColumnWithTypeAndName tag_col({}, TAG_COLUMN_TYPE, TAG_COLUMN_NAME, TAG_COLUMN_ID);
-        Field                 field = UInt64(0);
-        block.insert(makeColumn(tag_col, field));
-    }
-
-    {
-        ColumnWithTypeAndName balance_col({}, col_balance_define.type, col_balance_define.name, col_balance_define.id);
-        Field                 field = balance;
-        block.insert(makeColumn(balance_col, field));
-    }
+    insertColumn<Int64>(block, std::make_shared<DataTypeInt64>(), pk_name, EXTRA_HANDLE_COLUMN_ID, id);
+    insertColumn<UInt64>(block, VERSION_COLUMN_TYPE, VERSION_COLUMN_NAME, VERSION_COLUMN_ID, tso);
+    insertColumn<UInt64>(block, TAG_COLUMN_TYPE, TAG_COLUMN_NAME, TAG_COLUMN_ID, 0);
+    insertColumn<UInt64>(block, col_balance_define.type, col_balance_define.name, col_balance_define.id, balance);
 
     store->write(*context, context->getSettingsRef(), block);
 }
