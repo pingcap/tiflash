@@ -68,15 +68,15 @@ struct DMContext : private boost::noncopyable
           store_columns(store_columns_),
           min_version(min_version_),
           not_compress(not_compress_),
-          segment_limit_rows(settings.dm_segment_limit_rows),
-          delta_limit_rows(settings.dm_segment_delta_limit_rows),
-          delta_cache_limit_rows(settings.dm_segment_delta_cache_limit_rows),
-          delta_small_pack_rows(settings.dm_segment_delta_small_pack_rows),
-          stable_pack_rows(settings.dm_segment_stable_pack_rows),
-          enable_logical_split(settings.dm_enable_logical_split),
-          read_delta_only(settings.dm_read_delta_only),
-          read_stable_only(settings.dm_read_stable_only),
-          enable_skippable_place(settings.dm_enable_skippable_place)
+          segment_limit_rows(settings.dt_segment_limit_rows),
+          delta_limit_rows(settings.dt_segment_delta_limit_rows),
+          delta_cache_limit_rows(settings.dt_segment_delta_cache_limit_rows),
+          delta_small_pack_rows(settings.dt_segment_delta_cache_limit_rows),
+          stable_pack_rows(settings.dt_segment_stable_pack_rows),
+          enable_logical_split(settings.dt_enable_logical_split),
+          read_delta_only(settings.dt_read_delta_only),
+          read_stable_only(settings.dt_read_stable_only),
+          enable_skippable_place(settings.dt_enable_skippable_place)
     {
     }
 };

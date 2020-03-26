@@ -1,10 +1,25 @@
+#include <Common/TiFlashMetrics.h>
 #include <IO/CompressedReadBuffer.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <IO/MemoryReadWriteBuffer.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/Pack.h>
 #include <Storages/DeltaMerge/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
+
+namespace ProfileEvents
+{
+extern const Event DMWriteBytes;
+extern const Event PSMWriteBytes;
+extern const Event WriteBufferFromFileDescriptorWriteBytes;
+extern const Event WriteBufferAIOWriteBytes;
+} // namespace ProfileEvents
+
+namespace CurrentMetrics
+{
+extern const Metric DT_WriteAmplification;
+}
 
 namespace DB::DM
 {
@@ -13,8 +28,9 @@ struct FlushPackTask
 {
     FlushPackTask(const PackPtr & pack_) : pack(pack_) {}
 
-    PackPtr pack;
-    PageId  data_page = 0;
+    ConstPackPtr pack;
+
+    PageId data_page = 0;
 };
 using FlushPackTasks = std::vector<FlushPackTask>;
 
@@ -26,6 +42,7 @@ bool DeltaValueSpace::flush(DMContext & context)
     WriteBatches   wbs(context.storage_pool);
 
     size_t flush_rows    = 0;
+    size_t flush_bytes   = 0;
     size_t flush_deletes = 0;
     {
         /// Prepare data which will be written to disk.
@@ -53,24 +70,25 @@ bool DeltaValueSpace::flush(DMContext & context)
                 auto & task = tasks.emplace_back(pack);
                 // We only write the pack's data if it is not a delete range, and it's data haven't been saved.
                 // Otherwise, simply save it's metadata is enough.
-                if (pack->isMutable())
+                if (pack->dataFlushable())
                 {
                     if (unlikely(!pack->cache))
                         throw Exception("Mutable pack does not have cache", ErrorCodes::LOGICAL_ERROR);
                     task.data_page = writePackData(context, pack->cache->block, pack->cache_offset, pack->rows, wbs);
                 }
                 flush_rows += pack->rows;
+                flush_bytes += pack->bytes;
                 flush_deletes += pack->isDeleteRange();
             }
             total_rows += pack->rows;
             total_deletes += pack->isDeleteRange();
+
+            // Stop other threads appending to this pack.
+            pack->appendable = false;
         }
 
         if (unlikely(flush_rows != unsaved_rows || flush_deletes != unsaved_deletes || total_rows != rows || total_deletes != deletes))
             throw Exception("Rows and deletes check failed", ErrorCodes::LOGICAL_ERROR);
-
-        // Must remove the last_cache, so that later append operations won't append to last pack which we are flushing.
-        last_cache = {};
     }
 
     // No update, return successfully.
@@ -143,12 +161,6 @@ bool DeltaValueSpace::flush(DMContext & context)
             // If it's data have been updated, use the new pages info.
             if (task.data_page != 0)
                 shadow->data_page = task.data_page;
-            if (task.pack->rows >= context.delta_small_pack_rows)
-            {
-                // This pack is too large to use cache.
-                task.pack->cache        = {};
-                task.pack->cache_offset = 0;
-            }
 
             packs_copy.push_back(shadow);
         }
@@ -188,12 +200,36 @@ bool DeltaValueSpace::flush(DMContext & context)
         /// Commit updates in memory.
         packs.swap(packs_copy);
 
+        for (auto & pack : packs)
+        {
+            if (pack->cache && pack->data_page != 0 && pack->rows >= context.delta_small_pack_rows)
+            {
+                // This pack is too large to use cache.
+                pack->cache        = {};
+                pack->cache_offset = 0;
+            }
+        }
+
         unsaved_rows -= flush_rows;
         unsaved_deletes -= flush_deletes;
 
         LOG_DEBUG(log,
                   simpleInfo() << " Flush end. Flushed " << tasks.size() << " packs, " << flush_rows << " rows and " << flush_deletes
                                << " deletes.");
+    }
+
+
+    ProfileEvents::increment(ProfileEvents::DMWriteBytes, flush_bytes);
+
+
+    if (auto metrics = const_cast<Context &>(context.db_context).getTiFlashMetrics(); metrics)
+    {
+        // Also update the write amplification
+        auto total_write  = ProfileEvents::counters[ProfileEvents::DMWriteBytes].load(std::memory_order_relaxed);
+        auto actual_write = ProfileEvents::counters[ProfileEvents::PSMWriteBytes].load(std::memory_order_relaxed)
+            + ProfileEvents::counters[ProfileEvents::WriteBufferFromFileDescriptorWriteBytes].load(std::memory_order_relaxed)
+            + ProfileEvents::counters[ProfileEvents::WriteBufferAIOWriteBytes].load(std::memory_order_relaxed);
+        GET_METRIC(metrics, tiflash_storage_write_amplification).Set((double)(actual_write / 1024 / 1024) / (total_write / 1024 / 1024));
     }
 
     return true;

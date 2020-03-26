@@ -1,24 +1,27 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
-#include <DataTypes/DataTypeString.h>
-#include <DataTypes/DataTypeDateTime.h>
+#include <Common/typeid_cast.h>
 #include <DataStreams/OneBlockInputStream.h>
-#include <Storages/System/StorageSystemTables.h>
-#include <Storages/VirtualColumnUtils.h>
+#include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Databases/IDatabase.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/queryToString.h>
-#include <Common/typeid_cast.h>
-#include <DataTypes/DataTypesNumber.h>
-
+#include <Storages/IManageableStorage.h>
+#include <Storages/MutableSupport.h>
+#include <Storages/System/StorageSystemTables.h>
+#include <Storages/Transaction/TiDB.h>
+#include <Storages/Transaction/Types.h>
+#include <Storages/VirtualColumnUtils.h>
 
 namespace DB
 {
 
 namespace ErrorCodes
 {
-    extern const int CANNOT_GET_CREATE_TABLE_QUERY;
+extern const int CANNOT_GET_CREATE_TABLE_QUERY;
 }
 
 /// Some virtual columns routines
@@ -52,7 +55,8 @@ NameAndTypePair tryGetColumn(const ColumnsWithTypeAndName & columns, const Strin
 struct VirtualColumnsProcessor
 {
     explicit VirtualColumnsProcessor(const ColumnsWithTypeAndName & all_virtual_columns_)
-        : all_virtual_columns(all_virtual_columns_), virtual_columns_mask(all_virtual_columns_.size(), 0) {}
+        : all_virtual_columns(all_virtual_columns_), virtual_columns_mask(all_virtual_columns_.size(), 0)
+    {}
 
     /// Separates real and virtual column names, returns real ones
     Names process(const Names & column_names, const std::vector<bool *> & virtual_columns_exists_flag = {})
@@ -108,28 +112,23 @@ protected:
     std::vector<UInt8> virtual_columns_mask;
 };
 
-}
+} // namespace
 
 
-StorageSystemTables::StorageSystemTables(const std::string & name_)
-    : name(name_)
+StorageSystemTables::StorageSystemTables(const std::string & name_) : name(name_)
 {
-    setColumns(ColumnsDescription(
-    {
+    setColumns(ColumnsDescription({
         {"database", std::make_shared<DataTypeString>()},
         {"name", std::make_shared<DataTypeString>()},
         {"engine", std::make_shared<DataTypeString>()},
+        {"tidb_table_id", std::make_shared<DataTypeInt64>()},
         {"is_temporary", std::make_shared<DataTypeUInt8>()},
         {"data_path", std::make_shared<DataTypeString>()},
         {"metadata_path", std::make_shared<DataTypeString>()},
     }));
 
-    virtual_columns =
-    {
-        {std::make_shared<DataTypeDateTime>(), "metadata_modification_time"},
-        {std::make_shared<DataTypeString>(), "create_table_query"},
-        {std::make_shared<DataTypeString>(), "engine_full"}
-    };
+    virtual_columns = {{std::make_shared<DataTypeDateTime>(), "metadata_modification_time"},
+        {std::make_shared<DataTypeString>(), "create_table_query"}, {std::make_shared<DataTypeString>(), "engine_full"}};
 }
 
 
@@ -139,14 +138,13 @@ static ColumnPtr getFilteredDatabases(const ASTPtr & query, const Context & cont
     for (const auto & db : context.getDatabases())
         column->insert(db.first);
 
-    Block block { ColumnWithTypeAndName( std::move(column), std::make_shared<DataTypeString>(), "database" ) };
+    Block block{ColumnWithTypeAndName(std::move(column), std::make_shared<DataTypeString>(), "database")};
     VirtualColumnUtils::filterBlockWithQuery(query, block, context);
     return block.getByPosition(0).column;
 }
 
 
-BlockInputStreams StorageSystemTables::read(
-    const Names & column_names,
+BlockInputStreams StorageSystemTables::read(const Names & column_names,
     const SelectQueryInfo & query_info,
     const Context & context,
     QueryProcessingStage::Enum & processed_stage,
@@ -161,7 +159,8 @@ BlockInputStreams StorageSystemTables::read(
     bool has_engine_full = false;
 
     VirtualColumnsProcessor virtual_columns_processor(virtual_columns);
-    real_column_names = virtual_columns_processor.process(column_names, {&has_metadata_modification_time, &has_create_table_query, &has_engine_full});
+    real_column_names
+        = virtual_columns_processor.process(column_names, {&has_metadata_modification_time, &has_create_table_query, &has_engine_full});
     check(real_column_names);
 
     Block res_block = getSampleBlock();
@@ -190,7 +189,18 @@ BlockInputStreams StorageSystemTables::read(
             size_t j = 0;
             res_columns[j++]->insert(database_name);
             res_columns[j++]->insert(table_name);
-            res_columns[j++]->insert(iterator->table()->getName());
+            const String engine_name = iterator->table()->getName();
+            res_columns[j++]->insert(engine_name);
+            TableID table_id = -1;
+            if (engine_name == MutableSupport::txn_storage_name || engine_name == MutableSupport::delta_tree_storage_name)
+            {
+                auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(iterator->table());
+                if (managed_storage)
+                {
+                    table_id = managed_storage->getTableInfo().id;
+                }
+            }
+            res_columns[j++]->insert(Int64(table_id));
             res_columns[j++]->insert(UInt64(0));
             res_columns[j++]->insert(iterator->table()->getDataPath());
             res_columns[j++]->insert(database->getTableMetadataPath(table_name));
@@ -268,4 +278,4 @@ NameAndTypePair StorageSystemTables::getColumn(const String & column_name) const
     return !virtual_column.name.empty() ? virtual_column : ITableDeclaration::getColumn(column_name);
 }
 
-}
+} // namespace DB

@@ -70,6 +70,7 @@ public:
 
     void shutdown() override;
 
+    void removeFromTMTContext() override;
 
 private:
     String database_name;

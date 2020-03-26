@@ -1,3 +1,4 @@
+#include <Parsers/ASTPartition.h>
 #include <common/ThreadPool.h>
 #include <common/config_common.h>
 
@@ -7,6 +8,7 @@
 #include <gperftools/malloc_extension.h>
 #endif
 
+#include <Common/TiFlashMetrics.h>
 #include <Common/formatReadable.h>
 #include <Common/typeid_cast.h>
 #include <Core/Defines.h>
@@ -26,8 +28,9 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
-#include <Storages/StorageDeltaMergeHelpers.h>
+#include <Storages/MutableSupport.h>
 #include <Storages/StorageDeltaMerge.h>
+#include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionException.h>
@@ -256,8 +259,9 @@ public:
     Block getHeader() const override { return header; }
 
     void write(const Block & block) override
+    try
     {
-        if (db_settings.dm_insert_max_rows == 0)
+        if (db_settings.dt_insert_max_rows == 0)
         {
             store->write(db_context, db_settings, decorator(block));
         }
@@ -265,7 +269,7 @@ public:
         {
             Block new_block = decorator(block);
             auto rows = new_block.rows();
-            size_t step = db_settings.dm_insert_max_rows;
+            size_t step = db_settings.dt_insert_max_rows;
 
             for (size_t offset = 0; offset < rows; offset += step)
             {
@@ -281,6 +285,11 @@ public:
                 store->write(db_context, db_settings, write_block);
             }
         }
+    }
+    catch (DB::Exception & e)
+    {
+        e.addMessage("(while writing to table `" + store->getDatabaseName() + "`.`" + store->getTableName() + "`)");
+        throw;
     }
 
 private:
@@ -357,6 +366,7 @@ RegionMap doLearnerRead(const TiDB::TableID table_id,           //
     concurrent_num = std::max(1, std::min(concurrent_num, regions_info.size()));
 
     KVStorePtr & kvstore = tmt.getKVStore();
+    Context & context = tmt.getContext();
     RegionMap kvstore_region;
     // check region is not null and store region map.
     for (const auto & info : regions_info)
@@ -384,7 +394,7 @@ RegionMap doLearnerRead(const TiDB::TableID table_id,           //
             if (region_status != RegionException::RegionReadStatus::OK)
                 return;
 
-            const RegionQueryInfo & region_to_query = regions_info[region_idx];
+            RegionQueryInfo & region_to_query = regions_info[region_idx];
             const RegionID region_id = region_to_query.region_id;
             auto region = kvstore_region[region_id];
 
@@ -400,9 +410,14 @@ RegionMap doLearnerRead(const TiDB::TableID table_id,           //
                 return;
             }
 
+            GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_read_index_count).Increment();
+            Stopwatch read_index_watch;
+
             /// Blocking learner read. Note that learner read must be performed ahead of data read,
             /// otherwise the desired index will be blocked by the lock of data read.
             auto read_index_result = region->learnerRead();
+            GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_read_index_duration_seconds)
+                .Observe(read_index_watch.elapsedSeconds());
             if (read_index_result.region_unavailable)
             {
                 // client-c detect region removed. Set region_status and continue.
@@ -415,12 +430,36 @@ RegionMap doLearnerRead(const TiDB::TableID table_id,           //
                 continue;
             }
             else
-                region->waitIndex(read_index_result.read_index);
-
+            {
+                Stopwatch wait_index_watch;
+                if (region->waitIndex(read_index_result.read_index, tmt.getTerminated()))
+                {
+                    region_status = RegionException::RegionReadStatus::NOT_FOUND;
+                    continue;
+                }
+                GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_wait_index_duration_seconds)
+                    .Observe(wait_index_watch.elapsedSeconds());
+            }
             if (resolve_locks)
             {
-                auto scanner = region->createCommittedScanner();
-                RegionTable::resolveLocks(scanner, start_ts);
+                status = RegionTable::resolveLocksAndWriteRegion( //
+                    tmt,                                          //
+                    table_id,                                     //
+                    region,                                       //
+                    start_ts,                                     //
+                    region_to_query.version,                      //
+                    region_to_query.conf_version,                 //
+                    region_to_query.range_in_table, log);
+
+                if (status != RegionException::RegionReadStatus::OK)
+                {
+                    LOG_WARNING(log,
+                        "Check memory cache, region " << region_id << ", version " << region_to_query.version << ", handle range ["
+                                                      << region_to_query.range_in_table.first.toString() << ", "
+                                                      << region_to_query.range_in_table.second.toString() << ") , status "
+                                                      << RegionException::RegionReadStatusString(status));
+                    region_status = status;
+                }
             }
         }
     };
@@ -493,6 +532,62 @@ RegionMap doLearnerRead(const TiDB::TableID table_id,           //
 
 } // namespace
 
+std::unordered_set<UInt64> parseSegmentSet(const ASTPtr & ast)
+{
+    if (!ast)
+        return {};
+    const auto & partition_ast = typeid_cast<const ASTPartition &>(*ast);
+
+    if (!partition_ast.value)
+        return {parse<UInt64>(partition_ast.id)};
+
+    auto parse_segment_id = [](const ASTLiteral * literal) -> std::pair<bool, UInt64> {
+        if (!literal)
+            return {false, 0};
+        switch (literal->value.getType())
+        {
+            case Field::Types::String:
+                return {true, parse<UInt64>(literal->value.get<String>())};
+            case Field::Types::UInt64:
+                return {true, literal->value.get<UInt64>()};
+            default:
+                return {false, 0};
+        }
+    };
+
+    {
+        const auto * partition_lit = typeid_cast<const ASTLiteral *>(partition_ast.value.get());
+        auto [suc, id] = parse_segment_id(partition_lit);
+        if (suc)
+            return {id};
+    }
+
+    const auto * partition_function = typeid_cast<const ASTFunction *>(partition_ast.value.get());
+    if (partition_function && partition_function->name == "tuple")
+    {
+        std::unordered_set<UInt64> ids;
+        bool ok = true;
+        for (const auto & item : partition_function->arguments->children)
+        {
+            const auto * partition_lit = typeid_cast<const ASTLiteral *>(item.get());
+            auto [suc, id] = parse_segment_id(partition_lit);
+            if (suc)
+            {
+                ids.emplace(id);
+            }
+            else
+            {
+                ok = false;
+                break;
+            }
+        }
+        if (ok)
+            return ids;
+    }
+
+    throw Exception("Unable to parse segment IDs in literal form: `" + partition_ast.fields_str.toString() + "`");
+}
+
 BlockInputStreams StorageDeltaMerge::read( //
     const Names & column_names,
     const SelectQueryInfo & query_info,
@@ -529,7 +624,8 @@ BlockInputStreams StorageDeltaMerge::read( //
 
     const ASTSelectQuery & select_query = typeid_cast<const ASTSelectQuery &>(*query_info.query);
     if (select_query.raw_for_mutable)
-        return store->readRaw(context, context.getSettingsRef(), columns_to_read, num_streams);
+        return store->readRaw(
+            context, context.getSettingsRef(), columns_to_read, num_streams, parseSegmentSet(select_query.segment_expression_list));
     else
     {
         if (unlikely(!query_info.mvcc_query_info))
@@ -599,7 +695,7 @@ BlockInputStreams StorageDeltaMerge::read( //
 
         /// Get Rough set filter from query
         DM::RSOperatorPtr rs_operator = DM::EMPTY_FILTER;
-        const bool enable_rs_filter = context.getSettingsRef().dm_enable_rough_set_filter;
+        const bool enable_rs_filter = context.getSettingsRef().dt_enable_rough_set_filter;
         if (enable_rs_filter)
         {
             if (likely(query_info.dag_query))
@@ -640,7 +736,7 @@ BlockInputStreams StorageDeltaMerge::read( //
 
 
         auto streams = store->read(context, context.getSettingsRef(), columns_to_read, ranges, num_streams,
-            /*max_version=*/mvcc_query_info.read_tso, rs_operator, max_block_size);
+            /*max_version=*/mvcc_query_info.read_tso, rs_operator, max_block_size, parseSegmentSet(select_query.segment_expression_list));
 
         {
             /// Ensure read_tso and regions' info after read.
@@ -838,6 +934,8 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
     setColumns(std::move(new_columns));
 }
 
+String StorageDeltaMerge::getName() const { return MutableSupport::delta_tree_storage_name; }
+
 void StorageDeltaMerge::rename(const String & new_path_to_db, const String & new_database_name, const String & new_table_name)
 {
     const String new_path = new_path_to_db + "/" + new_table_name;
@@ -915,8 +1013,8 @@ void updateDeltaMergeTableCreateStatement(                   //
         else if (args.children.size() == 2)
             args.children.back() = literal;
         else
-            throw Exception(
-                "Wrong arguments num:" + DB::toString(args.children.size()) + " in table: " + table_name + " with engine=DeltaMerge",
+            throw Exception("Wrong arguments num:" + DB::toString(args.children.size()) + " in table: " + table_name
+                    + " with engine=" + MutableSupport::delta_tree_storage_name,
                 ErrorCodes::BAD_ARGUMENTS);
     };
 
@@ -1023,11 +1121,15 @@ void StorageDeltaMerge::startup()
 
 void StorageDeltaMerge::shutdown()
 {
-    if (shutdown_called)
+    bool v = false;
+    if (!shutdown_called.compare_exchange_strong(v, true))
         return;
 
-    shutdown_called = true;
+    store->shutdown();
+}
 
+void StorageDeltaMerge::removeFromTMTContext()
+{
     // remove this table from TMTContext
     TMTContext & tmt_context = global_context.getTMTContext();
     tmt_context.getStorages().remove(tidb_table_info.id);

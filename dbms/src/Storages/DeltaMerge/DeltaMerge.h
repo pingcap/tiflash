@@ -81,6 +81,7 @@ private:
     size_t num_read = 0;
 
     Handle last_handle          = N_INF_HANDLE;
+    UInt64 last_version         = 0;
     size_t last_handle_pos      = 0;
     size_t last_handle_read_num = 0;
 
@@ -208,19 +209,30 @@ private:
     {
         if constexpr (DM_RUN_CHECK)
         {
+            // In some cases like Segment::getSplitPointSlow, only handle column in block.
+            if (block.columns() < 2                                           //
+                || block.getByPosition(0).column_id != EXTRA_HANDLE_COLUMN_ID //
+                || block.getByPosition(1).column_id != VERSION_COLUMN_ID)
+                return;
+
             ++num_read;
 
-            auto & handle_column = toColumnVectorData<Handle>(block.getByPosition(0).column);
+            auto & handle_column  = toColumnVectorData<Handle>(block.getByPosition(0).column);
+            auto & version_column = toColumnVectorData<UInt64>(block.getByPosition(1).column);
             for (size_t i = 0; i < handle_column.size(); ++i)
             {
-                if (handle_column[i] < last_handle)
+                auto handle  = handle_column[i];
+                auto version = version_column[i];
+                if (handle < last_handle || (handle == last_handle && version < last_version))
                 {
-                    throw Exception("DeltaMerge return wrong result, current handle [" + DB::toString(handle_column[i]) + "]@read["
-                                    + DB::toString(num_read) + "]@pos[" + DB::toString(i) + "] is expected >= last handle ["
-                                    + DB::toString(last_handle) + "]@read[" + DB::toString(last_handle_read_num) + "]@pos["
+                    throw Exception("DeltaMerge return wrong result, current handle[" + DB::toString(handle) + "]version["
+                                    + DB::toString(version) + "]@read[" + DB::toString(num_read) + "]@pos[" + DB::toString(i)
+                                    + "] is expected >= last_handle[" + DB::toString(last_handle) + "]last_version["
+                                    + DB::toString(last_version) + "]@read[" + DB::toString(last_handle_read_num) + "]@pos["
                                     + DB::toString(last_handle_pos) + "]");
                 }
-                last_handle          = handle_column[i];
+                last_handle          = handle;
+                last_version         = version;
                 last_handle_pos      = i;
                 last_handle_read_num = num_read;
             }

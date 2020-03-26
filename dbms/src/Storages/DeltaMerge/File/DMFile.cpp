@@ -1,18 +1,25 @@
-#include <Poco/File.h>
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
-
 #include <Common/StringUtils/StringUtils.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
+#include <Poco/File.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/Page/PageUtil.h>
+
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/split.hpp>
 
 namespace DB
 {
 namespace DM
 {
+
+static constexpr const char * NGC_FILE_NAME = "NGC";
+
+String DMFile::ngcPath() const
+{
+    return path() + "/" + NGC_FILE_NAME;
+}
 
 DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path)
 {

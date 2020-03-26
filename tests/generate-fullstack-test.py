@@ -17,7 +17,7 @@ insert_stmt = Template("mysql> insert into $database.$table($columns) values($da
 update_stmt = Template("mysql> update $database.$table set $exprs $condition\n")
 delete_stmt = Template("mysql> delete from $database.$table $condition\n")
 select_stmt = Template(">> select $columns from $database.$table\n")
-tidb_select_stmt = Template("mysql> select /*+ read_from_storage(tiflash[ttt]) */ $columns from $database.$table ttt\n")
+tidb_select_stmt = Template("mysql> set SESSION tidb_isolation_read_engines = 'tiflash' ;select $columns from $database.$table ttt\n")
 sleep_string = "\nSLEEP 15\n\n"
 
 
@@ -314,10 +314,10 @@ def generate_cases_inner(database, table, column_names, types, sample_data,
                                                            "condition": condition}))
                     case_data = new_case_data
                 if op == SELECT:
-                    file.write(select_stmt.substitute({"columns": ", ".join(column_names),
-                                                       "database": database,
-                                                       "table": table}))
-                    file.write(generate_result(column_names, case_data) + "\n\n")
+                    # file.write(select_stmt.substitute({"columns": ", ".join(column_names),
+                    #                                    "database": database,
+                    #                                    "table": table}))
+                    # file.write(generate_result(column_names, case_data) + "\n\n")
                     file.write(tidb_select_stmt.substitute({"columns": ", ".join(column_names),
                                                        "database": database,
                                                        "table": table}))

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/IDataType.h>
 #include <Interpreters/Context.h>
 #include <Poco/Path.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -23,6 +24,21 @@ namespace tests
                                                                                                    \
         throw;                                                                                     \
     }
+
+/// helper functions for comparing DataType
+inline ::testing::AssertionResult DataTypeCompare( //
+    const char * lhs_expr,
+    const char * rhs_expr,
+    const DataTypePtr & lhs,
+    const DataTypePtr & rhs)
+{
+    if (lhs->equals(*rhs))
+        return ::testing::AssertionSuccess();
+    else
+        return ::testing::internal::EqFailure(lhs_expr, rhs_expr, lhs->getName(), rhs->getName(), false);
+}
+#define ASSERT_DATATYPE_EQ(val1, val2) ASSERT_PRED_FORMAT2(::DB::tests::DataTypeCompare, val1, val2)
+#define EXPECT_DATATYPE_EQ(val1, val2) EXPECT_PRED_FORMAT2(::DB::tests::DataTypeCompare, val1, val2)
 
 // A simple helper for getting DataType from type name
 inline DataTypePtr typeFromString(const String & str)

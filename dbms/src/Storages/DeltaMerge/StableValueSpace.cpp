@@ -97,18 +97,21 @@ SkippableBlockInputStreamPtr StableValueSpace::getInputStream(const DMContext & 
                                                               UInt64                max_data_version,
                                                               bool                  enable_clean_read)
 {
+    LOG_DEBUG(log, __FUNCTION__ << "max_data_version: " << max_data_version << ", enable_clean_read: " << enable_clean_read);
+
     SkippableBlockInputStreams streams;
     for (auto & file : files)
     {
-        streams.push_back(std::make_shared<DMFileBlockInputStream>(context.db_context, //
-                                                                   max_data_version,
-                                                                   enable_clean_read,
-                                                                   context.hash_salt,
-                                                                   file,
-                                                                   read_columns,
-                                                                   handle_range,
-                                                                   filter,
-                                                                   IdSetPtr{}));
+        streams.push_back(std::make_shared<DMFileBlockInputStream>( //
+            context.db_context,
+            max_data_version,
+            enable_clean_read,
+            context.hash_salt,
+            file,
+            read_columns,
+            handle_range,
+            filter,
+            IdSetPtr{}));
     }
     return std::make_shared<ConcatSkippableBlockInputStream>(streams);
 }

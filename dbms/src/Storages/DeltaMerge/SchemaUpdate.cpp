@@ -1,3 +1,4 @@
+#include <Common/FieldVisitors.h>
 #include <Functions/FunctionsConversion.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <Parsers/ASTFunction.h>
@@ -11,15 +12,21 @@ namespace DB
 namespace DM
 {
 
+String astToDebugString(const IAST * const ast)
+{
+    std::stringstream ss;
+    ast->dumpTree(ss);
+    return ss.str();
+}
+
 inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & define)
 {
-    std::function<Field(Field, DataTypePtr)> castDefaultValue; // for lazy bind
-    castDefaultValue = [&](Field value, DataTypePtr type) -> Field {
+    std::function<Field(const Field &, const DataTypePtr &)> castDefaultValue; // for lazy bind
+    castDefaultValue = [&](const Field & value, const DataTypePtr & type) -> Field {
         switch (type->getTypeId())
         {
         case TypeIndex::Float32:
-        case TypeIndex::Float64:
-        {
+        case TypeIndex::Float64: {
             if (value.getType() == Field::Types::Float64)
             {
                 Float64 res = applyVisitor(FieldVisitorConvertToNumber<Float64>(), value);
@@ -39,116 +46,147 @@ inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefi
             }
             else
             {
-                throw Exception("Unknown float number literal");
+                throw Exception("Unknown float number literal: " + applyVisitor(FieldVisitorToString(), value)
+                                + ", value type: " + value.getTypeName());
             }
         }
-        case TypeIndex::FixedString:
-        {
+        case TypeIndex::String:
+        case TypeIndex::FixedString: {
             String res = get<String>(value);
             return toField(res);
         }
         case TypeIndex::Int8:
         case TypeIndex::Int16:
         case TypeIndex::Int32:
-        case TypeIndex::Int64:
-        {
+        case TypeIndex::Int64: {
             Int64 res = applyVisitor(FieldVisitorConvertToNumber<Int64>(), value);
             return toField(res);
         }
         case TypeIndex::UInt8:
         case TypeIndex::UInt16:
         case TypeIndex::UInt32:
-        case TypeIndex::UInt64:
-        {
+        case TypeIndex::UInt64: {
             UInt64 res = applyVisitor(FieldVisitorConvertToNumber<UInt64>(), value);
             return toField(res);
         }
-        case TypeIndex::DateTime:
-        {
+        case TypeIndex::DateTime: {
             auto                 date = safeGet<String>(value);
             time_t               time = 0;
             ReadBufferFromMemory buf(date.data(), date.size());
             readDateTimeText(time, buf);
             return toField((Int64)time);
         }
-        case TypeIndex::Decimal32:
-        {
-            auto      dec   = std::dynamic_pointer_cast<const DataTypeDecimal32>(type);
-            Int64     v     = applyVisitor(FieldVisitorConvertToNumber<Int64>(), value);
-            ScaleType scale = dec->getScale();
-            return DecimalField(Decimal32(v), scale);
+        case TypeIndex::Decimal32: {
+            auto v = safeGet<DecimalField<Decimal32>>(value);
+            return v;
         }
-        case TypeIndex::Decimal64:
-        {
-            auto      dec   = std::dynamic_pointer_cast<const DataTypeDecimal64>(type);
-            Int64     v     = applyVisitor(FieldVisitorConvertToNumber<Int64>(), value);
-            ScaleType scale = dec->getScale();
-            return DecimalField(Decimal64(v), scale);
+        case TypeIndex::Decimal64: {
+            auto v = safeGet<DecimalField<Decimal64>>(value);
+            return v;
         }
-        case TypeIndex::Decimal128:
-        {
-            auto      dec   = std::dynamic_pointer_cast<const DataTypeDecimal128>(type);
-            Int64     v     = applyVisitor(FieldVisitorConvertToNumber<Int64>(), value);
-            ScaleType scale = dec->getScale();
-            return DecimalField(Decimal128(v), scale);
+        case TypeIndex::Decimal128: {
+            auto v = safeGet<DecimalField<Decimal128>>(value);
+            return v;
         }
-        case TypeIndex::Decimal256:
-        {
-            auto      dec   = std::dynamic_pointer_cast<const DataTypeDecimal256>(type);
-            Int64     v     = applyVisitor(FieldVisitorConvertToNumber<Int64>(), value);
-            ScaleType scale = dec->getScale();
-            return DecimalField(Decimal256(v), scale);
+        case TypeIndex::Decimal256: {
+            auto v = safeGet<DecimalField<Decimal256>>(value);
+            return v;
         }
-        case TypeIndex::Nullable:
-        {
+        case TypeIndex::Enum16: {
+            // According to `Storages/Transaction/TiDB.h` and MySQL 5.7
+            // document(https://dev.mysql.com/doc/refman/5.7/en/enum.html),
+            // enum support 65,535 distinct value at most, so only Enum16 is supported here.
+            // Default value of Enum should be store as a Int64 Field (Storages/Transaction/Datum.cpp)
+            Int64 res = applyVisitor(FieldVisitorConvertToNumber<Int64>(), value);
+            return toField(res);
+        }
+        case TypeIndex::MyDate:
+        case TypeIndex::MyDateTime: {
+            static_assert(std::is_same_v<DataTypeMyDate::FieldType, UInt64>);
+            static_assert(std::is_same_v<DataTypeMyDateTime::FieldType, UInt64>);
+            UInt64 res = applyVisitor(FieldVisitorConvertToNumber<UInt64>(), value);
+            return toField(res);
+        }
+        case TypeIndex::Nullable: {
             if (value.isNull())
                 return value;
             auto        nullable    = std::dynamic_pointer_cast<const DataTypeNullable>(type);
             DataTypePtr nested_type = nullable->getNestedType();
-            return castDefaultValue(value, nested_type);
+            return castDefaultValue(value, nested_type); // Recursive call on nested type
         }
         default:
-            throw Exception("Unsupported data type: " + type->getName());
+            throw Exception("Unsupported to setColumnDefineDefaultValue with data type: " + type->getName()
+                            + " value: " + applyVisitor(FieldVisitorToString(), value) + ", type: " + value.getTypeName());
         }
     };
 
     if (command.default_expression)
     {
-        // a cast function
-        // change column_define.default_value
+        try
+        {
+            // a cast function
+            // change column_define.default_value
 
-        if (auto default_literal = typeid_cast<const ASTLiteral *>(command.default_expression.get());
-            default_literal && default_literal->value.getType() == Field::Types::String)
-        {
-            define.default_value = default_literal->value;
-        }
-        else if (auto default_cast_expr = typeid_cast<const ASTFunction *>(command.default_expression.get());
-                 default_cast_expr && default_cast_expr->name == "CAST" /* ParserCastExpression::name */)
-        {
-            // eg. CAST('1.234' AS Float32); CAST(999 AS Int32)
-            if (default_cast_expr->arguments->children.size() != 2)
+            if (auto default_literal = typeid_cast<const ASTLiteral *>(command.default_expression.get());
+                default_literal && default_literal->value.getType() == Field::Types::String)
             {
-                throw Exception("Unknown CAST expression in default expr", ErrorCodes::NOT_IMPLEMENTED);
+                define.default_value = default_literal->value;
             }
-
-            auto default_literal_in_cast = typeid_cast<const ASTLiteral *>(default_cast_expr->arguments->children[0].get());
-            if (default_literal_in_cast)
+            else if (auto default_cast_expr = typeid_cast<const ASTFunction *>(command.default_expression.get());
+                     default_cast_expr && default_cast_expr->name == "CAST" /* ParserCastExpression::name */)
             {
-                Field default_value  = castDefaultValue(default_literal_in_cast->value, define.type);
-                define.default_value = default_value;
+                // eg. CAST('1.234' AS Float32); CAST(999 AS Int32)
+                if (default_cast_expr->arguments->children.size() != 2)
+                {
+                    throw Exception("Unknown CAST expression in default expr", ErrorCodes::NOT_IMPLEMENTED);
+                }
+
+                auto default_literal_in_cast = typeid_cast<const ASTLiteral *>(default_cast_expr->arguments->children[0].get());
+                if (default_literal_in_cast)
+                {
+                    Field default_value  = castDefaultValue(default_literal_in_cast->value, define.type);
+                    define.default_value = default_value;
+                }
+                else
+                {
+                    throw Exception("Invalid CAST expression", ErrorCodes::BAD_ARGUMENTS);
+                }
             }
             else
             {
-                throw Exception("Invalid CAST expression", ErrorCodes::BAD_ARGUMENTS);
+                throw Exception("Default value must be a string or CAST('...' AS WhatType)", ErrorCodes::BAD_ARGUMENTS);
             }
         }
-        else
+        catch (DB::Exception & e)
         {
-            throw Exception("Default value must be a string or CAST('...' AS WhatType)", ErrorCodes::BAD_ARGUMENTS);
+            e.addMessage("(in setColumnDefineDefaultValue for default_expression:" + astToDebugString(command.default_expression.get())
+                         + ")");
+            throw;
+        }
+        catch (const Poco::Exception & e)
+        {
+            DB::Exception ex(e);
+            ex.addMessage("(in setColumnDefineDefaultValue for default_expression:" + astToDebugString(command.default_expression.get())
+                          + ")");
+            throw ex;
+        }
+        catch (std::exception & e)
+        {
+            std::stringstream ss;
+            ss << "std::exception: " << e.what()
+               << " (in setColumnDefineDefaultValue for default_expression:" + astToDebugString(command.default_expression.get()) << ")";
+            DB::Exception ex(ss.str(), ErrorCodes::LOGICAL_ERROR);
+            throw ex;
         }
     }
 }
 
+
+inline void setColumnDefineDefaultValue(const OptionTableInfoConstRef table_info, ColumnDefine & define)
+{
+    const auto col_info  = table_info->get().getColumnInfo(define.id);
+    define.default_value = col_info.defaultValueToField();
+}
 
 void applyAlter(ColumnDefines &               table_columns,
                 const AlterCommand &          command,
@@ -170,7 +208,14 @@ void applyAlter(ColumnDefines &               table_columns,
             {
                 exist_column       = true;
                 column_define.type = command.data_type;
-                setColumnDefineDefaultValue(command, column_define);
+                if (table_info)
+                {
+                    setColumnDefineDefaultValue(table_info, column_define);
+                }
+                else
+                {
+                    setColumnDefineDefaultValue(command, column_define);
+                }
                 break;
             }
         }
@@ -206,12 +251,13 @@ void applyAlter(ColumnDefines &               table_columns,
         if (table_info)
         {
             define.id = table_info->get().getColumnID(command.column_name);
+            setColumnDefineDefaultValue(table_info, define);
         }
         else
         {
             define.id = max_column_id_used++;
+            setColumnDefineDefaultValue(command, define);
         }
-        setColumnDefineDefaultValue(command, define);
         table_columns.emplace_back(std::move(define));
     }
     else if (command.type == AlterCommand::DROP_COLUMN)

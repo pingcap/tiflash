@@ -182,9 +182,6 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
     TMTContext & tmt = context.getTMTContext();
 
     metapb::Region region_info;
-    SnapshotDataView lock_cf;
-    SnapshotDataView write_cf;
-    SnapshotDataView default_cf;
 
     region_info.set_id(region_id);
     region_info.set_start_key(RecordKVFormat::genKey(table_id, start).getStr());
@@ -194,14 +191,8 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
     *region_info.add_peers() = createPeer(2, true);
     auto peer_id = 1;
 
-    tmt.getKVStore()->handleApplySnapshot(std::move(region_info),
-        peer_id,
-        (lock_cf),
-        (write_cf),
-        (default_cf),
-        MockTiKV::instance().getRaftIndex(region_id),
-        RAFT_INIT_LOG_TERM,
-        tmt);
+    tmt.getKVStore()->handleApplySnapshot(
+        std::move(region_info), peer_id, SnapshotViewArray(), MockTiKV::instance().getRaftIndex(region_id), RAFT_INIT_LOG_TERM, tmt);
 
     std::stringstream ss;
     ss << "put region #" << region_id << ", range[" << start << ", " << end << ")"
@@ -333,6 +324,70 @@ void dbgFuncRemoveRegion(Context & context, const ASTs & args, DBGInvoker::Print
     std::stringstream ss;
     ss << "remove region #" << region_id;
     output(ss.str());
+}
+
+void dbgFuncIngestSST(Context & context, const ASTs & args, DBGInvoker::Printer)
+{
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+    RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
+    RegionID start_handle = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[3]).value);
+    RegionID end_handle = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[4]).value);
+    MockTiDB::TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
+
+    std::vector<std::pair<TiKVKey, TiKVValue>> write_kv_list, default_kv_list;
+
+    for (auto handle_id = start_handle; handle_id < end_handle; ++handle_id)
+    {
+        // make it have only one column Int64 just for test
+        std::vector<Field> fields;
+        fields.emplace_back(-handle_id);
+        {
+            TiKVKey key = RecordKVFormat::genKey(table->id(), handle_id);
+            std::stringstream ss;
+            RegionBench::encodeRow(table->table_info, fields, ss);
+            TiKVValue prewrite_value(ss.str());
+            UInt64 commit_ts = handle_id;
+            UInt64 prewrite_ts = commit_ts;
+            TiKVValue commit_value = RecordKVFormat::encodeWriteCfValue(Region::PutFlag, prewrite_ts);
+            TiKVKey commit_key = RecordKVFormat::appendTs(key, commit_ts);
+            TiKVKey prewrite_key = RecordKVFormat::appendTs(key, prewrite_ts);
+
+            write_kv_list.emplace_back(std::make_pair(std::move(commit_key), std::move(commit_value)));
+            default_kv_list.emplace_back(std::make_pair(std::move(prewrite_key), std::move(prewrite_value)));
+        }
+    }
+
+    {
+        std::vector<BaseBuffView> keys;
+        std::vector<BaseBuffView> vals;
+        for (const auto & kv : write_kv_list)
+        {
+            keys.push_back({kv.first.data(), kv.first.dataSize()});
+            vals.push_back({kv.second.data(), kv.second.dataSize()});
+        }
+        std::vector<SnapshotView> snaps;
+        snaps.push_back(SnapshotView{keys.data(), vals.data(), ColumnFamilyType::Write, keys.size()});
+
+        auto & tmt = context.getTMTContext();
+        tmt.getKVStore()->handleIngestSST(region_id, SnapshotViewArray{snaps.data(), snaps.size()},
+            MockTiKV::instance().getRaftIndex(region_id), MockTiKV::instance().getRaftTerm(region_id), tmt);
+    }
+
+    {
+        std::vector<BaseBuffView> keys;
+        std::vector<BaseBuffView> vals;
+        for (const auto & kv : default_kv_list)
+        {
+            keys.push_back({kv.first.data(), kv.first.dataSize()});
+            vals.push_back({kv.second.data(), kv.second.dataSize()});
+        }
+        std::vector<SnapshotView> snaps;
+        snaps.push_back(SnapshotView{keys.data(), vals.data(), ColumnFamilyType::Default, keys.size()});
+        auto & tmt = context.getTMTContext();
+        tmt.getKVStore()->handleIngestSST(region_id, SnapshotViewArray{snaps.data(), snaps.size()},
+            MockTiKV::instance().getRaftIndex(region_id), MockTiKV::instance().getRaftTerm(region_id), tmt);
+    }
 }
 
 } // namespace DB

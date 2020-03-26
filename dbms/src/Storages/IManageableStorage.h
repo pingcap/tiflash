@@ -45,6 +45,8 @@ public:
 
     virtual void deleteRows(const Context &, size_t /*rows*/) { throw Exception("Unsupported"); }
 
+    virtual BlockInputStreamPtr listSegments(const Context &) { throw Exception("Unsupported"); }
+
     virtual ::TiDB::StorageEngine engineType() const = 0;
 
     virtual String getDatabaseName() const = 0;
@@ -57,6 +59,10 @@ public:
     virtual void alterFromTiDB(
         const AlterCommands & commands, const TiDB::TableInfo & table_info, const String & database_name, const Context & context)
         = 0;
+
+    
+    /// Remove this storage from TMTContext. Should be called after its metadata and data have been removed from disk.
+    virtual void removeFromTMTContext() = 0;
 
     PKType getPKType() const
     {
