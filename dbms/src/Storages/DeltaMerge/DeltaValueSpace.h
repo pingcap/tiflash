@@ -31,6 +31,8 @@ struct BlockOrDelete
 };
 using BlockOrDeletes = std::vector<BlockOrDelete>;
 
+static std::atomic_uint64_t NEXT_PACK_ID{0};
+
 class DeltaValueSpace : public std::enable_shared_from_this<DeltaValueSpace>, private boost::noncopyable
 {
 public:
@@ -49,8 +51,11 @@ public:
 
     struct Pack
     {
-        UInt64      rows;
-        UInt64      bytes;
+        // This id is only used to to do equal check in DeltaValueSpace::checkHeadAndCloneTail.
+        UInt64 id;
+
+        UInt64      rows  = 0;
+        UInt64      bytes = 0;
         BlockPtr    schema;
         HandleRange delete_range;
         PageId      data_page = 0;
@@ -66,6 +71,9 @@ public:
         bool saved = false;
         // Can be appended into new rows or not.
         bool appendable = true;
+
+        Pack() : id(++NEXT_PACK_ID) {}
+        Pack(const Pack & o) = default;
 
         bool isDeleteRange() const { return !delete_range.none(); }
         bool isCached() const { return !isDeleteRange() && (bool)cache; }
@@ -86,9 +94,9 @@ public:
         std::pair<DataTypePtr, MutableColumnPtr> getDataTypeAndEmptyColumn(ColId column_id) const
         {
             // Note that column_id must exist
-            auto index = colid_to_offset.at(column_id);
+            auto index    = colid_to_offset.at(column_id);
             auto col_type = schema->getByPosition(index).type;
-            return { col_type, col_type->createColumn() };
+            return {col_type, col_type->createColumn()};
         }
 
         String toString()

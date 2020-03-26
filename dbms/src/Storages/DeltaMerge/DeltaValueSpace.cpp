@@ -127,7 +127,7 @@ Packs DeltaValueSpace::checkHeadAndCloneTail(DMContext &         context,
     auto it_2 = packs.begin();
     for (; it_1 != head_packs.end() && it_2 != packs.end(); ++it_1, ++it_2)
     {
-        if (*it_1 != *it_2 || (*it_1)->rows != (*it_2)->rows)
+        if ((*it_1)->id != (*it_2)->id || (*it_1)->rows != (*it_2)->rows)
         {
             LOG_ERROR(log,
                       simpleInfo() << ", Delta  Check head packs failed, unexpected size. head_packs: " << packsToString(head_packs)
