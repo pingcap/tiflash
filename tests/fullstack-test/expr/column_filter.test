@@ -9,7 +9,7 @@ mysql> insert into test.t values(2, 234);
 mysql> insert into test.t values(0, 0);
 mysql> insert into test.t values(NULL, 0);
 ## dt does not support non-function expr as filter expr
-mysql> select /*+ read_from_storage(tiflash[t]) */ c1 from test.t where c1 + 1 > 0;
+mysql> select /*+ read_from_storage(tiflash[t]) */ c1 from test.t where c1 + 1 > 1;
 +------+
 | c1   |
 +------+
