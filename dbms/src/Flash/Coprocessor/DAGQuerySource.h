@@ -31,15 +31,13 @@ public:
     static const String LIMIT_NAME;
 
     DAGQuerySource(Context & context_, DAGContext & dag_context_, const std::vector<RegionInfo> & regions,
-        const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges_, const tipb::DAGRequest & dag_request_);
+        const tipb::DAGRequest & dag_request_);
 
     std::tuple<std::string, ASTPtr> parse(size_t max_query_size) override;
     String str(size_t max_query_size) override;
     std::unique_ptr<IInterpreter> interpreter(Context & context, QueryProcessingStage::Enum stage) override;
 
     DAGContext & getDAGContext() const { return dag_context; };
-
-    const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & getKeyRanges() const { return key_ranges; }
 
     bool hasSelection() const { return sel_index != -1; };
     bool hasAggregation() const { return agg_index != -1; };
@@ -104,7 +102,6 @@ protected:
     DAGContext & dag_context;
 
     const std::vector<RegionInfo> & regions;
-    const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges;
 
     const tipb::DAGRequest & dag_request;
 

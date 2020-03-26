@@ -150,7 +150,6 @@ bool checkRangeAndGenExprIfNeeded(std::vector<HandleRange<HandleType>> & ranges,
 {
     if (ranges.empty())
     {
-        LOG_WARNING(log, "income key ranges is empty");
         // generate an always false filter
         constructInt64LiteralTiExpr(handle_filter, 0);
         return false;
@@ -231,7 +230,6 @@ bool checkKeyRanges(const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>>
     LOG_INFO(log, "pk_is_uint: " << pk_is_uint64);
     if (key_ranges.empty())
     {
-        LOG_WARNING(log, "income key ranges is empty1");
         constructInt64LiteralTiExpr(handle_filter, 0);
         return false;
     }
@@ -315,12 +313,14 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         getAndLockStorageWithSchemaVersion(table_id, settings.schema_version);
     }
 
+
     Names required_columns;
     std::vector<NameAndTypePair> source_columns;
     std::vector<bool> is_ts_column;
     String handle_column_name = MutableSupport::tidb_pk_column_name;
     if (auto pk_handle_col = storage->getTableInfo().getPKHandleColumn())
         handle_column_name = pk_handle_col->get().name;
+
 
     for (Int32 i = 0; i < ts.columns().size(); i++)
     {
@@ -347,6 +347,7 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         is_ts_column.push_back(ci.tp() == TiDB::TypeTimestamp);
     }
 
+
     if (handle_col_id == -1)
         handle_col_id = required_columns.size();
 
@@ -371,6 +372,7 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
 
     bool has_handle_column = (handle_col_id != (Int32)required_columns.size());
 
+
     if (filter_on_handle && !has_handle_column)
     {
         // if need to add filter on handle column, and
@@ -381,6 +383,7 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         source_columns.push_back(pair);
         is_ts_column.push_back(false);
     }
+
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
@@ -431,26 +434,40 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>();
     query_info.mvcc_query_info->resolve_locks = true;
     query_info.mvcc_query_info->read_tso = settings.read_tso;
-    for (auto & r : dag.getRegions()) {
+    for (auto & r : dag.getRegions())
+    {
+        if (r.key_ranges.empty())
+        {
+            throw Exception("Income key ranges is empty for region: " + std::to_string(r.region_id), ErrorCodes::COP_BAD_DAG_REQUEST);
+        }
         RegionQueryInfo info;
         info.region_id = r.region_id;
         info.version = r.region_version;
         info.conf_version = r.region_conf_version;
+        for (const auto & p : r.key_ranges)
+        {
+            TiKVRange::Handle start = TiKVRange::getRangeHandle<true>(p.first, table_id);
+            TiKVRange::Handle end = TiKVRange::getRangeHandle<false>(p.second, table_id);
+            info.required_handle_ranges.emplace_back(std::make_pair(start, end));
+        }
         auto current_region = context.getTMTContext().getKVStore()->getRegion(info.region_id);
-        if (!current_region) {
+        auto region_read_status = getRegionReadStatus(current_region);
+        if (region_read_status != RegionException::OK)
+        {
             std::vector<RegionID> region_ids;
             for (auto & rr : dag.getRegions()) {
                 region_ids.push_back(rr.region_id);
             }
+            LOG_WARNING(log, __PRETTY_FUNCTION__ << " Meet region exception for region " << info.region_id);
             throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
         }
-        //if (!checkKeyRanges(dag.getKeyRanges(), table_id, storage->getPKType() == IManageableStorage::PKType::UINT64, current_region->getRange(), 0, handle_filter_expr, log))
-        //    throw Exception("Cop request only support full range scan for given region",
-        //                    ErrorCodes::COP_BAD_DAG_REQUEST);
         info.range_in_table = current_region->getHandleRangeByTable(table_id);
         query_info.mvcc_query_info->regions_query_info.push_back(info);
     }
-    query_info.mvcc_query_info->concurrent = dag.getRegions().size() > 1 ? 1.0 : 0.0;
+    if (query_info.mvcc_query_info->regions_query_info.empty()) {
+        throw Exception("Dag Request does not have region to read. ", ErrorCodes::COP_BAD_DAG_REQUEST);
+    }
+    query_info.mvcc_query_info->concurrent = query_info.mvcc_query_info->regions_query_info.size() > 1 ? 1.0 : 0.0;
     try
     {
         pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
@@ -462,7 +479,7 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         throw;
     }
 
-    LOG_INFO(log, "dag execution stream size: " << dag.getRegions().size());
+    LOG_INFO(log, "dag execution region size: " << dag.getRegions().size());
 
     if (pipeline.streams.empty())
     {

@@ -35,12 +35,22 @@ try
             std::vector<RegionInfo> regions;
             for (auto & r : cop_request->regions())
             {
-                regions.emplace_back(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver());
+                std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
+                for (auto & range : r.ranges())
+                {
+                    std::string start_key(range.start());
+                    DecodedTiKVKey start(std::move(start_key));
+                    std::string end_key(range.end());
+                    DecodedTiKVKey end(std::move(end_key));
+                    key_ranges.emplace_back(std::make_pair(std::move(start), std::move(end)));
+                }
+                regions.emplace_back(
+                        RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), std::move(key_ranges)));
             }
             tipb::SelectResponse dag_response; // unused
             DAGDriver driver(cop_context.db_context, dag_request, regions,
                 cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(),
-                std::move(key_ranges), dag_response);
+                dag_response);
             // batch execution;
             driver.batchExecute(writer);
             if (dag_response.has_error())

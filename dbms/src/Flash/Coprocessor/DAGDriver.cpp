@@ -23,12 +23,11 @@ extern const int UNKNOWN_EXCEPTION;
 } // namespace ErrorCodes
 
 DAGDriver::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, const std::vector<RegionInfo> & regions_,
-    UInt64 start_ts, UInt64 schema_ver, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> && key_ranges_,
+    UInt64 start_ts, UInt64 schema_ver,
     tipb::SelectResponse & dag_response_, bool internal_)
     : context(context_),
       dag_request(dag_request_),
       regions(regions_),
-      key_ranges(std::move(key_ranges_)),
       dag_response(dag_response_),
       internal(internal_),
       log(&Logger::get("DAGDriver"))
@@ -43,7 +42,7 @@ void DAGDriver::execute()
 try
 {
     DAGContext dag_context(dag_request.executors_size());
-    DAGQuerySource dag(context, dag_context, regions, key_ranges, dag_request);
+    DAGQuerySource dag(context, dag_context, regions, dag_request);
 
     BlockIO streams = executeQuery(dag, context, internal, QueryProcessingStage::Complete);
     if (!streams.in || streams.out)
@@ -110,7 +109,7 @@ void DAGDriver::batchExecute(::grpc::ServerWriter< ::coprocessor::BatchResponse>
 try
 {
     DAGContext dag_context(dag_request.executors_size());
-    DAGQuerySource dag(context, dag_context, regions, key_ranges, dag_request);
+    DAGQuerySource dag(context, dag_context, regions, dag_request);
 
     BlockIO streams = executeQuery(dag, context, internal, QueryProcessingStage::Complete);
     if (!streams.in || streams.out)

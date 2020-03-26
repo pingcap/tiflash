@@ -30,12 +30,10 @@ static void assignOrThrowException(Int32 & index, Int32 value, const String & na
 }
 
 DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, const std::vector<RegionInfo> & regions_,
-    const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges_,
     const tipb::DAGRequest & dag_request_)
     : context(context_),
       dag_context(dag_context_),
       regions(regions_),
-      key_ranges(key_ranges_),
       dag_request(dag_request_),
       metrics(context.getTiFlashMetrics())
 {
