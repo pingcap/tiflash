@@ -5,7 +5,7 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <test_utils/TiflashTestBasic.h>
 
-#include <Storages/DeltaMerge/bank/DeltaStorageProxy.h>
+#include <Storages/DeltaMerge/bank/DeltaMergeStoreProxy.h>
 #include <Storages/DeltaMerge/tests/dm_basic_include.h>
 
 #include <iostream>
@@ -20,12 +20,33 @@ namespace DM
 {
 namespace tests
 {
-void work(DeltaStorageProxy & proxy,
-          SimpleLockManager & manager,
-          IDGenerator &       tso_gen,
-          IDGenerator &       trans_id_gen,
-          UInt64              max_id,
-          UInt64              try_num)
+void moveMoney(DeltaMergeStoreProxy & proxy, UInt64 from, UInt64 to, UInt64 amount, UInt64 tso)
+{
+    UInt64 old_balance1 = proxy.selectBalance(from, tso);
+    UInt64 old_balance2 = proxy.selectBalance(to, tso);
+    proxy.moveMoney(from, to, amount, tso);
+    UInt64 new_balance1 = proxy.selectBalance(from, tso);
+    UInt64 new_balance2 = proxy.selectBalance(to, tso);
+    if (old_balance1 > amount)
+    {
+        EXPECT_EQ(old_balance1 - amount, new_balance1);
+        EXPECT_EQ(old_balance2 + amount, new_balance2);
+    }
+    else
+    {
+        EXPECT_EQ(old_balance1, new_balance1);
+        EXPECT_EQ(old_balance2, new_balance2);
+    }
+
+    std::cout << "Move money from " << std::to_string(from) << " to " << std::to_string(to) << " amount " << std::to_string(amount)
+              << std::endl;
+}
+void work(DeltaMergeStoreProxy & proxy,
+          SimpleLockManager &    manager,
+          IDGenerator &          tso_gen,
+          IDGenerator &          trans_id_gen,
+          UInt64                 max_id,
+          UInt64                 try_num)
 {
     for (size_t i = 0; i < try_num; i++)
     {
@@ -54,57 +75,24 @@ void work(DeltaStorageProxy & proxy,
         int    direction = std::rand() % 2;
         if (direction == 0)
         {
-            UInt64 old_balance1 = proxy.selectBalance(s_id, tso);
-            UInt64 old_balance2 = proxy.selectBalance(b_id, tso);
-            proxy.moveMoney(s_id, b_id, amount, tso);
-            UInt64 new_balance1 = proxy.selectBalance(s_id, tso);
-            UInt64 new_balance2 = proxy.selectBalance(b_id, tso);
-            if (old_balance1 > amount)
-            {
-                EXPECT_EQ(old_balance1 - amount, new_balance1);
-                EXPECT_EQ(old_balance2 + amount, new_balance2);
-            }
-            else
-            {
-                EXPECT_EQ(old_balance1, new_balance1);
-                EXPECT_EQ(old_balance2, new_balance2);
-            }
-
-            std::cout << "Move money from " << std::to_string(s_id) << " to " << std::to_string(b_id) << " amount "
-                      << std::to_string(amount) << std::endl;
+            moveMoney(proxy, s_id, b_id, amount, tso);
         }
         else
         {
-            UInt64 old_balance1 = proxy.selectBalance(s_id, tso);
-            UInt64 old_balance2 = proxy.selectBalance(b_id, tso);
-            proxy.moveMoney(b_id, s_id, amount, tso);
-            UInt64 new_balance1 = proxy.selectBalance(s_id, tso);
-            UInt64 new_balance2 = proxy.selectBalance(b_id, tso);
-            if (old_balance2 > amount)
-            {
-                EXPECT_EQ(old_balance1 + amount, new_balance1);
-                EXPECT_EQ(old_balance2 - amount, new_balance2);
-            }
-            else
-            {
-                EXPECT_EQ(old_balance1, new_balance1);
-                EXPECT_EQ(old_balance2, new_balance2);
-            }
-            std::cout << "Move money from " << std::to_string(b_id) << " to " << std::to_string(s_id) << " amount "
-                      << std::to_string(amount) << std::endl;
+            moveMoney(proxy, b_id, s_id, amount, tso);
         }
         manager.writeUnlock(s_id, tid);
         manager.writeUnlock(b_id, tid);
     }
 }
 
-void verify(DeltaStorageProxy & proxy,
-            SimpleLockManager & manager,
-            IDGenerator &       tso_gen,
-            IDGenerator &       trans_id_gen,
-            UInt64              max_id,
-            UInt64              total,
-            UInt64              try_num)
+void verify(DeltaMergeStoreProxy & proxy,
+            SimpleLockManager &    manager,
+            IDGenerator &          tso_gen,
+            IDGenerator &          trans_id_gen,
+            UInt64                 max_id,
+            UInt64                 total,
+            UInt64                 try_num)
 {
     for (size_t i = 0; i < try_num; i++)
     {
@@ -134,14 +122,14 @@ void verify(DeltaStorageProxy & proxy,
 
 void run_bank(UInt64 account, UInt64 balance, UInt64 worker, UInt64 try_num)
 {
-    DeltaStorageProxy proxy;
-    SimpleLockManager manager;
-    IDGenerator       tso_gen;
-    IDGenerator       trans_id_gen;
-    UInt64            start           = 0;
-    UInt64            end             = account;
-    UInt64            initial_balance = balance;
-    UInt64            total           = (end - start) * initial_balance;
+    DeltaMergeStoreProxy proxy;
+    SimpleLockManager    manager;
+    IDGenerator          tso_gen;
+    IDGenerator          trans_id_gen;
+    UInt64               start           = 0;
+    UInt64               end             = account;
+    UInt64               initial_balance = balance;
+    UInt64               total           = (end - start) * initial_balance;
 
     for (UInt64 id = start; id < end; id++)
     {

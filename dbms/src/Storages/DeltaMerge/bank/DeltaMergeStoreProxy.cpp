@@ -1,4 +1,4 @@
-#include <Storages/DeltaMerge/bank/DeltaStorageProxy.h>
+#include <Storages/DeltaMerge/bank/DeltaMergeStoreProxy.h>
 
 namespace DB
 {
@@ -8,7 +8,7 @@ namespace tests
 {
 
 template <typename T>
-void insertColumn(Block & block, const DataTypePtr & type, String name, Int64 col_id, T value)
+void insertColumn(Block & block, const DataTypePtr & type, const String & name, Int64 col_id, T value)
 {
     ColumnWithTypeAndName col({}, type, name, col_id);
     IColumn::MutablePtr   m_col = col.type->createColumn();
@@ -18,9 +18,10 @@ void insertColumn(Block & block, const DataTypePtr & type, String name, Int64 co
     block.insert(std::move(col));
 }
 
-void DeltaStorageProxy::upsertRow(UInt64 id, UInt64 balance, UInt64 tso)
+void DeltaMergeStoreProxy::upsertRow(UInt64 id, UInt64 balance, UInt64 tso)
 {
-    Block block;
+    std::lock_guard<std::mutex> guard{mutex};
+    Block                       block;
 
     insertColumn<Int64>(block, std::make_shared<DataTypeInt64>(), pk_name, EXTRA_HANDLE_COLUMN_ID, id);
     insertColumn<UInt64>(block, VERSION_COLUMN_TYPE, VERSION_COLUMN_NAME, VERSION_COLUMN_ID, tso);
@@ -30,8 +31,9 @@ void DeltaStorageProxy::upsertRow(UInt64 id, UInt64 balance, UInt64 tso)
     store->write(*context, context->getSettingsRef(), block);
 }
 
-UInt64 DeltaStorageProxy::selectBalance(UInt64 id, UInt64 tso)
+UInt64 DeltaMergeStoreProxy::selectBalance(UInt64 id, UInt64 tso)
 {
+    std::lock_guard<std::mutex> guard{mutex};
     // read all columns from store
     const auto &        columns = store->getTableColumns();
     BlockInputStreamPtr in      = store->read(*context,
@@ -81,8 +83,9 @@ UInt64 DeltaStorageProxy::selectBalance(UInt64 id, UInt64 tso)
     return result;
 }
 
-UInt64 DeltaStorageProxy::sumBalance(UInt64 begin, UInt64 end, UInt64 tso)
+UInt64 DeltaMergeStoreProxy::sumBalance(UInt64 begin, UInt64 end, UInt64 tso)
 {
+    std::lock_guard<std::mutex> guard{mutex};
     // read all columns from store
     const auto &        columns = store->getTableColumns();
     BlockInputStreamPtr in      = store->read(*context,
@@ -142,7 +145,7 @@ UInt64 DeltaStorageProxy::sumBalance(UInt64 begin, UInt64 end, UInt64 tso)
     return sum;
 }
 
-void DeltaStorageProxy::moveMoney(UInt64 from, UInt64 to, UInt64 num, UInt64 tso)
+void DeltaMergeStoreProxy::moveMoney(UInt64 from, UInt64 to, UInt64 num, UInt64 tso)
 {
     UInt64 from_balance = selectBalance(from, tso);
     if (from_balance < num)
