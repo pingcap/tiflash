@@ -160,6 +160,7 @@ class Matcher:
         if line.startswith(SLEEP_PREFIX):
             time.sleep(float(line[len(SLEEP_PREFIX):]))
         elif line.startswith(CMD_PREFIX_TIDB):
+            if verbose: print 'running', line
             if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False
             self.is_mysql = True 

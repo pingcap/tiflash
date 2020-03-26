@@ -13,8 +13,9 @@ struct FlushPackTask
 {
     FlushPackTask(const PackPtr & pack_) : pack(pack_) {}
 
-    PackPtr pack;
-    PageId  data_page = 0;
+    ConstPackPtr pack;
+
+    PageId data_page = 0;
 };
 using FlushPackTasks = std::vector<FlushPackTask>;
 
@@ -53,7 +54,7 @@ bool DeltaValueSpace::flush(DMContext & context)
                 auto & task = tasks.emplace_back(pack);
                 // We only write the pack's data if it is not a delete range, and it's data haven't been saved.
                 // Otherwise, simply save it's metadata is enough.
-                if (pack->isMutable())
+                if (pack->dataFlushable())
                 {
                     if (unlikely(!pack->cache))
                         throw Exception("Mutable pack does not have cache", ErrorCodes::LOGICAL_ERROR);
@@ -64,13 +65,13 @@ bool DeltaValueSpace::flush(DMContext & context)
             }
             total_rows += pack->rows;
             total_deletes += pack->isDeleteRange();
+
+            // Stop other threads appending to this pack.
+            pack->appendable = false;
         }
 
         if (unlikely(flush_rows != unsaved_rows || flush_deletes != unsaved_deletes || total_rows != rows || total_deletes != deletes))
             throw Exception("Rows and deletes check failed", ErrorCodes::LOGICAL_ERROR);
-
-        // Must remove the last_cache, so that later append operations won't append to last pack which we are flushing.
-        last_cache = {};
     }
 
     // No update, return successfully.
@@ -143,12 +144,6 @@ bool DeltaValueSpace::flush(DMContext & context)
             // If it's data have been updated, use the new pages info.
             if (task.data_page != 0)
                 shadow->data_page = task.data_page;
-            if (task.pack->rows >= context.delta_small_pack_rows)
-            {
-                // This pack is too large to use cache.
-                task.pack->cache        = {};
-                task.pack->cache_offset = 0;
-            }
 
             packs_copy.push_back(shadow);
         }
@@ -187,6 +182,16 @@ bool DeltaValueSpace::flush(DMContext & context)
 
         /// Commit updates in memory.
         packs.swap(packs_copy);
+
+        for (auto & pack : packs)
+        {
+            if (pack->cache && pack->data_page != 0 && pack->rows >= context.delta_small_pack_rows)
+            {
+                // This pack is too large to use cache.
+                pack->cache        = {};
+                pack->cache_offset = 0;
+            }
+        }
 
         unsaved_rows -= flush_rows;
         unsaved_deletes -= flush_deletes;

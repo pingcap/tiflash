@@ -216,6 +216,8 @@ bool Segment::writeToDisk(DMContext & dm_context, const PackPtr & pack)
 bool Segment::writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit)
 {
     LOG_TRACE(log, "Segment [" << segment_id << "] write to cache rows: " << limit);
+    if (unlikely(limit == 0))
+        return true;
     return delta->appendToCache(dm_context, block, offset, limit);
 }
 
@@ -251,18 +253,21 @@ bool Segment::write(DMContext & dm_context, const HandleRange & delete_range)
     return delta->appendDeleteRange(dm_context, delete_range);
 }
 
-SegmentSnapshot Segment::createSnapshot(const DMContext & dm_context, bool is_update) const
+SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool is_update) const
 {
-    return {delta->createSnapshot(dm_context, is_update), stable};
+    auto delta_snap = delta->createSnapshot(dm_context, is_update);
+    if (!delta_snap)
+        return {};
+    return std::make_shared<SegmentSnapshot>(delta_snap, stable);
 }
 
-BlockInputStreamPtr Segment::getInputStream(const DMContext &     dm_context,
-                                            const ColumnDefines & columns_to_read,
-                                            SegmentSnapshot &     segment_snap,
-                                            const HandleRanges &  read_ranges,
-                                            const RSOperatorPtr & filter,
-                                            UInt64                max_version,
-                                            size_t                expected_block_size)
+BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_context,
+                                            const ColumnDefines &      columns_to_read,
+                                            const SegmentSnapshotPtr & segment_snap,
+                                            const HandleRanges &       read_ranges,
+                                            const RSOperatorPtr &      filter,
+                                            UInt64                     max_version,
+                                            size_t                     expected_block_size)
 {
     LOG_TRACE(log, "Segment [" << segment_id << "] create InputStream");
 
@@ -276,15 +281,15 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &     dm_context,
         }
         else if (dm_context.read_stable_only)
         {
-            stream = segment_snap.stable->getInputStream(dm_context, read_info.read_columns, read_range, filter, max_version, false);
+            stream = segment_snap->stable->getInputStream(dm_context, read_info.read_columns, read_range, filter, max_version, false);
         }
-        else if (segment_snap.delta->rows == 0 && segment_snap.delta->deletes == 0 //
-                 && !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID)            //
-                 && !hasColumn(columns_to_read, VERSION_COLUMN_ID)                 //
+        else if (segment_snap->delta->rows == 0 && segment_snap->delta->deletes == 0 //
+                 && !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID)              //
+                 && !hasColumn(columns_to_read, VERSION_COLUMN_ID)                   //
                  && !hasColumn(columns_to_read, TAG_COLUMN_ID))
         {
             // No delta, let's try some optimizations.
-            stream = segment_snap.stable->getInputStream(dm_context, read_info.read_columns, read_range, filter, max_version, true);
+            stream = segment_snap->stable->getInputStream(dm_context, read_info.read_columns, read_range, filter, max_version, true);
         }
         else
         {
@@ -292,8 +297,8 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &     dm_context,
                                      read_info.read_columns,
                                      read_range,
                                      filter,
-                                     segment_snap.stable,
-                                     segment_snap.delta,
+                                     segment_snap->stable,
+                                     segment_snap->delta,
                                      read_info.index_begin,
                                      read_info.index_end,
                                      read_info.index->entryCount(),
@@ -339,14 +344,16 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &     dm_context,
                                             size_t                expected_block_size)
 {
 
-    SegmentSnapshot segment_snap = createSnapshot(dm_context);
+    auto segment_snap = createSnapshot(dm_context);
+    if (!segment_snap)
+        return {};
     return getInputStream(dm_context, columns_to_read, segment_snap, read_ranges, filter, max_version, expected_block_size);
 }
 
-BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &     dm_context,
-                                               const ColumnDefines & columns_to_read,
-                                               SegmentSnapshot &     segment_snap,
-                                               bool                  do_range_filter)
+BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &          dm_context,
+                                               const ColumnDefines &      columns_to_read,
+                                               const SegmentSnapshotPtr & segment_snap,
+                                               bool                       do_range_filter)
 {
     ColumnDefines new_columns_to_read;
 
@@ -365,10 +372,10 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &     dm_context,
         }
     }
 
-    BlockInputStreamPtr delta_stream = segment_snap.delta->prepareForStream(dm_context, new_columns_to_read);
+    BlockInputStreamPtr delta_stream = segment_snap->delta->prepareForStream(dm_context, new_columns_to_read);
 
     BlockInputStreamPtr stable_stream
-        = segment_snap.stable->getInputStream(dm_context, new_columns_to_read, range, EMPTY_FILTER, MAX_UINT64, false);
+        = segment_snap->stable->getInputStream(dm_context, new_columns_to_read, range, EMPTY_FILTER, MAX_UINT64, false);
 
     if (do_range_filter)
     {
@@ -399,7 +406,9 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &     dm_context,
 
 BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context, const ColumnDefines & columns_to_read)
 {
-    SegmentSnapshot segment_snap = createSnapshot(dm_context);
+    auto segment_snap = createSnapshot(dm_context);
+    if (!segment_snap)
+        return {};
     return getInputStreamRaw(dm_context, columns_to_read, segment_snap, true);
 }
 
@@ -422,12 +431,12 @@ SegmentPtr Segment::mergeDelta(DMContext & dm_context) const
     return new_segment;
 }
 
-StableValueSpacePtr Segment::prepareMergeDelta(DMContext & dm_context, SegmentSnapshot & segment_snap, WriteBatches & wbs) const
+StableValueSpacePtr Segment::prepareMergeDelta(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs) const
 {
     LOG_DEBUG(log,
               "Segment [" << DB::toString(segment_id)
-                          << "] prepare merge delta start. delta packs: " << DB::toString(segment_snap.delta->getPackCount())
-                          << ", delta total rows: " << DB::toString(segment_snap.delta->getRows()));
+                          << "] prepare merge delta start. delta packs: " << DB::toString(segment_snap->delta->getPackCount())
+                          << ", delta total rows: " << DB::toString(segment_snap->delta->getRows()));
 
     EventRecorder recorder(ProfileEvents::DMDeltaMerge, ProfileEvents::DMDeltaMergeNS);
 
@@ -437,8 +446,8 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext & dm_context, SegmentSn
                                                       read_info.read_columns,
                                                       range,
                                                       EMPTY_FILTER,
-                                                      segment_snap.stable,
-                                                      segment_snap.delta,
+                                                      segment_snap->stable,
+                                                      segment_snap->delta,
                                                       read_info.index_begin,
                                                       read_info.index_end,
                                                       read_info.index->entryCount(),
@@ -449,7 +458,7 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext & dm_context, SegmentSn
     data_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
         data_stream, read_info.read_columns, dm_context.min_version);
 
-    auto new_stable = createNewStable(dm_context, data_stream, segment_snap.stable->getId(), wbs);
+    auto new_stable = createNewStable(dm_context, data_stream, segment_snap->stable->getId(), wbs);
 
     LOG_DEBUG(log, "Segment [" << DB::toString(segment_id) << "] prepare merge delta done.");
 
@@ -457,13 +466,13 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext & dm_context, SegmentSn
 }
 
 SegmentPtr Segment::applyMergeDelta(DMContext &                 context,
-                                    SegmentSnapshot &           segment_snap,
+                                    const SegmentSnapshotPtr &  segment_snap,
                                     WriteBatches &              wbs,
                                     const StableValueSpacePtr & new_stable) const
 {
     LOG_DEBUG(log, "Before apply merge delta: " << info());
 
-    auto later_packs = delta->checkHeadAndCloneTail(context, range, segment_snap.delta->packs, wbs);
+    auto later_packs = delta->checkHeadAndCloneTail(context, range, segment_snap->delta->packs, wbs);
     // Created references to tail pages' pages in "log" storage, we need to write them down.
     wbs.writeLogAndData();
 
@@ -576,7 +585,7 @@ Handle Segment::getSplitPointFast(DMContext & dm_context, const StableValueSpace
     return block.getByPosition(0).column->getInt(read_row_in_pack);
 }
 
-Handle Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, SegmentSnapshot & segment_snap) const
+Handle Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, const SegmentSnapshotPtr & segment_snap) const
 {
     EventRecorder recorder(ProfileEvents::DMSegmentGetSplitPoint, ProfileEvents::DMSegmentGetSplitPointNS);
 
@@ -588,8 +597,8 @@ Handle Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_
                                                      {handle},
                                                      range,
                                                      EMPTY_FILTER,
-                                                     segment_snap.stable,
-                                                     segment_snap.delta,
+                                                     segment_snap->stable,
+                                                     segment_snap->delta,
                                                      read_info.index_begin,
                                                      read_info.index_end,
                                                      read_info.index->entryCount(),
@@ -608,8 +617,8 @@ Handle Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_
                                                  {handle},
                                                  range,
                                                  EMPTY_FILTER,
-                                                 segment_snap.stable,
-                                                 segment_snap.delta,
+                                                 segment_snap->stable,
+                                                 segment_snap->delta,
                                                  read_info.index_begin,
                                                  read_info.index_end,
                                                  read_info.index->entryCount(),
@@ -644,15 +653,15 @@ Handle Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_
     return split_handle;
 }
 
-Segment::SplitInfo Segment::prepareSplit(DMContext & dm_context, SegmentSnapshot & segment_snap, WriteBatches & wbs) const
+Segment::SplitInfo Segment::prepareSplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs) const
 {
-    if (!dm_context.enable_logical_split        //
-        || segment_snap.stable->getPacks() <= 3 //
-        || segment_snap.delta->getRows() > segment_snap.stable->getRows())
+    if (!dm_context.enable_logical_split         //
+        || segment_snap->stable->getPacks() <= 3 //
+        || segment_snap->delta->getRows() > segment_snap->stable->getRows())
         return prepareSplitPhysical(dm_context, segment_snap, wbs);
     else
     {
-        Handle split_point     = getSplitPointFast(dm_context, segment_snap.stable);
+        Handle split_point     = getSplitPointFast(dm_context, segment_snap->stable);
         bool   bad_split_point = !range.check(split_point) || split_point == range.start;
         if (bad_split_point)
             return prepareSplitPhysical(dm_context, segment_snap, wbs);
@@ -662,7 +671,7 @@ Segment::SplitInfo Segment::prepareSplit(DMContext & dm_context, SegmentSnapshot
 }
 
 Segment::SplitInfo
-Segment::prepareSplitLogical(DMContext & dm_context, SegmentSnapshot & segment_snap, Handle split_point, WriteBatches & wbs) const
+Segment::prepareSplitLogical(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, Handle split_point, WriteBatches & wbs) const
 {
     LOG_DEBUG(log, "Segment [" << segment_id << "] prepare split logical start");
 
@@ -682,10 +691,10 @@ Segment::prepareSplitLogical(DMContext & dm_context, SegmentSnapshot & segment_s
     DMFiles my_stable_files;
     DMFiles other_stable_files;
 
-    for (auto & dmfile : segment_snap.stable->getDMFiles())
+    for (auto & dmfile : segment_snap->stable->getDMFiles())
     {
         auto ori_ref_id       = dmfile->refId();
-        auto file_id          = segment_snap.delta->storage_snap->data_reader.getNormalPageId(ori_ref_id);
+        auto file_id          = segment_snap->delta->storage_snap->data_reader.getNormalPageId(ori_ref_id);
         auto file_parent_path = dm_context.extra_paths.getPath(file_id) + "/" + STABLE_FOLDER_NAME;
 
         auto my_dmfile_id    = storage_pool.newDataPageId();
@@ -704,7 +713,7 @@ Segment::prepareSplitLogical(DMContext & dm_context, SegmentSnapshot & segment_s
 
     auto other_stable_id = storage_pool.newMetaPageId();
 
-    auto my_stable    = std::make_shared<StableValueSpace>(segment_snap.stable->getId());
+    auto my_stable    = std::make_shared<StableValueSpace>(segment_snap->stable->getId());
     auto other_stable = std::make_shared<StableValueSpace>(other_stable_id);
 
     my_stable->setFiles(my_stable_files, &dm_context, my_range);
@@ -715,9 +724,9 @@ Segment::prepareSplitLogical(DMContext & dm_context, SegmentSnapshot & segment_s
     return {true, split_point, my_stable, other_stable};
 }
 
-Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, SegmentSnapshot & segment_snap, WriteBatches & wbs) const
+Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs) const
 {
-    LOG_DEBUG(log, "Segment [" << segment_id << "] physical split physical start");
+    LOG_DEBUG(log, "Segment [" << segment_id << "] prepare split physical start");
 
     EventRecorder recorder(ProfileEvents::DMSegmentSplit, ProfileEvents::DMSegmentSplitNS);
 
@@ -740,20 +749,24 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, Segment
                                                       read_info.read_columns,
                                                       my_range,
                                                       EMPTY_FILTER,
-                                                      segment_snap.stable,
-                                                      segment_snap.delta,
+                                                      segment_snap->stable,
+                                                      segment_snap->delta,
                                                       read_info.index_begin,
                                                       read_info.index_end,
                                                       read_info.index->entryCount(),
                                                       dm_context.stable_pack_rows);
 
+        LOG_DEBUG(log, "Created my placed stream");
+
         my_data = std::make_shared<DMHandleFilterBlockInputStream<true>>(my_data, my_range, 0);
         my_data = std::make_shared<ReorganizeBlockInputStream>(my_data, EXTRA_HANDLE_COLUMN_NAME);
         my_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
             my_data, read_info.read_columns, dm_context.min_version);
-        auto my_stable_id = segment_snap.stable->getId();
+        auto my_stable_id = segment_snap->stable->getId();
         my_new_stable     = createNewStable(dm_context, my_data, my_stable_id, wbs);
     }
+
+    LOG_DEBUG(log, "prepare my_new_stable done");
 
     {
         // Write new segment's data
@@ -761,12 +774,14 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, Segment
                                                          read_info.read_columns,
                                                          other_range,
                                                          EMPTY_FILTER,
-                                                         segment_snap.stable,
-                                                         segment_snap.delta,
+                                                         segment_snap->stable,
+                                                         segment_snap->delta,
                                                          read_info.index_begin,
                                                          read_info.index_end,
                                                          read_info.index->entryCount(),
                                                          dm_context.stable_pack_rows);
+
+        LOG_DEBUG(log, "Created other placed stream");
 
         other_data = std::make_shared<DMHandleFilterBlockInputStream<true>>(other_data, other_range, 0);
         other_data = std::make_shared<ReorganizeBlockInputStream>(other_data, EXTRA_HANDLE_COLUMN_NAME);
@@ -776,6 +791,8 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, Segment
         other_stable         = createNewStable(dm_context, other_data, other_stable_id, wbs);
     }
 
+    LOG_DEBUG(log, "prepare other_stable done");
+
     // Remove old stable's files.
     for (auto & file : stable->getDMFiles())
     {
@@ -784,15 +801,15 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, Segment
         wbs.removed_data.delPage(file->refId());
     }
 
-    LOG_DEBUG(log, "Segment [" << segment_id << "] physical split physical end");
+    LOG_DEBUG(log, "Segment [" << segment_id << "] prepare split physical end");
 
     return {false, split_point, my_new_stable, other_stable};
 }
 
-SegmentPair Segment::applySplit(DMContext &       dm_context, //
-                                SegmentSnapshot & segment_snap,
-                                WriteBatches &    wbs,
-                                SplitInfo &       split_info) const
+SegmentPair Segment::applySplit(DMContext &                dm_context, //
+                                const SegmentSnapshotPtr & segment_snap,
+                                WriteBatches &             wbs,
+                                SplitInfo &                split_info) const
 {
     LOG_DEBUG(log, "Segment [" << segment_id << "] apply split");
 
@@ -800,7 +817,7 @@ SegmentPair Segment::applySplit(DMContext &       dm_context, //
     HandleRange other_range = {split_info.split_point, range.end};
 
     Packs   empty_packs;
-    Packs * head_packs = split_info.is_logical ? &empty_packs : &segment_snap.delta->packs;
+    Packs * head_packs = split_info.is_logical ? &empty_packs : &segment_snap->delta->packs;
 
     auto my_delta_packs    = delta->checkHeadAndCloneTail(dm_context, my_range, *head_packs, wbs);
     auto other_delta_packs = delta->checkHeadAndCloneTail(dm_context, other_range, *head_packs, wbs);
@@ -869,12 +886,12 @@ SegmentPtr Segment::merge(DMContext & dm_context, const SegmentPtr & left, const
     return merged;
 }
 
-StableValueSpacePtr Segment::prepareMerge(DMContext &        dm_context, //
-                                          const SegmentPtr & left,
-                                          SegmentSnapshot &  left_snap,
-                                          const SegmentPtr & right,
-                                          SegmentSnapshot &  right_snap,
-                                          WriteBatches &     wbs)
+StableValueSpacePtr Segment::prepareMerge(DMContext &                dm_context, //
+                                          const SegmentPtr &         left,
+                                          const SegmentSnapshotPtr & left_snap,
+                                          const SegmentPtr &         right,
+                                          const SegmentSnapshotPtr & right_snap,
+                                          WriteBatches &             wbs)
 {
     LOG_DEBUG(left->log, "Segment [" << left->segmentId() << "] and [" << right->segmentId() << "] prepare merge start");
 
@@ -882,14 +899,14 @@ StableValueSpacePtr Segment::prepareMerge(DMContext &        dm_context, //
         throw Exception("The ranges of merge segments are not consecutive: first end: " + DB::toString(left->range.end)
                         + ", second start: " + DB::toString(right->range.start));
 
-    auto getStream = [&](const SegmentPtr & segment, SegmentSnapshot & segment_snap) {
+    auto getStream = [&](const SegmentPtr & segment, const SegmentSnapshotPtr & segment_snap) {
         auto                read_info = segment->getReadInfo<false>(dm_context, *dm_context.store_columns, segment_snap);
         BlockInputStreamPtr stream    = segment->getPlacedStream(dm_context,
                                                               read_info.read_columns,
                                                               segment->range,
                                                               EMPTY_FILTER,
-                                                              segment_snap.stable,
-                                                              segment_snap.delta,
+                                                              segment_snap->stable,
+                                                              segment_snap->delta,
                                                               read_info.index_begin,
                                                               read_info.index_end,
                                                               read_info.index->entryCount(),
@@ -918,9 +935,9 @@ StableValueSpacePtr Segment::prepareMerge(DMContext &        dm_context, //
 
 SegmentPtr Segment::applyMerge(DMContext &                 dm_context, //
                                const SegmentPtr &          left,
-                               SegmentSnapshot &           left_snap,
+                               const SegmentSnapshotPtr &  left_snap,
                                const SegmentPtr &          right,
-                               SegmentSnapshot &           right_snap,
+                               const SegmentSnapshotPtr &  right_snap,
                                WriteBatches &              wbs,
                                const StableValueSpacePtr & merged_stable)
 {
@@ -928,8 +945,8 @@ SegmentPtr Segment::applyMerge(DMContext &                 dm_context, //
 
     HandleRange merged_range = {left->range.start, right->range.end};
 
-    auto left_tail_packs  = left->delta->checkHeadAndCloneTail(dm_context, merged_range, left_snap.delta->packs, wbs);
-    auto right_tail_packs = right->delta->checkHeadAndCloneTail(dm_context, merged_range, right_snap.delta->packs, wbs);
+    auto left_tail_packs  = left->delta->checkHeadAndCloneTail(dm_context, merged_range, left_snap->delta->packs, wbs);
+    auto right_tail_packs = right->delta->checkHeadAndCloneTail(dm_context, merged_range, right_snap->delta->packs, wbs);
 
     // Created references to tail pages' pages in "log" storage, we need to write them down.
     wbs.writeLogAndData();
@@ -1022,19 +1039,19 @@ String Segment::info() const
 
 template <bool add_tag_column>
 Segment::ReadInfo
-Segment::getReadInfo(const DMContext & dm_context, const ColumnDefines & read_columns, SegmentSnapshot & segment_snap) const
+Segment::getReadInfo(const DMContext & dm_context, const ColumnDefines & read_columns, const SegmentSnapshotPtr & segment_snap) const
 {
-    LOG_TRACE(log, "getReadInfo start");
+    LOG_DEBUG(log, "getReadInfo start");
 
     auto new_read_columns = arrangeReadColumns<add_tag_column>(getExtraHandleColumnDefine(), read_columns);
-    segment_snap.delta->prepare(dm_context, new_read_columns);
+    segment_snap->delta->prepare(dm_context, new_read_columns);
 
-    DeltaIndexPtr delta_index = ensurePlace(dm_context, segment_snap.stable, segment_snap.delta);
+    DeltaIndexPtr delta_index = ensurePlace(dm_context, segment_snap->stable, segment_snap->delta);
 
     auto index_begin = DeltaIndex::begin(delta_index);
     auto index_end   = DeltaIndex::end(delta_index);
 
-    LOG_TRACE(log, "getReadInfo end");
+    LOG_DEBUG(log, "getReadInfo end");
 
     return {
         .index        = delta_index,

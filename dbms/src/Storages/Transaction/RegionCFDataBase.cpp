@@ -58,6 +58,7 @@ void RegionCFDataBase<RegionWriteCFDataTrait>::finishInsert(typename Map::iterat
     auto & [handle, ts] = write_it->first;
     auto & [write_type, prewrite_ts, short_value] = decoded_val;
 
+    std::ignore = key;
     std::ignore = value;
     std::ignore = ts;
 
@@ -73,12 +74,8 @@ void RegionCFDataBase<RegionWriteCFDataTrait>::finishInsert(typename Map::iterat
 
             if (auto data_it = default_cf_map.find({handle, prewrite_ts}); data_it != default_cf_map.end())
             {
-                short_value = std::get<1>(data_it->second);
+                short_value = RegionDefaultCFDataTrait::getTiKVValue(data_it);
             }
-            else
-                throw Exception("Handle: " + std::to_string(handle) + ", Prewrite ts: " + std::to_string(prewrite_ts)
-                        + " can not found in default cf for key: " + key->toHex(),
-                    ErrorCodes::LOGICAL_ERROR);
         }
     }
     else

@@ -4,6 +4,7 @@
 #include <Storages/DeltaMerge/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/HandleFilter.h>
 #include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 
 namespace DB::DM
 {
@@ -52,7 +53,7 @@ SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool is_u
     {
         if (!is_update || pack->isSaved())
         {
-            auto pack_copy = pack->isMutable() ? std::make_shared<Pack>(*pack) : pack;
+            auto pack_copy = pack->isAppendable() ? std::make_shared<Pack>(*pack) : pack;
             snap->packs.push_back(std::move(pack_copy));
 
             check_rows += pack->rows;
@@ -169,15 +170,21 @@ std::pair<size_t, size_t> findPack(const Packs & packs, size_t rows_offset, size
 
 const Columns & DeltaValueSpace::Snapshot::getColumnsOfPack(size_t pack_index, size_t col_num)
 {
+    // If some columns is already read in this snapshot, we can reuse `packs_data`
     auto & columns = packs_data[pack_index];
     if (columns.size() < col_num)
     {
         size_t col_start = columns.size();
         size_t col_end   = col_num;
 
-        auto read_columns = packs[pack_index]->isCached()
-            ? readPackFromCache(packs[pack_index], column_defines, col_start, col_end)
-            : readPackFromDisk(packs[pack_index], storage_snap->log_reader, column_defines, col_start, col_end);
+        auto &  pack = packs[pack_index];
+        Columns read_columns;
+        if (pack->isCached())
+            read_columns = readPackFromCache(packs[pack_index], column_defines, col_start, col_end);
+        else if (pack->data_page != 0)
+            read_columns = readPackFromDisk(packs[pack_index], storage_snap->log_reader, column_defines, col_start, col_end);
+        else
+            throw Exception("Pack is in illegal status: " + pack->toString(), ErrorCodes::LOGICAL_ERROR);
 
         columns.insert(columns.end(), read_columns.begin(), read_columns.end());
     }
@@ -206,8 +213,9 @@ size_t DeltaValueSpace::Snapshot::read(const HandleRange & range, MutableColumns
         if (rows_start_in_pack == rows_end_in_pack)
             continue;
 
+        // TODO: this get the full columns of pack, which may cause unnecessary copying
         auto & columns         = getColumnsOfPack(pack_index, output_columns.size());
-        auto & handle_col_data = toColumnVectorData<Handle>(columns[0]);
+        auto & handle_col_data = toColumnVectorData<Handle>(columns[0]); // TODO: Magic number of fixed position of pk
         if (rows_in_pack_limit == 1)
         {
             if (range.check(handle_col_data[rows_start_in_pack]))

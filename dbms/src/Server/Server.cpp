@@ -21,6 +21,7 @@
 #include <Poco/Net/HTTPServer.h>
 #include <Poco/Net/NetException.h>
 #include <Poco/StringTokenizer.h>
+#include <Storages/MutableSupport.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/Transaction/KVStore.h>
@@ -395,7 +396,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     bool disable_bg_flush = false;
 
-    ::TiDB::StorageEngine engine_if_empty = ::TiDB::StorageEngine::TMT;
+    ::TiDB::StorageEngine engine_if_empty = ::TiDB::StorageEngine::DT;
     ::TiDB::StorageEngine engine = engine_if_empty;
 
     if (config().has("raft"))
@@ -447,22 +448,24 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
 
         /// "tmt" engine ONLY support disable_bg_flush = false.
-        /// "dm" engine by default disable_bg_flush = true.
+        /// "dt" engine ONLY support disable_bg_flush = true.
 
         String disable_bg_flush_conf = "raft.disable_bg_flush";
         if (engine == ::TiDB::StorageEngine::TMT)
         {
             if (config().has(disable_bg_flush_conf) && config().getBool(disable_bg_flush_conf))
-                throw Exception(
-                    "Illegal arguments: disable background flush while using engine TxnMergeTree.", ErrorCodes::INVALID_CONFIG_PARAMETER);
+                throw Exception("Illegal arguments: disable background flush while using engine " + MutableSupport::txn_storage_name,
+                    ErrorCodes::INVALID_CONFIG_PARAMETER);
             disable_bg_flush = false;
         }
         else if (engine == ::TiDB::StorageEngine::DT)
         {
-            if (config().has(disable_bg_flush_conf))
-                disable_bg_flush = config().getBool(disable_bg_flush_conf);
-            else
-                disable_bg_flush = true;
+            /// If background flush is enabled, read will not triggle schema sync.
+            /// Which means that we may get the wrong result with outdated schema.
+            if (config().has(disable_bg_flush_conf) && !config().getBool(disable_bg_flush_conf))
+                throw Exception("Illegal arguments: enable background flush while using engine " + MutableSupport::delta_tree_storage_name,
+                    ErrorCodes::INVALID_CONFIG_PARAMETER);
+            disable_bg_flush = true;
         }
     }
 
@@ -558,10 +561,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
         .fn_handle_apply_snapshot = HandleApplySnapshot,
         .fn_atomic_update_proxy = AtomicUpdateProxy,
         .fn_handle_destroy = HandleDestroy,
+        .fn_handle_ingest_sst = HandleIngestSST,
+        .fn_handle_check_terminated = HandleCheckTerminated,
 
         // a special number, also defined in proxy
         .magic_number = 0x13579BDF,
-        .version = 2};
+        .version = 4};
 
     auto proxy_runner = std::thread([&proxy_conf, &log, &helper]() {
         if (!proxy_conf.inited)
@@ -850,6 +855,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         ClusterManagerService cluster_manager_service(*global_context, config_path);
 
         waitForTerminationRequest();
+
+        {
+            global_context->getTMTContext().setTerminated();
+            LOG_INFO(log, "Set tmt context terminated");
+        }
     }
 
     return Application::EXIT_OK;

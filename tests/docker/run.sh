@@ -2,24 +2,51 @@
 
 set -xe
 
-docker-compose down
+# Stop all docker instances if exist.
+# tiflash-dt && tiflash-tmt share the same name "tiflash0", we just need one here
+docker-compose -f gtest.yaml -f cluster.yaml -f tiflash-dt.yaml -f mock-test-dt.yaml down
 
 rm -rf ./data ./log
-
 # run gtest cases. (only tics-gtest up)
-docker-compose up -d --scale tics0=0 --scale tiflash0=0 --scale tikv0=0 --scale tidb0=0 --scale pd0=0
-docker-compose exec -T tics-gtest bash -c 'cd /tests && ./run-gtest.sh'
-docker-compose down
+docker-compose -f gtest.yaml up -d
+docker-compose -f gtest.yaml exec -T tics-gtest bash -c 'cd /tests && ./run-gtest.sh'
+docker-compose -f gtest.yaml down
 
-# run fullstack-tests
-docker-compose up -d --scale tics0=0 --scale tics-gtest=0 --scale tiflash0=0
+
+rm -rf ./data ./log
+# run fullstack-tests (for engine DeltaTree)
+docker-compose -f cluster.yaml -f tiflash-dt.yaml up -d
 sleep 60
-docker-compose up -d --scale tics0=0 --scale tics-gtest=0 --build
+docker-compose -f cluster.yaml -f tiflash-dt.yaml up -d --build
 sleep 10
-docker-compose exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test true'
-docker-compose down
+docker-compose -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test true'
+docker-compose -f cluster.yaml -f tiflash-dt.yaml down
 
-# (only tics0 up)
-docker-compose up -d --scale tics-gtest=0 --scale tiflash0=0 --scale tikv0=0 --scale tidb0=0 --scale pd0=0
-docker-compose exec -T tics0 bash -c 'cd /tests ; ./run-test.sh  delta-merge-test && ./run-test.sh mutable-test'
-docker-compose down
+
+# We need to separate mock-test for dt and tmt, since this behavior
+# is different in some tests
+# * "tmt" engine ONLY support disable_bg_flush = false.
+# * "dt"  engine ONLY support disable_bg_flush = true.
+rm -rf ./data ./log
+# (only tics0 up) (for engine DetlaTree)
+docker-compose -f mock-test-dt.yaml up -d
+docker-compose -f mock-test-dt.yaml exec -T tics0 bash -c 'cd /tests ; ./run-test.sh delta-merge-test'
+docker-compose -f mock-test-dt.yaml down
+
+
+
+rm -rf ./data ./log
+# run fullstack-tests (for engine TxnMergeTree)
+docker-compose -f cluster.yaml -f tiflash-tmt.yaml up -d
+sleep 60
+docker-compose -f cluster.yaml -f tiflash-tmt.yaml up -d --build
+sleep 10
+docker-compose -f cluster.yaml -f tiflash-tmt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test true'
+docker-compose -f cluster.yaml -f tiflash-tmt.yaml down
+
+
+rm -rf ./data ./log
+# (only tics0 up) (for engine TxnMergeTree)
+docker-compose -f mock-test-tmt.yaml up -d
+docker-compose -f mock-test-tmt.yaml exec -T tics0 bash -c 'cd /tests ; ./run-test.sh mutable-test'
+docker-compose -f mock-test-tmt.yaml down

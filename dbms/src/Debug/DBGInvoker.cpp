@@ -1,17 +1,17 @@
-#include <cstring>
-#include <thread>
-
 #include <DataStreams/StringStreamBlockInputStream.h>
 #include <Debug/ClusterManage.h>
 #include <Debug/DBGInvoker.h>
 #include <Debug/dbgFuncCoprocessor.h>
+#include <Debug/dbgFuncFailPoint.h>
 #include <Debug/dbgFuncMockRaftCommand.h>
 #include <Debug/dbgFuncMockTiDBData.h>
 #include <Debug/dbgFuncMockTiDBTable.h>
 #include <Debug/dbgFuncRegion.h>
 #include <Debug/dbgFuncSchema.h>
-#include <Debug/dbgFuncFailPoint.h>
 #include <Parsers/ASTLiteral.h>
+
+#include <cstring>
+#include <thread>
 
 namespace DB
 {
@@ -88,6 +88,8 @@ DBGInvoker::DBGInvoker()
 
     regSchemafulFunc("dag", dbgFuncDAG);
     regSchemafulFunc("mock_dag", dbgFuncMockDAG);
+
+    regSchemalessFunc("region_mock_ingest_sst", dbgFuncIngestSST);
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)
