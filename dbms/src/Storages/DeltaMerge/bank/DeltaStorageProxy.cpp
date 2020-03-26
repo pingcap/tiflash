@@ -10,11 +10,11 @@ namespace tests
 void DeltaStorageProxy::upsertRow(UInt64 id, UInt64 balance, UInt64 tso)
 {
     Block block;
-    auto makeColumn = [](ColumnWithTypeAndName &col, Field &field) {
-            IColumn::MutablePtr   m_col = col.type->createColumn();
-            m_col->insert(field);
-            col.column = std::move(m_col);
-            return col;
+    auto  makeColumn = [](ColumnWithTypeAndName & col, Field & field) {
+        IColumn::MutablePtr m_col = col.type->createColumn();
+        m_col->insert(field);
+        col.column = std::move(m_col);
+        return col;
     };
 
     {
@@ -37,7 +37,7 @@ void DeltaStorageProxy::upsertRow(UInt64 id, UInt64 balance, UInt64 tso)
 
     {
         ColumnWithTypeAndName balance_col({}, col_balance_define.type, col_balance_define.name, col_balance_define.id);
-        Field                 field     = balance;
+        Field                 field = balance;
         block.insert(makeColumn(balance_col, field));
     }
 
