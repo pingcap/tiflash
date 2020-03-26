@@ -10,42 +10,35 @@ namespace tests
 void DeltaStorageProxy::upsertRow(UInt64 id, UInt64 balance, UInt64 tso)
 {
     Block block;
+    auto makeColumn = [](ColumnWithTypeAndName &col, Field &field) {
+            IColumn::MutablePtr   m_col = col.type->createColumn();
+            m_col->insert(field);
+            col.column = std::move(m_col);
+            return col;
+    };
+
     {
         ColumnWithTypeAndName col1({}, std::make_shared<DataTypeInt64>(), pk_name, EXTRA_HANDLE_COLUMN_ID);
-        IColumn::MutablePtr   m_col = col1.type->createColumn();
         Field                 field = Int64(id);
-        m_col->insert(field);
-        col1.column = std::move(m_col);
-        block.insert(col1);
+        block.insert(makeColumn(col1, field));
     }
 
     {
         ColumnWithTypeAndName version_col({}, VERSION_COLUMN_TYPE, VERSION_COLUMN_NAME, VERSION_COLUMN_ID);
-        IColumn::MutablePtr   m_col = version_col.type->createColumn();
         Field                 field = tso;
-        m_col->insert(field);
-        version_col.column = std::move(m_col);
-        block.insert(version_col);
+        block.insert(makeColumn(version_col, field));
     }
 
     {
         ColumnWithTypeAndName tag_col({}, TAG_COLUMN_TYPE, TAG_COLUMN_NAME, TAG_COLUMN_ID);
-        IColumn::MutablePtr   m_col       = tag_col.type->createColumn();
-        auto &                column_data = typeid_cast<ColumnVector<UInt8> &>(*m_col).getData();
-        column_data.resize(1);
-        column_data[0] = 0;
-        tag_col.column = std::move(m_col);
-        block.insert(tag_col);
+        Field                 field = UInt64(0);
+        block.insert(makeColumn(tag_col, field));
     }
 
     {
         ColumnWithTypeAndName balance_col({}, col_balance_define.type, col_balance_define.name, col_balance_define.id);
-        IColumn::MutablePtr   m_balance = balance_col.type->createColumn();
         Field                 field     = balance;
-        m_balance->insert(field);
-
-        balance_col.column = std::move(m_balance);
-        block.insert(std::move(balance_col));
+        block.insert(makeColumn(balance_col, field));
     }
 
     store->write(*context, context->getSettingsRef(), block);
