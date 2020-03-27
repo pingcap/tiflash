@@ -756,8 +756,8 @@ TEST_F(Segment_test, MassiveSplit)
 try
 {
     Settings settings                    = dmContext().db_context.getSettings();
-    settings.dm_segment_limit_rows       = 11;
-    settings.dm_segment_delta_limit_rows = 7;
+    settings.dt_segment_limit_rows       = 11;
+    settings.dt_segment_delta_limit_rows = 7;
 
     segment = reload(DMTestEnv::getDefaultColumns(), std::move(settings));
 

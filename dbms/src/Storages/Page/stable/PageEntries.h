@@ -471,7 +471,7 @@ public:
 
     static PageEntriesForDeltaPtr compactDeltas(const PageEntriesForDeltaPtr & tail)
     {
-        if (tail->prev == nullptr || tail->prev->isBase())
+        if (auto prev = std::atomic_load(&tail->prev); prev == nullptr || prev->isBase())
         {
             // Only one delta, do nothing
             return nullptr;
@@ -480,7 +480,7 @@ public:
         auto tmp = createDelta();
 
         std::stack<PageEntriesForDeltaPtr> nodes;
-        for (auto node = tail; node != nullptr; node = node->prev)
+        for (auto node = tail; node != nullptr; node = std::atomic_load(&node->prev))
         {
             if (node->isBase())
             {
