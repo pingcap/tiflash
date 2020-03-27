@@ -1,5 +1,38 @@
 #!/bin/bash
 
+function wait_table()
+{
+	local db="${1}"
+	local table="${2}"
+	local mysql_client="${3}"
+
+	local timeout='600'
+
+	echo "=> wait for ${db}.${table} available in tiflash"
+
+	local failed='true'
+	local query="select available from information_schema.tiflash_replica where table_schema='${db}' and table_name='${table}'"
+	for (( i = 0; i < "${timeout}"; i++ )); do
+		local available_status=`${mysql_client} "${query}" | { grep "1" || test $? = 1; } | wc -l`
+		if [ ${?} == 0 ] && [ "${available_status}" -eq 1 ]; then
+			local failed='false'
+			break
+		fi
+		if [ $((${i} % 10)) = 0 ] && [ ${i} -ge 10 ]; then
+			echo "   #${i} waiting for ${db}.${table} learner storage available"
+		fi
+		sleep 1
+	done
+
+	if [ "${failed}" == 'true' ]; then
+		echo "   can not reach syncing status" >&2
+		return 1
+	else
+		echo "   available"
+	fi
+}
+export -f wait_table
+
 function run_file()
 {
 	local dbc="$1"
