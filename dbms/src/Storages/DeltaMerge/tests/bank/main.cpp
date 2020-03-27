@@ -27,7 +27,7 @@ void moveMoney(DeltaMergeStoreProxy & proxy, UInt64 from, UInt64 to, UInt64 amou
     proxy.moveMoney(from, to, amount, tso);
     UInt64 new_balance1 = proxy.selectBalance(from, tso);
     UInt64 new_balance2 = proxy.selectBalance(to, tso);
-    if (old_balance1 > amount)
+    if (old_balance1 >= amount)
     {
         EXPECT_EQ(old_balance1 - amount, new_balance1);
         EXPECT_EQ(old_balance2 + amount, new_balance2);
