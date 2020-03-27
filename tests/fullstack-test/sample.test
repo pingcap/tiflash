@@ -5,7 +5,7 @@ mysql> alter table test.t set tiflash replica 1 location labels 'rack', 'host', 
 mysql> delete from test.t
 mysql> insert into test.t values('Hello world', 666)
 
-SLEEP 15
+func> wait_table test t
 
 => select s, i from test.t
 ┌─s───────────┬───i─┐
