@@ -1,0 +1,86 @@
+groups:
+- name: alert.rules
+  rules:
+  - alert: TiFlash_memory_abnormal
+    expr: tiflash_system_asynchronous_metric_jemalloc_allocated > 1.6e+10
+    for: 1m
+    labels:
+      env: ENV_LABELS_ENV
+      level: warning
+      expr: tiflash_system_asynchronous_metric_jemalloc_allocated > 1.6e+10
+    annotations:
+      description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, values:{{ $value }}'
+      value: '{{ $value }}'
+      summary: TiFlash memory usage is over 16 GB
+
+  - alert: TiFlash_tmt_merge_duration
+    expr: histogram_quantile(0.99, sum(rate(tiflash_tmt_merge_duration_seconds_bucket[1m])) BY (le, instance)) > 600
+    for: 1m
+    labels:
+      env: ENV_LABELS_ENV
+      level: emergency
+      expr:  histogram_quantile(0.99, sum(rate(tiflash_tmt_merge_duration_seconds_bucket[1m])) BY (le, instance)) > 600
+    annotations:
+      description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, values:{{ $value }}'
+      value: '{{ $value }}'
+      summary: TiFlash tmt merge duration 99th percentile is above 600s
+
+  - alert: TiFlash_tmt_write_parts_duration
+    expr: histogram_quantile(0.99, sum(rate(tiflash_tmt_write_parts_duration_seconds_bucket[1m])) BY (le, instance)) > 8
+    for: 1m
+    labels:
+      env: ENV_LABELS_ENV
+      level: emergency
+      expr:  histogram_quantile(0.99, sum(rate(tiflash_tmt_write_parts_duration_seconds_bucket[1m])) BY (le, instance)) > 8
+    annotations:
+      description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, values:{{ $value }}'
+      value: '{{ $value }}'
+      summary: TiFlash tmt write parts duration 99th percentile is above 8s
+
+  - alert: TiFlash_schema_error
+    expr: increase(tiflash_schema_apply_count{type="failed"}[15m]) > 0
+    for: 1m
+    labels:
+      env: ENV_LABELS_ENV
+      level: emergency
+      expr:  increase(tiflash_schema_apply_count{type="failed"}[15m]) > 0
+    annotations:
+      description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, values:{{ $value }}'
+      value: '{{ $value }}'
+      summary: TiFlash schema error
+
+  - alert: TiFlash_schema_apply_duration
+    expr: histogram_quantile(0.99, sum(rate(tiflash_schema_apply_duration_seconds_bucket[1m])) BY (le, instance)) > 20
+    for: 1m
+    labels:
+      env: ENV_LABELS_ENV
+      level: emergency
+      expr:  histogram_quantile(0.99, sum(rate(tiflash_schema_apply_duration_seconds_bucket[1m])) BY (le, instance)) > 20
+    annotations:
+      description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, values:{{ $value }}'
+      value: '{{ $value }}'
+      summary: TiFlash schema apply duration 99th percentile is above 20s
+
+  - alert: TiFlash_raft_read_index_duration
+    expr: histogram_quantile(0.99, sum(rate(tiflash_raft_read_index_duration_seconds_bucket[1m])) BY (le, instance)) > 3
+    for: 1m
+    labels:
+      env: ENV_LABELS_ENV
+      level: critical
+      expr:  histogram_quantile(0.99, sum(rate(tiflash_raft_read_index_duration_seconds_bucket[1m])) BY (le, instance)) > 3
+    annotations:
+      description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, values:{{ $value }}'
+      value: '{{ $value }}'
+      summary: TiFlash raft read index duration 99th percentile is above 3s
+
+  - alert: TiFlash_raft_wait_index_duration
+    expr: histogram_quantile(0.99, sum(rate(tiflash_raft_wait_index_duration_seconds_bucket[1m])) BY (le, instance)) > 2
+    for: 1m
+    labels:
+      env: ENV_LABELS_ENV
+      level: critical
+      expr:  histogram_quantile(0.99, sum(rate(tiflash_raft_wait_index_duration_seconds_bucket[1m])) BY (le, instance)) > 2
+    annotations:
+      description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, values:{{ $value }}'
+      value: '{{ $value }}'
+      summary: TiFlash raft wait index duration 99th percentile is above 2s
