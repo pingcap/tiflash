@@ -33,6 +33,7 @@ class Block;
 // for debug
 struct MockTiDBTable;
 class RegionRangeKeys;
+class RegionTaskLock;
 
 class RegionTable : private boost::noncopyable
 {
@@ -109,7 +110,7 @@ public:
     /// This functional only shrink the table range of this region_id
     void shrinkRegionRange(const Region & region);
 
-    void removeRegion(const RegionID region_id, bool remove_data);
+    void removeRegion(const RegionID region_id, bool remove_data, const RegionTaskLock &);
 
     TableID popOneTableToOptimize();
 

@@ -69,7 +69,7 @@ Field ColumnInfo::defaultValueToField() const
         case TypeTime:
             return getTimeValue(value.convert<String>());
         case TypeYear:
-            return getYearValue(value.convert<Int64>());
+            return getYearValue(value.convert<String>());
         case TypeSet:
             return getSetValue(value.convert<String>());
         default:
@@ -173,14 +173,17 @@ Int64 ColumnInfo::getTimeValue(const String & time_str) const
     return negative ? -ret : ret;
 }
 
-Int64 ColumnInfo::getYearValue(Int64 val) const
+Int64 ColumnInfo::getYearValue(const String & val) const
 {
     // do not check validation of the val because TiDB will do it
-    if (0 <= val && val < 70)
-        return 2000 + val;
-    if (70 <= val && val < 100)
-        return 1900 + val;
-    return val;
+    Int64 year = std::stol(val);
+    if (0 < year && year < 70)
+        return 2000 + year;
+    if (70 <= year && year < 100)
+        return 1900 + year;
+    if (year == 0 && val.length() <= 2)
+        return 2000;
+    return year;
 }
 
 Poco::JSON::Object::Ptr ColumnInfo::getJSONObject() const

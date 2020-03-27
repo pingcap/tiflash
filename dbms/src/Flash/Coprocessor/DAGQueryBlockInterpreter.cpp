@@ -452,7 +452,17 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
 
     if (ts.next_read_engine() == tipb::EngineType::Local)
     {
-        pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
+        try
+        {
+            pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size,
+                                             max_streams);
+        }
+        catch (DB::Exception & e)
+        {
+            e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
+                         + "`, table_id: " + DB::toString(table_id) + ")");
+            throw;
+        }
     }
     else
     {
