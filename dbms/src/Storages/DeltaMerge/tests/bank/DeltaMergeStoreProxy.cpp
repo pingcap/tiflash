@@ -1,4 +1,4 @@
-#include <Storages/DeltaMerge/bank/DeltaMergeStoreProxy.h>
+#include <Storages/DeltaMerge/tests/bank/DeltaMergeStoreProxy.h>
 
 namespace DB
 {
