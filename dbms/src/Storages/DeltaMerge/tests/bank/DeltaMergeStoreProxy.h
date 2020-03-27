@@ -7,8 +7,8 @@
 #include <test_utils/TiflashTestBasic.h>
 
 #include <Core/Types.h>
-#include <Storages/DeltaMerge/bank/IDGenerator.h>
-#include <Storages/DeltaMerge/bank/SimpleDB.h>
+#include <Storages/DeltaMerge/tests/bank/IDGenerator.h>
+#include <Storages/DeltaMerge/tests/bank/SimpleDB.h>
 #include <Storages/DeltaMerge/tests/dm_basic_include.h>
 #include <cstddef>
 #include <iostream>
