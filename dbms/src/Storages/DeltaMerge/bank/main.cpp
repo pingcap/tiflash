@@ -120,16 +120,16 @@ void verify(DeltaMergeStoreProxy & proxy,
     }
 }
 
-void run_bank(UInt64 account, UInt64 balance, UInt64 worker, UInt64 try_num)
+void run_bank(UInt64 account, UInt64 initial_balance, UInt64 worker_count, UInt64 try_num)
 {
     DeltaMergeStoreProxy proxy;
     SimpleLockManager    manager;
     IDGenerator          tso_gen;
     IDGenerator          trans_id_gen;
-    UInt64               start           = 0;
-    UInt64               end             = account;
-    UInt64               initial_balance = balance;
-    UInt64               total           = (end - start) * initial_balance;
+
+    UInt64 start = 0;
+    UInt64 end   = account;
+    UInt64 total = (end - start) * initial_balance;
 
     for (UInt64 id = start; id < end; id++)
     {
@@ -137,7 +137,6 @@ void run_bank(UInt64 account, UInt64 balance, UInt64 worker, UInt64 try_num)
         proxy.insertBalance(id, initial_balance, tso);
     }
 
-    size_t                   worker_count = worker;
     std::vector<std::thread> workers;
     workers.resize(worker_count);
 
@@ -168,6 +167,7 @@ int main(int argc, char * argv[])
     if (argc != 5)
     {
         std::cout << "Usage: <cmd> account balance worker try_num" << std::endl;
+        return 1;
     }
     UInt64 account = std::stoul(argv[1]);
     UInt64 balance = std::stoul(argv[2]);

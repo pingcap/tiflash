@@ -149,7 +149,7 @@ public:
         return false;
     }
 
-    // test whether there is write lock before tso
+    // test whether there is write lock before or equal tso
     bool isWriteLocked(UInt64 id, UInt64 tso)
     {
         auto & locks = lock_map[id];
