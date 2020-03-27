@@ -288,6 +288,23 @@ void DAGExpressionAnalyzer::appendWhere(
     if (arg_names.size() == 1)
     {
         filter_column_name = arg_names[0];
+        if (isColumnExpr(*conditions[0]))
+        {
+            bool need_warp_column_expr = true;
+            if (exprHasValidFieldType(*conditions[0]) && !isUInt8Type(getDataTypeByFieldType(conditions[0]->field_type())))
+            {
+                /// if the column is not UInt8 type, we already add some convert function to convert it ot UInt8 type
+                need_warp_column_expr = false;
+            }
+            if (need_warp_column_expr)
+            {
+                /// FilterBlockInputStream will CHANGE the filter column inplace, so
+                /// filter column should never be a columnRef in DAG request, otherwise
+                /// for queries like select c1 from t where c1 will got wrong result
+                /// as after FilterBlockInputStream, c1 will become a const column of 1
+                filter_column_name = convertToUInt8(last_step.actions, filter_column_name);
+            }
+        }
     }
     else
     {

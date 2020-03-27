@@ -189,7 +189,7 @@ struct ColumnInfo
     Int64 getEnumIndex(const String &) const;
     UInt64 getSetValue(const String &) const;
     Int64 getTimeValue(const String &) const;
-    Int64 getYearValue(Int64) const;
+    Int64 getYearValue(const String &) const;
 };
 
 enum PartitionType

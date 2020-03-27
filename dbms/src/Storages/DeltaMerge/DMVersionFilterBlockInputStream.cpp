@@ -54,6 +54,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
 
         if constexpr (MODE == DM_VERSION_FILTER_MODE_MVCC)
         {
+            /// filter[i] = !deleted && cur_version <= version_limit && (cur_handle != next_handle || next_version > version_limit)
             {
                 UInt8 * filter_pos  = filter.data();
                 auto *  version_pos = const_cast<UInt64 *>(version_col_data->data()) + 1;
@@ -106,6 +107,8 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
         }
         else if constexpr (MODE == DM_VERSION_FILTER_MODE_COMPACT)
         {
+            /// filter[i] = cur_version >= version_limit || ((cur_handle != next_handle || next_version > version_limit) && !deleted);
+
             {
                 UInt8 * filter_pos      = filter.data();
                 auto *  handle_pos      = const_cast<Handle *>(handle_col_data->data());
@@ -117,6 +120,19 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
                     ++filter_pos;
                     ++handle_pos;
                     ++next_handle_pos;
+                }
+            }
+
+            {
+                UInt8 * filter_pos       = filter.data();
+                auto *  version_pos      = const_cast<UInt64 *>(version_col_data->data());
+                auto *  next_version_pos = version_pos + 1;
+                for (size_t i = 0; i < batch_rows; ++i)
+                {
+                    (*filter_pos) |= (*next_version_pos) > version_limit;
+
+                    ++filter_pos;
+                    ++next_version_pos;
                 }
             }
 
@@ -226,7 +242,8 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
                 }
                 else if (MODE == DM_VERSION_FILTER_MODE_COMPACT)
                 {
-                    filter[rows - 1]    = cur_version >= version_limit || (cur_handle != next_handle && !deleted);
+                    filter[rows - 1]
+                        = cur_version >= version_limit || ((cur_handle != next_handle || next_version > version_limit) && !deleted);
                     not_clean[rows - 1] = filter[rows - 1] && (cur_handle == next_handle || deleted);
                 }
                 else
