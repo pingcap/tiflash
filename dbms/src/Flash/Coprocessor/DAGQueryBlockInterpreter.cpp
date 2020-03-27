@@ -10,6 +10,7 @@
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
+#include <DataTypes/getLeastSupertype.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
@@ -45,6 +46,7 @@ extern const int TOO_MANY_COLUMNS;
 extern const int SCHEMA_VERSION_ERROR;
 extern const int UNKNOWN_EXCEPTION;
 extern const int COP_BAD_DAG_REQUEST;
+extern const int NO_COMMON_TYPE;
 } // namespace ErrorCodes
 
 DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std::vector<BlockInputStreams> & input_streams_vec_,
@@ -497,18 +499,66 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     addTimeZoneCastAfterTS(is_ts_column, pipeline);
 }
 
-void DAGQueryBlockInterpreter::prepareJoinKeys(const tipb::Join & join, Pipeline & pipeline, Names & key_names, bool tiflash_left)
+void DAGQueryBlockInterpreter::prepareJoinKeys(
+    const tipb::Join & join, const DataTypes & key_types, Pipeline & pipeline, Names & key_names, bool tiflash_left)
 {
     std::vector<NameAndTypePair> source_columns;
     for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
         source_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(std::move(source_columns), context);
     ExpressionActionsChain chain;
-    if (dag_analyzer.appendJoinKey(chain, join, key_names, tiflash_left))
+    if (dag_analyzer.appendJoinKey(chain, join, key_types, key_names, tiflash_left))
     {
         pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions()); });
     }
 }
+
+/// ClickHouse require join key to be exactly the same type
+/// TiDB only require the join key to be the same category
+/// for example decimal(10,2) join decimal(20,0) is allowed in
+/// TiDB and will throw exception in ClickHouse
+void getJoinKeyTypes(const tipb::Join & join, DataTypes & key_types)
+{
+    for (int i = 0; i < join.left_join_keys().size(); i++)
+    {
+        if (!exprHasValidFieldType(join.left_join_keys(i)) || !exprHasValidFieldType(join.right_join_keys(i)))
+            throw Exception("Join key without field type", ErrorCodes::COP_BAD_DAG_REQUEST);
+        DataTypes types;
+        types.emplace_back(getDataTypeByFieldType(join.left_join_keys(i).field_type()));
+        types.emplace_back(getDataTypeByFieldType(join.right_join_keys(i).field_type()));
+        try
+        {
+            DataTypePtr common_type = getLeastSupertype(types);
+            key_types.emplace_back(common_type);
+        }
+        catch (Exception & e)
+        {
+            if (e.code() == ErrorCodes::NO_COMMON_TYPE)
+            {
+                DataTypePtr left_type = removeNullable(types[0]);
+                DataTypePtr right_type = removeNullable(types[1]);
+                right_type->isUnsignedInteger();
+                if ((left_type->getTypeId() == TypeIndex::UInt64 && right_type->isInteger() && !right_type->isUnsignedInteger())
+                    || (right_type->getTypeId() == TypeIndex::UInt64 && left_type->isInteger() && !left_type->isUnsignedInteger()))
+                {
+                    /// special case for uint64 and int
+                    /// inorder to not throw exception, use Decimal(20, 0) as the common type
+                    DataTypePtr common_type = std::make_shared<DataTypeDecimal<Decimal128>>(20, 0);
+                    if (types[0]->isNullable() || types[1]->isNullable())
+                        common_type = makeNullable(common_type);
+                    key_types.emplace_back(common_type);
+                }
+                else
+                    throw;
+            }
+            else
+            {
+                throw;
+            }
+        }
+    }
+}
+
 void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & pipeline, SubqueryForSet & right_query)
 {
     // build
@@ -576,13 +626,16 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
             final_project.emplace_back(p.name, query_block.qb_column_prefix + p.name);
     }
 
+    DataTypes join_key_types;
+    getJoinKeyTypes(join, join_key_types);
+
     /// add necessary transformation if the join key is an expression
     Pipeline left_pipeline;
     left_pipeline.streams = left_streams;
-    prepareJoinKeys(join, left_pipeline, left_key_names, true);
+    prepareJoinKeys(join, join_key_types, left_pipeline, left_key_names, true);
     Pipeline right_pipeline;
     right_pipeline.streams = right_streams;
-    prepareJoinKeys(join, right_pipeline, right_key_names, false);
+    prepareJoinKeys(join, join_key_types, right_pipeline, right_key_names, false);
 
     left_streams = left_pipeline.streams;
     right_streams = right_pipeline.streams;
@@ -1045,7 +1098,8 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
 
     pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
     pingcap::kv::StoreType store_type = pingcap::kv::TiFlash;
-    BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(cluster, req, schema, context.getSettingsRef().max_threads, store_type);
+    BlockInputStreamPtr input
+        = std::make_shared<CoprocessorBlockInputStream>(cluster, req, schema, context.getSettingsRef().max_threads, store_type);
     pipeline.streams = {input};
 }
 
