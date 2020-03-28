@@ -308,6 +308,26 @@ BlockOutputStreamPtr StorageDeltaMerge::write(const ASTPtr & query, const Settin
     return std::make_shared<DMBlockOutputStream>(store, decorator, global_context, settings);
 }
 
+void StorageDeltaMerge::write(Block && block, const Settings & settings)
+{
+    {
+        // TODO: remove this code if the column ids in the block are already settled.
+        auto header = store->getHeader();
+        for (auto & col : block)
+        {
+            if (col.name == EXTRA_HANDLE_COLUMN_NAME)
+                col.column_id = EXTRA_HANDLE_COLUMN_ID;
+            else if (col.name == VERSION_COLUMN_NAME)
+                col.column_id = VERSION_COLUMN_ID;
+            else if (col.name == TAG_COLUMN_NAME)
+                col.column_id = TAG_COLUMN_ID;
+            else
+                col.column_id = header->getByName(col.name).column_id;
+        }
+    }
+    store->write(global_context, settings, block);
+}
+
 namespace
 {
 
