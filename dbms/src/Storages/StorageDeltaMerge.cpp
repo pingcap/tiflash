@@ -231,7 +231,7 @@ Block StorageDeltaMerge::buildInsertBlock(bool is_import, bool is_delete, const 
     }
 
     // Set the real column id.
-    const Block & header = store->getHeader();
+    auto header = store->getHeader();
     for (auto & col : block)
     {
         if (col.name == EXTRA_HANDLE_COLUMN_NAME)
@@ -241,7 +241,7 @@ Block StorageDeltaMerge::buildInsertBlock(bool is_import, bool is_delete, const 
         else if (col.name == TAG_COLUMN_NAME)
             col.column_id = TAG_COLUMN_ID;
         else
-            col.column_id = header.getByName(col.name).column_id;
+            col.column_id = header->getByName(col.name).column_id;
     }
 
     return block;
@@ -256,10 +256,9 @@ public:
         : store(store_), header(store->getHeader()), decorator(decorator_), db_context(db_context_), db_settings(db_settings_)
     {}
 
-    Block getHeader() const override { return header; }
+    Block getHeader() const override { return *header; }
 
-    void write(const Block & block) override
-    try
+    void write(const Block & block) override try
     {
         if (db_settings.dt_insert_max_rows == 0)
         {
@@ -294,7 +293,7 @@ public:
 
 private:
     DeltaMergeStorePtr store;
-    Block header;
+    BlockPtr header;
     BlockDecorator decorator;
     const Context & db_context;
     const Settings & db_settings;
@@ -308,7 +307,6 @@ BlockOutputStreamPtr StorageDeltaMerge::write(const ASTPtr & query, const Settin
     };
     return std::make_shared<DMBlockOutputStream>(store, decorator, global_context, settings);
 }
-
 
 namespace
 {
@@ -597,10 +595,10 @@ BlockInputStreams StorageDeltaMerge::read( //
     unsigned num_streams)
 {
     // Note that `columns_to_read` should keep the same sequence as ColumnRef
-    // in `Coprocessor.TableScan.columns`, or rough set filter chould be
+    // in `Coprocessor.TableScan.columns`, or rough set filter could be
     // failed to parsed.
     ColumnDefines columns_to_read;
-    const Block & header = store->getHeader();
+    auto header = store->getHeader();
     for (auto & n : column_names)
     {
         ColumnDefine col_define;
@@ -612,7 +610,7 @@ BlockInputStreams StorageDeltaMerge::read( //
             col_define = getTagColumnDefine();
         else
         {
-            auto & column = header.getByName(n);
+            auto & column = header->getByName(n);
             col_define.name = column.name;
             col_define.id = column.column_id;
             col_define.type = column.type;
