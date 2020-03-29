@@ -269,7 +269,7 @@ public:
 
     const ColumnDefines & getTableColumns() const { return original_table_columns; }
     const ColumnDefine &  getHandle() const { return original_table_handle_define; }
-    Block                 getHeader() const;
+    BlockPtr              getHeader() const;
     const Settings &      getSettings() const { return settings; }
     DataTypePtr           getPKDataType() const { return original_table_handle_define.type; }
     SortDescription       getPrimarySortDescription() const;
@@ -311,6 +311,7 @@ private:
     String table_name;
 
     ColumnDefines      original_table_columns;
+    BlockPtr           original_table_header; // Used to speed up getHeader()
     const ColumnDefine original_table_handle_define;
 
     // The columns we actually store.
@@ -335,7 +336,7 @@ private:
     DB::Timestamp latest_gc_safe_point = 0;
 
     // Synchronize between write threads and read threads.
-    std::shared_mutex read_write_mutex;
+    mutable std::shared_mutex read_write_mutex;
 
     UInt64   hash_salt;
     Logger * log;

@@ -72,12 +72,7 @@ void writeRegionDataToStorage(Context & context, const RegionPtr & region, Regio
             case ::TiDB::StorageEngine::DT:
             {
                 auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-                // imported data from TiDB, ASTInsertQuery.is_import need to be true
-                ASTPtr query(new ASTInsertQuery(dm_storage->getDatabaseName(), dm_storage->getTableName(), /* is_import_= */ true));
-                BlockOutputStreamPtr output = dm_storage->write(query, context.getSettingsRef());
-                output->writePrefix();
-                output->write(block);
-                output->writeSuffix();
+                dm_storage->write(std::move(block), context.getSettingsRef());
                 break;
             }
             case ::TiDB::StorageEngine::DEBUGGING_MEMORY:
