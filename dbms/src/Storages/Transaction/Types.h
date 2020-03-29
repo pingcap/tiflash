@@ -1,9 +1,9 @@
 #pragma once
 
+#include <Core/Types.h>
+
 #include <chrono>
 #include <unordered_set>
-
-#include <Core/Types.h>
 
 namespace DB
 {
@@ -26,6 +26,7 @@ enum : ColumnID
     TiDBPkColumnID = -1,
     VersionColumnID = -1024,
     DelMarkColumnID = -1025,
+    InvalidColumnID = -10000,
 };
 
 using HandleID = Int64;

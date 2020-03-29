@@ -143,6 +143,17 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
     auto delmark_col = ColumnUInt8::create();
     auto version_col = ColumnUInt64::create();
 
+    /// use map to avoid linear search
+    std::unordered_map<String, DataTypePtr> column_type_map;
+    for (const auto & p : columns.getAllPhysical())
+        column_type_map[p.name] = p.type;
+
+    /// use map to avoid linear search
+    std::unordered_map<String, ColumnID> read_column_name_and_ids;
+    for (const auto & name : column_names_to_read)
+        read_column_name_and_ids[name] = InvalidColumnID;
+
+
     ColumnID handle_col_id = TiDBPkColumnID;
 
     constexpr size_t MustHaveColCnt = 3; // pk, del, version
@@ -165,13 +176,14 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
         ColumnID col_id = column_info.id;
         const String & col_name = column_info.name;
         column_lut.insert({col_id, i});
-        if (std::find(column_names_to_read.begin(), column_names_to_read.end(), col_name) == column_names_to_read.end())
+        if (read_column_name_and_ids.find(col_name) == read_column_name_and_ids.end())
         {
             continue;
         }
+        read_column_name_and_ids[col_name] = col_id;
 
         {
-            auto ch_col = columns.getPhysical(col_name);
+            auto ch_col = NameAndTypePair(col_name, column_type_map[col_name]);
             auto mut_col = ch_col.type->createColumn();
             column_map.insert(col_id, std::move(mut_col), std::move(ch_col), i, data_list.size());
         }
@@ -187,7 +199,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
 
     if (!table_info.pk_is_handle)
     {
-        auto ch_col = columns.getPhysical(MutableSupport::tidb_pk_column_name);
+        auto ch_col = NameAndTypePair(MutableSupport::tidb_pk_column_name, MutableSupport::tidb_pk_column_type);
         auto mut_col = ch_col.type->createColumn();
         column_map.insert(handle_col_id, std::move(mut_col), std::move(ch_col), -1, data_list.size());
     }
@@ -354,16 +366,18 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
     {
         if (name == MutableSupport::delmark_column_name)
         {
-            block.insert({std::move(delmark_col), MutableSupport::delmark_column_type, MutableSupport::delmark_column_name});
+            block.insert(
+                {std::move(delmark_col), MutableSupport::delmark_column_type, MutableSupport::delmark_column_name, DelMarkColumnID});
         }
         else if (name == MutableSupport::version_column_name)
         {
-            block.insert({std::move(version_col), MutableSupport::version_column_type, MutableSupport::version_column_name});
+            block.insert(
+                {std::move(version_col), MutableSupport::version_column_type, MutableSupport::version_column_name, VersionColumnID});
         }
         else
         {
-            ColumnID col_id = table_info.getColumnID(name);
-            block.insert({std::move(column_map.getMutableColumnPtr(col_id)), column_map.getNameAndTypePair(col_id).type, name});
+            ColumnID col_id = read_column_name_and_ids[name];
+            block.insert({std::move(column_map.getMutableColumnPtr(col_id)), column_map.getNameAndTypePair(col_id).type, name, col_id});
         }
     }
 
