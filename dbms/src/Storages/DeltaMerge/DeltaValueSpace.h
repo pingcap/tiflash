@@ -37,8 +37,7 @@ class DeltaValueSpace : public std::enable_shared_from_this<DeltaValueSpace>, pr
 {
 public:
     static const UInt64 CURRENT_VERSION;
-    using BlockPtr = std::shared_ptr<Block>;
-    using Lock     = std::unique_lock<std::mutex>;
+    using Lock = std::unique_lock<std::mutex>;
 
     struct Cache
     {
