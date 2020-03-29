@@ -152,6 +152,8 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
     std::unordered_map<String, ColumnID> read_column_name_and_ids;
     for (const auto & name : column_names_to_read)
         read_column_name_and_ids[name] = InvalidColumnID;
+    if (read_column_name_and_ids.find(MutableSupport::tidb_pk_column_name) != read_column_name_and_ids.end())
+        read_column_name_and_ids[MutableSupport::tidb_pk_column_name] = TiDBPkColumnID;
 
 
     ColumnID handle_col_id = TiDBPkColumnID;
