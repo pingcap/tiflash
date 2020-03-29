@@ -14,7 +14,7 @@
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TMTContext.h>
 
-#include <ext/scope_guard.h>
+#include <atomic>
 
 namespace ProfileEvents
 {
@@ -1316,8 +1316,7 @@ void DeltaMergeStore::check(const Context & /*db_context*/)
 
 BlockPtr DeltaMergeStore::getHeader() const
 {
-    std::shared_lock lock(read_write_mutex);
-    return original_table_header;
+    return std::atomic_load<Block>(&original_table_header);
 };
 
 void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
@@ -1336,8 +1335,9 @@ void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
     auto new_store_columns = getStoreColumns(new_original_table_columns);
 
     original_table_columns.swap(new_original_table_columns);
-    original_table_header = std::make_shared<Block>(toEmptyBlock(original_table_columns));
     store_columns.swap(new_store_columns);
+
+    std::atomic_store<Block>(&original_table_header, std::make_shared<Block>(toEmptyBlock(original_table_columns)));
 }
 
 
