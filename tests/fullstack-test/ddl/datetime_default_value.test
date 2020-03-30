@@ -4,8 +4,7 @@ mysql> alter table test.t set tiflash replica 1
 mysql> insert into test.t (a) values (1);
 mysql> insert into test.t (a) values (1);
 
-SLEEP 15
-
+func> wait_table test t
 
 >> DBGInvoke __try_flush()
 
