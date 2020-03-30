@@ -58,6 +58,7 @@ using DefaultDeltaTree = DeltaTree<EmptyValueSpace, DT_M, DT_F, DT_S, ArenaWithF
 using DeltaTreePtr     = std::shared_ptr<DefaultDeltaTree>;
 using DeltaIndex       = DTEntriesCopy<DT_M, DT_F, DT_S>;
 using DeltaIndexPtr    = std::shared_ptr<DeltaIndex>;
+using BlockPtr         = std::shared_ptr<Block>;
 
 using RowId = UInt64;
 using ColId = DB::ColumnID;
