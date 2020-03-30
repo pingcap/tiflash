@@ -458,7 +458,6 @@ bool DAGExpressionAnalyzer::appendJoinKey(
     bool ret = false;
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsPtr actions = chain.getLastActions();
-    std::vector<String> type_expr_names;
     const auto & keys = ((tiflash_left && join.inner_idx() == 1) || (!tiflash_left && join.inner_idx() == 0)) ? join.left_join_keys()
                                                                                                               : join.right_join_keys();
 
@@ -472,11 +471,7 @@ bool DAGExpressionAnalyzer::appendJoinKey(
         if (!removeNullable(current_type)->equals(*removeNullable(key_types[i])))
         {
             /// need to convert to key type
-            tipb::Expr type_expr;
-            constructStringLiteralTiExpr(type_expr, key_types[i]->getName());
-            auto type_expr_name = getActions(type_expr, actions);
-            key_name = applyFunction("CAST", {key_name, type_expr_name}, actions);
-            type_expr_names.emplace_back(type_expr_name);
+            key_name = appendCast(key_types[i], actions, key_name);
             has_actions = true;
         }
         if (!tiflash_left && !has_actions)

@@ -547,10 +547,10 @@ void getJoinKeyTypes(const tipb::Join & join, DataTypes & key_types)
             {
                 DataTypePtr left_type = removeNullable(types[0]);
                 DataTypePtr right_type = removeNullable(types[1]);
-                if ((left_type->getTypeId() == TypeIndex::UInt64 && right_type->getTypeId() == TypeIndex::Int64)
-                    || (left_type->getTypeId() == TypeIndex::Int64 && right_type->getTypeId() == TypeIndex::UInt64))
+                if ((left_type->getTypeId() == TypeIndex::UInt64 && right_type->isInteger() && !right_type->isUnsignedInteger())
+                    || (right_type->getTypeId() == TypeIndex::UInt64 && left_type->isInteger() && !left_type->isUnsignedInteger()))
                 {
-                    /// special case for uint64 and int64
+                    /// special case for uint64 and int
                     /// inorder to not throw exception, use Decimal(20, 0) as the common type
                     DataTypePtr common_type = std::make_shared<DataTypeDecimal<Decimal128>>(20, 0);
                     if (types[0]->isNullable() || types[1]->isNullable())
