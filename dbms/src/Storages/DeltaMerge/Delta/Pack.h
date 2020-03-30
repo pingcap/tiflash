@@ -14,8 +14,6 @@ class MemoryWriteBuffer;
 namespace DM
 {
 
-using BlockPtr = DeltaValueSpace::BlockPtr;
-
 static constexpr size_t PACK_SERIALIZE_BUFFER_SIZE = 65536;
 
 void serializeColumn(MemoryWriteBuffer & buf, const IColumn & column, const DataTypePtr & type, size_t offset, size_t limit, bool compress);
