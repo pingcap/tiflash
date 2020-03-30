@@ -14,7 +14,7 @@
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TMTContext.h>
 
-#include <ext/scope_guard.h>
+#include <atomic>
 
 namespace ProfileEvents
 {
@@ -126,8 +126,8 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
             original_table_columns.emplace_back(col);
     }
 
-    store_columns = getStoreColumns(original_table_columns);
-
+    original_table_header = std::make_shared<Block>(toEmptyBlock(original_table_columns));
+    store_columns         = getStoreColumns(original_table_columns);
 
     auto dm_context = newDMContext(db_context, db_context.getSettingsRef());
 
@@ -1315,11 +1315,10 @@ void DeltaMergeStore::check(const Context & /*db_context*/)
         throw Exception("Last segment range end[" + DB::toString(last_end) + "] is not equal to P_INF_HANDLE");
 }
 
-
-Block DeltaMergeStore::getHeader() const
+BlockPtr DeltaMergeStore::getHeader() const
 {
-    return toEmptyBlock(original_table_columns);
-}
+    return std::atomic_load<Block>(&original_table_header);
+};
 
 void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
                                   const OptionTableInfoConstRef table_info,
@@ -1338,6 +1337,8 @@ void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
 
     original_table_columns.swap(new_original_table_columns);
     store_columns.swap(new_store_columns);
+
+    std::atomic_store<Block>(&original_table_header, std::make_shared<Block>(toEmptyBlock(original_table_columns)));
 }
 
 
