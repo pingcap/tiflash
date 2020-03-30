@@ -2,7 +2,7 @@ mysql> drop table if exists test.t
 mysql> create table test.t(a int , b date)
 mysql> alter table test.t set tiflash replica 1 location labels 'rack', 'host', 'abc'
 
-SLEEP 15
+func> wait_table test t
 
 mysql> insert into test.t values (1, date'2020-01-01');
 mysql> insert into test.t values (1, date'2020-01-02');
