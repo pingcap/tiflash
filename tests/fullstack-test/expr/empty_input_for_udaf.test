@@ -2,7 +2,7 @@ mysql> drop table if exists test.t
 mysql> create table test.t(a int not null, b int, c int, d int, e int, f int)
 mysql> alter table test.t set tiflash replica 1 location labels 'rack', 'host', 'abc'
 
-SLEEP 15
+func> wait_table test t
 
 mysql> insert into test.t values (1, 1, 1, 1, 1, 1);
 mysql> insert into test.t values (1, 2, 3, NULL, NULL, 1);
