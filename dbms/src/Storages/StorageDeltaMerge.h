@@ -44,6 +44,9 @@ public:
 
     BlockOutputStreamPtr write(const ASTPtr & query, const Settings & settings) override;
 
+    /// Write from raft layer.
+    void write(Block && block, const Settings & settings);
+
     void flushCache(const Context & context, const DB::HandleRange<HandleID> & range_to_flush) override
     {
         flushCache(context, toDMHandleRange(range_to_flush));
