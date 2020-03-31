@@ -5,7 +5,7 @@ mysql> insert into test.t (a) values (1);
 mysql> insert into test.t (a) values (1);
 mysql> alter table test.t add column b year not null;
 
-SLEEP 15
+func> wait_table test t
 
 >> DBGInvoke __try_flush()
 mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_storage(tiflash[t]) */ * from test.t;
