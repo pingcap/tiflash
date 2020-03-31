@@ -1,18 +1,23 @@
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
+#include <DataStreams/CoprocessorBlockInputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/copyData.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
-#include <Flash/Coprocessor/StreamingDAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/StreamingDAGBlockOutputStream.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/executeQuery.h>
+#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/RegionException.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <pingcap/Exception.h>
+#include <pingcap/kv/Backoff.h>
+#include <pingcap/kv/LockResolver.h>
 
 namespace DB
 {
@@ -22,9 +27,8 @@ extern const int LOGICAL_ERROR;
 extern const int UNKNOWN_EXCEPTION;
 } // namespace ErrorCodes
 
-DAGDriver::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, const std::vector<RegionInfo> & regions_,
-    UInt64 start_ts, UInt64 schema_ver,
-    tipb::SelectResponse & dag_response_, bool internal_)
+DAGDriver::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, const std::unordered_map<RegionID, RegionInfo> & regions_,
+    UInt64 start_ts, UInt64 schema_ver, tipb::SelectResponse & dag_response_, bool internal_)
     : context(context_),
       dag_request(dag_request_),
       regions(regions_),
@@ -105,19 +109,18 @@ catch (...)
     recordError(ErrorCodes::UNKNOWN_EXCEPTION, "other exception");
 }
 
-void DAGDriver::batchExecute(::grpc::ServerWriter< ::coprocessor::BatchResponse>* writer)
+void DAGDriver::batchExecute(::grpc::ServerWriter<::coprocessor::BatchResponse> * writer)
 try
 {
     DAGContext dag_context(dag_request.executors_size());
-    DAGQuerySource dag(context, dag_context, regions, dag_request);
-
+    DAGQuerySource dag(context, dag_context, regions, dag_request, true);
     BlockIO streams = executeQuery(dag, context, internal, QueryProcessingStage::Complete);
     if (!streams.in || streams.out)
         // Only query is allowed, so streams.in must not be null and streams.out must be null
         throw Exception("DAG is not query.", ErrorCodes::LOGICAL_ERROR);
 
     BlockOutputStreamPtr dag_output_stream = std::make_shared<StreamingDAGBlockOutputStream>(
-            writer, context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), streams.in->getHeader());
+        writer, context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), streams.in->getHeader());
     copyData(*streams.in, *dag_output_stream);
 
     if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streams.in.get()))
@@ -148,14 +151,6 @@ try
         executeSummary->set_num_produced_rows(num_produced_rows);
         executeSummary->set_num_iterations(num_iterations);
     }
-}
-catch (const RegionException & e)
-{
-    throw;
-}
-catch (const LockException & e)
-{
-    throw;
 }
 catch (const Exception & e)
 {

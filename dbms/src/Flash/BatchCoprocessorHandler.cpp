@@ -32,7 +32,7 @@ try
             tipb::DAGRequest dag_request;
             dag_request.ParseFromString(cop_request->data());
             LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
-            std::vector<RegionInfo> regions;
+            std::unordered_map<RegionID, RegionInfo> regions;
             for (auto & r : cop_request->regions())
             {
                 std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
@@ -44,8 +44,8 @@ try
                     DecodedTiKVKey end(std::move(end_key));
                     key_ranges.emplace_back(std::make_pair(std::move(start), std::move(end)));
                 }
-                regions.emplace_back(
-                        RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), std::move(key_ranges)));
+                regions.emplace(r.region_id(),
+                    RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), std::move(key_ranges)));
             }
             tipb::SelectResponse dag_response; // unused
             DAGDriver driver(cop_context.db_context, dag_request, regions,
@@ -67,65 +67,6 @@ try
             throw Exception(
                 "Coprocessor request type " + std::to_string(cop_request->tp()) + " is not implemented", ErrorCodes::NOT_IMPLEMENTED);
     }
-    return grpc::Status::OK;
-}
-catch (const LockException & e)
-{
-    LOG_ERROR(log,
-        __PRETTY_FUNCTION__ << ": LockException: region " << cop_request->context().region_id() << "\n"
-                            << e.getStackTrace().toString());
-
-    //for (int i = 0; i < cop_request->regions_size(); i++) {
-    //    auto * status = cop_response->add_region_status();
-    //    if (cop_request->regions(i).region_id() == e.region_id)
-    //    {
-    //        auto * lock_info = status->mutable_locked();
-    //        lock_info->set_key(e.lock_infos[0]->key);
-    //        lock_info->set_primary_lock(e.lock_infos[0]->primary_lock);
-    //        lock_info->set_lock_ttl(e.lock_infos[0]->lock_ttl);
-    //        lock_info->set_lock_version(e.lock_infos[0]->lock_version);
-    //    }
-    //    else
-    //    {
-    //        status->set_success(true);
-    //    }
-    //}
-    // return ok so TiDB has the chance to see the LockException
-    return grpc::Status::OK;
-}
-catch (const RegionException & e)
-{
-    LOG_ERROR(log,
-        __PRETTY_FUNCTION__ << ": RegionException: region " << cop_request->context().region_id() << "\n"
-                            << e.getStackTrace().toString());
-    //errorpb::Error * region_err;
-    switch (e.status)
-    {
-        case RegionException::RegionReadStatus::NOT_FOUND:
-        case RegionException::RegionReadStatus::PENDING_REMOVE:
-            for (auto region_id : e.region_ids)
-            {
-                auto * status = err_response.add_region_status();
-                status->mutable_region_error()->mutable_region_not_found()->set_region_id(region_id);
-                status->set_region_id(region_id);
-            }
-            break;
-        case RegionException::RegionReadStatus::VERSION_ERROR:
-
-            for (auto region_id : e.region_ids)
-            {
-                auto * status = err_response.add_region_status();
-                status->mutable_region_error()->mutable_epoch_not_match();
-                status->set_region_id(region_id);
-            }
-            break;
-        default:
-            // should not happen
-            break;
-    }
-    // TODO: This should not be the last response, we should return data and exception at the same time.
-    writer->Write(err_response);
-    // return ok so TiDB has the chance to see the LockException
     return grpc::Status::OK;
 }
 catch (const Exception & e)

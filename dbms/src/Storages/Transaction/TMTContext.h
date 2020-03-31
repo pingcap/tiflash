@@ -6,10 +6,6 @@
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTStorages.h>
 
-#include <unordered_set>
-
-#include <Flash/BatchCoprocessorHandler.h>
-
 namespace DB
 {
 
@@ -66,6 +62,8 @@ public:
 
     const std::atomic_bool & getTerminated() const;
     void setTerminated();
+
+    const KVClusterPtr & getCluster() const { return cluster; }
 
 private:
     Context & context;

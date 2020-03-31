@@ -1,8 +1,7 @@
-#include <Flash/Coprocessor/StreamingDAGBlockOutputStream.h>
-
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
+#include <Flash/Coprocessor/StreamingDAGBlockOutputStream.h>
 
 namespace DB
 {
@@ -13,14 +12,14 @@ extern const int UNSUPPORTED_PARAMETER;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-StreamingDAGBlockOutputStream::StreamingDAGBlockOutputStream(::grpc::ServerWriter< ::coprocessor::BatchResponse>* writer_, Int64 records_per_chunk_, tipb::EncodeType encode_type_,
-                                           std::vector<tipb::FieldType> && result_field_types_, Block && header_)
-        : writer(writer_),
-          result_field_types(std::move(result_field_types_)),
-          header(std::move(header_)),
-          records_per_chunk(records_per_chunk_),
-          current_records_num(0),
-          encode_type(encode_type_)
+StreamingDAGBlockOutputStream::StreamingDAGBlockOutputStream(::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_,
+    Int64 records_per_chunk_, tipb::EncodeType encode_type_, std::vector<tipb::FieldType> result_field_types_, Block && header_)
+    : writer(writer_),
+      result_field_types(std::move(result_field_types_)),
+      header(std::move(header_)),
+      records_per_chunk(records_per_chunk_),
+      current_records_num(0),
+      encode_type(encode_type_)
 {
     if (encode_type == tipb::EncodeType::TypeDefault)
     {
@@ -37,7 +36,8 @@ StreamingDAGBlockOutputStream::StreamingDAGBlockOutputStream(::grpc::ServerWrite
     }
     else
     {
-        throw Exception("Only Default and Arrow encode type is supported in StreamingDAGBlockOutputStream.", ErrorCodes::UNSUPPORTED_PARAMETER);
+        throw Exception(
+            "Only Default and Arrow encode type is supported in StreamingDAGBlockOutputStream.", ErrorCodes::UNSUPPORTED_PARAMETER);
     }
 }
 
@@ -48,7 +48,7 @@ void StreamingDAGBlockOutputStream::writePrefix()
 
 void StreamingDAGBlockOutputStream::encodeChunkToDAGResponse()
 {
-    ::coprocessor::BatchResponse resp ;
+    ::coprocessor::BatchResponse resp;
 
     tipb::SelectResponse dag_response;
     dag_response.set_encode_type(encode_type);

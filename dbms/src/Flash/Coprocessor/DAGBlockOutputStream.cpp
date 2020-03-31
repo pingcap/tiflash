@@ -1,7 +1,6 @@
-#include <Flash/Coprocessor/DAGBlockOutputStream.h>
-
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 
 namespace DB
@@ -14,7 +13,7 @@ extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 DAGBlockOutputStream::DAGBlockOutputStream(tipb::SelectResponse & dag_response_, Int64 records_per_chunk_, tipb::EncodeType encodeType,
-    std::vector<tipb::FieldType> && result_field_types_, Block && header_)
+    std::vector<tipb::FieldType> result_field_types_, Block && header_)
     : dag_response(dag_response_),
       result_field_types(std::move(result_field_types_)),
       header(std::move(header_)),
