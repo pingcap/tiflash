@@ -7,6 +7,7 @@ import time
 CMD_PREFIX = '>> '
 CMD_PREFIX_ALTER = '=> '
 CMD_PREFIX_TIDB = 'mysql> '
+CMD_PREFIX_FUNC = 'func> '
 RETURN_PREFIX = '#RETURN'
 SLEEP_PREFIX = 'SLEEP '
 TODO_PREFIX = '#TODO'
@@ -22,6 +23,12 @@ class Executor:
         self.dbc = dbc
     def exe(self, cmd):
         return os.popen((self.dbc + ' "' + cmd + '" 2>&1').strip()).readlines()
+
+class ShellFuncExecutor:
+    def __init__(self, dbc):
+        self.dbc = dbc
+    def exe(self, cmd):
+        return os.popen((cmd + ' "' + self.dbc + '" 2>&1').strip()).readlines()
 
 def parse_line(line):
     words = [w.strip() for w in line.split("│") if w.strip() != ""]
@@ -147,22 +154,25 @@ def matched(outputs, matches, fuzz):
         return True
 
 class Matcher:
-    def __init__(self, executor, executor_tidb, fuzz):
+    def __init__(self, executor, executor_tidb, executor_func, fuzz):
         self.executor = executor
         self.executor_tidb = executor_tidb
+        self.executor_func = executor_func
+        self.query_line_number = 0
         self.fuzz = fuzz
         self.query = None
         self.outputs = None
         self.matches = []
         self.is_mysql = False
 
-    def on_line(self, line):
+    def on_line(self, line, line_number):
         if line.startswith(SLEEP_PREFIX):
             time.sleep(float(line[len(SLEEP_PREFIX):]))
         elif line.startswith(CMD_PREFIX_TIDB):
             if verbose: print 'running', line
             if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False
+            self.query_line_number = line_number
             self.is_mysql = True 
             self.query = line[len(CMD_PREFIX_TIDB):]
             self.outputs = self.executor_tidb.exe(self.query)
@@ -173,11 +183,22 @@ class Matcher:
             if verbose: print 'running', line
             if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False
+            self.query_line_number = line_number
             self.is_mysql = False
             self.query = line[len(CMD_PREFIX):]
             self.outputs = self.executor.exe(self.query)
             self.outputs = map(lambda x: x.strip(), self.outputs)
             self.outputs = filter(lambda x: len(x) != 0, self.outputs)
+            self.matches = []
+        elif line.startswith(CMD_PREFIX_FUNC):
+            if verbose: print 'running', line
+            if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
+                return False
+            self.query_line_number = line_number
+            self.is_mysql = False
+            self.query = line[len(CMD_PREFIX_FUNC):]
+            self.executor_func.exe(self.query)
+            self.outputs = []
             self.matches = []
         else:
             self.matches.append(line)
@@ -188,12 +209,15 @@ class Matcher:
             return False
         return True
 
-def parse_exe_match(path, executor, executor_tidb, fuzz):
+def parse_exe_match(path, executor, executor_tidb, executor_func, fuzz):
     todos = []
+    line_number = 0
+    line_number_cached = 0
     with open(path) as file:
-        matcher = Matcher(executor, executor_tidb, fuzz)
+        matcher = Matcher(executor, executor_tidb, executor_func, fuzz)
         cached = None
         for origin in file:
+            line_number += 1
             line = origin.strip()
             if line.startswith(RETURN_PREFIX):
                 break
@@ -207,10 +231,11 @@ def parse_exe_match(path, executor, executor_tidb, fuzz):
                     cached += ' '
                 cached += line
                 continue
-            if cached != None and not matcher.on_line(cached):
+            if cached != None and not matcher.on_line(cached, line_number_cached):
                 return False, matcher, todos
             cached = line
-        if (cached != None and not matcher.on_line(cached)) or not matcher.on_finish():
+            line_number_cached = line_number
+        if (cached != None and not matcher.on_line(cached, line_number)) or not matcher.on_finish():
             return False, matcher, todos
         return True, matcher, todos
 
@@ -227,8 +252,7 @@ def run():
     if len(sys.argv) == 6:
         verbose = (sys.argv[5] == 'true')
     if verbose: print 'parsing file: `{}`'.format(path)
-
-    matched, matcher, todos = parse_exe_match(path, Executor(dbc), Executor(mysql_client), fuzz)
+    matched, matcher, todos = parse_exe_match(path, Executor(dbc), Executor(mysql_client), ShellFuncExecutor(mysql_client), fuzz)
 
     def display(lines):
         if len(lines) == 0:
@@ -239,6 +263,7 @@ def run():
 
     if not matched:
         print '  File:', path
+        print '  Error line:', matcher.query_line_number
         print '  Error:', matcher.query
         print '  Result:'
         display(matcher.outputs)
