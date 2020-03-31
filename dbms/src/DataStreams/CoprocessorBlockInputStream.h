@@ -15,7 +15,7 @@ class CoprocessorBlockInputStream : public IProfilingBlockInputStream
     Block getSampleBlock() const
     {
         ColumnsWithTypeAndName columns;
-        for (auto name_and_column : schema)
+        for (auto & name_and_column : schema)
         {
             auto tp = getDataTypeByColumnInfo(name_and_column.second);
             ColumnWithTypeAndName col(tp, name_and_column.first);
@@ -48,7 +48,7 @@ public:
             if (!has_next)
                 return {};
         }
-        auto chunk = chunk_queue.front();
+        auto & chunk = chunk_queue.front();
         chunk_queue.pop();
         switch (resp->encode_type())
         {
@@ -68,7 +68,7 @@ private:
     {
         LOG_DEBUG(log, "fetch new data");
 
-        auto [result, has_next] = resp_iter.next();
+        auto && [result, has_next] = resp_iter.next();
         if (!result.error.empty())
         {
             LOG_WARNING(log, "coprocessor client meets error: " << result.error.displayText());
