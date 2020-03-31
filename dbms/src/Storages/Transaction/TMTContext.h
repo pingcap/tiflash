@@ -64,6 +64,9 @@ public:
 
     void reloadConfig(const Poco::Util::AbstractConfiguration & config);
 
+    const std::atomic_bool & getTerminated() const;
+    void setTerminated();
+
 private:
     Context & context;
     KVStorePtr kvstore;
@@ -83,6 +86,8 @@ private:
     ::TiDB::StorageEngine engine;
 
     bool disable_bg_flush;
+
+    std::atomic_bool terminated{false};
 };
 
 } // namespace DB

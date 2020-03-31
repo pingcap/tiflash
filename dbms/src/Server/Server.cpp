@@ -396,7 +396,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     bool disable_bg_flush = false;
 
-    ::TiDB::StorageEngine engine_if_empty = ::TiDB::StorageEngine::TMT;
+    ::TiDB::StorageEngine engine_if_empty = ::TiDB::StorageEngine::DT;
     ::TiDB::StorageEngine engine = engine_if_empty;
 
     if (config().has("raft"))
@@ -562,10 +562,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         .fn_atomic_update_proxy = AtomicUpdateProxy,
         .fn_handle_destroy = HandleDestroy,
         .fn_handle_ingest_sst = HandleIngestSST,
+        .fn_handle_check_terminated = HandleCheckTerminated,
 
         // a special number, also defined in proxy
         .magic_number = 0x13579BDF,
-        .version = 3};
+        .version = 4};
 
     auto proxy_runner = std::thread([&proxy_conf, &log, &helper]() {
         if (!proxy_conf.inited)
@@ -854,6 +855,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         ClusterManagerService cluster_manager_service(*global_context, config_path);
 
         waitForTerminationRequest();
+
+        {
+            global_context->getTMTContext().setTerminated();
+            LOG_INFO(log, "Set tmt context terminated");
+        }
     }
 
     return Application::EXIT_OK;

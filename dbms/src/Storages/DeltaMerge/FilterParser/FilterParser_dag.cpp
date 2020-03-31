@@ -1,13 +1,11 @@
-#include <Storages/DeltaMerge/FilterParser/FilterParser.h>
-
-#include <cassert>
-
-#include <common/logger_useful.h>
-
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Poco/Logger.h>
+#include <Storages/DeltaMerge/FilterParser/FilterParser.h>
+#include <common/logger_useful.h>
+
+#include <cassert>
 
 
 namespace DB
@@ -45,7 +43,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
     Poco::Logger * /* log */)
 {
     if (unlikely(expr.children_size() != 2))
-        return createUnsupported(expr.DebugString(),
+        return createUnsupported(expr.ShortDebugString(),
                                  tipb::ScalarFuncSig_Name(expr.sig()) + " with " + DB::toString(expr.children_size())
                                      + " children is not supported",
                                  false);
@@ -74,8 +72,9 @@ inline RSOperatorPtr parseTiCompareExpr( //
     }
 
     if (unlikely(state != state_finish))
-        return createUnsupported(
-            expr.DebugString(), tipb::ScalarFuncSig_Name(expr.sig()) + " with state " + DB::toString(state) + " is not supported", false);
+        return createUnsupported(expr.ShortDebugString(),
+                                 tipb::ScalarFuncSig_Name(expr.sig()) + " with state " + DB::toString(state) + " is not supported",
+                                 false);
     else
     {
         // TODO: null_direction
@@ -101,7 +100,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
             op = createLessEqual(attr, value, -1);
             break;
         default:
-            op = createUnsupported(expr.DebugString(), "Unknown compare type: " + tipb::ExprType_Name(expr.tp()), false);
+            op = createUnsupported(expr.ShortDebugString(), "Unknown compare type: " + tipb::ExprType_Name(expr.tp()), false);
             break;
         }
         return op;
@@ -118,7 +117,7 @@ RSOperatorPtr parseTiExpr(const tipb::Expr &                          expr,
     RSOperatorPtr op = EMPTY_FILTER;
     if (unlikely(isAggFunctionExpr(expr)))
     {
-        op = createUnsupported(expr.DebugString(), "agg function: " + tipb::ExprType_Name(expr.tp()), false);
+        op = createUnsupported(expr.ShortDebugString(), "agg function: " + tipb::ExprType_Name(expr.tp()), false);
         return op;
     }
 
@@ -128,24 +127,23 @@ RSOperatorPtr parseTiExpr(const tipb::Expr &                          expr,
         FilterParser::RSFilterType filter_type = iter->second;
         switch (filter_type)
         {
-        case FilterParser::RSFilterType::Not:
-        {
+        case FilterParser::RSFilterType::Not: {
             if (unlikely(expr.children_size() != 1))
-                op = createUnsupported(expr.DebugString(), "logical not with " + DB::toString(expr.children_size()) + " children", false);
+                op = createUnsupported(
+                    expr.ShortDebugString(), "logical not with " + DB::toString(expr.children_size()) + " children", false);
             else
             {
                 const auto & child = expr.children(0);
                 if (likely(isFunctionExpr(child)))
                     op = createNot(parseTiExpr(child, columns_to_read, creator, log));
                 else
-                    op = createUnsupported(child.DebugString(), "child of logical not is not function", false);
+                    op = createUnsupported(child.ShortDebugString(), "child of logical not is not function", false);
             }
         }
         break;
 
         case FilterParser::RSFilterType::And:
-        case FilterParser::RSFilterType::Or:
-        {
+        case FilterParser::RSFilterType::Or: {
             RSOperators children;
             for (Int32 i = 0; i < expr.children_size(); ++i)
             {
@@ -153,7 +151,7 @@ RSOperatorPtr parseTiExpr(const tipb::Expr &                          expr,
                 if (likely(isFunctionExpr(child)))
                     children.emplace_back(parseTiExpr(child, columns_to_read, creator, log));
                 else
-                    children.emplace_back(createUnsupported(child.DebugString(), "child of logical operator is not function", false));
+                    children.emplace_back(createUnsupported(child.ShortDebugString(), "child of logical operator is not function", false));
             }
             if (expr.sig() == tipb::ScalarFuncSig::LogicalAnd)
                 op = createAnd(children);
@@ -176,16 +174,27 @@ RSOperatorPtr parseTiExpr(const tipb::Expr &                          expr,
         case FilterParser::RSFilterType::Like:
         case FilterParser::RSFilterType::NotLike:
         case FilterParser::RSFilterType::Unsupported:
-            op = createUnsupported(expr.DebugString(), tipb::ScalarFuncSig_Name(expr.sig()) + " is not supported", false);
+            op = createUnsupported(expr.ShortDebugString(), tipb::ScalarFuncSig_Name(expr.sig()) + " is not supported", false);
             break;
         }
     }
     else
     {
-        op = createUnsupported(expr.DebugString(), tipb::ScalarFuncSig_Name(expr.sig()) + " is not supported", false);
+        op = createUnsupported(expr.ShortDebugString(), tipb::ScalarFuncSig_Name(expr.sig()) + " is not supported", false);
     }
 
     return op;
+}
+
+inline RSOperatorPtr tryParse(const tipb::Expr &                          filter,
+                              const ColumnDefines &                       columns_to_read,
+                              const FilterParser::AttrCreatorByColumnID & creator,
+                              Poco::Logger *                              log)
+{
+    if (isFunctionExpr(filter))
+        return cop::parseTiExpr(filter, columns_to_read, creator, log);
+    else
+        return createUnsupported(filter.ShortDebugString(), "child of logical and is not function", false);
 }
 
 } // namespace cop
@@ -201,7 +210,9 @@ RSOperatorPtr FilterParser::parseDAGQuery(const DAGQueryInfo &                  
         return op;
 
     if (dag_info.filters.size() == 1)
-        op = cop::parseTiExpr(*dag_info.filters[0], columns_to_read, creator, log);
+    {
+        op = cop::tryParse(*dag_info.filters[0], columns_to_read, creator, log);
+    }
     else
     {
         /// By default, multiple conditions with operator "and"
@@ -209,10 +220,7 @@ RSOperatorPtr FilterParser::parseDAGQuery(const DAGQueryInfo &                  
         for (size_t i = 0; i < dag_info.filters.size(); ++i)
         {
             const auto & filter = *dag_info.filters[i];
-            if (isFunctionExpr(filter))
-                children.emplace_back(cop::parseTiExpr(filter, columns_to_read, creator, log));
-            else
-                children.emplace_back(createUnsupported(filter.DebugString(), "child of logical and is not function", false));
+            children.emplace_back(cop::tryParse(filter, columns_to_read, creator, log));
         }
         op = createAnd(children);
     }

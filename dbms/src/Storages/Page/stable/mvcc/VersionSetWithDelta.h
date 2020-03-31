@@ -213,16 +213,16 @@ protected:
             return RebaseResult::SUCCESS;
         }
 
-        auto q = current, p = current->prev;
+        auto q = current, p = std::atomic_load(&current->prev);
         while (p != nullptr && p != old_base)
         {
             q = p;
-            p = q->prev;
+            p = std::atomic_load(&q->prev);
         }
         // p must point to `old_base` now
         assert(p == old_base);
         // rebase q on `new_base`
-        q->prev = new_base;
+        std::atomic_store(&q->prev, new_base);
         return RebaseResult::SUCCESS;
     }
 
@@ -231,7 +231,7 @@ protected:
     // Return true if `tail` is in current version-list
     bool isValidVersion(const VersionPtr tail) const
     {
-        for (auto node = current; node != nullptr; node = node->prev)
+        for (auto node = current; node != nullptr; node = std::atomic_load(&node->prev))
         {
             if (node == tail)
             {
@@ -278,7 +278,7 @@ protected:
             if (tail->shouldCompactToBase(config))
             {
                 ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnBase);
-                auto old_base = tail->prev;
+                auto old_base = std::atomic_load(&tail->prev);
                 assert(old_base != nullptr);
                 VersionPtr new_base = VersionType::compactDeltaAndBase(old_base, tail);
                 // replace nodes [head, tail] -> new_base
@@ -305,7 +305,7 @@ public:
     size_t sizeUnlocked() const
     {
         size_t sz = 0;
-        for (auto v = current; v != nullptr; v = v->prev)
+        for (auto v = current; v != nullptr; v = std::atomic_load(&v->prev))
         {
             sz += 1;
         }
@@ -323,7 +323,7 @@ public:
         std::string            s;
         bool                   is_first = true;
         std::stack<VersionPtr> deltas;
-        for (auto v = tail; v != nullptr; v = v->prev)
+        for (auto v = tail; v != nullptr; v = std::atomic_load(&v->prev))
         {
             deltas.emplace(v);
         }

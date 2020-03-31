@@ -33,6 +33,7 @@ class Block;
 // for debug
 struct MockTiDBTable;
 class RegionRangeKeys;
+class RegionTaskLock;
 
 class RegionTable : private boost::noncopyable
 {
@@ -109,7 +110,7 @@ public:
     /// This functional only shrink the table range of this region_id
     void shrinkRegionRange(const Region & region);
 
-    void removeRegion(const RegionID region_id);
+    void removeRegion(const RegionID region_id, bool remove_data, const RegionTaskLock &);
 
     TableID popOneTableToOptimize();
 
@@ -126,7 +127,8 @@ public:
     /// Will trigger schema sync on read error for only once,
     /// assuming that newer schema can always apply to older data by setting force_decode to true in readRegionBlock.
     /// Note that table schema must be keep unchanged throughout the process of read then write, we take good care of the lock.
-    static void writeBlockByRegion(Context & context, const RegionPtr & region, RegionDataReadInfoList & data_list_to_remove, Logger * log);
+    static void writeBlockByRegion(
+        Context & context, const RegionPtr & region, RegionDataReadInfoList & data_list_to_remove, Logger * log, bool lock_region = true);
 
     /// Read the data of the given region into block, take good care of learner read and locks.
     /// Assuming that the schema has been properly synced by outer, i.e. being new enough to decode data before start_ts,
@@ -144,8 +146,7 @@ public:
 
     /// Check transaction locks in region, and write committed data in it into storage engine if check passed. Otherwise throw an LockException.
     /// The write logic is the same as #writeBlockByRegion, with some extra checks about region version and conf_version.
-    static RegionException::RegionReadStatus resolveLocksAndWriteRegion(
-        TMTContext & tmt,
+    static RegionException::RegionReadStatus resolveLocksAndWriteRegion(TMTContext & tmt,
         const TiDB::TableID table_id,
         const RegionPtr & region,
         const Timestamp start_ts,
