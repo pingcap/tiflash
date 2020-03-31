@@ -526,13 +526,13 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
             }
 
             pingcap::coprocessor::Request req{.tp = pingcap::coprocessor::ReqType::DAG,
-                .start_ts = context.getSettingsRef().read_tso,
+                .start_ts = settings.read_tso,
                 .data = dag_req.SerializeAsString(),
                 .ranges = ranges,
                 .schema_version = settings.schema_version};
             pingcap::kv::StoreType store_type = pingcap::kv::TiFlash;
-            BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(
-                tmt.getCluster().get(), req, schema, context.getSettingsRef().max_threads, store_type);
+            BlockInputStreamPtr input
+                = std::make_shared<CoprocessorBlockInputStream>(tmt.getCluster().get(), req, schema, max_streams, store_type);
             {
                 // TODO: optimize when all regions can not be used.
                 if (query_info.mvcc_query_info->regions_query_info.empty())
