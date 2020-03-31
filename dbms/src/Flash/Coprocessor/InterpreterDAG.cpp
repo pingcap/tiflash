@@ -468,6 +468,12 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         }
         if (region_retry.size())
         {
+            // TODO: let tidb retry
+            if (query_info.mvcc_query_info->regions_query_info.empty())
+            {
+                throw Exception("All regions can not be used", ErrorCodes::LOGICAL_ERROR);
+            }
+
             LOG_DEBUG(log, "Start to retry region (" << ({
                 std::stringstream ss;
                 for (auto & r : region_retry)
@@ -533,11 +539,6 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
             pingcap::kv::StoreType store_type = pingcap::kv::TiFlash;
             BlockInputStreamPtr input
                 = std::make_shared<CoprocessorBlockInputStream>(tmt.getCluster().get(), req, schema, max_streams, store_type);
-            {
-                // TODO: optimize when all regions can not be used.
-                if (query_info.mvcc_query_info->regions_query_info.empty())
-                    pipeline.streams.clear();
-            }
             pipeline.streams.emplace_back(input);
         }
     }
