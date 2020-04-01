@@ -148,7 +148,7 @@ std::pair<RegionDataReadInfoList, RegionException::RegionReadStatus> resolveLock
             {
                 LockInfos lock_infos;
                 lock_infos.emplace_back(std::move(lock_info));
-                throw LockException(std::move(lock_infos));
+                throw LockException(region->id(), std::move(lock_infos));
             }
         }
 
@@ -241,8 +241,7 @@ std::tuple<Block, RegionException::RegionReadStatus> RegionTable::readBlockByReg
     Block block;
     {
         bool ok = false;
-        std::tie(block, ok) = readRegionBlock(table_info, columns, column_names_to_read, data_list_read,
-                start_ts, true, scan_filter);
+        std::tie(block, ok) = readRegionBlock(table_info, columns, column_names_to_read, data_list_read, start_ts, true, scan_filter);
         if (!ok)
             // TODO: Enrich exception message.
             throw Exception("Read region " + std::to_string(region->id()) + " of table " + std::to_string(table_info.id) + " failed",

@@ -6,11 +6,11 @@
 #pragma GCC diagnostic pop
 
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DAGDriver.h>
 #include <Interpreters/IQuerySource.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/Types.h>
-#include "DAGDriver.h"
 
 namespace DB
 {
@@ -30,8 +30,8 @@ public:
     static const String TOPN_NAME;
     static const String LIMIT_NAME;
 
-    DAGQuerySource(Context & context_, DAGContext & dag_context_, const std::vector<RegionInfo> & regions,
-        const tipb::DAGRequest & dag_request_);
+    DAGQuerySource(Context & context_, DAGContext & dag_context_, const std::unordered_map<RegionID, RegionInfo> & regions,
+        const tipb::DAGRequest & dag_request_, const bool retry_exception_ = false);
 
     std::tuple<std::string, ASTPtr> parse(size_t max_query_size) override;
     String str(size_t max_query_size) override;
@@ -77,13 +77,15 @@ public:
     };
     const tipb::DAGRequest & getDAGRequest() const { return dag_request; };
 
-    std::vector<tipb::FieldType> getResultFieldTypes() const { return result_field_types; };
+    const std::vector<tipb::FieldType> & getResultFieldTypes() const { return result_field_types; };
 
     ASTPtr getAST() const { return ast; };
 
     tipb::EncodeType getEncodeType() const { return encode_type; }
 
-    const std::vector<RegionInfo> & getRegions() const { return regions; }
+    const std::unordered_map<RegionID, RegionInfo> & getRegions() const { return regions; }
+
+    bool getRetryException() const { return retry_exception; }
 
 protected:
     void assertValid(Int32 index, const String & name) const
@@ -101,7 +103,7 @@ protected:
     Context & context;
     DAGContext & dag_context;
 
-    const std::vector<RegionInfo> & regions;
+    const std::unordered_map<RegionID, RegionInfo> & regions;
 
     const tipb::DAGRequest & dag_request;
 
@@ -117,6 +119,8 @@ protected:
     tipb::EncodeType encode_type;
 
     ASTPtr ast;
+
+    const bool retry_exception;
 };
 
 } // namespace DB

@@ -29,13 +29,17 @@ static void assignOrThrowException(Int32 & index, Int32 value, const String & na
     index = value;
 }
 
-DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, const std::vector<RegionInfo> & regions_,
-    const tipb::DAGRequest & dag_request_)
+DAGQuerySource::DAGQuerySource(Context & context_,
+    DAGContext & dag_context_,
+    const std::unordered_map<RegionID, RegionInfo> & regions_,
+    const tipb::DAGRequest & dag_request_,
+    const bool retry_exception_)
     : context(context_),
       dag_context(dag_context_),
       regions(regions_),
       dag_request(dag_request_),
-      metrics(context.getTiFlashMetrics())
+      metrics(context.getTiFlashMetrics()),
+      retry_exception(retry_exception_)
 {
     for (int i = 0; i < dag_request.executors_size(); i++)
     {
