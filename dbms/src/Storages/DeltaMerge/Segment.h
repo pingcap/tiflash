@@ -157,6 +157,8 @@ public:
     /// Flush delta's cache packs.
     bool flushCache(DMContext & dm_context);
 
+    bool compactDelta(DMContext & dm_context);
+
     size_t getEstimatedRows() const;
     size_t getEstimatedStableRows() const;
     size_t getEstimatedBytes() const;

@@ -55,7 +55,20 @@ namespace DB
         F(type_raft_read_index_duration, {{"type", "tmt_raft_read_index_duration"}}, ExpBuckets{0.0005, 2, 20}))                          \
     M(tiflash_raft_wait_index_duration_seconds, "Bucketed histogram of raft wait index duration", Histogram,                              \
         F(type_raft_wait_index_duration, {{"type", "tmt_raft_wait_index_duration"}}, ExpBuckets{0.0005, 2, 20}))                          \
-    M(tiflash_storage_write_amplification, "The data write amplification in storage engine", Gauge)
+    M(tiflash_storage_write_amplification, "The data write amplification in storage engine", Gauge)                                       \
+    M(tiflash_storage_read_tasks_count, "Total number of storage engine read tasks", Counter)                                             \
+    M(tiflash_storage_command_count, "Total number of storage's command, such as delete range / shutdown /startup", Counter,              \
+        F(type_delete_range, {"type", "delete_range"}))                                                                                   \
+    M(tiflash_storage_subtask_count, "Total number of storage's sub task", Counter, F(type_delta_merge, {"type", "delta_merge"}),         \
+        F(type_delta_compact, {"type", "delta_compact"}), F(type_delta_flush, {"type", "delta_flush"}),                                   \
+        F(type_seg_split, {"type", "seg_split"}), F(type_seg_merge, {"type", "seg_merge"}),                                               \
+        F(type_place_index_update, {"type", "place_index_update"}))                                                                       \
+    M(tiflash_storage_subtask_duration_seconds, "Bucketed histogram of storage's sub task duration", Histogram,                           \
+        F(type_delta_merge, {{"type", "delta_merge"}}, ExpBuckets{0.0005, 2, 20}),                                                        \
+        F(type_delta_compact, {{"type", "delta_compact"}}, ExpBuckets{0.0005, 2, 20}),                                                    \
+        F(type_delta_flush, {{"type", "delta_flush"}}, ExpBuckets{0.0005, 2, 20}),                                                        \
+        F(type_seg_split, {{"type", "seg_split"}}, ExpBuckets{0.0005, 2, 20}),                                                            \
+        F(type_seg_merge, {{"type", "seg_merge"}}, ExpBuckets{0.0005, 2, 20}))
 
 
 struct ExpBuckets
