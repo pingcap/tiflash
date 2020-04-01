@@ -9,6 +9,7 @@ namespace DB
 {
 extern const UInt8 TYPE_CODE_LITERAL;
 extern const UInt8 LITERAL_NIL;
+Field GenDefaultField(const TiDB::ColumnInfo & col_info);
 } // namespace DB
 
 namespace TiDB
@@ -22,11 +23,14 @@ using DB::Field;
 
 ColumnInfo::ColumnInfo(Poco::JSON::Object::Ptr json) { deserialize(json); }
 
+
 Field ColumnInfo::defaultValueToField() const
 {
     auto & value = origin_default_value;
     if (value.isEmpty())
     {
+        if (hasNotNullFlag())
+            return DB::GenDefaultField(*this);
         return Field();
     }
     switch (tp)
