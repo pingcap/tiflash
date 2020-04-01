@@ -33,9 +33,14 @@ std::tuple<std::optional<std::unordered_map<RegionID, const RegionInfo &>>, Regi
         {
             throw Exception("Income key ranges is empty for region: " + std::to_string(r.region_id), ErrorCodes::COP_BAD_DAG_REQUEST);
         }
+        if (region_force_retry.count(id))
+        {
+            region_need_retry.emplace(id, r);
+            status_res = RegionException::NOT_FOUND;
+            continue;
+        }
         auto current_region = tmt.getKVStore()->getRegion(id);
-        auto status = GetRegionReadStatus(current_region, r.region_version, r.region_conf_version);
-        if (region_force_retry.count(id) || status != RegionException::OK)
+        if (auto status = GetRegionReadStatus(current_region, r.region_version, r.region_conf_version); status != RegionException::OK)
         {
             region_need_retry.emplace(id, r);
             status_res = status;
