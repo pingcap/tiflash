@@ -1,4 +1,5 @@
 #include <Columns/ColumnVector.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/typeid_cast.h>
 #include <Core/SortDescription.h>
 #include <Interpreters/sortBlock.h>
@@ -15,6 +16,7 @@
 #include <Storages/Transaction/TMTContext.h>
 
 #include <atomic>
+#include <ext/scope_guard.h>
 
 namespace ProfileEvents
 {
@@ -563,7 +565,7 @@ void DeltaMergeStore::compact(const Context & db_context, const HandleRange & ra
             end_handle     = seg_range.end;
 
             // compact could fail.
-            if (segment->getDelta()->compact(*dm_context))
+            if (segment->compactDelta(*dm_context))
             {
                 break;
             }
@@ -725,6 +727,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
         this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read);
     };
 
+    GET_METRIC(dm_context->metrics, tiflash_storage_read_tasks_count).Increment(tasks.size());
     size_t final_num_stream = std::min(num_streams, tasks.size());
     auto   read_task_pool   = std::make_shared<SegmentReadTaskPool>(std::move(tasks));
 
@@ -1022,16 +1025,14 @@ bool DeltaMergeStore::handleBackgroundTask()
             left = segmentMergeDelta(*task.dm_context, task.segment, false);
             type = ThreadType::BG_MergeDelta;
             break;
-        case Compact:
-        {
-            task.segment->getDelta()->compact(*task.dm_context);
+        case Compact: {
+            task.segment->compactDelta(*task.dm_context);
             left = task.segment;
             type = ThreadType::BG_Compact;
             break;
         }
-        case Flush:
-        {
-            task.segment->getDelta()->flush(*task.dm_context);
+        case Flush: {
+            task.segment->flushCache(*task.dm_context);
             left = task.segment;
             type = ThreadType::BG_Flush;
             break;
@@ -1079,6 +1080,13 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
             return {};
         }
     }
+
+    // Not counting the early give up action.
+    GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_seg_split).Increment();
+    Stopwatch watch_seg_split;
+    SCOPE_EXIT({
+        GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_seg_split).Observe(watch_seg_split.elapsedSeconds());
+    });
 
     WriteBatches wbs(storage_pool);
     auto         range      = segment->getRange();
@@ -1165,6 +1173,13 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
         }
     }
 
+    // Not counting the early give up action.
+    GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_seg_merge).Increment();
+    Stopwatch watch_seg_merge;
+    SCOPE_EXIT({
+        GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_seg_merge).Observe(watch_seg_merge.elapsedSeconds());
+    });
+
     auto left_range  = left->getRange();
     auto right_range = right->getRange();
 
@@ -1240,6 +1255,14 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
             return {};
         }
     }
+
+    // Not counting the early give up action.
+    GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_delta_merge).Increment();
+    Stopwatch watch_delta_merge;
+    SCOPE_EXIT({
+        GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_delta_merge)
+            .Observe(watch_delta_merge.elapsedSeconds());
+    });
 
     WriteBatches wbs(storage_pool);
 

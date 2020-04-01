@@ -1,3 +1,4 @@
+#include <Common/TiFlashMetrics.h>
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
@@ -19,6 +20,7 @@
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/PathPool.h>
 
+#include <ext/scope_guard.h>
 #include <numeric>
 
 namespace ProfileEvents
@@ -995,7 +997,22 @@ void Segment::check(DMContext &, const String &) const {}
 
 bool Segment::flushCache(DMContext & dm_context)
 {
+    GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_delta_flush).Increment();
+    Stopwatch watch;
+    SCOPE_EXIT(
+        { GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_delta_flush).Observe(watch.elapsedSeconds()); });
+
     return delta->flush(dm_context);
+}
+
+bool Segment::compactDelta(DMContext & dm_context)
+{
+    GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_delta_compact).Increment();
+    Stopwatch watch;
+    SCOPE_EXIT(
+        { GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_delta_compact).Observe(watch.elapsedSeconds()); });
+
+    return delta->compact(dm_context);
 }
 
 size_t Segment::getEstimatedRows() const
@@ -1121,6 +1138,9 @@ Segment::ensurePlace(const DMContext & dm_context, const StableValueSpacePtr & s
     // But we if it contains more delete ranges, we cannot use it. Because delete range cannot be filtered out.
     if (placed_delta_rows >= delta_rows_limit && placed_delta_deletes == delta_deletes_limit)
         return delta_tree->getEntriesCopy<Allocator<false>>();
+
+
+    GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_place_index_update).Increment();
 
     if (placed_delta_rows > delta_rows_limit || placed_delta_deletes > delta_deletes_limit)
     {

@@ -696,7 +696,7 @@ bool PageStorage::gc()
         {
             // Apply empty edit and cleanup.
             apply_and_cleanup(PageEntriesEdit{});
-            LOG_DEBUG(log, storage_name << " GC exit with no files to gc.");
+            LOG_TRACE(log, storage_name << " GC exit with no files to gc.");
             return false;
         }
     }
