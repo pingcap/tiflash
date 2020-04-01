@@ -35,7 +35,7 @@ public:
     explicit IManageableStorage(const ColumnsDescription & columns_) : IStorage(columns_) {}
     ~IManageableStorage() override = default;
 
-    virtual void flushDelta() {}
+    virtual void flushCache(const Context & /*context*/) {}
 
     virtual void flushCache(const Context & /*context*/, const DB::HandleRange<HandleID> & /* range_to_flush */) {}
 
@@ -44,6 +44,8 @@ public:
     virtual void checkStatus(const Context &) {}
 
     virtual void deleteRows(const Context &, size_t /*rows*/) { throw Exception("Unsupported"); }
+
+    virtual void mergeDelta(const Context &) { throw Exception("Unsupported"); }
 
     virtual BlockInputStreamPtr listSegments(const Context &) { throw Exception("Unsupported"); }
 
