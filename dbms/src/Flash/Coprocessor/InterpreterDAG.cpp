@@ -432,27 +432,27 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     }
     else
     {
-        std::unordered_map<RegionID, RegionInfo> region_retry;
-        std::unordered_set<RegionID> region_ignore;
+        std::unordered_map<RegionID, const RegionInfo &> region_retry;
+        std::unordered_set<RegionID> force_retry;
         for (;;)
         {
             try
             {
                 region_retry.clear();
-                auto [retry, status] = MakeRegionQueryInfos(dag.getRegions(), region_ignore, tmt, *query_info.mvcc_query_info, table_id);
+                auto [retry, status] = MakeRegionQueryInfos(dag.getRegions(), force_retry, tmt, *query_info.mvcc_query_info, table_id);
                 std::ignore = status;
                 if (retry)
                 {
                     region_retry = std::move(*retry);
                     for (auto & r : region_retry)
-                        region_ignore.emplace(r.first);
+                        force_retry.emplace(r.first);
                 }
                 pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
                 break;
             }
             catch (const LockException & e)
             {
-                region_ignore.emplace(e.region_id);
+                force_retry.emplace(e.region_id);
             }
             catch (const RegionException & e)
             {

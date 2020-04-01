@@ -20,12 +20,12 @@ RegionException::RegionReadStatus GetRegionReadStatus(const RegionPtr & current_
     return RegionException::OK;
 }
 
-std::tuple<std::optional<std::unordered_map<RegionID, RegionInfo>>, RegionException::RegionReadStatus> MakeRegionQueryInfos(
-    const std::unordered_map<RegionID, RegionInfo> & dag_region_infos, const std::unordered_set<RegionID> & region_ignore_force_retry,
+std::tuple<std::optional<std::unordered_map<RegionID, const RegionInfo &>>, RegionException::RegionReadStatus> MakeRegionQueryInfos(
+    const std::unordered_map<RegionID, RegionInfo> & dag_region_infos, const std::unordered_set<RegionID> & region_force_retry,
     TMTContext & tmt, MvccQueryInfo & mvcc_info, TableID table_id)
 {
     mvcc_info.regions_query_info.clear();
-    std::unordered_map<RegionID, RegionInfo> region_need_retry;
+    std::unordered_map<RegionID, const RegionInfo &> region_need_retry;
     RegionException::RegionReadStatus status_res = RegionException::RegionReadStatus::OK;
     for (auto & [id, r] : dag_region_infos)
     {
@@ -35,7 +35,7 @@ std::tuple<std::optional<std::unordered_map<RegionID, RegionInfo>>, RegionExcept
         }
         auto current_region = tmt.getKVStore()->getRegion(id);
         auto status = GetRegionReadStatus(current_region, r.region_version, r.region_conf_version);
-        if (region_ignore_force_retry.count(id) || status != RegionException::OK)
+        if (region_force_retry.count(id) || status != RegionException::OK)
         {
             region_need_retry.emplace(id, r);
             status_res = status;

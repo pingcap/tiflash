@@ -23,16 +23,6 @@ public:
     RegionInfo(RegionID id, UInt64 ver, UInt64 conf_ver, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> && key_ranges_)
         : region_id(id), region_version(ver), region_conf_version(conf_ver), key_ranges(std::move(key_ranges_))
     {}
-
-    RegionInfo(const RegionInfo & info) : RegionInfo(info.region_id, info.region_version, info.region_conf_version, {})
-    {
-        for (auto & key_range : info.key_ranges)
-            key_ranges.emplace_back(
-                std::make_pair(DecodedTiKVKey(std::string(key_range.first)), DecodedTiKVKey(std::string(key_range.second))));
-    }
-
-    RegionInfo(RegionInfo && info) : RegionInfo(info.region_id, info.region_version, info.region_conf_version, std::move(info.key_ranges))
-    {}
 };
 
 /// An abstraction of driver running DAG request.
