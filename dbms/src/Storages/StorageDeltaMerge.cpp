@@ -799,6 +799,11 @@ void StorageDeltaMerge::flushCache(const Context & context, const DM::HandleRang
     store->flushCache(context, range_to_flush);
 }
 
+void StorageDeltaMerge::mergeDelta(const Context & context)
+{
+    store->mergeDeltaAll(context);
+}
+
 void StorageDeltaMerge::deleteRange(const DM::HandleRange & range_to_delete, const Settings & settings)
 {
     return store->deleteRange(global_context, settings, range_to_delete);
