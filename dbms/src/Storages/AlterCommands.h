@@ -18,6 +18,8 @@ struct AlterCommand
         MODIFY_PRIMARY_KEY,
         // Rename column is only for tmt/dm schema sync.
         RENAME_COLUMN,
+        TOMBSTONE,
+        RECOVER,
     };
 
     Type type;

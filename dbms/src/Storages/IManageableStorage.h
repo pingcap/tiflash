@@ -15,6 +15,9 @@ struct TableInfo;
 
 namespace DB
 {
+
+struct SchemaNameMapper;
+
 /**
  * An interface for Storages synced from TiDB.
  *
@@ -31,8 +34,8 @@ public:
     };
 
 public:
-    explicit IManageableStorage() : IStorage() {}
-    explicit IManageableStorage(const ColumnsDescription & columns_) : IStorage(columns_) {}
+    explicit IManageableStorage(bool tombstone_) : IStorage(), tombstone(tombstone_) {}
+    explicit IManageableStorage(const ColumnsDescription & columns_, bool tombstone_) : IStorage(columns_), tombstone(tombstone_) {}
     ~IManageableStorage() override = default;
 
     virtual void flushCache(const Context & /*context*/) {}
@@ -57,12 +60,15 @@ public:
 
     virtual const TiDB::TableInfo & getTableInfo() const = 0;
 
+    bool isTombstone() const { return tombstone; }
+    void setTombstone(bool tombstone_) { IManageableStorage::tombstone = tombstone_; }
+
     // Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
-    virtual void alterFromTiDB(
-        const AlterCommands & commands, const TiDB::TableInfo & table_info, const String & database_name, const Context & context)
+    virtual void alterFromTiDB(const AlterCommands & commands, const String & database_name, const TiDB::TableInfo & table_info,
+        const SchemaNameMapper & name_mapper, const Context & context)
         = 0;
 
-    
+
     /// Remove this storage from TMTContext. Should be called after its metadata and data have been removed from disk.
     virtual void removeFromTMTContext() = 0;
 
@@ -83,6 +89,9 @@ public:
 
 private:
     virtual DataTypePtr getPKTypeImpl() const = 0;
+
+private:
+    bool tombstone;
 };
 
 } // namespace DB

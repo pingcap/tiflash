@@ -1,27 +1,28 @@
 #pragma once
 
 #include <Interpreters/Context.h>
-#include <Storages/Transaction/TMTStorages.h>
 #include <Storages/Transaction/SchemaGetter.h>
+#include <Storages/Transaction/TMTStorages.h>
 
 namespace DB
 {
 
-template <typename Getter>
+template <typename Getter, typename NameMapper>
 struct SchemaBuilder
 {
+    NameMapper name_mapper;
 
     Getter & getter;
 
     Context & context;
 
-    std::unordered_map<DB::DatabaseID, String> & databases;
+    std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> & databases;
 
     Int64 target_version;
 
     Logger * log;
 
-    SchemaBuilder(Getter & getter_, Context & context_, std::unordered_map<DB::DatabaseID, String> & dbs_, Int64 version)
+    SchemaBuilder(Getter & getter_, Context & context_, std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> & dbs_, Int64 version)
         : getter(getter_), context(context_), databases(dbs_), target_version(version), log(&Logger::get("SchemaBuilder"))
     {}
 
@@ -29,43 +30,36 @@ struct SchemaBuilder
 
     void syncAllSchema();
 
-    void applyRenameTableImpl(const String & old_db, const String & new_db, const String & old_table, const String & new_table);
-
 private:
     void applyDropSchema(DatabaseID schema_id);
 
-    void applyDropSchemaImpl(const String & db_name);
+    /// Parameter schema_name should be mapped.
+    void applyDropSchemaByName(const String & schema_name);
 
     bool applyCreateSchema(DatabaseID schema_id);
 
-    void applyCreateSchemaImpl(TiDB::DBInfoPtr db_info);
+    void applyCreateSchemaByDBInfo(TiDB::DBInfoPtr db_info);
 
-    void applyCreateTable(TiDB::DBInfoPtr db_info, Int64 table_id);
+    void applyCreateTable(TiDB::DBInfoPtr db_info, TableID table_id);
 
-    void applyDropTable(TiDB::DBInfoPtr db_info, Int64 table_id);
+    void applyCreateTableByTableInfo(TiDB::DBInfoPtr db_info, TiDB::TableInfo & table_info);
 
-    void applyAlterTable(TiDB::DBInfoPtr db_info, Int64 table_id);
+    void applyCreateTableOrPartition(TiDB::DBInfoPtr db_info, TiDB::TableInfo & table_info);
 
-    void applyAlterTableImpl(TiDB::TableInfoPtr table_info, const String & db_name, ManageableStoragePtr storage);
+    void applyDropTable(TiDB::DBInfoPtr db_info, TableID table_id);
 
-    void applyAlterPartition(TiDB::DBInfoPtr db_info, Int64 table_id);
+    /// Parameter schema_name should be mapped.
+    void applyDropTableOrPartition(const String & db_name, TableID table_id);
 
-    void applyCreatePhysicalTableImpl(const TiDB::DBInfo & db_info, TiDB::TableInfo & table_info);
+    void applyAlterTable(TiDB::DBInfoPtr db_info, TableID table_id);
 
-    void applyCreateTableImpl(const TiDB::DBInfo & db_info, TiDB::TableInfo & table_info);
+    void applyAlterTableOrPartition(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info, ManageableStoragePtr storage);
 
-    void applyDropTableImpl(const String &, const String &);
+    void applyPartitionDiff(TiDB::DBInfoPtr db_info, TableID table_id);
 
-    void applyRenameTable(TiDB::DBInfoPtr db_info, TiDB::DatabaseID old_db_id, TiDB::TableID table_id);
+    void applyRenameTable(TiDB::DBInfoPtr new_db_info, TiDB::TableID table_id);
 
-
-    void createTables(std::vector<std::pair<TiDB::TableInfoPtr, TiDB::DBInfoPtr>> table_dbs);
-
-    void alterAndRenameTables(std::vector<std::pair<TiDB::TableInfoPtr, TiDB::DBInfoPtr>> table_dbs);
-
-    void dropInvalidTablesAndDBs(const std::vector<std::pair<TiDB::TableInfoPtr, TiDB::DBInfoPtr>> & table_dbs, const std::set<String> &);
-
-    bool isIgnoreDB(const String & name);
+    void applyRenameTableOrPartition(TiDB::DBInfoPtr new_db_info, const TiDB::TableInfo & new_table_info, ManageableStoragePtr storage);
 };
 
 } // namespace DB

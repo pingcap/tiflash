@@ -68,8 +68,11 @@ public:
     ::TiDB::StorageEngine engineType() const override { return ::TiDB::StorageEngine::DT; }
 
     // Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
-    void alterFromTiDB(
-        const AlterCommands & commands, const TiDB::TableInfo & table_info, const String & database_name, const Context & context) override;
+    void alterFromTiDB(const AlterCommands & commands,
+        const String & database_name,
+        const TiDB::TableInfo & table_info,
+        const SchemaNameMapper & name_mapper,
+        const Context & context) override;
 
     void setTableInfo(const TiDB::TableInfo & table_info_) override { tidb_table_info = table_info_; }
 
@@ -99,6 +102,7 @@ protected:
         const DM::OptionTableInfoConstRef table_info_,
         const ColumnsDescription & columns_,
         const ASTPtr & primary_expr_ast_,
+        bool tombstone,
         Context & global_context_);
 
     Block buildInsertBlock(bool is_import, bool is_delete, const Block & block);

@@ -96,7 +96,7 @@ public:
     }
 
     void alterFromTiDB(
-        const AlterCommands & params, const TiDB::TableInfo & table_info, const String & database_name, const Context & context) override;
+        const AlterCommands & params, const String & database_name, const TiDB::TableInfo & table_info, const SchemaNameMapper & name_mapper, const Context & context) override;
 
     bool checkTableCanBeDropped() const override;
 
@@ -180,7 +180,8 @@ protected:
         const ASTPtr & sampling_expression_, /// nullptr, if sampling is not supported.
         const MergeTreeData::MergingParams & merging_params_,
         const MergeTreeSettings & settings_,
-        bool has_force_restore_data_flag);
+        bool has_force_restore_data_flag,
+        bool tombstone);
 };
 
 } // namespace DB

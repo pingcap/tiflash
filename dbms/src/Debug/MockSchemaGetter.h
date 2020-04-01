@@ -39,7 +39,7 @@ struct MockSchemaGetter
         std::vector<TiDB::TableInfoPtr> res;
         for (auto it = tables_by_id.begin(); it != tables_by_id.end(); it++)
         {
-            if (it->second->table_info.db_id == db_id)
+            if (it->second->db_id() == db_id)
             {
                 res.push_back(std::make_shared<TiDB::TableInfo>(TiDB::TableInfo(it->second->table_info)));
             }
