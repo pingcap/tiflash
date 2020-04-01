@@ -258,6 +258,9 @@ public:
 
     void flushCache(const DMContextPtr & dm_context, const HandleRange & range);
 
+    /// Do merge delta for all segments. Only used for debug.
+    void mergeDeltaAll(const Context & context);
+
     /// Compact fregment packs into bigger one.
     void compact(const Context & context, const HandleRange & range = HandleRange::newAll());
 

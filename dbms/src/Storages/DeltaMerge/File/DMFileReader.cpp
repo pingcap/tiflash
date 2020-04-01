@@ -243,12 +243,8 @@ Block DMFileReader::read()
             const String stream_name = DMFile::getFileNameBase(cd.id);
             if (auto iter = column_streams.find(stream_name); iter != column_streams.end())
             {
-                auto & stream = iter->second;
-                if (shouldSeek(start_pack_id) || skip_packs_by_column[i] > 0)
-                {
-                    auto & mark = (*stream->marks)[start_pack_id];
-                    stream->buf->seek(mark.offset_in_compressed_file, mark.offset_in_decompressed_block);
-                }
+                auto & top_stream  = iter->second;
+                bool   should_seek = shouldSeek(start_pack_id) || skip_packs_by_column[i] > 0;
 
                 auto data_type = dmfile->getColumnStat(cd.id).type;
                 auto column    = data_type->createColumn();
@@ -257,13 +253,20 @@ Block DMFileReader::read()
                     [&](const IDataType::SubstreamPath & substream_path) {
                         String substream_name = DMFile::getFileNameBase(cd.id, substream_path);
                         auto & sub_stream     = column_streams.at(substream_name);
+
+                        if (should_seek)
+                        {
+                            auto & mark = (*sub_stream->marks)[start_pack_id];
+                            sub_stream->buf->seek(mark.offset_in_compressed_file, mark.offset_in_decompressed_block);
+                        }
+
                         return sub_stream->buf.get();
                     },
                     read_rows,
-                    stream->avg_size_hint,
+                    top_stream->avg_size_hint,
                     true,
                     {});
-                IDataType::updateAvgValueSizeHint(*column, stream->avg_size_hint);
+                IDataType::updateAvgValueSizeHint(*column, top_stream->avg_size_hint);
 
                 // Cast column's data from DataType in disk to what we need now
                 auto converted_column = convertColumnByColumnDefineIfNeed(data_type, std::move(column), cd);
