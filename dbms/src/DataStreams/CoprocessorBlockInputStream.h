@@ -48,7 +48,7 @@ public:
             if (!has_next)
                 return {};
         }
-        auto & chunk = chunk_queue.front();
+        auto chunk = chunk_queue.front();
         chunk_queue.pop();
         switch (resp->encode_type())
         {
