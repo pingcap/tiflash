@@ -231,10 +231,11 @@ TxnMergeTree is a variant of the MutableMergeTree engine.
 TxnMergeTree is slightly different from MutableMergeTree:
 - it requires an extra table info parameter in JSON format
 - in most cases, it should be created implicitly through raft rather than explicitly
+- an optional tombstone flag can be specified, defaults to 0, identifying if this table should be garbage collected
 
 Examples of creating a TxnMergeTree table:
 - Create Table ... TxnMergeTree((CounterID, EventDate), 8192, '...')
-- Create Table ... TxnMergeTree(16, (CounterID, EventDate), 8192, '...')
+- Create Table ... TxnMergeTree(16, (CounterID, EventDate), 8192, '...', 0)
 )";
     return help;
 }
@@ -668,6 +669,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     ASTPtr primary_expr_list;
     ASTPtr sampling_expression;
     TiDB::TableInfo table_info;
+    bool tombstone = false;
     MergeTreeSettings storage_settings = args.context.getMergeTreeSettings();
 
     if (is_extended_storage_def)
@@ -691,6 +693,17 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     {
         if (is_txn_engine)
         {
+            if (engine_args.size() == 4)
+            {
+                auto ast = typeid_cast<const ASTLiteral *>(engine_args.back().get());
+                if (ast && ast->value.getType() == Field::Types::UInt64)
+                    tombstone = safeGet<UInt64>(ast->value);
+                else
+                    throw Exception(
+                        "Tombstone must be a UInt64" + getMutableMergeTreeVerboseHelp(),
+                        ErrorCodes::BAD_ARGUMENTS);
+                engine_args.pop_back();
+            }
             auto ast = typeid_cast<const ASTLiteral *>(engine_args.back().get());
             if (ast && ast->value.getType() == Field::Types::String)
             {
@@ -766,7 +779,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             args.data_path, args.database_name, args.table_name, columns, args.attach,
             args.context, table_info, primary_expr_list, secondary_sorting_expr_list, date_column_name, partition_expr_list,
             sampling_expression, merging_params, storage_settings,
-            args.has_force_restore_data_flag);
+            args.has_force_restore_data_flag, tombstone);
 }
 
 

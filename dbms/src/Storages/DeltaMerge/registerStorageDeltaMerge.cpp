@@ -14,7 +14,7 @@ namespace ErrorCodes
 {
 extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 extern const int BAD_ARGUMENTS;
-}
+} // namespace ErrorCodes
 
 static ASTPtr extractKeyExpressionList(IAST & node)
 {
@@ -42,10 +42,12 @@ DeltaMerge requires:
 - primary key
 - an extra table info parameter in JSON format
 - in most cases, it should be created implicitly through raft rather than explicitly
+- tombstone, default to 0
 
 Examples of creating a DeltaMerge table:
-- Create Table ... engine = DeltaMerge((CounterID, EventDate)) # JSON format table info is set to empty string
+- Create Table ... engine = DeltaMerge((CounterID, EventDate)) # JSON format table info is set to empty string and tombstone is 0
 - Create Table ... engine = DeltaMerge((CounterID, EventDate), '{JSON format table info}')
+- Create Table ... engine = DeltaMerge((CounterID, EventDate), '{JSON format table info}', 1)
 )";
     return help;
 }
@@ -53,7 +55,7 @@ Examples of creating a DeltaMerge table:
 void registerStorageDeltaMerge(StorageFactory & factory)
 {
     factory.registerStorage("DeltaMerge", [](const StorageFactory::Arguments & args) {
-        if (args.engine_args.size() > 2 || args.engine_args.empty())
+        if (args.engine_args.size() > 3 || args.engine_args.empty())
             throw Exception(getDeltaMergeVerboseHelp(), ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         ASTPtr primary_expr_list = extractKeyExpressionList(*args.engine_args[0]);
@@ -61,7 +63,8 @@ void registerStorageDeltaMerge(StorageFactory & factory)
         TiDB::TableInfo info;
         // Note: if `table_info_json` is not empty, `table_info` store a ref to `info`
         std::optional<std::reference_wrapper<const TiDB::TableInfo>> table_info = std::nullopt;
-        if (args.engine_args.size() == 2)
+        bool                                                         tombstone  = false;
+        if (args.engine_args.size() >= 2)
         {
             auto ast = typeid_cast<const ASTLiteral *>(args.engine_args[1].get());
             if (ast && ast->value.getType() == Field::Types::String)
@@ -78,7 +81,16 @@ void registerStorageDeltaMerge(StorageFactory & factory)
             else
                 throw Exception("Engine DeltaMerge table info must be a string" + getDeltaMergeVerboseHelp(), ErrorCodes::BAD_ARGUMENTS);
         }
-        return StorageDeltaMerge::create(args.data_path, args.database_name, args.table_name, table_info, args.columns, primary_expr_list, args.context);
+        if (args.engine_args.size() == 3)
+        {
+            auto ast = typeid_cast<const ASTLiteral *>(args.engine_args[2].get());
+            if (ast && ast->value.getType() == Field::Types::UInt64)
+                tombstone = safeGet<UInt64>(ast->value);
+            else
+                throw Exception("Engine DeltaMerge tombstone must be a UInt64" + getDeltaMergeVerboseHelp(), ErrorCodes::BAD_ARGUMENTS);
+        }
+        return StorageDeltaMerge::create(
+            args.data_path, args.database_name, args.table_name, table_info, args.columns, primary_expr_list, tombstone, args.context);
     });
 }
 

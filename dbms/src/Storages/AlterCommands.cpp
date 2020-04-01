@@ -186,6 +186,10 @@ void AlterCommand::apply(ColumnsDescription & columns_description) const
             columns_description.defaults.emplace(new_column_name, default_value);
         }
     }
+    else if (type == TOMBSTONE || type == RECOVER)
+    {
+        // Nothing to do.
+    }
     else
         throw Exception("Wrong parameter type in ALTER query", ErrorCodes::LOGICAL_ERROR);
 }

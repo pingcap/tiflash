@@ -3,6 +3,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Debug/MockSchemaGetter.h>
+#include <Debug/MockSchemaNameMapper.h>
 #include <Storages/Transaction/SchemaBuilder.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <pingcap/kv/Cluster.h>
@@ -19,6 +20,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     using Getter = std::conditional_t<mock_getter, MockSchemaGetter, SchemaGetter>;
 
+    using NameMapper = std::conditional_t<mock_getter, MockSchemaNameMapper, SchemaNameMapper>;
 
     KVClusterPtr cluster;
 
@@ -28,7 +30,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     std::mutex schema_mutex;
 
-    std::unordered_map<DB::DatabaseID, String> databases;
+    std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> databases;
 
     Logger * log;
 
@@ -101,7 +103,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
         LOG_DEBUG(log, "try load schema diffs.");
 
-        SchemaBuilder<Getter> builder(getter, context, databases, version);
+        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, version);
 
         Int64 used_version = cur_version;
         std::vector<SchemaDiff> diffs;
@@ -141,7 +143,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     void loadAllSchema(Getter & getter, Int64 version, Context & context)
     {
-        SchemaBuilder<Getter> builder(getter, context, databases, version);
+        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, version);
         builder.syncAllSchema();
     }
 };
