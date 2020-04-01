@@ -27,7 +27,7 @@ BlockIO InterpreterManageQuery::execute()
     {
         case ManageOperation::Enum::Flush:
         {
-            manageable_storage->flushDelta();
+            manageable_storage->flushCache(context);
             return {};
         }
         case ManageOperation::Enum::Status:
@@ -41,9 +41,14 @@ BlockIO InterpreterManageQuery::execute()
             manageable_storage->checkStatus(context);
             return {};
         }
-        case ManageOperation::Enum ::DeleteRows:
+        case ManageOperation::Enum::DeleteRows:
         {
             manageable_storage->deleteRows(context, ast.rows);
+            return {};
+        }
+        case ManageOperation::Enum::MergeDelta:
+        {
+            manageable_storage->mergeDelta(context);
             return {};
         }
     }

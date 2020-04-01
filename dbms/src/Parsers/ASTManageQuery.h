@@ -13,12 +13,13 @@ namespace ManageOperation
         Status,
         Check,
         DeleteRows,
+        MergeDelta,
     };
 
     inline const char * toString(UInt64 op)
     {
-        static const char * data[] = {"Flush", "Status", "Check", "Delete Rows"};
-        return op < 4 ? data[op] : "Unknown operation";
+        static const char * data[] = {"Flush", "Status", "Check", "Delete Rows", "Merge Delta"};
+        return op < 5 ? data[op] : "Unknown operation";
     }
 }
 
