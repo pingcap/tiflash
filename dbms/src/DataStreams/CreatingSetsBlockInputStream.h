@@ -49,7 +49,7 @@ private:
     Logger * log = &Logger::get("CreatingSetsBlockInputStream");
 
     void createAll();
-    void createAllRaw();
+    void createAllWithoutLock();
     void createOne(SubqueryForSet & subquery);
 };
 

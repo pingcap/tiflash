@@ -70,11 +70,11 @@ Block CreatingSetsBlockInputStream::getTotals()
 }
 
 
-void CreatingSetsBlockInputStream::createAllRaw()
+void CreatingSetsBlockInputStream::createAllWithoutLock()
 {
     if (!created)
     {
-        for (auto &elem : subqueries_for_sets)
+        for (auto & elem : subqueries_for_sets)
         {
             if (elem.second.source) /// There could be prepared in advance Set/Join - no source is specified for them.
             {
@@ -95,11 +95,11 @@ void CreatingSetsBlockInputStream::createAll()
         if (create_mutex_ptr != nullptr)
         {
             std::lock_guard<std::mutex> lk(*create_mutex_ptr);
-            createAllRaw();
+            createAllWithoutLock();
         }
         else
         {
-            createAllRaw();
+            createAllWithoutLock();
         }
     }
 }
