@@ -1,18 +1,6 @@
 groups:
 - name: alert.rules
   rules:
-  - alert: TiFlash_memory_abnormal
-    expr: tiflash_system_asynchronous_metric_jemalloc_allocated > 1.6e+10
-    for: 1m
-    labels:
-      env: ENV_LABELS_ENV
-      level: warning
-      expr: tiflash_system_asynchronous_metric_jemalloc_allocated > 1.6e+10
-    annotations:
-      description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, values:{{ $value }}'
-      value: '{{ $value }}'
-      summary: TiFlash memory usage is over 16 GB
-
   - alert: TiFlash_tmt_merge_duration
     expr: histogram_quantile(0.99, sum(rate(tiflash_tmt_merge_duration_seconds_bucket[1m])) BY (le, instance)) > 600
     for: 1m
