@@ -1,8 +1,7 @@
-#include <Flash/Coprocessor/StreamingDAGBlockOutputStream.h>
-
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
+#include <Flash/Coprocessor/StreamingDAGBlockOutputStream.h>
 
 namespace DB
 {
@@ -13,16 +12,15 @@ extern const int UNSUPPORTED_PARAMETER;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-StreamingDAGBlockInputStream::StreamingDAGBlockInputStream(BlockInputStreamPtr input_, StreamWriterPtr writer_, Int64 records_per_chunk_, tipb::EncodeType encode_type_,
-                                           std::vector<tipb::FieldType> && result_field_types_, Block && header_)
-        : input(input_),
-          finished(false),
-          writer(writer_),
-          result_field_types(std::move(result_field_types_)),
-          header(std::move(header_)),
-          records_per_chunk(records_per_chunk_),
-          current_records_num(0),
-          encode_type(encode_type_)
+StreamingDAGBlockInputStream::StreamingDAGBlockInputStream(BlockInputStreamPtr input_, StreamWriterPtr writer_, Int64 records_per_chunk_,
+    tipb::EncodeType encode_type_, std::vector<tipb::FieldType> && result_field_types_, Block && header_)
+    : finished(false),
+      writer(writer_),
+      result_field_types(std::move(result_field_types_)),
+      header(std::move(header_)),
+      records_per_chunk(records_per_chunk_),
+      current_records_num(0),
+      encode_type(encode_type_)
 {
     if (encode_type == tipb::EncodeType::TypeDefault)
     {
@@ -39,18 +37,17 @@ StreamingDAGBlockInputStream::StreamingDAGBlockInputStream(BlockInputStreamPtr i
     }
     else
     {
-        throw Exception("Only Default and Arrow encode type is supported in StreamingDAGBlockOutputStream.", ErrorCodes::UNSUPPORTED_PARAMETER);
+        throw Exception(
+            "Only Default and Arrow encode type is supported in StreamingDAGBlockOutputStream.", ErrorCodes::UNSUPPORTED_PARAMETER);
     }
+    children.push_back(input_);
 }
 
-void StreamingDAGBlockInputStream::readPrefix()
-{
-    input->readPrefix();
-}
+void StreamingDAGBlockInputStream::readPrefix() { children.back()->readPrefix(); }
 
 void StreamingDAGBlockInputStream::encodeChunkToDAGResponse()
 {
-    ::coprocessor::BatchResponse resp ;
+    ::coprocessor::BatchResponse resp;
 
     tipb::SelectResponse dag_response;
     dag_response.set_encode_type(encode_type);
@@ -73,14 +70,15 @@ void StreamingDAGBlockInputStream::readSuffix()
     {
         encodeChunkToDAGResponse();
     }
-    input->readSuffix();
+    children.back()->readSuffix();
 }
 
 Block StreamingDAGBlockInputStream::readImpl()
 {
     if (finished)
         return {};
-    while(Block block = input->read()) {
+    while (Block block = children.back()->read())
+    {
         if (!block)
         {
             finished = true;
@@ -88,16 +86,22 @@ Block StreamingDAGBlockInputStream::readImpl()
         }
         if (block.columns() != result_field_types.size())
             throw Exception("Output column size mismatch with field type size", ErrorCodes::LOGICAL_ERROR);
-        if (records_per_chunk == -1) {
+        if (records_per_chunk == -1)
+        {
             current_records_num = 0;
-            if (block.rows() > 0) {
+            if (block.rows() > 0)
+            {
                 chunk_codec_stream->encode(block, 0, block.rows());
                 encodeChunkToDAGResponse();
             }
-        } else {
+        }
+        else
+        {
             size_t rows = block.rows();
-            for (size_t row_index = 0; row_index < rows;) {
-                if (current_records_num >= records_per_chunk) {
+            for (size_t row_index = 0; row_index < rows;)
+            {
+                if (current_records_num >= records_per_chunk)
+                {
                     encodeChunkToDAGResponse();
                 }
                 const size_t upper = std::min(row_index + (records_per_chunk - current_records_num), rows);

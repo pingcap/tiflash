@@ -454,13 +454,12 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     {
         try
         {
-            pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size,
-                                             max_streams);
+            pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
         }
         catch (DB::Exception & e)
         {
             e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
-                         + "`, table_id: " + DB::toString(table_id) + ")");
+                + "`, table_id: " + DB::toString(table_id) + ")");
             throw;
         }
     }
@@ -468,7 +467,6 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     {
         throw Exception("Should not reach here", ErrorCodes::LOGICAL_ERROR);
     }
-    LOG_INFO(log, "dag execution stream size: " << regions.size());
 
     if (pipeline.streams.empty())
     {
@@ -981,11 +979,13 @@ void DAGQueryBlockInterpreter::executeOrder(Pipeline & pipeline, Strings & order
 void DAGQueryBlockInterpreter::executeSubqueryInJoin(Pipeline & pipeline, SubqueryForSet & subquery)
 {
     const Settings & settings = context.getSettingsRef();
-    executeUnion(pipeline);
     SubqueriesForSets subquries;
     subquries[query_block.qb_column_prefix + "join"] = subquery;
-    pipeline.firstStream() = std::make_shared<CreatingSetsBlockInputStream>(pipeline.firstStream(), subquries,
-        SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode));
+    std::shared_ptr<std::mutex> create_mutex_ptr = pipeline.hasMoreThanOneStream() ? std::make_shared<std::mutex>() : nullptr;
+    pipeline.transform([&](auto & stream) {
+        stream = std::make_shared<CreatingSetsBlockInputStream>(stream, subquries,
+            SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode), create_mutex_ptr);
+    });
 }
 
 void copyExecutorTreeWithLocalTableScan(tipb::DAGRequest & dag_req, const tipb::Executor * root)
@@ -1063,6 +1063,11 @@ void copyExecutorTreeWithLocalTableScan(tipb::DAGRequest & dag_req, const tipb::
 
 void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
 {
+    // remote query containing agg/limit/topN can not running
+    // in parellel, but current remote query is running in
+    // parellel, so just disable this corner case.
+    if (query_block.aggregation || query_block.limitOrTopN)
+        throw Exception("Remote query containing agg or limit or topN is not supported", ErrorCodes::COP_BAD_DAG_REQUEST);
     const auto & ts = query_block.source->tbl_scan();
     std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
     for (auto & range : ts.ranges())
@@ -1078,6 +1083,37 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
     for (const auto & key_range : key_ranges)
     {
         cop_key_ranges.emplace_back(static_cast<String>(key_range.first), static_cast<String>(key_range.second));
+    }
+
+    pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
+    pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
+    std::vector<std::vector<pingcap::coprocessor::KeyRange>> split_ranges;
+    while (!cop_key_ranges.empty())
+    {
+        auto loc = cluster->region_cache->locateKey(bo, cop_key_ranges[0].start_key);
+
+        size_t i;
+        for (i = 0; i < cop_key_ranges.size(); i++)
+        {
+            const auto & range = cop_key_ranges[i];
+            if (!(loc.contains(range.end_key) || loc.end_key == range.end_key))
+                break;
+        }
+        // all ranges belong to same region.
+        if (i == cop_key_ranges.size())
+        {
+            split_ranges.push_back(cop_key_ranges);
+            break;
+        }
+        std::vector<pingcap::coprocessor::KeyRange> task_ranges(cop_key_ranges.begin(), cop_key_ranges.begin() + i);
+        auto & bound = cop_key_ranges[i];
+        if (loc.contains(bound.start_key))
+        {
+            task_ranges.emplace_back(pingcap::coprocessor::KeyRange{bound.start_key, loc.end_key});
+            bound.start_key = loc.end_key;
+        }
+        split_ranges.push_back(task_ranges);
+        cop_key_ranges.erase(cop_key_ranges.begin(), cop_key_ranges.begin() + i);
     }
 
     ::tipb::DAGRequest dag_req;
@@ -1098,18 +1134,31 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
     }
     Block sample_block = Block(columns);
 
-    pingcap::coprocessor::Request req;
+    size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, split_ranges.size());
+    size_t task_per_thread = split_ranges.size() / concurrent_num;
+    size_t rest_task = split_ranges.size() % concurrent_num;
+    for (size_t i = 0, split_start = 0; i < concurrent_num; i++)
+    {
+        size_t split_end = split_start + task_per_thread;
+        if (i < rest_task)
+            split_end++;
+        if (split_end == split_start)
+            continue;
+        std::vector<pingcap::coprocessor::KeyRange> req_ranges;
+        for (size_t j = split_start; j < split_end; j++)
+            req_ranges.insert(req_ranges.end(), split_ranges[j].begin(), split_ranges[j].end());
 
-    dag_req.SerializeToString(&req.data);
-    req.tp = pingcap::coprocessor::ReqType::DAG;
-    req.start_ts = context.getSettingsRef().read_tso;
-    req.ranges = cop_key_ranges;
+        pingcap::coprocessor::Request req;
+        dag_req.SerializeToString(&req.data);
+        req.tp = pingcap::coprocessor::ReqType::DAG;
+        req.start_ts = context.getSettingsRef().read_tso;
+        req.ranges = req_ranges;
 
-    pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
-    pingcap::kv::StoreType store_type = pingcap::kv::TiFlash;
-    BlockInputStreamPtr input
-        = std::make_shared<CoprocessorBlockInputStream>(cluster, req, schema, context.getSettingsRef().max_threads, store_type);
-    pipeline.streams = {input};
+        pingcap::kv::StoreType store_type = pingcap::kv::TiFlash;
+        BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(cluster, req, schema, 1, store_type);
+        pipeline.streams.push_back(input);
+        split_start = split_end;
+    }
 }
 
 void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
@@ -1139,6 +1188,8 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
         //if (dag.hasSelection())
         //recordProfileStreams(pipeline, dag.getSelectionIndex());
     }
+    LOG_INFO(log,
+        "execution stream size for query block(before aggregation) " << query_block.qb_column_prefix << " is " << pipeline.streams.size());
     if (res.need_aggregate)
     {
         // execute aggregation

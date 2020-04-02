@@ -20,7 +20,8 @@ public:
     CreatingSetsBlockInputStream(
         const BlockInputStreamPtr & input,
         const SubqueriesForSets & subqueries_for_sets_,
-        const SizeLimits & network_transfer_limits);
+        const SizeLimits & network_transfer_limits,
+        std::shared_ptr<std::mutex> create_mutex_ptr_ = nullptr);
 
     String getName() const override { return "CreatingSets"; }
 
@@ -39,6 +40,8 @@ private:
 
     SizeLimits network_transfer_limits;
 
+    std::shared_ptr<std::mutex> create_mutex_ptr;
+
     size_t rows_to_transfer = 0;
     size_t bytes_to_transfer = 0;
 
@@ -46,6 +49,7 @@ private:
     Logger * log = &Logger::get("CreatingSetsBlockInputStream");
 
     void createAll();
+    void createAllRaw();
     void createOne(SubqueryForSet & subquery);
 };
 

@@ -19,9 +19,11 @@ namespace ErrorCodes
 CreatingSetsBlockInputStream::CreatingSetsBlockInputStream(
     const BlockInputStreamPtr & input,
     const SubqueriesForSets & subqueries_for_sets_,
-    const SizeLimits & network_transfer_limits)
+    const SizeLimits & network_transfer_limits,
+    std::shared_ptr<std::mutex> create_mutex_ptr_)
     : subqueries_for_sets(subqueries_for_sets_),
-    network_transfer_limits(network_transfer_limits)
+      network_transfer_limits(network_transfer_limits),
+      create_mutex_ptr(create_mutex_ptr_)
 {
     for (auto & elem : subqueries_for_sets)
     {
@@ -68,12 +70,10 @@ Block CreatingSetsBlockInputStream::getTotals()
 }
 
 
-void CreatingSetsBlockInputStream::createAll()
+void CreatingSetsBlockInputStream::createAllRaw()
 {
-    if (!created)
-    {
-        for (auto & elem : subqueries_for_sets)
-        {
+    if (!created) {
+        for (auto &elem : subqueries_for_sets) {
             if (elem.second.source) /// There could be prepared in advance Set/Join - no source is specified for them.
             {
                 if (isCancelledOrThrowIfKilled())
@@ -84,6 +84,21 @@ void CreatingSetsBlockInputStream::createAll()
         }
 
         created = true;
+    }
+}
+void CreatingSetsBlockInputStream::createAll()
+{
+    if (!created)
+    {
+        if (create_mutex_ptr != nullptr)
+        {
+            std::lock_guard<std::mutex> lk(*create_mutex_ptr);
+            createAllRaw();
+        }
+        else
+        {
+            createAllRaw();
+        }
     }
 }
 
