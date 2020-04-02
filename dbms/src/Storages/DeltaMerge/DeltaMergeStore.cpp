@@ -102,19 +102,19 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
                                  const ColumnDefine &  handle,
                                  const Settings &      settings_)
     : path(path_),
-      storage_pool(db_name_ + "." + table_name_, path, db_context.getSettingsRef()),
+      global_context(db_context.getGlobalContext()),
+      settings(settings_),
+      storage_pool(db_name_ + "." + table_name_, path, global_context, db_context.getSettingsRef()),
       db_name(db_name_),
       table_name(table_name_),
       original_table_handle_define(handle),
       background_pool(db_context.getBackgroundPool()),
-      global_context(db_context.getGlobalContext()),
-      settings(settings_),
       hash_salt(++DELTA_MERGE_STORE_HASH_SALT),
       log(&Logger::get("DeltaMergeStore[" + db_name + "." + table_name + "]"))
 {
     LOG_INFO(log, "Restore DeltaMerge Store start [" << db_name << "." << table_name << "]");
 
-    auto & extra_paths_root = db_context.getGlobalContext().getExtraPaths();
+    auto & extra_paths_root = global_context.getExtraPaths();
     extra_paths             = extra_paths_root.withTable(db_name, table_name_);
 
     loadDMFiles();

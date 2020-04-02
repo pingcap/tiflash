@@ -1,3 +1,5 @@
+#include <Common/Stopwatch.h>
+#include <Common/TiFlashMetrics.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Poco/File.h>
@@ -101,14 +103,15 @@ PageFileSet PageStorage::listAllPageFiles(const String & storage_path, Poco::Log
     return page_files;
 }
 
-PageStorage::PageStorage(String name, const String & storage_path_, const Config & config_)
+PageStorage::PageStorage(String name, const String & storage_path_, const Config & config_, TiFlashMetricsPtr metrics_)
     : storage_name(std::move(name)),
       storage_path(storage_path_),
       config(config_),
       write_files(std::max(1UL, config.num_write_slots)),
       page_file_log(&Poco::Logger::get("PageFile")),
       log(&Poco::Logger::get("PageStorage")),
-      versioned_page_entries(storage_name, config.version_set_config, log)
+      versioned_page_entries(storage_name, config.version_set_config, log),
+      metrics(std::move(metrics_))
 {
     // at least 1 write slots
     config.num_write_slots = std::max(1UL, config.num_write_slots);
@@ -701,6 +704,18 @@ bool PageStorage::gc()
         }
     }
 
+    Stopwatch watch;
+    if (metrics)
+    {
+        GET_METRIC(metrics, tiflash_storage_page_gc_count, type_exec).Increment();
+    }
+    SCOPE_EXIT({
+        if (metrics)
+        {
+            GET_METRIC(metrics, tiflash_storage_page_gc_duration_seconds, type_exec).Observe(watch.elapsedSeconds());
+        }
+    });
+
     debugging_info.min_file_id     = page_files.begin()->fileIdLevel();
     debugging_info.min_file_type   = page_files.begin()->getType();
     debugging_info.max_file_id     = page_files.rbegin()->fileIdLevel();
@@ -720,23 +735,31 @@ bool PageStorage::gc()
     {
         /// Select the GC candidates files and migrate valid pages into an new file.
         /// Acquire a snapshot version of page map, new edit on page map store in `gc_file_entries_edit`
+        Stopwatch watch_migrate;
+
         DataCompactor compactor(*this);
         std::tie(debugging_info.compact_result, gc_file_entries_edit)
             = compactor.tryMigrate(page_files, getSnapshot(), writing_file_id_levels);
+
+        // We only care about those time cost in actually doing compaction on page data.
+        if (debugging_info.compact_result.do_compaction && metrics)
+        {
+            GET_METRIC(metrics, tiflash_storage_page_gc_duration_seconds, type_migrate).Observe(watch_migrate.elapsedSeconds());
+        }
     }
 
     apply_and_cleanup(std::move(gc_file_entries_edit));
 
-    LOG_DEBUG(log,
-              storage_name << " GC exit. PageFiles from ["                                                 //
-                           << debugging_info.min_file_id.first << "," << debugging_info.min_file_id.second //
-                           << "," << PageFile::typeToString(debugging_info.min_file_type) << "] to ["      //
-                           << debugging_info.max_file_id.first << "," << debugging_info.max_file_id.second //
-                           << "," << PageFile::typeToString(debugging_info.max_file_type)
-                           << "], size: " + DB::toString(debugging_info.page_files_size) //
-                           << ", compact legacy archive files: " << debugging_info.num_files_archive_in_compact_legacy
-                           << ", remove data files: " << debugging_info.num_files_remove_data
-                           << ", gc apply: " << debugging_info.gc_apply_stat.toString());
+    LOG_INFO(log,
+             storage_name << " GC exit within " << DB::toString(watch.elapsedSeconds(), 2) << " sec. PageFiles from [" //
+                          << debugging_info.min_file_id.first << "," << debugging_info.min_file_id.second              //
+                          << "," << PageFile::typeToString(debugging_info.min_file_type) << "] to ["                   //
+                          << debugging_info.max_file_id.first << "," << debugging_info.max_file_id.second              //
+                          << "," << PageFile::typeToString(debugging_info.max_file_type)
+                          << "], size: " + DB::toString(debugging_info.page_files_size) //
+                          << ", compact legacy archive files: " << debugging_info.num_files_archive_in_compact_legacy
+                          << ", remove data files: " << debugging_info.num_files_remove_data
+                          << ", gc apply: " << debugging_info.gc_apply_stat.toString());
     return debugging_info.compact_result.do_compaction;
 }
 
