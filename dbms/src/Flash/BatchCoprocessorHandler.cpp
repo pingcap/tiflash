@@ -28,25 +28,35 @@ try
     {
         case COP_REQ_TYPE_DAG:
         {
-            std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
-            tipb::DAGRequest dag_request;
-            dag_request.ParseFromString(cop_request->data());
-            LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
-            std::unordered_map<RegionID, RegionInfo> regions;
-            for (auto & r : cop_request->regions())
-            {
-                std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
-                for (auto & range : r.ranges())
+            const auto dag_request = ({
+                tipb::DAGRequest dag_req;
+                dag_req.ParseFromString(cop_request->data());
+                std::move(dag_req);
+            });
+            const auto regions = ({
+                std::unordered_map<RegionID, RegionInfo> regions;
+                for (auto & r : cop_request->regions())
                 {
-                    std::string start_key(range.start());
-                    DecodedTiKVKey start(std::move(start_key));
-                    std::string end_key(range.end());
-                    DecodedTiKVKey end(std::move(end_key));
-                    key_ranges.emplace_back(std::make_pair(std::move(start), std::move(end)));
+                    std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
+                    for (auto & range : r.ranges())
+                    {
+                        std::string start_key(range.start());
+                        DecodedTiKVKey start(std::move(start_key));
+                        std::string end_key(range.end());
+                        DecodedTiKVKey end(std::move(end_key));
+                        key_ranges.emplace_back(std::make_pair(std::move(start), std::move(end)));
+                    }
+                    auto res = regions.emplace(r.region_id(),
+                        RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), std::move(key_ranges)));
+                    if (!res.second)
+                        throw Exception(std::string(__PRETTY_FUNCTION__) + ": contain duplicate region " + std::to_string(r.region_id()),
+                            ErrorCodes::LOGICAL_ERROR);
                 }
-                regions.emplace(r.region_id(),
-                    RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), std::move(key_ranges)));
-            }
+                std::move(regions);
+            });
+            LOG_DEBUG(
+                log, __PRETTY_FUNCTION__ << ": Handling " << regions.size() << " regions in DAG request: " << dag_request.DebugString());
+
             tipb::SelectResponse dag_response; // unused
             DAGDriver driver(cop_context.db_context, dag_request, regions,
                 cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(),
