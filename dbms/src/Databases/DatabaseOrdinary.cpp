@@ -519,7 +519,13 @@ void DatabaseOrdinary::shutdown()
 
 void DatabaseOrdinary::drop()
 {
-    /// No additional removal actions are required.
+    // Remove data dir for this database
+    const String database_data_path = getDataPath();
+    if (!database_data_path.empty())
+        Poco::File(database_data_path).remove(false);
+    // Remove metadata dir for this database
+    const String curr_database_metadata_dir = getMetadataPath();
+    Poco::File(curr_database_metadata_dir).remove(false);
 }
 
 void DatabaseOrdinary::alterTable(

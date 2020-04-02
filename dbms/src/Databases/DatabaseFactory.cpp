@@ -1,24 +1,23 @@
-#include <Databases/DatabaseFactory.h>
-#include <Databases/DatabaseOrdinary.h>
-#include <Databases/DatabaseMemory.h>
 #include <Databases/DatabaseDictionary.h>
+#include <Databases/DatabaseFactory.h>
+#include <Databases/DatabaseMemory.h>
+#include <Databases/DatabaseOrdinary.h>
+#include <Databases/DatabaseTiFlash.h>
 
 namespace DB
 {
 
 namespace ErrorCodes
 {
-    extern const int UNKNOWN_DATABASE_ENGINE;
+extern const int UNKNOWN_DATABASE_ENGINE;
 }
 
 
-DatabasePtr DatabaseFactory::get(
-    const String & engine_name,
-    const String & database_name,
-    const String & metadata_path,
-    Context & context)
+DatabasePtr DatabaseFactory::get(const String & engine_name, const String & database_name, const String & metadata_path, Context & context)
 {
-    if (engine_name == "Ordinary")
+    if (engine_name == "TiFlash")
+        return std::make_shared<DatabaseTiFlash>(database_name, metadata_path, context);
+    else if (engine_name == "Ordinary")
         return std::make_shared<DatabaseOrdinary>(database_name, metadata_path, context);
     else if (engine_name == "Memory")
         return std::make_shared<DatabaseMemory>(database_name);
@@ -28,4 +27,4 @@ DatabasePtr DatabaseFactory::get(
     throw Exception("Unknown database engine: " + engine_name, ErrorCodes::UNKNOWN_DATABASE_ENGINE);
 }
 
-}
+} // namespace DB
