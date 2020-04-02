@@ -72,8 +72,10 @@ Block CreatingSetsBlockInputStream::getTotals()
 
 void CreatingSetsBlockInputStream::createAllRaw()
 {
-    if (!created) {
-        for (auto &elem : subqueries_for_sets) {
+    if (!created)
+    {
+        for (auto &elem : subqueries_for_sets)
+        {
             if (elem.second.source) /// There could be prepared in advance Set/Join - no source is specified for them.
             {
                 if (isCancelledOrThrowIfKilled())
