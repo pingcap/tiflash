@@ -4,6 +4,7 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/DeltaValueSpace.h>
+#include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Index/MinMax.h>
 #include <Storages/DeltaMerge/Range.h>
@@ -32,9 +33,9 @@ using Segments    = std::vector<SegmentPtr>;
 struct SegmentSnapshot : private boost::noncopyable
 {
     DeltaSnapshotPtr    delta;
-    StableValueSpacePtr stable;
+    StableSnapshotPtr stable;
 
-    SegmentSnapshot(const DeltaSnapshotPtr & delta_, const StableValueSpacePtr & stable_) : delta(delta_), stable(stable_) {}
+    SegmentSnapshot(const DeltaSnapshotPtr & delta_, const StableSnapshotPtr & stable_) : delta(delta_), stable(stable_) {}
 };
 
 /// A segment contains many rows of a table. A table is split into segments by consecutive ranges.
@@ -209,7 +210,7 @@ private:
                                                  const ColumnDefines &       read_columns,
                                                  const HandleRange &         handle_range,
                                                  const RSOperatorPtr &       filter,
-                                                 const StableValueSpacePtr & stable_snap,
+                                                 const StableSnapshotPtr & stable_snap,
                                                  DeltaSnapshotPtr &          delta_snap,
                                                  const IndexIterator &       delta_index_begin,
                                                  const IndexIterator &       delta_index_end,
@@ -219,7 +220,7 @@ private:
     /// Merge delta & stable, and then take the middle one.
     Handle getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, const SegmentSnapshotPtr & segment_snap) const;
     /// Only look up in the stable vs.
-    Handle getSplitPointFast(DMContext & dm_context, const StableValueSpacePtr & stable_snap) const;
+    Handle getSplitPointFast(DMContext & dm_context, const StableSnapshotPtr & stable_snap) const;
 
     SplitInfo prepareSplitLogical(DMContext &                dm_context, //
                                   const SegmentSnapshotPtr & segment_snap,
@@ -229,12 +230,12 @@ private:
 
 
     /// Make sure that all delta packs have been placed.
-    DeltaIndexPtr ensurePlace(const DMContext & dm_context, const StableValueSpacePtr & stable_snap, DeltaSnapshotPtr & delta_snap) const;
+    DeltaIndexPtr ensurePlace(const DMContext & dm_context, const StableSnapshotPtr & stable_snap, DeltaSnapshotPtr & delta_snap) const;
 
     /// Reference the inserts/updates by delta tree.
     template <bool skippable_place>
     void placeUpsert(const DMContext &           dm_context,
-                     const StableValueSpacePtr & stable_snap,
+                     const StableSnapshotPtr & stable_snap,
                      DeltaSnapshotPtr &          delta_snap,
                      size_t                      delta_value_space_offset,
                      Block &&                    block,
@@ -242,7 +243,7 @@ private:
     /// Reference the deletes by delta tree.
     template <bool skippable_place>
     void placeDelete(const DMContext &           dm_context,
-                     const StableValueSpacePtr & stable_snap,
+                     const StableSnapshotPtr & stable_snap,
                      DeltaSnapshotPtr &          delta_snap,
                      const HandleRange &         delete_range,
                      DeltaTree &                 delta_tree) const;

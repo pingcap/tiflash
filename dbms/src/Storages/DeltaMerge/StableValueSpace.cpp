@@ -161,5 +161,46 @@ void StableValueSpace::recordRemovePacksPages(WriteBatches & wbs) const
 }
 
 
+// ================================================
+// StableValueSpace::Snapshot
+// ================================================
+
+using Snapshot    = StableValueSpace::Snapshot;
+using SnapshotPtr = std::shared_ptr<Snapshot>;
+
+SnapshotPtr StableValueSpace::createSnapshot()
+{
+    auto snap = std::make_shared<Snapshot>();
+    snap->stable = this->shared_from_this();
+
+    return snap;
+}
+
+SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DMContext &     context, //
+                                                              const ColumnDefines & read_columns,
+                                                              const HandleRange &   handle_range,
+                                                              const RSOperatorPtr & filter,
+                                                              UInt64                max_data_version,
+                                                              bool                  enable_clean_read)
+{
+    SkippableBlockInputStreams streams;
+    for (auto & file : stable->files)
+    {
+        streams.push_back(std::make_shared<DMFileBlockInputStream>( //
+            context.db_context,
+            max_data_version,
+            enable_clean_read,
+            context.hash_salt,
+            file,
+            read_columns,
+            handle_range,
+            filter,
+            IdSetPtr{}));
+    }
+    return std::make_shared<ConcatSkippableBlockInputStream>(streams);
+}
+
+
+
 } // namespace DM
 } // namespace DB

@@ -255,9 +255,10 @@ bool Segment::write(DMContext & dm_context, const HandleRange & delete_range)
 SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool is_update) const
 {
     auto delta_snap = delta->createSnapshot(dm_context, is_update);
-    if (!delta_snap)
+    auto stable_snap = stable->createSnapshot();
+    if (!delta_snap || !stable_snap)
         return {};
-    return std::make_shared<SegmentSnapshot>(delta_snap, stable);
+    return std::make_shared<SegmentSnapshot>(delta_snap, stable_snap);
 }
 
 BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_context,
@@ -519,7 +520,7 @@ SegmentPair Segment::split(DMContext & dm_context) const
     return segment_pair;
 }
 
-Handle Segment::getSplitPointFast(DMContext & dm_context, const StableValueSpacePtr & stable_snap) const
+Handle Segment::getSplitPointFast(DMContext & dm_context, const StableSnapshotPtr & stable_snap) const
 {
     // FIXME: this method does not consider invalid packs in stable dmfiles.
 
@@ -1083,7 +1084,7 @@ SkippableBlockInputStreamPtr Segment::getPlacedStream(const DMContext &         
                                                       const ColumnDefines &       read_columns,
                                                       const HandleRange &         handle_range,
                                                       const RSOperatorPtr &       filter,
-                                                      const StableValueSpacePtr & stable_snap,
+                                                      const StableSnapshotPtr & stable_snap,
                                                       DeltaSnapshotPtr &          delta_snap,
                                                       const IndexIterator &       delta_index_begin,
                                                       const IndexIterator &       delta_index_end,
@@ -1103,7 +1104,7 @@ SkippableBlockInputStreamPtr Segment::getPlacedStream(const DMContext &         
 }
 
 DeltaIndexPtr
-Segment::ensurePlace(const DMContext & dm_context, const StableValueSpacePtr & stable_snap, DeltaSnapshotPtr & delta_snap) const
+Segment::ensurePlace(const DMContext & dm_context, const StableSnapshotPtr & stable_snap, DeltaSnapshotPtr & delta_snap) const
 {
     // Synchronize between read/read threads.
     std::scoped_lock lock(read_read_mutex);
@@ -1181,7 +1182,7 @@ Segment::ensurePlace(const DMContext & dm_context, const StableValueSpacePtr & s
 
 template <bool skippable_place>
 void Segment::placeUpsert(const DMContext &           dm_context,
-                          const StableValueSpacePtr & stable_snap,
+                          const StableSnapshotPtr & stable_snap,
                           DeltaSnapshotPtr &          delta_snap,
                           size_t                      delta_value_space_offset,
                           Block &&                    block,
@@ -1219,7 +1220,7 @@ void Segment::placeUpsert(const DMContext &           dm_context,
 
 template <bool skippable_place>
 void Segment::placeDelete(const DMContext &           dm_context,
-                          const StableValueSpacePtr & stable_snap,
+                          const StableSnapshotPtr & stable_snap,
                           DeltaSnapshotPtr &          delta_snap,
                           const HandleRange &         delete_range,
                           DeltaTree &                 update_delta_tree) const
