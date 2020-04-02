@@ -76,7 +76,7 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
     String database_engine_name;
     if (!create.storage)
     {
-        database_engine_name = "Ordinary"; /// Default database engine.
+        database_engine_name = "TiFlash"; /// Default database engine.
         auto engine = std::make_shared<ASTFunction>();
         engine->name = database_engine_name;
         auto storage = std::make_shared<ASTStorage>();
@@ -102,7 +102,9 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
 
     /// Create directories for tables metadata.
     String path = context.getPath();
-    String metadata_path = path + "metadata/" + database_name_escaped + "/";
+    // The directory for storing all tables' metadata sql file for this database.
+    // For tiflash, we store all tables' metadata sql file in the same directory.
+    String metadata_path = path + "metadata/";
     Poco::File(metadata_path).createDirectory();
 
     DatabasePtr database = DatabaseFactory::get(database_engine_name, database_name, metadata_path, context);
