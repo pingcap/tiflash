@@ -327,8 +327,6 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         }
     }
 
-    LOG_INFO(log, "dag execution region count: " << dag.getRegions().size());
-
     if (pipeline.streams.empty())
     {
         pipeline.streams.emplace_back(std::make_shared<NullBlockInputStream>(storage->getSampleBlockForColumns(required_columns)));

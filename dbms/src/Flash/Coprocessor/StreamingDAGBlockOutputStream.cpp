@@ -13,7 +13,7 @@ extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 StreamingDAGBlockOutputStream::StreamingDAGBlockOutputStream(::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_,
-    Int64 records_per_chunk_, tipb::EncodeType encode_type_, std::vector<tipb::FieldType> result_field_types_, Block && header_)
+    Int64 records_per_chunk_, tipb::EncodeType encode_type_, std::vector<tipb::FieldType> result_field_types_, Block header_)
     : writer(writer_),
       result_field_types(std::move(result_field_types_)),
       header(std::move(header_)),

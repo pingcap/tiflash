@@ -7,9 +7,8 @@
 #include <kvproto/coprocessor.pb.h>
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
+#include <Flash/CoprocessorHandler.h>
 #include <grpcpp/server_context.h>
-
-#include "CoprocessorHandler.h"
 
 namespace DB
 {

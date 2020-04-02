@@ -1,6 +1,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Core/Types.h>
 #include <Flash/BatchCommandsHandler.h>
+#include <Flash/BatchCoprocessorHandler.h>
 #include <Flash/CoprocessorHandler.h>
 #include <Flash/FlashService.h>
 #include <Interpreters/Context.h>
@@ -49,7 +50,8 @@ grpc::Status FlashService::Coprocessor(
     return ret;
 }
 
-::grpc::Status FlashService:: BatchCoprocessor(::grpc::ServerContext* grpc_context, const ::coprocessor::BatchRequest* request, ::grpc::ServerWriter< ::coprocessor::BatchResponse>* writer)
+::grpc::Status FlashService::BatchCoprocessor(::grpc::ServerContext * grpc_context, const ::coprocessor::BatchRequest * request,
+    ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer)
 {
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling batch coprocessor request: " << request->DebugString());
 

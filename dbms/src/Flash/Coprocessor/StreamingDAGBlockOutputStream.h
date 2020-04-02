@@ -21,7 +21,7 @@ class StreamingDAGBlockOutputStream : public IBlockOutputStream
 {
 public:
     StreamingDAGBlockOutputStream(::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_, Int64 records_per_chunk_,
-        tipb::EncodeType encodeType_, std::vector<tipb::FieldType> result_field_types, Block && header_);
+        tipb::EncodeType encodeType_, std::vector<tipb::FieldType> result_field_types, Block header_);
 
     Block getHeader() const override { return header; }
     void write(const Block & block) override;
