@@ -277,10 +277,6 @@ void applyAlter(ColumnDefines &               table_columns,
             }
         }
     }
-    else if (command.type == AlterCommand::TOMBSTONE || command.type == AlterCommand::RECOVER)
-    {
-        // Nothing to do.
-    }
     else
     {
         LOG_WARNING(log, __PRETTY_FUNCTION__ << " receive unknown alter command, type: " << DB::toString(static_cast<Int32>(command.type)));
