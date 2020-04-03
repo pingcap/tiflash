@@ -31,7 +31,7 @@ public:
     static const String LIMIT_NAME;
 
     DAGQuerySource(Context & context_, DAGContext & dag_context_, const std::unordered_map<RegionID, RegionInfo> & regions,
-        const tipb::DAGRequest & dag_request_, const bool retry_exception_ = false);
+        const tipb::DAGRequest & dag_request_, const bool is_batch_cop_ = false);
 
     std::tuple<std::string, ASTPtr> parse(size_t max_query_size) override;
     String str(size_t max_query_size) override;
@@ -85,7 +85,7 @@ public:
 
     const std::unordered_map<RegionID, RegionInfo> & getRegions() const { return regions; }
 
-    bool getRetryException() const { return retry_exception; }
+    bool isBatchCop() const { return is_batch_cop; }
 
 protected:
     void assertValid(Int32 index, const String & name) const
@@ -120,7 +120,7 @@ protected:
 
     ASTPtr ast;
 
-    const bool retry_exception;
+    const bool is_batch_cop;
 };
 
 } // namespace DB

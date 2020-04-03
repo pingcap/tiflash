@@ -33,7 +33,7 @@
 #include <Storages/Transaction/Types.h>
 #include <pingcap/coprocessor/Client.h>
 
-#include "InterpreterDAGHelper.hpp"
+#include <Flash/Coprocessor/InterpreterDAGHelper.hpp>
 
 namespace DB
 {
@@ -109,35 +109,14 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
             auto pair = storage->getColumns().getPhysical(handle_column_name);
             source_columns.emplace_back(std::move(pair));
             is_ts_column.push_back(false);
-            handle_col_id = i;
             continue;
         }
 
         String name = storage->getTableInfo().getColumnName(cid);
         required_columns.push_back(name);
-        if (name == handle_column_name)
-            handle_col_id = i;
         auto pair = storage->getColumns().getPhysical(name);
         source_columns.emplace_back(std::move(pair));
         is_ts_column.push_back(ci.tp() == TiDB::TypeTimestamp);
-    }
-
-
-    if (handle_col_id == DB::TiDBPkColumnID)
-        handle_col_id = required_columns.size();
-
-    bool has_handle_column = (handle_col_id != (Int32)required_columns.size());
-
-
-    if (filter_on_handle && !has_handle_column)
-    {
-        // if need to add filter on handle column, and
-        // the handle column is not selected in ts, add
-        // the handle column
-        required_columns.push_back(handle_column_name);
-        auto pair = storage->getColumns().getPhysical(handle_column_name);
-        source_columns.push_back(pair);
-        is_ts_column.push_back(false);
     }
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
@@ -146,10 +125,9 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     {
         // if the dag request does not contain agg, then the final output is
         // based on the output of table scan
-        int extra_col_size = (filter_on_handle && !has_handle_column) ? 1 : 0;
         for (auto i : dag.getDAGRequest().output_offsets())
         {
-            if (i >= required_columns.size() - extra_col_size)
+            if (i >= required_columns.size())
             {
                 // array index out of bound
                 throw Exception("Output offset index is out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
@@ -194,7 +172,7 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         throw Exception("Dag Request does not have region to read. ", ErrorCodes::COP_BAD_DAG_REQUEST);
     }
 
-    if (!dag.getRetryException())
+    if (!dag.isBatchCop())
     {
         if (auto [info_retry, status] = MakeRegionQueryInfos(dag.getRegions(), {}, tmt, *query_info.mvcc_query_info, table_id); info_retry)
             throw RegionException({(*info_retry).begin()->first}, status);
