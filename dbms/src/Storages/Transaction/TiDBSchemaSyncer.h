@@ -94,6 +94,16 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         return true;
     }
 
+    TiDB::DBInfoPtr getDBInfoByName(const String & database_name) override
+    {
+        std::lock_guard<std::mutex> lock(schema_mutex);
+
+        auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) { return pair.second->name == database_name; });
+        if (it == databases.end())
+            return nullptr;
+        return it->second;
+    }
+
     bool tryLoadSchemaDiffs(Getter & getter, Int64 version, Context & context)
     {
         if (isTooOldSchema(cur_version, version))

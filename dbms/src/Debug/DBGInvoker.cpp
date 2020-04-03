@@ -8,6 +8,7 @@
 #include <Debug/dbgFuncMockTiDBTable.h>
 #include <Debug/dbgFuncRegion.h>
 #include <Debug/dbgFuncSchema.h>
+#include <Debug/dbgFuncSchemaName.h>
 #include <Parsers/ASTLiteral.h>
 
 #include <cstring>
@@ -91,6 +92,10 @@ DBGInvoker::DBGInvoker()
     regSchemafulFunc("mock_dag", dbgFuncMockDAG);
 
     regSchemalessFunc("region_mock_ingest_sst", dbgFuncIngestSST);
+
+    regSchemalessFunc("reverse_database", dbgFuncReverseDatabase);
+    regSchemalessFunc("reverse_table", dbgFuncReverseTable);
+    regSchemafulFunc("reverse_query", dbgFuncReverseQuery);
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)
