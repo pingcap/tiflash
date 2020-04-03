@@ -888,7 +888,7 @@ static void updateDeltaMergeTableCreateStatement(            //
     const ColumnsDescription & columns,
     const OrderedNameSet & hidden_columns,                                                         //
     const OptionTableInfoConstRef table_info_from_tidb, const ColumnDefines & store_table_columns, //
-    bool tombstone, const Context & context);
+    const std::optional<bool> tombstone, const Context & context);
 
 void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
     const String & database_name,
@@ -902,6 +902,8 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
     cols_drop_forbidden.insert(EXTRA_HANDLE_COLUMN_NAME);
     cols_drop_forbidden.insert(VERSION_COLUMN_NAME);
     cols_drop_forbidden.insert(TAG_COLUMN_NAME);
+
+    std::optional<bool> tombstone = std::nullopt;
 
     for (const auto & command : commands)
     {
@@ -920,11 +922,11 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
         }
         else if (command.type == AlterCommand::TOMBSTONE)
         {
-            setTombstone(true);
+            tombstone = true;
         }
         else if (command.type == AlterCommand::RECOVER)
         {
-            setTombstone(false);
+            tombstone = false;
         }
     }
 
@@ -957,8 +959,9 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
     // after update `new_columns` and store's table columns, we need to update create table statement,
     // so that we can restore table next time.
     updateDeltaMergeTableCreateStatement(
-        database_name, table_name_, new_columns, hidden_columns, table_info, store->getTableColumns(), isTombstone(), context);
+        database_name, table_name_, new_columns, hidden_columns, table_info, store->getTableColumns(), tombstone, context);
     setColumns(std::move(new_columns));
+    setTombstone(tombstone.value());
 }
 
 String StorageDeltaMerge::getName() const { return MutableSupport::delta_tree_storage_name; }
@@ -1002,7 +1005,7 @@ void updateDeltaMergeTableCreateStatement(                   //
     const ColumnsDescription & columns,
     const OrderedNameSet & hidden_columns,                                                         //
     const OptionTableInfoConstRef table_info_from_tidb, const ColumnDefines & store_table_columns, //
-    bool tombstone, const Context & context)
+    const std::optional<bool> tombstone, const Context & context)
 {
     /// Filter out hidden columns in the `create table statement`
     ColumnsDescription columns_without_hidden;
@@ -1039,7 +1042,7 @@ void updateDeltaMergeTableCreateStatement(                   //
             literal = std::make_shared<ASTLiteral>(Field(table_info_from_tidb->get().serialize()));
         else
             literal = std::make_shared<ASTLiteral>(Field(table_info_from_store.serialize()));
-        auto tombstone_ast = std::make_shared<ASTLiteral>(Field(UInt64(tombstone)));
+        auto tombstone_ast = std::make_shared<ASTLiteral>(Field(UInt64(tombstone.value())));
         auto & storage_ast = typeid_cast<ASTStorage &>(ast);
         auto & args = typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments);
         if (args.children.size() == 1)

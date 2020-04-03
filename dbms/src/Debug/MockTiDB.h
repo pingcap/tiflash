@@ -32,7 +32,7 @@ public:
         Table(const String & database_name, DatabaseID database_id, const String & table_name, TiDB::TableInfo && table_info);
 
         TableID id() { return table_info.id; }
-        DatabaseID db_id() { return database_id; }
+        DatabaseID dbID() { return database_id; }
 
         ColumnID allocColumnID() { return ++col_id; }
 
