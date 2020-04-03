@@ -77,15 +77,12 @@ AlterCommand newRenameColCommand(const String & old_col, const String & new_col,
     return command;
 }
 
-inline std::vector<AlterCommands> detectSchemaChanges(
-    Logger * log, Context & context, const TableInfo & table_info, const TableInfo & orig_table_info)
+inline AlterCommands detectSchemaChanges(Logger * log, Context & context, const TableInfo & table_info, const TableInfo & orig_table_info)
 {
-    std::vector<AlterCommands> result;
+    AlterCommands result;
 
     // add drop commands
     {
-        AlterCommands drop_commands;
-
         /// Detect dropped columns.
         for (const auto & orig_column_info : orig_table_info.columns)
         {
@@ -101,11 +98,10 @@ inline std::vector<AlterCommands> detectSchemaChanges(
                 // Drop column with old name.
                 command.column_name = orig_column_info.name;
                 command.column_id = orig_column_info.id;
-                drop_commands.emplace_back(std::move(command));
+                result.emplace_back(std::move(command));
                 GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_drop_column).Increment();
             }
         }
-        result.push_back(drop_commands);
     }
 
     {
@@ -131,17 +127,14 @@ inline std::vector<AlterCommands> detectSchemaChanges(
         typename Resolver::NamePairs rename_result = Resolver().resolve(std::move(rename_map));
         for (const auto & rename_pair : rename_result)
         {
-            AlterCommands rename_commands;
-            rename_commands.push_back(
+            result.emplace_back(
                 newRenameColCommand(rename_pair.first.name, rename_pair.second.name, rename_pair.second.id, orig_table_info));
-            result.push_back(rename_commands);
             GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_rename_column).Increment();
         }
     }
 
     // alter commands
     {
-        AlterCommands alter_commands;
         /// Detect type changed columns.
         for (const auto & orig_column_info : orig_table_info.columns)
         {
@@ -161,15 +154,13 @@ inline std::vector<AlterCommands> detectSchemaChanges(
                 command.type = AlterCommand::MODIFY_COLUMN;
                 // Alter column with new column info
                 setAlterCommandColumn(log, command, *column_info);
-                alter_commands.emplace_back(std::move(command));
+                result.emplace_back(std::move(command));
                 GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_alter_column_tp).Increment();
             }
         }
-        result.push_back(alter_commands);
     }
 
     {
-        AlterCommands add_commands;
         /// Detect new columns.
         for (const auto & column_info : table_info.columns)
         {
@@ -184,12 +175,10 @@ inline std::vector<AlterCommands> detectSchemaChanges(
                 command.type = AlterCommand::ADD_COLUMN;
                 setAlterCommandColumn(log, command, column_info);
 
-                add_commands.emplace_back(std::move(command));
+                result.emplace_back(std::move(command));
                 GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_add_column).Increment();
             }
         }
-
-        result.push_back(add_commands);
     }
 
     return result;
@@ -200,33 +189,38 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
 {
     LOG_INFO(log, "Altering table " << name_mapper.displayCanonicalName(*db_info, *table_info));
 
-    /// Update schema version.
-    table_info->schema_version = target_version;
-
     /// Detect schema changes.
     auto orig_table_info = storage->getTableInfo();
-    auto commands_vec = detectSchemaChanges(log, context, *table_info, orig_table_info);
+    auto alter_commands = detectSchemaChanges(log, context, *table_info, orig_table_info);
+    if (alter_commands.empty())
+    {
+        LOG_INFO(
+            log, "No schema change detected for table " << name_mapper.displayCanonicalName(*db_info, *table_info) << ", not altering");
+        return;
+    }
 
     std::stringstream ss;
     ss << "Detected schema changes: " << name_mapper.displayCanonicalName(*db_info, *table_info) << "\n";
-    for (const auto & alter_commands : commands_vec)
-        for (const auto & command : alter_commands)
-        {
-            if (command.type == AlterCommand::ADD_COLUMN)
-                ss << "ADD COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
-            else if (command.type == AlterCommand::DROP_COLUMN)
-                ss << "DROP COLUMN " << command.column_name << ", ";
-            else if (command.type == AlterCommand::MODIFY_COLUMN)
-                ss << "MODIFY COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
-            else if (command.type == AlterCommand::RENAME_COLUMN)
-                ss << "RENAME COLUMN from " << command.column_name << " to " << command.new_column_name << ", ";
-        }
-
+    for (const auto & command : alter_commands)
+    {
+        if (command.type == AlterCommand::ADD_COLUMN)
+            ss << "ADD COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
+        else if (command.type == AlterCommand::DROP_COLUMN)
+            ss << "DROP COLUMN " << command.column_name << ", ";
+        else if (command.type == AlterCommand::MODIFY_COLUMN)
+            ss << "MODIFY COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
+        else if (command.type == AlterCommand::RENAME_COLUMN)
+            ss << "RENAME COLUMN from " << command.column_name << " to " << command.new_column_name << ", ";
+    }
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": " << ss.str());
 
-    for (const auto & alter_commands : commands_vec)
-        if (!alter_commands.empty())
-            storage->alterFromTiDB(alter_commands, name_mapper.mapDatabaseName(*db_info), *table_info, name_mapper, context);
+    /// Update metadata, through calling alterFromTiDB.
+    // Using copy of original table info with updated columns instead of using new_table_info directly,
+    // so that other changes (RENAME commands) won't be saved.
+    // Also, updating schema_version as altering column is structural.
+    orig_table_info.columns = table_info->columns;
+    orig_table_info.schema_version = target_version;
+    storage->alterFromTiDB(alter_commands, name_mapper.mapDatabaseName(*db_info), orig_table_info, name_mapper, context);
 
     LOG_INFO(log, "Altered table " << name_mapper.displayCanonicalName(*db_info, *table_info));
 }
@@ -412,14 +406,18 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(TiDB::DBInfoPtr db_in
         "Applying partition changes " << name_mapper.displayCanonicalName(*db_info, *table_info) << " old: " << orig_part_ids_str
                                       << " new: " << new_part_ids_str);
 
-    /// Update schema version.
-    table_info->schema_version = target_version;
-
     if (orig_part_id_set == new_part_id_set)
     {
         LOG_INFO(log, "No partition changes " << name_mapper.displayCanonicalName(*db_info, *table_info));
         return;
     }
+
+    /// Create new table info based on original table info.
+    // Using copy of original table info with updated table name instead of using new_table_info directly,
+    // so that other changes (ALTER/RENAME commands) won't be saved.
+    // Besides, no need to update schema_version as partition change is not structural.
+    auto updated_table_info = orig_table_info;
+    updated_table_info.partition = table_info->partition;
 
     /// Apply changes to physical tables.
     for (auto orig_def : orig_defs)
@@ -429,18 +427,17 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(TiDB::DBInfoPtr db_in
             applyDropPhysicalTable(name_mapper.mapDatabaseName(*db_info), orig_def.id);
         }
     }
-
     for (auto new_def : new_defs)
     {
         if (orig_part_id_set.count(new_def.id) == 0)
         {
-            auto part_table_info = table_info->producePartitionTableInfo(new_def.id, name_mapper);
+            auto part_table_info = updated_table_info.producePartitionTableInfo(new_def.id, name_mapper);
             applyCreatePhysicalTable(db_info, part_table_info);
         }
     }
 
     /// Apply new table info to logical table.
-    storage->alterFromTiDB(AlterCommands{}, name_mapper.mapDatabaseName(*db_info), *table_info, name_mapper, context);
+    storage->alterFromTiDB(AlterCommands{}, name_mapper.mapDatabaseName(*db_info), updated_table_info, name_mapper, context);
 
     LOG_INFO(log, "Applied partition changes " << name_mapper.displayCanonicalName(*db_info, *table_info));
 }
@@ -527,10 +524,10 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
         InterpreterRenameQuery(rename, context).execute();
     }
 
-    /// Update metadata under new database, through calling alterFromTiDB.
+    /// Update metadata, through calling alterFromTiDB.
     // Using copy of original table info with updated table name instead of using new_table_info directly,
     // so that other changes (ALTER commands) won't be saved.
-    // Besides, no need to update schema_version as table name is not a structural change.
+    // Besides, no need to update schema_version as table name is not structural.
     auto updated_table_info = storage->getTableInfo();
     updated_table_info.name = new_table_info->name;
     storage->alterFromTiDB(AlterCommands{}, name_mapper.mapDatabaseName(*new_db_info), updated_table_info, name_mapper, context);
@@ -701,10 +698,12 @@ void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(DBInfoPtr db_in
         if (auto storage = tmt_context.getStorages().get(table_info->id).get(); storage)
         {
             if (!storage->isTombstone())
-                // TODO: Is this an error?
-                LOG_WARNING(log,
+            {
+                LOG_DEBUG(log,
                     "Trying to create table " << name_mapper.displayCanonicalName(*db_info, *table_info)
                                               << " but it already exists and is not tombstoned");
+                return;
+            }
 
             LOG_DEBUG(log, "Recovering table " << name_mapper.displayCanonicalName(*db_info, *table_info));
             AlterCommands commands;
@@ -771,6 +770,8 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateLogicalTable(TiDB::DBInfoPtr 
         }
     }
 
+    // Create logical table at last, only logical table creation will be treated as "complete".
+    // Intermediate failure will hide the logical table creation so that schema syncing when restart will re-create all (despite some physical tables may have created).
     applyCreatePhysicalTable(db_info, table_info);
 }
 
@@ -822,6 +823,9 @@ void SchemaBuilder<Getter, NameMapper>::applyDropTable(DBInfoPtr db_info, TableI
             applyDropPhysicalTable(name_mapper.mapDatabaseName(*db_info), part_def.id);
         }
     }
+
+    // Drop logical table at last, only logical table drop will be treated as "complete".
+    // Intermediate failure will hide the logical table drop so that schema syncing when restart will re-drop all (despite some physical tables may have dropped).
     applyDropPhysicalTable(name_mapper.mapDatabaseName(*db_info), table_info.id);
 }
 
@@ -855,24 +859,29 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
             LOG_DEBUG(log, "Table " << name_mapper.displayCanonicalName(*db, *table) << " syncing during sync all schemas");
             /// Record for further detecting tables to drop.
             table_set.emplace(table->id);
+            if (table->isLogicalPartitionTable())
+            {
+                std::for_each(table->partition.definitions.begin(), table->partition.definitions.end(), [&table_set](const auto & def) {
+                    table_set.emplace(def.id);
+                });
+            }
+
             auto storage = tmt_context.getStorages().get(table->id);
             if (storage == nullptr)
             {
                 /// Create if not exists.
                 applyCreateLogicalTable(db, table);
+                storage = tmt_context.getStorages().get(table->id);
             }
-            else
+            if (table->isLogicalPartitionTable())
             {
-                if (table->isLogicalPartitionTable())
-                {
-                    /// Apply partition diff if needed.
-                    applyPartitionDiff(db, table, storage);
-                }
-                /// Rename if needed.
-                applyRenameLogicalTable(db, table, storage);
-                /// Alter if needed.
-                applyAlterLogicalTable(db, table, storage);
+                /// Apply partition diff if needed.
+                applyPartitionDiff(db, table, storage);
             }
+            /// Rename if needed.
+            applyRenameLogicalTable(db, table, storage);
+            /// Alter if needed.
+            applyAlterLogicalTable(db, table, storage);
             LOG_DEBUG(log, "Table " << name_mapper.displayCanonicalName(*db, *table) << " synced during sync all schemas");
         }
         LOG_DEBUG(log, "Database " << name_mapper.displayDatabaseName(*db) << " synced during sync all schemas");
