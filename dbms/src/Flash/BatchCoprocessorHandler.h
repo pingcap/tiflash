@@ -8,6 +8,7 @@
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 #include <Flash/CoprocessorHandler.h>
+#include <grpcpp/impl/codegen/sync_stream.h>
 #include <grpcpp/server_context.h>
 
 namespace DB
