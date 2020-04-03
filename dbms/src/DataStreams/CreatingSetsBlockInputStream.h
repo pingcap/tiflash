@@ -1,11 +1,14 @@
 #pragma once
 
-#include <Poco/Logger.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Interpreters/ExpressionAnalyzer.h>    /// SubqueriesForSets
+#include <Interpreters/ExpressionAnalyzer.h> /// SubqueriesForSets
+#include <Poco/Logger.h>
 
 
-namespace Poco { class Logger; }
+namespace Poco
+{
+class Logger;
+}
 
 namespace DB
 {
@@ -18,10 +21,11 @@ class CreatingSetsBlockInputStream : public IProfilingBlockInputStream
 {
 public:
     CreatingSetsBlockInputStream(
-        const BlockInputStreamPtr & input,
-        const SubqueriesForSets & subqueries_for_sets_,
-        const SizeLimits & network_transfer_limits,
-        std::shared_ptr<std::mutex> create_mutex_ptr_ = nullptr);
+        const BlockInputStreamPtr & input, const SubqueriesForSets & subqueries_for_sets_, const SizeLimits & network_transfer_limits);
+
+    CreatingSetsBlockInputStream(const BlockInputStreamPtr & input,
+        std::vector<SubqueriesForSets> && subqueries_for_sets_list_,
+        const SizeLimits & network_transfer_limits);
 
     String getName() const override { return "CreatingSets"; }
 
@@ -35,12 +39,12 @@ protected:
     void readPrefixImpl() override;
 
 private:
-    SubqueriesForSets subqueries_for_sets;
+    void init(const BlockInputStreamPtr & input);
+
+    std::vector<SubqueriesForSets> subqueries_for_sets_list;
     bool created = false;
 
     SizeLimits network_transfer_limits;
-
-    std::shared_ptr<std::mutex> create_mutex_ptr;
 
     size_t rows_to_transfer = 0;
     size_t bytes_to_transfer = 0;
@@ -49,8 +53,7 @@ private:
     Logger * log = &Logger::get("CreatingSetsBlockInputStream");
 
     void createAll();
-    void createAllWithoutLock();
     void createOne(SubqueryForSet & subquery);
 };
 
-}
+} // namespace DB

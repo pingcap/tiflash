@@ -1,6 +1,7 @@
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/ConcatBlockInputStream.h>
+#include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/LimitBlockInputStream.h>
@@ -29,6 +30,8 @@
 #include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <Storages/Transaction/Types.h>
+
+#include "StreamingDAGBlockOutputStream.h"
 
 namespace DB
 {
@@ -919,24 +922,24 @@ void InterpreterDAG::executeUnion(Pipeline & pipeline)
     }
 }
 
-BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block)
+BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block, std::vector<SubqueriesForSets> & subqueriesForSets)
 {
     if (!query_block.children.empty())
     {
         std::vector<BlockInputStreams> input_streams_vec;
         for (auto & child : query_block.children)
         {
-            BlockInputStreams child_streams = executeQueryBlock(*child);
+            BlockInputStreams child_streams = executeQueryBlock(*child, subqueriesForSets);
             input_streams_vec.push_back(child_streams);
         }
         DAGQueryBlockInterpreter query_block_interpreter(
-            context, input_streams_vec, query_block, keep_session_timezone_info, dag.getDAGRequest(), dag.getAST(), dag);
+            context, input_streams_vec, query_block, keep_session_timezone_info, dag.getDAGRequest(), dag.getAST(), dag, subqueriesForSets);
         return query_block_interpreter.execute();
     }
     else
     {
         DAGQueryBlockInterpreter query_block_interpreter(
-            context, {}, query_block, keep_session_timezone_info, dag.getDAGRequest(), dag.getAST(), dag);
+            context, {}, query_block, keep_session_timezone_info, dag.getDAGRequest(), dag.getAST(), dag, subqueriesForSets);
         return query_block_interpreter.execute();
     }
 }
@@ -946,12 +949,25 @@ BlockIO InterpreterDAG::execute()
     /// region_info should based on the source executor, however
     /// tidb does not support multi-table dag request yet, so
     /// it is ok to use the same region_info for the whole dag request
-    BlockInputStreams streams = executeQueryBlock(*dag.getQueryBlock());
+    std::vector<SubqueriesForSets> subqueriesForSets;
+    BlockInputStreams streams = executeQueryBlock(*dag.getQueryBlock(), subqueriesForSets);
 
     Pipeline pipeline;
     pipeline.streams = streams;
 
+    if (dag.writer->writer != nullptr)
+    {
+        for (auto & stream : pipeline.streams)
+            stream = std::make_shared<StreamingDAGBlockInputStream>(stream, dag.writer, context.getSettings().dag_records_per_chunk,
+                dag.getEncodeType(), dag.getResultFieldTypes(), stream->getHeader());
+    }
     executeUnion(pipeline);
+    if (!subqueriesForSets.empty())
+    {
+        const Settings & settings = context.getSettingsRef();
+        pipeline.firstStream() = std::make_shared<CreatingSetsBlockInputStream>(pipeline.firstStream(), std::move(subqueriesForSets),
+            SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode));
+    }
 
     BlockIO res;
     res.in = pipeline.firstStream();

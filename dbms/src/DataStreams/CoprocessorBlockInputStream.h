@@ -15,7 +15,7 @@ class CoprocessorBlockInputStream : public IProfilingBlockInputStream
     Block getSampleBlock() const
     {
         ColumnsWithTypeAndName columns;
-        for (auto name_and_column : schema)
+        for (auto & name_and_column : schema)
         {
             auto tp = getDataTypeByColumnInfo(name_and_column.second);
             ColumnWithTypeAndName col(tp, name_and_column.first);
@@ -25,10 +25,9 @@ class CoprocessorBlockInputStream : public IProfilingBlockInputStream
     }
 
 public:
-    CoprocessorBlockInputStream(pingcap::kv::Cluster * cluster_, const pingcap::coprocessor::Request & req_, const DAGSchema & schema_,
-        int concurrency, pingcap::kv::StoreType store_type)
-        : req(req_),
-          resp_iter(pingcap::coprocessor::Client::send(cluster_, &req, concurrency, store_type)),
+    CoprocessorBlockInputStream(
+        pingcap::kv::Cluster * cluster_, std::vector<pingcap::coprocessor::copTask> tasks, const DAGSchema & schema_, int concurrency)
+        : resp_iter(std::move(tasks), cluster_, concurrency, &Logger::get("pingcap/coprocessor")),
           schema(schema_),
           sample_block(getSampleBlock()),
           log(&Logger::get("pingcap/coprocessor"))

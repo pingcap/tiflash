@@ -1,9 +1,10 @@
-#include <Interpreters/Set.h>
-#include <Interpreters/Join.h>
-#include <DataStreams/materializeBlock.h>
-#include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
+#include <DataStreams/IBlockOutputStream.h>
+#include <DataStreams/materializeBlock.h>
+#include <Interpreters/Join.h>
+#include <Interpreters/Set.h>
 #include <Storages/IStorage.h>
+
 #include <iomanip>
 
 
@@ -12,27 +13,38 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int SET_SIZE_LIMIT_EXCEEDED;
+extern const int SET_SIZE_LIMIT_EXCEEDED;
 }
 
+CreatingSetsBlockInputStream::CreatingSetsBlockInputStream(const BlockInputStreamPtr & input,
+    std::vector<SubqueriesForSets> && subqueries_for_sets_list_,
+    const SizeLimits & network_transfer_limits)
+    : subqueries_for_sets_list(std::move(subqueries_for_sets_list_)), network_transfer_limits(network_transfer_limits)
+{
+    init(input);
+}
 
 CreatingSetsBlockInputStream::CreatingSetsBlockInputStream(
-    const BlockInputStreamPtr & input,
-    const SubqueriesForSets & subqueries_for_sets_,
-    const SizeLimits & network_transfer_limits,
-    std::shared_ptr<std::mutex> create_mutex_ptr_)
-    : subqueries_for_sets(subqueries_for_sets_),
-      network_transfer_limits(network_transfer_limits),
-      create_mutex_ptr(create_mutex_ptr_)
+    const BlockInputStreamPtr & input, const SubqueriesForSets & subqueries_for_sets, const SizeLimits & network_transfer_limits)
+    : network_transfer_limits(network_transfer_limits)
 {
-    for (auto & elem : subqueries_for_sets)
-    {
-        if (elem.second.source)
-        {
-            children.push_back(elem.second.source);
+    subqueries_for_sets_list.push_back(subqueries_for_sets);
+    init(input);
+}
 
-            if (elem.second.set)
-                elem.second.set->setHeader(elem.second.source->getHeader());
+void CreatingSetsBlockInputStream::init(const BlockInputStreamPtr & input)
+{
+    for (auto & subqueries_for_sets : subqueries_for_sets_list)
+    {
+        for (auto & elem : subqueries_for_sets)
+        {
+            if (elem.second.source)
+            {
+                children.push_back(elem.second.source);
+
+                if (elem.second.set)
+                    elem.second.set->setHeader(elem.second.source->getHeader());
+            }
         }
     }
 
@@ -53,10 +65,7 @@ Block CreatingSetsBlockInputStream::readImpl()
 }
 
 
-void CreatingSetsBlockInputStream::readPrefixImpl()
-{
-    createAll();
-}
+void CreatingSetsBlockInputStream::readPrefixImpl() { createAll(); }
 
 
 Block CreatingSetsBlockInputStream::getTotals()
@@ -70,46 +79,33 @@ Block CreatingSetsBlockInputStream::getTotals()
 }
 
 
-void CreatingSetsBlockInputStream::createAllWithoutLock()
+void CreatingSetsBlockInputStream::createAll()
 {
     if (!created)
     {
-        for (auto & elem : subqueries_for_sets)
+        for (auto & subqueries_for_sets : subqueries_for_sets_list)
         {
-            if (elem.second.source) /// There could be prepared in advance Set/Join - no source is specified for them.
+            for (auto & elem : subqueries_for_sets)
             {
-                if (isCancelledOrThrowIfKilled())
-                    return;
+                if (elem.second.source) /// There could be prepared in advance Set/Join - no source is specified for them.
+                {
+                    if (isCancelledOrThrowIfKilled())
+                        return;
 
-                createOne(elem.second);
+                    createOne(elem.second);
+                }
             }
         }
 
         created = true;
     }
 }
-void CreatingSetsBlockInputStream::createAll()
-{
-    if (!created)
-    {
-        if (create_mutex_ptr != nullptr)
-        {
-            std::lock_guard<std::mutex> lk(*create_mutex_ptr);
-            createAllWithoutLock();
-        }
-        else
-        {
-            createAllWithoutLock();
-        }
-    }
-}
-
 
 void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
 {
-    LOG_TRACE(log, (subquery.set ? "Creating set. " : "")
-        << (subquery.join ? "Creating join. " : "")
-        << (subquery.table ? "Filling temporary table. " : ""));
+    LOG_TRACE(log,
+        (subquery.set ? "Creating set. " : "") << (subquery.join ? "Creating join. " : "")
+                                               << (subquery.table ? "Filling temporary table. " : ""));
     Stopwatch watch;
 
     BlockOutputStreamPtr table_out;
@@ -154,7 +150,8 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
             rows_to_transfer += block.rows();
             bytes_to_transfer += block.bytes();
 
-            if (!network_transfer_limits.check(rows_to_transfer, bytes_to_transfer, "IN/JOIN external table", ErrorCodes::SET_SIZE_LIMIT_EXCEEDED))
+            if (!network_transfer_limits.check(
+                    rows_to_transfer, bytes_to_transfer, "IN/JOIN external table", ErrorCodes::SET_SIZE_LIMIT_EXCEEDED))
                 done_with_table = true;
         }
 
@@ -205,4 +202,4 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
     }
 }
 
-}
+} // namespace DB
