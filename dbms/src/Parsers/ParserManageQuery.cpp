@@ -18,6 +18,7 @@ bool ParserManageQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserKeyword s_status("STATUS");
     ParserKeyword s_check("CHECK");
     ParserKeyword s_delete_rows("DELETE ROWS");
+    ParserKeyword s_merge_delta("MERGE DELTA");
 
     ParserToken s_dot(TokenType::Dot);
     ParserIdentifier name_p;
@@ -52,6 +53,8 @@ bool ParserManageQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         operation = ManageOperation::Enum::Status;
     else if (s_check.ignore(pos, expected))
         operation = ManageOperation::Enum::Check;
+    else if (s_merge_delta.ignore(pos, expected))
+        operation = ManageOperation::Enum::MergeDelta;
     else if (s_delete_rows.ignore(pos, expected))
     {
         operation = ManageOperation::Enum::DeleteRows;

@@ -305,9 +305,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                     }
 
                     // not null or has no default value, tidb will fill with specific value.
-                    decoded_data.emplace_back(column_info.id,
-                        column_info.hasNoDefaultValueFlag() ? (column_info.hasNotNullFlag() ? GenDefaultField(column_info) : Field())
-                                                            : column_info.defaultValueToField());
+                    decoded_data.emplace_back(column_info.id, column_info.defaultValueToField());
                 }
             }
 

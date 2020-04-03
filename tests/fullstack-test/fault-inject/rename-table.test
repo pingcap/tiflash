@@ -6,12 +6,10 @@ mysql> drop table if exists test.t;
 mysql> create table test.t(a int not null, b int not null);
 mysql> alter table test.t set tiflash replica 1 location labels 'rack', 'host', 'abc'
 
-SLEEP 15
+func> wait_table test t
 
 
 mysql> insert into test.t values (1, 1),(1,2)
-
-SLEEP 15
 
 # ensure table is sync to tiflash
 mysql> select table_schema,table_name,replica_count,location_labels,available from information_schema.tiflash_replica where table_schema='test' and table_name='t';
@@ -31,9 +29,9 @@ mysql> select table_schema,table_name,replica_count,location_labels,available fr
 >> DBGInvoke __enable_fail_point(exception_between_rename_table_metadata_and_data)
 
 mysql> drop table if exists test.t_2;
-mysql> rename table test.t to test.t_2 ;
+mysql> rename table test.t to test.t_2;
 
-SLEEP 15
+func> wait_table test t_2
 
 # After restart, test.t is rename to test.t_2, we can still read data from tiflash
 >> select database,name from system.tables where database='test' and name='t';
