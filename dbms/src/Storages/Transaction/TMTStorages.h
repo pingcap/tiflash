@@ -1,10 +1,10 @@
 #pragma once
 
+#include <Storages/Transaction/Types.h>
+
 #include <memory>
 #include <mutex>
 #include <unordered_map>
-
-#include <Storages/Transaction/Types.h>
 
 namespace DB
 {
@@ -24,7 +24,7 @@ public:
     ManageableStoragePtr get(TableID table_id) const;
     std::unordered_map<TableID, ManageableStoragePtr> getAllStorage() const;
 
-    ManageableStoragePtr getByName(const std::string & db, const std::string & table) const;
+    ManageableStoragePtr getByName(const std::string & db, const std::string & table, bool include_tombstone = true) const;
 
     void remove(TableID table_id);
 
