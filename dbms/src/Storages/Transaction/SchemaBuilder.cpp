@@ -491,7 +491,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
     DBInfoPtr new_db_info, TableInfoPtr new_table_info, ManageableStoragePtr storage)
 {
     auto old_db_name = storage->getDatabaseName();
-    auto old_table_name = storage->getTableInfo().name;
+    const auto & old_table_name = storage->getTableInfo().name;
     if (old_db_name == name_mapper.mapDatabaseName(*new_db_info) && old_table_name == new_table_info->name)
     {
         LOG_DEBUG(log, "Table " << name_mapper.displayCanonicalName(*new_db_info, *new_table_info) << " name identical, not renaming.");
@@ -502,9 +502,6 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
     LOG_INFO(log,
         "Renaming table " << old_db_name << "." << old_table_name << " to "
                           << name_mapper.displayCanonicalName(*new_db_info, *new_table_info));
-
-    /// Update schema version.
-    new_table_info->schema_version = target_version;
 
     if (old_db_name != name_mapper.mapDatabaseName(*new_db_info)
         || storage->getTableName() != name_mapper.mapTableName(*new_table_info) /* this condition only holds for mock tests */)
@@ -531,7 +528,12 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
     }
 
     /// Update metadata under new database, through calling alterFromTiDB.
-    storage->alterFromTiDB(AlterCommands{}, name_mapper.mapDatabaseName(*new_db_info), *new_table_info, name_mapper, context);
+    // Using copy of original table info with updated table name instead of using new_table_info directly,
+    // so that other changes (ALTER commands) won't be saved.
+    // Besides, no need to update schema_version as table name is not a structural change.
+    auto updated_table_info = storage->getTableInfo();
+    updated_table_info.name = new_table_info->name;
+    storage->alterFromTiDB(AlterCommands{}, name_mapper.mapDatabaseName(*new_db_info), updated_table_info, name_mapper, context);
 
     LOG_INFO(log,
         "Renamed table " << old_db_name << "." << old_table_name << " to "
