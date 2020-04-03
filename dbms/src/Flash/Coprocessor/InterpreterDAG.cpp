@@ -236,12 +236,14 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
 
         if (region_retry.size())
         {
-            LOG_DEBUG(log, "Start to retry region (" << ({
+            LOG_DEBUG(log, ({
                 std::stringstream ss;
+                ss << "Start to retry " << region_retry.size() << " regions (";
                 for (auto & r : region_retry)
                     ss << r.first << ",";
+                ss << ")";
                 ss.str();
-            }) << ")");
+            }));
 
             DAGSchema schema;
             ::tipb::DAGRequest dag_req;
@@ -250,38 +252,27 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
                 const auto & table_info = storage->getTableInfo();
                 tipb::Executor * ts_exec = dag_req.add_executors();
                 ts_exec->set_tp(tipb::ExecType::TypeTableScan);
-                ::tipb::TableScan * new_ts = ts_exec->mutable_tbl_scan();
-                new_ts->set_table_id(table_id);
+                *(ts_exec->mutable_tbl_scan()) = ts;
 
-                UInt32 ts_idx = 0;
-                auto sample_block = pipeline.firstStream()->getHeader();
-                for (auto & type_name : sample_block.getColumnsWithTypeAndName())
+                for (int i = 0; i < ts.columns().size(); ++i)
                 {
-                    auto col_id = table_info.getColumnID(type_name.name);
-                    const ::tipb::ColumnInfo * ts_col_info = nullptr;
-                    for (auto & c : ts.columns())
-                    {
-                        if (c.column_id() == col_id)
-                            ts_col_info = &c;
-                    }
+                    const auto & col = ts.columns(i);
+                    auto col_id = col.column_id();
+
                     if (col_id == DB::TiDBPkColumnID)
                     {
                         ColumnInfo ci;
                         ci.tp = TiDB::TypeLongLong;
                         ci.setPriKeyFlag();
                         ci.setNotNullFlag();
-                        schema.emplace_back(std::make_pair(type_name.name, std::move(ci)));
-                        auto tidb_rowid_col = new_ts->add_columns();
-                        tidb_rowid_col->set_column_id(DB::TiDBPkColumnID);
-                        tidb_rowid_col->set_tp(TiDB::TypeLongLong);
+                        schema.emplace_back(std::make_pair(handle_column_name, std::move(ci)));
                     }
                     else
                     {
                         auto & col_info = table_info.getColumnInfo(col_id);
-                        schema.emplace_back(std::make_pair(type_name.name, col_info));
-                        *(new_ts->add_columns()) = *ts_col_info;
+                        schema.emplace_back(std::make_pair(col_info.name, col_info));
                     }
-                    dag_req.add_output_offsets(ts_idx++);
+                    dag_req.add_output_offsets(i);
                 }
                 dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
             }
