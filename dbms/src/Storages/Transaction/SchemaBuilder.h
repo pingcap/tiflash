@@ -34,32 +34,38 @@ private:
     void applyDropSchema(DatabaseID schema_id);
 
     /// Parameter schema_name should be mapped.
-    void applyDropSchemaByName(const String & schema_name);
+    void applyDropSchema(const String & schema_name);
 
     bool applyCreateSchema(DatabaseID schema_id);
 
-    void applyCreateSchemaByDBInfo(TiDB::DBInfoPtr db_info);
+    void applyCreateSchema(TiDB::DBInfoPtr db_info);
 
     void applyCreateTable(TiDB::DBInfoPtr db_info, TableID table_id);
 
-    void applyCreateTableByTableInfo(TiDB::DBInfoPtr db_info, TiDB::TableInfo & table_info);
+    void applyCreateLogicalTable(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info);
 
-    void applyCreateTableOrPartition(TiDB::DBInfoPtr db_info, TiDB::TableInfo & table_info);
+    void applyCreatePhysicalTable(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info);
 
     void applyDropTable(TiDB::DBInfoPtr db_info, TableID table_id);
 
     /// Parameter schema_name should be mapped.
-    void applyDropTableOrPartition(const String & db_name, TableID table_id);
-
-    void applyAlterTable(TiDB::DBInfoPtr db_info, TableID table_id);
-
-    void applyAlterTableOrPartition(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info, ManageableStoragePtr storage);
+    void applyDropPhysicalTable(const String & db_name, TableID table_id);
 
     void applyPartitionDiff(TiDB::DBInfoPtr db_info, TableID table_id);
 
+    void applyPartitionDiff(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info, ManageableStoragePtr storage);
+
+    void applyAlterTable(TiDB::DBInfoPtr db_info, TableID table_id);
+
+    void applyAlterLogicalTable(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info, ManageableStoragePtr storage);
+
+    void applyAlterPhysicalTable(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info, ManageableStoragePtr storage);
+
     void applyRenameTable(TiDB::DBInfoPtr new_db_info, TiDB::TableID table_id);
 
-    void applyRenameTableOrPartition(TiDB::DBInfoPtr new_db_info, const TiDB::TableInfo & new_table_info, ManageableStoragePtr storage);
+    void applyRenameLogicalTable(TiDB::DBInfoPtr new_db_info, TiDB::TableInfoPtr new_table_info, ManageableStoragePtr storage);
+
+    void applyRenamePhysicalTable(TiDB::DBInfoPtr new_db_info, TiDB::TableInfoPtr new_table_info, ManageableStoragePtr storage);
 };
 
 } // namespace DB
