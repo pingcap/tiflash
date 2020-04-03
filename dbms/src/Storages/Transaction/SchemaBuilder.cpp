@@ -872,6 +872,14 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
                 /// Create if not exists.
                 applyCreateLogicalTable(db, table);
                 storage = tmt_context.getStorages().get(table->id);
+                if (storage == nullptr)
+                {
+                    /// This is abnormal as the storage shouldn't be null after creation, the underlying table must already be existing for unknown reason.
+                    LOG_WARNING(log,
+                        "Table " << name_mapper.displayCanonicalName(*db, *table)
+                                 << " not synced because may have been dropped during sync all schemas");
+                    continue;
+                }
             }
             if (table->isLogicalPartitionTable())
             {
