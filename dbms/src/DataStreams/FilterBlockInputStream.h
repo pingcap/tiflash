@@ -37,8 +37,8 @@ public:
 
     ConstantFilterDescription constant_filter_description;
 
-    std::shared_ptr<BloomFilter>  bf;
-    std::vector<UInt64> join_key;
+    std::shared_ptr<BloomFilter>  bfs[100];
+    std::vector<UInt64> join_keys[100];
 };
 
 }

@@ -103,7 +103,7 @@ Block FilterBlockInputStream::readImpl()
 
         expression->execute(res);
 
-        if (constant_filter_description.always_true && !child_filter)
+        if (constant_filter_description.always_true && !child_filter && bfs[0] == nullptr)
             return res;
 
         size_t columns = res.columns();
@@ -111,52 +111,61 @@ Block FilterBlockInputStream::readImpl()
         ColumnPtr column_of_filter = res.safeGetByPosition(filter_column).column;
 
         std::vector<UInt8 > column_of_filter_for_bloom;
-        if (bf != nullptr) {
-            std::vector<ColumnWithTypeAndName > cols;
-            bool canUseBloom = true;
-            for (unsigned i = 0;i < join_key.size();i++) {
-                ColumnWithTypeAndName col = res.safeGetByPosition(join_key[i] + 1);
-                String type = col.type->getName();
-                if (!IsInt(type) && !IsUInt(type) && !IsString(type)) {
-                    canUseBloom = false;
-                    break;
-                }
-                cols.push_back(col);
+        if (bfs[0] != nullptr) {
+            for (unsigned i = 0;i < rows;i++) {
+                column_of_filter_for_bloom.push_back(1);
             }
-            if (canUseBloom) {
-                for (unsigned i = 0;i < rows;i++) {
-                    if (column_of_filter->get64(i) == 0) {
-                        column_of_filter_for_bloom.push_back(0);
-                        continue;
+            for (unsigned bfnum = 0; !join_keys[bfnum].empty() ;bfnum++) {
+                auto join_key = join_keys[bfnum];
+                auto bf = bfs[bfnum];
+
+                std::vector<ColumnWithTypeAndName > cols;
+                bool canUseBloom = true;
+                for (unsigned i = 0;i < join_key.size();i++) {
+                    ColumnWithTypeAndName col = res.safeGetByPosition(join_key[i] + 1);
+                    String type = col.type->getName();
+                    if (!IsInt(type) && !IsUInt(type) && !IsString(type)) {
+                        canUseBloom = false;
+                        break;
                     }
-                    bf->resetHash();
-                    UInt8 flag[1];
-                    flag[0] = 8;
-                    UInt8 tmp[8];
-                    for (unsigned j = 0;j < join_key.size();j++) {
-                        if (IsInt(cols[j].type->getName())) {
-                            flag[0] = 8;
-                            *(UInt64 *)(tmp) = cols[j].column->get64(i);
-                            bf->myhash(flag,1);
-                            bf->myhash(tmp,8);
+                    cols.push_back(col);
+                }
+                if (canUseBloom) {
+                    for (unsigned i = 0;i < rows;i++) {
+                        if (column_of_filter->get64(i) == 0) {
+                            column_of_filter_for_bloom.push_back(0);
+                            continue;
                         }
-                        if (IsUInt(cols[j].type->getName())) {
-                            flag[0] = 9;
-                            *(UInt64 *)(tmp) = cols[j].column->get64(i);
-                            bf->myhash(flag,1);
-                            bf->myhash(tmp,8);
+                        bf->resetHash();
+                        UInt8 flag[1];
+                        flag[0] = 8;
+                        UInt8 tmp[8];
+                        for (unsigned j = 0;j < join_key.size();j++) {
+                            if (IsInt(cols[j].type->getName())) {
+                                flag[0] = 8;
+                                *(UInt64 *)(tmp) = cols[j].column->get64(i);
+                                bf->myhash(flag,1);
+                                bf->myhash(tmp,8);
+                            }
+                            if (IsUInt(cols[j].type->getName())) {
+                                flag[0] = 9;
+                                *(UInt64 *)(tmp) = cols[j].column->get64(i);
+                                bf->myhash(flag,1);
+                                bf->myhash(tmp,8);
+                            }
+                            if (IsString(cols[j].type->getName())) {
+                                flag[0] = 2;
+                                bf->myhash(flag, 1);
+                                auto t = (*cols[j].column)[i].get<String>();
+                                bf->myhash((UInt8 *)(t.c_str()), t.length());
+                            }
                         }
-                        if (IsString(cols[j].type->getName())) {
-                            flag[0] = 2;
-                            bf->myhash(flag, 1);
-                            auto t = (*cols[j].column)[i].get<String>();
-                            bf->myhash((UInt8 *)(t.c_str()), t.length());
+                        if (bf->ProbeU64(bf->sum64())) {
+//                            column_of_filter_for_bloom.push_back(1);
+                        } else {
+                            column_of_filter_for_bloom[i] = 0;
+//                            column_of_filter_for_bloom.push_back(0);
                         }
-                    }
-                    if (bf->ProbeU64(bf->sum64())) {
-                        column_of_filter_for_bloom.push_back(1);
-                    } else {
-                        column_of_filter_for_bloom.push_back(0);
                     }
                 }
             }

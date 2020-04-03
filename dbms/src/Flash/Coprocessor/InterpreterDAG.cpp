@@ -59,16 +59,22 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
         for (auto & condition : dag.getSelection().conditions())
             conditions.push_back(&condition);
         auto tmp = dag.getSelection();
-        if (tmp.has_bloom()) {
-            bf = std::make_shared<BloomFilter>();
-            for (auto & uint64 : dag.getSelection().bloom().bit_set())
-            {
-                bf->PushU64(uint64);
-            }
-            bf->FinishBuild();
-            for (auto & uint64 : dag.getSelection().bloom().col_idx())
-            {
-                join_key.push_back(uint64);
+        if (tmp.bloom_size() != 0) {
+            for (int i = 0;i < tmp.bloom_size();i++) {
+                auto bf_in_dag = tmp.bloom(i);
+                auto one_bf = std::make_shared<BloomFilter>();
+                std::vector<UInt64 > one_join_key;
+                for (auto & uint64 : bf_in_dag.bit_set())
+                {
+                    one_bf->PushU64(uint64);
+                }
+                one_bf->FinishBuild();
+                for (auto & uint64 : bf_in_dag.col_idx())
+                {
+                    one_join_key.push_back(uint64);
+                }
+                bf[i] = one_bf;
+                join_key[i] = one_join_key;
             }
         }
     }
@@ -425,8 +431,13 @@ void InterpreterDAG::executeWhere(Pipeline & pipeline, const ExpressionActionsPt
 {
     pipeline.transform([&](auto & stream) {
         const auto & tmp = std::make_shared<FilterBlockInputStream>(stream, expr, filter_column);
-        (*tmp).bf = bf;
-        (*tmp).join_key = join_key;
+        for (int i = 0;;i++) {
+            if (join_key[i].empty()) {
+                break;
+            }
+            (*tmp).bfs[i] = bf[i];
+            (*tmp).join_keys[i] = join_key[i];
+        }
         stream = tmp;
     });
 }
