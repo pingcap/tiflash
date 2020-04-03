@@ -10,9 +10,9 @@ struct SchemaNameMapper
 {
     virtual ~SchemaNameMapper() = default;
 
-    virtual String mapDatabaseName(const TiDB::DBInfo & db_info) const { return std::to_string(db_info.id); }
+    virtual String mapDatabaseName(const TiDB::DBInfo & db_info) const { return "db_" + std::to_string(db_info.id); }
     virtual String displayDatabaseName(const TiDB::DBInfo & db_info) const { return db_info.name + "(" + std::to_string(db_info.id) + ")"; }
-    virtual String mapTableName(const TiDB::TableInfo & table_info) const { return std::to_string(table_info.id); }
+    virtual String mapTableName(const TiDB::TableInfo & table_info) const { return "t_" + std::to_string(table_info.id); }
     virtual String displayTableName(const TiDB::TableInfo & table_info) const
     {
         return table_info.name + "(" + std::to_string(table_info.id) + ")";

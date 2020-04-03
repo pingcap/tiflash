@@ -861,23 +861,17 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
             }
             else
             {
-                /// Apply partition diff if needed.
-                applyPartitionDiff(db, table, storage);
+                if (table->isLogicalPartitionTable())
+                {
+                    /// Apply partition diff if needed.
+                    applyPartitionDiff(db, table, storage);
+                }
                 /// Rename if needed.
                 applyRenameLogicalTable(db, table, storage);
                 /// Alter if needed.
                 applyAlterLogicalTable(db, table, storage);
             }
             LOG_DEBUG(log, "Table " << name_mapper.displayCanonicalName(*db, *table) << " synced during sync all schemas");
-            //            loadTableOrPartition(db, table);
-            //            if (table->isLogicalPartitionTable())
-            //            {
-            //                for (const auto & part_def : table->partition.definitions)
-            //                {
-            //                    auto part_table_info = table->producePartitionTableInfo(part_def.id, name_mapper);
-            //                    loadTableOrPartition(db, part_table_info);
-            //                }
-            //            }
         }
         LOG_DEBUG(log, "Database " << name_mapper.displayDatabaseName(*db) << " synced during sync all schemas");
     }
