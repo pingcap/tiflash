@@ -365,8 +365,6 @@ void StorageMergeTree::alterInternal(
 
     bool rename_column = false;
 
-    std::optional<bool> tombstone = std::nullopt;
-
     for (const AlterCommand & param : params)
     {
         if (param.type == AlterCommand::MODIFY_PRIMARY_KEY)
@@ -390,11 +388,11 @@ void StorageMergeTree::alterInternal(
         }
         else if (param.type == AlterCommand::TOMBSTONE)
         {
-            tombstone = true;
+            setTombstone(true);
         }
         else if (param.type == AlterCommand::RECOVER)
         {
-            tombstone = false;
+            setTombstone(false);
         }
     }
 
@@ -417,7 +415,7 @@ void StorageMergeTree::alterInternal(
 
     auto table_hard_lock = lockStructureForAlter(__PRETTY_FUNCTION__);
 
-    IDatabase::ASTModifier storage_modifier = [primary_key_is_modified, new_primary_key_ast, table_info, tombstone] (IAST & ast)
+    IDatabase::ASTModifier storage_modifier = [primary_key_is_modified, new_primary_key_ast, table_info, tombstone = isTombstone()] (IAST & ast)
     {
         auto & storage_ast = typeid_cast<ASTStorage &>(ast);
 
@@ -439,13 +437,12 @@ void StorageMergeTree::alterInternal(
             typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments).children.at(2) = literal;
         }
 
-        if (tombstone)
         {
-            auto literal = std::make_shared<ASTLiteral>(Field(table_info->get().serialize()));
+            auto tombstone_ast = std::make_shared<ASTLiteral>(Field(UInt64(tombstone)));
             if (storage_ast.engine->arguments->children.size() == 3)
-                typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments).children.emplace_back(literal);
+                typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments).children.emplace_back(tombstone_ast);
             else
-                typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments).children.at(3) = literal;
+                typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments).children.at(3) = tombstone_ast;
         }
     };
 
@@ -461,8 +458,6 @@ void StorageMergeTree::alterInternal(
     setColumns(std::move(new_columns));
     if (table_info)
         setTableInfo(table_info->get());
-    if (tombstone)
-        setTombstone(tombstone.value());
 
     if (new_primary_key_ast != nullptr)
     {
