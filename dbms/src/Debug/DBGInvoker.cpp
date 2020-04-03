@@ -77,6 +77,7 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("enable_schema_sync_service", dbgFuncEnableSchemaSyncService);
     regSchemalessFunc("refresh_schemas", dbgFuncRefreshSchemas);
     regSchemalessFunc("reset_schemas", dbgFuncResetSchemas);
+    regSchemalessFunc("is_tombstone", dbgFuncIsTombstone);
 
     regSchemalessFunc("region_split", MockRaftCommand::dbgFuncRegionBatchSplit);
     regSchemalessFunc("region_prepare_merge", MockRaftCommand::dbgFuncPrepareMerge);

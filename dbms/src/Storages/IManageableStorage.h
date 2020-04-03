@@ -62,6 +62,7 @@ public:
     void setTombstone(bool tombstone_) { IManageableStorage::tombstone = tombstone_; }
 
     // Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
+    // Once called, table_info is guaranteed to be persisted, regardless commands being empty or not.
     virtual void alterFromTiDB(const AlterCommands & commands, const String & database_name, const TiDB::TableInfo & table_info,
         const SchemaNameMapper & name_mapper, const Context & context)
         = 0;
