@@ -20,6 +20,8 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TypeMapping.h>
 
+#include <boost/algorithm/string/join.hpp>
+
 namespace DB
 {
 
@@ -345,7 +347,7 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(TiDB::DBInfoPtr db_in
     }
 
     auto & tmt_context = context.getTMTContext();
-    auto storage = tmt_context.getStorages().get(table_id).get();
+    auto storage = tmt_context.getStorages().get(table_id);
     if (storage == nullptr)
     {
         throw Exception("miss table in Flash " + std::to_string(table_id), ErrorCodes::DDL_ERROR);
@@ -364,6 +366,20 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(TiDB::DBInfoPtr db_in
     const auto & orig_defs = orig_table_info.partition.definitions;
     const auto & new_defs = table_info->partition.definitions;
 
+    std::vector<String> orig_part_ids, new_part_ids;
+    std::for_each(
+        orig_defs.begin(), orig_defs.end(), [&orig_part_ids](const auto & def) { orig_part_ids.emplace_back(std::to_string(def.id)); });
+    std::for_each(
+        new_defs.begin(), new_defs.end(), [&new_part_ids](const auto & def) { new_part_ids.emplace_back(std::to_string(def.id)); });
+
+    auto orig_part_ids_str = boost::algorithm::join(orig_part_ids, ", ");
+    auto new_part_ids_str = boost::algorithm::join(new_part_ids, ", ");
+
+    LOG_INFO(log,
+        "Applying partition changes " << name_mapper.displayCanonicalName(*db_info, *table_info) << " old: " << orig_part_ids_str
+                                      << " new: " << new_part_ids_str);
+
+    /// Apply changes to physical tables.
     for (auto orig_def : orig_defs)
     {
         auto it = std::find_if(
@@ -384,6 +400,11 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(TiDB::DBInfoPtr db_in
             applyCreateTableOrPartition(db_info, *part_table_info);
         }
     }
+
+    /// Apply new table info to logical table.
+    applyAlterTableOrPartition(db_info, table_info, storage);
+
+    LOG_INFO(log, "Applied partition changes " << name_mapper.displayCanonicalName(*db_info, *table_info));
 }
 
 template <typename Getter, typename NameMapper>
