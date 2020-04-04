@@ -192,7 +192,6 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     {
         std::unordered_map<RegionID, const RegionInfo &> region_retry;
         std::unordered_set<RegionID> force_retry;
-        bool all_region_useless = false;
         for (;;)
         {
             try
@@ -207,10 +206,7 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
                         force_retry.emplace(r.first);
                 }
                 if (query_info.mvcc_query_info->regions_query_info.empty())
-                {
-                    all_region_useless = true;
                     break;
-                }
                 pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
                 break;
             }
@@ -230,9 +226,6 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
                 throw;
             }
         }
-        // TODO: let tidb update region cache and retry.
-        if (all_region_useless)
-            throw Exception("All regions can not be used", ErrorCodes::LOGICAL_ERROR);
 
         if (region_retry.size())
         {
