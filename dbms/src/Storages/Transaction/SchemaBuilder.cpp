@@ -32,6 +32,11 @@ namespace ErrorCodes
 extern const int DDL_ERROR;
 }
 
+bool isReservedDatabase(Context & context, const String & database_name)
+{
+    return context.getTMTContext().getIgnoreDatabases().count(database_name) > 0;
+}
+
 inline void setAlterCommandColumn(Logger * log, AlterCommand & command, const ColumnInfo & column_info)
 {
     command.column_name = column_info.name;
@@ -611,7 +616,7 @@ template <typename Getter, typename NameMapper>
 bool SchemaBuilder<Getter, NameMapper>::applyCreateSchema(DatabaseID schema_id)
 {
     auto db = getter.getDatabase(schema_id);
-    if (db == nullptr || db->name.empty())
+    if (db == nullptr)
     {
         return false;
     }
@@ -624,8 +629,11 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(TiDB::DBInfoPtr db_inf
 {
     GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_create_db).Increment();
     LOG_INFO(log, "Creating database " << name_mapper.displayDatabaseName(*db_info));
+    auto mapped = name_mapper.mapDatabaseName(*db_info);
+    if (isReservedDatabase(context, mapped))
+        throw Exception("Database " + name_mapper.displayDatabaseName(*db_info) + " is reserved", ErrorCodes::DDL_ERROR);
     ASTCreateQuery * create_query = new ASTCreateQuery();
-    create_query->database = name_mapper.mapDatabaseName(*db_info);
+    create_query->database = std::move(mapped);
     create_query->if_not_exists = true;
     ASTPtr ast = ASTPtr(create_query);
     InterpreterCreateQuery interpreter(ast, context);
@@ -982,7 +990,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
     const auto & dbs = context.getDatabases();
     for (auto it = dbs.begin(); it != dbs.end(); it++)
     {
-        if (db_set.count(it->first) == 0 && it->first != "system")
+        if (db_set.count(it->first) == 0 && !isReservedDatabase(context, it->first))
         {
             applyDropSchema(it->first);
             LOG_DEBUG(log, "DB " << it->first << " dropped during sync all schemas");
