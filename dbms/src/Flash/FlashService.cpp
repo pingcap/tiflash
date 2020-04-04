@@ -1,3 +1,4 @@
+#include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Core/Types.h>
 #include <Flash/BatchCommandsHandler.h>
@@ -55,6 +56,10 @@ grpc::Status FlashService::Coprocessor(
 {
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling batch coprocessor request: " << request->DebugString());
 
+    Stopwatch watch;
+    SCOPE_EXIT({
+       GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_batch_cop_dag).Observe(watch.elapsedSeconds());
+   });
     auto [context, status] = createDBContext(grpc_context);
     if (!status.ok())
     {
