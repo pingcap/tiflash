@@ -17,7 +17,7 @@ void dbgFuncMappedDatabase(Context & context, const ASTs & args, DBGInvoker::Pri
 
 // Get the mapped underlying table name of a TiDB table.
 // Usage:
-//   ./storage-client.sh "DBGInvoke mapped_table(database_name, table_name)"
+//   ./storage-client.sh "DBGInvoke mapped_table(database_name, table_name[, qualify = 'true'])"
 void dbgFuncMappedTable(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
 // Run query using mapped table name. Use place holder $d and $t to specify database name and table name in query.
