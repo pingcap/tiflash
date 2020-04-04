@@ -77,12 +77,23 @@ AlterCommand newRenameColCommand(const String & old_col, const String & new_col,
     return command;
 }
 
-inline AlterCommands detectSchemaChanges(Logger * log, Context & context, const TableInfo & table_info, const TableInfo & orig_table_info)
+using ColumnInfos = std::vector<ColumnInfo>;
+using ColumnInfosModifier = std::function<void(ColumnInfos & column_infos)>;
+using SchemaChange = std::pair<AlterCommands, ColumnInfosModifier>;
+using SchemaChanges = std::vector<SchemaChange>;
+
+/// When schema change detected, the modification to original table info must be preserved as well.
+/// With the preserved table info modifications, table info changes along with applying alter commands.
+/// In other words, table info and storage structure (altered by applied alter commands) are always identical,
+/// and intermediate failure won't hide the remaining alter commands.
+inline SchemaChanges detectSchemaChanges(Logger * log, Context & context, const TableInfo & table_info, const TableInfo & orig_table_info)
 {
-    AlterCommands result;
+    SchemaChanges result;
 
     // add drop commands
     {
+        AlterCommands drop_commands;
+        std::unordered_set<ColumnID> column_ids_to_drop;
         /// Detect dropped columns.
         for (const auto & orig_column_info : orig_table_info.columns)
         {
@@ -98,9 +109,19 @@ inline AlterCommands detectSchemaChanges(Logger * log, Context & context, const 
                 // Drop column with old name.
                 command.column_name = orig_column_info.name;
                 command.column_id = orig_column_info.id;
-                result.emplace_back(std::move(command));
+                drop_commands.emplace_back(std::move(command));
+                column_ids_to_drop.emplace(orig_column_info.id);
                 GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_drop_column).Increment();
             }
+        }
+        if (!drop_commands.empty())
+        {
+            result.emplace_back(std::move(drop_commands), [column_ids_to_drop{std::move(column_ids_to_drop)}](ColumnInfos & column_infos) {
+                column_infos.erase(std::remove_if(column_infos.begin(),
+                                       column_infos.end(),
+                                       [&](const auto & column_info) { return column_ids_to_drop.count(column_info.id) > 0; }),
+                    column_infos.end());
+            });
         }
     }
 
@@ -127,14 +148,34 @@ inline AlterCommands detectSchemaChanges(Logger * log, Context & context, const 
         typename Resolver::NamePairs rename_result = Resolver().resolve(std::move(rename_map));
         for (const auto & rename_pair : rename_result)
         {
-            result.emplace_back(
-                newRenameColCommand(rename_pair.first.name, rename_pair.second.name, rename_pair.second.id, orig_table_info));
+            AlterCommands rename_commands;
+            auto rename_command
+                = newRenameColCommand(rename_pair.first.name, rename_pair.second.name, rename_pair.second.id, orig_table_info);
+            auto rename_modifier = [/* column_id = rename_command.column_id, */ old_name = rename_command.column_name,
+                                       new_name = rename_command.new_column_name](ColumnInfos & column_infos) {
+                auto it = std::find_if(column_infos.begin(), column_infos.end(), [&](const auto & column_info) {
+                    return
+                        // I don't know why the column_id is somehow of the "new" column, for example:
+                        // (1,col_1)->(1,col_2), (2,col_2)->(2,col_1)
+                        // will be resolved to:
+                        // (2,col_1)->(2,_tiflash_tmp_col_1), (2,col_2)->(2,col_1), (2,_tiflash_tmp_col_1)(1,col_2)
+                        // So confusing that I dare no use id equal check.
+                        /* column_info.id == column_id && */
+                        column_info.name == old_name;
+                });
+                if (it != column_infos.end())
+                    it->name = new_name;
+            };
+            rename_commands.emplace_back(std::move(rename_command));
+            result.emplace_back(std::move(rename_commands), rename_modifier);
             GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_rename_column).Increment();
         }
     }
 
     // alter commands
     {
+        AlterCommands alter_commands;
+        std::unordered_map<ColumnID, ColumnInfo> alter_map;
         /// Detect type changed columns.
         for (const auto & orig_column_info : orig_table_info.columns)
         {
@@ -143,6 +184,7 @@ inline AlterCommands detectSchemaChanges(Logger * log, Context & context, const 
                       if (column_info_.id == orig_column_info.id && column_info_.name != orig_column_info.name)
                           LOG_INFO(log, "detect column " << orig_column_info.name << " rename to " << column_info_.name);
 
+                      // TODO: Shouldn't we detect default value change as well???
                       return column_info_.id == orig_column_info.id
                           && (column_info_.tp != orig_column_info.tp || column_info_.hasNotNullFlag() != orig_column_info.hasNotNullFlag());
                   });
@@ -154,13 +196,25 @@ inline AlterCommands detectSchemaChanges(Logger * log, Context & context, const 
                 command.type = AlterCommand::MODIFY_COLUMN;
                 // Alter column with new column info
                 setAlterCommandColumn(log, command, *column_info);
-                result.emplace_back(std::move(command));
+                alter_commands.emplace_back(std::move(command));
+                alter_map.emplace(column_info->id, *column_info);
                 GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_alter_column_tp).Increment();
             }
+        }
+        if (!alter_commands.empty())
+        {
+            result.emplace_back(std::move(alter_commands), [alter_map{std::move(alter_map)}](ColumnInfos & column_infos) {
+                std::for_each(column_infos.begin(), column_infos.end(), [&](auto & column_info) {
+                    if (auto it = alter_map.find(column_info.id); it != alter_map.end())
+                        column_info = it->second;
+                });
+            });
         }
     }
 
     {
+        AlterCommands add_commands;
+        std::vector<ColumnInfo> new_column_infos;
         /// Detect new columns.
         for (const auto & column_info : table_info.columns)
         {
@@ -175,9 +229,18 @@ inline AlterCommands detectSchemaChanges(Logger * log, Context & context, const 
                 command.type = AlterCommand::ADD_COLUMN;
                 setAlterCommandColumn(log, command, column_info);
 
-                result.emplace_back(std::move(command));
+                add_commands.emplace_back(std::move(command));
+                new_column_infos.emplace_back(column_info);
                 GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_add_column).Increment();
             }
+        }
+        if (!add_commands.empty())
+        {
+            result.emplace_back(std::move(add_commands), [new_column_infos{std::move(new_column_infos)}](ColumnInfos & column_infos) {
+                std::for_each(new_column_infos.begin(), new_column_infos.end(), [&](auto & new_column_info) {
+                    column_infos.emplace_back(std::move(new_column_info));
+                });
+            });
         }
     }
 
@@ -191,8 +254,8 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
 
     /// Detect schema changes.
     auto orig_table_info = storage->getTableInfo();
-    auto alter_commands = detectSchemaChanges(log, context, *table_info, orig_table_info);
-    if (alter_commands.empty())
+    auto schema_changes = detectSchemaChanges(log, context, *table_info, orig_table_info);
+    if (schema_changes.empty())
     {
         LOG_INFO(
             log, "No schema change detected for table " << name_mapper.displayCanonicalName(*db_info, *table_info) << ", not altering");
@@ -201,26 +264,33 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
 
     std::stringstream ss;
     ss << "Detected schema changes: " << name_mapper.displayCanonicalName(*db_info, *table_info) << "\n";
-    for (const auto & command : alter_commands)
-    {
-        if (command.type == AlterCommand::ADD_COLUMN)
-            ss << "ADD COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
-        else if (command.type == AlterCommand::DROP_COLUMN)
-            ss << "DROP COLUMN " << command.column_name << ", ";
-        else if (command.type == AlterCommand::MODIFY_COLUMN)
-            ss << "MODIFY COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
-        else if (command.type == AlterCommand::RENAME_COLUMN)
-            ss << "RENAME COLUMN from " << command.column_name << " to " << command.new_column_name << ", ";
-    }
+    for (const auto & schema_change : schema_changes)
+        for (const auto & command : schema_change.first)
+        {
+            if (command.type == AlterCommand::ADD_COLUMN)
+                ss << "ADD COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
+            else if (command.type == AlterCommand::DROP_COLUMN)
+                ss << "DROP COLUMN " << command.column_name << ", ";
+            else if (command.type == AlterCommand::MODIFY_COLUMN)
+                ss << "MODIFY COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
+            else if (command.type == AlterCommand::RENAME_COLUMN)
+                ss << "RENAME COLUMN from " << command.column_name << " to " << command.new_column_name << ", ";
+        }
+
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": " << ss.str());
 
     /// Update metadata, through calling alterFromTiDB.
-    // Using copy of original table info with updated columns instead of using new_table_info directly,
+    // Using original table info with updated columns instead of using new_table_info directly,
     // so that other changes (RENAME commands) won't be saved.
     // Also, updating schema_version as altering column is structural.
-    orig_table_info.columns = table_info->columns;
-    orig_table_info.schema_version = target_version;
-    storage->alterFromTiDB(alter_commands, name_mapper.mapDatabaseName(*db_info), orig_table_info, name_mapper, context);
+    for (const auto & schema_change : schema_changes)
+    {
+        /// Update column infos by applying schema change in this step.
+        schema_change.second(orig_table_info.columns);
+        /// Update schema version aggressively for the sake of correctness.
+        orig_table_info.schema_version = target_version;
+        storage->alterFromTiDB(schema_change.first, name_mapper.mapDatabaseName(*db_info), orig_table_info, name_mapper, context);
+    }
 
     LOG_INFO(log, "Altered table " << name_mapper.displayCanonicalName(*db_info, *table_info));
 }
