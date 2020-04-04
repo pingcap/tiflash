@@ -30,6 +30,19 @@ CoprocessorHandler::CoprocessorHandler(
     : cop_context(cop_context_), cop_request(cop_request_), cop_response(cop_response_), log(&Logger::get("CoprocessorHandler"))
 {}
 
+std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> CoprocessorHandler::GenCopKeyRange(
+    const ::google::protobuf::RepeatedPtrField<::coprocessor::KeyRange> & ranges)
+{
+    std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
+    for (auto & range : ranges)
+    {
+        DecodedTiKVKey start(std::string(range.start()));
+        DecodedTiKVKey end(std::string(range.end()));
+        key_ranges.emplace_back(std::make_pair(std::move(start), std::move(end)));
+    }
+    return key_ranges;
+}
+
 grpc::Status CoprocessorHandler::execute()
 {
     Stopwatch watch;
@@ -42,15 +55,7 @@ grpc::Status CoprocessorHandler::execute()
             case COP_REQ_TYPE_DAG:
             {
                 GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_count, type_cop_dag).Increment();
-                std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
-                for (auto & range : cop_request->ranges())
-                {
-                    std::string start_key(range.start());
-                    DecodedTiKVKey start(std::move(start_key));
-                    std::string end_key(range.end());
-                    DecodedTiKVKey end(std::move(end_key));
-                    key_ranges.emplace_back(std::make_pair(std::move(start), std::move(end)));
-                }
+
                 tipb::DAGRequest dag_request;
                 dag_request.ParseFromString(cop_request->data());
                 LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
@@ -60,7 +65,7 @@ grpc::Status CoprocessorHandler::execute()
                 std::unordered_map<RegionID, RegionInfo> regions;
                 regions.emplace(cop_context.kv_context.region_id(),
                     RegionInfo(cop_context.kv_context.region_id(), cop_context.kv_context.region_epoch().version(),
-                        cop_context.kv_context.region_epoch().conf_ver(), std::move(key_ranges)));
+                        cop_context.kv_context.region_epoch().conf_ver(), GenCopKeyRange(cop_request->ranges())));
                 DAGDriver driver(cop_context.db_context, dag_request, regions,
                     cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(),
                     dag_response);

@@ -19,17 +19,19 @@ namespace ErrorCodes
 extern const int NOT_IMPLEMENTED;
 }
 
-BatchCoprocessorHandler::BatchCoprocessorHandler(CoprocessorContext & cop_context_, const coprocessor::BatchRequest * cop_request_,
+BatchCoprocessorHandler::BatchCoprocessorHandler(CoprocessorContext & cop_context_,
+    const coprocessor::BatchRequest * cop_request_,
     ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_)
-    : cop_context(cop_context_), cop_request(cop_request_), writer(writer_), log(&Logger::get("BatchCoprocessorHandler"))
-{}
+    : CoprocessorHandler(cop_context_, nullptr, nullptr), cop_request(cop_request_), writer(writer_)
+{
+    log = (&Logger::get("BatchCoprocessorHandler"));
+}
 
 grpc::Status BatchCoprocessorHandler::execute()
 {
     Stopwatch watch;
-    SCOPE_EXIT({
-        GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_handle_seconds, type_batch_cop_dag).Observe(watch.elapsedSeconds());
-    });
+    SCOPE_EXIT(
+        { GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_handle_seconds, type_super_batch).Observe(watch.elapsedSeconds()); });
 
     try
     {
@@ -37,7 +39,7 @@ grpc::Status BatchCoprocessorHandler::execute()
         {
             case COP_REQ_TYPE_DAG:
             {
-                GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_count, type_batch_cop_dag).Increment();
+                GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_count, type_super_batch_cop_dag).Increment();
                 const auto dag_request = ({
                     tipb::DAGRequest dag_req;
                     dag_req.ParseFromString(cop_request->data());
@@ -47,17 +49,8 @@ grpc::Status BatchCoprocessorHandler::execute()
                     std::unordered_map<RegionID, RegionInfo> regions;
                     for (auto & r : cop_request->regions())
                     {
-                        std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
-                        for (auto & range : r.ranges())
-                        {
-                            std::string start_key(range.start());
-                            DecodedTiKVKey start(std::move(start_key));
-                            std::string end_key(range.end());
-                            DecodedTiKVKey end(std::move(end_key));
-                            key_ranges.emplace_back(std::make_pair(std::move(start), std::move(end)));
-                        }
                         auto res = regions.emplace(r.region_id(),
-                            RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), std::move(key_ranges)));
+                            RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), GenCopKeyRange(r.ranges())));
                         if (!res.second)
                             throw Exception(
                                 std::string(__PRETTY_FUNCTION__) + ": contain duplicate region " + std::to_string(r.region_id()),
