@@ -18,7 +18,7 @@ mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t;
 
 >> DBGInvoke __refresh_schemas()
 
->> DBGInvoke reverse_query('desc \$d.\$t', test, t)
+>> DBGInvoke query_mapped('desc \$d.\$t', test, t)
 ┌─name────────┬─type────────────┬─default_type─┬─default_expression─┐
 │ a           │ Int32           │              │                    │
 │ b           │ Int32           │              │                    │
@@ -33,7 +33,7 @@ mysql> alter table test.t drop primary key;
 
 >> DBGInvoke __refresh_schemas()
 
->> DBGInvoke reverse_query('desc \$d.\$t', test, t)
+>> DBGInvoke query_mapped('desc \$d.\$t', test, t)
 ┌─name────────┬─type────────────┬─default_type─┬─default_expression─┐
 │ a           │ Int32           │              │                    │
 │ b           │ Int32           │              │                    │
