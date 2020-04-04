@@ -20,6 +20,7 @@
 ┌─name────┐
 │ db3     │
 │ db4     │
+│ db_1    │
 │ default │
 │ system  │
 └─────────┘
@@ -30,6 +31,7 @@
 => show databases
 ┌─name────┐
 │ db4     │
+│ db_1    │
 │ default │
 │ system  │
 └─────────┘
@@ -43,6 +45,7 @@
 ┌─name────┐
 │ db3     │
 │ db4     │
+│ db_1    │
 │ default │
 │ system  │
 └─────────┘
@@ -52,6 +55,7 @@
 => DBGInvoke __refresh_schemas()
 => show databases
 ┌─name────┐
+│ db_1    │
 │ default │
 │ system  │
 └─────────┘
