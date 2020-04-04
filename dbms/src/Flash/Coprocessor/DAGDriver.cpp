@@ -8,7 +8,6 @@
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Flash/Coprocessor/StreamingDAGBlockOutputStream.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/KVStore.h>
@@ -53,8 +52,8 @@ try
         // Only query is allowed, so streams.in must not be null and streams.out must be null
         throw Exception("DAG is not query.", ErrorCodes::LOGICAL_ERROR);
 
-    BlockOutputStreamPtr dag_output_stream = std::make_shared<DAGBlockOutputStream>(
-        dag_response, context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), streams.in->getHeader());
+    BlockOutputStreamPtr dag_output_stream = std::make_shared<DAGBlockOutputStream<false>>(
+        &dag_response, context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), streams.in->getHeader());
     copyData(*streams.in, *dag_output_stream);
 
     if (!dag_request.has_collect_execution_summaries() || !dag_request.collect_execution_summaries())
@@ -119,7 +118,7 @@ try
         // Only query is allowed, so streams.in must not be null and streams.out must be null
         throw Exception("DAG is not query.", ErrorCodes::LOGICAL_ERROR);
 
-    BlockOutputStreamPtr dag_output_stream = std::make_shared<StreamingDAGBlockOutputStream>(
+    BlockOutputStreamPtr dag_output_stream = std::make_shared<DAGBlockOutputStream<true>>(
         writer, context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), streams.in->getHeader());
     copyData(*streams.in, *dag_output_stream);
 
