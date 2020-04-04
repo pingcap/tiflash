@@ -8,22 +8,22 @@ namespace DB
 
 class Context;
 
-// Schema name reverse map tools.
+// Schema name mapping tools.
 
-// Reverse map database name.
+// Get the mapped underlying database name of a TiDB database.
 // Usage:
-//   ./storage-client.sh "DBGInvoke reverse_database(database_name)"
-void dbgFuncReverseDatabase(Context & context, const ASTs & args, DBGInvoker::Printer output);
+//   ./storage-client.sh "DBGInvoke mapped_database(database_name)"
+void dbgFuncMappedDatabase(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
-// Reverse map table name.
+// Get the mapped underlying table name of a TiDB table.
 // Usage:
-//   ./storage-client.sh "DBGInvoke reverse_table(database_name, table_name)"
-void dbgFuncReverseTable(Context & context, const ASTs & args, DBGInvoker::Printer output);
+//   ./storage-client.sh "DBGInvoke mapped_table(database_name, table_name)"
+void dbgFuncMappedTable(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
 // Run query using mapped table name. Use place holder $d and $t to specify database name and table name in query.
 // So far at most one database name and table name is supported.
 // Usage:
-//   ./storage-client.sh "DBGInvoke reverse_query('select * from $d.$t'), database_name, table_name)"
-BlockInputStreamPtr dbgFuncReverseQuery(Context & context, const ASTs & args);
+//   ./storage-client.sh "DBGInvoke query_mapped('select * from $d.$t'), database_name, table_name)"
+BlockInputStreamPtr dbgFuncQueryMapped(Context & context, const ASTs & args);
 
 } // namespace DB

@@ -93,9 +93,9 @@ DBGInvoker::DBGInvoker()
 
     regSchemalessFunc("region_mock_ingest_sst", dbgFuncIngestSST);
 
-    regSchemalessFunc("reverse_database", dbgFuncReverseDatabase);
-    regSchemalessFunc("reverse_table", dbgFuncReverseTable);
-    regSchemafulFunc("reverse_query", dbgFuncReverseQuery);
+    regSchemalessFunc("mapped_database", dbgFuncMappedDatabase);
+    regSchemalessFunc("mapped_table", dbgFuncMappedTable);
+    regSchemafulFunc("query_mapped", dbgFuncQueryMapped);
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)
