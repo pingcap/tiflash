@@ -219,7 +219,7 @@ void registerStorageDebugging(StorageFactory & factory)
         // Note: if `table_info_json` is not empty, `table_info` store a ref to `info`
         std::optional<std::reference_wrapper<const TiDB::TableInfo>> table_info = std::nullopt;
         bool tombstone = false;
-        if (args.engine_args.size() > 1)
+        if (args.engine_args.size() >= 1)
         {
             auto ast = typeid_cast<const ASTLiteral *>(args.engine_args[0].get());
             if (ast && ast->value.getType() == Field::Types::String)
