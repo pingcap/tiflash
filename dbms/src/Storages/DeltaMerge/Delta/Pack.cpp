@@ -169,7 +169,7 @@ Block readPackFromCache(const PackPtr & pack)
     auto &         cache_block = pack->cache->block;
     MutableColumns columns     = cache_block.cloneEmptyColumns();
     for (size_t i = 0; i < cache_block.columns(); ++i)
-        columns[i]->insertRangeFrom(*cache_block.getByPosition(i).column, pack->cache_offset, pack->rows);
+        columns[i]->insertRangeFrom(*cache_block.getByPosition(i).column, 0, pack->rows);
     return cache_block.cloneWithColumns(std::move(columns));
 }
 
@@ -206,14 +206,14 @@ Columns readPackFromCache(const PackPtr & pack, const ColumnDefines & column_def
             auto col_offset = it->second;
             // Copy data from cache
             auto [type, col_data] = pack->getDataTypeAndEmptyColumn(cd.id);
-            col_data->insertRangeFrom(*cache_block.getByPosition(col_offset).column, pack->cache_offset, pack->rows);
+            col_data->insertRangeFrom(*cache_block.getByPosition(col_offset).column, 0, pack->rows);
             // Cast if need
             auto col_converted = convertColumnByColumnDefineIfNeed(type, std::move(col_data), cd);
             columns.push_back(std::move(col_converted));
         }
         else
         {
-            ColumnPtr column = createColumnWithDefaultValue(cd, pack->rows - pack->cache_offset);
+            ColumnPtr column = createColumnWithDefaultValue(cd, pack->rows);
             columns.emplace_back(std::move(column));
         }
     }
