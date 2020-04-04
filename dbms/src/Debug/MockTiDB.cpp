@@ -38,7 +38,11 @@ Table::Table(const String & database_name_, DatabaseID database_id_, const Strin
       col_id(table_info_.columns.size())
 {}
 
-MockTiDB::MockTiDB() { databases["default"] = 0; }
+MockTiDB::MockTiDB()
+{
+    databases["default"] = 0;
+    databases["db_1"] = 1;
+}
 
 TablePtr MockTiDB::dropTableInternal(Context & context, const String & database_name, const String & table_name, bool drop_regions)
 {
