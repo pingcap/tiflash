@@ -62,18 +62,23 @@ void dbgFuncMappedDatabase(Context & context, const ASTs & args, DBGInvoker::Pri
 
 void dbgFuncMappedTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
-    if (args.size() != 2)
-        throw Exception("Args not matched, should be: database-name, table-name", ErrorCodes::BAD_ARGUMENTS);
+    if (args.size() < 2 || args.size() > 3)
+        throw Exception("Args not matched, should be: database-name, table-name[, qualify = 'true']", ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+    bool qualify = true;
+    if (args.size() == 3)
+        qualify = typeid_cast<const ASTIdentifier &>(*args[0]).name == "true";
 
     std::stringstream ss;
     auto mapped = mappedTable(context, database_name, table_name);
     if (mapped == std::nullopt)
         ss << "Table " << database_name << "." << table_name << " not found.";
-    else
+    else if (qualify)
         ss << mapped->first << "." << mapped->second;
+    else
+        ss << mapped->second;
     output(ss.str());
 }
 
