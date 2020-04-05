@@ -365,6 +365,8 @@ void StorageMergeTree::alterInternal(
 
     bool rename_column = false;
 
+    std::optional<bool> tombstone = std::nullopt;
+
     for (const AlterCommand & param : params)
     {
         if (param.type == AlterCommand::MODIFY_PRIMARY_KEY)
@@ -388,11 +390,11 @@ void StorageMergeTree::alterInternal(
         }
         else if (param.type == AlterCommand::TOMBSTONE)
         {
-            setTombstone(true);
+            tombstone = true;
         }
         else if (param.type == AlterCommand::RECOVER)
         {
-            setTombstone(false);
+            tombstone = false;
         }
     }
 
@@ -415,7 +417,7 @@ void StorageMergeTree::alterInternal(
 
     auto table_hard_lock = lockStructureForAlter(__PRETTY_FUNCTION__);
 
-    IDatabase::ASTModifier storage_modifier = [primary_key_is_modified, new_primary_key_ast, table_info, tombstone = isTombstone()] (IAST & ast)
+    IDatabase::ASTModifier storage_modifier = [primary_key_is_modified, new_primary_key_ast, table_info, tombstone] (IAST & ast)
     {
         auto & storage_ast = typeid_cast<ASTStorage &>(ast);
 
@@ -437,8 +439,9 @@ void StorageMergeTree::alterInternal(
             typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments).children.at(2) = literal;
         }
 
+        if (tombstone)
         {
-            auto tombstone_ast = std::make_shared<ASTLiteral>(Field(UInt64(tombstone)));
+            auto tombstone_ast = std::make_shared<ASTLiteral>(Field(UInt64(tombstone.value())));
             if (storage_ast.engine->arguments->children.size() == 3)
                 typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments).children.emplace_back(tombstone_ast);
             else
@@ -458,6 +461,8 @@ void StorageMergeTree::alterInternal(
     setColumns(std::move(new_columns));
     if (table_info)
         setTableInfo(table_info->get());
+    if (tombstone)
+        setTombstone(tombstone.value());
 
     if (new_primary_key_ast != nullptr)
     {
