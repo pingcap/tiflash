@@ -26,7 +26,8 @@ private:
     {
         Timestamp last_gc_safe_point = 0;
     } gc_context;
-    bool gc();
+
+    bool gc(Timestamp gc_safe_point);
 
 private:
     Context & context;
