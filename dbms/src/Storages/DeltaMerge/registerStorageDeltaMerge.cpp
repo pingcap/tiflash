@@ -63,7 +63,9 @@ void registerStorageDeltaMerge(StorageFactory & factory)
         TiDB::TableInfo info;
         // Note: if `table_info_json` is not empty, `table_info` store a ref to `info`
         std::optional<std::reference_wrapper<const TiDB::TableInfo>> table_info = std::nullopt;
-        bool                                                         tombstone  = false;
+
+        Timestamp tombstone = 0;
+
         if (args.engine_args.size() >= 2)
         {
             auto ast = typeid_cast<const ASTLiteral *>(args.engine_args[1].get());

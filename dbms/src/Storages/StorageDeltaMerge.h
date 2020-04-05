@@ -47,10 +47,7 @@ public:
     /// Write from raft layer.
     void write(Block && block, const Settings & settings);
 
-    void flushCache(const Context & context) override
-    {
-        flushCache(context, DM::HandleRange::newAll());
-    }
+    void flushCache(const Context & context) override { flushCache(context, DM::HandleRange::newAll()); }
 
     void flushCache(const Context & context, const DB::HandleRange<HandleID> & range_to_flush) override
     {
@@ -106,7 +103,7 @@ protected:
         const DM::OptionTableInfoConstRef table_info_,
         const ColumnsDescription & columns_,
         const ASTPtr & primary_expr_ast_,
-        bool tombstone,
+        Timestamp tombstone,
         Context & global_context_);
 
     Block buildInsertBlock(bool is_import, bool is_delete, const Block & block);

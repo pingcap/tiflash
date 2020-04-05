@@ -82,7 +82,7 @@ private:
 
 StorageDebugging::StorageDebugging( //
     String database_name_, String table_name_, const ColumnsDescription & columns_,
-    std::optional<std::reference_wrapper<const TiDB::TableInfo>> table_info, bool tombstone, const Context & context_, Mode mode_)
+    std::optional<std::reference_wrapper<const TiDB::TableInfo>> table_info, Timestamp tombstone, const Context & context_, Mode mode_)
     : IManageableStorage{tombstone},
       database_name(std::move(database_name_)),
       table_name(std::move(table_name_)),
@@ -218,7 +218,7 @@ void registerStorageDebugging(StorageFactory & factory)
         TiDB::TableInfo info;
         // Note: if `table_info_json` is not empty, `table_info` store a ref to `info`
         std::optional<std::reference_wrapper<const TiDB::TableInfo>> table_info = std::nullopt;
-        bool tombstone = false;
+        Timestamp tombstone = 0;
         if (args.engine_args.size() >= 1)
         {
             auto ast = typeid_cast<const ASTLiteral *>(args.engine_args[0].get());
