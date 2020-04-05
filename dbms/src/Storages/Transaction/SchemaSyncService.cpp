@@ -2,11 +2,10 @@
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Parsers/ASTDropQuery.h>
 #include <Storages/IManageableStorage.h>
+#include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/SchemaSyncService.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
-
-#include "SchemaNameMapper.h"
 
 namespace DB
 {
@@ -21,7 +20,7 @@ SchemaSyncService::SchemaSyncService(DB::Context & context_)
             {
                 /// Do sync schema first, then gc.
                 /// They must be performed synchronously,
-                /// otherwise table may get mis-GC-ed if RECOVER was not properly synced caused by schema sync pause.
+                /// otherwise table may get mis-GC-ed if RECOVER was not properly synced caused by schema sync pause but GC runs too aggressively.
                 stage = "Sync schemas";
                 if (!syncSchemas())
                     return false;
@@ -70,15 +69,16 @@ bool SchemaSyncService::gc()
         String table_name = storage->getDatabaseName();
         auto db_info = tmt_context.getSchemaSyncer()->getDBInfoByName(database_name);
         const auto & table_info = storage->getTableInfo();
-        auto display_name = SchemaNameMapper()
-        LOG_INFO(log, "Physically dropping table " << SchemaN)
+        auto canonical_name = SchemaNameMapper().displayCanonicalName(*db_info, table_info);
+        LOG_INFO(log, "Physically dropping table " << canonical_name);
         auto drop_query = std::make_shared<ASTDropQuery>();
-        drop_query->database = storage->getDatabaseName();
-        drop_query->table = storage->getTableName();
+        drop_query->database = std::move(database_name);
+        drop_query->table = std::move(table_name);
         drop_query->if_exists = true;
         ASTPtr ast_drop_query = drop_query;
         InterpreterDropQuery drop_interpreter(ast_drop_query, context);
         drop_interpreter.execute();
+        LOG_INFO(log, "Physically dropped table " << canonical_name);
     }
 
     gc_context.last_gc_safe_point = gc_safe_point;
