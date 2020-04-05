@@ -47,6 +47,9 @@ struct AlterCommand
     /// For MODIFY_PRIMARY_KEY
     ASTPtr primary_key;
 
+    /// For TOMBSTONE - timestamp when this table is dropped.
+    Timestamp tombstone;
+
     /// the names are the same if they match the whole name or name_without_dot matches the part of the name up to the dot
     static bool namesEqual(const String & name_without_dot, const DB::NameAndTypePair & name_type)
     {

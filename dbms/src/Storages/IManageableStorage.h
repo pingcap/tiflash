@@ -34,8 +34,8 @@ public:
     };
 
 public:
-    explicit IManageableStorage(bool tombstone_) : IStorage(), tombstone(tombstone_) {}
-    explicit IManageableStorage(const ColumnsDescription & columns_, bool tombstone_) : IStorage(columns_), tombstone(tombstone_) {}
+    explicit IManageableStorage(Timestamp tombstone_) : IStorage(), tombstone(tombstone_) {}
+    explicit IManageableStorage(const ColumnsDescription & columns_, Timestamp tombstone_) : IStorage(columns_), tombstone(tombstone_) {}
     ~IManageableStorage() override = default;
 
     virtual void flushCache(const Context & /*context*/) {}
@@ -61,7 +61,8 @@ public:
     virtual const TiDB::TableInfo & getTableInfo() const = 0;
 
     bool isTombstone() const { return tombstone; }
-    void setTombstone(bool tombstone_) { IManageableStorage::tombstone = tombstone_; }
+    Timestamp getTombstone() const { return tombstone; }
+    void setTombstone(Timestamp tombstone_) { IManageableStorage::tombstone = tombstone_; }
 
     // Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
     // Once called, table_info is guaranteed to be persisted, regardless commands being empty or not.
@@ -92,7 +93,9 @@ private:
     virtual DataTypePtr getPKTypeImpl() const = 0;
 
 private:
-    bool tombstone;
+    /// Timestamp when this table is dropped.
+    /// Zero means this table is not dropped;
+    Timestamp tombstone;
 };
 
 } // namespace DB

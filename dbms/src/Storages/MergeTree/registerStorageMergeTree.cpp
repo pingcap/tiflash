@@ -231,7 +231,7 @@ TxnMergeTree is a variant of the MutableMergeTree engine.
 TxnMergeTree is slightly different from MutableMergeTree:
 - it requires an extra table info parameter in JSON format
 - in most cases, it should be created implicitly through raft rather than explicitly
-- an optional tombstone flag can be specified, defaults to 0, identifying if this table should be garbage collected
+- an optional tombstone timestamp can be specified, defaults to 0, identifying when this table is dropped.
 
 Examples of creating a TxnMergeTree table:
 - Create Table ... TxnMergeTree((CounterID, EventDate), 8192, '...')
@@ -669,7 +669,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     ASTPtr primary_expr_list;
     ASTPtr sampling_expression;
     TiDB::TableInfo table_info;
-    bool tombstone = false;
+    Timestamp tombstone = 0;
     MergeTreeSettings storage_settings = args.context.getMergeTreeSettings();
 
     if (is_extended_storage_def)

@@ -100,7 +100,7 @@ protected:
         const ColumnsDescription & columns_description_,
         std::optional<std::reference_wrapper<const TiDB::TableInfo>>
             table_info,
-        bool tombstone,
+        Timestamp tombstone,
         const Context & context_,
         Mode mode_ = Mode::Normal);
 };

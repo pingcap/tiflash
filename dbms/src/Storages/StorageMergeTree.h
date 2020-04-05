@@ -181,7 +181,7 @@ protected:
         const MergeTreeData::MergingParams & merging_params_,
         const MergeTreeSettings & settings_,
         bool has_force_restore_data_flag,
-        bool tombstone);
+        Timestamp tombstone);
 };
 
 } // namespace DB

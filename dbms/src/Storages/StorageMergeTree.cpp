@@ -64,7 +64,7 @@ StorageMergeTree::StorageMergeTree(
     const MergeTreeData::MergingParams & merging_params_,
     const MergeTreeSettings & settings_,
     bool has_force_restore_data_flag,
-    bool tombstone)
+    Timestamp tombstone)
     : IManageableStorage{tombstone}, path(path_), database_name(database_name_), table_name(table_name_), full_path(path + escapeForFileName(table_name) + '/'),
     context(context_), background_pool(context_.getBackgroundPool()),
     data(database_name, table_name,
@@ -365,7 +365,7 @@ void StorageMergeTree::alterInternal(
 
     bool rename_column = false;
 
-    std::optional<bool> tombstone = std::nullopt;
+    std::optional<Timestamp> tombstone = std::nullopt;
 
     for (const AlterCommand & param : params)
     {
@@ -390,11 +390,11 @@ void StorageMergeTree::alterInternal(
         }
         else if (param.type == AlterCommand::TOMBSTONE)
         {
-            tombstone = true;
+            tombstone = param.tombstone;
         }
         else if (param.type == AlterCommand::RECOVER)
         {
-            tombstone = false;
+            tombstone = 0;
         }
     }
 
@@ -441,7 +441,7 @@ void StorageMergeTree::alterInternal(
 
         if (tombstone)
         {
-            auto tombstone_ast = std::make_shared<ASTLiteral>(Field(UInt64(tombstone.value())));
+            auto tombstone_ast = std::make_shared<ASTLiteral>(Field(tombstone.value()));
             if (storage_ast.engine->arguments->children.size() == 3)
                 typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments).children.emplace_back(tombstone_ast);
             else

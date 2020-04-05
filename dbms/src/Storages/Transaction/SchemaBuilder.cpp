@@ -773,7 +773,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(DBInfoPtr db_in
             {
                 LOG_DEBUG(log,
                     "Trying to create table " << name_mapper.displayCanonicalName(*db_info, *table_info)
-                                              << " but it already exists and is not tombstoned");
+                                              << " but it already exists and is not marked as tombstone");
                 return;
             }
 
@@ -863,18 +863,16 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
     {
         AlterCommand command;
         command.type = AlterCommand::TOMBSTONE;
+        // We don't try to get a precise time that TiDB drops this table.
+        // We use a more relaxing GC strategy:
+        // 1. Use current timestamp, which is after TiDB's drop time, to be the tombstone of this table;
+        // 2. Use the same GC safe point as TiDB.
+        // In such way our table will be GC-ed later than TiDB, which is safe and correct.
+        command.tombstone = tmt_context.getPDClient()->getTS();
         commands.emplace_back(std::move(command));
     }
     storage->alterFromTiDB(commands, db_name, storage->getTableInfo(), name_mapper, context);
     LOG_INFO(log, "Tombstoned table " << db_name << "." << name_mapper.displayTableName(storage->getTableInfo()));
-
-    //    auto drop_query = std::make_shared<ASTDropQuery>();
-    //    drop_query->database = database_name;
-    //    drop_query->table = table_name;
-    //    drop_query->if_exists = true;
-    //    ASTPtr ast_drop_query = drop_query;
-    //    InterpreterDropQuery drop_interpreter(ast_drop_query, context);
-    //    drop_interpreter.execute();
 }
 
 template <typename Getter, typename NameMapper>
@@ -931,7 +929,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
             LOG_DEBUG(log, "Table " << name_mapper.displayCanonicalName(*db, *table) << " syncing during sync all schemas");
 
             /// Ignore view and sequence.
-            if (table->is_view/* || table->is_sequence*/)
+            if (table->is_view /* || table->is_sequence*/)
             {
                 LOG_INFO(log, "Table " << name_mapper.displayCanonicalName(*db, *table) << " is a view or sequence, ignoring.");
                 continue;
