@@ -758,12 +758,6 @@ String createTableStmt(const DBInfo & db_info, const TableInfo & table_info, con
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyCreatePhysicalTable(DBInfoPtr db_info, TableInfoPtr table_info)
 {
-    if (table_info->is_view)
-    {
-        LOG_INFO(log, "Table " << name_mapper.displayCanonicalName(*db_info, *table_info) << " is a view table, ignore it.");
-        return;
-    }
-
     GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_create_table).Increment();
     LOG_INFO(log, "Creating table " << name_mapper.displayCanonicalName(*db_info, *table_info));
 
@@ -935,6 +929,14 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
         for (auto & table : tables)
         {
             LOG_DEBUG(log, "Table " << name_mapper.displayCanonicalName(*db, *table) << " syncing during sync all schemas");
+
+            /// Ignore view and sequence.
+            if (table->is_view/* || table->is_sequence*/)
+            {
+                LOG_INFO(log, "Table " << name_mapper.displayCanonicalName(*db, *table) << " is a view or sequence, ignoring.");
+                continue;
+            }
+
             /// Record for further detecting tables to drop.
             table_set.emplace(table->id);
             if (table->isLogicalPartitionTable())
