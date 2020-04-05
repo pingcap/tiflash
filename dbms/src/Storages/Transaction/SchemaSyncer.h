@@ -29,6 +29,8 @@ public:
     virtual void reset() = 0;
 
     virtual TiDB::DBInfoPtr getDBInfoByName(const String & database_name) = 0;
+
+    virtual TiDB::DBInfoPtr getDBInfoByMappedName(const String & mapped_database_name) = 0;
 };
 
 using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
