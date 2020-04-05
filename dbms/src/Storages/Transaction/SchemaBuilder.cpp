@@ -929,7 +929,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
             LOG_DEBUG(log, "Table " << name_mapper.displayCanonicalName(*db, *table) << " syncing during sync all schemas");
 
             /// Ignore view and sequence.
-            if (table->is_view /* || table->is_sequence*/)
+            if (table->is_view || table->is_sequence)
             {
                 LOG_INFO(log, "Table " << name_mapper.displayCanonicalName(*db, *table) << " is a view or sequence, ignoring.");
                 continue;
