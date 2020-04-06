@@ -24,7 +24,7 @@ public:
     ManageableStoragePtr get(TableID table_id) const;
     std::unordered_map<TableID, ManageableStoragePtr> getAllStorage() const;
 
-    ManageableStoragePtr getByName(const std::string & db, const std::string & table, bool include_tombstone = true) const;
+    ManageableStoragePtr getByName(const std::string & db, const std::string & table, bool include_tombstone) const;
 
     void remove(TableID table_id);
 

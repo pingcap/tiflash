@@ -21,7 +21,7 @@ struct SchemaNameMapper
     {
         return displayDatabaseName(db_info) + "." + displayTableName(table_info);
     }
-    virtual String mapPartitionName(const TiDB::TableInfo & table_info) const { return std::to_string(table_info.id); }
+    virtual String mapPartitionName(const TiDB::TableInfo & table_info) const { return mapTableName(table_info); }
 };
 
 } // namespace DB

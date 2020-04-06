@@ -611,7 +611,6 @@ TableInfoPtr TableInfo::producePartitionTableInfo(TableID table_or_partition_id,
     new_table->belonging_table_id = id;
     new_table->id = table_or_partition_id;
 
-    // Mangle the table name by appending partition name.
     new_table->name = name_mapper.mapPartitionName(*new_table);
 
     return new_table;
