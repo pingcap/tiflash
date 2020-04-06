@@ -94,7 +94,7 @@ private:
 
 private:
     /// Timestamp when this table is dropped.
-    /// Zero means this table is not dropped;
+    /// Zero means this table is not dropped.
     Timestamp tombstone;
 };
 
