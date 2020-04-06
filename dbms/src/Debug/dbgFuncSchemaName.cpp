@@ -69,7 +69,7 @@ void dbgFuncMappedTable(Context & context, const ASTs & args, DBGInvoker::Printe
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
     bool qualify = true;
     if (args.size() == 3)
-        qualify = typeid_cast<const ASTIdentifier &>(*args[2]).name == "true";
+        qualify = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[2]).value) == "true";
 
     std::stringstream ss;
     auto mapped = mappedTable(context, database_name, table_name);
