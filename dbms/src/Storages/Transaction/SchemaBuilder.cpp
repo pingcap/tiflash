@@ -90,7 +90,7 @@ using SchemaChanges = std::vector<SchemaChange>;
 /// When schema change detected, the modification to original table info must be preserved as well.
 /// With the preserved table info modifications, table info changes along with applying alter commands.
 /// In other words, table info and storage structure (altered by applied alter commands) are always identical,
-/// and intermediate failure won't hide the remaining alter commands.
+/// and intermediate failure won't hide the outstanding alter commands.
 inline SchemaChanges detectSchemaChanges(Logger * log, Context & context, const TableInfo & table_info, const TableInfo & orig_table_info)
 {
     SchemaChanges result;
