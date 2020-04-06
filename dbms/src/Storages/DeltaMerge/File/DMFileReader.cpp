@@ -100,6 +100,7 @@ DMFileReader::DMFileReader(bool                  enable_clean_read_,
                            const ColumnDefines & read_columns_,
                            const HandleRange &   handle_range_,
                            const RSOperatorPtr & filter_,
+                           ColumnCachePtr & column_cache_,
                            const IdSetPtr &      read_packs_,
                            MarkCache *           mark_cache_,
                            MinMaxIndexCache *    index_cache_,
@@ -116,6 +117,7 @@ DMFileReader::DMFileReader(bool                  enable_clean_read_,
       hash_salt(hash_salt_),
       rows_threshold_per_read(rows_threshold_per_read_),
       pack_filter(dmfile_, index_cache_, hash_salt_, handle_range_, filter_, read_packs_),
+      column_cache(column_cache_),
       handle_res(pack_filter.getHandleRes()),
       use_packs(pack_filter.getUsePacks()),
       skip_packs_by_column(read_columns.size(), 0),
@@ -240,43 +242,45 @@ Block DMFileReader::read()
         }
         else
         {
-            const String stream_name = DMFile::getFileNameBase(cd.id);
-            if (auto iter = column_streams.find(stream_name); iter != column_streams.end())
-            {
-                auto & top_stream  = iter->second;
-                bool   should_seek = shouldSeek(start_pack_id) || skip_packs_by_column[i] > 0;
-
-                auto data_type = dmfile->getColumnStat(cd.id).type;
-                auto column    = data_type->createColumn();
-                data_type->deserializeBinaryBulkWithMultipleStreams( //
-                    *column,
-                    [&](const IDataType::SubstreamPath & substream_path) {
-                        String substream_name = DMFile::getFileNameBase(cd.id, substream_path);
-                        auto & sub_stream     = column_streams.at(substream_name);
-
-                        if (should_seek)
-                        {
-                            auto & mark = (*sub_stream->marks)[start_pack_id];
-                            sub_stream->buf->seek(mark.offset_in_compressed_file, mark.offset_in_decompressed_block);
+            if (cd.id == EXTRA_HANDLE_COLUMN_ID) {
+                auto [cache_range, cache_column] = column_cache->tryGetHandleColumn(start_pack_id, read_packs);
+                if (cache_range.second - cache_range.first == 0) {
+                    auto column = readFromDisk(cd, start_pack_id, read_rows, skip_packs_by_column[i]);
+                    column_cache->putHandleColumn(start_pack_id, read_packs, column);
+                    res.insert(ColumnWithTypeAndName{std::move(column), cd.type, cd.name, cd.id});
+                } else {
+                    auto ranges = ColumnCache::splitPackRange(cache_range, start_pack_id, start_pack_id + read_packs);
+                    std::vector<size_t> ranges_rows;
+                    for (auto & range : ranges) {
+                        size_t rows = 0;
+                        for (size_t cursor = range.first; cursor < range.second; cursor++) {
+                            rows += pack_stats[cursor].rows;
                         }
+                        ranges_rows.push_back(rows);
+                    }
 
-                        return sub_stream->buf.get();
-                    },
-                    read_rows,
-                    top_stream->avg_size_hint,
-                    true,
-                    {});
-                IDataType::updateAvgValueSizeHint(*column, top_stream->avg_size_hint);
-
-                // Cast column's data from DataType in disk to what we need now
-                auto converted_column = convertColumnByColumnDefineIfNeed(data_type, std::move(column), cd);
-
-                res.insert(ColumnWithTypeAndName{std::move(converted_column), cd.type, cd.name, cd.id});
-            }
-            else
-            {
-                // New column after ddl is not exist in this DMFile, fill with default value
-                ColumnPtr column = createColumnWithDefaultValue(cd, read_rows);
+                    auto data_type = dmfile->getColumnStat(cd.id).type;
+                    auto column    = data_type->createColumn();
+                    column->reserve(read_rows);
+                    for (size_t k = 0; k < ranges.size(); k++) {
+                        auto & range = ranges[k];
+                        if (range.first >= cache_range.first && range.second <= cache_range.second) {
+                            // read from cache
+                            size_t rows_offset = 0;
+                            for (size_t l = 0; l < k; k++) {
+                                rows_offset += ranges_rows[l];
+                            }
+                            column->insertRangeFrom(*cache_column, rows_offset, ranges_rows[k]);
+                        } else {
+                            auto sub_column = readFromDisk(cd, range.first, ranges_rows[k], skip_packs_by_column[i]);
+                            column->insertRangeFrom(*sub_column, 0, ranges_rows[k]);
+                            skip_packs_by_column[i] = 0;
+                        }
+                    }
+                    res.insert(ColumnWithTypeAndName{std::move(column), cd.type, cd.name, cd.id});
+                }
+            } else {
+                auto column = readFromDisk(cd, start_pack_id, read_rows, skip_packs_by_column[i]);
                 res.insert(ColumnWithTypeAndName{std::move(column), cd.type, cd.name, cd.id});
             }
 
@@ -285,6 +289,45 @@ Block DMFileReader::read()
     }
 
     return res;
+}
+
+ColumnPtr DMFileReader::readFromDisk(ColumnDefine &column_define, size_t start_pack_id, size_t read_rows, size_t skip_packs) {
+    const String stream_name = DMFile::getFileNameBase(column_define.id);
+    if (auto iter = column_streams.find(stream_name); iter != column_streams.end())
+    {
+        auto & top_stream  = iter->second;
+        bool   should_seek = shouldSeek(start_pack_id) || skip_packs > 0;
+
+        auto data_type = dmfile->getColumnStat(column_define.id).type;
+        auto column    = data_type->createColumn();
+        data_type->deserializeBinaryBulkWithMultipleStreams( //
+            *column,
+            [&](const IDataType::SubstreamPath & substream_path) {
+                String substream_name = DMFile::getFileNameBase(column_define.id, substream_path);
+                auto & sub_stream     = column_streams.at(substream_name);
+
+                if (should_seek)
+                {
+                    auto & mark = (*sub_stream->marks)[start_pack_id];
+                    sub_stream->buf->seek(mark.offset_in_compressed_file, mark.offset_in_decompressed_block);
+                }
+
+                return sub_stream->buf.get();
+            },
+            read_rows,
+            top_stream->avg_size_hint,
+            true,
+            {});
+        IDataType::updateAvgValueSizeHint(*column, top_stream->avg_size_hint);
+
+        // Cast column's data from DataType in disk to what we need now
+        return convertColumnByColumnDefineIfNeed(data_type, std::move(column), column_define);
+    }
+    else
+    {
+        // New column after ddl is not exist in this DMFile, fill with default value
+        return  createColumnWithDefaultValue(column_define, read_rows);
+    }
 }
 
 } // namespace DM

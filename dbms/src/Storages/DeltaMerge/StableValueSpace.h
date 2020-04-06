@@ -3,6 +3,7 @@
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/Page/PageStorage.h>
+#include <Storages/DeltaMerge/File/ColumnCache.h>
 
 namespace DB
 {
@@ -34,37 +35,22 @@ public:
 
     void enableDMFilesGC();
 
-    SkippableBlockInputStreamPtr getInputStream(const DMContext &     context,
-                                                const ColumnDefines & read_columns,
-                                                const HandleRange &   handle_range,
-                                                const RSOperatorPtr & filter,
-                                                UInt64                max_data_version,
-                                                bool                  enable_clean_read);
+//    SkippableBlockInputStreamPtr getInputStream(const DMContext &     context,
+//                                                const ColumnDefines & read_columns,
+//                                                const HandleRange &   handle_range,
+//                                                const RSOperatorPtr & filter,
+//                                                UInt64                max_data_version,
+//                                                bool                  enable_clean_read);
 
     static StableValueSpacePtr restore(DMContext & context, PageId id);
 
     void recordRemovePacksPages(WriteBatches & wbs) const;
 
-    class ColumnCache : public std::enable_shared_from_this<ColumnCache>, private boost::noncopyable
-    {
-//    public:
-//        void putColumn(size_t pack_id, size_t pack_count, ColumnPtr handle_column, ColumnPtr version_column) {
-//
-//        }
-//
-//        std::pair<std::pair<size_t, size_t>, std::pair<ColumnPtr, ColumnPtr>> tryGetColumn(size_t pack_id, size_t pack_count) {
-//            return {};
-//        }
-
-    private:
-        std::vector<ColumnPtr> handle_columns;
-        std::vector<ColumnPtr> version_columns;
-        std::vector<std::pair<size_t, size_t>> pack_ranges;
-    };
-    using ColumnCachePtr = std::shared_ptr<ColumnCache>;
-
     struct Snapshot : public std::enable_shared_from_this<Snapshot>, private boost::noncopyable
     {
+        Snapshot() {
+            column_cache = std::make_shared<ColumnCache>();
+        }
         StableValueSpacePtr stable;
         ColumnCachePtr column_cache;
 
@@ -101,8 +87,6 @@ private:
     Logger * log;
 };
 
-using StableColumnCache = StableValueSpace::ColumnCache;
-using StableColumnCachePtr = StableValueSpace::ColumnCachePtr;
 using StableSnapshot    = StableValueSpace::Snapshot;
 using StableSnapshotPtr = StableValueSpace::SnapshotPtr;
 

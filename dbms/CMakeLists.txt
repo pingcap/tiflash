@@ -33,7 +33,7 @@ include_directories (src)
 add_subdirectory (src)
 
 set(dbms_headers)
-set(dbms_sources)
+set(dbms_sources src/Storages/DeltaMerge/File/ColumnCache.cpp src/Storages/DeltaMerge/File/ColumnCache.h)
 
 include(${ClickHouse_SOURCE_DIR}/cmake/dbms_glob_sources.cmake)
 

@@ -574,6 +574,7 @@ Handle Segment::getSplitPointFast(DMContext & dm_context, const StableSnapshotPt
                                   {getExtraHandleColumnDefine()},
                                   HandleRange::newAll(),
                                   EMPTY_FILTER,
+                                  ColumnCache::null_cache,
                                   read_pack);
 
     stream.readSuffix();
