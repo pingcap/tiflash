@@ -23,7 +23,7 @@ void dbgFuncMappedTable(Context & context, const ASTs & args, DBGInvoker::Printe
 // Run query using mapped table name. Use place holder $d and $t to specify database name and table name in query.
 // So far at most one database name and table name is supported.
 // Usage:
-//   ./storage-client.sh "DBGInvoke query_mapped('select * from $d.$t'), database_name[, table_name])"
+//   ./storage-client.sh "DBGInvoke query_mapped('select * from $d.$t', database_name[, table_name])"
 BlockInputStreamPtr dbgFuncQueryMapped(Context & context, const ASTs & args);
 
 } // namespace DB
