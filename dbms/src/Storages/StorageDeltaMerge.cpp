@@ -870,7 +870,6 @@ void StorageDeltaMerge::deleteRows(const Context & context, size_t delete_rows)
 void StorageDeltaMerge::alterFromTiDB(const AlterCommands & params, const String & database_name, const TiDB::TableInfo & table_info,
     const SchemaNameMapper & name_mapper, const Context & context)
 {
-    tidb_table_info = table_info;
     alterImpl(params, database_name, name_mapper.mapTableName(table_info),
         std::optional<std::reference_wrapper<const TiDB::TableInfo>>(table_info), context);
 }
@@ -903,6 +902,8 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
     cols_drop_forbidden.insert(VERSION_COLUMN_NAME);
     cols_drop_forbidden.insert(TAG_COLUMN_NAME);
 
+    auto tombstone = getTombstone();
+
     for (const auto & command : commands)
     {
         if (command.type == AlterCommand::MODIFY_PRIMARY_KEY)
@@ -920,11 +921,11 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
         }
         else if (command.type == AlterCommand::TOMBSTONE)
         {
-            setTombstone(command.tombstone);
+            tombstone = command.tombstone;
         }
         else if (command.type == AlterCommand::RECOVER)
         {
-            setTombstone(0);
+            tombstone = 0;
         }
     }
 
@@ -957,8 +958,11 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
     // after update `new_columns` and store's table columns, we need to update create table statement,
     // so that we can restore table next time.
     updateDeltaMergeTableCreateStatement(
-        database_name, table_name_, new_columns, hidden_columns, table_info, store->getTableColumns(), getTombstone(), context);
+        database_name, table_name_, new_columns, hidden_columns, table_info, store->getTableColumns(), tombstone, context);
     setColumns(std::move(new_columns));
+    if (table_info)
+        tidb_table_info = table_info.value();
+    setTombstone(tombstone);
 }
 
 String StorageDeltaMerge::getName() const { return MutableSupport::delta_tree_storage_name; }
