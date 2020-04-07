@@ -43,6 +43,7 @@ public:
                  const HandleRange &   handle_range_,
                  const RSOperatorPtr & filter,
                  ColumnCachePtr & column_cache_,
+                 bool enable_column_cache_,
                  const IdSetPtr &      read_packs,
                  MarkCache *           mark_cache_,
                  MinMaxIndexCache *    index_cache_,
@@ -76,6 +77,7 @@ private:
     DMFilePackFilter pack_filter;
 
     ColumnCachePtr column_cache;
+    bool enable_column_cache;
 
     const std::vector<RSResult> & handle_res;
     const std::vector<UInt8> &    use_packs;

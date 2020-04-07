@@ -101,6 +101,7 @@ DMFileReader::DMFileReader(bool                  enable_clean_read_,
                            const HandleRange &   handle_range_,
                            const RSOperatorPtr & filter_,
                            ColumnCachePtr & column_cache_,
+                           bool enable_column_cache_,
                            const IdSetPtr &      read_packs_,
                            MarkCache *           mark_cache_,
                            MinMaxIndexCache *    index_cache_,
@@ -118,6 +119,7 @@ DMFileReader::DMFileReader(bool                  enable_clean_read_,
       rows_threshold_per_read(rows_threshold_per_read_),
       pack_filter(dmfile_, index_cache_, hash_salt_, handle_range_, filter_, read_packs_),
       column_cache(column_cache_),
+      enable_column_cache(enable_column_cache_),
       handle_res(pack_filter.getHandleRes()),
       use_packs(pack_filter.getUsePacks()),
       skip_packs_by_column(read_columns.size(), 0),
@@ -242,14 +244,29 @@ Block DMFileReader::read()
         }
         else
         {
-            if (cd.id == EXTRA_HANDLE_COLUMN_ID) {
-                auto [cache_range, cache_column] = column_cache->tryGetHandleColumn(start_pack_id, read_packs);
+            if (enable_column_cache && (cd.id == EXTRA_HANDLE_COLUMN_ID || cd.id == VERSION_COLUMN_ID)) {
+                PackRange cache_range;
+                ColumnPtr cache_column;
+                if (cd.id == EXTRA_HANDLE_COLUMN_ID) {
+                    auto cache_result = column_cache->tryGetHandleColumn(start_pack_id, read_packs);
+                    cache_range = cache_result.first;
+                    cache_column = cache_result.second;
+                } else {
+                    auto cache_result = column_cache->tryGetVersionColumn(start_pack_id, read_packs);
+                    cache_range = cache_result.first;
+                    cache_column = cache_result.second;
+                }
                 if (cache_range.second - cache_range.first == 0) {
                     auto column = readFromDisk(cd, start_pack_id, read_rows, skip_packs_by_column[i]);
-                    column_cache->putHandleColumn(start_pack_id, read_packs, column);
+                    if (cd.id == EXTRA_HANDLE_COLUMN_ID) {
+                        column_cache->putHandleColumn(start_pack_id, read_packs, column);
+                    } else {
+                        column_cache->putVersionColumn(start_pack_id, read_packs, column);
+                    }
                     res.insert(ColumnWithTypeAndName{std::move(column), cd.type, cd.name, cd.id});
+                    skip_packs_by_column[i] = 0;
                 } else {
-                    auto ranges = ColumnCache::splitPackRange(cache_range, start_pack_id, start_pack_id + read_packs);
+                    auto ranges = ColumnCache::splitPackRangeByCacheRange(cache_range, start_pack_id, start_pack_id + read_packs);
                     std::vector<size_t> ranges_rows;
                     for (auto & range : ranges) {
                         size_t rows = 0;
@@ -271,6 +288,7 @@ Block DMFileReader::read()
                                 rows_offset += ranges_rows[l];
                             }
                             column->insertRangeFrom(*cache_column, rows_offset, ranges_rows[k]);
+                            skip_packs_by_column[i] += (range.second - range.first);
                         } else {
                             auto sub_column = readFromDisk(cd, range.first, ranges_rows[k], skip_packs_by_column[i]);
                             column->insertRangeFrom(*sub_column, 0, ranges_rows[k]);
@@ -282,9 +300,8 @@ Block DMFileReader::read()
             } else {
                 auto column = readFromDisk(cd, start_pack_id, read_rows, skip_packs_by_column[i]);
                 res.insert(ColumnWithTypeAndName{std::move(column), cd.type, cd.name, cd.id});
+                skip_packs_by_column[i] = 0;
             }
-
-            skip_packs_by_column[i] = 0;
         }
     }
 
