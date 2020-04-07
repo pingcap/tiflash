@@ -1141,6 +1141,10 @@ Segment::ensurePlace(const DMContext & dm_context, const StableValueSpacePtr & s
 
 
     GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_place_index_update).Increment();
+    Stopwatch watch;
+    SCOPE_EXIT({
+        GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_place_index_update).Observe(watch.elapsedSeconds());
+    });
 
     if (placed_delta_rows > delta_rows_limit || placed_delta_deletes > delta_deletes_limit)
     {
