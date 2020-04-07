@@ -189,7 +189,6 @@ inline SchemaChanges detectSchemaChanges(Logger * log, Context & context, const 
                       if (column_info_.id == orig_column_info.id && column_info_.name != orig_column_info.name)
                           LOG_INFO(log, "detect column " << orig_column_info.name << " rename to " << column_info_.name);
 
-                      // TODO: Shouldn't we detect default value change as well???
                       return column_info_.id == orig_column_info.id
                           && (column_info_.tp != orig_column_info.tp || column_info_.hasNotNullFlag() != orig_column_info.hasNotNullFlag());
                   });
@@ -268,7 +267,7 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
     }
 
     std::stringstream ss;
-    ss << "Detected schema changes: " << name_mapper.displayCanonicalName(*db_info, *table_info) << "\n";
+    ss << "Detected schema changes: " << name_mapper.displayCanonicalName(*db_info, *table_info) << ": ";
     for (const auto & schema_change : schema_changes)
         for (const auto & command : schema_change.first)
         {
