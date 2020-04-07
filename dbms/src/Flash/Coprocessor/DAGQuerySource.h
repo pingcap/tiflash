@@ -6,6 +6,7 @@
 #pragma GCC diagnostic pop
 
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DAGDriver.h>
 #include <Interpreters/IQuerySource.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
@@ -29,19 +30,14 @@ public:
     static const String TOPN_NAME;
     static const String LIMIT_NAME;
 
-    DAGQuerySource(Context & context_, DAGContext & dag_context_, RegionID region_id_, UInt64 region_version_, UInt64 region_conf_version_,
-        const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges_, const tipb::DAGRequest & dag_request_);
+    DAGQuerySource(Context & context_, DAGContext & dag_context_, const std::unordered_map<RegionID, RegionInfo> & regions,
+        const tipb::DAGRequest & dag_request_, const bool is_batch_cop_ = false);
 
     std::tuple<std::string, ASTPtr> parse(size_t max_query_size) override;
     String str(size_t max_query_size) override;
     std::unique_ptr<IInterpreter> interpreter(Context & context, QueryProcessingStage::Enum stage) override;
 
     DAGContext & getDAGContext() const { return dag_context; };
-
-    RegionID getRegionID() const { return region_id; }
-    UInt64 getRegionVersion() const { return region_version; }
-    UInt64 getRegionConfVersion() const { return region_conf_version; }
-    const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & getKeyRanges() const { return key_ranges; }
 
     bool hasSelection() const { return sel_index != -1; };
     bool hasAggregation() const { return agg_index != -1; };
@@ -81,11 +77,15 @@ public:
     };
     const tipb::DAGRequest & getDAGRequest() const { return dag_request; };
 
-    std::vector<tipb::FieldType> getResultFieldTypes() const { return result_field_types; };
+    const std::vector<tipb::FieldType> & getResultFieldTypes() const { return result_field_types; };
 
     ASTPtr getAST() const { return ast; };
 
     tipb::EncodeType getEncodeType() const { return encode_type; }
+
+    const std::unordered_map<RegionID, RegionInfo> & getRegions() const { return regions; }
+
+    bool isBatchCop() const { return is_batch_cop; }
 
 protected:
     void assertValid(Int32 index, const String & name) const
@@ -103,10 +103,7 @@ protected:
     Context & context;
     DAGContext & dag_context;
 
-    const RegionID region_id;
-    const UInt64 region_version;
-    const UInt64 region_conf_version;
-    const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges;
+    const std::unordered_map<RegionID, RegionInfo> & regions;
 
     const tipb::DAGRequest & dag_request;
 
@@ -122,6 +119,8 @@ protected:
     tipb::EncodeType encode_type;
 
     ASTPtr ast;
+
+    const bool is_batch_cop;
 };
 
 } // namespace DB
