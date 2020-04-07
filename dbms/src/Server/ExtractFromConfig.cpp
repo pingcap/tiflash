@@ -6,7 +6,6 @@
 #include <Poco/FormattingChannel.h>
 #include <Poco/PatternFormatter.h>
 #include <Poco/AutoPtr.h>
-#include <Poco/String.h>
 
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/Exception.h>
