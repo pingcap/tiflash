@@ -212,12 +212,16 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
             }
             catch (const LockException & e)
             {
+                // We can also use current thread to resolve lock, but it will block next process.
+                // So, force this region retry in another thread in CoprocessorBlockInputStream.
                 force_retry.emplace(e.region_id);
             }
             catch (const RegionException & e)
             {
                 if (tmt.getTerminated())
                     throw Exception("TiFlash server is terminating", ErrorCodes::LOGICAL_ERROR);
+                // By now, RegionException will contain all region id of MvccQueryInfo, which is needed by CHSpark.
+                // When meeting RegionException, we can let MakeRegionQueryInfos to check in next loop.
             }
             catch (DB::Exception & e)
             {
