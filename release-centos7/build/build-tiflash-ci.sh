@@ -24,7 +24,7 @@ cp -r /flash_cluster_manager "$install_dir"/flash_cluster_manager
 if [ -d "$SRCPATH/contrib/kvproto" ]; then
   cd "$SRCPATH/contrib/kvproto"
   rm -rf cpp/kvproto
-  ./generate_cpp.sh
+  ./scripts/generate_cpp.sh
   cd -
 fi
 

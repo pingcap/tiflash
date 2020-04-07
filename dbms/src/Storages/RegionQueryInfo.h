@@ -11,6 +11,8 @@ struct RegionQueryInfo
     UInt64 version;
     UInt64 conf_version;
     HandleRange<HandleID> range_in_table;
+    // required handle ranges is the handle range specified in DAG request
+    std::vector<HandleRange<HandleID>> required_handle_ranges;
 
     bool operator<(const RegionQueryInfo & o) const { return range_in_table < o.range_in_table; }
 };
