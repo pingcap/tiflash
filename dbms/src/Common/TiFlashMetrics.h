@@ -68,7 +68,8 @@ namespace DB
         F(type_delta_compact, {{"type", "delta_compact"}}, ExpBuckets{0.0005, 2, 20}),                                                    \
         F(type_delta_flush, {{"type", "delta_flush"}}, ExpBuckets{0.0005, 2, 20}),                                                        \
         F(type_seg_split, {{"type", "seg_split"}}, ExpBuckets{0.0005, 2, 20}),                                                            \
-        F(type_seg_merge, {{"type", "seg_merge"}}, ExpBuckets{0.0005, 2, 20}))                                                            \
+        F(type_seg_merge, {{"type", "seg_merge"}}, ExpBuckets{0.0005, 2, 20}),                                                            \
+        F(type_place_index_update, {{"type", "seg_merge"}}, ExpBuckets{0.0005, 2, 20}))                                                   \
     M(tiflash_storage_page_gc_count, "Total number of page's gc execution.", Counter, F(type_exec, {"type", "exec"}))                     \
     M(tiflash_storage_page_gc_duration_seconds, "Bucketed histogram of page's gc task duration", Histogram,                               \
         F(type_exec, {{"type", "exec"}}, ExpBuckets{0.0005, 2, 20}), F(type_migrate, {{"type", "migrate"}}, ExpBuckets{0.0005, 2, 20}))
