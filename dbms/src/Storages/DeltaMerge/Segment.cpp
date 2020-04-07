@@ -254,7 +254,7 @@ bool Segment::write(DMContext & dm_context, const HandleRange & delete_range)
 
 SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool is_update) const
 {
-    auto delta_snap = delta->createSnapshot(dm_context, is_update);
+    auto delta_snap  = delta->createSnapshot(dm_context, is_update);
     auto stable_snap = stable->createSnapshot();
     if (!delta_snap || !stable_snap)
         return {};
@@ -1081,16 +1081,16 @@ ColumnDefines Segment::arrangeReadColumns(const ColumnDefine & handle, const Col
 }
 
 template <class IndexIterator, bool skippable_place>
-SkippableBlockInputStreamPtr Segment::getPlacedStream(const DMContext &           dm_context,
-                                                      const ColumnDefines &       read_columns,
-                                                      const HandleRange &         handle_range,
-                                                      const RSOperatorPtr &       filter,
+SkippableBlockInputStreamPtr Segment::getPlacedStream(const DMContext &         dm_context,
+                                                      const ColumnDefines &     read_columns,
+                                                      const HandleRange &       handle_range,
+                                                      const RSOperatorPtr &     filter,
                                                       const StableSnapshotPtr & stable_snap,
-                                                      DeltaSnapshotPtr &          delta_snap,
-                                                      const IndexIterator &       delta_index_begin,
-                                                      const IndexIterator &       delta_index_end,
-                                                      size_t                      index_size,
-                                                      size_t                      expected_block_size) const
+                                                      DeltaSnapshotPtr &        delta_snap,
+                                                      const IndexIterator &     delta_index_begin,
+                                                      const IndexIterator &     delta_index_end,
+                                                      size_t                    index_size,
+                                                      size_t                    expected_block_size) const
 {
     SkippableBlockInputStreamPtr stable_input_stream
         = stable_snap->getInputStream(dm_context, read_columns, handle_range, filter, MAX_UINT64, false);
@@ -1104,8 +1104,7 @@ SkippableBlockInputStreamPtr Segment::getPlacedStream(const DMContext &         
         expected_block_size);
 }
 
-DeltaIndexPtr
-Segment::ensurePlace(const DMContext & dm_context, const StableSnapshotPtr & stable_snap, DeltaSnapshotPtr & delta_snap) const
+DeltaIndexPtr Segment::ensurePlace(const DMContext & dm_context, const StableSnapshotPtr & stable_snap, DeltaSnapshotPtr & delta_snap) const
 {
     // Synchronize between read/read threads.
     std::scoped_lock lock(read_read_mutex);
@@ -1182,12 +1181,12 @@ Segment::ensurePlace(const DMContext & dm_context, const StableSnapshotPtr & sta
 }
 
 template <bool skippable_place>
-void Segment::placeUpsert(const DMContext &           dm_context,
+void Segment::placeUpsert(const DMContext &         dm_context,
                           const StableSnapshotPtr & stable_snap,
-                          DeltaSnapshotPtr &          delta_snap,
-                          size_t                      delta_value_space_offset,
-                          Block &&                    block,
-                          DeltaTree &                 update_delta_tree) const
+                          DeltaSnapshotPtr &        delta_snap,
+                          size_t                    delta_value_space_offset,
+                          Block &&                  block,
+                          DeltaTree &               update_delta_tree) const
 {
     EventRecorder recorder(ProfileEvents::DMPlaceUpsert, ProfileEvents::DMPlaceUpsertNS);
 
@@ -1220,11 +1219,11 @@ void Segment::placeUpsert(const DMContext &           dm_context,
 }
 
 template <bool skippable_place>
-void Segment::placeDelete(const DMContext &           dm_context,
+void Segment::placeDelete(const DMContext &         dm_context,
                           const StableSnapshotPtr & stable_snap,
-                          DeltaSnapshotPtr &          delta_snap,
-                          const HandleRange &         delete_range,
-                          DeltaTree &                 update_delta_tree) const
+                          DeltaSnapshotPtr &        delta_snap,
+                          const HandleRange &       delete_range,
+                          DeltaTree &               update_delta_tree) const
 {
     EventRecorder recorder(ProfileEvents::DMPlaceDeleteRange, ProfileEvents::DMPlaceDeleteRangeNS);
 

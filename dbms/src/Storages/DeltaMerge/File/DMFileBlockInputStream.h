@@ -1,9 +1,9 @@
 #pragma once
 
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
-#include <Storages/DeltaMerge/File/ColumnCache.h>
 
 namespace DB
 {
@@ -21,7 +21,7 @@ public:
                            const ColumnDefines & read_columns,
                            const HandleRange &   handle_range,
                            const RSOperatorPtr & filter,
-                           ColumnCachePtr & column_cache_,
+                           ColumnCachePtr &      column_cache_,
                            const IdSetPtr &      read_packs,
                            size_t                expected_size = DMFILE_READ_ROWS_THRESHOLD)
         : reader(enable_clean_read,

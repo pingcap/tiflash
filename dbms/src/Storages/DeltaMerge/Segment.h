@@ -4,11 +4,11 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/DeltaValueSpace.h>
-#include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Index/MinMax.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
+#include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/Page/PageDefines.h>
 
 namespace DB
@@ -32,7 +32,7 @@ using Segments    = std::vector<SegmentPtr>;
 /// A structure stores the informations to constantly read a segment instance.
 struct SegmentSnapshot : private boost::noncopyable
 {
-    DeltaSnapshotPtr    delta;
+    DeltaSnapshotPtr  delta;
     StableSnapshotPtr stable;
 
     SegmentSnapshot(const DeltaSnapshotPtr & delta_, const StableSnapshotPtr & stable_) : delta(delta_), stable(stable_) {}
@@ -200,22 +200,21 @@ public:
     bool hasAbandoned() { return delta->hasAbandoned(); }
 
 private:
-
     ReadInfo getReadInfo(const DMContext & dm_context, const ColumnDefines & read_columns, const SegmentSnapshotPtr & segment_snap) const;
 
     static ColumnDefines arrangeReadColumns(const ColumnDefine & handle, const ColumnDefines & columns_to_read);
 
     template <class IndexIterator = DeltaIndex::Iterator, bool skippable_place = false>
-    SkippableBlockInputStreamPtr getPlacedStream(const DMContext &           dm_context,
-                                                 const ColumnDefines &       read_columns,
-                                                 const HandleRange &         handle_range,
-                                                 const RSOperatorPtr &       filter,
+    SkippableBlockInputStreamPtr getPlacedStream(const DMContext &         dm_context,
+                                                 const ColumnDefines &     read_columns,
+                                                 const HandleRange &       handle_range,
+                                                 const RSOperatorPtr &     filter,
                                                  const StableSnapshotPtr & stable_snap,
-                                                 DeltaSnapshotPtr &          delta_snap,
-                                                 const IndexIterator &       delta_index_begin,
-                                                 const IndexIterator &       delta_index_end,
-                                                 size_t                      index_size,
-                                                 size_t                      expected_block_size) const;
+                                                 DeltaSnapshotPtr &        delta_snap,
+                                                 const IndexIterator &     delta_index_begin,
+                                                 const IndexIterator &     delta_index_end,
+                                                 size_t                    index_size,
+                                                 size_t                    expected_block_size) const;
 
     /// Merge delta & stable, and then take the middle one.
     Handle getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, const SegmentSnapshotPtr & segment_snap) const;
@@ -234,19 +233,19 @@ private:
 
     /// Reference the inserts/updates by delta tree.
     template <bool skippable_place>
-    void placeUpsert(const DMContext &           dm_context,
+    void placeUpsert(const DMContext &         dm_context,
                      const StableSnapshotPtr & stable_snap,
-                     DeltaSnapshotPtr &          delta_snap,
-                     size_t                      delta_value_space_offset,
-                     Block &&                    block,
-                     DeltaTree &                 delta_tree) const;
+                     DeltaSnapshotPtr &        delta_snap,
+                     size_t                    delta_value_space_offset,
+                     Block &&                  block,
+                     DeltaTree &               delta_tree) const;
     /// Reference the deletes by delta tree.
     template <bool skippable_place>
-    void placeDelete(const DMContext &           dm_context,
+    void placeDelete(const DMContext &         dm_context,
                      const StableSnapshotPtr & stable_snap,
-                     DeltaSnapshotPtr &          delta_snap,
-                     const HandleRange &         delete_range,
-                     DeltaTree &                 delta_tree) const;
+                     DeltaSnapshotPtr &        delta_snap,
+                     const HandleRange &       delete_range,
+                     DeltaTree &               delta_tree) const;
 
     size_t stableRows() const;
     size_t deltaRows() const;

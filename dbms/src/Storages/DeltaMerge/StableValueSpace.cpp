@@ -170,18 +170,18 @@ using SnapshotPtr = std::shared_ptr<Snapshot>;
 
 SnapshotPtr StableValueSpace::createSnapshot()
 {
-    auto snap = std::make_shared<Snapshot>();
+    auto snap    = std::make_shared<Snapshot>();
     snap->stable = this->shared_from_this();
 
     return snap;
 }
 
 SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DMContext &     context, //
-                                                              const ColumnDefines & read_columns,
-                                                              const HandleRange &   handle_range,
-                                                              const RSOperatorPtr & filter,
-                                                              UInt64                max_data_version,
-                                                              bool                  enable_clean_read)
+                                                                        const ColumnDefines & read_columns,
+                                                                        const HandleRange &   handle_range,
+                                                                        const RSOperatorPtr & filter,
+                                                                        UInt64                max_data_version,
+                                                                        bool                  enable_clean_read)
 {
     SkippableBlockInputStreams streams;
     for (auto & file : stable->files)
