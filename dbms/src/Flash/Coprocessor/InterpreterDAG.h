@@ -87,7 +87,6 @@ private:
     AnalysisResult analyzeExpressions();
     void recordProfileStreams(Pipeline & pipeline, Int32 index);
     bool addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, Pipeline & pipeline);
-    RegionException::RegionReadStatus getRegionReadStatus(const RegionPtr & current_region);
 
 private:
     Context & context;
@@ -107,9 +106,6 @@ private:
 
     const bool keep_session_timezone_info;
 
-    bool filter_on_handle = false;
-    tipb::Expr handle_filter_expr;
-    Int32 handle_col_id = -1;
     std::vector<const tipb::Expr *> conditions;
 
     Poco::Logger * log;
