@@ -144,13 +144,13 @@ void DAGDriver<batch>::recordError(Int32 err_code , const String & err_msg)
 {
     if constexpr (batch)
     {
+        std::ignore = err_code;
         coprocessor::BatchResponse err_response;
         err_response.set_other_error(err_msg);
         writer->Write(err_response);
     }
     else
     {
-        std::ignore = err_code;
         dag_response->Clear();
         tipb::Error * error = dag_response->mutable_error();
         error->set_code(err_code);
