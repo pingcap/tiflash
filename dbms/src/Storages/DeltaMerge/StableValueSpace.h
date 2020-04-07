@@ -35,13 +35,6 @@ public:
 
     void enableDMFilesGC();
 
-    //    SkippableBlockInputStreamPtr getInputStream(const DMContext &     context,
-    //                                                const ColumnDefines & read_columns,
-    //                                                const HandleRange &   handle_range,
-    //                                                const RSOperatorPtr & filter,
-    //                                                UInt64                max_data_version,
-    //                                                bool                  enable_clean_read);
-
     static StableValueSpacePtr restore(DMContext & context, PageId id);
 
     void recordRemovePacksPages(WriteBatches & wbs) const;
