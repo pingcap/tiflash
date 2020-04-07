@@ -12,21 +12,6 @@
 #include <Common/Exception.h>
 #include <Common/Config/TOMLConfiguration.h>
 
-
-static std::string normalize(const std::string & log_level)
-{
-    std::string norm = Poco::toLower(log_level);
-    // normalize
-    // info -> information
-    // warn -> warning
-    if (norm == "info")
-        return "information";
-    else if (norm == "warn")
-        return "warning";
-    else
-        return norm;
-}
-
 static void setupLogging(const std::string & log_level)
 {
     Poco::AutoPtr<Poco::ConsoleChannel> channel(new Poco::ConsoleChannel);
@@ -34,7 +19,7 @@ static void setupLogging(const std::string & log_level)
     formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i <%p> %s: %t");
     Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
     Poco::Logger::root().setChannel(formatting_channel);
-    Poco::Logger::root().setLevel(normalize(log_level));
+    Poco::Logger::root().setLevel(log_level);
 }
 
 static std::string extractFromConfig(
