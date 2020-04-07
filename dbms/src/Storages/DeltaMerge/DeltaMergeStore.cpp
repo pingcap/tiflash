@@ -513,6 +513,26 @@ void DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const HandleRa
     }
 }
 
+void DeltaMergeStore::mergeDeltaAll(const Context & context)
+{
+    auto dm_context = newDMContext(context, context.getSettingsRef());
+
+    std::vector<SegmentPtr> all_segments;
+    {
+        std::shared_lock lock(read_write_mutex);
+        for (auto & [range_end, segment] : segments)
+        {
+            (void)range_end;
+            all_segments.push_back(segment);
+        }
+    }
+
+    for (auto & segment : all_segments)
+    {
+        segmentMergeDelta(*dm_context, segment, true);
+    }
+}
+
 void DeltaMergeStore::compact(const Context & db_context, const HandleRange & range)
 {
     auto dm_context = newDMContext(db_context, db_context.getSettingsRef());
