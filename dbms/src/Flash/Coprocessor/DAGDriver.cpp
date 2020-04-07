@@ -140,7 +140,7 @@ catch (...)
 }
 
 template <bool batch>
-void DAGDriver<batch>::recordError(Int32 err_code, const String & err_msg)
+void DAGDriver<batch>::recordError(Int32 err_code , const String & err_msg)
 {
     if constexpr (batch)
     {
@@ -150,6 +150,7 @@ void DAGDriver<batch>::recordError(Int32 err_code, const String & err_msg)
     }
     else
     {
+        std::ignore = err_code;
         dag_response->Clear();
         tipb::Error * error = dag_response->mutable_error();
         error->set_code(err_code);
