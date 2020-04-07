@@ -1111,8 +1111,7 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
             task_end++;
         if (task_end == task_start)
             continue;
-        std::vector<pingcap::coprocessor::copTask> tasks;
-        tasks.insert(tasks.end(), all_tasks.begin() + task_start, all_tasks.begin() + task_end);
+        std::vector<pingcap::coprocessor::copTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
 
         BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(cluster, tasks, schema, 1);
         pipeline.streams.push_back(input);
