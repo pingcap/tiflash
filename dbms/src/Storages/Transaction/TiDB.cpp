@@ -450,11 +450,14 @@ try
 
     auto cols_arr = obj->getArray("cols");
     columns.clear();
-    for (size_t i = 0; i < cols_arr->size(); i++)
+    if (!cols_arr.isNull())
     {
-        auto col_json = cols_arr->getObject(i);
-        ColumnInfo column_info(col_json);
-        columns.emplace_back(column_info);
+        for (size_t i = 0; i < cols_arr->size(); i++)
+        {
+            auto col_json = cols_arr->getObject(i);
+            ColumnInfo column_info(col_json);
+            columns.emplace_back(column_info);
+        }
     }
 
     state = static_cast<SchemaState>(obj->getValue<Int32>("state"));
@@ -476,6 +479,10 @@ try
     if (obj->has("view") && !obj->getObject("view").isNull())
     {
         is_view = true;
+    }
+    if (obj->has("sequence") && !obj->getObject("sequence").isNull())
+    {
+        is_sequence = true;
     }
 }
 catch (const Poco::Exception & e)
