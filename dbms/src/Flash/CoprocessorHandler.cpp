@@ -68,7 +68,7 @@ grpc::Status CoprocessorHandler::execute()
                         cop_context.kv_context.region_epoch().conf_ver(), GenCopKeyRange(cop_request->ranges())));
                 DAGDriver driver(cop_context.db_context, dag_request, regions,
                     cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(),
-                    dag_response);
+                    &dag_response);
                 driver.execute();
                 cop_response->set_data(dag_response.SerializeAsString());
                 LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");

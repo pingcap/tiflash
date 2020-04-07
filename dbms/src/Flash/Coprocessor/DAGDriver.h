@@ -27,15 +27,18 @@ public:
 
 /// An abstraction of driver running DAG request.
 /// Now is a naive native executor. Might get evolved to drive MPP-like computation.
+
+template <bool batch = false>
 class DAGDriver
 {
 public:
     DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, const std::unordered_map<RegionID, RegionInfo> & regions_,
-        UInt64 start_ts, UInt64 schema_ver, tipb::SelectResponse & dag_response_, bool internal_ = false);
+        UInt64 start_ts, UInt64 schema_ver, tipb::SelectResponse * dag_response_, bool internal_ = false);
+
+    DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, const std::unordered_map<RegionID, RegionInfo> & regions_,
+        UInt64 start_ts, UInt64 schema_ver, ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer, bool internal_ = false);
 
     void execute();
-
-    void batchExecute(::grpc::ServerWriter<::coprocessor::BatchResponse> * writer);
 
 private:
     void recordError(Int32 err_code, const String & err_msg);
@@ -47,7 +50,9 @@ private:
 
     const std::unordered_map<RegionID, RegionInfo> & regions;
 
-    tipb::SelectResponse & dag_response;
+    tipb::SelectResponse * dag_response;
+
+    ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer;
 
     bool internal;
 

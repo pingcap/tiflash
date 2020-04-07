@@ -61,17 +61,11 @@ grpc::Status BatchCoprocessorHandler::execute()
                 LOG_DEBUG(log,
                     __PRETTY_FUNCTION__ << ": Handling " << regions.size() << " regions in DAG request: " << dag_request.DebugString());
 
-                tipb::SelectResponse dag_response; // unused
-                DAGDriver driver(cop_context.db_context, dag_request, regions,
+                DAGDriver<true> driver(cop_context.db_context, dag_request, regions,
                     cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(),
-                    dag_response);
+                    writer);
                 // batch execution;
-                driver.batchExecute(writer);
-                if (dag_response.has_error())
-                {
-                    err_response.set_other_error(dag_response.error().msg());
-                    writer->Write(err_response);
-                }
+                driver.execute();
                 LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");
                 break;
             }

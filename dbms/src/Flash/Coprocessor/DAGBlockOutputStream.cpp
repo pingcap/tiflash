@@ -12,24 +12,25 @@ extern const int UNSUPPORTED_PARAMETER;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-template<>
-DAGBlockOutputStream<false>::DAGBlockOutputStream(tipb::SelectResponse * dag_response_, Int64 records_per_chunk_, tipb::EncodeType encodeType,
-    std::vector<tipb::FieldType> result_field_types_, Block && header_)
+template <>
+DAGBlockOutputStream<false>::DAGBlockOutputStream(tipb::SelectResponse * dag_response_, Int64 records_per_chunk_,
+    tipb::EncodeType encode_type_, std::vector<tipb::FieldType> result_field_types_, Block && header_)
     : dag_response(dag_response_),
       result_field_types(std::move(result_field_types_)),
       header(std::move(header_)),
       records_per_chunk(records_per_chunk_),
+      encode_type(encode_type_),
       current_records_num(0)
 {
-    if (encodeType == tipb::EncodeType::TypeDefault)
+    if (encode_type == tipb::EncodeType::TypeDefault)
     {
         chunk_codec_stream = std::make_unique<DefaultChunkCodec>()->newCodecStream(result_field_types);
     }
-    else if (encodeType == tipb::EncodeType::TypeChunk)
+    else if (encode_type == tipb::EncodeType::TypeChunk)
     {
         chunk_codec_stream = std::make_unique<ArrowChunkCodec>()->newCodecStream(result_field_types);
     }
-    else if (encodeType == tipb::EncodeType::TypeCHBlock)
+    else if (encode_type == tipb::EncodeType::TypeCHBlock)
     {
         chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(result_field_types);
         records_per_chunk = -1;
@@ -38,45 +39,46 @@ DAGBlockOutputStream<false>::DAGBlockOutputStream(tipb::SelectResponse * dag_res
     {
         throw Exception("Only Default and Arrow encode type is supported in DAGBlockOutputStream.", ErrorCodes::UNSUPPORTED_PARAMETER);
     }
-    dag_response->set_encode_type(encodeType);
+    dag_response->set_encode_type(encode_type);
 }
 
-template<>
-DAGBlockOutputStream<true>::DAGBlockOutputStream(::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_, Int64 records_per_chunk_, tipb::EncodeType encodeType,
-                                           std::vector<tipb::FieldType> result_field_types_, Block && header_)
-        : writer(writer_),
-          result_field_types(std::move(result_field_types_)),
-          header(std::move(header_)),
-          records_per_chunk(records_per_chunk_),
-          encode_type(encodeType),
-          current_records_num(0)
+template <>
+DAGBlockOutputStream<true>::DAGBlockOutputStream(::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_, Int64 records_per_chunk_,
+    tipb::EncodeType encode_type_, std::vector<tipb::FieldType> result_field_types_, Block && header_)
+    : writer(writer_),
+      result_field_types(std::move(result_field_types_)),
+      header(std::move(header_)),
+      records_per_chunk(records_per_chunk_),
+      encode_type(encode_type_),
+      current_records_num(0)
 {
-    if (encodeType == tipb::EncodeType::TypeDefault)
+    if (encode_type == tipb::EncodeType::TypeDefault)
     {
         chunk_codec_stream = std::make_unique<DefaultChunkCodec>()->newCodecStream(result_field_types);
     }
-    else if (encodeType == tipb::EncodeType::TypeChunk)
+    else if (encode_type == tipb::EncodeType::TypeChunk)
     {
         chunk_codec_stream = std::make_unique<ArrowChunkCodec>()->newCodecStream(result_field_types);
     }
-    else if (encodeType == tipb::EncodeType::TypeCHBlock)
+    else if (encode_type == tipb::EncodeType::TypeCHBlock)
     {
         chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(result_field_types);
         records_per_chunk = -1;
     }
     else
     {
-        throw Exception("Only Default and Arrow encode type is supported in StreamingDAGBlockOutputStream.", ErrorCodes::UNSUPPORTED_PARAMETER);
+        throw Exception(
+            "Only Default and Arrow encode type is supported in StreamingDAGBlockOutputStream.", ErrorCodes::UNSUPPORTED_PARAMETER);
     }
 }
 
-template<bool streaming>
+template <bool streaming>
 void DAGBlockOutputStream<streaming>::writePrefix()
 {
     //something to do here?
 }
 
-template<>
+template <>
 void DAGBlockOutputStream<false>::encodeChunkToDAGResponse()
 {
     auto dag_chunk = dag_response->add_chunks();
@@ -86,7 +88,7 @@ void DAGBlockOutputStream<false>::encodeChunkToDAGResponse()
     current_records_num = 0;
 }
 
-template<>
+template <>
 void DAGBlockOutputStream<true>::encodeChunkToDAGResponse()
 {
     ::coprocessor::BatchResponse resp;
@@ -105,7 +107,7 @@ void DAGBlockOutputStream<true>::encodeChunkToDAGResponse()
     writer->Write(resp);
 }
 
-template<bool streaming>
+template <bool streaming>
 void DAGBlockOutputStream<streaming>::writeSuffix()
 {
     // todo error handle
@@ -115,7 +117,7 @@ void DAGBlockOutputStream<streaming>::writeSuffix()
     }
 }
 
-template<bool streaming>
+template <bool streaming>
 void DAGBlockOutputStream<streaming>::write(const Block & block)
 {
     if (block.columns() != result_field_types.size())
