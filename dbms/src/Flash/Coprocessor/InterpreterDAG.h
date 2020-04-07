@@ -37,7 +37,7 @@ public:
     BlockIO execute();
 
 private:
-    BlockInputStreams executeQueryBlock(DAGQueryBlock & query_block);
+    BlockInputStreams executeQueryBlock(DAGQueryBlock & query_block, std::vector<SubqueriesForSets> & subqueriesForSets);
     void executeUnion(Pipeline & pipeline);
     /*
     void executeImpl(Pipeline & pipeline);
