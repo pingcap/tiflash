@@ -174,6 +174,11 @@ bool isExtraColumn(const ColumnDefine & cd)
     return cd.id == EXTRA_HANDLE_COLUMN_ID || cd.id == VERSION_COLUMN_ID || cd.id == TAG_COLUMN_ID;
 }
 
+bool isCacheableColumn(const ColumnDefine & cd)
+{
+    return cd.id == EXTRA_HANDLE_COLUMN_ID || cd.id == VERSION_COLUMN_ID;
+}
+
 Block DMFileReader::read()
 {
     // Go to next available pack.
@@ -244,7 +249,7 @@ Block DMFileReader::read()
         }
         else
         {
-            if (enable_column_cache && (cd.id == EXTRA_HANDLE_COLUMN_ID || cd.id == VERSION_COLUMN_ID))
+            if (enable_column_cache && isCacheableColumn(cd))
             {
                 auto read_strategy = column_cache->getReadStrategy(start_pack_id, read_packs, cd.id);
 
