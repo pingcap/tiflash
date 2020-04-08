@@ -387,7 +387,7 @@ public:
     PartPathSelector & getPartPathSelector();
 
     void initializeTiFlashMetrics();
-    TiFlashMetricsPtr getTiFlashMetrics();
+    TiFlashMetricsPtr getTiFlashMetrics() const;
 
     Clusters & getClusters() const;
     std::shared_ptr<Cluster> getCluster(const std::string & cluster_name) const;

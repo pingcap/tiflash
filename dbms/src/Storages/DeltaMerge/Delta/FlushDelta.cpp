@@ -221,16 +221,13 @@ bool DeltaValueSpace::flush(DMContext & context)
 
     ProfileEvents::increment(ProfileEvents::DMWriteBytes, flush_bytes);
 
-
-    if (auto metrics = const_cast<Context &>(context.db_context).getTiFlashMetrics(); metrics)
-    {
-        // Also update the write amplification
-        auto total_write  = ProfileEvents::counters[ProfileEvents::DMWriteBytes].load(std::memory_order_relaxed);
-        auto actual_write = ProfileEvents::counters[ProfileEvents::PSMWriteBytes].load(std::memory_order_relaxed)
-            + ProfileEvents::counters[ProfileEvents::WriteBufferFromFileDescriptorWriteBytes].load(std::memory_order_relaxed)
-            + ProfileEvents::counters[ProfileEvents::WriteBufferAIOWriteBytes].load(std::memory_order_relaxed);
-        GET_METRIC(metrics, tiflash_storage_write_amplification).Set((double)(actual_write / 1024 / 1024) / (total_write / 1024 / 1024));
-    }
+    // Also update the write amplification
+    auto total_write  = ProfileEvents::counters[ProfileEvents::DMWriteBytes].load(std::memory_order_relaxed);
+    auto actual_write = ProfileEvents::counters[ProfileEvents::PSMWriteBytes].load(std::memory_order_relaxed)
+        + ProfileEvents::counters[ProfileEvents::WriteBufferFromFileDescriptorWriteBytes].load(std::memory_order_relaxed)
+        + ProfileEvents::counters[ProfileEvents::WriteBufferAIOWriteBytes].load(std::memory_order_relaxed);
+    GET_METRIC(context.metrics, tiflash_storage_write_amplification)
+        .Set((double)(actual_write / 1024 / 1024) / (total_write / 1024 / 1024));
 
     return true;
 }

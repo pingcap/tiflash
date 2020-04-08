@@ -308,6 +308,8 @@ private:
 private:
     String      path;
     PathPool    extra_paths;
+    Context &   global_context;
+    Settings    settings;
     StoragePool storage_pool;
 
     String db_name;
@@ -325,9 +327,6 @@ private:
     BackgroundProcessingPool &           background_pool;
     BackgroundProcessingPool::TaskHandle gc_handle;
     BackgroundProcessingPool::TaskHandle background_task_handle;
-
-    Context & global_context;
-    Settings  settings;
 
     /// end of range -> segment
     SegmentSortedMap segments;
