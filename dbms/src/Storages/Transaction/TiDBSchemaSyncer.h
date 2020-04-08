@@ -6,6 +6,7 @@
 #include <Debug/MockSchemaNameMapper.h>
 #include <Storages/Transaction/SchemaBuilder.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiDB.h>
 #include <pingcap/kv/Cluster.h>
 #include <pingcap/kv/Snapshot.h>
 
@@ -66,20 +67,28 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         return getter.listDBs();
     }
 
-    std::vector<std::pair<TableInfoPtr, DBInfoPtr>> fetchAllTables(const std::vector<TiDB::DBInfoPtr> & all_databases) override
+    std::vector<std::pair<TiDB::TableID, TiDB::DatabaseID>> fetchAllTablesMapping(
+        const std::vector<TiDB::DBInfoPtr> & all_databases) override
     {
         auto getter = createSchemaGetter();
-        std::vector<std::pair<TableInfoPtr, DBInfoPtr>> all_tables;
+        std::vector<std::pair<TiDB::TableID, TiDB::DatabaseID>> all_tables;
         for (const auto & db : all_databases)
         {
-            std::vector<TableInfoPtr> tables = getter.listTables(db->id);
+            const std::vector<TiDB::TableInfoPtr> tables = getter.listTables(db->id);
             for (const auto & table : tables)
             {
-                all_tables.emplace_back(table, db);
+                /// Ignore view and sequence.
+                if (table->is_view || table->is_sequence)
+                {
+                    continue;
+                }
+
+                all_tables.emplace_back(table->id, db->id);
                 if (table->isLogicalPartitionTable())
                 {
-                    auto partition_tables = collectPartitionTables(*table, db);
-                    all_tables.insert(all_tables.end(), partition_tables.begin(), partition_tables.end());
+                    const auto & parts_def = table->partition.definitions;
+                    std::for_each(parts_def.begin(), parts_def.end(), //
+                        [&all_tables, &db](const auto & def) { all_tables.emplace_back(def.id, db->id); });
                 }
             }
         }
@@ -134,9 +143,8 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     {
         std::lock_guard<std::mutex> lock(schema_mutex);
 
-        auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) {
-            return NameMapper().mapDatabaseName(*pair.second) == mapped_database_name;
-        });
+        auto it = std::find_if(databases.begin(), databases.end(),
+            [&](const auto & pair) { return NameMapper().mapDatabaseName(*pair.second) == mapped_database_name; });
         if (it == databases.end())
             return nullptr;
         return it->second;

@@ -103,7 +103,7 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
 
     /// Create directories for tables metadata.
     String path = context.getPath();
-    // The directory for storing all tables' metadata sql file for this database.
+    // Create the directory for storing all tables' metadata sql file for this database.
     // For tiflash, we store all tables' metadata sql file in the same directory.
     String metadata_path = path + "metadata/";
     Poco::File(metadata_path).createDirectory();

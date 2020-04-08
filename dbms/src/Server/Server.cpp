@@ -488,7 +488,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             IDAsPathUpgrader upgrader(*global_context);
             if (!upgrader.needUpgrade())
                 break;
-            upgrader.prepare();
             upgrader.doUpgrade();
         } while (0);
 
