@@ -7,6 +7,8 @@
 namespace DB
 {
 
+std::vector<std::pair<TableInfoPtr, DBInfoPtr>> collectPartitionTables(const TableInfo & table_info, DBInfoPtr db_info);
+
 template <typename Getter, typename NameMapper>
 struct SchemaBuilder
 {

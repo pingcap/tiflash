@@ -1,14 +1,22 @@
 #pragma once
 
-#include <IO/ReadBufferFromString.h>
-#include <Interpreters/Context.h>
-#include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
 
+#include <memory>
+#include <vector>
+
+namespace TiDB
+{
+struct DBInfo;
+using DBInfoPtr = std::shared_ptr<DBInfo>;
+struct TableInfo;
+using TableInfoPtr = std::shared_ptr<TableInfo>;
+} // namespace TiDB
 
 namespace DB
 {
+class Context;
 
 class SchemaSyncer
 {
@@ -31,6 +39,10 @@ public:
     virtual TiDB::DBInfoPtr getDBInfoByName(const String & database_name) = 0;
 
     virtual TiDB::DBInfoPtr getDBInfoByMappedName(const String & mapped_database_name) = 0;
+
+    virtual std::vector<TiDB::DBInfoPtr> fetchAllDBs() = 0;
+
+    virtual std::vector<std::pair<TableInfoPtr, DBInfoPtr>> fetchAllTables(const std::vector<TiDB::DBInfoPtr> & all_databases) = 0;
 };
 
 using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;

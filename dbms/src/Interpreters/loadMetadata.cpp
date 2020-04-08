@@ -1,33 +1,26 @@
-#include <iomanip>
-#include <thread>
-#include <future>
-
-#include <common/ThreadPool.h>
-
+#include <Common/Stopwatch.h>
+#include <Common/escapeForFileName.h>
+#include <Databases/DatabaseOrdinary.h>
+#include <IO/ReadBufferFromFile.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/InterpreterCreateQuery.h>
+#include <Interpreters/loadMetadata.h>
+#include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ParserCreateQuery.h>
+#include <Parsers/parseQuery.h>
 #include <Poco/DirectoryIterator.h>
 #include <Poco/FileStream.h>
+#include <common/ThreadPool.h>
 
-#include <Parsers/ParserCreateQuery.h>
-#include <Parsers/ASTCreateQuery.h>
-#include <Parsers/parseQuery.h>
-
-#include <Interpreters/InterpreterCreateQuery.h>
-#include <Interpreters/Context.h>
-#include <Interpreters/loadMetadata.h>
-
-#include <Databases/DatabaseOrdinary.h>
-
-#include <IO/ReadBufferFromFile.h>
-#include <Common/escapeForFileName.h>
-
-#include <Common/Stopwatch.h>
+#include <future>
+#include <iomanip>
+#include <thread>
 
 
 namespace DB
 {
 
-static void executeCreateQuery(
-    const String & query,
+static void executeCreateQuery(const String & query,
     Context & context,
     const String & database,
     const String & file_name,
@@ -51,11 +44,7 @@ static void executeCreateQuery(
 
 
 static void loadDatabase(
-    Context & context,
-    const String & database,
-    const String & database_path,
-    ThreadPool * thread_pool,
-    bool force_restore_data)
+    Context & context, const String & database, const String & database_path, ThreadPool * thread_pool, bool force_restore_data)
 {
     /// There may exist .sql file with database creation statement.
     /// Or, if it is absent, then database with default engine is created.
@@ -123,7 +112,7 @@ void loadMetadata(Context & context)
 
 void loadMetadataSystem(Context & context)
 {
-    String path = context.getPath() + "metadata/" SYSTEM_DATABASE;
+    const String path = context.getPath() + "metadata/" SYSTEM_DATABASE;
     if (Poco::File(path).exists())
     {
         /// 'has_force_restore_data_flag' is true, to not fail on loading query_log table, if it is corrupted.
@@ -132,14 +121,13 @@ void loadMetadataSystem(Context & context)
     else
     {
         /// Initialize system database manually
-        String global_path = context.getPath();
+        const String global_path = context.getPath();
         Poco::File(global_path + "data/" SYSTEM_DATABASE).createDirectories();
         Poco::File(global_path + "metadata/" SYSTEM_DATABASE).createDirectories();
 
         auto system_database = std::make_shared<DatabaseOrdinary>(SYSTEM_DATABASE, global_path + "metadata/" SYSTEM_DATABASE, context);
         context.addDatabase(SYSTEM_DATABASE, system_database);
     }
-
 }
 
-}
+} // namespace DB

@@ -38,8 +38,9 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     bool isTooOldSchema(Int64 cur_ver, Int64 new_version) { return cur_ver == 0 || new_version - cur_ver > maxNumberOfDiffs; }
 
-    Getter createSchemaGetter(UInt64 tso [[maybe_unused]])
+    Getter createSchemaGetter()
     {
+        [[maybe_unused]] auto tso = cluster->pd_client->getTS();
         if constexpr (mock_getter)
         {
             return Getter();
@@ -59,6 +60,32 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         cur_version = 0;
     }
 
+    std::vector<TiDB::DBInfoPtr> fetchAllDBs() override
+    {
+        auto getter = createSchemaGetter();
+        return getter.listDBs();
+    }
+
+    std::vector<std::pair<TableInfoPtr, DBInfoPtr>> fetchAllTables(const std::vector<TiDB::DBInfoPtr> & all_databases) override
+    {
+        auto getter = createSchemaGetter();
+        std::vector<std::pair<TableInfoPtr, DBInfoPtr>> all_tables;
+        for (const auto & db : all_databases)
+        {
+            std::vector<TableInfoPtr> tables = getter.listTables(db->id);
+            for (const auto & table : tables)
+            {
+                all_tables.emplace_back(table, db);
+                if (table->isLogicalPartitionTable())
+                {
+                    auto partition_tables = collectPartitionTables(*table, db);
+                    all_tables.insert(all_tables.end(), partition_tables.begin(), partition_tables.end());
+                }
+            }
+        }
+        return all_tables;
+    }
+
     Int64 getCurrentVersion() override
     {
         std::lock_guard<std::mutex> lock(schema_mutex);
@@ -69,8 +96,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     {
         std::lock_guard<std::mutex> lock(schema_mutex);
 
-        auto tso = cluster->pd_client->getTS();
-        auto getter = createSchemaGetter(tso);
+        auto getter = createSchemaGetter();
         Int64 version = getter.getVersion();
         if (version <= cur_version)
         {
