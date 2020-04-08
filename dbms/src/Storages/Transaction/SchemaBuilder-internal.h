@@ -1,11 +1,11 @@
 #pragma once
 
+#include <Core/Types.h>
+#include <Storages/Transaction/Types.h>
+
 #include <map>
 #include <set>
 #include <utility>
-
-#include <Core/Types.h>
-#include <Storages/Transaction/Types.h>
 
 /// === Some Private struct / method for SchemaBuilder
 /// Notice that this file should only included by SchemaBuilder.cpp and unittest for this file.
@@ -34,9 +34,14 @@ struct ColumnNameWithID
 
     explicit ColumnNameWithID(String name_ = "", ColumnID id_ = 0) : name(std::move(name_)), id(id_) {}
 
+    bool equals(const ColumnNameWithID & rhs) const { return name == rhs.name && id == rhs.id; }
+
+    // This is for only compare column name in CyclicRenameResolver
     bool operator==(const ColumnNameWithID & rhs) const { return name == rhs.name; }
 
     bool operator<(const ColumnNameWithID & rhs) const { return name < rhs.name; }
+
+    String toString() const { return name + "(" + std::to_string(id) + ")"; }
 };
 
 struct TmpColNameWithIDGenerator
@@ -92,11 +97,12 @@ private:
             result.push_back(NamePair(origin_name, target_name));
             return NamePair();
         }
-        else if (visited.find(target_name) != visited.end())
+        else if (auto visited_iter = visited.find(target_name); visited_iter != visited.end())
         {
-            // The target name is visited, so this is a cyclic rename.
-            auto tmp_name = name_gen(target_name);
-            result.push_back(NamePair(target_name, tmp_name));
+            // The target name is visited, so this is a cyclic rename, generate a tmp name for visited column to break the cyclic.
+            const Name & visited_name = *visited_iter;
+            auto tmp_name = name_gen(visited_name);
+            result.push_back(NamePair(visited_name, tmp_name));
             result.push_back(NamePair(origin_name, target_name));
             return NamePair(target_name, tmp_name);
         }
