@@ -13,7 +13,7 @@ install_dir="$SRCPATH/release-centos7/tiflash"
 if [ -d "$SRCPATH/contrib/kvproto" ]; then
   cd "$SRCPATH/contrib/kvproto"
   rm -rf cpp/kvproto
-  ./generate_cpp.sh
+  ./scripts/generate_cpp.sh
   cd -
 fi
 
