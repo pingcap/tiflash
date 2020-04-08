@@ -31,6 +31,7 @@ DAGDriver<false>::DAGDriver(Context & context_, const tipb::DAGRequest & dag_req
       dag_request(dag_request_),
       regions(regions_),
       dag_response(dag_response_),
+      writer(nullptr),
       internal(internal_),
       log(&Logger::get("DAGDriver"))
 {
