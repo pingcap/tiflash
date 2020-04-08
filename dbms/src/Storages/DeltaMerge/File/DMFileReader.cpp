@@ -246,80 +246,47 @@ Block DMFileReader::read()
         {
             if (enable_column_cache && (cd.id == EXTRA_HANDLE_COLUMN_ID || cd.id == VERSION_COLUMN_ID))
             {
-                PackRange cache_range;
-                ColumnPtr cache_column;
-                if (cd.id == EXTRA_HANDLE_COLUMN_ID)
-                {
-                    auto cache_result = column_cache->tryGetHandleColumn(start_pack_id, read_packs);
-                    cache_range       = cache_result.first;
-                    cache_column      = cache_result.second;
-                }
-                else
-                {
-                    auto cache_result = column_cache->tryGetVersionColumn(start_pack_id, read_packs);
-                    cache_range       = cache_result.first;
-                    cache_column      = cache_result.second;
-                }
-                if (cache_range.second - cache_range.first == 0)
-                {
-                    auto column = readFromDisk(cd, start_pack_id, read_rows, skip_packs_by_column[i]);
-                    if (cd.id == EXTRA_HANDLE_COLUMN_ID)
-                    {
-                        column_cache->putHandleColumn(start_pack_id, read_packs, column);
-                    }
-                    else
-                    {
-                        column_cache->putVersionColumn(start_pack_id, read_packs, column);
-                    }
-                    res.insert(ColumnWithTypeAndName{std::move(column), cd.type, cd.name, cd.id});
-                    skip_packs_by_column[i] = 0;
-                }
-                else
-                {
-                    auto ranges = ColumnCache::splitPackRangeByCacheRange(cache_range, start_pack_id, start_pack_id + read_packs);
-                    std::vector<size_t> ranges_rows;
-                    for (auto & range : ranges)
-                    {
-                        size_t rows = 0;
-                        for (size_t cursor = range.first; cursor < range.second; cursor++)
-                        {
-                            rows += pack_stats[cursor].rows;
-                        }
-                        ranges_rows.push_back(rows);
-                    }
+                auto read_strategy = column_cache->getReadStrategy(start_pack_id, read_packs, cd.id);
 
-                    auto data_type = dmfile->getColumnStat(cd.id).type;
-                    auto column    = data_type->createColumn();
-                    column->reserve(read_rows);
-                    for (size_t k = 0; k < ranges.size(); k++)
+                auto data_type = dmfile->getColumnStat(cd.id).type;
+                auto column    = data_type->createColumn();
+                column->reserve(read_rows);
+                bool hit_cache = false;
+                for (auto & [range, strategy] : read_strategy)
+                {
+                    size_t range_rows = 0;
+                    for (size_t cursor = range.first; cursor < range.second; cursor++)
                     {
-                        auto & range = ranges[k];
-                        if (range.first >= cache_range.first && range.second <= cache_range.second)
-                        {
-                            // read from cache
-                            size_t rows_offset = 0;
-                            for (size_t l = 0; l < k; k++)
-                            {
-                                rows_offset += ranges_rows[l];
-                            }
-                            column->insertRangeFrom(*cache_column, rows_offset, ranges_rows[k]);
-                            skip_packs_by_column[i] += (range.second - range.first);
-                        }
-                        else
-                        {
-                            auto sub_column = readFromDisk(cd, range.first, ranges_rows[k], skip_packs_by_column[i]);
-                            column->insertRangeFrom(*sub_column, 0, ranges_rows[k]);
-                            skip_packs_by_column[i] = 0;
-                        }
+                        range_rows += pack_stats[cursor].rows;
                     }
-                    res.insert(ColumnWithTypeAndName{std::move(column), cd.type, cd.name, cd.id});
+                    if (strategy == ColumnCache::Strategy::Disk) {
+                        auto sub_column = readFromDisk(cd, range.first, range_rows, skip_packs_by_column[i]);
+                        column->insertRangeFrom(*sub_column, 0, range_rows);
+                        skip_packs_by_column[i] = 0;
+                    } else if(strategy == ColumnCache::Strategy::Memory) {
+                        hit_cache = true;
+                        auto [cache_pack_range, cache_column] = column_cache->getColumn(range, cd.id);
+                        size_t rows_offset = 0;
+                        for (size_t cursor = cache_pack_range.first; cursor < range.first; cursor++)
+                        {
+                            rows_offset += pack_stats[cursor].rows;
+                        }
+                        column->insertRangeFrom(*cache_column, rows_offset, range_rows);
+                        skip_packs_by_column[i] += (range.second - range.first);
+                    }
                 }
+                ColumnPtr result_column = std::move(column);
+                if (!hit_cache)
+                {
+                    column_cache->putColumn(start_pack_id, read_packs, result_column, cd.id);
+                }
+                res.insert(ColumnWithTypeAndName{result_column, cd.type, cd.name, cd.id});
             }
             else
             {
                 auto column = readFromDisk(cd, start_pack_id, read_rows, skip_packs_by_column[i]);
-                res.insert(ColumnWithTypeAndName{std::move(column), cd.type, cd.name, cd.id});
                 skip_packs_by_column[i] = 0;
+                res.insert(ColumnWithTypeAndName{std::move(column), cd.type, cd.name, cd.id});
             }
         }
     }
@@ -356,7 +323,6 @@ ColumnPtr DMFileReader::readFromDisk(ColumnDefine & column_define, size_t start_
             true,
             {});
         IDataType::updateAvgValueSizeHint(*column, top_stream->avg_size_hint);
-
         // Cast column's data from DataType in disk to what we need now
         return convertColumnByColumnDefineIfNeed(data_type, std::move(column), column_define);
     }
