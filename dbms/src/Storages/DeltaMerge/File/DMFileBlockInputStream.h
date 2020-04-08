@@ -31,7 +31,7 @@ public:
                  handle_range,
                  filter,
                  column_cache_,
-                 context.getGlobalContext().getSettingsRef().enable_delta_merge_column_cache,
+                 context.getGlobalContext().getSettingsRef().dt_enable_stable_column_cache,
                  read_packs,
                  context.getGlobalContext().getMarkCache().get(),
                  context.getGlobalContext().getMinMaxIndexCache().get(),
