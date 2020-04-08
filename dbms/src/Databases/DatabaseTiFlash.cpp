@@ -235,7 +235,7 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
 
     // DatabaseTiFlash should only manage tables in TMTContext.
     auto & tmt = context.getTMTContext();
-    auto table = tmt.getStorages().getByName(name, table_name); // TODO: maybe get by table_id?
+    auto table = tmt.getStorages().getByName(name, table_name, /*include_tombstone=*/false); // TODO: maybe get by table_id?
     if (!table)
         throw Exception("Table " + name + "." + table_name + " doesn't exist in TiFlash context.", ErrorCodes::UNKNOWN_TABLE);
 

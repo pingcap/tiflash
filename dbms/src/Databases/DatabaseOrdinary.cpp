@@ -111,16 +111,11 @@ DatabaseOrdinary::DatabaseOrdinary(String name_, const String & metadata_path_, 
 }
 
 
-void DatabaseOrdinary::loadTables(
-    Context & context,
-    ThreadPool * thread_pool,
-    bool has_force_restore_data_flag)
+std::vector<String> DatabaseOrdinary::listTableFilenames(const String & database_dir, Poco::Logger * log)
 {
-    using FileNames = std::vector<std::string>;
-    FileNames file_names;
-
+    std::vector<String> filenames;
     Poco::DirectoryIterator dir_end;
-    for (Poco::DirectoryIterator dir_it(metadata_path); dir_it != dir_end; ++dir_it)
+    for (Poco::DirectoryIterator dir_it(database_dir); dir_it != dir_end; ++dir_it)
     {
         /// For '.svn', '.gitignore' directory and similar.
         if (dir_it.name().at(0) == '.')
@@ -140,11 +135,21 @@ void DatabaseOrdinary::loadTables(
 
         /// The required files have names like `table_name.sql`
         if (endsWith(dir_it.name(), ".sql"))
-            file_names.push_back(dir_it.name());
+            filenames.push_back(dir_it.name());
         else
-            throw Exception("Incorrect file extension: " + dir_it.name() + " in metadata directory " + metadata_path,
-                ErrorCodes::INCORRECT_FILE_NAME);
+            throw Exception(
+                "Incorrect file extension: " + dir_it.name() + " in metadata directory " + database_dir, ErrorCodes::INCORRECT_FILE_NAME);
     }
+    return filenames;
+}
+
+void DatabaseOrdinary::loadTables(
+    Context & context,
+    ThreadPool * thread_pool,
+    bool has_force_restore_data_flag)
+{
+    using FileNames = std::vector<std::string>;
+    FileNames file_names = listTableFilenames(metadata_path, log);
 
     /** Tables load faster if they are loaded in sorted (by name) order.
       * Otherwise (for the ext4 filesystem), `DirectoryIterator` iterates through them in some order,
