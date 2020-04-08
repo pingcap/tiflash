@@ -1,7 +1,6 @@
-#include <test_utils/TiflashTestBasic.h>
-
 #include <Storages/Transaction/SchemaBuilder-internal.h>
 #include <Storages/Transaction/SchemaBuilder.h>
+#include <test_utils/TiflashTestBasic.h>
 
 namespace DB::tests
 {
@@ -62,12 +61,12 @@ TEST(CyclicRenameResolver_test, resolve_linked_2)
 
 namespace
 {
-template<typename T>
-bool isEqualPairs(const std::pair<T, T> &lhs, const std::pair<T, T> &rhs)
+template <typename T>
+bool isEqualPairs(const std::pair<T, T> & lhs, const std::pair<T, T> & rhs)
 {
     return lhs == rhs;
 }
-}
+} // namespace
 
 TEST(CyclicRenameResolver_test, resolve_long_linked)
 {
@@ -114,6 +113,24 @@ TEST(CyclicRenameResolver_test, resolve_simple_cycle)
     ASSERT_EQ(rename_result[2].second, "b");
 }
 
+
+inline ::testing::AssertionResult ColumnNameWithIDPairsCompare( //
+    const char * lhs_expr,
+    const char * rhs_expr,
+    const std::pair<ColumnNameWithID, ColumnNameWithID> & lhs,
+    const std::pair<ColumnNameWithID, ColumnNameWithID> & rhs)
+{
+    if (lhs.first.equals(rhs.first) && lhs.second.equals(rhs.second))
+        return ::testing::AssertionSuccess();
+    else
+        return ::testing::internal::EqFailure(lhs_expr,
+            rhs_expr,
+            "<" + lhs.first.toString() + "," + lhs.second.toString() + ">",
+            "<" + rhs.first.toString() + "," + rhs.second.toString() + ">",
+            false);
+}
+#define ASSERT_COLUMN_NAME_ID_PAIR_EQ(val1, val2) ASSERT_PRED_FORMAT2(::DB::tests::ColumnNameWithIDPairsCompare, val1, val2)
+
 TEST(CyclicRenameResolver_test, resolve_id_simple_cycle)
 {
     using Resolver = CyclicRenameResolver<ColumnNameWithID, TmpColNameWithIDGenerator>;
@@ -127,14 +144,11 @@ TEST(CyclicRenameResolver_test, resolve_id_simple_cycle)
 
     ASSERT_EQ(rename_result.size(), 3UL);
     // a -> tmp_a
-    ASSERT_EQ(rename_result[0].first, ColumnNameWithID("a", 1L));
-    ASSERT_EQ(rename_result[0].second, generator(ColumnNameWithID{"a", 1}));
+    ASSERT_COLUMN_NAME_ID_PAIR_EQ(rename_result[0], std::make_pair(ColumnNameWithID{"a", 1L}, generator(ColumnNameWithID{"a", 1})));
     // b -> a
-    ASSERT_EQ(rename_result[1].first, ColumnNameWithID("b", 2L));
-    ASSERT_EQ(rename_result[1].second, ColumnNameWithID("a", 2L));
+    ASSERT_COLUMN_NAME_ID_PAIR_EQ(rename_result[1], std::make_pair(ColumnNameWithID{"b", 2L}, ColumnNameWithID{"a", 2L}));
     // tmp_a -> b
-    ASSERT_EQ(rename_result[2].first, generator(ColumnNameWithID{"a", 1}));
-    ASSERT_EQ(rename_result[2].second, ColumnNameWithID("b", 1));
+    ASSERT_COLUMN_NAME_ID_PAIR_EQ(rename_result[2], std::make_pair(generator(ColumnNameWithID{"a", 1}), ColumnNameWithID{"b", 1}));
 }
 
-} // namespace DB
+} // namespace DB::tests
