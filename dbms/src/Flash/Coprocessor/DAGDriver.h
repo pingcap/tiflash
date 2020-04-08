@@ -5,8 +5,12 @@
 #include <Storages/Transaction/Types.h>
 #include <grpcpp/server_context.h>
 #include <kvproto/coprocessor.pb.h>
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <kvproto/tikvpb.grpc.pb.h>
 #include <tipb/select.pb.h>
+#pragma GCC diagnostic pop
 
 namespace DB
 {
