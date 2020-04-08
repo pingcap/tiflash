@@ -28,7 +28,6 @@ struct Settings
 #define APPLY_FOR_SETTINGS(M) \
     M(SettingString, regions, "", "the region need to be read.") \
     M(SettingBool, resolve_locks, false, "tmt resolve locks.") \
-    M(SettingBool, enable_delta_merge_column_cache, true, "Enable column cache for StorageDeltaMerge.") \
     M(SettingUInt64, read_tso, DEFAULT_MAX_READ_TSO, "tmt read tso.") \
     M(SettingInt64, dag_records_per_chunk, DEFAULT_DAG_RECORDS_PER_CHUNK, "default chunk size of a DAG response.") \
     M(SettingInt64, schema_version, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, "tmt schema version.") \
@@ -250,6 +249,7 @@ struct Settings
     M(SettingBool, dt_enable_logical_split, true, "Enable logical split or not in DeltaTree Engine.")\
     M(SettingBool, dt_flush_after_write, false, "Flush cache or not after write in DeltaTree Engine.")\
     M(SettingBool, dt_enable_skippable_place, true, "Enable skippable place or not in DeltaTree Engine.")\
+    M(SettingBool, dt_enable_stable_column_cache, true, "Enable column cache for StorageDeltaMerge.") \
     M(SettingUInt64, dt_storage_pool_log_write_slots, 4, "Max write concurrency for each StoragePool.log") \
     M(SettingUInt64, dt_storage_pool_data_write_slots, 1, "Max write concurrency for each StoragePool.data") \
     M(SettingUInt64, dt_storage_pool_meta_write_slots, 2, "Max write concurrency for each StoragePool.meta") \

@@ -252,9 +252,8 @@ Block DMFileReader::read()
             if (enable_column_cache && isCacheableColumn(cd))
             {
                 auto read_strategy = column_cache->getReadStrategy(start_pack_id, read_packs, cd.id);
-
-                auto data_type = dmfile->getColumnStat(cd.id).type;
-                auto column    = data_type->createColumn();
+                auto data_type     = dmfile->getColumnStat(cd.id).type;
+                auto column        = data_type->createColumn();
                 column->reserve(read_rows);
                 bool hit_cache = false;
                 for (auto & [range, strategy] : read_strategy)
@@ -264,14 +263,17 @@ Block DMFileReader::read()
                     {
                         range_rows += pack_stats[cursor].rows;
                     }
-                    if (strategy == ColumnCache::Strategy::Disk) {
+                    if (strategy == ColumnCache::Strategy::Disk)
+                    {
                         auto sub_column = readFromDisk(cd, range.first, range_rows, skip_packs_by_column[i]);
                         column->insertRangeFrom(*sub_column, 0, range_rows);
                         skip_packs_by_column[i] = 0;
-                    } else if(strategy == ColumnCache::Strategy::Memory) {
-                        hit_cache = true;
+                    }
+                    else if (strategy == ColumnCache::Strategy::Memory)
+                    {
+                        hit_cache                             = true;
                         auto [cache_pack_range, cache_column] = column_cache->getColumn(range, cd.id);
-                        size_t rows_offset = 0;
+                        size_t rows_offset                    = 0;
                         for (size_t cursor = cache_pack_range.first; cursor < range.first; cursor++)
                         {
                             rows_offset += pack_stats[cursor].rows;
@@ -289,7 +291,7 @@ Block DMFileReader::read()
             }
             else
             {
-                auto column = readFromDisk(cd, start_pack_id, read_rows, skip_packs_by_column[i]);
+                auto column             = readFromDisk(cd, start_pack_id, read_rows, skip_packs_by_column[i]);
                 skip_packs_by_column[i] = 0;
                 res.insert(ColumnWithTypeAndName{std::move(column), cd.type, cd.name, cd.id});
             }

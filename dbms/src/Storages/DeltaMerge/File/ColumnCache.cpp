@@ -4,15 +4,20 @@ namespace DB
 {
 namespace DM
 {
-ColumnCachePtr ColumnCache::null_cache = std::make_shared<ColumnCache>();
+ColumnCachePtr ColumnCache::disabled_cache = std::make_shared<ColumnCache>(true);
 
 void ColumnCache::putColumn(size_t pack_id, size_t pack_count, const ColumnPtr & column, ColId column_id)
 {
-    if (column_id == EXTRA_HANDLE_COLUMN_ID) {
+    if (column_id == EXTRA_HANDLE_COLUMN_ID)
+    {
         handle_columns.push_back(column);
-    } else if (column_id == VERSION_COLUMN_ID) {
+    }
+    else if (column_id == VERSION_COLUMN_ID)
+    {
         version_columns.push_back(column);
-    } else {
+    }
+    else
+    {
         throw Exception("Unknown column id " + std::to_string(column_id), ErrorCodes::LOGICAL_ERROR);
     }
     insertPackRange(pack_id, pack_count);
@@ -22,12 +27,18 @@ std::pair<PackRange, ColumnPtr> ColumnCache::getColumn(const PackRange & target_
 {
     for (size_t i = 0; i < pack_ranges.size(); i++)
     {
-        if (isSameRange(target_range, pack_ranges[i])) {
-            if (column_id == EXTRA_HANDLE_COLUMN_ID) {
+        if (isSameRange(target_range, pack_ranges[i]))
+        {
+            if (column_id == EXTRA_HANDLE_COLUMN_ID)
+            {
                 return std::make_pair(pack_ranges[i], handle_columns[i]);
-            } else if (column_id == VERSION_COLUMN_ID) {
+            }
+            else if (column_id == VERSION_COLUMN_ID)
+            {
                 return std::make_pair(pack_ranges[i], version_columns[i]);
-            } else {
+            }
+            else
+            {
                 throw Exception("Unknown column id " + std::to_string(column_id), ErrorCodes::LOGICAL_ERROR);
             }
         }
@@ -74,15 +85,22 @@ void ColumnCache::insertPackRange(size_t pack_id, size_t pack_count)
     else
     {
         auto range = pack_ranges.back();
-        if (!isSameRange(target_range, range)) {
+        if (!isSameRange(target_range, range))
+        {
             pack_ranges.emplace_back(target_range);
         }
     }
 }
 
-std::vector<std::pair<PackRange, ColumnCache::Strategy>> ColumnCache::getReadStrategy(size_t pack_id, size_t pack_count, ColId column_id) {
-    PackRange target_range{pack_id, pack_id + pack_count};
+std::vector<std::pair<PackRange, ColumnCache::Strategy>> ColumnCache::getReadStrategy(size_t pack_id, size_t pack_count, ColId column_id)
+{
+    PackRange                                                target_range{pack_id, pack_id + pack_count};
     std::vector<std::pair<PackRange, ColumnCache::Strategy>> range_and_strategy;
+    if (disabled)
+    {
+        range_and_strategy.emplace_back(std::make_pair(target_range, Strategy::Disk));
+        return range_and_strategy;
+    }
     bool hit_cache = false;
     for (size_t i = 0; i < pack_ranges.size(); i++)
     {
@@ -90,38 +108,58 @@ std::vector<std::pair<PackRange, ColumnCache::Strategy>> ColumnCache::getReadStr
         if (!isRangeEmpty(cache_range))
         {
             hit_cache = true;
-            if (column_id == EXTRA_HANDLE_COLUMN_ID) {
-                if (i == handle_columns.size()) {
+            if (column_id == EXTRA_HANDLE_COLUMN_ID)
+            {
+                if (i == handle_columns.size())
+                {
                     range_and_strategy.emplace_back(std::make_pair(target_range, Strategy::Disk));
-                } else {
+                }
+                else
+                {
                     auto ranges = splitPackRangeByCacheRange(target_range, cache_range);
-                    for (auto & range : ranges) {
-                        if (isSameRange(range, cache_range)) {
+                    for (auto & range : ranges)
+                    {
+                        if (isSameRange(range, cache_range))
+                        {
                             range_and_strategy.emplace_back(std::make_pair(range, Strategy::Memory));
-                        } else {
+                        }
+                        else
+                        {
                             range_and_strategy.emplace_back(std::make_pair(range, Strategy::Disk));
                         }
                     }
                 }
-            } else if (column_id == VERSION_COLUMN_ID) {
-                if (i == version_columns.size()) {
+            }
+            else if (column_id == VERSION_COLUMN_ID)
+            {
+                if (i == version_columns.size())
+                {
                     range_and_strategy.emplace_back(std::make_pair(target_range, Strategy::Disk));
-                } else {
+                }
+                else
+                {
                     auto ranges = splitPackRangeByCacheRange(target_range, cache_range);
-                    for (auto & range : ranges) {
-                        if (isSameRange(range, cache_range)) {
+                    for (auto & range : ranges)
+                    {
+                        if (isSameRange(range, cache_range))
+                        {
                             range_and_strategy.emplace_back(std::make_pair(range, Strategy::Memory));
-                        } else {
+                        }
+                        else
+                        {
                             range_and_strategy.emplace_back(std::make_pair(range, Strategy::Disk));
                         }
                     }
                 }
-            } else {
+            }
+            else
+            {
                 throw Exception("Unknown column id " + std::to_string(column_id), ErrorCodes::LOGICAL_ERROR);
             }
         }
     }
-    if (!hit_cache) {
+    if (!hit_cache)
+    {
         range_and_strategy.emplace_back(std::make_pair(target_range, Strategy::Disk));
     }
     return range_and_strategy;
