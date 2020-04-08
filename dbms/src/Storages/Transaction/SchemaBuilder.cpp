@@ -156,7 +156,7 @@ inline SchemaChanges detectSchemaChanges(Logger * log, Context & context, const 
             AlterCommands rename_commands;
             auto rename_command
                 = newRenameColCommand(rename_pair.first.name, rename_pair.second.name, rename_pair.second.id, orig_table_info);
-            auto rename_modifier = [/* column_id = rename_command.column_id, */ old_name = rename_command.column_name,
+            auto rename_modifier = [column_id = rename_command.column_id, old_name = rename_command.column_name,
                                        new_name = rename_command.new_column_name](ColumnInfos & column_infos) {
                 auto it = std::find_if(column_infos.begin(), column_infos.end(), [&](const auto & column_info) {
                     return column_info.id == column_id && column_info.name == old_name;
