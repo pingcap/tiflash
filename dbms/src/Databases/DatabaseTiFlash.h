@@ -8,6 +8,10 @@ namespace DB
 class DatabaseTiFlash : public DatabaseWithOwnTablesBase
 {
 public:
+    using Version = UInt32;
+    static constexpr Version CURRENT_VERSION = 1;
+
+public:
     DatabaseTiFlash(String name_, const String & metadata_path_, const Context & context);
 
     String getEngineName() const override { return "TiFlash"; }

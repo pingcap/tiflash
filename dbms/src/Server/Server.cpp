@@ -16,6 +16,7 @@
 #include <IO/HTTPCommon.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/DDLWorker.h>
+#include <Interpreters/IDAsPathUpgrader.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/loadMetadata.h>
 #include <Poco/DirectoryIterator.h>
@@ -192,7 +193,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->setExtraPaths(extra_paths);
 
     std::string path = all_normal_path[0];
-    std::string default_database = config().getString("default_database", "default");
+    std::string default_database = config().getString("default_database", "default"); // TODO: we may need to handle this "default" database
     global_context->setPath(path);
     global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
 
@@ -384,7 +385,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     format_schema_path.createDirectories();
 
     LOG_INFO(log, "Loading metadata.");
-    loadMetadataSystem(*global_context);
+    loadMetadataSystem(*global_context); // Load "system" database. TODO: Is it ok to keep Ordinary?
     /// After attaching system databases we can initialize system log.
     global_context->initializeSystemLogs();
     /// After the system database is created, attach virtual system tables (in addition to query_log and part_log)
@@ -479,9 +480,22 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->getTMTContext().reloadConfig(config());
     }
 
-    /// Then, load remaining databases
-    loadMetadata(*global_context);
-    LOG_DEBUG(log, "Loaded metadata.");
+    {
+        // Note that this must do before initialize schema sync service.
+        do
+        {
+            // Check whether we need to upgrade directories hierarchy
+            IDAsPathUpgrader upgrader(*global_context);
+            if (!upgrader.needUpgrade())
+                break;
+            upgrader.prepare();
+            upgrader.doUpgrade();
+        } while (0);
+
+        /// Then, load remaining databases TODO: fix this method
+        loadMetadata(*global_context);
+    }
+    LOG_DEBUG(log, "Load metadata done.");
 
     global_context->setCurrentDatabase(default_database);
 

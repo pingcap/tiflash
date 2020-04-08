@@ -13,6 +13,7 @@
 #include <Storages/Transaction/TMTStorages.h>
 #include <Storages/registerStorages.h>
 #include <test_utils/TiflashTestBasic.h>
+#include <optional>
 
 namespace DB::tests
 {
