@@ -60,7 +60,7 @@ void DAGDriver<batch>::execute()
 try
 {
     DAGContext dag_context(dag_request.executors_size());
-    DAGQuerySource dag(context, dag_context, regions, dag_request);
+    DAGQuerySource dag(context, dag_context, regions, dag_request, batch);
 
     BlockIO streams = executeQuery(dag, context, internal, QueryProcessingStage::Complete);
     if (!streams.in || streams.out)
@@ -140,7 +140,7 @@ catch (...)
 }
 
 template <bool batch>
-void DAGDriver<batch>::recordError(Int32 err_code , const String & err_msg)
+void DAGDriver<batch>::recordError(Int32 err_code, const String & err_msg)
 {
     if constexpr (batch)
     {
