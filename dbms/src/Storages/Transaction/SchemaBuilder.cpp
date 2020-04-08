@@ -159,14 +159,7 @@ inline SchemaChanges detectSchemaChanges(Logger * log, Context & context, const 
             auto rename_modifier = [/* column_id = rename_command.column_id, */ old_name = rename_command.column_name,
                                        new_name = rename_command.new_column_name](ColumnInfos & column_infos) {
                 auto it = std::find_if(column_infos.begin(), column_infos.end(), [&](const auto & column_info) {
-                    return
-                        // I don't know why the column_id is somehow of the "new" column, for example:
-                        // (1,col_1)->(1,col_2), (2,col_2)->(2,col_1)
-                        // will be resolved to:
-                        // (2,col_1)->(2,_tiflash_tmp_col_1), (2,col_2)->(2,col_1), (2,_tiflash_tmp_col_1)(1,col_2)
-                        // So confusing that I dare no use id equal check.
-                        /* column_info.id == column_id && */
-                        column_info.name == old_name;
+                    return column_info.id == column_id && column_info.name == old_name;
                 });
                 if (it != column_infos.end())
                     it->name = new_name;
