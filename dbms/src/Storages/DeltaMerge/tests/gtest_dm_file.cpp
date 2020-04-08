@@ -27,7 +27,7 @@ public:
         dropFiles();
 
         auto settings  = DB::Settings();
-        storage_pool   = std::make_unique<StoragePool>("test.t1", path, settings);
+        storage_pool   = std::make_unique<StoragePool>("test.t1", path, DMTestEnv::getContext(), settings);
         dm_file        = DMFile::create(0, path);
         db_context     = std::make_unique<Context>(DMTestEnv::getContext(settings));
         table_columns_ = std::make_shared<ColumnDefines>();

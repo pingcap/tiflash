@@ -1482,7 +1482,7 @@ void Context::initializeTiFlashMetrics()
     shared->tiflash_metrics = std::make_shared<TiFlashMetrics>();
 }
 
-TiFlashMetricsPtr Context::getTiFlashMetrics()
+TiFlashMetricsPtr Context::getTiFlashMetrics() const
 {
     auto lock = getLock();
     return shared->tiflash_metrics;

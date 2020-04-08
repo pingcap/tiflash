@@ -64,8 +64,15 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mu
     valid_snapshots.emplace_back(std::make_shared<Snapshot>(this, current));
 
     lock.unlock(); // Notice: unlock
-    LOG_DEBUG(log,
-              name << " gcApply remove " + DB::toString(snapshots_size_before_clean + 1 - valid_snapshots.size()) + " invalid snapshots.");
+
+    // Plus 1 for eliminating the counting of temporary snapshot of `current`
+    const size_t num_invalid_snapshot_to_clean = snapshots_size_before_clean + 1 - valid_snapshots.size();
+    if (num_invalid_snapshot_to_clean > 0)
+    {
+        LOG_DEBUG(log,
+                  name << " gcApply remove " + DB::toString(snapshots_size_before_clean + 1 - valid_snapshots.size())
+                          + " invalid snapshots.");
+    }
     // Iterate all snapshots to collect all PageFile in used.
     std::set<PageFileIdAndLevel> live_files;
     std::set<PageId>             live_normal_pages;
