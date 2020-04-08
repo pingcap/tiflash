@@ -1,6 +1,7 @@
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/ConcatBlockInputStream.h>
+#include <DataStreams/CoprocessorBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/LimitBlockInputStream.h>
@@ -22,6 +23,7 @@
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/CHTableHandle.h>
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/SchemaSyncer.h>
@@ -29,6 +31,9 @@
 #include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <Storages/Transaction/Types.h>
+#include <pingcap/coprocessor/Client.h>
+
+#include <Flash/Coprocessor/InterpreterDAGHelper.hpp>
 
 namespace DB
 {
@@ -56,238 +61,10 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
     }
 }
 
-template <typename HandleType>
-void constructHandleColRefExpr(tipb::Expr & expr, Int64 col_index)
-{
-    expr.set_tp(tipb::ExprType::ColumnRef);
-    std::stringstream ss;
-    encodeDAGInt64(col_index, ss);
-    expr.set_val(ss.str());
-    auto * field_type = expr.mutable_field_type();
-    field_type->set_tp(TiDB::TypeLongLong);
-    // handle col is always not null
-    field_type->set_flag(TiDB::ColumnFlagNotNull);
-    if constexpr (!std::is_signed_v<HandleType>)
-    {
-        field_type->set_flag(TiDB::ColumnFlagUnsigned);
-    }
-}
-
-template <typename HandleType>
-void constructIntLiteralExpr(tipb::Expr & expr, HandleType value)
-{
-    constexpr bool is_signed = std::is_signed_v<HandleType>;
-    if constexpr (is_signed)
-    {
-        expr.set_tp(tipb::ExprType::Int64);
-    }
-    else
-    {
-        expr.set_tp(tipb::ExprType::Uint64);
-    }
-    std::stringstream ss;
-    if constexpr (is_signed)
-    {
-        encodeDAGInt64(value, ss);
-    }
-    else
-    {
-        encodeDAGUInt64(value, ss);
-    }
-    expr.set_val(ss.str());
-    auto * field_type = expr.mutable_field_type();
-    field_type->set_tp(TiDB::TypeLongLong);
-    field_type->set_flag(TiDB::ColumnFlagNotNull);
-    if constexpr (!is_signed)
-    {
-        field_type->set_flag(TiDB::ColumnFlagUnsigned);
-    }
-}
-
-template <typename HandleType>
-void constructBoundExpr(Int32 handle_col_id, tipb::Expr & expr, TiKVHandle::Handle<HandleType> bound, bool is_left_bound)
-{
-    auto * left = expr.add_children();
-    constructHandleColRefExpr<HandleType>(*left, handle_col_id);
-    auto * right = expr.add_children();
-    constructIntLiteralExpr<HandleType>(*right, bound.handle_id);
-    expr.set_tp(tipb::ExprType::ScalarFunc);
-    if (is_left_bound)
-        expr.set_sig(tipb::ScalarFuncSig::GEInt);
-    else
-        expr.set_sig(tipb::ScalarFuncSig::LTInt);
-    auto * field_type = expr.mutable_field_type();
-    field_type->set_tp(TiDB::TypeLongLong);
-    field_type->set_flag(TiDB::ColumnFlagNotNull);
-    field_type->set_flag(TiDB::ColumnFlagUnsigned);
-}
-
-template <typename HandleType>
-void constructExprBasedOnRange(Int32 handle_col_id, tipb::Expr & expr, HandleRange<HandleType> range)
-{
-    if (range.second == TiKVHandle::Handle<HandleType>::max)
-    {
-        constructBoundExpr<HandleType>(handle_col_id, expr, range.first, true);
-    }
-    else
-    {
-        auto * left = expr.add_children();
-        constructBoundExpr<HandleType>(handle_col_id, *left, range.first, true);
-        auto * right = expr.add_children();
-        constructBoundExpr<HandleType>(handle_col_id, *right, range.second, false);
-        expr.set_tp(tipb::ExprType::ScalarFunc);
-        expr.set_sig(tipb::ScalarFuncSig::LogicalAnd);
-        auto * field_type = expr.mutable_field_type();
-        field_type->set_tp(TiDB::TypeLongLong);
-        field_type->set_flag(TiDB::ColumnFlagNotNull);
-        field_type->set_flag(TiDB::ColumnFlagUnsigned);
-    }
-}
-
-template <typename HandleType>
-bool checkRangeAndGenExprIfNeeded(std::vector<HandleRange<HandleType>> & ranges, const std::vector<HandleRange<HandleType>> & region_ranges,
-    Int32 handle_col_id, tipb::Expr & handle_filter)
-{
-    if (ranges.empty())
-    {
-        // generate an always false filter
-        constructInt64LiteralTiExpr(handle_filter, 0);
-        return false;
-    }
-    std::sort(ranges.begin(), ranges.end(),
-        [](const HandleRange<HandleType> & a, const HandleRange<HandleType> & b) { return a.first < b.first; });
-
-    std::vector<HandleRange<HandleType>> merged_ranges;
-    HandleRange<HandleType> merged_range;
-    merged_range.first = ranges[0].first;
-    merged_range.second = ranges[0].second;
-
-    for (size_t i = 1; i < ranges.size(); i++)
-    {
-        if (merged_range.second >= ranges[i].first)
-            merged_range.second = merged_range.second >= ranges[i].second ? merged_range.second : ranges[i].second;
-        else
-        {
-            if (merged_range.second > merged_range.first)
-                merged_ranges.emplace_back(std::make_pair(merged_range.first, merged_range.second));
-            merged_range.first = ranges[i].first;
-            merged_range.second = ranges[i].second;
-        }
-    }
-    if (merged_range.second > merged_range.first)
-        merged_ranges.emplace_back(std::make_pair(merged_range.first, merged_range.second));
-
-    bool ret = true;
-    for (const auto & region_range : region_ranges)
-    {
-        bool covered = false;
-        for (const auto & range : merged_ranges)
-        {
-            if (region_range.first >= range.first && region_range.second <= range.second)
-            {
-                covered = true;
-                break;
-            }
-        }
-        if (!covered && region_range.second > region_range.first)
-        {
-            ret = false;
-            break;
-        }
-    }
-    if (!ret)
-    {
-        if (merged_ranges.empty())
-        {
-            constructInt64LiteralTiExpr(handle_filter, 0);
-        }
-        else if (merged_ranges.size() == 1)
-        {
-            constructExprBasedOnRange<HandleType>(handle_col_id, handle_filter, merged_ranges[0]);
-        }
-        else
-        {
-            for (const auto & range : merged_ranges)
-            {
-                auto * filter = handle_filter.add_children();
-                constructExprBasedOnRange<HandleType>(handle_col_id, *filter, range);
-            }
-            handle_filter.set_tp(tipb::ExprType::ScalarFunc);
-            handle_filter.set_sig(tipb::ScalarFuncSig::LogicalOr);
-            auto * field_type = handle_filter.mutable_field_type();
-            field_type->set_tp(TiDB::TypeLongLong);
-            field_type->set_flag(TiDB::ColumnFlagNotNull);
-            field_type->set_flag(TiDB::ColumnFlagUnsigned);
-        }
-    }
-    return ret;
-}
-
-bool checkKeyRanges(const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges, TableID table_id, bool pk_is_uint64,
-    const ImutRegionRangePtr & region_key_range, Int32 handle_col_id, tipb::Expr & handle_filter)
-{
-    if (key_ranges.empty())
-    {
-        constructInt64LiteralTiExpr(handle_filter, 0);
-        return false;
-    }
-
-    std::vector<HandleRange<Int64>> handle_ranges;
-    for (auto & range : key_ranges)
-    {
-        TiKVRange::Handle start = TiKVRange::getRangeHandle<true>(range.first, table_id);
-        TiKVRange::Handle end = TiKVRange::getRangeHandle<false>(range.second, table_id);
-        handle_ranges.emplace_back(std::make_pair(start, end));
-    }
-
-    std::vector<HandleRange<Int64>> region_handle_ranges;
-    auto & raw_keys = region_key_range->rawKeys();
-    TiKVRange::Handle region_start = TiKVRange::getRangeHandle<true>(raw_keys.first, table_id);
-    TiKVRange::Handle region_end = TiKVRange::getRangeHandle<false>(raw_keys.second, table_id);
-    region_handle_ranges.emplace_back(std::make_pair(region_start, region_end));
-
-    if (pk_is_uint64)
-    {
-        std::vector<HandleRange<UInt64>> update_handle_ranges;
-        for (auto & range : handle_ranges)
-        {
-            const auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(range);
-
-            for (int i = 0; i < n; i++)
-            {
-                update_handle_ranges.emplace_back(new_range[i]);
-            }
-        }
-        std::vector<HandleRange<UInt64>> update_region_handle_ranges;
-        for (auto & range : region_handle_ranges)
-        {
-            const auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(range);
-
-            for (int i = 0; i < n; i++)
-            {
-                update_region_handle_ranges.emplace_back(new_range[i]);
-            }
-        }
-        return checkRangeAndGenExprIfNeeded<UInt64>(update_handle_ranges, update_region_handle_ranges, handle_col_id, handle_filter);
-    }
-    else
-        return checkRangeAndGenExprIfNeeded<Int64>(handle_ranges, region_handle_ranges, handle_col_id, handle_filter);
-}
-
-RegionException::RegionReadStatus InterpreterDAG::getRegionReadStatus(const RegionPtr & current_region)
-{
-    if (!current_region)
-        return RegionException::NOT_FOUND;
-    if (current_region->version() != dag.getRegionVersion() || current_region->confVer() != dag.getRegionConfVersion())
-        return RegionException::VERSION_ERROR;
-    if (current_region->isPendingRemove())
-        return RegionException::PENDING_REMOVE;
-    return RegionException::OK;
-}
-
 // the flow is the same as executeFetchcolumns
 void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
 {
+    auto & tmt = context.getTMTContext();
     if (!ts.has_table_id())
     {
         // do not have table id
@@ -299,7 +76,7 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
 
     if (settings.schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION)
     {
-        storage = context.getTMTContext().getStorages().get(table_id);
+        storage = tmt.getStorages().get(table_id);
         if (storage == nullptr)
         {
             throw Exception("Table " + std::to_string(table_id) + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
@@ -311,6 +88,7 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         getAndLockStorageWithSchemaVersion(table_id, settings.schema_version);
     }
 
+
     Names required_columns;
     std::vector<NameAndTypePair> source_columns;
     std::vector<bool> is_ts_column;
@@ -318,62 +96,27 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     if (auto pk_handle_col = storage->getTableInfo().getPKHandleColumn())
         handle_column_name = pk_handle_col->get().name;
 
+
     for (Int32 i = 0; i < ts.columns().size(); i++)
     {
         auto const & ci = ts.columns(i);
         ColumnID cid = ci.column_id();
 
-        if (cid == -1)
+        if (cid == DB::TiDBPkColumnID)
         {
             // Column ID -1 return the handle column
             required_columns.push_back(handle_column_name);
             auto pair = storage->getColumns().getPhysical(handle_column_name);
-            source_columns.push_back(pair);
+            source_columns.emplace_back(std::move(pair));
             is_ts_column.push_back(false);
-            handle_col_id = i;
             continue;
         }
 
         String name = storage->getTableInfo().getColumnName(cid);
         required_columns.push_back(name);
-        if (name == handle_column_name)
-            handle_col_id = i;
         auto pair = storage->getColumns().getPhysical(name);
         source_columns.emplace_back(std::move(pair));
         is_ts_column.push_back(ci.tp() == TiDB::TypeTimestamp);
-    }
-
-    if (handle_col_id == -1)
-        handle_col_id = required_columns.size();
-
-    auto current_region = context.getTMTContext().getKVStore()->getRegion(dag.getRegionID());
-    auto region_read_status = getRegionReadStatus(current_region);
-    if (region_read_status != RegionException::OK)
-    {
-        std::vector<RegionID> region_ids;
-        region_ids.push_back(dag.getRegionID());
-        LOG_WARNING(log, __PRETTY_FUNCTION__ << " Meet region exception for region " << dag.getRegionID());
-        throw RegionException(std::move(region_ids), region_read_status);
-    }
-    const bool pk_is_uint64 = storage->getPKType() == IManageableStorage::PKType::UINT64;
-    if (!checkKeyRanges(dag.getKeyRanges(), table_id, pk_is_uint64, current_region->getRange(), handle_col_id, handle_filter_expr))
-    {
-        // need to add extra filter on handle column
-        filter_on_handle = true;
-        conditions.push_back(&handle_filter_expr);
-    }
-
-    bool has_handle_column = (handle_col_id != (Int32)required_columns.size());
-
-    if (filter_on_handle && !has_handle_column)
-    {
-        // if need to add filter on handle column, and
-        // the handle column is not selected in ts, add
-        // the handle column
-        required_columns.push_back(handle_column_name);
-        auto pair = storage->getColumns().getPhysical(handle_column_name);
-        source_columns.push_back(pair);
-        is_ts_column.push_back(false);
     }
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
@@ -382,10 +125,9 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     {
         // if the dag request does not contain agg, then the final output is
         // based on the output of table scan
-        int extra_col_size = (filter_on_handle && !has_handle_column) ? 1 : 0;
         for (auto i : dag.getDAGRequest().output_offsets())
         {
-            if (i >= required_columns.size() - extra_col_size)
+            if (i >= required_columns.size())
             {
                 // array index out of bound
                 throw Exception("Output offset index is out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
@@ -425,22 +167,130 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>();
     query_info.mvcc_query_info->resolve_locks = true;
     query_info.mvcc_query_info->read_tso = settings.read_tso;
-    RegionQueryInfo info;
-    info.region_id = dag.getRegionID();
-    info.version = dag.getRegionVersion();
-    info.conf_version = dag.getRegionConfVersion();
-    info.range_in_table = current_region->getHandleRangeByTable(table_id);
-    query_info.mvcc_query_info->regions_query_info.push_back(info);
-    query_info.mvcc_query_info->concurrent = 0.0;
-    try
+    if (dag.getRegions().empty())
     {
-        pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
+        throw Exception("Dag Request does not have region to read. ", ErrorCodes::COP_BAD_DAG_REQUEST);
     }
-    catch (DB::Exception & e)
+
+    if (!dag.isBatchCop())
     {
-        e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
-            + "`, table_id: " + DB::toString(table_id) + ")");
-        throw;
+        if (auto [info_retry, status] = MakeRegionQueryInfos(dag.getRegions(), {}, tmt, *query_info.mvcc_query_info, table_id); info_retry)
+            throw RegionException({(*info_retry).begin()->first}, status);
+
+        try
+        {
+            pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
+        }
+        catch (DB::Exception & e)
+        {
+            e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
+                + "`, table_id: " + DB::toString(table_id) + ")");
+            throw;
+        }
+    }
+    else
+    {
+        std::unordered_map<RegionID, const RegionInfo &> region_retry;
+        std::unordered_set<RegionID> force_retry;
+        for (;;)
+        {
+            try
+            {
+                region_retry.clear();
+                auto [retry, status] = MakeRegionQueryInfos(dag.getRegions(), force_retry, tmt, *query_info.mvcc_query_info, table_id);
+                std::ignore = status;
+                if (retry)
+                {
+                    region_retry = std::move(*retry);
+                    for (auto & r : region_retry)
+                        force_retry.emplace(r.first);
+                }
+                if (query_info.mvcc_query_info->regions_query_info.empty())
+                    break;
+                pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
+                break;
+            }
+            catch (const LockException & e)
+            {
+                // We can also use current thread to resolve lock, but it will block next process.
+                // So, force this region retry in another thread in CoprocessorBlockInputStream.
+                force_retry.emplace(e.region_id);
+            }
+            catch (const RegionException & e)
+            {
+                if (tmt.getTerminated())
+                    throw Exception("TiFlash server is terminating", ErrorCodes::LOGICAL_ERROR);
+                // By now, RegionException will contain all region id of MvccQueryInfo, which is needed by CHSpark.
+                // When meeting RegionException, we can let MakeRegionQueryInfos to check in next loop.
+            }
+            catch (DB::Exception & e)
+            {
+                e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
+                    + "`, table_id: " + DB::toString(table_id) + ")");
+                throw;
+            }
+        }
+
+        if (region_retry.size())
+        {
+            LOG_DEBUG(log, ({
+                std::stringstream ss;
+                ss << "Start to retry " << region_retry.size() << " regions (";
+                for (auto & r : region_retry)
+                    ss << r.first << ",";
+                ss << ")";
+                ss.str();
+            }));
+
+            DAGSchema schema;
+            ::tipb::DAGRequest dag_req;
+
+            {
+                const auto & table_info = storage->getTableInfo();
+                tipb::Executor * ts_exec = dag_req.add_executors();
+                ts_exec->set_tp(tipb::ExecType::TypeTableScan);
+                *(ts_exec->mutable_tbl_scan()) = ts;
+
+                for (int i = 0; i < ts.columns().size(); ++i)
+                {
+                    const auto & col = ts.columns(i);
+                    auto col_id = col.column_id();
+
+                    if (col_id == DB::TiDBPkColumnID)
+                    {
+                        ColumnInfo ci;
+                        ci.tp = TiDB::TypeLongLong;
+                        ci.setPriKeyFlag();
+                        ci.setNotNullFlag();
+                        schema.emplace_back(std::make_pair(handle_column_name, std::move(ci)));
+                    }
+                    else
+                    {
+                        auto & col_info = table_info.getColumnInfo(col_id);
+                        schema.emplace_back(std::make_pair(col_info.name, col_info));
+                    }
+                    dag_req.add_output_offsets(i);
+                }
+                dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
+            }
+
+            std::vector<pingcap::coprocessor::KeyRange> ranges;
+            for (auto & info : region_retry)
+            {
+                for (auto & range : info.second.key_ranges)
+                    ranges.emplace_back(range.first, range.second);
+            }
+
+            pingcap::coprocessor::Request req{.tp = pingcap::coprocessor::ReqType::DAG,
+                .start_ts = settings.read_tso,
+                .data = dag_req.SerializeAsString(),
+                .ranges = std::move(ranges),
+                .schema_version = settings.schema_version};
+            pingcap::kv::StoreType store_type = pingcap::kv::TiFlash;
+            BlockInputStreamPtr input
+                = std::make_shared<CoprocessorBlockInputStream>(tmt.getCluster().get(), req, schema, max_streams, store_type);
+            pipeline.streams.emplace_back(input);
+        }
     }
 
     if (pipeline.streams.empty())

@@ -111,8 +111,18 @@ static inline MarkRanges markRangesFromRegionRange(const MergeTreeData::DataPart
     return res;
 }
 
+struct ReadGroup {
+    std::deque<size_t> mem_block_indexes;
+    size_t start_range_index;
+    size_t end_range_index;
+};
+
+/// computeHandleRanges divide the input handle ranges into one or more read groups
+/// the basic rule is
+/// 1. the handle ranges will be combined if adjacent handle ranges is combinable
+/// 2. a mem block only exists in a single read groups
 template <typename TargetType>
-static inline void computeHandleRanges(std::vector<std::deque<size_t>> & block_data,
+static inline void computeHandleRanges(std::vector<ReadGroup> & read_groups,
     std::vector<std::pair<DB::HandleRange<TargetType>, size_t>> & handle_ranges,
     std::vector<RangesInDataParts> & region_group_range_parts,
     std::vector<DB::HandleRange<TargetType>> & region_group_handle_ranges,
@@ -122,24 +132,48 @@ static inline void computeHandleRanges(std::vector<std::deque<size_t>> & block_d
     const Settings & settings,
     const size_t min_marks_for_seek)
 {
-    block_data.resize(handle_ranges.size());
+    read_groups.resize(handle_ranges.size());
     {
         size_t size = 0;
+        size_t read_group_size = 0;
+        std::unordered_set<size_t> current_region_indexes;
 
-        block_data[0].emplace_back(handle_ranges[0].second);
+        read_groups[0].mem_block_indexes.emplace_back(handle_ranges[0].second);
+        current_region_indexes.insert(handle_ranges[0].second);
+        read_groups[0].start_range_index = 0;
 
         for (size_t i = 1; i < handle_ranges.size(); ++i)
         {
             if (handle_ranges[i].first.first == handle_ranges[size].first.second)
                 handle_ranges[size].first.second = handle_ranges[i].first.second;
             else
+            {
                 handle_ranges[++size] = handle_ranges[i];
+                /// check if it is ok to start new read group
+                /// a mem block should only exists in a single read group
+                if (current_region_indexes.find(handle_ranges[i].second) == current_region_indexes.end())
+                {
+                    /// if the region index in handle_ranges[i] is not in current_region_indexes
+                    /// then it is safe to start a new read group
+                    /// NOTE this assumes region index in handle_ranges is monotonous
+                    read_groups[read_group_size++].end_range_index = size - 1;
+                    read_groups[read_group_size].start_range_index = size;
+                    current_region_indexes.clear();
+                }
+            }
 
-            block_data[size].emplace_back(handle_ranges[i].second);
+            /// to avoid duplicate mem block in one read group
+            if (current_region_indexes.find(handle_ranges[i].second) == current_region_indexes.end())
+            {
+                read_groups[read_group_size].mem_block_indexes.emplace_back(handle_ranges[i].second);
+                current_region_indexes.insert(handle_ranges[i].second);
+            }
         }
+        read_groups[read_group_size].end_range_index = size;
         size = size + 1;
+        read_group_size = read_group_size + 1;
         handle_ranges.resize(size);
-        block_data.resize(size);
+        read_groups.resize(read_group_size);
     }
 
     region_group_range_parts.assign(handle_ranges.size(), {});
