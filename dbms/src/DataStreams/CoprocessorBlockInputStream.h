@@ -67,7 +67,7 @@ private:
     {
         LOG_DEBUG(log, "fetch new data");
 
-        auto [result, has_next] = resp_iter.next();
+        auto && [result, has_next] = resp_iter.next();
         if (!result.error.empty())
         {
             LOG_WARNING(log, "coprocessor client meets error: " << result.error.displayText());

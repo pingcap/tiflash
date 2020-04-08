@@ -1,7 +1,8 @@
+#include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Core/Types.h>
 #include <Flash/BatchCommandsHandler.h>
-#include <Flash/CoprocessorHandler.h>
+#include <Flash/BatchCoprocessorHandler.h>
 #include <Flash/FlashService.h>
 #include <Interpreters/Context.h>
 #include <Server/IServer.h>
@@ -49,9 +50,14 @@ grpc::Status FlashService::Coprocessor(
     return ret;
 }
 
-::grpc::Status FlashService:: BatchCoprocessor(::grpc::ServerContext* grpc_context, const ::coprocessor::BatchRequest* request, ::grpc::ServerWriter< ::coprocessor::BatchResponse>* writer)
+::grpc::Status FlashService::BatchCoprocessor(::grpc::ServerContext * grpc_context, const ::coprocessor::BatchRequest * request,
+    ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer)
 {
-    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling batch coprocessor request: " << request->DebugString());
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling coprocessor request: " << request->DebugString());
+
+    GET_METRIC(metrics, tiflash_coprocessor_request_count, type_super_batch).Increment();
+    Stopwatch watch;
+    SCOPE_EXIT({ GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_super_batch).Observe(watch.elapsedSeconds()); });
 
     auto [context, status] = createDBContext(grpc_context);
     if (!status.ok())

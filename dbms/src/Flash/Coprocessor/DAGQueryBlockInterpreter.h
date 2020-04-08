@@ -17,6 +17,7 @@
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/TMTStorages.h>
+#include <pingcap/coprocessor/Client.h>
 
 namespace DB
 {
@@ -104,9 +105,10 @@ private:
     AnalysisResult analyzeExpressions();
     //void recordProfileStreams(Pipeline & pipeline, Int32 index);
     bool addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, Pipeline & pipeline);
-    RegionException::RegionReadStatus getRegionReadStatus(const RegionPtr & current_region);
 
 private:
+    void executeRemoteQueryWithRanges(Pipeline & pipeline, const std::vector<pingcap::coprocessor::KeyRange> & key_ranges);
+
     Context & context;
     std::vector<BlockInputStreams> input_streams_vec;
     const DAGQueryBlock & query_block;

@@ -258,7 +258,8 @@ public:
 
     Block getHeader() const override { return *header; }
 
-    void write(const Block & block) override try
+    void write(const Block & block) override
+    try
     {
         if (db_settings.dt_insert_max_rows == 0)
         {
@@ -689,8 +690,8 @@ BlockInputStreams StorageDeltaMerge::read( //
 
             if (likely(!mvcc_query_info.regions_query_info.empty()))
             {
-                /// For learner read from TiDB/TiSpark, we set num_streams by `mvcc_query_info.concurrent`
-                num_streams = std::max(1U, static_cast<UInt32>(mvcc_query_info.concurrent));
+                /// For learner read from TiDB/TiSpark, we set num_streams by `concurrent_num`
+                num_streams = concurrent_num;
             } // else learner read from ch-client, keep num_streams
         }
 

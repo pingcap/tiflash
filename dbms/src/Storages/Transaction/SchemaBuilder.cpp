@@ -632,9 +632,9 @@ String createTableStmt(const DBInfo & db_info, const TableInfo & table_info, Log
 template <typename Getter>
 void SchemaBuilder<Getter>::applyCreatePhysicalTableImpl(const TiDB::DBInfo & db_info, TiDB::TableInfo & table_info)
 {
-    if (table_info.is_view)
+    if (table_info.is_view || table_info.is_sequence)
     {
-        LOG_INFO(log, "Table " << table_info.name << " is a view table, ignore it.");
+        LOG_INFO(log, "Table " << table_info.name << " is a view or sequence, ignoring it.");
         return;
     }
 

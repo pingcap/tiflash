@@ -16,6 +16,7 @@ namespace DB
 
 class TiFlashMetrics;
 using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
+struct DecodedTiKVKey;
 
 struct CoprocessorContext
 {
@@ -39,6 +40,9 @@ public:
     ~CoprocessorHandler() = default;
 
     grpc::Status execute();
+
+    static std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> GenCopKeyRange(
+        const ::google::protobuf::RepeatedPtrField<::coprocessor::KeyRange> & ranges);
 
 protected:
     grpc::Status recordError(grpc::StatusCode err_code, const String & err_msg);

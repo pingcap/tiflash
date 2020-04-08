@@ -1,7 +1,7 @@
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
-#include <Flash/Coprocessor/StreamingDAGBlockOutputStream.h>
+#include <Flash/Coprocessor/StreamingDAGBlockInputStream.h>
 
 namespace DB
 {

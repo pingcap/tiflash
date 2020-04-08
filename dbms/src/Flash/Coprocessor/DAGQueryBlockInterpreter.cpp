@@ -1,7 +1,4 @@
 #include <DataStreams/AggregatingBlockInputStream.h>
-#include <DataStreams/BlockIO.h>
-#include <DataStreams/ConcatBlockInputStream.h>
-#include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/LimitBlockInputStream.h>
@@ -17,7 +14,7 @@
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Flash/Coprocessor/StreamingDAGBlockOutputStream.h>
+#include <Flash/Coprocessor/StreamingDAGBlockInputStream.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Join.h>
@@ -28,6 +25,7 @@
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/CHTableHandle.h>
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/SchemaSyncer.h>
@@ -35,6 +33,8 @@
 #include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <Storages/Transaction/Types.h>
+
+#include "InterpreterDAGHelper.hpp"
 
 namespace DB
 {
@@ -297,17 +297,6 @@ bool checkKeyRanges(const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>>
         return checkRangeAndGenExprIfNeeded<Int64>(handle_ranges, region_handle_ranges, handle_col_id, handle_filter, log);
 }
 
-RegionException::RegionReadStatus DAGQueryBlockInterpreter::getRegionReadStatus(const RegionPtr & current_region)
-{
-    if (!current_region)
-        return RegionException::NOT_FOUND;
-    //if (current_region->version() != region_info.region_version || current_region->confVer() != region_info.region_conf_version)
-    //    return RegionException::VERSION_ERROR;
-    if (current_region->isPendingRemove())
-        return RegionException::PENDING_REMOVE;
-    return RegionException::OK;
-}
-
 // the flow is the same as executeFetchcolumns
 void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
 {
@@ -319,6 +308,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     TableID table_id = ts.table_id();
 
     const Settings & settings = context.getSettingsRef();
+    auto & tmt = context.getTMTContext();
 
     if (settings.schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION)
     {
@@ -414,45 +404,17 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>();
     query_info.mvcc_query_info->resolve_locks = true;
     query_info.mvcc_query_info->read_tso = settings.read_tso;
-    const auto & regions = dag.getRegions();
-    for (auto & r : regions)
-    {
-        if (r.key_ranges.empty())
-        {
-            throw Exception("Income key ranges is empty for region: " + std::to_string(r.region_id), ErrorCodes::COP_BAD_DAG_REQUEST);
-        }
-        RegionQueryInfo info;
-        info.region_id = r.region_id;
-        info.version = r.region_version;
-        info.conf_version = r.region_conf_version;
-        for (const auto & p : r.key_ranges)
-        {
-            TiKVRange::Handle start = TiKVRange::getRangeHandle<true>(p.first, table_id);
-            TiKVRange::Handle end = TiKVRange::getRangeHandle<false>(p.second, table_id);
-            info.required_handle_ranges.emplace_back(std::make_pair(start, end));
-        }
-        auto current_region = context.getTMTContext().getKVStore()->getRegion(info.region_id);
-        auto region_read_status = getRegionReadStatus(current_region);
-        if (region_read_status != RegionException::OK)
-        {
-            std::vector<RegionID> region_ids;
-            region_ids.reserve(regions.size());
-            for (auto & rr : regions)
-            {
-                region_ids.push_back(rr.region_id);
-            }
-            LOG_WARNING(log, __PRETTY_FUNCTION__ << " Meet region exception for region " << info.region_id);
-            throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
-        }
-        info.range_in_table = current_region->getHandleRangeByTable(table_id);
-        query_info.mvcc_query_info->regions_query_info.push_back(info);
-    }
-    if (query_info.mvcc_query_info->regions_query_info.empty())
-        throw Exception("Dag Request does not have region to read. ", ErrorCodes::COP_BAD_DAG_REQUEST);
-    query_info.mvcc_query_info->concurrent = query_info.mvcc_query_info->regions_query_info.size() > 1 ? 1.0 : 0.0;
 
-    if (ts.next_read_engine() == tipb::EngineType::Local)
+    if (dag.getRegions().empty())
     {
+        throw Exception("Dag Request does not have region to read. ", ErrorCodes::COP_BAD_DAG_REQUEST);
+    }
+
+    if (!dag.isBatchCop())
+    {
+        if (auto [info_retry, status] = MakeRegionQueryInfos(dag.getRegions(), {}, tmt, *query_info.mvcc_query_info, table_id); info_retry)
+            throw RegionException({(*info_retry).begin()->first}, status);
+
         try
         {
             pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
@@ -466,7 +428,67 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     }
     else
     {
-        throw Exception("Should not reach here", ErrorCodes::LOGICAL_ERROR);
+        std::unordered_map<RegionID, const RegionInfo &> region_retry;
+        std::unordered_set<RegionID> force_retry;
+        for (;;)
+        {
+            try
+            {
+                region_retry.clear();
+                auto [retry, status] = MakeRegionQueryInfos(dag.getRegions(), force_retry, tmt, *query_info.mvcc_query_info, table_id);
+                std::ignore = status;
+                if (retry)
+                {
+                    region_retry = std::move(*retry);
+                    for (auto & r : region_retry)
+                        force_retry.emplace(r.first);
+                }
+                if (query_info.mvcc_query_info->regions_query_info.empty())
+                    break;
+                pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
+                break;
+            }
+            catch (const LockException & e)
+            {
+                // We can also use current thread to resolve lock, but it will block next process.
+                // So, force this region retry in another thread in CoprocessorBlockInputStream.
+                force_retry.emplace(e.region_id);
+            }
+            catch (const RegionException & e)
+            {
+                if (tmt.getTerminated())
+                    throw Exception("TiFlash server is terminating", ErrorCodes::LOGICAL_ERROR);
+                // By now, RegionException will contain all region id of MvccQueryInfo, which is needed by CHSpark.
+                // When meeting RegionException, we can let MakeRegionQueryInfos to check in next loop.
+            }
+            catch (DB::Exception & e)
+            {
+                e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
+                    + "`, table_id: " + DB::toString(table_id) + ")");
+                throw;
+            }
+        }
+
+        if (region_retry.size())
+        {
+            LOG_DEBUG(log, ({
+                std::stringstream ss;
+                ss << "Start to retry " << region_retry.size() << " regions (";
+                for (auto & r : region_retry)
+                    ss << r.first << ",";
+                ss << ")";
+                ss.str();
+            }));
+
+            std::vector<pingcap::coprocessor::KeyRange> ranges;
+            for (auto & info : region_retry)
+            {
+                for (auto & range : info.second.key_ranges)
+                    ranges.emplace_back(range.first, range.second);
+            }
+            sort(ranges.begin(), ranges.end());
+            executeRemoteQueryWithRanges(pipeline, ranges);
+        }
     }
 
     if (pipeline.streams.empty())
@@ -1073,6 +1095,13 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
     {
         cop_key_ranges.emplace_back(static_cast<String>(key_range.first), static_cast<String>(key_range.second));
     }
+    sort(cop_key_ranges.begin(), cop_key_ranges.end());
+    executeRemoteQueryWithRanges(pipeline, cop_key_ranges);
+}
+
+void DAGQueryBlockInterpreter::executeRemoteQueryWithRanges(
+    Pipeline & pipeline, const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges)
+{
 
     ::tipb::DAGRequest dag_req;
     copyExecutorTreeWithLocalTableScan(dag_req, query_block.root);
@@ -1098,7 +1127,6 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
     pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
     pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
     pingcap::kv::StoreType store_type = pingcap::kv::TiFlash;
-    sort(cop_key_ranges.begin(), cop_key_ranges.end());
     auto all_tasks = pingcap::coprocessor::buildCopTasks(bo, cluster, cop_key_ranges, req, store_type, &Logger::get("pingcap/coprocessor"));
 
     size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());

@@ -148,7 +148,7 @@ std::pair<RegionDataReadInfoList, RegionException::RegionReadStatus> resolveLock
             {
                 LockInfos lock_infos;
                 lock_infos.emplace_back(std::move(lock_info));
-                throw LockException(std::move(lock_infos));
+                throw LockException(region->id(), std::move(lock_infos));
             }
         }
 

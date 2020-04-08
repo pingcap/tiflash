@@ -69,6 +69,8 @@ public:
     const std::atomic_bool & getTerminated() const;
     void setTerminated();
 
+    const KVClusterPtr & getCluster() const { return cluster; }
+
 private:
     Context & context;
     KVStorePtr kvstore;

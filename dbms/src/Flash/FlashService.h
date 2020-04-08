@@ -9,8 +9,6 @@
 #include <kvproto/tikvpb.grpc.pb.h>
 #pragma GCC diagnostic pop
 
-#include "BatchCoprocessorHandler.h"
-
 namespace DB
 {
 
@@ -29,7 +27,9 @@ public:
     grpc::Status BatchCommands(grpc::ServerContext * grpc_context,
         grpc::ServerReaderWriter<tikvpb::BatchCommandsResponse, tikvpb::BatchCommandsRequest> * stream) override;
 
-    ::grpc::Status BatchCoprocessor(::grpc::ServerContext* context, const ::coprocessor::BatchRequest* request, ::grpc::ServerWriter< ::coprocessor::BatchResponse>* writer) override;
+    ::grpc::Status BatchCoprocessor(::grpc::ServerContext * context,
+        const ::coprocessor::BatchRequest * request,
+        ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer) override;
 
 private:
     std::tuple<Context, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_contex) const;

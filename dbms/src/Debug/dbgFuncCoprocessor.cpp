@@ -643,9 +643,9 @@ tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest
     static Logger * log = &Logger::get("MockDAG");
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
     tipb::SelectResponse dag_response;
-    std::vector<RegionInfo> regions;
-    regions.emplace_back(RegionInfo(region_id, region_version, region_conf_version, std::move(key_ranges)));
-    DAGDriver driver(context, dag_request, regions, start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, dag_response, true);
+    std::unordered_map<RegionID, RegionInfo> regions;
+    regions.emplace(region_id, RegionInfo(region_id, region_version, region_conf_version, std::move(key_ranges)));
+    DAGDriver driver(context, dag_request, regions, start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
     driver.execute();
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");
     return dag_response;

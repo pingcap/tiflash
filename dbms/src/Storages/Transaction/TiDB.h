@@ -281,6 +281,8 @@ struct TableInfo
     PartitionInfo partition;
     // If the table is view, we should ignore it.
     bool is_view = false;
+    // If the table is sequence, we should ignore it.
+    bool is_sequence = false;
     Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
 
     ::TiDB::StorageEngine engine_type = ::TiDB::StorageEngine::UNSPECIFIED;
