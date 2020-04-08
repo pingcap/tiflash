@@ -43,22 +43,19 @@ grpc::Status BatchCoprocessorHandler::execute()
                 const auto dag_request = ({
                     tipb::DAGRequest dag_req;
                     dag_req.ParseFromString(cop_request->data());
-                    std::move(dag_req);
+                    dag_req;
                 });
-                const auto regions = ({
-                    std::unordered_map<RegionID, RegionInfo> regions;
-                    for (auto & r : cop_request->regions())
-                    {
-                        auto res = regions.emplace(r.region_id(),
-                            RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), GenCopKeyRange(r.ranges()),
-                                nullptr));
-                        if (!res.second)
-                            throw Exception(
-                                std::string(__PRETTY_FUNCTION__) + ": contain duplicate region " + std::to_string(r.region_id()),
-                                ErrorCodes::LOGICAL_ERROR);
-                    }
-                    std::move(regions);
-                });
+                std::unordered_map<RegionID, RegionInfo> regions;
+                for (auto & r : cop_request->regions())
+                {
+                    auto res = regions.emplace(r.region_id(),
+                        RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), GenCopKeyRange(r.ranges()),
+                            nullptr));
+                    if (!res.second)
+                        throw Exception(
+                            std::string(__PRETTY_FUNCTION__) + ": contain duplicate region " + std::to_string(r.region_id()),
+                            ErrorCodes::LOGICAL_ERROR);
+                }
                 LOG_DEBUG(log,
                     __PRETTY_FUNCTION__ << ": Handling " << regions.size() << " regions in DAG request: " << dag_request.DebugString());
 
