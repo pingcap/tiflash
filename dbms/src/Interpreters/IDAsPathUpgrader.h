@@ -40,7 +40,7 @@ class IDAsPathUpgrader
 
         std::vector<TableDiskInfo> tables;
 
-        DatabaseDiskInfo(String meta_dir) : meta_dir_path(std::move(meta_dir)) {}
+        DatabaseDiskInfo(String meta_dir) : meta_dir_path(std::move(meta_dir)), id(0) {}
 
         String getMetaFilePath() const;
     };

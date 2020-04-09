@@ -192,6 +192,26 @@ ASTPtr parseCreateDatabaseAST(const String & statement)
     return ast;
 }
 
+void tryRemoveDirectory(const String & directory, Poco::Logger * log)
+{
+    if (auto dir = Poco::File(directory); dir.exists() && dir.isDirectory())
+    {
+        try
+        {
+            dir.remove(/*recursive=*/false);
+        }
+        catch (Poco::DirectoryNotEmptyException &)
+        {
+            // just ignore and keep that directory if it is not empty
+            LOG_WARNING(log, "Can not remove directory: " << directory << ", it is not empty");
+        }
+    }
+}
+
+// This function will tidy up path and compare if them are the same one.
+// For example "/tmp/data/a.sql" is equal to "/tmp//data//a.sql"
+inline bool isSamePath(const String & lhs, const String & rhs) { return Poco::Path{lhs}.toString() == Poco::Path{rhs}.toString(); }
+
 } // namespace
 
 String IDAsPathUpgrader::DatabaseDiskInfo::getMetaFilePath() const
@@ -199,7 +219,7 @@ String IDAsPathUpgrader::DatabaseDiskInfo::getMetaFilePath() const
     return (endsWith(meta_dir_path, "/") ? meta_dir_path.substr(0, meta_dir_path.size() - 1) : meta_dir_path) + ".sql";
 }
 
-IDAsPathUpgrader::IDAsPathUpgrader(Context & global_ctx_) : global_context(global_ctx_), log(&Logger::get("IDAsPathUpgrader")) {}
+IDAsPathUpgrader::IDAsPathUpgrader(Context & global_ctx_) : global_context(global_ctx_), log{&Logger::get("IDAsPathUpgrader")} {}
 
 bool IDAsPathUpgrader::needUpgrade()
 {
@@ -288,6 +308,14 @@ void IDAsPathUpgrader::doRename()
     {
         renameDatabase(db_name, db_info);
     }
+
+    {
+        // After all, if there is a "system" (empty directory) in metadata, remove it.
+        const String system_metadata_dir = global_context.getPath() + "/metadata/" + SYSTEM_DATABASE;
+        tryRemoveDirectory(system_metadata_dir, log);
+        const String system_data_dir = global_context.getPath() + "/data/" + SYSTEM_DATABASE;
+        tryRemoveDirectory(system_data_dir, log);
+    }
 }
 
 void IDAsPathUpgrader::renameDatabase(const String & db_name, const DatabaseDiskInfo & db_info)
@@ -301,7 +329,7 @@ void IDAsPathUpgrader::renameDatabase(const String & db_name, const DatabaseDisk
     }
 
     // Then rename database
-    LOG_INFO(log, "Renaming database `" << db_name << "` to `" << mapped_db_name << "`");
+    LOG_INFO(log, "database `" << db_name << "` to `" << mapped_db_name << "` renaming");
     {
         // Recreate metadata file for database
         const String old_meta_file = db_info.getMetaFilePath();
@@ -310,25 +338,42 @@ void IDAsPathUpgrader::renameDatabase(const String & db_name, const DatabaseDisk
         auto ast = parseCreateDatabaseAST(statement);
         const auto & settings = global_context.getSettingsRef();
         writeDatabaseDefinitionToFile(new_meta_file, ast, settings.fsync_metadata);
+
         // Remove old metadata file
-        Poco::File(old_meta_file).remove();
+        if (auto file = Poco::File(old_meta_file); file.exists())
+            file.remove();
+        else
+            LOG_WARNING(log, "Can not remove database meta file: " << old_meta_file);
+        // Remove old metadata dir
+        const String old_meta_dir = db_info.meta_dir_path;
+        tryRemoveDirectory(old_meta_dir, log);
+        // Remove old data dir
+        const String old_data_dir = global_context.getPath() + "/data/" + db_name;
+        tryRemoveDirectory(old_data_dir, log);
+        auto data_extra_paths = global_context.getExtraPaths();
+        for (const auto & extra_root_path : data_extra_paths.listPaths())
+        {
+            auto old_data_extra_dir = extra_root_path + "/" + db_name;
+            tryRemoveDirectory(old_data_extra_dir, log);
+        }
     }
-    LOG_INFO(log, "Rename database `" << db_name << "` to `" << mapped_db_name << "` done.");
+    LOG_INFO(log, "database `" << db_name << "` to `" << mapped_db_name << "` rename done.");
 }
 
 void IDAsPathUpgrader::renameTable(const String & db_name, const String & mapped_db_name, const TableDiskInfo & table)
 {
     const auto mapped_table_name = mapper.mapTableName(table.id);
     LOG_INFO(log,
-        "Renaming table `" << db_name << "`.`" << table.name << "` to `" //
-                           << mapped_db_name << "`.`" << mapped_table_name << "`");
+        "table `" << db_name << "`.`" << table.name << "` to `" //
+                           << mapped_db_name << "`.`" << mapped_table_name << "` renaming");
 
+    String old_tbl_data_path;
     {
         // Former data path use ${path}/data/${database}/${table}/ as data path.
         // Rename it to ${path}/data/${mapped_table_name}.
-        auto data_root_path = global_context.getPath() + "/data";
-        auto old_tbl_data_path = data_root_path + "/" + db_name + "/" + table.name;
-        auto new_tbl_data_path = data_root_path + "/" + mapped_table_name;
+        auto data_root_path = global_context.getPath() + "/data/";
+        old_tbl_data_path = data_root_path + db_name + "/" + table.name;
+        auto new_tbl_data_path = data_root_path + mapped_table_name;
         renamePath(old_tbl_data_path, new_tbl_data_path, log, true);
     }
 
@@ -337,9 +382,11 @@ void IDAsPathUpgrader::renameTable(const String & db_name, const String & mapped
         auto data_extra_paths = global_context.getExtraPaths();
         for (const auto & extra_root_path : data_extra_paths.listPaths())
         {
-            auto old_tbl_data_path = extra_root_path + "/" + db_name + "/" + table.name;
-            auto new_tbl_data_path = extra_root_path + "/" + mapped_table_name;
-            renamePath(old_tbl_data_path, new_tbl_data_path, log, false);
+            auto old_tbl_extra_data_path = extra_root_path + "/" + db_name + "/" + table.name;
+            if (isSamePath(old_tbl_extra_data_path, old_tbl_data_path))
+                continue;
+            auto new_tbl_extra_data_path = extra_root_path + "/" + mapped_table_name;
+            renamePath(old_tbl_extra_data_path, new_tbl_extra_data_path, log, false);
         }
     }
 
@@ -357,11 +404,14 @@ void IDAsPathUpgrader::renameTable(const String & db_name, const String & mapped
     }
 
     // Remove old metadata path
-    Poco::File(table.meta_file_path).remove();
+    if (auto file = Poco::File(table.meta_file_path); file.exists())
+        file.remove();
+    else
+        LOG_WARNING(log, "Can not remove table meta file: " << table.meta_file_path);
 
     LOG_INFO(log,
-        "Rename table `" << db_name << "`.`" << table.name << "` to `" //
-                         << mapped_db_name << "`.`" << mapped_table_name << "` done.");
+        "table `" << db_name << "`.`" << table.name << "` to `" //
+                         << mapped_db_name << "`.`" << mapped_table_name << "` rename done.");
 }
 
 void IDAsPathUpgrader::doUpgrade()
