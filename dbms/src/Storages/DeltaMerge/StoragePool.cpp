@@ -1,3 +1,4 @@
+#include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 
@@ -29,10 +30,10 @@ PageStorage::Config extractConfig(const Settings & settings, UInt64 subtype)
     return config;
 }
 
-StoragePool::StoragePool(const String & name, const String & path, const Settings & settings)
-    : log_storage(name + ".log", path + "/log", extractConfig(settings, STORAGE_LOG)),
-      data_storage(name + ".data", path + "/data", extractConfig(settings, STORAGE_DATA)),
-      meta_storage(name + ".meta", path + "/meta", extractConfig(settings, STORAGE_META)),
+StoragePool::StoragePool(const String & name, const String & path, const Context & global_ctx, const Settings & settings)
+    : log_storage(name + ".log", path + "/log", extractConfig(settings, STORAGE_LOG), global_ctx.getTiFlashMetrics()),
+      data_storage(name + ".data", path + "/data", extractConfig(settings, STORAGE_DATA), global_ctx.getTiFlashMetrics()),
+      meta_storage(name + ".meta", path + "/meta", extractConfig(settings, STORAGE_META), global_ctx.getTiFlashMetrics()),
       max_log_page_id(0),
       max_data_page_id(0),
       max_meta_page_id(0)

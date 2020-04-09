@@ -258,7 +258,8 @@ public:
 
     Block getHeader() const override { return *header; }
 
-    void write(const Block & block) override try
+    void write(const Block & block) override
+    try
     {
         if (db_settings.dt_insert_max_rows == 0)
         {
@@ -376,7 +377,8 @@ RegionMap doLearnerRead(const TiDB::TableID table_id,           //
         {
             if (region == nullptr)
                 continue;
-            regions_info.emplace_back(RegionQueryInfo{id, region->version(), region->confVer(), {0, 0}});
+            regions_info.emplace_back(
+                RegionQueryInfo{id, region->version(), region->confVer(), region->getHandleRangeByTable(table_id), {}});
         }
     }
 
@@ -401,6 +403,7 @@ RegionMap doLearnerRead(const TiDB::TableID table_id,           //
     if (unlikely(kvstore_region.size() != regions_info.size()))
         throw Exception("Duplicate region id", ErrorCodes::LOGICAL_ERROR);
 
+    auto metrics = context.getTiFlashMetrics();
     const size_t num_regions = regions_info.size();
     const size_t batch_size = num_regions / concurrent_num;
     std::atomic_uint8_t region_status = RegionException::RegionReadStatus::OK;
@@ -428,14 +431,13 @@ RegionMap doLearnerRead(const TiDB::TableID table_id,           //
                 return;
             }
 
-            GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_read_index_count).Increment();
+            GET_METRIC(metrics, tiflash_raft_read_index_count).Increment();
             Stopwatch read_index_watch;
 
             /// Blocking learner read. Note that learner read must be performed ahead of data read,
             /// otherwise the desired index will be blocked by the lock of data read.
             auto read_index_result = region->learnerRead();
-            GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_read_index_duration_seconds)
-                .Observe(read_index_watch.elapsedSeconds());
+            GET_METRIC(metrics, tiflash_raft_read_index_duration_seconds).Observe(read_index_watch.elapsedSeconds());
             if (read_index_result.region_unavailable)
             {
                 // client-c detect region removed. Set region_status and continue.
@@ -455,8 +457,7 @@ RegionMap doLearnerRead(const TiDB::TableID table_id,           //
                     region_status = RegionException::RegionReadStatus::NOT_FOUND;
                     continue;
                 }
-                GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_wait_index_duration_seconds)
-                    .Observe(wait_index_watch.elapsedSeconds());
+                GET_METRIC(metrics, tiflash_raft_wait_index_duration_seconds).Observe(wait_index_watch.elapsedSeconds());
             }
             if (resolve_locks)
             {
@@ -688,8 +689,8 @@ BlockInputStreams StorageDeltaMerge::read( //
 
             if (likely(!mvcc_query_info.regions_query_info.empty()))
             {
-                /// For learner read from TiDB/TiSpark, we set num_streams by `mvcc_query_info.concurrent`
-                num_streams = std::max(1U, static_cast<UInt32>(mvcc_query_info.concurrent));
+                /// For learner read from TiDB/TiSpark, we set num_streams by `concurrent_num`
+                num_streams = concurrent_num;
             } // else learner read from ch-client, keep num_streams
         }
 
@@ -701,8 +702,17 @@ BlockInputStreams StorageDeltaMerge::read( //
                 std::stringstream ss;
                 for (const auto & region : mvcc_query_info.regions_query_info)
                 {
-                    const auto & range = region.range_in_table;
-                    ss << region.region_id << "[" << range.first.toString() << "," << range.second.toString() << "),";
+                    if (!region.required_handle_ranges.empty())
+                    {
+                        for (const auto & range : region.required_handle_ranges)
+                            ss << region.region_id << "[" << range.first.toString() << "," << range.second.toString() << "),";
+                    }
+                    else
+                    {
+                        /// only used for test cases
+                        const auto & range = region.range_in_table;
+                        ss << region.region_id << "[" << range.first.toString() << "," << range.second.toString() << "),";
+                    }
                 }
                 std::stringstream ss_merged_range;
                 for (const auto & range : ranges)
@@ -806,6 +816,8 @@ void StorageDeltaMerge::mergeDelta(const Context & context)
 
 void StorageDeltaMerge::deleteRange(const DM::HandleRange & range_to_delete, const Settings & settings)
 {
+    auto metrics = global_context.getTiFlashMetrics();
+    GET_METRIC(metrics, tiflash_storage_command_count, type_delete_range).Increment();
     return store->deleteRange(global_context, settings, range_to_delete);
 }
 

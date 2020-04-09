@@ -157,6 +157,7 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DM
                                                                         UInt64                max_data_version,
                                                                         bool                  enable_clean_read)
 {
+    LOG_DEBUG(log, __FUNCTION__ << " max_data_version: " << max_data_version << ", enable_clean_read: " << enable_clean_read);
     SkippableBlockInputStreams streams;
     for (auto & file : stable->files)
     {

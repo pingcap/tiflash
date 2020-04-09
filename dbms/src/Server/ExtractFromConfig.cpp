@@ -11,7 +11,6 @@
 #include <Common/Exception.h>
 #include <Common/Config/TOMLConfiguration.h>
 
-
 static void setupLogging(const std::string & log_level)
 {
     Poco::AutoPtr<Poco::ConsoleChannel> channel(new Poco::ConsoleChannel);

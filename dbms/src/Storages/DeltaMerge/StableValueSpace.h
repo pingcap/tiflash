@@ -41,7 +41,7 @@ public:
 
     struct Snapshot : public std::enable_shared_from_this<Snapshot>, private boost::noncopyable
     {
-        Snapshot() { column_cache = std::make_shared<ColumnCache>(); }
+        Snapshot() : log(&Logger::get("StableValueSpace::Snapshot")) { column_cache = std::make_shared<ColumnCache>(); }
         StableValueSpacePtr stable;
         ColumnCachePtr      column_cache;
 
@@ -59,6 +59,9 @@ public:
                                                     const RSOperatorPtr & filter,
                                                     UInt64                max_data_version,
                                                     bool                  enable_clean_read);
+
+    private:
+        Logger * log;
     };
     using SnapshotPtr = std::shared_ptr<Snapshot>;
 
