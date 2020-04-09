@@ -346,7 +346,7 @@ void DatabaseOrdinary::removeTable(
     }
 }
 
-static ASTPtr getQueryFromMetadata(const String & metadata_path, bool throw_on_error = true)
+ASTPtr DatabaseOrdinary::getQueryFromMetadata(const String & metadata_path, bool throw_on_error)
 {
     if (!Poco::File(metadata_path).exists())
         return nullptr;
@@ -361,8 +361,8 @@ static ASTPtr getQueryFromMetadata(const String & metadata_path, bool throw_on_e
     ParserCreateQuery parser;
     const char * pos = query.data();
     std::string error_message;
-    auto ast = tryParseQuery(parser, pos, pos + query.size(), error_message, /* hilite = */ false,
-                             "in file " + metadata_path, /* allow_multi_statements = */ false, 0);
+    auto ast = tryParseQuery(parser, pos, pos + query.size(), error_message, /* hilite = */ false, "in file " + metadata_path,
+        /* allow_multi_statements = */ false, 0);
 
     if (!ast && throw_on_error)
         throw Exception(error_message, ErrorCodes::SYNTAX_ERROR);
@@ -372,7 +372,7 @@ static ASTPtr getQueryFromMetadata(const String & metadata_path, bool throw_on_e
 
 static ASTPtr getCreateQueryFromMetadata(const String & metadata_path, const String & database, bool throw_on_error)
 {
-    ASTPtr ast = getQueryFromMetadata(metadata_path, throw_on_error);
+    ASTPtr ast = DatabaseOrdinary::getQueryFromMetadata(metadata_path, throw_on_error);
 
     if (ast)
     {

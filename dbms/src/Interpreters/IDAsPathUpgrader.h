@@ -1,4 +1,5 @@
 #include <Core/Types.h>
+#include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/Types.h>
 
 #include <map>
@@ -24,19 +25,24 @@ class Context;
 
 class IDAsPathUpgrader
 {
-    struct DatabaseDiskInfo
-    {
-        String path;
-        String engine;
-        DatabaseID id;
-    };
-
     struct TableDiskInfo
     {
-        String meta_file_path;
-        // Maybe multi-path
-        std::vector<String> data_path;
         TableID id;
+        String name;
+        String meta_file_path;
+    };
+
+    struct DatabaseDiskInfo
+    {
+        String meta_dir_path;
+        String engine;
+        DatabaseID id;
+
+        std::vector<TableDiskInfo> tables;
+
+        DatabaseDiskInfo(String meta_dir) : meta_dir_path(std::move(meta_dir)) {}
+
+        String getMetaFilePath() const;
     };
 
 public:
@@ -53,12 +59,18 @@ private:
     void linkDatabaseTableInfos(
         const std::vector<TiDB::DBInfoPtr> & all_databases, const std::vector<std::pair<TableID, DatabaseID>> & all_tables_mapping);
 
+    void doRename();
+
+    void renameDatabase(const String & db_name, const DatabaseDiskInfo & db_info);
+
+    void renameTable(const String & db_name, const String & mapped_db_name, const TableDiskInfo & table_info);
+
 private:
     Context & global_context;
 
     std::map<String, DatabaseDiskInfo> databases;
 
-    std::map<String, TableDiskInfo> tables;
+    SchemaNameMapper mapper;
 
     Poco::Logger * log;
 };

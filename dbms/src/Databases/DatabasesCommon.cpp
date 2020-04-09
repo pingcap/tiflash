@@ -48,6 +48,30 @@ String getTableDefinitionFromCreateQuery(const ASTPtr & query)
     return statement_stream.str();
 }
 
+String getDatabaseDefinitionFromCreateQuery(const ASTPtr & query)
+{
+    ASTPtr query_clone = query->clone();
+    ASTCreateQuery & create = typeid_cast<ASTCreateQuery &>(*query_clone.get());
+
+    /// We remove everything that is not needed for ATTACH from the query
+    create.attach = true;
+    create.table.clear();
+    create.as_database.clear();
+    create.as_table.clear();
+    create.if_not_exists = false;
+    create.is_populate = false;
+
+    create.select = nullptr;
+
+    create.format = nullptr;
+    create.out_file = nullptr;
+
+    std::ostringstream statement_stream;
+    formatAST(create, statement_stream, false);
+    statement_stream << '\n';
+    return statement_stream.str();
+}
+
 
 std::pair<String, StoragePtr> createTableFromDefinition(
     const String & definition,

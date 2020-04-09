@@ -44,6 +44,7 @@ public:
     void drop() override;
 
     static std::vector<String> listTableFilenames(const String & database_dir, Poco::Logger * log);
+    static ASTPtr getQueryFromMetadata(const String & metadata_path, bool throw_on_error = true);
 
 private:
     const String metadata_path;
