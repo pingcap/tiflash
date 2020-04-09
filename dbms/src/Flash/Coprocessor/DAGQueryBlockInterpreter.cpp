@@ -480,6 +480,38 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
                 ss.str();
             }));
 
+            DAGSchema schema;
+            ::tipb::DAGRequest dag_req;
+
+            {
+                const auto & table_info = storage->getTableInfo();
+                tipb::Executor * ts_exec = dag_req.add_executors();
+                ts_exec->set_tp(tipb::ExecType::TypeTableScan);
+                *(ts_exec->mutable_tbl_scan()) = ts;
+
+                for (int i = 0; i < ts.columns().size(); ++i)
+                {
+                    const auto & col = ts.columns(i);
+                    auto col_id = col.column_id();
+
+                    if (col_id == DB::TiDBPkColumnID)
+                    {
+                        ColumnInfo ci;
+                        ci.tp = TiDB::TypeLongLong;
+                        ci.setPriKeyFlag();
+                        ci.setNotNullFlag();
+                        schema.emplace_back(std::make_pair(handle_column_name, std::move(ci)));
+                    }
+                    else
+                    {
+                        auto & col_info = table_info.getColumnInfo(col_id);
+                        schema.emplace_back(std::make_pair(col_info.name, col_info));
+                    }
+                    dag_req.add_output_offsets(i);
+                }
+                dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
+            }
+
             std::vector<pingcap::coprocessor::KeyRange> ranges;
             for (auto & info : region_retry)
             {
@@ -487,7 +519,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
                     ranges.emplace_back(range.first, range.second);
             }
             sort(ranges.begin(), ranges.end());
-            executeRemoteQueryWithRanges(pipeline, ranges);
+            executeRemoteQueryImpl(pipeline, ranges, dag_req, schema);
         }
     }
 
@@ -1096,12 +1128,6 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
         cop_key_ranges.emplace_back(static_cast<String>(key_range.first), static_cast<String>(key_range.second));
     }
     sort(cop_key_ranges.begin(), cop_key_ranges.end());
-    executeRemoteQueryWithRanges(pipeline, cop_key_ranges);
-}
-
-void DAGQueryBlockInterpreter::executeRemoteQueryWithRanges(
-    Pipeline & pipeline, const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges)
-{
 
     ::tipb::DAGRequest dag_req;
     copyExecutorTreeWithLocalTableScan(dag_req, query_block.root);
@@ -1113,11 +1139,14 @@ void DAGQueryBlockInterpreter::executeRemoteQueryWithRanges(
         ColumnInfo info = fieldTypeToColumnInfo(query_block.output_field_types[i]);
         String col_name = query_block.qb_column_prefix + "col_" + std::to_string(i);
         schema.push_back(std::make_pair(col_name, info));
-        auto tp = getDataTypeByColumnInfo(info);
-        ColumnWithTypeAndName col(tp, col_name);
-        columns.emplace_back(col);
     }
-    Block sample_block = Block(columns);
+
+    executeRemoteQueryImpl(pipeline, cop_key_ranges, dag_req, schema);
+}
+
+void DAGQueryBlockInterpreter::executeRemoteQueryImpl(Pipeline & pipeline,
+    const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges, ::tipb::DAGRequest & dag_req, const DAGSchema & schema)
+{
 
     pingcap::coprocessor::RequestPtr req = std::make_shared<pingcap::coprocessor::Request>();
     dag_req.SerializeToString(&(req->data));

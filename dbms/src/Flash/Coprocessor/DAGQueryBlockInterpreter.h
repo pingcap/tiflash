@@ -7,6 +7,7 @@
 #pragma GCC diagnostic pop
 
 #include <DataStreams/BlockIO.h>
+#include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/DAGUtils.h>
@@ -107,7 +108,8 @@ private:
     bool addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, Pipeline & pipeline);
 
 private:
-    void executeRemoteQueryWithRanges(Pipeline & pipeline, const std::vector<pingcap::coprocessor::KeyRange> & key_ranges);
+    void executeRemoteQueryImpl(Pipeline & pipeline, const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges,
+        ::tipb::DAGRequest & dag_req, const DAGSchema & schema);
 
     Context & context;
     std::vector<BlockInputStreams> input_streams_vec;
