@@ -43,7 +43,7 @@ std::pair<PackRange, ColumnPtr> ColumnCache::getColumn(const PackRange & target_
             }
         }
     }
-    return {{0, 0}, nullptr};
+    throw Exception("Shouldn't reach here", ErrorCodes::LOGICAL_ERROR);
 }
 
 PackRange ColumnCache::interleaveRange(const PackRange & range1, const PackRange & range2)
