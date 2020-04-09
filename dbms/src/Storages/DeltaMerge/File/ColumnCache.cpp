@@ -27,7 +27,7 @@ std::pair<PackRange, ColumnPtr> ColumnCache::getColumn(const PackRange & target_
 {
     for (size_t i = 0; i < pack_ranges.size(); i++)
     {
-        if (isSameRange(target_range, pack_ranges[i]))
+        if (isSubRange(target_range, pack_ranges[i]))
         {
             if (column_id == EXTRA_HANDLE_COLUMN_ID)
             {

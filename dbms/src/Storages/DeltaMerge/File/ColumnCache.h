@@ -48,6 +48,11 @@ private:
         return (range1.first == range2.first) && (range1.second == range2.second);
     }
 
+    static bool isSubRange(const PackRange & range1, const PackRange & range2)
+    {
+        return (range1.first >= range2.first) && (range1.second <= range2.second);
+    }
+
 private:
     bool disabled;
 
