@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Core/Types.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 
@@ -8,6 +9,9 @@ namespace DB
 {
 
 class PathPool;
+
+class TiFlashMetrics;
+using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 
 namespace DM
 {
@@ -20,11 +24,13 @@ using NotCompress = std::unordered_set<ColId>;
  */
 struct DMContext : private boost::noncopyable
 {
-    const Context & db_context;
-    const String &  store_path;
-    PathPool &      extra_paths;
-    StoragePool &   storage_pool;
-    const UInt64    hash_salt;
+    const Context &         db_context;
+    const TiFlashMetricsPtr metrics;
+
+    const String & store_path;
+    PathPool &     extra_paths;
+    StoragePool &  storage_pool;
+    const UInt64   hash_salt;
 
     // The schema snapshot
     // We need a consistent snapshot of columns, copy ColumnsDefines
@@ -61,6 +67,7 @@ struct DMContext : private boost::noncopyable
               const NotCompress &      not_compress_,
               const DB::Settings &     settings)
         : db_context(db_context_),
+          metrics(db_context.getTiFlashMetrics()),
           store_path(store_path_),
           extra_paths(extra_paths_),
           storage_pool(storage_pool_),
