@@ -62,5 +62,6 @@ private:
 };
 
 using ColumnCachePtr = std::shared_ptr<ColumnCache>;
+using ColumnCachePtrs = std::vector<ColumnCachePtr>;
 } // namespace DM
 } // namespace DB

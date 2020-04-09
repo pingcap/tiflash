@@ -41,9 +41,9 @@ public:
 
     struct Snapshot : public std::enable_shared_from_this<Snapshot>, private boost::noncopyable
     {
-        Snapshot() : log(&Logger::get("StableValueSpace::Snapshot")) { column_cache = std::make_shared<ColumnCache>(); }
+        Snapshot() : log(&Logger::get("StableValueSpace::Snapshot")) { }
         StableValueSpacePtr stable;
-        ColumnCachePtr      column_cache;
+        ColumnCachePtrs      column_caches;
 
         PageId getId() { return stable->getId(); }
 

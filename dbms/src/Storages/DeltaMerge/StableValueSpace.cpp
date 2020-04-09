@@ -159,18 +159,24 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DM
 {
     LOG_DEBUG(log, __FUNCTION__ << " max_data_version: " << max_data_version << ", enable_clean_read: " << enable_clean_read);
     SkippableBlockInputStreams streams;
-    for (auto & file : stable->files)
+
+    for (size_t i = 0; i < stable->files.size(); i++)
     {
+        if (i >= column_caches.size())
+        {
+            auto column_cache = std::make_shared<ColumnCache>();
+            column_caches.push_back(column_cache);
+        }
         streams.push_back(std::make_shared<DMFileBlockInputStream>( //
             context.db_context,
             max_data_version,
             enable_clean_read,
             context.hash_salt,
-            file,
+            stable->files[i],
             read_columns,
             handle_range,
             filter,
-            column_cache,
+            column_caches[i],
             IdSetPtr{}));
     }
     return std::make_shared<ConcatSkippableBlockInputStream>(streams);
