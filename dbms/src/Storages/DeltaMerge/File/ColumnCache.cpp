@@ -87,6 +87,10 @@ void ColumnCache::insertPackRange(size_t pack_id, size_t pack_count)
         auto range = pack_ranges.back();
         if (!isSameRange(target_range, range))
         {
+            if (target_range.first < range.second)
+            {
+                throw Exception("New insert range should be larger than previous ones", ErrorCodes::LOGICAL_ERROR);
+            }
             pack_ranges.emplace_back(target_range);
         }
     }

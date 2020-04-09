@@ -283,6 +283,7 @@ Block DMFileReader::read()
                         for (size_t cursor = cache_pack_range.first; cursor < range.first; cursor++)
                         {
                             rows_offset += pack_stats[cursor].rows;
+
                         }
                         column->insertRangeFrom(*cache_column, rows_offset, range_rows);
                         skip_packs_by_column[i] += (range.second - range.first);
