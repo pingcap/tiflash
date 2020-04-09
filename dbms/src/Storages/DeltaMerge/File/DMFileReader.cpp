@@ -265,12 +265,14 @@ Block DMFileReader::read()
                     }
                     if (strategy == ColumnCache::Strategy::Disk)
                     {
+                        LOG_DEBUG(log, "Read from disk");
                         auto sub_column = readFromDisk(cd, range.first, range_rows, skip_packs_by_column[i]);
                         column->insertRangeFrom(*sub_column, 0, range_rows);
                         skip_packs_by_column[i] = 0;
                     }
                     else if (strategy == ColumnCache::Strategy::Memory)
                     {
+                        LOG_DEBUG(log, "Read from memory");
                         hit_cache                             = true;
                         auto [cache_pack_range, cache_column] = column_cache->getColumn(range, cd.id);
                         size_t rows_offset                    = 0;
