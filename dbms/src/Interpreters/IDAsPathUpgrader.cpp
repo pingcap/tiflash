@@ -283,7 +283,6 @@ void IDAsPathUpgrader::linkDatabaseTableInfos(
     for (auto && [db_name, db_info] : databases)
     {
         std::vector<std::string> file_names = DatabaseOrdinary::listTableFilenames(db_info.meta_dir_path, log);
-        const String database_data_dir = global_context.getPath() + "data/" + escapeForFileName(db_name) + "/";
         for (const auto & table_filename : file_names)
         {
             String table_meta_file = db_info.meta_dir_path + "/" + table_filename;
@@ -333,7 +332,7 @@ void IDAsPathUpgrader::renameDatabase(const String & db_name, const DatabaseDisk
     {
         // Recreate metadata file for database
         const String old_meta_file = db_info.getMetaFilePath();
-        const String new_meta_file = global_context.getPath() + "/metadata/" + mapped_db_name + ".sql";
+        const String new_meta_file = global_context.getPath() + "/metadata/" + escapeForFileName(mapped_db_name) + ".sql";
         const String statement = "ATTACH DATABASE `" + mapped_db_name + "` ENGINE=TiFlash";
         auto ast = parseCreateDatabaseAST(statement);
         const auto & settings = global_context.getSettingsRef();
@@ -344,16 +343,19 @@ void IDAsPathUpgrader::renameDatabase(const String & db_name, const DatabaseDisk
             file.remove();
         else
             LOG_WARNING(log, "Can not remove database meta file: " << old_meta_file);
+    }
+
+    {
         // Remove old metadata dir
         const String old_meta_dir = db_info.meta_dir_path;
         tryRemoveDirectory(old_meta_dir, log);
         // Remove old data dir
-        const String old_data_dir = global_context.getPath() + "/data/" + db_name;
+        const String old_data_dir = global_context.getPath() + "/data/" + escapeForFileName(db_name);
         tryRemoveDirectory(old_data_dir, log);
-        auto data_extra_paths = global_context.getExtraPaths();
+        const auto & data_extra_paths = global_context.getExtraPaths();
         for (const auto & extra_root_path : data_extra_paths.listPaths())
         {
-            auto old_data_extra_dir = extra_root_path + "/" + db_name;
+            auto old_data_extra_dir = extra_root_path + "/" + escapeForFileName(db_name);
             tryRemoveDirectory(old_data_extra_dir, log);
         }
     }
@@ -365,15 +367,15 @@ void IDAsPathUpgrader::renameTable(const String & db_name, const String & mapped
     const auto mapped_table_name = mapper.mapTableName(table.id);
     LOG_INFO(log,
         "table `" << db_name << "`.`" << table.name << "` to `" //
-                           << mapped_db_name << "`.`" << mapped_table_name << "` renaming");
+                  << mapped_db_name << "`.`" << mapped_table_name << "` renaming");
 
     String old_tbl_data_path;
     {
         // Former data path use ${path}/data/${database}/${table}/ as data path.
         // Rename it to ${path}/data/${mapped_table_name}.
         auto data_root_path = global_context.getPath() + "/data/";
-        old_tbl_data_path = data_root_path + db_name + "/" + table.name;
-        auto new_tbl_data_path = data_root_path + mapped_table_name;
+        old_tbl_data_path = data_root_path + escapeForFileName(db_name) + "/" + escapeForFileName(table.name);
+        auto new_tbl_data_path = data_root_path + escapeForFileName(mapped_table_name);
         renamePath(old_tbl_data_path, new_tbl_data_path, log, true);
     }
 
@@ -382,10 +384,10 @@ void IDAsPathUpgrader::renameTable(const String & db_name, const String & mapped
         auto data_extra_paths = global_context.getExtraPaths();
         for (const auto & extra_root_path : data_extra_paths.listPaths())
         {
-            auto old_tbl_extra_data_path = extra_root_path + "/" + db_name + "/" + table.name;
+            auto old_tbl_extra_data_path = extra_root_path + "/" + escapeForFileName(db_name) + "/" + escapeForFileName(table.name);
             if (isSamePath(old_tbl_extra_data_path, old_tbl_data_path))
                 continue;
-            auto new_tbl_extra_data_path = extra_root_path + "/" + mapped_table_name;
+            auto new_tbl_extra_data_path = extra_root_path + "/" + escapeForFileName(mapped_table_name);
             renamePath(old_tbl_extra_data_path, new_tbl_extra_data_path, log, false);
         }
     }
@@ -398,7 +400,7 @@ void IDAsPathUpgrader::renameTable(const String & db_name, const String & mapped
                 ErrorCodes::FILE_DOESNT_EXIST);
         ASTCreateQuery & ast_create_query = typeid_cast<ASTCreateQuery &>(*ast);
         ast_create_query.table = mapped_table_name;
-        const String new_tbl_meta_file = global_context.getPath() + "/metadata/" + mapped_table_name + ".sql";
+        const String new_tbl_meta_file = global_context.getPath() + "/metadata/" + escapeForFileName(mapped_table_name) + ".sql";
         const auto & settings = global_context.getSettingsRef();
         writeTableDefinitionToFile(new_tbl_meta_file, ast, settings.fsync_metadata);
     }
@@ -411,7 +413,7 @@ void IDAsPathUpgrader::renameTable(const String & db_name, const String & mapped
 
     LOG_INFO(log,
         "table `" << db_name << "`.`" << table.name << "` to `" //
-                         << mapped_db_name << "`.`" << mapped_table_name << "` rename done.");
+                  << mapped_db_name << "`.`" << mapped_table_name << "` rename done.");
 }
 
 void IDAsPathUpgrader::doUpgrade()
