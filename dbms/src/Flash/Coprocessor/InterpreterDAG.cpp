@@ -60,10 +60,11 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
             conditions.push_back(&condition);
         auto tmp = dag.getSelection();
         if (tmp.bloom_size() != 0) {
+            auto st = context.getTMTContext().getStorages().get(dag.getTS().table_id());
             for (int i = 0;i < tmp.bloom_size();i++) {
                 auto bf_in_dag = tmp.bloom(i);
                 auto one_bf = std::make_shared<BloomFilter>();
-                std::vector<UInt64 > one_join_key;
+                std::vector<String > one_join_key;
                 for (auto & uint64 : bf_in_dag.bit_set())
                 {
                     one_bf->PushU64(uint64);
@@ -71,7 +72,9 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
                 one_bf->FinishBuild();
                 for (auto & uint64 : bf_in_dag.col_idx())
                 {
-                    one_join_key.push_back(uint64);
+                    auto col_id = dag.getTS().columns(uint64).column_id();
+                    auto name = st->getTableInfo().getColumnName(col_id);
+                    one_join_key.push_back(name);
                 }
                 bf[i] = one_bf;
                 join_key[i] = one_join_key;

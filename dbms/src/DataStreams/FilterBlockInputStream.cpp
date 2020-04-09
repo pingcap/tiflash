@@ -122,7 +122,7 @@ Block FilterBlockInputStream::readImpl()
                 std::vector<ColumnWithTypeAndName > cols;
                 bool canUseBloom = true;
                 for (unsigned i = 0;i < join_key.size();i++) {
-                    ColumnWithTypeAndName col = res.safeGetByPosition(join_key[i] + 1);
+                    ColumnWithTypeAndName col = res.getByName(join_key[i]);
                     String type = col.type->getName();
                     if (!IsInt(type) && !IsUInt(type) && !IsString(type)) {
                         canUseBloom = false;
