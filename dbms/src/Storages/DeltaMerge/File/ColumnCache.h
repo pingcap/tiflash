@@ -40,7 +40,7 @@ public:
     }
 
 private:
-    void insertPackRange(size_t pack_id, size_t pack_count);
+    bool insertPackRange(size_t pack_id, size_t pack_count);
 
     static std::vector<PackRange> splitPackRangeByCacheRange(const PackRange & range, const PackRange & cache_range);
 

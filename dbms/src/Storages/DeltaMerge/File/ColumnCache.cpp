@@ -8,13 +8,9 @@ ColumnCachePtr ColumnCache::disabled_cache = std::make_shared<ColumnCache>(true)
 
 void ColumnCache::putColumn(size_t pack_id, size_t pack_count, const ColumnPtr & column, ColId column_id)
 {
-    if (!pack_ranges.empty())
+    if (!insertPackRange(pack_id, pack_count))
     {
-        auto & range = pack_ranges.back();
-        if (range.second > pack_id)
-        {
-            return;
-        }
+        return;
     }
     if (column_id == EXTRA_HANDLE_COLUMN_ID)
     {
@@ -28,7 +24,6 @@ void ColumnCache::putColumn(size_t pack_id, size_t pack_count, const ColumnPtr &
     {
         throw Exception("Unknown column id " + std::to_string(column_id), ErrorCodes::LOGICAL_ERROR);
     }
-    insertPackRange(pack_id, pack_count);
 }
 
 std::pair<PackRange, ColumnPtr> ColumnCache::getColumn(const PackRange & target_range, ColId column_id)
@@ -83,7 +78,7 @@ std::vector<PackRange> ColumnCache::splitPackRangeByCacheRange(const PackRange &
     return results;
 }
 
-void ColumnCache::insertPackRange(size_t pack_id, size_t pack_count)
+bool ColumnCache::insertPackRange(size_t pack_id, size_t pack_count)
 {
     PackRange target_range{pack_id, pack_id + pack_count};
     if (pack_ranges.empty())
@@ -97,13 +92,12 @@ void ColumnCache::insertPackRange(size_t pack_id, size_t pack_count)
         {
             if (target_range.first < range.second)
             {
-                throw Exception("New insert range should be larger than previous ones new insert range[" +
-                std::to_string(target_range.first) + ", " + std::to_string(target_range.second) + ")" +
-                " previous range [" + std::to_string(range.first) + ", " + std::to_string(range.second) + ")", ErrorCodes::LOGICAL_ERROR);
+               return false;
             }
             pack_ranges.emplace_back(target_range);
         }
     }
+    return true;
 }
 
 std::vector<std::pair<PackRange, ColumnCache::Strategy>> ColumnCache::getReadStrategy(size_t pack_id, size_t pack_count, ColId column_id)
