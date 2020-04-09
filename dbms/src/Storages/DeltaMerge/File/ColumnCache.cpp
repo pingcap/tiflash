@@ -80,7 +80,7 @@ void ColumnCache::insertPackRange(size_t pack_id, size_t pack_count)
     PackRange target_range{pack_id, pack_id + pack_count};
     if (pack_ranges.empty())
     {
-        pack_ranges.emplace_back(std::make_pair(pack_id, pack_id + pack_count));
+        pack_ranges.emplace_back(target_range);
     }
     else
     {
@@ -120,7 +120,7 @@ std::vector<std::pair<PackRange, ColumnCache::Strategy>> ColumnCache::getReadStr
                     auto ranges = splitPackRangeByCacheRange(target_range, cache_range);
                     for (auto & range : ranges)
                     {
-                        if (isSameRange(range, cache_range))
+                        if (isSubRange(range, cache_range))
                         {
                             range_and_strategy.emplace_back(std::make_pair(range, Strategy::Memory));
                         }
@@ -142,7 +142,7 @@ std::vector<std::pair<PackRange, ColumnCache::Strategy>> ColumnCache::getReadStr
                     auto ranges = splitPackRangeByCacheRange(target_range, cache_range);
                     for (auto & range : ranges)
                     {
-                        if (isSameRange(range, cache_range))
+                        if (isSubRange(range, cache_range))
                         {
                             range_and_strategy.emplace_back(std::make_pair(range, Strategy::Memory));
                         }

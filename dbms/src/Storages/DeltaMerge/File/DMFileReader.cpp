@@ -275,6 +275,10 @@ Block DMFileReader::read()
                         LOG_DEBUG(log, "Read from memory");
                         hit_cache                             = true;
                         auto [cache_pack_range, cache_column] = column_cache->getColumn(range, cd.id);
+                        if (!ColumnCache::isSubRange(range, cache_pack_range))
+                        {
+                            throw Exception("Shouldn't happen", ErrorCodes::LOGICAL_ERROR);
+                        }
                         size_t rows_offset                    = 0;
                         for (size_t cursor = cache_pack_range.first; cursor < range.first; cursor++)
                         {

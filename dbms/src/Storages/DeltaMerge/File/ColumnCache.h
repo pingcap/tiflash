@@ -34,6 +34,11 @@ public:
 public:
     static std::shared_ptr<ColumnCache> disabled_cache;
 
+    static bool isSubRange(const PackRange & range1, const PackRange & range2)
+    {
+        return (range1.first >= range2.first) && (range1.second <= range2.second);
+    }
+
 private:
     void insertPackRange(size_t pack_id, size_t pack_count);
 
@@ -46,11 +51,6 @@ private:
     static bool isSameRange(const PackRange & range1, const PackRange & range2)
     {
         return (range1.first == range2.first) && (range1.second == range2.second);
-    }
-
-    static bool isSubRange(const PackRange & range1, const PackRange & range2)
-    {
-        return (range1.first >= range2.first) && (range1.second <= range2.second);
     }
 
 private:
