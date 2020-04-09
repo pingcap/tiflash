@@ -251,7 +251,6 @@ Block DMFileReader::read()
         {
             if (enable_column_cache && isCacheableColumn(cd))
             {
-                LOG_DEBUG(log, "try read start_pack_id: " + std::to_string(start_pack_id) + " read packs " + std::to_string(read_packs));
                 auto read_strategy = column_cache->getReadStrategy(start_pack_id, read_packs, cd.id);
                 auto data_type     = dmfile->getColumnStat(cd.id).type;
                 auto column        = data_type->createColumn();
@@ -259,7 +258,6 @@ Block DMFileReader::read()
                 bool hit_cache = false;
                 for (auto & [range, strategy] : read_strategy)
                 {
-                    LOG_DEBUG(log, "sub range [" + std::to_string(range.first) + ", " + std::to_string(range.second) + ")");
                     size_t range_rows = 0;
                     for (size_t cursor = range.first; cursor < range.second; cursor++)
                     {
@@ -267,14 +265,12 @@ Block DMFileReader::read()
                     }
                     if (strategy == ColumnCache::Strategy::Disk)
                     {
-                        LOG_DEBUG(log, "Read from disk");
                         auto sub_column = readFromDisk(cd, range.first, range_rows, skip_packs_by_column[i]);
                         column->insertRangeFrom(*sub_column, 0, range_rows);
                         skip_packs_by_column[i] = 0;
                     }
                     else if (strategy == ColumnCache::Strategy::Memory)
                     {
-                        LOG_DEBUG(log, "Read from memory");
                         hit_cache                             = true;
                         auto [cache_pack_range, cache_column] = column_cache->getColumn(range, cd.id);
                         if (!ColumnCache::isSubRange(range, cache_pack_range))
