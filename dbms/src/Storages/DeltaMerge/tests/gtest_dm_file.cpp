@@ -109,6 +109,7 @@ try
             *cols,
             HandleRange::newAll(),
             RSOperatorPtr{},
+            ColumnCache::disabled_cache,
             IdSetPtr{});
 
         size_t num_rows_read = 0;
@@ -185,6 +186,7 @@ try
             *cols,
             HandleRange::newAll(),
             RSOperatorPtr{},
+            ColumnCache::disabled_cache,
             IdSetPtr{});
 
         size_t num_rows_read = 0;
@@ -260,6 +262,7 @@ TEST_F(DMFile_Test, StringType)
             *cols,
             HandleRange::newAll(),
             RSOperatorPtr{},
+            ColumnCache::disabled_cache,
             IdSetPtr{});
 
         size_t num_rows_read = 0;
@@ -333,6 +336,7 @@ try
             *cols,
             HandleRange::newAll(),
             RSOperatorPtr{},
+            ColumnCache::disabled_cache,
             IdSetPtr{});
 
         size_t num_rows_read = 0;
@@ -455,6 +459,7 @@ try
             *cols_after_ddl,
             HandleRange::newAll(),
             RSOperatorPtr{},
+            ColumnCache::disabled_cache,
             IdSetPtr{});
 
         size_t num_rows_read = 0;
@@ -547,6 +552,7 @@ try
             *cols_after_ddl,
             HandleRange::newAll(),
             RSOperatorPtr{},
+            ColumnCache::disabled_cache,
             IdSetPtr{});
 
         size_t num_rows_read = 0;
@@ -617,6 +623,7 @@ try
             *cols_after_ddl,
             HandleRange::newAll(),
             RSOperatorPtr{},
+            ColumnCache::disabled_cache,
             IdSetPtr{});
 
         size_t num_rows_read = 0;
@@ -688,6 +695,7 @@ try
             *cols_after_ddl,
             HandleRange::newAll(),
             RSOperatorPtr{},
+            ColumnCache::disabled_cache,
             IdSetPtr{});
 
         size_t num_rows_read = 0;
