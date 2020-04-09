@@ -8,6 +8,14 @@ ColumnCachePtr ColumnCache::disabled_cache = std::make_shared<ColumnCache>(true)
 
 void ColumnCache::putColumn(size_t pack_id, size_t pack_count, const ColumnPtr & column, ColId column_id)
 {
+    if (!pack_ranges.empty())
+    {
+        auto & range = pack_ranges.back();
+        if (range.second > pack_id)
+        {
+            return;
+        }
+    }
     if (column_id == EXTRA_HANDLE_COLUMN_ID)
     {
         handle_columns.push_back(column);
