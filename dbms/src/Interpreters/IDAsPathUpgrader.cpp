@@ -1,7 +1,10 @@
+#include <Common/StringUtils/StringUtils.h>
 #include <Common/escapeForFileName.h>
 #include <Common/typeid_cast.h>
 #include <Databases/DatabaseOrdinary.h>
+#include <Databases/DatabasesCommon.h>
 #include <IO/ReadBufferFromFile.h>
+#include <IO/WriteBufferFromFile.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/IDAsPathUpgrader.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -11,8 +14,11 @@
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Poco/DirectoryIterator.h>
+#include <Poco/File.h>
 #include <Poco/FileStream.h>
 #include <Storages/MutableSupport.h>
+#include <Storages/PathPool.h>
+#include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiDBSchemaSyncer.h>
@@ -25,6 +31,8 @@ namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
 extern const int LOGICAL_ERROR;
+extern const int FILE_DOESNT_EXIST;
+extern const int SYNTAX_ERROR;
 } // namespace ErrorCodes
 
 static constexpr auto SYSTEM_DATABASE = "system";
@@ -116,7 +124,80 @@ std::optional<TiDB::TableInfo> getTableInfo(const String & table_metadata_file)
 
     return std::nullopt;
 }
+
+void renamePath(const String & old_path, const String & new_path, Poco::Logger * log, bool must_success)
+{
+    if (auto file = Poco::File{old_path}; file.exists())
+    {
+        file.renameTo(new_path);
+    }
+    else
+    {
+        if (must_success)
+            throw Exception("Path \"" + old_path + "\" is missed.");
+        else
+            LOG_WARNING(log, "Path \"" << old_path << "\" is missed.");
+    }
+}
+
+void writeTableDefinitionToFile(const String & table_meta_path, const ASTPtr & query, bool fsync_metadata)
+{
+    String table_meta_tmp_path = table_meta_path + ".tmp";
+    {
+        String statement = getTableDefinitionFromCreateQuery(query);
+
+        /// Exclusive flags guarantees, that table is not created right now in another thread. Otherwise, exception will be thrown.
+        WriteBufferFromFile out(table_meta_tmp_path, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+        writeString(statement, out);
+        out.next();
+        if (fsync_metadata)
+            out.sync();
+        out.close();
+    }
+    Poco::File(table_meta_tmp_path).renameTo(table_meta_path);
+}
+
+void writeDatabaseDefinitionToFile(const String & database_meta_path, const ASTPtr & query, bool fsync_metadata)
+{
+    String db_meta_tmp_path = database_meta_path + ".tmp";
+    {
+        String statement = getDatabaseDefinitionFromCreateQuery(query);
+
+        /// Exclusive flags guarantees, that table is not created right now in another thread. Otherwise, exception will be thrown.
+        WriteBufferFromFile out(db_meta_tmp_path, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+        writeString(statement, out);
+        out.next();
+        if (fsync_metadata)
+            out.sync();
+        out.close();
+    }
+    Poco::File(db_meta_tmp_path).renameTo(database_meta_path);
+}
+
+ASTPtr parseCreateDatabaseAST(const String & statement)
+{
+    ParserCreateQuery parser;
+    const char * pos = statement.data();
+    std::string error_msg;
+    auto ast = tryParseQuery(parser,
+        pos,
+        pos + statement.size(),
+        error_msg,
+        /*hilite=*/false,
+        String("in ") + __PRETTY_FUNCTION__,
+        /*allow_multi_statements=*/false,
+        0);
+    if (!ast)
+        throw Exception(error_msg, ErrorCodes::SYNTAX_ERROR);
+    return ast;
+}
+
 } // namespace
+
+String IDAsPathUpgrader::DatabaseDiskInfo::getMetaFilePath() const
+{
+    return (endsWith(meta_dir_path, "/") ? meta_dir_path.substr(0, meta_dir_path.size() - 1) : meta_dir_path) + ".sql";
+}
 
 IDAsPathUpgrader::IDAsPathUpgrader(Context & global_ctx_) : global_context(global_ctx_), log(&Logger::get("IDAsPathUpgrader")) {}
 
@@ -138,13 +219,13 @@ bool IDAsPathUpgrader::needUpgrade()
         if (it.name() == SYSTEM_DATABASE)
             continue;
 
-        databases.emplace(unescapeForFileName(it.name()), DatabaseDiskInfo{it.path().toString(), "", 0});
+        databases.emplace(unescapeForFileName(it.name()), DatabaseDiskInfo{it.path().toString()});
     }
 
     bool has_old_db_engine = false;
     for (auto && [db_name, db_info] : databases)
     {
-        const String database_metadata_file = db_info.path + ".sql";
+        const String database_metadata_file = db_info.meta_dir_path + ".sql";
         auto engine = getDatabaseEngine(db_name, database_metadata_file);
         db_info.engine = engine->name;
         if (db_info.engine != "TiFlash")
@@ -179,20 +260,21 @@ void IDAsPathUpgrader::linkDatabaseTableInfos(
     }
 
     // list all table in former directories.
-    for (const auto & [db_name, db_info] : databases)
+    for (auto && [db_name, db_info] : databases)
     {
-        std::vector<std::string> file_names = DatabaseOrdinary::listTableFilenames(db_info.path, log);
+        std::vector<std::string> file_names = DatabaseOrdinary::listTableFilenames(db_info.meta_dir_path, log);
         const String database_data_dir = global_context.getPath() + "data/" + escapeForFileName(db_name) + "/";
         for (const auto & table_filename : file_names)
         {
-            TableDiskInfo disk_info;
-            disk_info.meta_file_path = db_info.path + "/" + table_filename;
-            auto table_info = getTableInfo(disk_info.meta_file_path);
+            String table_meta_file = db_info.meta_dir_path + "/" + table_filename;
+            auto table_info = getTableInfo(table_meta_file);
             if (table_info.has_value())
             {
+                TableDiskInfo disk_info;
+                disk_info.meta_file_path = std::move(table_meta_file);
                 disk_info.id = table_info->id;
-                disk_info.data_path = {}; // TODO:
-                tables.emplace(table_info->name, disk_info);
+                disk_info.name = table_info->name;
+                db_info.tables.emplace_back(std::move(disk_info));
             }
         }
     }
@@ -200,12 +282,95 @@ void IDAsPathUpgrader::linkDatabaseTableInfos(
 
 void resolveConflictDirectories() {}
 
+void IDAsPathUpgrader::doRename()
+{
+    for (const auto & [db_name, db_info] : databases)
+    {
+        renameDatabase(db_name, db_info);
+    }
+}
+
+void IDAsPathUpgrader::renameDatabase(const String & db_name, const DatabaseDiskInfo & db_info)
+{
+    const auto mapped_db_name = mapper.mapDatabaseName(db_info.id);
+
+    // First rename all tables of this database
+    for (const auto & table : db_info.tables)
+    {
+        renameTable(db_name, mapped_db_name, table);
+    }
+
+    // Then rename database
+    LOG_INFO(log, "Renaming database `" << db_name << "` to `" << mapped_db_name << "`");
+    {
+        // Recreate metadata file for database
+        const String old_meta_file = db_info.getMetaFilePath();
+        const String new_meta_file = global_context.getPath() + "/metadata/" + mapped_db_name + ".sql";
+        const String statement = "ATTACH DATABASE `" + mapped_db_name + "` ENGINE=TiFlash";
+        auto ast = parseCreateDatabaseAST(statement);
+        const auto & settings = global_context.getSettingsRef();
+        writeDatabaseDefinitionToFile(new_meta_file, ast, settings.fsync_metadata);
+        // Remove old metadata file
+        Poco::File(old_meta_file).remove();
+    }
+    LOG_INFO(log, "Rename database `" << db_name << "` to `" << mapped_db_name << "` done.");
+}
+
+void IDAsPathUpgrader::renameTable(const String & db_name, const String & mapped_db_name, const TableDiskInfo & table)
+{
+    const auto mapped_table_name = mapper.mapTableName(table.id);
+    LOG_INFO(log,
+        "Renaming table `" << db_name << "`.`" << table.name << "` to `" //
+                           << mapped_db_name << "`.`" << mapped_table_name << "`");
+
+    {
+        // Former data path use ${path}/data/${database}/${table}/ as data path.
+        // Rename it to ${path}/data/${mapped_table_name}.
+        auto data_root_path = global_context.getPath() + "/data";
+        auto old_tbl_data_path = data_root_path + "/" + db_name + "/" + table.name;
+        auto new_tbl_data_path = data_root_path + "/" + mapped_table_name;
+        renamePath(old_tbl_data_path, new_tbl_data_path, log, true);
+    }
+
+    {
+        // Rename data path for multi disk
+        auto data_extra_paths = global_context.getExtraPaths();
+        for (const auto & extra_root_path : data_extra_paths.listPaths())
+        {
+            auto old_tbl_data_path = extra_root_path + "/" + db_name + "/" + table.name;
+            auto new_tbl_data_path = extra_root_path + "/" + mapped_table_name;
+            renamePath(old_tbl_data_path, new_tbl_data_path, log, false);
+        }
+    }
+
+    // Recreate metadata path
+    {
+        auto ast = DatabaseOrdinary::getQueryFromMetadata(table.meta_file_path, /*throw_on_error=*/true);
+        if (!ast)
+            throw Exception("There is no metadata file for table " + table.name + ", expected file: " + table.meta_file_path,
+                ErrorCodes::FILE_DOESNT_EXIST);
+        ASTCreateQuery & ast_create_query = typeid_cast<ASTCreateQuery &>(*ast);
+        ast_create_query.table = mapped_table_name;
+        const String new_tbl_meta_file = global_context.getPath() + "/metadata/" + mapped_table_name + ".sql";
+        const auto & settings = global_context.getSettingsRef();
+        writeTableDefinitionToFile(new_tbl_meta_file, ast, settings.fsync_metadata);
+    }
+
+    // Remove old metadata path
+    Poco::File(table.meta_file_path).remove();
+
+    LOG_INFO(log,
+        "Rename table `" << db_name << "`.`" << table.name << "` to `" //
+                         << mapped_db_name << "`.`" << mapped_table_name << "` done.");
+}
+
 void IDAsPathUpgrader::doUpgrade()
 {
     auto [all_databases, all_table_mapping] = fetchInfosFromTiDB();
     linkDatabaseTableInfos(all_databases, all_table_mapping);
     // Check if destination db / tbl file exists and resolve conflict
     // Rename
+    doRename();
 }
 
 } // namespace DB

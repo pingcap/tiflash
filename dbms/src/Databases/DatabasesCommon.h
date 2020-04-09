@@ -20,6 +20,12 @@ class Context;
   */
 String getTableDefinitionFromCreateQuery(const ASTPtr & query);
 
+/** Get the row with the database definition based on the CREATE query.
+  * It is an ATTACH query that you can execute to create a database.
+  * See the implementation.
+  */
+String getDatabaseDefinitionFromCreateQuery(const ASTPtr & query);
+
 
 /** Create a table by its definition, without using InterpreterCreateQuery.
   *  (InterpreterCreateQuery has more complex functionality, and it can not be used if the database has not been created yet)

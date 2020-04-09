@@ -6,6 +6,7 @@ namespace DB::tests
 
 TEST(IDAsPathUpgrader_test, test)
 {
+    TiFlashTestEnv::setupLogger();
     auto ctx = TiFlashTestEnv::getContext();
     IDAsPathUpgrader upgrader(ctx);
     ASSERT_TRUE(upgrader.needUpgrade());
