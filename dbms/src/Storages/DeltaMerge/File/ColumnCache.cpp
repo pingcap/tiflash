@@ -89,7 +89,9 @@ void ColumnCache::insertPackRange(size_t pack_id, size_t pack_count)
         {
             if (target_range.first < range.second)
             {
-                throw Exception("New insert range should be larger than previous ones", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("New insert range should be larger than previous ones new insert range[" +
+                std::to_string(target_range.first) + ", " + std::to_string(target_range.second) + ")" +
+                " previous range [" + range.first + ", " + std::to_string(range.second) + ")", ErrorCodes::LOGICAL_ERROR);
             }
             pack_ranges.emplace_back(target_range);
         }
