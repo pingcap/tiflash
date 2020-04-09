@@ -165,6 +165,7 @@ std::vector<std::pair<PackRange, ColumnCache::Strategy>> ColumnCache::getReadStr
             {
                 throw Exception("Unknown column id " + std::to_string(column_id), ErrorCodes::LOGICAL_ERROR);
             }
+            break;
         }
     }
     if (!hit_cache)
