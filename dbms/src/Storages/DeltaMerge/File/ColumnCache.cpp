@@ -48,7 +48,7 @@ std::pair<PackRange, ColumnPtr> ColumnCache::getColumn(const PackRange & target_
 
 PackRange ColumnCache::interleaveRange(const PackRange & range1, const PackRange & range2)
 {
-    if (range1.second >= range2.first || range2.second >= range1.first)
+    if (range1.first >= range2.second || range2.first >= range1.second)
     {
         return PackRange(0, 0);
     }
@@ -94,7 +94,8 @@ void ColumnCache::insertPackRange(size_t pack_id, size_t pack_count)
 
 std::vector<std::pair<PackRange, ColumnCache::Strategy>> ColumnCache::getReadStrategy(size_t pack_id, size_t pack_count, ColId column_id)
 {
-    PackRange                                                target_range{pack_id, pack_id + pack_count};
+    PackRange target_range{pack_id, pack_id + pack_count};
+
     std::vector<std::pair<PackRange, ColumnCache::Strategy>> range_and_strategy;
     if (disabled)
     {
