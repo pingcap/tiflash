@@ -100,7 +100,7 @@ std::vector<std::pair<PackRange, ColumnCache::Strategy>> ColumnCache::getReadStr
 
 void ColumnCache::tryPutColumn(size_t pack_id, size_t pack_count, const ColumnPtr & column, ColId column_id)
 {
-    if (!tryInsertPackRange(pack_id, pack_count, ColId column_id))
+    if (!tryInsertPackRange(pack_id, pack_count, column_id))
     {
         return;
     }
