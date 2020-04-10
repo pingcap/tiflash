@@ -30,6 +30,7 @@ using namespace TiDB;
 namespace ErrorCodes
 {
 extern const int DDL_ERROR;
+extern const int SYNTAX_ERROR;
 }
 
 bool isReservedDatabase(Context & context, const String & database_name)
@@ -156,14 +157,15 @@ inline SchemaChanges detectSchemaChanges(Logger * log, Context & context, const 
             AlterCommands rename_commands;
             auto rename_command
                 = newRenameColCommand(rename_pair.first.name, rename_pair.second.name, rename_pair.second.id, orig_table_info);
-            auto rename_modifier = [column_id = rename_command.column_id, old_name = rename_command.column_name,
-                                       new_name = rename_command.new_column_name](ColumnInfos & column_infos) {
-                auto it = std::find_if(column_infos.begin(), column_infos.end(), [&](const auto & column_info) {
-                    return column_info.id == column_id && column_info.name == old_name;
-                });
-                if (it != column_infos.end())
-                    it->name = new_name;
-            };
+            auto rename_modifier
+                = [column_id = rename_command.column_id, old_name = rename_command.column_name, new_name = rename_command.new_column_name](
+                      ColumnInfos & column_infos) {
+                      auto it = std::find_if(column_infos.begin(), column_infos.end(), [&](const auto & column_info) {
+                          return column_info.id == column_id && column_info.name == old_name;
+                      });
+                      if (it != column_infos.end())
+                          it->name = new_name;
+                  };
             rename_commands.emplace_back(std::move(rename_command));
             result.emplace_back(std::move(rename_commands), rename_modifier);
             GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_rename_column).Increment();
@@ -615,6 +617,24 @@ bool SchemaBuilder<Getter, NameMapper>::applyCreateSchema(DatabaseID schema_id)
     return true;
 }
 
+static ASTPtr parseCreateStatement(const String & statement)
+{
+    ParserCreateQuery parser;
+    const char * pos = statement.data();
+    std::string error_msg;
+    auto ast = tryParseQuery(parser,
+        pos,
+        pos + statement.size(),
+        error_msg,
+        /*hilite=*/false,
+        String("in ") + __PRETTY_FUNCTION__,
+        /*allow_multi_statements=*/false,
+        0);
+    if (!ast)
+        throw Exception(error_msg, ErrorCodes::SYNTAX_ERROR);
+    return ast;
+}
+
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(TiDB::DBInfoPtr db_info)
 {
@@ -623,10 +643,10 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(TiDB::DBInfoPtr db_inf
     auto mapped = name_mapper.mapDatabaseName(*db_info);
     if (isReservedDatabase(context, mapped))
         throw Exception("Database " + name_mapper.displayDatabaseName(*db_info) + " is reserved", ErrorCodes::DDL_ERROR);
-    ASTCreateQuery * create_query = new ASTCreateQuery();
-    create_query->database = std::move(mapped);
-    create_query->if_not_exists = true;
-    ASTPtr ast = ASTPtr(create_query);
+
+    const String statement = "CREATE DATABASE " + backQuoteIfNeed(mapped) + " IF NOT EXIST ENGINE=TiFlash";
+    ASTPtr ast = parseCreateStatement(statement);
+
     InterpreterCreateQuery interpreter(ast, context);
     interpreter.setInternal(true);
     interpreter.setForceRestoreData(false);
