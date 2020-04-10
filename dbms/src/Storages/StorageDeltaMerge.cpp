@@ -1,4 +1,5 @@
 #include <Common/TiFlashMetrics.h>
+#include <Common/escapeForFileName.h>
 #include <Common/formatReadable.h>
 #include <Common/typeid_cast.h>
 #include <Core/Defines.h>
@@ -138,8 +139,16 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
         std::move(handle_column_define), DeltaMergeStore::Settings());
 }
 
+String StorageDeltaMerge::getTableName() const { return store->getTableName(); }
+
+String StorageDeltaMerge::getDatabaseName() const 
+{
+    return store->getDatabaseName();
+}
+
 void StorageDeltaMerge::drop()
 {
+    const String tbl_name = store->getTableName();
     shutdown();
     store->drop();
 }
@@ -969,6 +978,10 @@ String StorageDeltaMerge::getName() const { return MutableSupport::delta_tree_st
 
 void StorageDeltaMerge::rename(const String & new_path_to_db, const String & new_database_name, const String & new_table_name)
 {
+#if 1
+    (void)new_path_to_db;
+    store->rename(new_database_name, new_table_name);
+#else
     const String new_path = new_path_to_db + "/" + new_table_name;
 
     if (Poco::File{new_path}.exists())

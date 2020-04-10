@@ -225,25 +225,43 @@ void DatabaseTiFlash::removeTable(const Context & /*context*/, const String & ta
 
 void DatabaseTiFlash::renameTable(const Context & context, const String & table_name, IDatabase & to_database, const String & to_table_name)
 {
-    if (table_name != to_table_name)
-        throw Exception("Renaming table for DatabaseTiFlash, `table_name` should be euqal to `to_table_name`. table_name=" + table_name
-            + ", to_table_name=" + to_table_name);
-
     DatabaseTiFlash * to_database_concrete = typeid_cast<DatabaseTiFlash *>(&to_database);
     if (!to_database_concrete)
         throw Exception("Moving tables between databases of different engines is not supported", ErrorCodes::NOT_IMPLEMENTED);
 
     // DatabaseTiFlash should only manage tables in TMTContext.
-    auto & tmt = context.getTMTContext();
-    auto table = tmt.getStorages().getByName(name, table_name, /*include_tombstone=*/false); // TODO: maybe get by table_id?
-    if (!table)
-        throw Exception("Table " + name + "." + table_name + " doesn't exist in TiFlash context.", ErrorCodes::UNKNOWN_TABLE);
+    ManageableStoragePtr table;
+    {
+        StoragePtr table_ = tryGetTable(context, table_name);
+        if (!table_)
+            throw Exception("Table " + name + "." + table_name + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
+        table = std::dynamic_pointer_cast<IManageableStorage>(table_);
+        if (!table)
+            throw Exception("Table " + name + "." + table_name + " is not manageable storage.", ErrorCodes::UNKNOWN_TABLE);
+    }
 
     /// Notify the table that it is renamed. If the table does not support renaming, exception is thrown.
     try
     {
-        /// FIXME: For tiflash, we should update metadata for table.
-        table->rename(/*new_path_to_db=*/context.getPath() + "/data/", /*new_database_name=*/to_database_concrete->name, to_table_name);
+        // Update `table->getDatabase()` for IManageableStorage
+        table->rename(/*new_path_to_db=*/context.getPath() + "/data/", // DeltaTree will ignored it
+            /*new_database_name=*/to_database_concrete->name, to_table_name);
+
+        if (name != to_database_concrete->name)
+        {
+            // Detach from this database and attach to new database
+            // Not atomic between two databases, but not big deal.
+            const String table_name = table->getTableName();
+            StoragePtr detach_storage = detachTable(table_name);
+            to_database_concrete->attachTable(table_name, detach_storage);
+        }
+
+        /// FIXME: we have no name_mapper in DatabaseTiFlash,
+        /// should we update metadata for table inside this method?
+
+        // auto updated_table_info = table->getTableInfo();
+        // updated_table_info.name = to_table_name;
+        // storage->alterFromTiDB(AlterCommands{}, to_database_concrete->name, name_mapper, context);
     }
     catch (const Exception & e)
     {

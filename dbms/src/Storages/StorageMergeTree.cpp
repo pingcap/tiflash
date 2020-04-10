@@ -297,6 +297,9 @@ void StorageMergeTree::rename(const String & new_path_to_db, const String & new_
 {
     std::string new_full_path = new_path_to_db + escapeForFileName(new_table_name) + '/';
 
+#if 0
+    /// After we remove "database" related information in path, we can simply ignore these piece of code?
+
     data.setPath(new_full_path);
 
     for (auto & path : context.getPartPathSelector().getAllPath())
@@ -310,6 +313,8 @@ void StorageMergeTree::rename(const String & new_path_to_db, const String & new_
                     ErrorCodes::DIRECTORY_ALREADY_EXISTS};
         Poco::File(orig_parts_path).renameTo(new_parts_path);
     }
+#endif
+
     context.dropCaches();
     path = new_path_to_db;
     table_name = new_table_name;

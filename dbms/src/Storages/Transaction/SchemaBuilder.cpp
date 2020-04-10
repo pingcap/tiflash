@@ -570,8 +570,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
     if (old_db_name != name_mapper.mapDatabaseName(*new_db_info)
         || storage->getTableName() != name_mapper.mapTableName(*new_table_info) /* this condition only holds for mock tests */)
     {
-        /// Renaming table across databases (or renaming for mock tests), we issue a RENAME query to move data around.
-        // TODO: This whole if branch won't be needed once we flattened the data path.
+        /// Renaming table across databases, we need to move storage between database objects, and update storage->getDatabase. See `DatabaseTiFlash::renameTable` for detail.
         auto rename = std::make_shared<ASTRenameQuery>();
 
         ASTRenameQuery::Table from;
