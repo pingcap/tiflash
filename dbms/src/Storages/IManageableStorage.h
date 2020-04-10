@@ -70,6 +70,18 @@ public:
         const SchemaNameMapper & name_mapper, const Context & context)
         = 0;
 
+    /** Rename the table.
+      * 
+      * Renaming a name in a file with metadata, the name in the list of tables in the RAM, is done separately.
+      * Different from `rename`, storage's data path do not contain database name, nothing to do with data path, `new_path_to_db` is ignored.
+      * But `IManageableStorage::getDatabaseName` means we usally store database name as a member in storage, we need to change that to `new_database_name`
+      * Called when the table structure is locked for write.
+      * TODO: For TiFlash, we can rename without any lock on data?
+      */
+    void rename(const String & /*new_path_to_db*/, const String & /*new_database_name*/, const String & /*new_table_name*/) override
+    {
+        throw Exception("Method rename is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
 
     /// Remove this storage from TMTContext. Should be called after its metadata and data have been removed from disk.
     virtual void removeFromTMTContext() = 0;

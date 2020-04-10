@@ -366,7 +366,7 @@ void IDAsPathUpgrader::resolveConflictDirectories()
     {
         auto iter = databases.find(db_name);
         auto & db_info = iter->second;
-        db_info.renameToTmpDirectories();
+        db_info.renameToTmpDirectories(global_context);
     }
 }
 
