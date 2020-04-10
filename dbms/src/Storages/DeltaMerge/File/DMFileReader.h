@@ -61,7 +61,7 @@ public:
 private:
     bool shouldSeek(size_t pack_id);
 
-    ColumnPtr readFromDisk(ColumnDefine & column_define, size_t start_pack_id, size_t read_rows, size_t skip_packs);
+    void readFromDisk(ColumnDefine & column_define, MutableColumnPtr & column, size_t start_pack_id, size_t read_rows, size_t skip_packs);
 
 private:
     bool          enable_clean_read;

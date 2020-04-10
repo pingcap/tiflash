@@ -12,7 +12,8 @@ namespace DB
 namespace DM
 {
 using ColId      = DB::ColumnID;
-using PackRange  = std::pair<size_t, size_t>;
+using PackId = size_t;
+using PackRange  = std::pair<PackId, PackId>;
 using PackRanges = std::vector<PackRange>;
 class ColumnCache : public std::enable_shared_from_this<ColumnCache>, private boost::noncopyable
 {
@@ -20,48 +21,42 @@ public:
     enum class Strategy
     {
         Memory,
-        Disk
+        Disk,
+        Unknown
     };
 
     ColumnCache(bool disabled_ = false) : disabled{disabled_} {}
 
-    std::vector<std::pair<PackRange, ColumnCache::Strategy>> getReadStrategy(size_t pack_id, size_t pack_count, ColId column_id);
+    using RangeWithStrategy = std::pair<PackRange, ColumnCache::Strategy>;
+    using RangeWithStrategys = std::vector<RangeWithStrategy>;
+    RangeWithStrategys getReadStrategy(size_t pack_id, size_t pack_count, ColId column_id);
 
-    void tryPutColumn(size_t pack_id, size_t pack_count, const ColumnPtr & column, ColId column_id);
+    void putColumn(size_t pack_id, ColId column_id, const ColumnPtr & column, size_t rows_offset, size_t rows_count);
 
-    std::pair<PackRange, ColumnPtr> mustGetColumn(const PackRange & range, ColId column_id);
+    using ColumnCacheElement=std::pair<ColumnPtr, std::pair<size_t, size_t>>;
+    ColumnCacheElement getColumn(size_t pack_id, ColId column_id);
 
 public:
     static std::shared_ptr<ColumnCache> disabled_cache;
 
-    static bool isSubRange(const PackRange & range1, const PackRange & range2)
-    {
-        return (range1.first >= range2.first) && (range1.second <= range2.second);
-    }
+private:
+    bool isPackInCache(PackId pack_id, ColId column_id);
 
 private:
-    bool tryInsertPackRange(size_t pack_id, size_t pack_count, ColId column_id);
+    struct ColumnCacheEntry {
+        std::unordered_map<ColId, ColumnPtr> columns;
+        size_t rows_offset;
+        size_t rows_count;
+    };
+    std::unordered_map<PackId, ColumnCacheEntry> column_caches;
 
-    static std::vector<PackRange> splitPackRangeByCacheRange(const PackRange & range, const PackRange & cache_range);
-
-    static PackRange interleaveRange(const PackRange & range1, const PackRange & range2);
-
-    static bool isRangeEmpty(const PackRange & range) { return range.second - range.first == 0; }
-
-    static bool isSameRange(const PackRange & range1, const PackRange & range2)
-    {
-        return (range1.first == range2.first) && (range1.second == range2.second);
-    }
-
-private:
     bool disabled;
-
-    std::vector<ColumnPtr> handle_columns;
-    std::vector<ColumnPtr> version_columns;
-    PackRanges             pack_ranges;
 };
 
 using ColumnCachePtr  = std::shared_ptr<ColumnCache>;
 using ColumnCachePtrs = std::vector<ColumnCachePtr>;
+using RangeWithStrategy = ColumnCache::RangeWithStrategy;
+using RangeWithStrategys = ColumnCache::RangeWithStrategys;
+using ColumnCacheElement = ColumnCache::ColumnCacheElement;
 } // namespace DM
 } // namespace DB
