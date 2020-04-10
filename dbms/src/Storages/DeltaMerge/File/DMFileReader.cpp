@@ -254,7 +254,7 @@ Block DMFileReader::read()
                 auto read_strategy = column_cache->getReadStrategy(start_pack_id, read_packs, cd.id);
 
                 LOG_DEBUG(log, "Begin to read range [" << std::to_string(start_pack_id)
-                    << ", " << std::to_string(start_pack_id + read_packs) << ")");
+                    << ", " << std::to_string(start_pack_id + read_packs) << ") for column " << cd.name);
 
                 auto data_type = dmfile->getColumnStat(cd.id).type;
                 auto column    = data_type->createColumn();
