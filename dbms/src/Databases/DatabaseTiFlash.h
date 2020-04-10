@@ -19,6 +19,13 @@ public:
 
     void loadTables(Context & context, ThreadPool * thread_pool, bool has_force_restore_data_flag) override;
 
+    void loadTables(Context & context,
+        const std::vector<String> & table_files,
+        ThreadPool * thread_pool,
+        bool has_force_restore_data_flag,
+        Poco::Logger * log);
+
+
     void createTable(const Context & context, const String & table_name, const StoragePtr & table, const ASTPtr & query) override;
 
     void removeTable(const Context & context, const String & table_name) override;

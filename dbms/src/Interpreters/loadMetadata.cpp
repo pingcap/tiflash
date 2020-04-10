@@ -1,6 +1,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/escapeForFileName.h>
 #include <Databases/DatabaseOrdinary.h>
+#include <Databases/DatabaseTiFlash.h>
 #include <Databases/DatabasesCommon.h>
 #include <IO/ReadBufferFromFile.h>
 #include <Interpreters/Context.h>
@@ -123,70 +124,11 @@ void loadMetadata(Context & context)
 }
 
 
-static constexpr size_t PRINT_MESSAGE_EACH_N_TABLES = 256;
-static constexpr size_t PRINT_MESSAGE_EACH_N_SECONDS = 5;
-static constexpr size_t TABLES_PARALLEL_LOAD_BUNCH_SIZE = 100;
-
-void loadTiFlashTables(Context & context,
-    const std::vector<String> & table_files,
-    ThreadPool * thread_pool,
-    bool has_force_restore_data_flag,
-    Poco::Logger * log)
-{
-    const auto total_tables = table_files.size();
-    LOG_INFO(log, "Total " << total_tables << " tables.");
-
-    // table name -> table
-    Tables tables;
-
-    AtomicStopwatch watch;
-    std::atomic<size_t> tables_processed{0};
-
-    auto task_function = [&](std::vector<String>::const_iterator begin, std::vector<String>::const_iterator end) {
-        for (auto it = begin; it != end; ++it)
-        {
-            /// Messages, so that it's not boring to wait for the server to load for a long time.
-            if ((++tables_processed) % PRINT_MESSAGE_EACH_N_TABLES == 0 || watch.compareAndRestart(PRINT_MESSAGE_EACH_N_SECONDS))
-            {
-                LOG_INFO(log, DB::toString(tables_processed * 100.0 / total_tables, 2) << "%");
-                watch.restart();
-            }
-
-            const String & table_file = *it;
-            (void)table_file;
-            (void)has_force_restore_data_flag;
-            (void)context;
-
-            // DatabaseLoading::loadTable(context, metadata_path, database, database_name, data_path, table_file, has_force_restore_data_flag);
-        }
-    };
-
-    const size_t bunch_size = TABLES_PARALLEL_LOAD_BUNCH_SIZE;
-    size_t num_bunches = (total_tables + bunch_size - 1) / bunch_size;
-    for (size_t i = 0; i < num_bunches; ++i)
-    {
-        auto begin = table_files.begin() + i * bunch_size;
-        auto end = (i + 1 == num_bunches) ? table_files.end() : (table_files.begin() + (i + 1) * bunch_size);
-
-        auto task = std::bind(task_function, begin, end);
-        if (thread_pool)
-            thread_pool->schedule(task);
-        else
-            task();
-    }
-
-    if (thread_pool)
-        thread_pool->wait();
-
-    // After all tables was basically initialized, startup them.
-    DatabaseLoading::startupTables(tables, thread_pool, log);
-}
-
 void loadTiFlashMetadata(Context & context)
 {
     Logger * log = &Logger::get("loadTiFlashMetadata");
 
-    const String meta_path = context.getPath() + "/metadata/";
+    const String meta_root = context.getPath() + "/metadata/";
 
     /** There may exist 'force_restore_data' file, that means,
       *  skip safety threshold on difference of data parts while initializing tables.
@@ -200,17 +142,17 @@ void loadTiFlashMetadata(Context & context)
     ThreadPool thread_pool(SettingMaxThreads().getAutoValue());
 
     // Get all filename endsWith ".sql", and cleanup temporary file with ".sql.tmp" suffix
-    std::vector<String> table_files;
+    std::set<String> table_files;
     std::vector<String> database_files;
-    auto filenames = DatabaseLoading::listSQLFilenames(meta_path, log);
+    auto filenames = DatabaseLoading::listSQLFilenames(meta_root, log);
     for (const auto & filename : filenames)
     {
         if (startsWith(filename, SchemaNameMapper::DATABASE_PREFIX))
             database_files.emplace_back(filename);
         else if (startsWith(filename, SchemaNameMapper::TABLE_PREFIX))
-            table_files.emplace_back(filename);
+            table_files.emplace(filename);
         else
-            LOG_WARNING(log, "Unkonw sql file: " << meta_path << "/" << filename); // just ignore with warning
+            LOG_WARNING(log, "Unkonw sql file: " << meta_root << "/" << filename); // just ignore with warning
     }
 
     SchemaNameMapper mapper;
@@ -222,11 +164,15 @@ void loadTiFlashMetadata(Context & context)
     for (const auto & db_file : database_files)
     {
         const String db_name = unescapeForFileName(db_file.c_str() + strlen(SchemaNameMapper::DATABASE_PREFIX));
-        const String db_file_path = meta_path + db_file;
+        const String db_file_path = meta_root + db_file;
         loadDatabase(context, db_name, db_file_path, &thread_pool, has_force_restore_data_flag);
         auto database = context.getDatabase(db_name);
         if (database->getEngineName() == "TiFlash")
         {
+            DatabaseTiFlash * database_concrete = typeid_cast<DatabaseTiFlash *>(database.get());
+            if (!database_concrete)
+                throw Exception("Cast failed!", ErrorCodes::LOGICAL_ERROR);
+
             auto db_info = std::find_if( //
                 tidb_databases_info.begin(),
                 tidb_databases_info.end(),
@@ -234,10 +180,23 @@ void loadTiFlashMetadata(Context & context)
             // If databse is "DatabaseTiFlash", we need to attach tables to database according to relationships from TiDB
             std::vector<std::pair<TableID, TiDB::DatabaseID>> //
                 tidb_tables = schema_syncer->fetchAllTables(*db_info);
+
+            std::vector<String> table_files_for_this_db;
+            for (const auto & [t_id, db_id] : tidb_tables)
+            {
+                (void)db_id;
+                const String expected_tbl_file = mapper.mapTableName(t_id) + ".sql";
+                // TiFlash schema may lag behind TiDB, some table may not exist in this time.
+                if (table_files.find(expected_tbl_file) != table_files.end())
+                {
+                    table_files_for_this_db.emplace_back(meta_root + expected_tbl_file);
+                }
+            }
+
+            // Then load all storages (files with "t_" prefix) and attach them to databases.
+            database_concrete->loadTables(context, table_files_for_this_db, &thread_pool, has_force_restore_data_flag, log);
         }
     }
-    // Then load all storages (files with "t_" prefix) and attach them to databases.
-    loadTiFlashTables(context, table_files, &thread_pool, has_force_restore_data_flag, log);
 }
 
 
