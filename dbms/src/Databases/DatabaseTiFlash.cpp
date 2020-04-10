@@ -1,4 +1,5 @@
 #include <Common/FailPoint.h>
+#include <Common/Stopwatch.h>
 #include <Common/escapeForFileName.h>
 #include <Databases/DatabaseTiFlash.h>
 #include <IO/ReadBufferFromFile.h>
@@ -12,6 +13,7 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TMTStorages.h>
+#include <common/ThreadPool.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -54,9 +56,65 @@ String DatabaseTiFlash::getTableMetadataPath(const String & table_name) const
     return metadata_path + (endsWith(metadata_path, "/") ? "" : "/") + escapeForFileName(table_name) + ".sql";
 }
 
-void DatabaseTiFlash::loadTables(Context & , ThreadPool * , bool )
+void DatabaseTiFlash::loadTables(Context &, ThreadPool *, bool)
 {
     // Just empty
+}
+
+static constexpr size_t PRINT_MESSAGE_EACH_N_TABLES = 256;
+static constexpr size_t PRINT_MESSAGE_EACH_N_SECONDS = 5;
+static constexpr size_t TABLES_PARALLEL_LOAD_BUNCH_SIZE = 100;
+
+void DatabaseTiFlash::loadTables(Context & context,
+    const std::vector<String> & table_files,
+    ThreadPool * thread_pool,
+    bool has_force_restore_data_flag,
+    Poco::Logger * log)
+{
+    const auto total_tables = table_files.size();
+    LOG_INFO(log, "Total " << total_tables << " tables.");
+
+    // table name -> table
+    Tables tables;
+
+    AtomicStopwatch watch;
+    std::atomic<size_t> tables_processed{0};
+
+    auto task_function = [&](std::vector<String>::const_iterator begin, std::vector<String>::const_iterator end) {
+        for (auto it = begin; it != end; ++it)
+        {
+            /// Messages, so that it's not boring to wait for the server to load for a long time.
+            if ((++tables_processed) % PRINT_MESSAGE_EACH_N_TABLES == 0 || watch.compareAndRestart(PRINT_MESSAGE_EACH_N_SECONDS))
+            {
+                LOG_INFO(log, DB::toString(tables_processed * 100.0 / total_tables, 2) << "%");
+                watch.restart();
+            }
+
+            const String & table_file = *it;
+
+            DatabaseLoading::loadTable(context, *this, metadata_path, name, data_path, table_file, has_force_restore_data_flag);
+        }
+    };
+
+    const size_t bunch_size = TABLES_PARALLEL_LOAD_BUNCH_SIZE;
+    size_t num_bunches = (total_tables + bunch_size - 1) / bunch_size;
+    for (size_t i = 0; i < num_bunches; ++i)
+    {
+        auto begin = table_files.begin() + i * bunch_size;
+        auto end = (i + 1 == num_bunches) ? table_files.end() : (table_files.begin() + (i + 1) * bunch_size);
+
+        auto task = std::bind(task_function, begin, end);
+        if (thread_pool)
+            thread_pool->schedule(task);
+        else
+            task();
+    }
+
+    if (thread_pool)
+        thread_pool->wait();
+
+    // After all tables was basically initialized, startup them.
+    DatabaseLoading::startupTables(tables, thread_pool, log);
 }
 
 
