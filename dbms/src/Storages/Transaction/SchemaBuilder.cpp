@@ -592,6 +592,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
         InterpreterRenameQuery(rename, context).execute();
     }
 
+    // Seems we don't need this, table name is always t_${id} if it is synced from TiDB. Or we need to keep it for mocked tests?
     /// Update metadata, through calling alterFromTiDB.
     // Using copy of original table info with updated table name instead of using new_table_info directly,
     // so that other changes (ALTER commands) won't be saved.
