@@ -192,13 +192,14 @@ ASTPtr parseCreateDatabaseAST(const String & statement)
     return ast;
 }
 
-void tryRemoveDirectory(const String & directory, Poco::Logger * log)
+// By default, only remove directory if it is empy
+void tryRemoveDirectory(const String & directory, Poco::Logger * log, bool recursive = false)
 {
     if (auto dir = Poco::File(directory); dir.exists() && dir.isDirectory())
     {
         try
         {
-            dir.remove(/*recursive=*/false);
+            dir.remove(/*recursive=*/recursive);
         }
         catch (Poco::DirectoryNotEmptyException &)
         {
@@ -359,9 +360,37 @@ bool IDAsPathUpgrader::needUpgrade()
 
 std::vector<TiDB::DBInfoPtr> IDAsPathUpgrader::fetchInfosFromTiDB() const
 {
-    // Fetch DBs and tables info from TiDB/TiKV
+    // Fetch DBs info from TiDB/TiKV
+    // Note: Not get table info from TiDB, just rename according to TableID in persisted TableInfo
     auto schema_syncer = global_context.getTMTContext().getSchemaSyncer();
     return schema_syncer->fetchAllDBs();
+}
+
+static void dropAbsentDatabase(Context & context, const IDAsPathUpgrader::DatabaseDiskInfo & db_info, Poco::Logger * log)
+{
+    if (db_info.id != IDAsPathUpgrader::DatabaseDiskInfo::UNINIT_ID)
+        throw Exception("Invalid call for dropAbsentDatabase with id=" + DB::toString(db_info.id));
+
+    /// tryRemoveDirectory with recursive=true to clean up
+
+    const auto root_path = context.getPath();
+    // Remove old metadata dir
+    const String old_meta_dir = db_info.getMetaDirectory(root_path);
+    tryRemoveDirectory(old_meta_dir, log, true);
+    // Remove old metadata file
+    const String old_meta_file = db_info.getMetaFilePath(root_path);
+    if (auto file = Poco::File(old_meta_file); file.exists())
+        file.remove();
+    else
+        LOG_WARNING(log, "Can not remove database meta file: " << old_meta_file);
+    // Remove old data dir
+    const String old_data_dir = db_info.getDataDirectory(root_path);
+    tryRemoveDirectory(old_data_dir, log, true);
+    const auto & data_extra_paths = context.getExtraPaths();
+    for (const auto & extra_root_path : data_extra_paths.listPaths())
+    {
+        tryRemoveDirectory(db_info.getExtraDirectory(extra_root_path), log, true);
+    }
 }
 
 void IDAsPathUpgrader::linkDatabaseTableInfos(const std::vector<TiDB::DBInfoPtr> & all_databases)
@@ -374,10 +403,23 @@ void IDAsPathUpgrader::linkDatabaseTableInfos(const std::vector<TiDB::DBInfoPtr>
         }
     }
 
-    // list all table in former directories.
-    for (auto && [db_name, db_info] : databases)
+    // list all table in old style.
+    for (auto iter = databases.begin(); iter != databases.end(); /*empty*/)
     {
-        (void)db_name;
+        auto & db_info = iter->second;
+        if (db_info.id == IDAsPathUpgrader::DatabaseDiskInfo::UNINIT_ID)
+        {
+            LOG_WARNING(log, "Database " << iter->first << " id=" << db_info.id << ", may already dropped in TiDB, drop it..");
+            dropAbsentDatabase(global_context, db_info, log);
+            iter = databases.erase(iter);
+            continue;
+        }
+        if (db_info.engine != "TiFlash")
+        {
+            ++iter;
+            continue;
+        }
+
         const String db_meta_dir = db_info.getMetaDirectory(root_path);
         std::vector<std::string> file_names = DatabaseLoading::listSQLFilenames(db_meta_dir, log);
         for (const auto & table_filename : file_names)
@@ -387,12 +429,12 @@ void IDAsPathUpgrader::linkDatabaseTableInfos(const std::vector<TiDB::DBInfoPtr>
             if (table_info.has_value())
             {
                 TableDiskInfo disk_info;
-                disk_info.meta_file_path = std::move(table_meta_file);
                 disk_info.id = table_info->id;
                 disk_info.name = table_info->name;
                 db_info.tables.emplace_back(std::move(disk_info));
             }
         }
+        ++iter;
     }
 }
 
@@ -469,24 +511,23 @@ void IDAsPathUpgrader::renameDatabase(const String & db_name, const DatabaseDisk
     LOG_INFO(log, "database `" << db_name << "` to `" << mapped_db_name << "` renaming");
     {
         // Recreate metadata file for database
-        const String old_meta_file = db_info.getMetaFilePath(root_path);
         const String new_meta_file = db_info.getNewMetaFilePath(root_path);
         const String statement = "ATTACH DATABASE `" + mapped_db_name + "` ENGINE=TiFlash";
         auto ast = parseCreateDatabaseAST(statement);
         const auto & settings = global_context.getSettingsRef();
         writeDatabaseDefinitionToFile(new_meta_file, ast, settings.fsync_metadata);
-
-        // Remove old metadata file
-        if (auto file = Poco::File(old_meta_file); file.exists())
-            file.remove();
-        else
-            LOG_WARNING(log, "Can not remove database meta file: " << old_meta_file);
     }
 
     {
         // Remove old metadata dir
         const String old_meta_dir = db_info.getMetaDirectory(root_path);
         tryRemoveDirectory(old_meta_dir, log);
+        // Remove old metadata file
+        const String old_meta_file = db_info.getMetaFilePath(root_path);
+        if (auto file = Poco::File(old_meta_file); file.exists())
+            file.remove();
+        else
+            LOG_WARNING(log, "Can not remove database meta file: " << old_meta_file);
         // Remove old data dir
         const String old_data_dir = db_info.getDataDirectory(root_path);
         tryRemoveDirectory(old_data_dir, log);
@@ -502,7 +543,6 @@ void IDAsPathUpgrader::renameDatabase(const String & db_name, const DatabaseDisk
 void IDAsPathUpgrader::renameTable(
     const String & db_name, const DatabaseDiskInfo & db_info, const String & mapped_db_name, const TableDiskInfo & table)
 {
-    (void)db_info;
     const auto mapped_table_name = mapper.mapTableName(table.id);
     LOG_INFO(log,
         "table `" << db_name << "`.`" << table.name << "` to `" //
@@ -528,25 +568,23 @@ void IDAsPathUpgrader::renameTable(
         }
     }
 
-    // Recreate metadata path
+    // Recreate metadata file
     {
-        auto ast = DatabaseLoading::getQueryFromMetadata(table.getMetaFilePath(root_path, db_info), /*throw_on_error=*/true);
+        auto old_tbl_meta_file = table.getMetaFilePath(root_path, db_info);
+        auto ast = DatabaseLoading::getQueryFromMetadata(old_tbl_meta_file, /*throw_on_error=*/true);
         if (!ast)
-            throw Exception("There is no metadata file for table " + table.name + ", expected file: " + table.meta_file_path,
+            throw Exception("There is no metadata file for table " + table.name + ", expected file: " + old_tbl_meta_file,
                 ErrorCodes::FILE_DOESNT_EXIST);
         ASTCreateQuery & ast_create_query = typeid_cast<ASTCreateQuery &>(*ast);
         ast_create_query.table = mapped_table_name;
         const String new_tbl_meta_file = table.getNewMetaFilePath(root_path, db_info);
         const auto & settings = global_context.getSettingsRef();
         writeTableDefinitionToFile(new_tbl_meta_file, ast, settings.fsync_metadata);
-    }
 
-    // Remove old metadata path
-    auto table_meta_file = table.getMetaFilePath(root_path, db_info);
-    if (auto file = Poco::File(table_meta_file); file.exists())
-        file.remove();
-    else
-        LOG_WARNING(log, "Can not remove table meta file: " << table_meta_file);
+        // Remove old metadata file
+        if (auto file = Poco::File(old_tbl_meta_file); file.exists())
+            file.remove();
+    }
 
     LOG_INFO(log,
         "table `" << db_name << "`.`" << table.name << "` to `" //
