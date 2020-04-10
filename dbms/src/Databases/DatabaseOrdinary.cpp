@@ -54,52 +54,6 @@ namespace detail
 
 }
 
-static void loadTable(
-    Context & context,
-    const String & database_metadata_path,
-    DatabaseOrdinary & database,
-    const String & database_name,
-    const String & database_data_path,
-    const String & file_name,
-    bool has_force_restore_data_flag)
-{
-    Logger * log = &Logger::get("loadTable");
-
-    const String table_metadata_path = database_metadata_path + "/" + file_name;
-
-    String s;
-    {
-        char in_buf[METADATA_FILE_BUFFER_SIZE];
-        ReadBufferFromFile in(table_metadata_path, METADATA_FILE_BUFFER_SIZE, -1, in_buf);
-        readStringUntilEOF(s, in);
-    }
-
-    /** Empty files with metadata are generated after a rough restart of the server.
-      * Remove these files to slightly reduce the work of the admins on startup.
-      */
-    if (s.empty())
-    {
-        LOG_ERROR(log, "File " << table_metadata_path << " is empty. Removing.");
-        Poco::File(table_metadata_path).remove();
-        return;
-    }
-
-    try
-    {
-        String table_name;
-        StoragePtr table;
-        std::tie(table_name, table) = createTableFromDefinition(
-            s, database_name, database_data_path, context, has_force_restore_data_flag, "in file " + table_metadata_path);
-        database.attachTable(table_name, table);
-    }
-    catch (const Exception & e)
-    {
-        throw Exception("Cannot create table from metadata file " + table_metadata_path + ", error: " + e.displayText() +
-            ", stack trace:\n" + e.getStackTrace().toString(),
-            ErrorCodes::CANNOT_CREATE_TABLE_FROM_METADATA);
-    }
-}
-
 
 DatabaseOrdinary::DatabaseOrdinary(String name_, const String & metadata_path_, const Context & context)
     : DatabaseWithOwnTablesBase(std::move(name_))
@@ -111,45 +65,13 @@ DatabaseOrdinary::DatabaseOrdinary(String name_, const String & metadata_path_, 
 }
 
 
-std::vector<String> DatabaseOrdinary::listTableFilenames(const String & database_dir, Poco::Logger * log)
-{
-    std::vector<String> filenames;
-    Poco::DirectoryIterator dir_end;
-    for (Poco::DirectoryIterator dir_it(database_dir); dir_it != dir_end; ++dir_it)
-    {
-        /// For '.svn', '.gitignore' directory and similar.
-        if (dir_it.name().at(0) == '.')
-            continue;
-
-        /// There are .sql.bak files - skip them.
-        if (endsWith(dir_it.name(), ".sql.bak"))
-            continue;
-
-        /// There are files .sql.tmp - delete.
-        if (endsWith(dir_it.name(), ".sql.tmp"))
-        {
-            LOG_INFO(log, "Removing file " << dir_it->path());
-            Poco::File(dir_it->path()).remove();
-            continue;
-        }
-
-        /// The required files have names like `table_name.sql`
-        if (endsWith(dir_it.name(), ".sql"))
-            filenames.push_back(dir_it.name());
-        else
-            throw Exception(
-                "Incorrect file extension: " + dir_it.name() + " in metadata directory " + database_dir, ErrorCodes::INCORRECT_FILE_NAME);
-    }
-    return filenames;
-}
-
 void DatabaseOrdinary::loadTables(
     Context & context,
     ThreadPool * thread_pool,
     bool has_force_restore_data_flag)
 {
     using FileNames = std::vector<std::string>;
-    FileNames file_names = listTableFilenames(metadata_path, log);
+    FileNames file_names = DatabaseLoading::listSQLFilenames(metadata_path, log);
 
     /** Tables load faster if they are loaded in sorted (by name) order.
       * Otherwise (for the ext4 filesystem), `DirectoryIterator` iterates through them in some order,
@@ -179,7 +101,7 @@ void DatabaseOrdinary::loadTables(
                 watch.restart();
             }
 
-            loadTable(context, metadata_path, *this, name, data_path, table, has_force_restore_data_flag);
+            DatabaseLoading::loadTable(context, *this, metadata_path, name, data_path, table, has_force_restore_data_flag);
         }
     };
 
@@ -205,60 +127,8 @@ void DatabaseOrdinary::loadTables(
         thread_pool->wait();
 
     /// After all tables was basically initialized, startup them.
-    startupTables(thread_pool);
+    DatabaseLoading::startupTables(tables, thread_pool, log);
 }
-
-
-void DatabaseOrdinary::startupTables(ThreadPool * thread_pool)
-{
-    LOG_INFO(log, "Starting up tables.");
-
-    AtomicStopwatch watch;
-    std::atomic<size_t> tables_processed {0};
-    size_t total_tables = tables.size();
-
-    auto task_function = [&](Tables::iterator begin, Tables::iterator end)
-    {
-        for (auto it = begin; it != end; ++it)
-        {
-            if ((++tables_processed) % PRINT_MESSAGE_EACH_N_TABLES == 0
-                || watch.compareAndRestart(PRINT_MESSAGE_EACH_N_SECONDS))
-            {
-                LOG_INFO(log, std::fixed << std::setprecision(2) << tables_processed * 100.0 / total_tables << "%");
-                watch.restart();
-            }
-
-            it->second->startup();
-        }
-    };
-
-    const size_t bunch_size = TABLES_PARALLEL_LOAD_BUNCH_SIZE;
-    size_t num_bunches = (total_tables + bunch_size - 1) / bunch_size;
-
-    auto begin = tables.begin();
-    for (size_t i = 0; i < num_bunches; ++i)
-    {
-        auto end = begin;
-
-        if (i + 1 == num_bunches)
-            end = tables.end();
-        else
-            std::advance(end, bunch_size);
-
-        auto task = std::bind(task_function, begin, end);
-
-        if (thread_pool)
-            thread_pool->schedule(task);
-        else
-            task();
-
-        begin = end;
-    }
-
-    if (thread_pool)
-        thread_pool->wait();
-}
-
 
 void DatabaseOrdinary::createTable(
     const Context & context,

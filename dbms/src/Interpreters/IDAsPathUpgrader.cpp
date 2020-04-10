@@ -234,7 +234,7 @@ std::vector<String> IDAsPathUpgrader::DatabaseDiskInfo::getExtraDirectories(cons
 
 void IDAsPathUpgrader::DatabaseDiskInfo::renameToTmpDirectories(const Context & ctx)
 {
-    (void) ctx;
+    (void)ctx;
     // TODO:
     {
         // Rename database meta file, meta file
@@ -285,19 +285,14 @@ bool IDAsPathUpgrader::needUpgrade()
     return has_old_db_engine;
 }
 
-std::tuple<std::vector<TiDB::DBInfoPtr>, std::vector<std::pair<TableID, DatabaseID>>> IDAsPathUpgrader::fetchInfosFromTiDB() const
+std::vector<TiDB::DBInfoPtr> IDAsPathUpgrader::fetchInfosFromTiDB() const
 {
     // Fetch DBs and tables info from TiDB/TiKV
     auto schema_syncer = global_context.getTMTContext().getSchemaSyncer();
-    std::vector<TiDB::DBInfoPtr> all_databases = schema_syncer->fetchAllDBs();
-    std::vector<std::pair<TableID, DatabaseID>> //
-        all_tables_mapping = schema_syncer->fetchAllTablesMapping(all_databases);
-
-    return {all_databases, all_tables_mapping};
+    return schema_syncer->fetchAllDBs();
 }
 
-void IDAsPathUpgrader::linkDatabaseTableInfos(
-    const std::vector<TiDB::DBInfoPtr> & all_databases, const std::vector<std::pair<TableID, DatabaseID>> & /*all_tables_mapping*/)
+void IDAsPathUpgrader::linkDatabaseTableInfos(const std::vector<TiDB::DBInfoPtr> & all_databases)
 {
     for (const auto & db : all_databases)
     {
@@ -310,7 +305,7 @@ void IDAsPathUpgrader::linkDatabaseTableInfos(
     // list all table in former directories.
     for (auto && [db_name, db_info] : databases)
     {
-        std::vector<std::string> file_names = DatabaseOrdinary::listTableFilenames(db_info.meta_dir_path, log);
+        std::vector<std::string> file_names = DatabaseLoading::listSQLFilenames(db_info.meta_dir_path, log);
         for (const auto & table_filename : file_names)
         {
             String table_meta_file = db_info.meta_dir_path + "/" + table_filename;
@@ -489,8 +484,8 @@ void IDAsPathUpgrader::renameTable(
 
 void IDAsPathUpgrader::doUpgrade()
 {
-    auto [all_databases, all_table_mapping] = fetchInfosFromTiDB();
-    linkDatabaseTableInfos(all_databases, all_table_mapping);
+    auto all_databases = fetchInfosFromTiDB();
+    linkDatabaseTableInfos(all_databases);
     // Check if destination db / tbl file exists and resolve conflict
     // Rename
     doRename();

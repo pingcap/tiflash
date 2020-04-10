@@ -64,11 +64,9 @@ public:
     void doUpgrade();
 
 private:
-    std::tuple<std::vector<TiDB::DBInfoPtr>, std::vector<std::pair<TableID, DatabaseID>>> //
-    fetchInfosFromTiDB() const;
+    std::vector<TiDB::DBInfoPtr> fetchInfosFromTiDB() const;
 
-    void linkDatabaseTableInfos(
-        const std::vector<TiDB::DBInfoPtr> & all_databases, const std::vector<std::pair<TableID, DatabaseID>> & all_tables_mapping);
+    void linkDatabaseTableInfos(const std::vector<TiDB::DBInfoPtr> & all_databases);
 
     void resolveConflictDirectories();
 

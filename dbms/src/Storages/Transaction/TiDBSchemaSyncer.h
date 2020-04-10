@@ -67,29 +67,26 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         return getter.listDBs();
     }
 
-    std::vector<std::pair<TiDB::TableID, TiDB::DatabaseID>> fetchAllTablesMapping(
-        const std::vector<TiDB::DBInfoPtr> & all_databases) override
+    std::vector<std::pair<TableID, DatabaseID>> //
+    fetchAllTables(const TiDB::DBInfoPtr & database) override
     {
         auto getter = createSchemaGetter();
-        std::vector<std::pair<TiDB::TableID, TiDB::DatabaseID>> all_tables;
-        for (const auto & db : all_databases)
+        std::vector<std::pair<TableID, DatabaseID>> all_tables;
+        const std::vector<TiDB::TableInfoPtr> tables = getter.listTables(database->id);
+        for (const auto & table : tables)
         {
-            const std::vector<TiDB::TableInfoPtr> tables = getter.listTables(db->id);
-            for (const auto & table : tables)
+            /// Ignore view and sequence.
+            if (table->is_view || table->is_sequence)
             {
-                /// Ignore view and sequence.
-                if (table->is_view || table->is_sequence)
-                {
-                    continue;
-                }
+                continue;
+            }
 
-                all_tables.emplace_back(table->id, db->id);
-                if (table->isLogicalPartitionTable())
-                {
-                    const auto & parts_def = table->partition.definitions;
-                    std::for_each(parts_def.begin(), parts_def.end(), //
-                        [&all_tables, &db](const auto & def) { all_tables.emplace_back(def.id, db->id); });
-                }
+            all_tables.emplace_back(table->id, database->id);
+            if (table->isLogicalPartitionTable())
+            {
+                const auto & parts_def = table->partition.definitions;
+                std::for_each(parts_def.begin(), parts_def.end(), //
+                    [&all_tables, &database](const auto & def) { all_tables.emplace_back(def.id, database->id); });
             }
         }
         return all_tables;

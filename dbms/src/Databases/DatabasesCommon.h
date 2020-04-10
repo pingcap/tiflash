@@ -40,6 +40,21 @@ std::pair<String, StoragePtr> createTableFromDefinition(
     bool has_force_restore_data_flag,
     const String & description_for_error_message);
 
+namespace DatabaseLoading
+{
+std::vector<String> listSQLFilenames(const String & database_dir, Poco::Logger * log);
+
+void startupTables(Tables & tables, ThreadPool * thread_pool, Poco::Logger * log);
+
+void loadTable(Context & context,
+    IDatabase & database,
+    const String & database_metadata_path,
+    const String & database_name,
+    const String & database_data_path,
+    const String & file_name,
+    bool has_force_restore_data_flag);
+} // namespace DatabaseLoading
+
 
 /// Copies list of tables and iterates through such snapshot.
 class DatabaseSnapshotIterator : public IDatabaseIterator
