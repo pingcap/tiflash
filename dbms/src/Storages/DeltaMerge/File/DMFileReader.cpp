@@ -274,7 +274,10 @@ Block DMFileReader::read()
                         auto [cache_pack_range, cache_column] = column_cache->mustGetColumn(range, cd.id);
                         if (!ColumnCache::isSubRange(range, cache_pack_range))
                         {
-                            throw Exception("Shouldn't happen", ErrorCodes::LOGICAL_ERROR);
+                            throw Exception("Target range [" + std::to_string(range.first) +
+                                    ", " + std::to_string(range.second) + ") is not included in cache range [" +
+                                    std::to_string(cache_pack_range.first) + ", " +
+                                    std::to_string(cache_pack_range.second) + ")", ErrorCodes::LOGICAL_ERROR);
                         }
                         size_t rows_offset = 0;
                         for (size_t cursor = cache_pack_range.first; cursor < range.first; cursor++)
