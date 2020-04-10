@@ -219,7 +219,35 @@ String IDAsPathUpgrader::DatabaseDiskInfo::getMetaFilePath() const
     return (endsWith(meta_dir_path, "/") ? meta_dir_path.substr(0, meta_dir_path.size() - 1) : meta_dir_path) + ".sql";
 }
 
-IDAsPathUpgrader::IDAsPathUpgrader(Context & global_ctx_) : global_context(global_ctx_), log{&Logger::get("IDAsPathUpgrader")} {}
+String IDAsPathUpgrader::DatabaseDiskInfo::getDataDirectory(const String & root, const String & name) const
+{
+    return root + "/data/" + escapeForFileName(name + (moved_to_tmp ? TMP_SUFFIX : ""));
+}
+
+std::vector<String> IDAsPathUpgrader::DatabaseDiskInfo::getExtraDirectories(const PathPool & pool, const String & name) const
+{
+    auto paths = pool.listPaths();
+    for (auto && p : paths)
+        p += "/" + escapeForFileName(name + (moved_to_tmp ? TMP_SUFFIX : "")) + "/";
+    return paths;
+}
+
+void IDAsPathUpgrader::DatabaseDiskInfo::renameToTmpDirectories(const Context & ctx)
+{
+    (void) ctx;
+    // TODO:
+    {
+        // Rename database meta file, meta file
+    }
+
+    // Rename database data dir
+
+    // Rename database data dir for multi-paths
+}
+
+IDAsPathUpgrader::IDAsPathUpgrader(Context & global_ctx_)
+    : global_context(global_ctx_), root_path{global_context.getPath()}, log{&Logger::get("IDAsPathUpgrader")}
+{}
 
 bool IDAsPathUpgrader::needUpgrade()
 {
@@ -245,7 +273,7 @@ bool IDAsPathUpgrader::needUpgrade()
     bool has_old_db_engine = false;
     for (auto && [db_name, db_info] : databases)
     {
-        const String database_metadata_file = db_info.meta_dir_path + ".sql";
+        const String database_metadata_file = db_info.getMetaFilePath();
         auto engine = getDatabaseEngine(db_name, database_metadata_file);
         db_info.engine = engine->name;
         if (db_info.engine != "TiFlash")
@@ -299,7 +327,48 @@ void IDAsPathUpgrader::linkDatabaseTableInfos(
     }
 }
 
-void resolveConflictDirectories() {}
+void IDAsPathUpgrader::resolveConflictDirectories()
+{
+    // using Resolver = CyclicRenameResolver<String, >
+    std::unordered_set<String> conflict_databases;
+    for (const auto & [db_name, db_info] : databases)
+    {
+        // In theory, user can create database naming "t_xx" and there is cyclic renaming between table and database.
+        // First detect if there is any database may have cyclic rename with table.
+        for (const auto & table : db_info.tables)
+        {
+            const auto new_tbl_name = mapper.mapTableName(table.id);
+            if (auto iter = databases.find(new_tbl_name); iter != databases.end())
+            {
+                conflict_databases.insert(iter->first);
+                LOG_INFO(log,
+                    "Detect cyclic renaming between table `" //
+                        << db_name << "`.`" << table.name    //
+                        << "`(id:" << table.id               //
+                        << ") and database `" << iter->first << "`");
+            }
+        }
+
+        // In theory, user can create two database naming "db_xx" and there is cyclic renaming.
+        // We need to break that cyclic.
+        const auto new_database_name = mapper.mapDatabaseName(db_info.id);
+        if (auto iter = databases.find(new_database_name); iter != databases.end())
+        {
+            conflict_databases.insert(iter->first);
+            LOG_INFO(log,
+                "Detect cyclic renaming between database `" //
+                    << db_name << "`(id:" << db_info.id     //
+                    << ") and database `" << iter->first << "`");
+        }
+    }
+    LOG_INFO(log, "Detect " << conflict_databases.size() << " cyclic renaming");
+    for (const auto & db_name : conflict_databases)
+    {
+        auto iter = databases.find(db_name);
+        auto & db_info = iter->second;
+        db_info.renameToTmpDirectories();
+    }
+}
 
 void IDAsPathUpgrader::doRename()
 {
@@ -324,7 +393,7 @@ void IDAsPathUpgrader::renameDatabase(const String & db_name, const DatabaseDisk
     // First rename all tables of this database
     for (const auto & table : db_info.tables)
     {
-        renameTable(db_name, mapped_db_name, table);
+        renameTable(db_name, db_info, mapped_db_name, table);
     }
 
     // Then rename database
@@ -362,8 +431,10 @@ void IDAsPathUpgrader::renameDatabase(const String & db_name, const DatabaseDisk
     LOG_INFO(log, "database `" << db_name << "` to `" << mapped_db_name << "` rename done.");
 }
 
-void IDAsPathUpgrader::renameTable(const String & db_name, const String & mapped_db_name, const TableDiskInfo & table)
+void IDAsPathUpgrader::renameTable(
+    const String & db_name, const DatabaseDiskInfo & db_info, const String & mapped_db_name, const TableDiskInfo & table)
 {
+    (void)db_info;
     const auto mapped_table_name = mapper.mapTableName(table.id);
     LOG_INFO(log,
         "table `" << db_name << "`.`" << table.name << "` to `" //
@@ -373,9 +444,9 @@ void IDAsPathUpgrader::renameTable(const String & db_name, const String & mapped
     {
         // Former data path use ${path}/data/${database}/${table}/ as data path.
         // Rename it to ${path}/data/${mapped_table_name}.
-        auto data_root_path = global_context.getPath() + "/data/";
+        auto data_root_path = global_context.getPath();
         old_tbl_data_path = data_root_path + escapeForFileName(db_name) + "/" + escapeForFileName(table.name);
-        auto new_tbl_data_path = data_root_path + escapeForFileName(mapped_table_name);
+        auto new_tbl_data_path = data_root_path + "/data/" + escapeForFileName(mapped_table_name);
         renamePath(old_tbl_data_path, new_tbl_data_path, log, true);
     }
 
