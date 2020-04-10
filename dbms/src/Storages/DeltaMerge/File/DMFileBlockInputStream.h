@@ -9,7 +9,6 @@ namespace DB
 {
 namespace DM
 {
-class StableValueSpace;
 class DMFileBlockInputStream : public SkippableBlockInputStream
 {
 public:
