@@ -110,13 +110,13 @@ std::vector<std::pair<PackRange, ColumnCache::Strategy>> ColumnCache::getReadStr
         range_and_strategy.emplace_back(std::make_pair(target_range, Strategy::Disk));
         return range_and_strategy;
     }
-    bool hit_cache = false;
+    bool unhandled_range = true;
     for (size_t i = 0; i < pack_ranges.size(); i++)
     {
         auto cache_range = interleaveRange(target_range, pack_ranges[i]);
         if (!isRangeEmpty(cache_range))
         {
-            hit_cache = true;
+            unhandled_range = false;
             if (column_id == EXTRA_HANDLE_COLUMN_ID)
             {
                 if (i == handle_columns.size())
@@ -126,11 +126,18 @@ std::vector<std::pair<PackRange, ColumnCache::Strategy>> ColumnCache::getReadStr
                 else
                 {
                     auto ranges = splitPackRangeByCacheRange(target_range, cache_range);
+                    bool meet_cache_range = false;
                     for (auto & range : ranges)
                     {
+                        if (meet_cache_range) {
+                            target_range = range;
+                            unhandled_range = true;
+                            continue;
+                        }
                         if (isSubRange(range, cache_range))
                         {
                             range_and_strategy.emplace_back(std::make_pair(range, Strategy::Memory));
+                            meet_cache_range = true;
                         }
                         else
                         {
@@ -148,11 +155,18 @@ std::vector<std::pair<PackRange, ColumnCache::Strategy>> ColumnCache::getReadStr
                 else
                 {
                     auto ranges = splitPackRangeByCacheRange(target_range, cache_range);
+                    bool meet_cache_range = false;
                     for (auto & range : ranges)
                     {
+                        if (meet_cache_range) {
+                            target_range = range;
+                            unhandled_range = true;
+                            continue;
+                        }
                         if (isSubRange(range, cache_range))
                         {
                             range_and_strategy.emplace_back(std::make_pair(range, Strategy::Memory));
+                            meet_cache_range = true;
                         }
                         else
                         {
@@ -168,7 +182,7 @@ std::vector<std::pair<PackRange, ColumnCache::Strategy>> ColumnCache::getReadStr
             break;
         }
     }
-    if (!hit_cache)
+    if (unhandled_range)
     {
         range_and_strategy.emplace_back(std::make_pair(target_range, Strategy::Disk));
     }
