@@ -100,7 +100,7 @@ std::vector<std::pair<PackRange, ColumnCache::Strategy>> ColumnCache::getReadStr
 
 void ColumnCache::tryPutColumn(size_t pack_id, size_t pack_count, const ColumnPtr & column, ColId column_id)
 {
-    if (!tryInsertPackRange(pack_id, pack_count))
+    if (!tryInsertPackRange(pack_id, pack_count, ColId column_id))
     {
         return;
     }
@@ -141,7 +141,7 @@ std::pair<PackRange, ColumnPtr> ColumnCache::mustGetColumn(const PackRange & tar
     throw Exception("Shouldn't reach here", ErrorCodes::LOGICAL_ERROR);
 }
 
-bool ColumnCache::tryInsertPackRange(size_t pack_id, size_t pack_count)
+bool ColumnCache::tryInsertPackRange(size_t pack_id, size_t pack_count, ColId column_id)
 {
     PackRange target_range{pack_id, pack_id + pack_count};
     if (pack_ranges.empty())
@@ -151,7 +151,24 @@ bool ColumnCache::tryInsertPackRange(size_t pack_id, size_t pack_count)
     else
     {
         auto range = pack_ranges.back();
-        if (!isSameRange(target_range, range))
+        if (isSameRange(target_range, range))
+        {
+            if (column_id == EXTRA_HANDLE_COLUMN_ID)
+            {
+                if (pack_ranges.size() <= handle_columns.size())
+                {
+                    return false;
+                }
+            }
+            else if (column_id == VERSION_COLUMN_ID)
+            {
+                if (pack_ranges.size() <= version_columns.size())
+                {
+                    return false;
+                }
+            }
+        }
+        else
         {
             if (target_range.first < range.second)
             {

@@ -40,7 +40,7 @@ public:
     }
 
 private:
-    bool tryInsertPackRange(size_t pack_id, size_t pack_count);
+    bool tryInsertPackRange(size_t pack_id, size_t pack_count, ColId column_id);
 
     static std::vector<PackRange> splitPackRangeByCacheRange(const PackRange & range, const PackRange & cache_range);
 
