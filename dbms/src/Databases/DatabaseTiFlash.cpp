@@ -74,9 +74,6 @@ void DatabaseTiFlash::loadTables(Context & context,
     const auto total_tables = table_files.size();
     LOG_INFO(log, "Total " << total_tables << " tables.");
 
-    // table name -> table
-    Tables tables;
-
     AtomicStopwatch watch;
     std::atomic<size_t> tables_processed{0};
 
