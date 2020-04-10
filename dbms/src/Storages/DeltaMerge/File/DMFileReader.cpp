@@ -252,10 +252,10 @@ Block DMFileReader::read()
             if (enable_column_cache && isCacheableColumn(cd))
             {
                 auto read_strategy = column_cache->getReadStrategy(start_pack_id, read_packs, cd.id);
-                auto data_type     = dmfile->getColumnStat(cd.id).type;
-                auto column        = data_type->createColumn();
+
+                auto data_type = dmfile->getColumnStat(cd.id).type;
+                auto column    = data_type->createColumn();
                 column->reserve(read_rows);
-                bool hit_cache = false;
                 for (auto & [range, strategy] : read_strategy)
                 {
                     size_t range_rows = 0;
@@ -271,34 +271,29 @@ Block DMFileReader::read()
                     }
                     else if (strategy == ColumnCache::Strategy::Memory)
                     {
-                        hit_cache                             = true;
-                        auto [cache_pack_range, cache_column] = column_cache->getColumn(range, cd.id);
+                        auto [cache_pack_range, cache_column] = column_cache->mustGetColumn(range, cd.id);
                         if (!ColumnCache::isSubRange(range, cache_pack_range))
                         {
                             throw Exception("Shouldn't happen", ErrorCodes::LOGICAL_ERROR);
                         }
-                        size_t rows_offset                    = 0;
+                        size_t rows_offset = 0;
                         for (size_t cursor = cache_pack_range.first; cursor < range.first; cursor++)
                         {
                             rows_offset += pack_stats[cursor].rows;
-
                         }
                         column->insertRangeFrom(*cache_column, rows_offset, range_rows);
                         skip_packs_by_column[i] += (range.second - range.first);
                     }
                 }
                 ColumnPtr result_column = std::move(column);
-                if (!hit_cache)
-                {
-                    column_cache->putColumn(start_pack_id, read_packs, result_column, cd.id);
-                }
+                column_cache->tryPutColumn(start_pack_id, read_packs, result_column, cd.id);
                 res.insert(ColumnWithTypeAndName{result_column, cd.type, cd.name, cd.id});
             }
             else
             {
-                auto column             = readFromDisk(cd, start_pack_id, read_rows, skip_packs_by_column[i]);
-                skip_packs_by_column[i] = 0;
+                auto column = readFromDisk(cd, start_pack_id, read_rows, skip_packs_by_column[i]);
                 res.insert(ColumnWithTypeAndName{std::move(column), cd.type, cd.name, cd.id});
+                skip_packs_by_column[i] = 0;
             }
         }
     }

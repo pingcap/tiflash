@@ -25,11 +25,11 @@ public:
 
     ColumnCache(bool disabled_ = false) : disabled{disabled_} {}
 
-    void putColumn(size_t pack_id, size_t pack_count, const ColumnPtr & column, ColId column_id);
-
-    std::pair<PackRange, ColumnPtr> getColumn(const PackRange & range, ColId column_id);
-
     std::vector<std::pair<PackRange, ColumnCache::Strategy>> getReadStrategy(size_t pack_id, size_t pack_count, ColId column_id);
+
+    void tryPutColumn(size_t pack_id, size_t pack_count, const ColumnPtr & column, ColId column_id);
+
+    std::pair<PackRange, ColumnPtr> mustGetColumn(const PackRange & range, ColId column_id);
 
 public:
     static std::shared_ptr<ColumnCache> disabled_cache;
@@ -40,7 +40,7 @@ public:
     }
 
 private:
-    bool insertPackRange(size_t pack_id, size_t pack_count);
+    bool tryInsertPackRange(size_t pack_id, size_t pack_count);
 
     static std::vector<PackRange> splitPackRangeByCacheRange(const PackRange & range, const PackRange & cache_range);
 
@@ -61,7 +61,7 @@ private:
     PackRanges             pack_ranges;
 };
 
-using ColumnCachePtr = std::shared_ptr<ColumnCache>;
+using ColumnCachePtr  = std::shared_ptr<ColumnCache>;
 using ColumnCachePtrs = std::vector<ColumnCachePtr>;
 } // namespace DM
 } // namespace DB
