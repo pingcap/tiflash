@@ -115,6 +115,7 @@ Block FilterBlockInputStream::readImpl()
             for (unsigned i = 0;i < rows;i++) {
                 column_of_filter_for_bloom.push_back(1);
             }
+            auto fnvHash = std::make_shared<FNVhash>();
             for (unsigned bfnum = 0; !join_keys[bfnum].empty() ;bfnum++) {
                 auto join_key = join_keys[bfnum];
                 auto bf = bfs[bfnum];
@@ -131,40 +132,45 @@ Block FilterBlockInputStream::readImpl()
                     cols.push_back(col);
                 }
                 if (canUseBloom) {
-                    for (unsigned i = 0;i < rows;i++) {
-                        if (column_of_filter->get64(i) == 0) {
-                            column_of_filter_for_bloom.push_back(0);
-                            continue;
-                        }
-                        bf->resetHash();
-                        UInt8 flag[1];
-                        flag[0] = 8;
-                        UInt8 tmp[8];
-                        for (unsigned j = 0;j < join_key.size();j++) {
-                            if (IsInt(cols[j].type->getName())) {
+                    fnvHash ->resetHash(rows);
+
+                    UInt8 flag[1];
+                    UInt8 tmp[8];
+                    for (unsigned j = 0;j < join_key.size();j++) {
+                        if (IsInt(cols[j].type->getName())) {
+                            for (unsigned i = 0;i < rows;i++) {
                                 flag[0] = 8;
                                 *(UInt64 *)(tmp) = cols[j].column->get64(i);
-                                bf->myhash(flag,1);
-                                bf->myhash(tmp,8);
-                            }
-                            if (IsUInt(cols[j].type->getName())) {
-                                flag[0] = 9;
-                                *(UInt64 *)(tmp) = cols[j].column->get64(i);
-                                bf->myhash(flag,1);
-                                bf->myhash(tmp,8);
-                            }
-                            if (IsString(cols[j].type->getName())) {
-                                flag[0] = 2;
-                                bf->myhash(flag, 1);
-                                auto t = (*cols[j].column)[i].get<String>();
-                                bf->myhash((UInt8 *)(t.c_str()), t.length());
+                                fnvHash->myhash(i,flag,1);
+                                fnvHash->myhash(i,tmp,8);
                             }
                         }
-                        if (bf->ProbeU64(bf->sum64())) {
-//                            column_of_filter_for_bloom.push_back(1);
+                        if (IsUInt(cols[j].type->getName())) {
+                            for (unsigned i = 0;i < rows;i++) {
+                                flag[0] = 9;
+                                *(UInt64 *)(tmp) = cols[j].column->get64(i);
+                                fnvHash->myhash(i,flag,1);
+                                fnvHash->myhash(i,tmp,8);
+                            }
+                        }
+                        if (IsString(cols[j].type->getName())) {
+                            for (unsigned i = 0;i < rows;i++) {
+                                flag[0] = 2;
+                                auto t = (*cols[j].column)[i].get<String>();
+                                fnvHash->myhash(i,flag, 1);
+                                fnvHash->myhash(i,(UInt8 *) (t.c_str()), t.length());
+                            }
+                        }
+                    }
+
+                    for (unsigned i = 0;i < rows;i++) {
+                        if (column_of_filter->get64(i) == 0) {
+                            column_of_filter_for_bloom[i] = 0;
+                            continue;
+                        }
+                        if (bf->ProbeU64(fnvHash->sum64(i))) {
                         } else {
                             column_of_filter_for_bloom[i] = 0;
-//                            column_of_filter_for_bloom.push_back(0);
                         }
                     }
                 }
