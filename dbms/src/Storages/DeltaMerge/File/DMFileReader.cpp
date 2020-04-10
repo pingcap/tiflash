@@ -253,8 +253,8 @@ Block DMFileReader::read()
             {
                 auto read_strategy = column_cache->getReadStrategy(start_pack_id, read_packs, cd.id);
 
-                LOG_DEBUG(log, "Begin to read range [" << std::to_string(start_pack_id)
-                    << ", " << std::to_string(start_pack_id + read_packs) << ") for column " << cd.name);
+//                LOG_DEBUG(log, "Begin to read range [" << std::to_string(start_pack_id)
+//                    << ", " << std::to_string(start_pack_id + read_packs) << ") for column " << cd.name);
 
                 auto data_type = dmfile->getColumnStat(cd.id).type;
                 auto column    = data_type->createColumn();
@@ -268,16 +268,16 @@ Block DMFileReader::read()
                     }
                     if (strategy == ColumnCache::Strategy::Disk)
                     {
-                        LOG_DEBUG(log, "Read range [" << std::to_string(range.first)
-                        << ", " << std::to_string(range.second) << ") from disk");
+//                        LOG_DEBUG(log, "Read range [" << std::to_string(range.first)
+//                        << ", " << std::to_string(range.second) << ") from disk");
                         auto sub_column = readFromDisk(cd, range.first, range_rows, skip_packs_by_column[i]);
                         column->insertRangeFrom(*sub_column, 0, range_rows);
                         skip_packs_by_column[i] = 0;
                     }
                     else if (strategy == ColumnCache::Strategy::Memory)
                     {
-                        LOG_DEBUG(log, "Read range [" << std::to_string(range.first)
-                        << ", " << std::to_string(range.second) << ") from memory");
+//                        LOG_DEBUG(log, "Read range [" << std::to_string(range.first)
+//                        << ", " << std::to_string(range.second) << ") from memory");
                         auto [cache_pack_range, cache_column] = column_cache->mustGetColumn(range, cd.id);
                         if (!ColumnCache::isSubRange(range, cache_pack_range))
                         {
