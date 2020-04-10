@@ -51,11 +51,15 @@ RangeWithStrategys ColumnCache::getReadStrategy(size_t pack_id, size_t pack_coun
     return range_and_strategys;
 }
 
-void ColumnCache::putColumn(size_t pack_id, ColId column_id, const ColumnPtr & column, size_t rows_offset, size_t rows_count)
+void ColumnCache::tryPutColumn(size_t pack_id, ColId column_id, const ColumnPtr & column, size_t rows_offset, size_t rows_count)
 {
     if (auto iter = column_caches.find(pack_id); iter != column_caches.end())
     {
         auto & column_cache_entry = iter->second;
+        if (column_cache_entry.columns.find(column_id) != column_cache_entry.columns.end())
+        {
+            return;
+        }
         if (column_cache_entry.rows_offset != rows_offset || column_cache_entry.rows_count != rows_count)
         {
             throw Exception("Rows offset and rows count doesn't match. In cache rows offset: " +
@@ -64,10 +68,8 @@ void ColumnCache::putColumn(size_t pack_id, ColId column_id, const ColumnPtr & c
             ", new pack rows offset " + std::to_string(rows_offset) +
             " rows count " + std::to_string(rows_count), ErrorCodes::LOGICAL_ERROR);
         }
-        if (column_cache_entry.columns.find(column_id) == column_cache_entry.columns.end())
-        {
-            column_cache_entry.columns.emplace(column_id, column);
-        }
+
+        column_cache_entry.columns.emplace(column_id, column);
     }
     else
     {

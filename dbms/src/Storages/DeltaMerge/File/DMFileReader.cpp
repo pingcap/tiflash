@@ -284,7 +284,7 @@ Block DMFileReader::read()
                     size_t rows_offset = 0;
                     for (size_t cursor = start_pack_id; cursor < start_pack_id + read_packs; cursor++)
                     {
-                        column_cache->putColumn(cursor, cd.id, result_column, rows_offset, pack_stats[cursor].rows);
+                        column_cache->tryPutColumn(cursor, cd.id, result_column, rows_offset, pack_stats[cursor].rows);
                         rows_offset += pack_stats[cursor].rows;
                     }
                     // Cast column's data from DataType in disk to what we need now

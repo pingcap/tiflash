@@ -31,7 +31,7 @@ public:
     using RangeWithStrategys = std::vector<RangeWithStrategy>;
     RangeWithStrategys getReadStrategy(size_t pack_id, size_t pack_count, ColId column_id);
 
-    void putColumn(size_t pack_id, ColId column_id, const ColumnPtr & column, size_t rows_offset, size_t rows_count);
+    void tryPutColumn(size_t pack_id, ColId column_id, const ColumnPtr & column, size_t rows_offset, size_t rows_count);
 
     using ColumnCacheElement=std::pair<ColumnPtr, std::pair<size_t, size_t>>;
     ColumnCacheElement getColumn(size_t pack_id, ColId column_id);
