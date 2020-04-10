@@ -30,7 +30,8 @@ std::vector<std::pair<PackRange, ColumnCache::Strategy>> ColumnCache::getReadStr
                 }
                 else
                 {
-                    auto ranges           = splitPackRangeByCacheRange(target_range, cache_range);
+                    auto ranges = splitPackRangeByCacheRange(target_range, cache_range);
+
                     bool meet_cache_range = false;
                     for (auto & range : ranges)
                     {
@@ -60,7 +61,8 @@ std::vector<std::pair<PackRange, ColumnCache::Strategy>> ColumnCache::getReadStr
                 }
                 else
                 {
-                    auto ranges           = splitPackRangeByCacheRange(target_range, cache_range);
+                    auto ranges = splitPackRangeByCacheRange(target_range, cache_range);
+
                     bool meet_cache_range = false;
                     for (auto & range : ranges)
                     {
