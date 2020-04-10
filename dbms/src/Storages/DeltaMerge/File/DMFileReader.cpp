@@ -262,7 +262,6 @@ Block DMFileReader::read()
                     {
                         if (strategy == ColumnCache::Strategy::Memory)
                         {
-                            LOG_DEBUG(log, "range [" << range.first << ", " << range.second << ") read from memory column " << cd.name);
                             for (size_t cursor = range.first; cursor < range.second; cursor++)
                             {
                                 auto cache_element = column_cache->getColumn(cursor, cd.id);
@@ -277,7 +276,6 @@ Block DMFileReader::read()
                             {
                                 rows_count += pack_stats[cursor].rows;
                             }
-                            LOG_DEBUG(log, "range [" << range.first << ", " << range.second << ") read from disk column " << cd.name);
                             readFromDisk(cd, column, range.first, rows_count, skip_packs_by_column[i]);
                             skip_packs_by_column[i] = 0;
                         }
