@@ -26,13 +26,13 @@ class PathPool;
 
 class IDAsPathUpgrader
 {
+public:
     struct DatabaseDiskInfo;
 
     struct TableDiskInfo
     {
         TableID id;
         String name;
-        String meta_file_path;
 
     public:
         // "metadata/${db_name}/${tbl_name}.sql"
@@ -54,8 +54,9 @@ class IDAsPathUpgrader
     {
     public:
         static constexpr auto TMP_SUFFIX = "_flash_upgrade";
+        static constexpr auto UNINIT_ID = -1;
 
-        DatabaseID id = -1;
+        DatabaseID id = UNINIT_ID;
         String engine;
         std::vector<TableDiskInfo> tables;
 
