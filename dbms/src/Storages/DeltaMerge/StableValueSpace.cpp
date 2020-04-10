@@ -144,8 +144,10 @@ using SnapshotPtr = std::shared_ptr<Snapshot>;
 
 SnapshotPtr StableValueSpace::createSnapshot()
 {
-    auto snap    = std::make_shared<Snapshot>();
-    snap->stable = this->shared_from_this();
+    auto snap        = std::make_shared<Snapshot>();
+    snap->id         = id;
+    snap->valid_rows = valid_rows;
+    snap->stable     = this->shared_from_this();
 
     return snap;
 }

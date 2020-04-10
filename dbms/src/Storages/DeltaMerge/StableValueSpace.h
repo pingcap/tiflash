@@ -41,17 +41,26 @@ public:
 
     struct Snapshot : public std::enable_shared_from_this<Snapshot>, private boost::noncopyable
     {
-        Snapshot() : log(&Logger::get("StableValueSpace::Snapshot")) { }
+        Snapshot() : log(&Logger::get("StableValueSpace::Snapshot")) {}
         StableValueSpacePtr stable;
-        ColumnCachePtrs      column_caches;
+        ColumnCachePtrs     column_caches;
 
-        PageId getId() { return stable->getId(); }
+        PageId id;
+        UInt64 valid_rows;
+
+        PageId getId() { return id; }
+
+        size_t getRows() { return valid_rows; }
 
         const DMFiles & getDMFiles() { return stable->getDMFiles(); }
 
-        size_t getRows() { return stable->getRows(); }
-        size_t getBytes() { return stable->getBytes(); }
-        size_t getPacks() { return stable->getPacks(); }
+        size_t getPacks()
+        {
+            size_t packs = 0;
+            for (auto & file : getDMFiles())
+                packs += file->getPacks();
+            return packs;
+        }
 
         SkippableBlockInputStreamPtr getInputStream(const DMContext &     context, //
                                                     const ColumnDefines & read_columns,
