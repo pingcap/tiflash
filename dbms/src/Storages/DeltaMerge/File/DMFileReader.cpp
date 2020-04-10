@@ -272,8 +272,13 @@ Block DMFileReader::read()
                         }
                         else if (strategy == ColumnCache::Strategy::Disk)
                         {
+                            size_t rows_count = 0;
+                            for (size_t cursor = range.first; cursor < range.second; cursor++)
+                            {
+                                rows_count += pack_stats[cursor].rows;
+                            }
                             LOG_DEBUG(log, "range [" << range.first << ", " << range.second << ") read from disk column " << cd.name);
-                            readFromDisk(cd, column, start_pack_id, read_rows, skip_packs_by_column[i]);
+                            readFromDisk(cd, column, range.first, rows_count, skip_packs_by_column[i]);
                             skip_packs_by_column[i] = 0;
                         }
                         else
