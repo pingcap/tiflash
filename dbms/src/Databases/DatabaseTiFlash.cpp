@@ -54,95 +54,9 @@ String DatabaseTiFlash::getTableMetadataPath(const String & table_name) const
     return metadata_path + (endsWith(metadata_path, "/") ? "" : "/") + escapeForFileName(table_name) + ".sql";
 }
 
-void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bool has_force_restore_data_flag)
+void DatabaseTiFlash::loadTables(Context & , ThreadPool * , bool )
 {
-    (void)context;
-    (void)thread_pool;
-    (void)has_force_restore_data_flag;
-// TODO: FIX this load
-#if 0
-    using FileNames = std::vector<std::string>;
-    FileNames file_names;
-
-    Poco::DirectoryIterator dir_end;
-    for (Poco::DirectoryIterator dir_it(metadata_path); dir_it != dir_end; ++dir_it)
-    {
-        /// For '.svn', '.gitignore' directory and similar.
-        if (dir_it.name().at(0) == '.')
-            continue;
-
-        /// There are .sql.bak files - skip them.
-        if (endsWith(dir_it.name(), ".sql.bak"))
-            continue;
-
-        /// There are files .sql.tmp - delete.
-        if (endsWith(dir_it.name(), ".sql.tmp"))
-        {
-            LOG_INFO(log, "Removing file " << dir_it->path());
-            Poco::File(dir_it->path()).remove();
-            continue;
-        }
-
-        /// The required files have names like `table_name.sql`
-        if (endsWith(dir_it.name(), ".sql"))
-            file_names.push_back(dir_it.name());
-        else
-            throw Exception(
-                "Incorrect file extension: " + dir_it.name() + " in metadata directory " + metadata_path, ErrorCodes::INCORRECT_FILE_NAME);
-    }
-
-    /** Tables load faster if they are loaded in sorted (by name) order.
-      * Otherwise (for the ext4 filesystem), `DirectoryIterator` iterates through them in some order,
-      *  which does not correspond to order tables creation and does not correspond to order of their location on disk.
-      */
-    std::sort(file_names.begin(), file_names.end());
-
-    size_t total_tables = file_names.size();
-    LOG_INFO(log, "Total " << total_tables << " tables.");
-
-    String data_path = context.getPath() + "data/" + escapeForFileName(name) + "/";
-
-    AtomicStopwatch watch;
-    std::atomic<size_t> tables_processed{0};
-
-    auto task_function = [&](FileNames::const_iterator begin, FileNames::const_iterator end) {
-        for (auto it = begin; it != end; ++it)
-        {
-            const String & table = *it;
-
-            /// Messages, so that it's not boring to wait for the server to load for a long time.
-            if ((++tables_processed) % PRINT_MESSAGE_EACH_N_TABLES == 0 || watch.compareAndRestart(PRINT_MESSAGE_EACH_N_SECONDS))
-            {
-                LOG_INFO(log, std::fixed << std::setprecision(2) << tables_processed * 100.0 / total_tables << "%");
-                watch.restart();
-            }
-
-            loadTable(context, metadata_path, *this, name, data_path, table, has_force_restore_data_flag);
-        }
-    };
-
-    const size_t bunch_size = TABLES_PARALLEL_LOAD_BUNCH_SIZE;
-    size_t num_bunches = (total_tables + bunch_size - 1) / bunch_size;
-
-    for (size_t i = 0; i < num_bunches; ++i)
-    {
-        auto begin = file_names.begin() + i * bunch_size;
-        auto end = (i + 1 == num_bunches) ? file_names.end() : (file_names.begin() + (i + 1) * bunch_size);
-
-        auto task = std::bind(task_function, begin, end);
-
-        if (thread_pool)
-            thread_pool->schedule(task);
-        else
-            task();
-    }
-
-    if (thread_pool)
-        thread_pool->wait();
-
-    /// After all tables was basically initialized, startup them.
-    startupTables(thread_pool);
-#endif
+    // Just empty
 }
 
 

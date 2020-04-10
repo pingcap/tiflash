@@ -1,9 +1,13 @@
 #include <sstream>
 
+#include <Common/Stopwatch.h>
+#include <common/ThreadPool.h>
+#include <Poco/DirectoryIterator.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/formatAST.h>
+#include <IO/ReadBufferFromFile.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Storages/StorageFactory.h>
@@ -19,6 +23,8 @@ namespace ErrorCodes
     extern const int TABLE_ALREADY_EXISTS;
     extern const int UNKNOWN_TABLE;
     extern const int LOGICAL_ERROR;
+    extern const int INCORRECT_FILE_NAME;
+    extern const int CANNOT_CREATE_TABLE_FROM_METADATA;
 }
 
 
@@ -193,4 +199,136 @@ DatabaseWithOwnTablesBase::~DatabaseWithOwnTablesBase()
     }
 }
 
+namespace DatabaseLoading
+{
+std::vector<String> listSQLFilenames(const String & database_dir, Poco::Logger * log)
+{
+    std::vector<String> filenames;
+    Poco::DirectoryIterator dir_end;
+    for (Poco::DirectoryIterator dir_it(database_dir); dir_it != dir_end; ++dir_it)
+    {
+        /// For '.svn', '.gitignore' directory and similar.
+        if (dir_it.name().at(0) == '.')
+            continue;
+
+        /// There are .sql.bak files - skip them.
+        if (endsWith(dir_it.name(), ".sql.bak"))
+            continue;
+
+        /// There are files .sql.tmp - delete.
+        if (endsWith(dir_it.name(), ".sql.tmp"))
+        {
+            LOG_INFO(log, "Removing file " << dir_it->path());
+            Poco::File(dir_it->path()).remove();
+            continue;
+        }
+
+        /// The required files have names like `table_name.sql`
+        if (endsWith(dir_it.name(), ".sql"))
+            filenames.push_back(dir_it.name());
+        else
+            throw Exception(
+                "Incorrect file extension: " + dir_it.name() + " in metadata directory " + database_dir, ErrorCodes::INCORRECT_FILE_NAME);
+    }
+    return filenames;
 }
+
+void loadTable(Context & context,
+    IDatabase & database,
+    const String & database_metadata_path,
+    const String & database_name,
+    const String & database_data_path,
+    const String & file_name,
+    bool has_force_restore_data_flag)
+{
+    Logger * log = &Logger::get("loadTable");
+
+    const String table_metadata_path = database_metadata_path + "/" + file_name;
+
+    String s;
+    {
+        ReadBufferFromFile in(table_metadata_path, 1024);
+        readStringUntilEOF(s, in);
+    }
+
+    /** Empty files with metadata are generated after a rough restart of the server.
+      * Remove these files to slightly reduce the work of the admins on startup.
+      */
+    if (s.empty())
+    {
+        LOG_ERROR(log, "File " << table_metadata_path << " is empty. Removing.");
+        Poco::File(table_metadata_path).remove();
+        return;
+    }
+
+    try
+    {
+        String table_name;
+        StoragePtr table;
+        std::tie(table_name, table) = createTableFromDefinition(
+            s, database_name, database_data_path, context, has_force_restore_data_flag, "in file " + table_metadata_path);
+        database.attachTable(table_name, table);
+    }
+    catch (const Exception & e)
+    {
+        throw Exception("Cannot create table from metadata file " + table_metadata_path + ", error: " + e.displayText() + ", stack trace:\n"
+                + e.getStackTrace().toString(),
+            ErrorCodes::CANNOT_CREATE_TABLE_FROM_METADATA);
+    }
+}
+
+
+static constexpr size_t PRINT_MESSAGE_EACH_N_TABLES = 256;
+static constexpr size_t PRINT_MESSAGE_EACH_N_SECONDS = 5;
+static constexpr size_t TABLES_PARALLEL_LOAD_BUNCH_SIZE = 100;
+
+void startupTables(Tables & tables, ThreadPool * thread_pool, Poco::Logger * log)
+{
+    LOG_INFO(log, "Starting up tables.");
+
+    AtomicStopwatch watch;
+    std::atomic<size_t> tables_processed{0};
+    size_t total_tables = tables.size();
+
+    auto task_function = [&](Tables::iterator begin, Tables::iterator end) {
+        for (auto it = begin; it != end; ++it)
+        {
+            if ((++tables_processed) % PRINT_MESSAGE_EACH_N_TABLES == 0 || watch.compareAndRestart(PRINT_MESSAGE_EACH_N_SECONDS))
+            {
+                LOG_INFO(log, std::fixed << std::setprecision(2) << tables_processed * 100.0 / total_tables << "%");
+                watch.restart();
+            }
+
+            it->second->startup();
+        }
+    };
+
+    const size_t bunch_size = TABLES_PARALLEL_LOAD_BUNCH_SIZE;
+    size_t num_bunches = (total_tables + bunch_size - 1) / bunch_size;
+
+    auto begin = tables.begin();
+    for (size_t i = 0; i < num_bunches; ++i)
+    {
+        auto end = begin;
+
+        if (i + 1 == num_bunches)
+            end = tables.end();
+        else
+            std::advance(end, bunch_size);
+
+        auto task = std::bind(task_function, begin, end);
+
+        if (thread_pool)
+            thread_pool->schedule(task);
+        else
+            task();
+
+        begin = end;
+    }
+
+    if (thread_pool)
+        thread_pool->wait();
+}
+} // namespace DatabaseLoading
+
+} // namespace DB

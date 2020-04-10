@@ -42,9 +42,8 @@ public:
 
     virtual std::vector<TiDB::DBInfoPtr> fetchAllDBs() = 0;
 
-    virtual std::vector<std::pair<TableID, DatabaseID>> fetchAllTablesMapping(
-        const std::vector<TiDB::DBInfoPtr> & all_databases)
-        = 0;
+    virtual std::vector<std::pair<TableID, DatabaseID>> //
+    fetchAllTables(const TiDB::DBInfoPtr & database) = 0;
 };
 
 using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;

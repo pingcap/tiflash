@@ -11,6 +11,9 @@ class Context;
 void loadMetadataSystem(Context & context);
 
 /// Load tables from databases and add them to context. Database 'system' is ignored. Use separate function to load system tables.
+void loadTiFlashMetadata(Context & context);
+
+/// Load tables from databases and add them to context. Database 'system' is ignored. Use separate function to load system tables.
 void loadMetadata(Context & context);
 
 }

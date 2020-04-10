@@ -43,15 +43,12 @@ public:
     void shutdown() override;
     void drop() override;
 
-    static std::vector<String> listTableFilenames(const String & database_dir, Poco::Logger * log);
     static ASTPtr getQueryFromMetadata(const String & metadata_path, bool throw_on_error = true);
 
 private:
     const String metadata_path;
     const String data_path;
     Poco::Logger * log;
-
-    void startupTables(ThreadPool * thread_pool);
 
     ASTPtr getCreateTableQueryImpl(const Context & context, const String & table_name, bool throw_on_error) const;
 };

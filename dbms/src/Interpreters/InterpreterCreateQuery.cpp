@@ -143,6 +143,7 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
         if (need_write_metadata)
             Poco::File(metadata_file_tmp_path).renameTo(metadata_file_path);
 
+        // For DatabaseTiFlash, this is empty and we should attach tables for this database in `loadTiFlashMetadata`
         database->loadTables(context, thread_pool, has_force_restore_data_flag);
     }
     catch (...)
