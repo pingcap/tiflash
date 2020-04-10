@@ -216,45 +216,6 @@ void DatabaseOrdinary::removeTable(
     }
 }
 
-ASTPtr DatabaseOrdinary::getQueryFromMetadata(const String & metadata_path, bool throw_on_error)
-{
-    if (!Poco::File(metadata_path).exists())
-        return nullptr;
-
-    String query;
-
-    {
-        ReadBufferFromFile in(metadata_path, 4096);
-        readStringUntilEOF(query, in);
-    }
-
-    ParserCreateQuery parser;
-    const char * pos = query.data();
-    std::string error_message;
-    auto ast = tryParseQuery(parser, pos, pos + query.size(), error_message, /* hilite = */ false, "in file " + metadata_path,
-        /* allow_multi_statements = */ false, 0);
-
-    if (!ast && throw_on_error)
-        throw Exception(error_message, ErrorCodes::SYNTAX_ERROR);
-
-    return ast;
-}
-
-static ASTPtr getCreateQueryFromMetadata(const String & metadata_path, const String & database, bool throw_on_error)
-{
-    ASTPtr ast = DatabaseOrdinary::getQueryFromMetadata(metadata_path, throw_on_error);
-
-    if (ast)
-    {
-        ASTCreateQuery & ast_create_query = typeid_cast<ASTCreateQuery &>(*ast);
-        ast_create_query.attach = false;
-        ast_create_query.database = database;
-    }
-
-    return ast;
-}
-
-
 void DatabaseOrdinary::renameTable(
     const Context & context,
     const String & table_name,
@@ -291,7 +252,7 @@ void DatabaseOrdinary::renameTable(
     // TODO: Atomic rename table is not fixed.
     FAIL_POINT_TRIGGER_EXCEPTION(exception_between_rename_table_data_and_metadata);
 
-    ASTPtr ast = getQueryFromMetadata(detail::getTableMetadataPath(metadata_path, table_name));
+    ASTPtr ast = DatabaseLoading::getQueryFromMetadata(detail::getTableMetadataPath(metadata_path, table_name));
     if (!ast)
         throw Exception("There is no metadata file for table " + table_name, ErrorCodes::FILE_DOESNT_EXIST);
     ASTCreateQuery & ast_create_query = typeid_cast<ASTCreateQuery &>(*ast);
@@ -327,7 +288,7 @@ ASTPtr DatabaseOrdinary::getCreateTableQueryImpl(const Context & context,
     ASTPtr ast;
 
     auto table_metadata_path = detail::getTableMetadataPath(metadata_path, table_name);
-    ast = getCreateQueryFromMetadata(table_metadata_path, name, throw_on_error);
+    ast = DatabaseLoading::getCreateQueryFromMetadata(table_metadata_path, name, throw_on_error);
     if (!ast && throw_on_error)
     {
         /// Handle system.* tables for which there are no table.sql files.
@@ -358,7 +319,7 @@ ASTPtr DatabaseOrdinary::getCreateDatabaseQuery(const Context & /*context*/) con
     ASTPtr ast;
 
     auto database_metadata_path = detail::getDatabaseMetadataPath(metadata_path);
-    ast = getCreateQueryFromMetadata(database_metadata_path, name, true);
+    ast = DatabaseLoading::getCreateQueryFromMetadata(database_metadata_path, name, true);
     if (!ast)
     {
         /// Handle databases (such as default) for which there are no database.sql files.

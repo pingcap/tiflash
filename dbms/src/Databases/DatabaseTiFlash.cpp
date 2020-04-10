@@ -307,46 +307,10 @@ time_t DatabaseTiFlash::getTableMetadataModificationTime(const Context & /*conte
     }
 }
 
-static ASTPtr getQueryFromMetadata(const String & metadata_path, bool throw_on_error = true)
-{
-    if (!Poco::File(metadata_path).exists())
-        return nullptr;
-
-    String query;
-
-    {
-        ReadBufferFromFile in(metadata_path, 4096);
-        readStringUntilEOF(query, in);
-    }
-
-    ParserCreateQuery parser;
-    const char * pos = query.data();
-    std::string error_message;
-    auto ast = tryParseQuery(parser, pos, pos + query.size(), error_message, /* hilite = */ false, "in file " + metadata_path,
-        /* allow_multi_statements = */ false, 0);
-
-    if (!ast && throw_on_error)
-        throw Exception(error_message, ErrorCodes::SYNTAX_ERROR);
-
-    return ast;
-}
-
-static ASTPtr getCreateQueryFromMetadata(const String & metadata_path, const String & database, bool throw_on_error)
-{
-    ASTPtr ast = getQueryFromMetadata(metadata_path, throw_on_error);
-    if (ast)
-    {
-        ASTCreateQuery & ast_create_query = typeid_cast<ASTCreateQuery &>(*ast);
-        ast_create_query.attach = false;
-        ast_create_query.database = database;
-    }
-    return ast;
-}
-
 ASTPtr DatabaseTiFlash::getCreateTableQueryImpl(const Context & context, const String & table_name, bool throw_on_error) const
 {
     const auto table_metadata_path = getTableMetadataPath(table_name);
-    ASTPtr ast = getCreateQueryFromMetadata(table_metadata_path, name, throw_on_error);
+    ASTPtr ast = DatabaseLoading::getCreateQueryFromMetadata(table_metadata_path, name, throw_on_error);
     if (!ast && throw_on_error)
     {
         /// Handle system.* tables for which there are no table.sql files.
@@ -373,7 +337,7 @@ ASTPtr DatabaseTiFlash::tryGetCreateTableQuery(const Context & context, const St
 ASTPtr DatabaseTiFlash::getCreateDatabaseQuery(const Context & /*context*/) const
 {
     const auto database_metadata_path = getDatabaseMetadataPath(metadata_path);
-    ASTPtr ast = getCreateQueryFromMetadata(database_metadata_path, name, true);
+    ASTPtr ast = DatabaseLoading::getCreateQueryFromMetadata(database_metadata_path, name, true);
     if (!ast)
     {
         /// Handle databases (such as default) for which there are no database.sql files.

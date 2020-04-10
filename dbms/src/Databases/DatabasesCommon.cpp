@@ -25,6 +25,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
     extern const int INCORRECT_FILE_NAME;
     extern const int CANNOT_CREATE_TABLE_FROM_METADATA;
+    extern const int SYNTAX_ERROR;
 }
 
 
@@ -201,6 +202,43 @@ DatabaseWithOwnTablesBase::~DatabaseWithOwnTablesBase()
 
 namespace DatabaseLoading
 {
+
+ASTPtr getQueryFromMetadata(const String & metadata_path, bool throw_on_error)
+{
+    if (!Poco::File(metadata_path).exists())
+        return nullptr;
+
+    String query;
+    {
+        ReadBufferFromFile in(metadata_path, 4096);
+        readStringUntilEOF(query, in);
+    }
+
+    ParserCreateQuery parser;
+    const char * pos = query.data();
+    std::string error_message;
+    auto ast = tryParseQuery(parser, pos, pos + query.size(), error_message, /* hilite = */ false, "in file " + metadata_path,
+        /* allow_multi_statements = */ false, 0);
+
+    if (!ast && throw_on_error)
+        throw Exception(error_message, ErrorCodes::SYNTAX_ERROR);
+
+    return ast;
+}
+
+ASTPtr getCreateQueryFromMetadata(const String & metadata_path, const String & database, bool throw_on_error)
+{
+    ASTPtr ast = DatabaseLoading::getQueryFromMetadata(metadata_path, throw_on_error);
+    if (ast)
+    {
+        ASTCreateQuery & ast_create_query = typeid_cast<ASTCreateQuery &>(*ast);
+        ast_create_query.attach = false;
+        ast_create_query.database = database;
+    }
+    return ast;
+}
+
+
 std::vector<String> listSQLFilenames(const String & database_dir, Poco::Logger * log)
 {
     std::vector<String> filenames;

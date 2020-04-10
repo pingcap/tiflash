@@ -40,8 +40,13 @@ std::pair<String, StoragePtr> createTableFromDefinition(
     bool has_force_restore_data_flag,
     const String & description_for_error_message);
 
+/// Some helper functions for loading database metadata.
 namespace DatabaseLoading
 {
+ASTPtr getQueryFromMetadata(const String & metadata_path, bool throw_on_error = true);
+
+ASTPtr getCreateQueryFromMetadata(const String & metadata_path, const String & database, bool throw_on_error);
+
 std::vector<String> listSQLFilenames(const String & database_dir, Poco::Logger * log);
 
 void startupTables(Tables & tables, ThreadPool * thread_pool, Poco::Logger * log);
