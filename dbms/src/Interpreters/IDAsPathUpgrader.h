@@ -26,34 +26,75 @@ class PathPool;
 
 class IDAsPathUpgrader
 {
+    struct DatabaseDiskInfo;
+
     struct TableDiskInfo
     {
         TableID id;
         String name;
         String meta_file_path;
+
+    public:
+        // "metadata/${db_name}/${tbl_name}.sql"
+        String getMetaFilePath(const String & root_path, const DatabaseDiskInfo & db) const;
+        // "data/${db_name}/${tbl_name}/"
+        String getDataDirectory(const String & root_path, const DatabaseDiskInfo & db) const;
+        // "extra_data/${db_name}/${tbl_name}/"
+        String getExtraDirectory(const String & root_path, const DatabaseDiskInfo & db) const;
+
+        // "metadata/t_${id}.sql"
+        String getNewMetaFilePath(const String & root_path, const DatabaseDiskInfo & db) const;
+        // "data/t_${id}/"
+        String getNewDataDirectory(const String & root_path, const DatabaseDiskInfo & db) const;
+        // "extra_data/t_${id}"
+        String getNewExtraDirectory(const String & root_path, const DatabaseDiskInfo & db) const;
     };
 
     struct DatabaseDiskInfo
     {
+    public:
         static constexpr auto TMP_SUFFIX = "_flash_upgrade";
 
-        String meta_dir_path;
+        DatabaseID id = -1;
         String engine;
-        DatabaseID id = 0;
-        bool moved_to_tmp = false;
-
         std::vector<TableDiskInfo> tables;
 
-        DatabaseDiskInfo(String meta_dir) : meta_dir_path(std::move(meta_dir)) {}
+    private:
+        String name;
+        bool moved_to_tmp = false;
+
+    public:
+        DatabaseDiskInfo(String name_) : name(std::move(name_)) {}
 
         // "metadata/${db_name}.sql"
-        String getMetaFilePath() const;
+        String getMetaFilePath(const String & root_path) const { return getMetaFilePath(root_path, moved_to_tmp); }
+        // "metadata/${db_name}/"
+        String getMetaDirectory(const String & root_path) const { return getMetaDirectory(root_path, moved_to_tmp); }
+        // "data/${db_name}/"
+        String getDataDirectory(const String & root_path) const { return getDataDirectory(root_path, moved_to_tmp); }
+        // "extra_data/${db_name}/"
+        String getExtraDirectory(const String & extra_root) const { return getExtraDirectory(extra_root, moved_to_tmp); }
 
-        String getDataDirectory(const String & root, const String & name) const;
+        void renameToTmpDirectories(const Context & ctx, Poco::Logger * log);
 
-        std::vector<String> getExtraDirectories(const PathPool & pool, const String & name) const;
+        // "metadata/db_${id}.sql"
+        String getNewMetaFilePath(const String & root_path) const;
+        // "metadata/"
+        String getNewMetaDirectory(const String & root_path) const;
+        // "data/"
+        String getNewDataDirectory(const String & root_path) const;
+        // "extra_data/"
+        String getNewExtraDirectory(const String & extra_root) const;
 
-        void renameToTmpDirectories(const Context & ctx);
+    private:
+        // "metadata/${db_name}.sql"
+        String getMetaFilePath(const String & root_path, bool tmp) const;
+        // "metadata/${db_name}/"
+        String getMetaDirectory(const String & root_path, bool tmp) const;
+        // "data/${db_name}/"
+        String getDataDirectory(const String & root_path, bool tmp) const;
+        // "extra_data/${db_name}/"
+        String getExtraDirectory(const String & extra_root, bool tmp) const;
     };
 
 public:
