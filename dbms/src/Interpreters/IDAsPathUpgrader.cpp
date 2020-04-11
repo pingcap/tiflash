@@ -281,10 +281,14 @@ String IDAsPathUpgrader::DatabaseDiskInfo::getExtraDirectory(const String & extr
 // "metadata/db_${id}.sql"
 String IDAsPathUpgrader::DatabaseDiskInfo::getNewMetaFilePath(const String & root_path) const
 {
-    return getNewMetaDirectory(root_path) + escapeForFileName(SchemaNameMapper::mapDatabaseName(id)) + ".sql";
+    String meta_dir = getNewMetaDirectory(root_path);
+    return (endsWith(meta_dir, "/") ? meta_dir.substr(0, meta_dir.size() - 1) : meta_dir) + ".sql";
 }
-// "metadata/"
-String IDAsPathUpgrader::DatabaseDiskInfo::getNewMetaDirectory(const String & root_path) const { return root_path + "/metadata/"; }
+// "metadata/db_${id}/"
+String IDAsPathUpgrader::DatabaseDiskInfo::getNewMetaDirectory(const String & root_path) const
+{
+    return root_path + "/metadata/" + escapeForFileName(SchemaNameMapper::mapDatabaseName(id)) + "/";
+}
 // "data/"
 String IDAsPathUpgrader::DatabaseDiskInfo::getNewDataDirectory(const String & root_path) const { return root_path + "/data/"; }
 // "extra_data/"
@@ -323,7 +327,8 @@ IDAsPathUpgrader::IDAsPathUpgrader(Context & global_ctx_, String default_db, std
       root_path{global_context.getPath()},
       log{&Logger::get("IDAsPathUpgrader")}
 {
-    non_drop_databases.emplace(default_db);
+    if (!default_db.empty())
+        non_drop_databases.emplace(default_db);
 }
 
 bool IDAsPathUpgrader::needUpgrade()
@@ -513,7 +518,13 @@ void IDAsPathUpgrader::renameDatabase(const String & db_name, const DatabaseDisk
 {
     const auto mapped_db_name = mapper.mapDatabaseName(db_info.id);
 
-    // First rename all tables of this database
+    {
+        // Create directory for target database
+        auto new_db_meta_dir = db_info.getNewMetaDirectory(root_path);
+        Poco::File(new_db_meta_dir).createDirectory();
+    }
+
+    // Rename all tables of this database
     for (const auto & table : db_info.tables)
     {
         renameTable(db_name, db_info, mapped_db_name, table);

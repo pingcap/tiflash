@@ -42,37 +42,45 @@ DatabaseTiFlash::DatabaseTiFlash(String name_, const String & metadata_path_, co
     Poco::File(data_path).createDirectories();
 }
 
+// metadata/${db_name}.sql
 String getDatabaseMetadataPath(const String & base_path)
 {
     return (endsWith(base_path, "/") ? base_path.substr(0, base_path.size() - 1) : base_path) + ".sql";
 }
 
-String DatabaseTiFlash::getDataPath() const { return data_path; }
-
+// metadata/${db_name}/
 String DatabaseTiFlash::getMetadataPath() const { return metadata_path; }
 
+// metadata/${db_name}/${tbl_name}.sql
 String DatabaseTiFlash::getTableMetadataPath(const String & table_name) const
 {
     return metadata_path + (endsWith(metadata_path, "/") ? "" : "/") + escapeForFileName(table_name) + ".sql";
 }
 
-void DatabaseTiFlash::loadTables(Context &, ThreadPool *, bool)
-{
-    // Just empty
-}
+// data/
+// Note that data path of all databases are flatten.
+String DatabaseTiFlash::getDataPath() const { return data_path; }
+
 
 static constexpr size_t PRINT_MESSAGE_EACH_N_TABLES = 256;
 static constexpr size_t PRINT_MESSAGE_EACH_N_SECONDS = 5;
 static constexpr size_t TABLES_PARALLEL_LOAD_BUNCH_SIZE = 100;
 
 void DatabaseTiFlash::loadTables(Context & context,
-    const std::vector<String> & table_files,
     ThreadPool * thread_pool,
-    bool has_force_restore_data_flag,
-    Poco::Logger * log)
+    bool has_force_restore_data_flag)
 {
+    using FileNames = std::vector<std::string>;
+    FileNames table_files = DatabaseLoading::listSQLFilenames(getMetadataPath(), log);
+
+    /** Tables load faster if they are loaded in sorted (by name) order.
+      * Otherwise (for the ext4 filesystem), `DirectoryIterator` iterates through them in some order,
+      *  which does not correspond to order tables creation and does not correspond to order of their location on disk.
+      */
+    std::sort(table_files.begin(), table_files.end());
+
     const auto total_tables = table_files.size();
-    LOG_INFO(log, "Total " << total_tables << " tables in database" << name);
+    LOG_INFO(log, "Total " << total_tables << " tables in database " << name);
 
     AtomicStopwatch watch;
     std::atomic<size_t> tables_processed{0};
@@ -88,7 +96,6 @@ void DatabaseTiFlash::loadTables(Context & context,
             }
 
             const String & table_file = *it;
-
             DatabaseLoading::loadTable(context, *this, metadata_path, name, data_path, table_file, has_force_restore_data_flag);
         }
     };
@@ -212,22 +219,25 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
     /// Notify the table that it is renamed. If the table does not support renaming, exception is thrown.
     try
     {
-        // Update `table->getDatabase()` for IManageableStorage
-        table->rename(/*new_path_to_db=*/context.getPath() + "/data/", // DeltaTree will ignored it
-            /*new_database_name=*/to_database_concrete->name, to_table_name);
-
-        if (name != to_database_concrete->name)
+        if (likely(name != to_database_concrete->name))
         {
+            // First move table meta file to new database directory.
+            const String old_tbl_meta_file = getTableMetadataPath(table_name);
+            const String new_tbl_meta_file = to_database_concrete->getTableMetadataPath(to_table_name);
+            Poco::File{old_tbl_meta_file}.renameTo(new_tbl_meta_file);
+
             // Detach from this database and attach to new database
-            // Not atomic between two databases, but not big deal.
+            // Not atomic between two databases in memory, but not big deal.
             const String table_name = table->getTableName();
             StoragePtr detach_storage = detachTable(table_name);
             to_database_concrete->attachTable(table_name, detach_storage);
         }
 
-        /// FIXME: we have no name_mapper in DatabaseTiFlash,
-        /// should we update metadata for table inside this method?
+        // Update `table->getDatabase()` for IManageableStorage
+        table->rename(/*new_path_to_db=*/context.getPath() + "/data/", // DeltaTree just ignored this param
+            /*new_database_name=*/to_database_concrete->name, to_table_name);
 
+        /// Nothing changed in table meta file, we can remove these comments later.
         // auto updated_table_info = table->getTableInfo();
         // updated_table_info.name = to_table_name;
         // storage->alterFromTiDB(AlterCommands{}, to_database_concrete->name, name_mapper, context);

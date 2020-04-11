@@ -5,23 +5,24 @@
 namespace DB::tests
 {
 
-TEST(IDAsPathUpgrader_test, test)
+// This test need to prepare some directory in local
+// Can not find a good way to support it in CI, ignore for now.
+TEST(IDAsPathUpgrader_test, DISABLED_test)
 try
 {
     TiFlashTestEnv::setupLogger();
     auto ctx = TiFlashTestEnv::getContext();
-    IDAsPathUpgrader upgrader(ctx);
+    IDAsPathUpgrader upgrader(ctx, "", {});
     ASSERT_TRUE(upgrader.needUpgrade());
     upgrader.doUpgrade();
 
     {
         // After upgrade, next time we don't need it.
-        IDAsPathUpgrader checker_after_upgrade(ctx);
+        IDAsPathUpgrader checker_after_upgrade(ctx, "", {});
         ASSERT_FALSE(checker_after_upgrade.needUpgrade());
     }
 
-    loadTiFlashMetadata(ctx);
-
+    loadMetadata(ctx);
 }
 CATCH
 

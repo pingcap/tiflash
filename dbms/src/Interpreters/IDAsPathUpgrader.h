@@ -43,7 +43,7 @@ public:
         // "extra_data/${db_name}/${tbl_name}/"
         String getExtraDirectory(const String & root_path, const DatabaseDiskInfo & db) const;
 
-        // "metadata/t_${id}.sql"
+        // "metadata/db_${db_id}/t_${id}.sql"
         String getNewMetaFilePath(const String & root_path, const DatabaseDiskInfo & db) const;
         // "data/t_${id}/"
         String getNewDataDirectory(const String & root_path, const DatabaseDiskInfo & db) const;
@@ -81,7 +81,7 @@ public:
 
         // "metadata/db_${id}.sql"
         String getNewMetaFilePath(const String & root_path) const;
-        // "metadata/"
+        // "metadata/db_${id}/"
         String getNewMetaDirectory(const String & root_path) const;
         // "data/"
         String getNewDataDirectory(const String & root_path) const;
