@@ -414,7 +414,7 @@ void IDAsPathUpgrader::linkDatabaseTableInfos(const std::vector<TiDB::DBInfoPtr>
             iter = databases.erase(iter);
             continue;
         }
-        if (db_info.engine != "TiFlash")
+        if (db_info.engine == "TiFlash")
         {
             ++iter;
             continue;
