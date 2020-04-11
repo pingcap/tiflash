@@ -492,7 +492,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         } while (0);
 
         /// Then, load remaining databases TODO: fix this method
-        loadMetadata(*global_context);
+        loadTiFlashMetadata(*global_context);
     }
     LOG_DEBUG(log, "Load metadata done.");
 
