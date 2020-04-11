@@ -75,6 +75,8 @@ public:
             context.setGlobalContext(context);
             context.setApplicationType(DB::Context::ApplicationType::SERVER);
 
+            context.initializeTiFlashMetrics();
+
             context.createTMTContext({}, "", "", {"default"}, getTemporaryPath() + "/kvstore", TiDB::StorageEngine::TMT, false);
             context.getTMTContext().restore();
         }
