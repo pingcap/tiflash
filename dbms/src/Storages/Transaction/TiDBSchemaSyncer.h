@@ -67,6 +67,8 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         return getter.listDBs();
     }
 
+    bool isMock() const override { return mock_getter; }
+
     Int64 getCurrentVersion() override
     {
         std::lock_guard<std::mutex> lock(schema_mutex);

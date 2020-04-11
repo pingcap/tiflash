@@ -41,6 +41,8 @@ public:
     virtual TiDB::DBInfoPtr getDBInfoByMappedName(const String & mapped_database_name) = 0;
 
     virtual std::vector<TiDB::DBInfoPtr> fetchAllDBs() = 0;
+
+    virtual bool isMock() const = 0;
 };
 
 using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
