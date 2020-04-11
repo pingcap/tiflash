@@ -414,19 +414,28 @@ void IDAsPathUpgrader::linkDatabaseTableInfos(const std::vector<TiDB::DBInfoPtr>
     }
 
     // list all table in old style.
+    bool is_mock_test = global_context.getTMTContext().getSchemaSyncer()->isMock();
     for (auto iter = databases.begin(); iter != databases.end(); /*empty*/)
     {
+        const auto & db_name = iter->first;
         auto & db_info = iter->second;
+        if (unlikely(is_mock_test && non_drop_databases.count(db_name) > 0))
+        {
+            iter = databases.erase(iter);
+            LOG_DEBUG(log, "Database `" << db_name << "` is default database or ignore databas, won't drop it in mock test.");
+            continue;
+        }
+
         if (db_info.id == IDAsPathUpgrader::DatabaseDiskInfo::UNINIT_ID)
         {
-            if (non_drop_databases.count(iter->first) == 0)
+            if (non_drop_databases.count(db_name) == 0)
             {
-                LOG_WARNING(log, "Database " << iter->first << " id=" << db_info.id << ", may already dropped in TiDB, drop it..");
+                LOG_WARNING(log, "Database " << db_name << " id=" << db_info.id << ", may already dropped in TiDB, drop it..");
                 dropAbsentDatabase(global_context, db_info, log);
             }
             else
             {
-                LOG_DEBUG(log, "Database " << iter->first << " is default database or ignore databas, won't drop it.");
+                LOG_DEBUG(log, "Database `" << db_name << "` is default database or ignore databas, won't drop it.");
             }
             iter = databases.erase(iter);
             continue;
