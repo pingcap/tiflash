@@ -645,7 +645,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(TiDB::DBInfoPtr db_inf
     if (isReservedDatabase(context, mapped))
         throw Exception("Database " + name_mapper.displayDatabaseName(*db_info) + " is reserved", ErrorCodes::DDL_ERROR);
 
-    const String statement = "CREATE DATABASE " + backQuoteIfNeed(mapped) + " IF NOT EXIST ENGINE=TiFlash";
+    const String statement = "CREATE DATABASE IF NOT EXISTS " + backQuoteIfNeed(mapped) + " ENGINE=TiFlash";
     ASTPtr ast = parseCreateStatement(statement);
 
     InterpreterCreateQuery interpreter(ast, context);

@@ -72,7 +72,7 @@ void DatabaseTiFlash::loadTables(Context & context,
     Poco::Logger * log)
 {
     const auto total_tables = table_files.size();
-    LOG_INFO(log, "Total " << total_tables << " tables.");
+    LOG_INFO(log, "Total " << total_tables << " tables in database" << name);
 
     AtomicStopwatch watch;
     std::atomic<size_t> tables_processed{0};

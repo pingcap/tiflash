@@ -245,6 +245,10 @@ std::vector<String> listSQLFilenames(const String & database_dir, Poco::Logger *
     Poco::DirectoryIterator dir_end;
     for (Poco::DirectoryIterator dir_it(database_dir); dir_it != dir_end; ++dir_it)
     {
+        // Ignore directories
+        if (!dir_it->isFile())
+            continue;
+
         /// For '.svn', '.gitignore' directory and similar.
         if (dir_it.name().at(0) == '.')
             continue;
@@ -322,7 +326,7 @@ static constexpr size_t TABLES_PARALLEL_LOAD_BUNCH_SIZE = 100;
 
 void startupTables(Tables & tables, ThreadPool * thread_pool, Poco::Logger * log)
 {
-    LOG_INFO(log, "Starting up tables.");
+    LOG_INFO(log, "Starting up " << tables.size() << " tables.");
 
     AtomicStopwatch watch;
     std::atomic<size_t> tables_processed{0};
@@ -333,7 +337,7 @@ void startupTables(Tables & tables, ThreadPool * thread_pool, Poco::Logger * log
         {
             if ((++tables_processed) % PRINT_MESSAGE_EACH_N_TABLES == 0 || watch.compareAndRestart(PRINT_MESSAGE_EACH_N_SECONDS))
             {
-                LOG_INFO(log, std::fixed << std::setprecision(2) << tables_processed * 100.0 / total_tables << "%");
+                LOG_INFO(log, DB::toString(tables_processed * 100.0 / total_tables, 2) << "%");
                 watch.restart();
             }
 

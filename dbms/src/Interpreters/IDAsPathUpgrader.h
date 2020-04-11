@@ -3,6 +3,7 @@
 #include <Storages/Transaction/Types.h>
 
 #include <map>
+#include <unordered_set>
 
 namespace Poco
 {
@@ -99,7 +100,10 @@ public:
     };
 
 public:
-    IDAsPathUpgrader(Context & global_ctx_);
+    /// Upgrader
+    // If some database can not find in TiDB, they will be dropped
+    // if theirs name is not default_db or not in ignore_dbs
+    IDAsPathUpgrader(Context & global_ctx_, String default_db, std::unordered_set<std::string> ignore_dbs);
 
     bool needUpgrade();
 
@@ -121,6 +125,8 @@ private:
 
 private:
     Context & global_context;
+
+    std::unordered_set<std::string> non_drop_databases;
 
     const String root_path;
 
