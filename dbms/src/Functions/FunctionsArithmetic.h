@@ -1156,18 +1156,18 @@ private:
 };
 
 template <typename DataType> constexpr bool IsIntegral = false;
-template <> constexpr bool IsIntegral<DataTypeUInt8> = true;
-template <> constexpr bool IsIntegral<DataTypeUInt16> = true;
-template <> constexpr bool IsIntegral<DataTypeUInt32> = true;
-template <> constexpr bool IsIntegral<DataTypeUInt64> = true;
-template <> constexpr bool IsIntegral<DataTypeInt8> = true;
-template <> constexpr bool IsIntegral<DataTypeInt16> = true;
-template <> constexpr bool IsIntegral<DataTypeInt32> = true;
-template <> constexpr bool IsIntegral<DataTypeInt64> = true;
+template <> inline constexpr bool IsIntegral<DataTypeUInt8> = true;
+template <> inline constexpr bool IsIntegral<DataTypeUInt16> = true;
+template <> inline constexpr bool IsIntegral<DataTypeUInt32> = true;
+template <> inline constexpr bool IsIntegral<DataTypeUInt64> = true;
+template <> inline constexpr bool IsIntegral<DataTypeInt8> = true;
+template <> inline constexpr bool IsIntegral<DataTypeInt16> = true;
+template <> inline constexpr bool IsIntegral<DataTypeInt32> = true;
+template <> inline constexpr bool IsIntegral<DataTypeInt64> = true;
 
 template <typename DataType> constexpr bool IsDateOrDateTime = false;
-template <> constexpr bool IsDateOrDateTime<DataTypeDate> = true;
-template <> constexpr bool IsDateOrDateTime<DataTypeDateTime> = true;
+template <> inline constexpr bool IsDateOrDateTime<DataTypeDate> = true;
+template <> inline constexpr bool IsDateOrDateTime<DataTypeDateTime> = true;
 
 /** Returns appropriate result type for binary operator on dates (or datetimes):
  *  Date + Integral -> Date
