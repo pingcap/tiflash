@@ -317,9 +317,14 @@ void IDAsPathUpgrader::DatabaseDiskInfo::renameToTmpDirectories(const Context & 
 //   IDAsPathUpgrader
 // ================================================
 
-IDAsPathUpgrader::IDAsPathUpgrader(Context & global_ctx_)
-    : global_context(global_ctx_), root_path{global_context.getPath()}, log{&Logger::get("IDAsPathUpgrader")}
-{}
+IDAsPathUpgrader::IDAsPathUpgrader(Context & global_ctx_, String default_db, std::unordered_set<std::string> ignore_dbs)
+    : global_context(global_ctx_),
+      non_drop_databases(std::move(ignore_dbs)),
+      root_path{global_context.getPath()},
+      log{&Logger::get("IDAsPathUpgrader")}
+{
+    non_drop_databases.emplace(default_db);
+}
 
 bool IDAsPathUpgrader::needUpgrade()
 {
@@ -409,8 +414,15 @@ void IDAsPathUpgrader::linkDatabaseTableInfos(const std::vector<TiDB::DBInfoPtr>
         auto & db_info = iter->second;
         if (db_info.id == IDAsPathUpgrader::DatabaseDiskInfo::UNINIT_ID)
         {
-            LOG_WARNING(log, "Database " << iter->first << " id=" << db_info.id << ", may already dropped in TiDB, drop it..");
-            dropAbsentDatabase(global_context, db_info, log);
+            if (non_drop_databases.count(iter->first) == 0)
+            {
+                LOG_WARNING(log, "Database " << iter->first << " id=" << db_info.id << ", may already dropped in TiDB, drop it..");
+                dropAbsentDatabase(global_context, db_info, log);
+            }
+            else
+            {
+                LOG_DEBUG(log, "Database " << iter->first << " is default database or ignore databas, won't drop it.");
+            }
             iter = databases.erase(iter);
             continue;
         }

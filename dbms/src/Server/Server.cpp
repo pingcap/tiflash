@@ -193,7 +193,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->setExtraPaths(extra_paths);
 
     std::string path = all_normal_path[0];
-    std::string default_database = config().getString("default_database", "default"); // TODO: we may need to handle this "default" database
+    std::string default_database = config().getString("default_database", "default"); // This "default" database is kept as DatabaseOrdinary.
     global_context->setPath(path);
     global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
 
@@ -485,13 +485,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
         do
         {
             // Check whether we need to upgrade directories hierarchy
-            IDAsPathUpgrader upgrader(*global_context);
+            IDAsPathUpgrader upgrader(*global_context, default_database, ignore_databases);
             if (!upgrader.needUpgrade())
                 break;
             upgrader.doUpgrade();
         } while (0);
 
-        /// Then, load remaining databases TODO: fix this method
+        /// Then, load remaining databases
         loadTiFlashMetadata(*global_context);
     }
     LOG_DEBUG(log, "Load metadata done.");

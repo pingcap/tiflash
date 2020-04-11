@@ -68,13 +68,10 @@ static void loadDatabase(
         ReadBufferFromFile in(database_metadata_file, 1024);
         readStringUntilEOF(database_attach_query, in);
     }
-    else if (database == SYSTEM_DATABASE)
-    {
-        database_attach_query = "ATTACH DATABASE " + backQuoteIfNeed(database) + " ENGINE=Ordinary";
-    }
     else
     {
-        throw Exception("File is not exist: " + database_metadata_file, ErrorCodes::FILE_DOESNT_EXIST);
+        // Old fasion way.
+        database_attach_query = "ATTACH DATABASE " + backQuoteIfNeed(database) + " ENGINE=Ordinary";
     }
 
     executeCreateQuery(database_attach_query, context, database, database_metadata_file, thread_pool, force_restore_data);
@@ -126,6 +123,9 @@ void loadMetadata(Context & context)
 
 void loadTiFlashMetadata(Context & context)
 {
+    // "defalut" database and ignore database kept as DatabaseOrdinary, we need to load them.
+    loadMetadata(context);
+
     Logger * log = &Logger::get("loadTiFlashMetadata");
 
     const String meta_root = context.getPath() + "/metadata/";
@@ -163,8 +163,8 @@ void loadTiFlashMetadata(Context & context)
     // Load all database. (files with "db_" prefix)
     for (const auto & db_file : database_files)
     {
-        String db_name = unescapeForFileName(db_file.c_str() + strlen(SchemaNameMapper::DATABASE_PREFIX));
-        db_name = db_name.substr(0, db_name.length() - strlen(".sql")); // remove suffix
+        // remove suffix ".sql" from filename to get db_name
+        const String db_name = unescapeForFileName(db_file.substr(0, db_file.length() - strlen(".sql")));
         const String db_file_path = meta_root + db_file;
         loadDatabase(context, db_name, db_file_path, &thread_pool, has_force_restore_data_flag);
         auto database = context.getDatabase(db_name);
@@ -198,7 +198,7 @@ void loadTiFlashMetadata(Context & context)
                 if (auto iter = table_files.find(expected_tbl_file); iter != table_files.end())
                 {
                     table_files.erase(iter);
-                    table_files_for_this_db.emplace_back(meta_root + expected_tbl_file);
+                    table_files_for_this_db.emplace_back(expected_tbl_file);
                 }
             }
 
