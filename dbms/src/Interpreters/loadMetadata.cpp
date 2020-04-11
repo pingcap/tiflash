@@ -226,7 +226,7 @@ void loadMetadataSystem(Context & context)
     if (Poco::File(path).exists())
     {
         /// 'has_force_restore_data_flag' is true, to not fail on loading query_log table, if it is corrupted.
-        loadDatabase(context, SYSTEM_DATABASE, path, nullptr, true);
+        loadDatabase(context, SYSTEM_DATABASE, path + ".sql", nullptr, true);
     }
     else
     {
