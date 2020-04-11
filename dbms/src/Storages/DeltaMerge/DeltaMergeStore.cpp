@@ -221,12 +221,17 @@ DeltaMergeStore::~DeltaMergeStore()
 void DeltaMergeStore::rename(String new_path, String new_database_name, String new_table_name)
 {
     // These few lines can be removed after PR "id as path" and "flatten storage path hierarchy" is merged.
-    extra_paths.rename(new_database_name, new_table_name); // rename for multi-disk
-    // Check if path is covered by extra_paths, if not, rename
-    if (auto dir = Poco::File(path); dir.exists())
     {
-        LOG_INFO(log, "Renaming " << path << " to " << new_path);
-        dir.renameTo(new_path);
+        shutdown();                                            // Remove all background task first
+        extra_paths.rename(new_database_name, new_table_name); // rename for multi-disk
+        // Check if path is covered by extra_paths, if not, rename
+        if (auto dir = Poco::File(path); dir.exists())
+        {
+            LOG_INFO(log, "Renaming " << path << " to " << new_path);
+            dir.renameTo(new_path);
+        }
+        // setting `path` is useless, we need to restore the whole DeltaMergeStore object after path is changed.
+        // path = new_path;
     }
 
     // TODO: replacing these two variables is not atomic, but could be good enough?
