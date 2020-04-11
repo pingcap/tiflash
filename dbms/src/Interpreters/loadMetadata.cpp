@@ -163,7 +163,8 @@ void loadTiFlashMetadata(Context & context)
     // Load all database. (files with "db_" prefix)
     for (const auto & db_file : database_files)
     {
-        const String db_name = unescapeForFileName(db_file.c_str() + strlen(SchemaNameMapper::DATABASE_PREFIX));
+        String db_name = unescapeForFileName(db_file.c_str() + strlen(SchemaNameMapper::DATABASE_PREFIX));
+        db_name = db_name.substr(0, db_name.length() - strlen(".sql")); // remove suffix
         const String db_file_path = meta_root + db_file;
         loadDatabase(context, db_name, db_file_path, &thread_pool, has_force_restore_data_flag);
         auto database = context.getDatabase(db_name);
@@ -177,6 +178,13 @@ void loadTiFlashMetadata(Context & context)
                 tidb_databases_info.begin(),
                 tidb_databases_info.end(),
                 [&mapper, &db_name](const TiDB::DBInfoPtr & db) { return mapper.mapDatabaseName(*db) == db_name; });
+            if (db_info == tidb_databases_info.end())
+            {
+                LOG_WARNING(log, "Database " << db_name << " not exists in TiDB, going to drop it");
+                // FIXME: This database is not exists in TiDB, drop it?
+                continue;
+            }
+
             // If databse is "DatabaseTiFlash", we need to attach tables to database according to relationships from TiDB
             std::vector<std::pair<TableID, TiDB::DatabaseID>> //
                 tidb_tables = schema_syncer->fetchAllTables(*db_info);
@@ -187,14 +195,26 @@ void loadTiFlashMetadata(Context & context)
                 (void)db_id;
                 const String expected_tbl_file = mapper.mapTableName(t_id) + ".sql";
                 // TiFlash schema may lag behind TiDB, some table may not exist in this time.
-                if (table_files.find(expected_tbl_file) != table_files.end())
+                if (auto iter = table_files.find(expected_tbl_file); iter != table_files.end())
                 {
+                    table_files.erase(iter);
                     table_files_for_this_db.emplace_back(meta_root + expected_tbl_file);
                 }
             }
 
             // Then load all storages (files with "t_" prefix) and attach them to databases.
             database_concrete->loadTables(context, table_files_for_this_db, &thread_pool, has_force_restore_data_flag, log);
+        }
+    }
+
+    // After all, TiFlash schema may lag behind TiDB, some tables may not be dropped
+    if (!table_files.empty())
+    {
+        LOG_WARNING(log, "There are " << table_files.size() << " tables not found in TiDB schema");
+        for (const auto & table_file : table_files)
+        {
+            // FIXME: drop schema file, data, multi-disk
+            LOG_WARNING(log, "Drop table " << table_file);
         }
     }
 }

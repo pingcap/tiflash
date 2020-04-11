@@ -1,5 +1,6 @@
 #include <Interpreters/IDAsPathUpgrader.h>
 #include <test_utils/TiflashTestBasic.h>
+#include <Interpreters/loadMetadata.h>
 
 namespace DB::tests
 {
@@ -18,6 +19,9 @@ try
         IDAsPathUpgrader checker_after_upgrade(ctx);
         ASSERT_FALSE(checker_after_upgrade.needUpgrade());
     }
+
+    loadTiFlashMetadata(ctx);
+
 }
 CATCH
 
