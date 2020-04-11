@@ -102,10 +102,8 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
 
     String database_name_escaped = escapeForFileName(database_name);
 
-    /// Create directories for tables metadata.
+    /// Create directories for storing all tables' metadata sql file for this database.
     String path = context.getPath();
-    // Create the directory for storing all tables' metadata sql file for this database.
-    // For tiflash, we store all tables' metadata sql file in the same directory.
     String metadata_path = path + "metadata/" + database_name_escaped + "/";
     Poco::File(metadata_path).createDirectory();
 
@@ -144,7 +142,6 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
         if (need_write_metadata)
             Poco::File(metadata_file_tmp_path).renameTo(metadata_file_path);
 
-        // For DatabaseTiFlash, this is empty and we should attach tables for this database in `loadTiFlashMetadata`
         database->loadTables(context, thread_pool, has_force_restore_data_flag);
     }
     catch (...)

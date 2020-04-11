@@ -66,9 +66,7 @@ static constexpr size_t PRINT_MESSAGE_EACH_N_TABLES = 256;
 static constexpr size_t PRINT_MESSAGE_EACH_N_SECONDS = 5;
 static constexpr size_t TABLES_PARALLEL_LOAD_BUNCH_SIZE = 100;
 
-void DatabaseTiFlash::loadTables(Context & context,
-    ThreadPool * thread_pool,
-    bool has_force_restore_data_flag)
+void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bool has_force_restore_data_flag)
 {
     using FileNames = std::vector<std::string>;
     FileNames table_files = DatabaseLoading::listSQLFilenames(getMetadataPath(), log);
@@ -383,7 +381,16 @@ void DatabaseTiFlash::shutdown()
 
 void DatabaseTiFlash::drop()
 {
-    /// No additional removal actions are required.
+    // Remove metadata dir for this database
+    if (auto dir = Poco::File(getMetadataPath()); dir.exists())
+    {
+        dir.remove(false);
+    }
+    // Removd meta file for this database
+    if (auto meta_file = Poco::File(getDatabaseMetadataPath(getMetadataPath())); meta_file.exists())
+    {
+        meta_file.remove();
+    }
 }
 
 

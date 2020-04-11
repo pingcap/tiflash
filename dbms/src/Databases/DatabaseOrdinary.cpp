@@ -360,8 +360,15 @@ void DatabaseOrdinary::drop()
     if (!database_data_path.empty())
         Poco::File(database_data_path).remove(false);
     // Remove metadata dir for this database
-    const String curr_database_metadata_dir = getMetadataPath();
-    Poco::File(curr_database_metadata_dir).remove(false);
+    if (auto dir = Poco::File(getMetadataPath()); dir.exists())
+    {
+        dir.remove(false);
+    }
+    /// Old ClickHouse versions did not store database.sql files
+    if (auto meta_file = Poco::File(detail::getDatabaseMetadataPath(getMetadataPath())); meta_file.exists())
+    {
+        meta_file.remove();
+    }
 }
 
 void DatabaseOrdinary::alterTable(
