@@ -13,9 +13,17 @@
 #include <Storages/Transaction/TMTStorages.h>
 #include <Storages/registerStorages.h>
 #include <test_utils/TiflashTestBasic.h>
+
 #include <optional>
 
-namespace DB::tests
+namespace DB
+{
+namespace ErrorCodes
+{
+extern const int SYNTAX_ERROR;
+} // namespace ErrorCodes
+
+namespace tests
 {
 
 class DatabaseTiFlash_test : public ::testing::Test
@@ -36,6 +44,27 @@ public:
     }
 };
 
+namespace
+{
+ASTPtr parseCreateStatement(const String & statement)
+{
+    ParserCreateQuery parser;
+    const char * pos = statement.data();
+    std::string error_msg;
+    auto ast = tryParseQuery(parser,
+        pos,
+        pos + statement.size(),
+        error_msg,
+        /*hilite=*/false,
+        String("in ") + __PRETTY_FUNCTION__,
+        /*allow_multi_statements=*/false,
+        0);
+    if (!ast)
+        throw Exception(error_msg, ErrorCodes::SYNTAX_ERROR);
+    return ast;
+}
+} // namespace
+
 TEST_F(DatabaseTiFlash_test, CreateDBAndTable)
 try
 {
@@ -46,17 +75,16 @@ try
 
     {
         // Create database
-        ASTCreateQuery * create_query = new ASTCreateQuery();
-        create_query->database = "db_1";
-        create_query->if_not_exists = false;
-        ASTPtr ast = ASTPtr(create_query);
+        const String statement = "CREATE DATABASE IF NOT EXISTS " + db_name + " ENGINE=TiFlash";
+        ASTPtr ast = parseCreateStatement(statement);
+        ASSERT_NE(ast, nullptr);
         InterpreterCreateQuery interpreter(ast, ctx);
         interpreter.setInternal(true);
         interpreter.setForceRestoreData(false);
         interpreter.execute();
     }
 
-    auto db = ctx.getDatabase(db_name);
+    auto db = ctx.tryGetDatabase(db_name);
     ASSERT_NE(db, nullptr);
     EXPECT_EQ(db->getEngineName(), "TiFlash");
     EXPECT_TRUE(db->empty(ctx));
@@ -103,6 +131,9 @@ try
         ASTPtr ast_drop_query = drop_query;
         InterpreterDropQuery drop_interpreter(ast_drop_query, ctx);
         drop_interpreter.execute();
+
+        auto storage = db->tryGetTable(ctx, tbl_name);
+        ASSERT_EQ(storage, nullptr);
     }
 
     {
@@ -113,8 +144,12 @@ try
         ASTPtr ast_drop_query = drop_query;
         InterpreterDropQuery drop_interpreter(ast_drop_query, ctx);
         drop_interpreter.execute();
+
+        auto db = ctx.tryGetDatabase(db_name);
+        ASSERT_EQ(db, nullptr);
     }
 }
 CATCH
 
-} // namespace DB::tests
+} // namespace tests
+} // namespace DB
