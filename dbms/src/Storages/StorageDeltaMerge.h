@@ -31,7 +31,8 @@ public:
     bool supportsModification() const override { return true; }
 
     String getName() const override;
-    String getTableName() const override { return table_name; }
+    String getTableName() const override;
+    String getDatabaseName() const override;
 
     void drop() override;
 
@@ -61,8 +62,6 @@ public:
     void deleteRange(const DM::HandleRange & range_to_delete, const Settings & settings);
 
     void rename(const String & /*new_path_to_db*/, const String & /*new_database_name*/, const String & /*new_table_name*/) override;
-
-    String getDatabaseName() const override { return db_name; }
 
     void alter(const AlterCommands & commands, const String & database_name, const String & table_name, const Context & context) override;
 
@@ -121,8 +120,6 @@ private:
     using ColumnIdMap = std::unordered_map<String, size_t>;
 
     String path;
-    String db_name;
-    String table_name;
 
     DM::DeltaMergeStorePtr store;
 
