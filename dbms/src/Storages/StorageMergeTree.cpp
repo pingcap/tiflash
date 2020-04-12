@@ -48,8 +48,8 @@ namespace ErrorCodes
 }
 
 
-StorageMergeTree::StorageMergeTree(
-    const String & path_,
+StorageMergeTree::StorageMergeTree(const String & path_,
+    const String & db_engine_,
     const String & database_name_,
     const String & table_name_,
     const ColumnsDescription & columns_,
@@ -65,15 +65,21 @@ StorageMergeTree::StorageMergeTree(
     const MergeTreeSettings & settings_,
     bool has_force_restore_data_flag,
     Timestamp tombstone)
-    : IManageableStorage{tombstone}, path(path_), database_name(database_name_), table_name(table_name_), full_path(path + escapeForFileName(table_name) + '/'),
-    context(context_), background_pool(context_.getBackgroundPool()),
-    data(database_name, table_name,
-         full_path, columns_,
-         context_, primary_expr_ast_, secondary_sorting_expr_list_, date_column_name, partition_expr_ast_,
-         sampling_expression_, merging_params_,
-         settings_, false, attach),
-    reader(data), writer(data), merger(data, context.getBackgroundPool()),
-    log(&Logger::get(database_name_ + "." + table_name + " (StorageMergeTree)"))
+    : IManageableStorage{tombstone},
+      path(path_),
+      data_path_contains_database_name(db_engine_ == "TiFlash"),
+      database_name(database_name_),
+      table_name(table_name_),
+      full_path(path + escapeForFileName(table_name) + '/'),
+      context(context_),
+      background_pool(context_.getBackgroundPool()),
+      data(database_name, table_name, full_path, data_path_contains_database_name, columns_, context_, primary_expr_ast_,
+          secondary_sorting_expr_list_, date_column_name, partition_expr_ast_, sampling_expression_, merging_params_, settings_, false,
+          attach),
+      reader(data),
+      writer(data),
+      merger(data, context.getBackgroundPool()),
+      log(&Logger::get(database_name_ + "." + table_name + " (StorageMergeTree)"))
 {
     *data.table_info = table_info_;
     if (path_.empty())
@@ -303,16 +309,21 @@ void StorageMergeTree::rename(const String & new_path_to_db, const String & new_
 
     for (auto & path : context.getPartPathSelector().getAllPath())
     {
-        std::string orig_parts_path = path + "data/" + escapeForFileName(data.table_name) + '/';
-        std::string new_parts_path = path + "data/" + escapeForFileName(new_table_name) + '/';
+        std::string orig_parts_path = path + "data/";
+        std::string new_parts_path = path + "data/";
+        if (data_path_contains_database_name)
+        {
+            orig_parts_path += escapeForFileName(data.database_name) + '/';
+            new_parts_path += escapeForFileName(new_database_name) + '/';
+        }
+        orig_parts_path += escapeForFileName(data.table_name) + '/';
+        new_parts_path += escapeForFileName(new_table_name) + '/';
         if (Poco::File{new_parts_path}.exists())
-            throw Exception{
-                    "Target path already exists: " + new_parts_path,
-                    /// @todo existing target can also be a file, not directory
-                    ErrorCodes::DIRECTORY_ALREADY_EXISTS};
+            throw Exception{"Target path already exists: " + new_parts_path,
+                /// @todo existing target can also be a file, not directory
+                ErrorCodes::DIRECTORY_ALREADY_EXISTS};
         Poco::File(orig_parts_path).renameTo(new_parts_path);
     }
-
     context.dropCaches();
     path = new_path_to_db;
     table_name = new_table_name;
