@@ -104,7 +104,7 @@ public:
         std::vector<String> root_paths;
         for (auto & path_info : path_infos)
         {
-            String root_path = Poco::Path(path_info.path).parent().parent().toString();
+            String root_path = Poco::Path(path_info.path).parent().toString();
             root_paths.emplace_back(root_path);
         }
 
@@ -244,11 +244,9 @@ public:
     }
 
 private:
-    static String getStorePath(const String & extra_path_root, const String & database_name, const String & table_name)
+    static String getStorePath(const String & extra_path_root, const String & /*database_name*/, const String & table_name)
     {
-        return extra_path_root + "/" + escapeForFileName(database_name) + "/" + escapeForFileName(table_name);
-        // TODO: use this after PR "id as path" and "flatten storage path hierarchy" is merged.
-        // return extra_path_root + "/" + escapeForFileName(table);
+        return extra_path_root + "/" + escapeForFileName(table_name);
     }
 
     void renamePath(const String & old_path, const String & new_path)
