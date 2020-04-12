@@ -421,8 +421,8 @@ void IDAsPathUpgrader::linkDatabaseTableInfos(const std::vector<TiDB::DBInfoPtr>
         auto & db_info = iter->second;
         if (unlikely(is_mock_test && non_drop_databases.count(db_name) > 0))
         {
-            iter = databases.erase(iter);
             LOG_DEBUG(log, "Database `" << db_name << "` is default database or ignore databas, won't drop it in mock test.");
+            iter = databases.erase(iter);
             continue;
         }
 
