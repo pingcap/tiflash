@@ -8,6 +8,7 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/config.h>
+#include <Common/escapeForFileName.h>
 #include <Common/getFQDNOrHostName.h>
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
@@ -193,7 +194,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->setExtraPaths(extra_paths);
 
     std::string path = all_normal_path[0];
-    std::string default_database = config().getString("default_database", "default"); // This "default" database is kept as DatabaseOrdinary.
+    std::string default_database = config().getString("default_database", "default");
     global_context->setPath(path);
     global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
 
@@ -202,7 +203,31 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         Poco::File(candidate_path + "data/" + default_database).createDirectories();
     }
-    Poco::File(path + "metadata/" + default_database).createDirectories();
+
+    {
+        // Create "default" database
+        std::string default_database_meta = path + "metadata/" + escapeForFileName(default_database);
+        Poco::File(default_database_meta).createDirectories();
+        std::string default_database_meta_file = default_database_meta + ".sql";
+        if (auto file = Poco::File{default_database_meta_file}; !file.exists())
+        {
+            std::string default_database_meta_file_tmp = default_database_meta_file + ".tmp";
+            if (auto file = Poco::File{default_database_meta_file_tmp}; file.exists())
+                file.remove();
+
+            const String statement = "CREATE DATABASE IF NOT EXISTS " + backQuoteIfNeed(default_database) + " ENGINE = TiFlash";
+            {
+                WriteBufferFromFile out(default_database_meta_file_tmp, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+                writeString(statement, out);
+                out.next();
+                const auto & settings = global_context->getSettingsRef();
+                if (settings.fsync_metadata)
+                    out.sync();
+                out.close();
+            }
+            Poco::File(default_database_meta_file_tmp).renameTo(default_database_meta_file);
+        }
+    }
 
     StatusFile status{path + "status"};
 
