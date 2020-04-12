@@ -225,6 +225,10 @@ public:
     const String & getDatabaseName() const { return db_name; }
     const String & getTableName() const { return table_name; }
 
+    void rename(String new_path, String new_database_name, String new_table_name);
+
+    void drop();
+
     // Stop all background tasks.
     void shutdown();
 
