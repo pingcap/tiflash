@@ -101,7 +101,7 @@ void DatabaseOrdinary::loadTables(
                 watch.restart();
             }
 
-            DatabaseLoading::loadTable(context, *this, metadata_path, name, data_path, table, has_force_restore_data_flag);
+            DatabaseLoading::loadTable(context, *this, metadata_path, name, data_path, getEngineName(), table, has_force_restore_data_flag);
         }
     };
 

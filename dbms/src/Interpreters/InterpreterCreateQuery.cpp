@@ -529,6 +529,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
             data_path,
             table_name,
             database_name,
+            database->getEngineName(),
             context,
             context.getGlobalContext(),
             columns,

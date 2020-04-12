@@ -36,8 +36,9 @@ public:
         }
     }
 
-    PathPool(const std::vector<String> & paths_, const String & database_, const String & table_)
-        : database(database_), table(table_), log{&Logger::get("PathPool")}
+private:
+    PathPool(const std::vector<String> & paths_, const String & database_, const String & table_, bool path_need_database_name_)
+        : database(database_), table(table_), path_need_database_name{path_need_database_name_}, log{&Logger::get("PathPool")}
     {
         for (auto & path : paths_)
         {
@@ -48,6 +49,7 @@ public:
         }
     }
 
+public:
     PathPool(const PathPool & path_pool)
     {
         path_infos.clear();
@@ -58,6 +60,7 @@ public:
         }
         database = path_pool.database;
         table = path_pool.table;
+        path_need_database_name = path_pool.path_need_database_name;
         log = path_pool.log;
     }
 
@@ -71,11 +74,12 @@ public:
         }
         database = path_pool.database;
         table = path_pool.table;
+        path_need_database_name = path_pool.path_need_database_name;
         log = path_pool.log;
         return *this;
     }
 
-    PathPool withTable(const String & database_, const String & table_) const
+    PathPool withTable(const String & database_, const String & table_, bool path_need_database_name_) const
     {
         if (unlikely(!database.empty() || !table.empty()))
             throw Exception("Already has database or table");
@@ -84,10 +88,10 @@ public:
         {
             paths_.emplace_back(path_info.path);
         }
-        return PathPool(paths_, database_, table_);
+        return PathPool(paths_, database_, table_, path_need_database_name_);
     }
 
-    void rename(const String & new_database, const String & new_table)
+    void rename(const String & new_database, const String & new_table, bool clean_rename)
     {
         if (unlikely(database.empty() && table.empty()))
             throw Exception("Can not do rename for root PathPool");
@@ -95,30 +99,42 @@ public:
         if (unlikely(new_database.empty() || new_table.empty()))
             throw Exception("Can not rename for PathPool to " + new_database + "." + new_table);
 
-        // Note: changing these path is not atomic, we may lost data if process is crash here.
-        // TODO: This method could only change database and table without renaming path
-        // after PR "id as path" and "flatten storage path hierarchy" is merged.
-
-        std::lock_guard<std::mutex> lock{mutex};
-        // Get root path without database and table
-        std::vector<String> root_paths;
-        for (auto & path_info : path_infos)
+        if (clean_rename)
         {
-            String root_path = Poco::Path(path_info.path).parent().toString();
-            root_paths.emplace_back(root_path);
+            // caller ensure that no path need to be renamed.
+            if (unlikely(path_need_database_name))
+            {
+                throw Exception("Can not do clean rename with path_need_database_name is true!");
+            }
+            std::lock_guard<std::mutex> lock{mutex};
+            database = new_database;
+            table = new_table;
         }
-
-        std::vector<String> new_paths;
-        for (const auto & root_path : root_paths)
+        else
         {
-            const String new_path = getStorePath(root_path, new_database, new_table);
-            new_paths.emplace_back(new_path);
-            renamePath(getStorePath(root_path, database, table), new_path);
-        }
+            // Note: changing these path is not atomic, we may lost data if process is crash here.
 
-        database.clear();
-        table.clear();
-        *this = withTable(new_database, new_table);
+            std::lock_guard<std::mutex> lock{mutex};
+            // Get root path without database and table
+            std::vector<String> root_paths;
+            for (auto & path_info : path_infos)
+            {
+                String root_path = Poco::Path(path_info.path).parent().toString();
+                root_paths.emplace_back(root_path);
+            }
+
+            std::vector<String> new_paths;
+            for (const auto & root_path : root_paths)
+            {
+                const String new_path = getStorePath(root_path, new_database, new_table);
+                new_paths.emplace_back(new_path);
+                renamePath(getStorePath(root_path, database, table), new_path);
+            }
+
+            database.clear();
+            table.clear();
+            *this = withTable(new_database, new_table, path_need_database_name);
+        }
     }
 
     void drop(bool recursive, bool must_success = true)
@@ -244,9 +260,12 @@ public:
     }
 
 private:
-    static String getStorePath(const String & extra_path_root, const String & /*database_name*/, const String & table_name)
+    String getStorePath(const String & extra_path_root, const String & database_name, const String & table_name)
     {
-        return extra_path_root + "/" + escapeForFileName(table_name);
+        if (path_need_database_name)
+            return extra_path_root + "/" + escapeForFileName(database_name) + "/" + escapeForFileName(table_name);
+        else
+            return extra_path_root + "/" + escapeForFileName(table_name);
     }
 
     void renamePath(const String & old_path, const String & new_path)
@@ -266,6 +285,8 @@ private:
     String table;
 
     mutable std::mutex mutex;
+
+    bool path_need_database_name = false;
 
     Poco::Logger * log;
 };

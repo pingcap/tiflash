@@ -94,7 +94,8 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
             }
 
             const String & table_file = *it;
-            DatabaseLoading::loadTable(context, *this, metadata_path, name, data_path, table_file, has_force_restore_data_flag);
+            DatabaseLoading::loadTable(
+                context, *this, metadata_path, name, data_path, getEngineName(), table_file, has_force_restore_data_flag);
         }
     };
 
