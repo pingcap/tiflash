@@ -217,7 +217,7 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
     /// Notify the table that it is renamed. If the table does not support renaming, exception is thrown.
     try
     {
-        if (likely(name != to_database_concrete->name))
+        if (name != to_database_concrete->name || table_name != to_table_name)
         {
             // First move table meta file to new database directory.
             const String old_tbl_meta_file = getTableMetadataPath(table_name);
@@ -226,9 +226,8 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
 
             // Detach from this database and attach to new database
             // Not atomic between two databases in memory, but not big deal.
-            const String table_name = table->getTableName();
             StoragePtr detach_storage = detachTable(table_name);
-            to_database_concrete->attachTable(table_name, detach_storage);
+            to_database_concrete->attachTable(to_table_name, detach_storage);
         }
 
         // Update `table->getDatabase()` for IManageableStorage
