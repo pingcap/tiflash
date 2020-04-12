@@ -61,7 +61,7 @@ protected:
         ColumnDefine handle_column_define = (*cols)[0];
 
         DeltaMergeStorePtr s
-            = std::make_shared<DeltaMergeStore>(*context, path, "test", name, *cols, handle_column_define, DeltaMergeStore::Settings());
+            = std::make_shared<DeltaMergeStore>(*context, path, false, "test", name, *cols, handle_column_define, DeltaMergeStore::Settings());
         return s;
     }
 

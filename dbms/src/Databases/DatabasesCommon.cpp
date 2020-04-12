@@ -80,10 +80,10 @@ String getDatabaseDefinitionFromCreateQuery(const ASTPtr & query)
 }
 
 
-std::pair<String, StoragePtr> createTableFromDefinition(
-    const String & definition,
+std::pair<String, StoragePtr> createTableFromDefinition(const String & definition,
     const String & database_name,
     const String & database_data_path,
+    const String & database_engine,
     Context & context,
     bool has_force_restore_data_flag,
     const String & description_for_error_message)
@@ -103,15 +103,9 @@ std::pair<String, StoragePtr> createTableFromDefinition(
 
     ColumnsDescription columns = InterpreterCreateQuery::getColumnsDescription(*ast_create_query.columns, context);
 
-    return
-    {
-        ast_create_query.table,
-        StorageFactory::instance().get(
-            ast_create_query,
-            database_data_path, ast_create_query.table, database_name, context, context.getGlobalContext(),
-            columns,
-            true, has_force_restore_data_flag)
-    };
+    return {ast_create_query.table,
+        StorageFactory::instance().get(ast_create_query, database_data_path, ast_create_query.table, database_name, database_engine,
+            context, context.getGlobalContext(), columns, true, has_force_restore_data_flag)};
 }
 
 
@@ -280,6 +274,7 @@ void loadTable(Context & context,
     const String & database_metadata_path,
     const String & database_name,
     const String & database_data_path,
+    const String & database_engine,
     const String & file_name,
     bool has_force_restore_data_flag)
 {
@@ -308,7 +303,7 @@ void loadTable(Context & context,
         String table_name;
         StoragePtr table;
         std::tie(table_name, table) = createTableFromDefinition(
-            s, database_name, database_data_path, context, has_force_restore_data_flag, "in file " + table_metadata_path);
+            s, database_name, database_data_path, database_engine, context, has_force_restore_data_flag, "in file " + table_metadata_path);
         database.attachTable(table_name, table);
     }
     catch (const Exception & e)

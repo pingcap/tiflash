@@ -36,6 +36,7 @@ std::pair<String, StoragePtr> createTableFromDefinition(
     const String & definition,
     const String & database_name,
     const String & database_data_path,
+    const String & database_engine,
     Context & context,
     bool has_force_restore_data_flag,
     const String & description_for_error_message);
@@ -56,6 +57,7 @@ void loadTable(Context & context,
     const String & database_metadata_path,
     const String & database_name,
     const String & database_data_path,
+    const String & database_engine,
     const String & file_name,
     bool has_force_restore_data_flag);
 } // namespace DatabaseLoading

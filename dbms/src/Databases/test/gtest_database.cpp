@@ -84,7 +84,7 @@ try
 
     {
         // Create database
-        const String statement = "CREATE DATABASE IF NOT EXISTS " + db_name + " ENGINE=TiFlash";
+        const String statement = "CREATE DATABASE " + db_name + " ENGINE=TiFlash";
         ASTPtr ast = parseCreateStatement(statement);
         ASSERT_NE(ast, nullptr);
         InterpreterCreateQuery interpreter(ast, ctx);
@@ -170,7 +170,7 @@ try
 
     {
         // Create database
-        const String statement = "CREATE DATABASE IF NOT EXISTS " + db_name + " ENGINE=TiFlash";
+        const String statement = "CREATE DATABASE " + db_name + " ENGINE=TiFlash";
         ASTPtr ast = parseCreateStatement(statement);
         ASSERT_NE(ast, nullptr);
         InterpreterCreateQuery interpreter(ast, ctx);
@@ -274,7 +274,7 @@ try
 
     {
         // Create database
-        const String statement = "CREATE DATABASE IF NOT EXISTS " + db_name + " ENGINE=TiFlash";
+        const String statement = "CREATE DATABASE " + db_name + " ENGINE=TiFlash";
         ASTPtr ast = parseCreateStatement(statement);
         ASSERT_NE(ast, nullptr);
         InterpreterCreateQuery interpreter(ast, ctx);
@@ -285,7 +285,7 @@ try
 
     {
         // Create database2
-        const String statement = "CREATE DATABASE IF NOT EXISTS " + db2_name + " ENGINE=TiFlash";
+        const String statement = "CREATE DATABASE " + db2_name + " ENGINE=TiFlash";
         ASTPtr ast = parseCreateStatement(statement);
         ASSERT_NE(ast, nullptr);
         InterpreterCreateQuery interpreter(ast, ctx);
