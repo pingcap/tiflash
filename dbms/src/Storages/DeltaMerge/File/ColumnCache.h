@@ -12,7 +12,7 @@ namespace DB
 namespace DM
 {
 using ColId      = DB::ColumnID;
-using PackId = size_t;
+using PackId     = size_t;
 using PackRange  = std::pair<PackId, PackId>;
 using PackRanges = std::vector<PackRange>;
 class ColumnCache : public std::enable_shared_from_this<ColumnCache>, private boost::noncopyable
@@ -27,13 +27,13 @@ public:
 
     ColumnCache(bool disabled_ = false) : disabled{disabled_} {}
 
-    using RangeWithStrategy = std::pair<PackRange, ColumnCache::Strategy>;
+    using RangeWithStrategy  = std::pair<PackRange, ColumnCache::Strategy>;
     using RangeWithStrategys = std::vector<RangeWithStrategy>;
     RangeWithStrategys getReadStrategy(size_t pack_id, size_t pack_count, ColId column_id);
 
     void tryPutColumn(size_t pack_id, ColId column_id, const ColumnPtr & column, size_t rows_offset, size_t rows_count);
 
-    using ColumnCacheElement=std::pair<ColumnPtr, std::pair<size_t, size_t>>;
+    using ColumnCacheElement = std::pair<ColumnPtr, std::pair<size_t, size_t>>;
     ColumnCacheElement getColumn(size_t pack_id, ColId column_id);
 
 public:
@@ -43,8 +43,10 @@ private:
     bool isPackInCache(PackId pack_id, ColId column_id);
 
 private:
-    struct ColumnCacheEntry {
+    struct ColumnCacheEntry
+    {
         std::unordered_map<ColId, ColumnPtr> columns;
+
         size_t rows_offset;
         size_t rows_count;
     };
@@ -53,9 +55,9 @@ private:
     bool disabled;
 };
 
-using ColumnCachePtr  = std::shared_ptr<ColumnCache>;
-using ColumnCachePtrs = std::vector<ColumnCachePtr>;
-using RangeWithStrategy = ColumnCache::RangeWithStrategy;
+using ColumnCachePtr     = std::shared_ptr<ColumnCache>;
+using ColumnCachePtrs    = std::vector<ColumnCachePtr>;
+using RangeWithStrategy  = ColumnCache::RangeWithStrategy;
 using RangeWithStrategys = ColumnCache::RangeWithStrategys;
 using ColumnCacheElement = ColumnCache::ColumnCacheElement;
 } // namespace DM

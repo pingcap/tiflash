@@ -252,13 +252,14 @@ Block DMFileReader::read()
             const String stream_name = DMFile::getFileNameBase(cd.id);
             if (auto iter = column_streams.find(stream_name); iter != column_streams.end())
             {
-                if (enable_column_cache && isCacheableColumn(cd)) {
+                if (enable_column_cache && isCacheableColumn(cd))
+                {
                     auto read_strategy = column_cache->getReadStrategy(start_pack_id, read_packs, cd.id);
 
                     auto data_type = dmfile->getColumnStat(cd.id).type;
-                    auto column = data_type->createColumn();
+                    auto column    = data_type->createColumn();
                     column->reserve(read_rows);
-                    for (auto &[range, strategy] : read_strategy)
+                    for (auto & [range, strategy] : read_strategy)
                     {
                         if (strategy == ColumnCache::Strategy::Memory)
                         {
@@ -285,7 +286,7 @@ Block DMFileReader::read()
                         }
                     }
                     ColumnPtr result_column = std::move(column);
-                    size_t rows_offset = 0;
+                    size_t    rows_offset   = 0;
                     for (size_t cursor = start_pack_id; cursor < start_pack_id + read_packs; cursor++)
                     {
                         column_cache->tryPutColumn(cursor, cd.id, result_column, rows_offset, pack_stats[cursor].rows);
@@ -318,7 +319,8 @@ Block DMFileReader::read()
     return res;
 }
 
-void DMFileReader::readFromDisk(ColumnDefine & column_define, MutableColumnPtr & column, size_t start_pack_id, size_t read_rows, size_t skip_packs)
+void DMFileReader::readFromDisk(
+    ColumnDefine & column_define, MutableColumnPtr & column, size_t start_pack_id, size_t read_rows, size_t skip_packs)
 {
     const String stream_name = DMFile::getFileNameBase(column_define.id);
     if (auto iter = column_streams.find(stream_name); iter != column_streams.end())

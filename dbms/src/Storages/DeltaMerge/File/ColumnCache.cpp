@@ -17,8 +17,8 @@ RangeWithStrategys ColumnCache::getReadStrategy(size_t pack_id, size_t pack_coun
         return range_and_strategys;
     }
 
-    Strategy strategy = Strategy::Unknown;
-    size_t range_start = 0;
+    Strategy strategy    = Strategy::Unknown;
+    size_t   range_start = 0;
     for (size_t cursor = target_range.first; cursor < target_range.second; cursor++)
     {
         if (isPackInCache(cursor, column_id))
@@ -32,8 +32,10 @@ RangeWithStrategys ColumnCache::getReadStrategy(size_t pack_id, size_t pack_coun
                 range_and_strategys.emplace_back(std::make_pair(PackRange{range_start, cursor}, Strategy::Disk));
             }
             range_start = cursor;
-            strategy = Strategy::Memory;
-        } else {
+            strategy    = Strategy::Memory;
+        }
+        else
+        {
             if (strategy == Strategy::Memory)
             {
                 range_and_strategys.emplace_back(std::make_pair(PackRange{range_start, cursor}, Strategy::Memory));
@@ -43,7 +45,7 @@ RangeWithStrategys ColumnCache::getReadStrategy(size_t pack_id, size_t pack_coun
                 continue;
             }
             range_start = cursor;
-            strategy = Strategy::Disk;
+            strategy    = Strategy::Disk;
         }
     }
     range_and_strategys.emplace_back(std::make_pair(PackRange{range_start, target_range.second}, strategy));
@@ -62,11 +64,11 @@ void ColumnCache::tryPutColumn(size_t pack_id, ColId column_id, const ColumnPtr 
         }
         if (column_cache_entry.rows_offset != rows_offset || column_cache_entry.rows_count != rows_count)
         {
-            throw Exception("Rows offset and rows count doesn't match. In cache rows offset: " +
-            std::to_string(column_cache_entry.rows_offset) +
-            " rows count " + std::to_string(column_cache_entry.rows_count) +
-            ", new pack rows offset " + std::to_string(rows_offset) +
-            " rows count " + std::to_string(rows_count), ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Rows offset and rows count doesn't match. In cache rows offset: "
+                                + std::to_string(column_cache_entry.rows_offset) + " rows count "
+                                + std::to_string(column_cache_entry.rows_count) + ", new pack rows offset " + std::to_string(rows_offset)
+                                + " rows count " + std::to_string(rows_count),
+                            ErrorCodes::LOGICAL_ERROR);
         }
 
         column_cache_entry.columns.emplace(column_id, column);
@@ -76,7 +78,7 @@ void ColumnCache::tryPutColumn(size_t pack_id, ColId column_id, const ColumnPtr 
         ColumnCache::ColumnCacheEntry column_cache_entry;
         column_cache_entry.columns.emplace(column_id, column);
         column_cache_entry.rows_offset = rows_offset;
-        column_cache_entry.rows_count = rows_count;
+        column_cache_entry.rows_count  = rows_count;
 
         column_caches.emplace(pack_id, column_cache_entry);
     }
@@ -87,18 +89,19 @@ ColumnCacheElement ColumnCache::getColumn(size_t pack_id, ColId column_id)
     if (auto iter = column_caches.find(pack_id); iter != column_caches.end())
     {
         auto & column_cache_entry = iter->second;
-        auto & columns = column_cache_entry.columns;
+        auto & columns            = column_cache_entry.columns;
         if (auto column_iter = columns.find(column_id); column_iter != columns.end())
         {
             auto & column = column_iter->second;
             return std::make_pair(column, std::make_pair(column_cache_entry.rows_offset, column_cache_entry.rows_count));
         }
     }
-    throw Exception("Cannot find column in cache for pack id: " + std::to_string(pack_id) +
-            " column id: " + std::to_string(column_id), ErrorCodes::LOGICAL_ERROR);
+    throw Exception("Cannot find column in cache for pack id: " + std::to_string(pack_id) + " column id: " + std::to_string(column_id),
+                    ErrorCodes::LOGICAL_ERROR);
 }
 
-bool ColumnCache::isPackInCache(PackId pack_id, ColId column_id) {
+bool ColumnCache::isPackInCache(PackId pack_id, ColId column_id)
+{
     if (auto iter = column_caches.find(pack_id); iter != column_caches.end())
     {
         auto & columns = iter->second.columns;
