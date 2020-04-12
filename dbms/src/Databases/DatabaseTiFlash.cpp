@@ -225,7 +225,8 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
             Poco::File{old_tbl_meta_file}.renameTo(new_tbl_meta_file);
 
             // Detach from this database and attach to new database
-            // Not atomic between two databases in memory, but not big deal.
+            // Not atomic between two databases in memory, but not big deal,
+            // because of locks in InterpreterRenameQuery
             StoragePtr detach_storage = detachTable(table_name);
             to_database_concrete->attachTable(to_table_name, detach_storage);
         }
