@@ -18,6 +18,10 @@
 #include <atomic>
 #include <ext/scope_guard.h>
 
+#if USE_TCMALLOC
+#include <gperftools/malloc_extension.h>
+#endif
+
 namespace ProfileEvents
 {
 extern const Event DMWriteBlock;
@@ -212,6 +216,44 @@ DeltaMergeStore::~DeltaMergeStore()
     shutdown();
 
     LOG_INFO(log, "Release DeltaMerge Store end [" << db_name << "." << table_name << "]");
+}
+
+void DeltaMergeStore::rename(String new_path, String new_database_name, String new_table_name)
+{
+    // These few lines can be removed after PR "id as path" and "flatten storage path hierarchy" is merged.
+    {
+        shutdown();                                            // Remove all background task first
+        extra_paths.rename(new_database_name, new_table_name); // rename for multi-disk
+        // Check if path is covered by extra_paths, if not, rename
+        if (auto dir = Poco::File(path); dir.exists())
+        {
+            LOG_INFO(log, "Renaming " << path << " to " << new_path);
+            dir.renameTo(new_path);
+        }
+        // setting `path` is useless, we need to restore the whole DeltaMergeStore object after path is changed.
+        // path = new_path;
+    }
+
+    // TODO: replacing these two variables is not atomic, but could be good enough?
+    table_name.swap(new_table_name);
+    db_name.swap(new_database_name);
+}
+
+void DeltaMergeStore::drop()
+{
+    // Remove all background task first
+    shutdown();
+    // Drop data in extra path (stable data by default)
+    extra_paths.drop(true);
+    // Check if path(delta && meta by default) is covered by extra_paths, if not, drop it.
+    Poco::File dir(path);
+    if (dir.exists())
+        dir.remove(true);
+
+#if USE_TCMALLOC
+    // Reclaim memory.
+    MallocExtension::instance()->ReleaseFreeMemory();
+#endif
 }
 
 void DeltaMergeStore::shutdown()
