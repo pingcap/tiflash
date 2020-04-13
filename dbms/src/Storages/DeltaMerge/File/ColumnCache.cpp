@@ -58,11 +58,7 @@ void ColumnCache::tryPutColumn(size_t pack_id, ColId column_id, const ColumnPtr 
         }
         if (column_cache_entry.rows_offset != rows_offset || column_cache_entry.rows_count != rows_count)
         {
-            throw Exception("Rows offset and rows count doesn't match. In cache pack rows offset is "
-                                + std::to_string(column_cache_entry.rows_offset) + " rows count is "
-                                + std::to_string(column_cache_entry.rows_count) + ". New insert pack rows offset is "
-                                + std::to_string(rows_offset) + " rows count is " + std::to_string(rows_count),
-                            ErrorCodes::LOGICAL_ERROR);
+            return;
         }
 
         column_cache_entry.columns.emplace(column_id, column);
