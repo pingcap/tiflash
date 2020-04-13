@@ -57,16 +57,24 @@ public:
         static constexpr auto TMP_SUFFIX = "_flash_upgrade";
         static constexpr auto UNINIT_ID = -1;
 
-        DatabaseID id = UNINIT_ID;
         String engine;
         std::vector<TableDiskInfo> tables;
 
     private:
         String name;
         bool moved_to_tmp = false;
+        TiDB::DBInfoPtr tidb_db_info = nullptr;
 
     public:
         DatabaseDiskInfo(String name_) : name(std::move(name_)) {}
+
+        void setDBInfo(TiDB::DBInfoPtr info_);
+
+        bool hasValidTiDBInfo() const { return tidb_db_info != nullptr; }
+
+        DatabaseID getID() const;
+
+        String getTiDBSerializeInfo() const;
 
         // "metadata/${db_name}.sql"
         String getMetaFilePath(const String & root_path) const { return getMetaFilePath(root_path, moved_to_tmp); }

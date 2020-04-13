@@ -268,6 +268,22 @@ String IDAsPathUpgrader::TableDiskInfo::getNewExtraDirectory(const String & root
 //   DatabaseDiskInfo
 // ================================================
 
+void IDAsPathUpgrader::DatabaseDiskInfo::setDBInfo(TiDB::DBInfoPtr info_) { tidb_db_info = info_; }
+
+DatabaseID IDAsPathUpgrader::DatabaseDiskInfo::getID() const
+{
+    if (!hasValidTiDBInfo())
+        throw Exception("Try to get database id of not inited database: " + name);
+    return tidb_db_info->id;
+}
+
+String IDAsPathUpgrader::DatabaseDiskInfo::getTiDBSerializeInfo() const
+{
+    if (!hasValidTiDBInfo())
+        throw Exception("Try to serialize database info of not inited database: " + name);
+    return tidb_db_info->serialize();
+}
+
 // "metadata/${db_name}.sql"
 String IDAsPathUpgrader::DatabaseDiskInfo::getMetaFilePath(const String & root_path, bool tmp) const
 {
@@ -299,7 +315,7 @@ String IDAsPathUpgrader::DatabaseDiskInfo::getNewMetaFilePath(const String & roo
 // "metadata/db_${id}/"
 String IDAsPathUpgrader::DatabaseDiskInfo::getNewMetaDirectory(const String & root_path) const
 {
-    return root_path + "/metadata/" + escapeForFileName(SchemaNameMapper::mapDatabaseName(id)) + "/";
+    return root_path + "/metadata/" + escapeForFileName(SchemaNameMapper::mapDatabaseName(getID())) + "/";
 }
 // "data/"
 String IDAsPathUpgrader::DatabaseDiskInfo::getNewDataDirectory(const String & root_path) const { return root_path + "/data/"; }
@@ -390,8 +406,8 @@ std::vector<TiDB::DBInfoPtr> IDAsPathUpgrader::fetchInfosFromTiDB() const
 
 static void dropAbsentDatabase(Context & context, const IDAsPathUpgrader::DatabaseDiskInfo & db_info, Poco::Logger * log)
 {
-    if (db_info.id != IDAsPathUpgrader::DatabaseDiskInfo::UNINIT_ID)
-        throw Exception("Invalid call for dropAbsentDatabase with id=" + DB::toString(db_info.id));
+    if (db_info.hasValidTiDBInfo())
+        throw Exception("Invalid call for dropAbsentDatabase with id=" + DB::toString(db_info.getID()));
 
     /// tryRemoveDirectory with recursive=true to clean up
 
@@ -421,7 +437,7 @@ void IDAsPathUpgrader::linkDatabaseTableInfos(const std::vector<TiDB::DBInfoPtr>
     {
         if (auto iter = databases.find(db->name); iter != databases.end())
         {
-            iter->second.id = db->id;
+            iter->second.setDBInfo(db);
         }
     }
 
@@ -438,11 +454,11 @@ void IDAsPathUpgrader::linkDatabaseTableInfos(const std::vector<TiDB::DBInfoPtr>
             continue;
         }
 
-        if (db_info.id == IDAsPathUpgrader::DatabaseDiskInfo::UNINIT_ID)
+        if (!db_info.hasValidTiDBInfo())
         {
             if (non_drop_databases.count(db_name) == 0)
             {
-                LOG_WARNING(log, "Database " << db_name << " id=" << db_info.id << ", may already dropped in TiDB, drop it..");
+                LOG_WARNING(log, "Database " << db_name << " may already dropped in TiDB, drop it..");
                 dropAbsentDatabase(global_context, db_info, log);
             }
             else
@@ -499,13 +515,13 @@ void IDAsPathUpgrader::resolveConflictDirectories()
 
         // In theory, user can create two database naming "db_xx" and there is cyclic renaming.
         // We need to break that cyclic.
-        const auto new_database_name = mapper.mapDatabaseName(db_info.id);
+        const auto new_database_name = mapper.mapDatabaseName(db_info.getID());
         if (auto iter = databases.find(new_database_name); iter != databases.end())
         {
             conflict_databases.insert(iter->first);
             LOG_INFO(log,
-                "Detect cyclic renaming between database `" //
-                    << db_name << "`(id:" << db_info.id     //
+                "Detect cyclic renaming between database `"  //
+                    << db_name << "`(id:" << db_info.getID() //
                     << ") and database `" << iter->first << "`");
         }
     }
@@ -537,7 +553,7 @@ void IDAsPathUpgrader::doRename()
 
 void IDAsPathUpgrader::renameDatabase(const String & db_name, const DatabaseDiskInfo & db_info)
 {
-    const auto mapped_db_name = mapper.mapDatabaseName(db_info.id);
+    const auto mapped_db_name = mapper.mapDatabaseName(db_info.getID());
 
     {
         // Create directory for target database
@@ -556,7 +572,7 @@ void IDAsPathUpgrader::renameDatabase(const String & db_name, const DatabaseDisk
     {
         // Recreate metadata file for database
         const String new_meta_file = db_info.getNewMetaFilePath(root_path);
-        const String statement = "ATTACH DATABASE `" + mapped_db_name + "` ENGINE=TiFlash('" + db_info->serialize() + "', 1)\n";
+        const String statement = "ATTACH DATABASE `" + mapped_db_name + "` ENGINE=TiFlash('" + db_info.getTiDBSerializeInfo() + "', 1)\n";
         auto ast = parseCreateDatabaseAST(statement);
         const auto & settings = global_context.getSettingsRef();
         writeDatabaseDefinitionToFile(new_meta_file, ast, settings.fsync_metadata);
