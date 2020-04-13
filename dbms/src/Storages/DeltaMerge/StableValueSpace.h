@@ -62,6 +62,8 @@ public:
             return packs;
         }
 
+        ColumnCachePtrs & getColumnCaches() { return column_caches; }
+
         SkippableBlockInputStreamPtr getInputStream(const DMContext &     context, //
                                                     const ColumnDefines & read_columns,
                                                     const HandleRange &   handle_range,

@@ -149,6 +149,12 @@ SnapshotPtr StableValueSpace::createSnapshot()
     snap->valid_rows = valid_rows;
     snap->stable     = this->shared_from_this();
 
+    for (size_t i = 0; i < files.size(); i++)
+    {
+        auto column_cache = std::make_shared<ColumnCache>();
+        snap->column_caches.emplace_back(column_cache);
+    }
+
     return snap;
 }
 
@@ -161,15 +167,6 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DM
 {
     LOG_DEBUG(log, __FUNCTION__ << " max_data_version: " << max_data_version << ", enable_clean_read: " << enable_clean_read);
     SkippableBlockInputStreams streams;
-
-    if (column_caches.empty())
-    {
-        for (size_t i = 0; i < stable->files.size(); i++)
-        {
-            auto column_cache = std::make_shared<ColumnCache>();
-            column_caches.push_back(column_cache);
-        }
-    }
 
     for (size_t i = 0; i < stable->files.size(); i++)
     {

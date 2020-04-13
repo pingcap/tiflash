@@ -25,7 +25,7 @@ public:
         Unknown
     };
 
-    ColumnCache(bool disabled_ = false) : disabled{disabled_} {}
+    ColumnCache() = default;
 
     using RangeWithStrategy  = std::pair<PackRange, ColumnCache::Strategy>;
     using RangeWithStrategys = std::vector<RangeWithStrategy>;
@@ -35,9 +35,6 @@ public:
 
     using ColumnCacheElement = std::pair<ColumnPtr, std::pair<size_t, size_t>>;
     ColumnCacheElement getColumn(size_t pack_id, ColId column_id);
-
-public:
-    static std::shared_ptr<ColumnCache> disabled_cache;
 
 private:
     bool isPackInCache(PackId pack_id, ColId column_id);
@@ -51,8 +48,6 @@ private:
         size_t rows_count;
     };
     std::unordered_map<PackId, ColumnCacheEntry> column_caches;
-
-    bool disabled;
 };
 
 using ColumnCachePtr     = std::shared_ptr<ColumnCache>;

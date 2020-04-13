@@ -536,12 +536,14 @@ Handle Segment::getSplitPointFast(DMContext & dm_context, const StableSnapshotPt
     auto & dmfiles = stable_snap->getDMFiles();
 
     DMFilePtr read_file;
+    size_t    file_index       = 0;
     auto      read_pack        = std::make_shared<IdSet>();
     size_t    read_row_in_pack = 0;
 
     size_t cur_rows = 0;
-    for (auto & file : dmfiles)
+    for (size_t index = 0; index < dmfiles.size(); index++)
     {
+        auto & file         = dmfiles[index];
         size_t rows_in_file = file->getRows();
         cur_rows += rows_in_file;
         if (cur_rows > split_row_index)
@@ -555,9 +557,11 @@ Handle Segment::getSplitPointFast(DMContext & dm_context, const StableSnapshotPt
                 {
                     cur_rows -= pack_stats[pack_id].rows;
 
-                    read_file = file;
+                    read_file  = file;
+                    file_index = index;
                     read_pack->insert(pack_id);
                     read_row_in_pack = split_row_index - cur_rows;
+
 
                     break;
                 }
@@ -576,7 +580,7 @@ Handle Segment::getSplitPointFast(DMContext & dm_context, const StableSnapshotPt
                                   {getExtraHandleColumnDefine()},
                                   HandleRange::newAll(),
                                   EMPTY_FILTER,
-                                  ColumnCache::disabled_cache,
+                                  stable_snap->getColumnCaches()[file_index],
                                   read_pack);
 
     stream.readSuffix();

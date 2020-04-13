@@ -11,12 +11,6 @@ RangeWithStrategys ColumnCache::getReadStrategy(size_t pack_id, size_t pack_coun
 
     RangeWithStrategys range_and_strategys;
 
-    if (disabled)
-    {
-        range_and_strategys.emplace_back(std::make_pair(target_range, Strategy::Disk));
-        return range_and_strategys;
-    }
-
     Strategy strategy    = Strategy::Unknown;
     size_t   range_start = 0;
     for (size_t cursor = target_range.first; cursor < target_range.second; cursor++)
@@ -112,8 +106,6 @@ bool ColumnCache::isPackInCache(PackId pack_id, ColId column_id)
     }
     return false;
 }
-
-ColumnCachePtr ColumnCache::disabled_cache = std::make_shared<ColumnCache>(true);
 
 } // namespace DM
 } // namespace DB
