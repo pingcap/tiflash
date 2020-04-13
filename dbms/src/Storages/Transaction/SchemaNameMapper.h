@@ -17,11 +17,20 @@ struct SchemaNameMapper
     static String mapTableName(TableID id) { return TABLE_PREFIX + std::to_string(id); }
 
     virtual String mapDatabaseName(const TiDB::DBInfo & db_info) const { return mapDatabaseName(db_info.id); }
-    virtual String displayDatabaseName(const TiDB::DBInfo & db_info) const { return db_info.name + "(" + std::to_string(db_info.id) + ")"; }
-    virtual String mapTableName(const TiDB::TableInfo & table_info) const { return mapTableName(table_info.id); }
-    virtual String displayTableName(const TiDB::TableInfo & table_info) const
+    virtual String displayDatabaseName(const TiDB::DBInfo & db_info, bool show_id = true) const
     {
-        return table_info.name + "(" + std::to_string(table_info.id) + ")";
+        String res = db_info.name;
+        if (show_id)
+            res += "(" + std::to_string(db_info.id) + ")";
+        return res;
+    }
+    virtual String mapTableName(const TiDB::TableInfo & table_info) const { return mapTableName(table_info.id); }
+    virtual String displayTableName(const TiDB::TableInfo & table_info, bool show_id = true) const
+    {
+        String res = table_info.name;
+        if (show_id)
+            res += "(" + std::to_string(table_info.id) + ")";
+        return res;
     }
     virtual String displayCanonicalName(const TiDB::DBInfo & db_info, const TiDB::TableInfo & table_info) const
     {

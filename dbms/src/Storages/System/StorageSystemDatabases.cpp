@@ -1,20 +1,27 @@
 #include <Columns/ColumnString.h>
-#include <DataTypes/DataTypeString.h>
+#include <Common/typeid_cast.h>
 #include <DataStreams/OneBlockInputStream.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Databases/DatabaseTiFlash.h>
 #include <Databases/IDatabase.h>
-#include <Storages/System/StorageSystemDatabases.h>
 #include <Interpreters/Context.h>
+#include <Storages/System/StorageSystemDatabases.h>
+#include <Storages/Transaction/SchemaNameMapper.h>
+#include <Storages/Transaction/Types.h>
+#include <Storages/Transaction/TiDB.h>
 
 
 namespace DB
 {
 
 
-StorageSystemDatabases::StorageSystemDatabases(const std::string & name_)
-    : name(name_)
+StorageSystemDatabases::StorageSystemDatabases(const std::string & name_) : name(name_)
 {
     setColumns(ColumnsDescription({
         {"name", std::make_shared<DataTypeString>()},
+        {"tidb_name", std::make_shared<DataTypeString>()},
+        {"id", std::make_shared<DataTypeInt64>()},
         {"engine", std::make_shared<DataTypeString>()},
         {"data_path", std::make_shared<DataTypeString>()},
         {"metadata_path", std::make_shared<DataTypeString>()},
@@ -22,8 +29,7 @@ StorageSystemDatabases::StorageSystemDatabases(const std::string & name_)
 }
 
 
-BlockInputStreams StorageSystemDatabases::read(
-    const Names & column_names,
+BlockInputStreams StorageSystemDatabases::read(const Names & column_names,
     const SelectQueryInfo &,
     const Context & context,
     QueryProcessingStage::Enum & processed_stage,
@@ -35,17 +41,35 @@ BlockInputStreams StorageSystemDatabases::read(
 
     MutableColumns res_columns = getSampleBlock().cloneEmptyColumns();
 
+    SchemaNameMapper mapper;
+
     auto databases = context.getDatabases();
     for (const auto & database : databases)
     {
-        res_columns[0]->insert(database.first);
-        res_columns[1]->insert(database.second->getEngineName());
-        res_columns[2]->insert(database.second->getDataPath());
-        res_columns[3]->insert(database.second->getMetadataPath());
+        const DatabaseTiFlash * db_tiflash = typeid_cast<DatabaseTiFlash *>(database.second.get());
+
+        size_t j = 0;
+        res_columns[j++]->insert(database.first);
+
+        String tidb_db_name;
+        DatabaseID database_id = -1;
+        if (db_tiflash)
+        {
+            auto & db_info = db_tiflash->getDatabaseInfo();
+            tidb_db_name = mapper.displayDatabaseName(db_info, false);
+            database_id = db_info.id;
+        }
+
+        res_columns[j++]->insert(tidb_db_name);
+        res_columns[j++]->insert(Int64(database_id));
+
+        res_columns[j++]->insert(database.second->getEngineName());
+        res_columns[j++]->insert(database.second->getDataPath());
+        res_columns[j++]->insert(database.second->getMetadataPath());
     }
 
     return BlockInputStreams(1, std::make_shared<OneBlockInputStream>(getSampleBlock().cloneWithColumns(std::move(res_columns))));
 }
 
 
-}
+} // namespace DB
