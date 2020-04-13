@@ -256,10 +256,11 @@ bool Segment::write(DMContext & dm_context, const HandleRange & delete_range)
 
 SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool is_update) const
 {
-    auto delta_snap = delta->createSnapshot(dm_context, is_update);
-    if (!delta_snap)
+    auto delta_snap  = delta->createSnapshot(dm_context, is_update);
+    auto stable_snap = stable->createSnapshot();
+    if (!delta_snap || !stable_snap)
         return {};
-    return std::make_shared<SegmentSnapshot>(delta_snap, stable);
+    return std::make_shared<SegmentSnapshot>(delta_snap, stable_snap);
 }
 
 BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_context,
@@ -521,7 +522,7 @@ SegmentPair Segment::split(DMContext & dm_context) const
     return segment_pair;
 }
 
-Handle Segment::getSplitPointFast(DMContext & dm_context, const StableValueSpacePtr & stable_snap) const
+Handle Segment::getSplitPointFast(DMContext & dm_context, const StableSnapshotPtr & stable_snap) const
 {
     // FIXME: this method does not consider invalid packs in stable dmfiles.
 
@@ -535,12 +536,14 @@ Handle Segment::getSplitPointFast(DMContext & dm_context, const StableValueSpace
     auto & dmfiles = stable_snap->getDMFiles();
 
     DMFilePtr read_file;
+    size_t    file_index       = 0;
     auto      read_pack        = std::make_shared<IdSet>();
     size_t    read_row_in_pack = 0;
 
     size_t cur_rows = 0;
-    for (auto & file : dmfiles)
+    for (size_t index = 0; index < dmfiles.size(); index++)
     {
+        auto & file         = dmfiles[index];
         size_t rows_in_file = file->getRows();
         cur_rows += rows_in_file;
         if (cur_rows > split_row_index)
@@ -554,9 +557,11 @@ Handle Segment::getSplitPointFast(DMContext & dm_context, const StableValueSpace
                 {
                     cur_rows -= pack_stats[pack_id].rows;
 
-                    read_file = file;
+                    read_file  = file;
+                    file_index = index;
                     read_pack->insert(pack_id);
                     read_row_in_pack = split_row_index - cur_rows;
+
 
                     break;
                 }
@@ -575,6 +580,7 @@ Handle Segment::getSplitPointFast(DMContext & dm_context, const StableValueSpace
                                   {getExtraHandleColumnDefine()},
                                   HandleRange::newAll(),
                                   EMPTY_FILTER,
+                                  stable_snap->getColumnCaches()[file_index],
                                   read_pack);
 
     stream.readSuffix();
@@ -1096,16 +1102,16 @@ ColumnDefines Segment::arrangeReadColumns(const ColumnDefine & handle, const Col
 }
 
 template <class IndexIterator, bool skippable_place>
-SkippableBlockInputStreamPtr Segment::getPlacedStream(const DMContext &           dm_context,
-                                                      const ColumnDefines &       read_columns,
-                                                      const HandleRange &         handle_range,
-                                                      const RSOperatorPtr &       filter,
-                                                      const StableValueSpacePtr & stable_snap,
-                                                      DeltaSnapshotPtr &          delta_snap,
-                                                      const IndexIterator &       delta_index_begin,
-                                                      const IndexIterator &       delta_index_end,
-                                                      size_t                      index_size,
-                                                      size_t                      expected_block_size) const
+SkippableBlockInputStreamPtr Segment::getPlacedStream(const DMContext &         dm_context,
+                                                      const ColumnDefines &     read_columns,
+                                                      const HandleRange &       handle_range,
+                                                      const RSOperatorPtr &     filter,
+                                                      const StableSnapshotPtr & stable_snap,
+                                                      DeltaSnapshotPtr &        delta_snap,
+                                                      const IndexIterator &     delta_index_begin,
+                                                      const IndexIterator &     delta_index_end,
+                                                      size_t                    index_size,
+                                                      size_t                    expected_block_size) const
 {
     SkippableBlockInputStreamPtr stable_input_stream
         = stable_snap->getInputStream(dm_context, read_columns, handle_range, filter, MAX_UINT64, false);
@@ -1119,8 +1125,7 @@ SkippableBlockInputStreamPtr Segment::getPlacedStream(const DMContext &         
         expected_block_size);
 }
 
-DeltaIndexPtr
-Segment::ensurePlace(const DMContext & dm_context, const StableValueSpacePtr & stable_snap, DeltaSnapshotPtr & delta_snap) const
+DeltaIndexPtr Segment::ensurePlace(const DMContext & dm_context, const StableSnapshotPtr & stable_snap, DeltaSnapshotPtr & delta_snap) const
 {
     // Synchronize between read/read threads.
     std::scoped_lock lock(read_read_mutex);
@@ -1204,12 +1209,12 @@ Segment::ensurePlace(const DMContext & dm_context, const StableValueSpacePtr & s
 }
 
 template <bool skippable_place>
-void Segment::placeUpsert(const DMContext &           dm_context,
-                          const StableValueSpacePtr & stable_snap,
-                          DeltaSnapshotPtr &          delta_snap,
-                          size_t                      delta_value_space_offset,
-                          Block &&                    block,
-                          DeltaTree &                 update_delta_tree) const
+void Segment::placeUpsert(const DMContext &         dm_context,
+                          const StableSnapshotPtr & stable_snap,
+                          DeltaSnapshotPtr &        delta_snap,
+                          size_t                    delta_value_space_offset,
+                          Block &&                  block,
+                          DeltaTree &               update_delta_tree) const
 {
     EventRecorder recorder(ProfileEvents::DMPlaceUpsert, ProfileEvents::DMPlaceUpsertNS);
 
@@ -1242,11 +1247,11 @@ void Segment::placeUpsert(const DMContext &           dm_context,
 }
 
 template <bool skippable_place>
-void Segment::placeDelete(const DMContext &           dm_context,
-                          const StableValueSpacePtr & stable_snap,
-                          DeltaSnapshotPtr &          delta_snap,
-                          const HandleRange &         delete_range,
-                          DeltaTree &                 update_delta_tree) const
+void Segment::placeDelete(const DMContext &         dm_context,
+                          const StableSnapshotPtr & stable_snap,
+                          DeltaSnapshotPtr &        delta_snap,
+                          const HandleRange &       delete_range,
+                          DeltaTree &               update_delta_tree) const
 {
     EventRecorder recorder(ProfileEvents::DMPlaceDeleteRange, ProfileEvents::DMPlaceDeleteRangeNS);
 
