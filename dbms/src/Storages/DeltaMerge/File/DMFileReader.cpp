@@ -282,7 +282,7 @@ Block DMFileReader::read()
                         }
                         else
                         {
-                            throw Exception("Unknown strategy ", ErrorCodes::LOGICAL_ERROR);
+                            throw Exception("Unknown strategy", ErrorCodes::LOGICAL_ERROR);
                         }
                     }
                     ColumnPtr result_column = std::move(column);
