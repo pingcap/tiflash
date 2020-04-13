@@ -58,6 +58,7 @@ std::tuple<std::optional<std::unordered_map<RegionID, const RegionInfo &>>, Regi
                 info.required_handle_ranges.emplace_back(std::make_pair(start, end));
             }
             info.range_in_table = current_region->getHandleRangeByTable(table_id);
+            info.bypass_lock_ts = r.bypass_lock_ts;
         }
         mvcc_info.regions_query_info.emplace_back(std::move(info));
     }
