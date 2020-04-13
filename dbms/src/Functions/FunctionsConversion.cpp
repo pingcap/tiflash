@@ -88,6 +88,9 @@ void registerFunctionsConversion(FunctionFactory & factory)
     factory.registerFunction<FunctionConvert<DataTypeInterval, NameToIntervalWeek, PositiveMonotonicity>>();
     factory.registerFunction<FunctionConvert<DataTypeInterval, NameToIntervalMonth, PositiveMonotonicity>>();
     factory.registerFunction<FunctionConvert<DataTypeInterval, NameToIntervalYear, PositiveMonotonicity>>();
+
+    factory.registerFunction<FunctionFromUnixTime>();
+    factory.registerFunction<FunctionDateFormat>();
 }
 
 }

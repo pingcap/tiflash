@@ -41,6 +41,7 @@ DAGDriver<false>::DAGDriver(Context & context_, const tipb::DAGRequest & dag_req
     if (schema_ver)
         // schema_ver being 0 means TiDB/TiSpark hasn't specified schema version.
         context.setSetting("schema_version", schema_ver);
+    context.getTimezoneInfo().resetByDAGRequest(dag_request);
 }
 
 template <>
@@ -53,6 +54,7 @@ DAGDriver<true>::DAGDriver(Context & context_, const tipb::DAGRequest & dag_requ
     if (schema_ver)
         // schema_ver being 0 means TiDB/TiSpark hasn't specified schema version.
         context.setSetting("schema_version", schema_ver);
+    context.getTimezoneInfo().resetByDAGRequest(dag_request);
 }
 
 template <bool batch>
