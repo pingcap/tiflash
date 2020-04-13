@@ -79,6 +79,10 @@ struct WriteCmdsView
 
 struct TiFlashServerHelper
 {
+    uint32_t magic_number; // use a very special number to check whether this struct is legal
+    uint32_t version;      // version of function interface
+    //
+
     TiFlashServer * inner;
     void (*fn_gc_buff)(BaseBuff *);
     TiFlashApplyRes (*fn_handle_write_raft_cmd)(const TiFlashServer *, WriteCmdsView, RaftCmdHeader);
@@ -88,10 +92,6 @@ struct TiFlashServerHelper
     void (*fn_handle_destroy)(TiFlashServer *, RegionId);
     void (*fn_handle_ingest_sst)(TiFlashServer *, SnapshotViewArray, RaftCmdHeader);
     uint8_t (*fn_handle_check_terminated)(TiFlashServer *);
-
-    //
-    uint32_t magic_number; // use a very special number to check whether this struct is legal
-    uint32_t version;      // version of function interface
 };
 
 void run_tiflash_proxy_ffi(int argc, const char ** argv, const TiFlashServerHelper *);

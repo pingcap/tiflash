@@ -63,19 +63,19 @@ using String = std::string;
   */
 template <typename T> constexpr bool IsNumber = false;
 
-template <> constexpr bool IsNumber<UInt8> = true;
-template <> constexpr bool IsNumber<UInt16> = true;
-template <> constexpr bool IsNumber<UInt32> = true;
-template <> constexpr bool IsNumber<UInt64> = true;
-template <> constexpr bool IsNumber<Int8> = true;
-template <> constexpr bool IsNumber<Int16> = true;
-template <> constexpr bool IsNumber<Int32> = true;
-template <> constexpr bool IsNumber<Int64> = true;
-template <> constexpr bool IsNumber<Int128> = true;
-template <> constexpr bool IsNumber<Int256> = true;
-template <> constexpr bool IsNumber<Int512> = true;
-template <> constexpr bool IsNumber<Float32> = true;
-template <> constexpr bool IsNumber<Float64> = true;
+template <> inline constexpr bool IsNumber<UInt8> = true;
+template <> inline constexpr bool IsNumber<UInt16> = true;
+template <> inline constexpr bool IsNumber<UInt32> = true;
+template <> inline constexpr bool IsNumber<UInt64> = true;
+template <> inline constexpr bool IsNumber<Int8> = true;
+template <> inline constexpr bool IsNumber<Int16> = true;
+template <> inline constexpr bool IsNumber<Int32> = true;
+template <> inline constexpr bool IsNumber<Int64> = true;
+template <> inline constexpr bool IsNumber<Int128> = true;
+template <> inline constexpr bool IsNumber<Int256> = true;
+template <> inline constexpr bool IsNumber<Int512> = true;
+template <> inline constexpr bool IsNumber<Float32> = true;
+template <> inline constexpr bool IsNumber<Float64> = true;
 
 template <typename T> struct TypeName;
 
