@@ -1,4 +1,5 @@
 #include <Common/TiFlashMetrics.h>
+#include <Databases/DatabaseTiFlash.h>
 #include <Debug/MockSchemaGetter.h>
 #include <Debug/MockSchemaNameMapper.h>
 #include <IO/WriteHelpers.h>
@@ -31,7 +32,7 @@ namespace ErrorCodes
 {
 extern const int DDL_ERROR;
 extern const int SYNTAX_ERROR;
-}
+} // namespace ErrorCodes
 
 bool isReservedDatabase(Context & context, const String & database_name)
 {
@@ -645,7 +646,8 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(TiDB::DBInfoPtr db_inf
     if (isReservedDatabase(context, mapped))
         throw Exception("Database " + name_mapper.displayDatabaseName(*db_info) + " is reserved", ErrorCodes::DDL_ERROR);
 
-    const String statement = "CREATE DATABASE IF NOT EXISTS " + backQuoteIfNeed(mapped) + " ENGINE=TiFlash";
+    const String statement = "CREATE DATABASE IF NOT EXISTS " + backQuoteIfNeed(mapped) + " ENGINE = TiFlash('" + db_info->serialize()
+        + "', " + DB::toString(DatabaseTiFlash::CURRENT_VERSION) + ")";
     ASTPtr ast = parseCreateStatement(statement);
 
     InterpreterCreateQuery interpreter(ast, context);

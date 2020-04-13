@@ -2,6 +2,12 @@
 
 #include <Databases/DatabasesCommon.h>
 
+namespace TiDB
+{
+struct DBInfo;
+using DBInfoPtr = std::shared_ptr<DBInfo>;
+} // namespace TiDB
+
 namespace DB
 {
 
@@ -12,7 +18,7 @@ public:
     static constexpr Version CURRENT_VERSION = 1;
 
 public:
-    DatabaseTiFlash(String name_, const String & metadata_path_, const Context & context);
+    DatabaseTiFlash(String name_, const String & metadata_path_, const TiDB::DBInfo & db_info_, Version version_, const Context & context);
 
     String getEngineName() const override { return "TiFlash"; }
 
@@ -43,9 +49,12 @@ public:
     void shutdown() override;
     void drop() override;
 
+    TiDB::DBInfo & getDatabaseInfo() const;
+
 private:
     const String metadata_path;
     const String data_path;
+    TiDB::DBInfoPtr db_info;
     Poco::Logger * log;
 
     ASTPtr getCreateTableQueryImpl(const Context & context, const String & table_name, bool throw_on_error) const;

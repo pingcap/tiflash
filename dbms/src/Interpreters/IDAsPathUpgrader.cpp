@@ -124,7 +124,7 @@ std::optional<TiDB::TableInfo> getTableInfo(const String & table_metadata_file)
             info.deserialize(table_info_json);
             if (unlikely(info.columns.empty()))
             {
-                throw Exception("Columns is empty, invalid TableInfo in file: "+ table_metadata_file, ErrorCodes::BAD_ARGUMENTS);
+                throw Exception("Columns is empty, invalid TableInfo in file: " + table_metadata_file, ErrorCodes::BAD_ARGUMENTS);
             }
             return std::make_optional(info);
         }
@@ -556,7 +556,7 @@ void IDAsPathUpgrader::renameDatabase(const String & db_name, const DatabaseDisk
     {
         // Recreate metadata file for database
         const String new_meta_file = db_info.getNewMetaFilePath(root_path);
-        const String statement = "ATTACH DATABASE `" + mapped_db_name + "` ENGINE=TiFlash";
+        const String statement = "ATTACH DATABASE `" + mapped_db_name + "` ENGINE=TiFlash('" + db_info->serialize() + "', 1)\n";
         auto ast = parseCreateDatabaseAST(statement);
         const auto & settings = global_context.getSettingsRef();
         writeDatabaseDefinitionToFile(new_meta_file, ast, settings.fsync_metadata);

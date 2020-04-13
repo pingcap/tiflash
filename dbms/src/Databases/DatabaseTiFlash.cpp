@@ -33,14 +33,21 @@ extern const int SYNTAX_ERROR;
 
 static constexpr size_t METADATA_FILE_BUFFER_SIZE = 32768;
 
-DatabaseTiFlash::DatabaseTiFlash(String name_, const String & metadata_path_, const Context & context)
+DatabaseTiFlash::DatabaseTiFlash(
+    String name_, const String & metadata_path_, const TiDB::DBInfo & db_info_, DatabaseTiFlash::Version version_, const Context & context)
     : DatabaseWithOwnTablesBase(std::move(name_)),
       metadata_path(metadata_path_),
       data_path(context.getPath() + "data/"),
+      db_info(std::make_shared<TiDB::DBInfo>(db_info_)),
       log(&Logger::get("DatabaseTiFlash (" + name + ")"))
 {
+    if (unlikely(version_ != DatabaseTiFlash::CURRENT_VERSION))
+        throw Exception("Can not create database TiFlash with unknown version: " + DB::toString(version_), ErrorCodes::LOGICAL_ERROR);
+
     Poco::File(data_path).createDirectories();
 }
+
+TiDB::DBInfo & DatabaseTiFlash::getDatabaseInfo() const { return *db_info; }
 
 // metadata/${db_name}.sql
 String getDatabaseMetadataPath(const String & base_path)
