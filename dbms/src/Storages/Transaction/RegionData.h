@@ -30,7 +30,7 @@ public:
 
     RegionDataReadInfo readDataByWriteIt(const ConstWriteCFIter & write_it, bool need_value = true) const;
 
-    LockInfoPtr getLockInfo(const QueryTS & query) const;
+    LockInfoPtr getLockInfo(const RegionLockReadQuery & query) const;
 
     void splitInto(const RegionRange & range, RegionData & new_region_data);
     void mergeFrom(const RegionData & ori_region_data);

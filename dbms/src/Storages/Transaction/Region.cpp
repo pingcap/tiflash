@@ -29,7 +29,7 @@ RegionDataReadInfo Region::readDataByWriteIt(const RegionData::ConstWriteCFIter 
     return data.readDataByWriteIt(write_it, need_value);
 }
 
-LockInfoPtr Region::getLockInfo(const QueryTS & query) const { return data.getLockInfo(query); }
+LockInfoPtr Region::getLockInfo(const RegionLockReadQuery & query) const { return data.getLockInfo(query); }
 
 void Region::insert(const std::string & cf, TiKVKey && key, TiKVValue && value)
 {

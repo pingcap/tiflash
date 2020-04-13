@@ -110,7 +110,7 @@ RegionDataReadInfo RegionData::readDataByWriteIt(const ConstWriteCFIter & write_
     return std::make_tuple(handle, write_type, ts, short_value);
 }
 
-LockInfoPtr RegionData::getLockInfo(const QueryTS & query) const
+LockInfoPtr RegionData::getLockInfo(const RegionLockReadQuery & query) const
 {
     enum LockType : UInt8
     {
@@ -119,8 +119,6 @@ LockInfoPtr RegionData::getLockInfo(const QueryTS & query) const
         Lock = 'L',
         Pessimistic = 'S',
     };
-
-    const auto start_ts = query.ts;
 
     for (const auto & [handle, value] : lock_cf.getData())
     {
@@ -131,7 +129,7 @@ LockInfoPtr RegionData::getLockInfo(const QueryTS & query) const
         std::ignore = tikv_key;
         std::ignore = tikv_val;
 
-        if (ts > start_ts || lock_type == Lock || lock_type == Pessimistic)
+        if (ts > query.read_tso || lock_type == Lock || lock_type == Pessimistic)
             continue;
 
         if (query.bypass_lock_ts && query.bypass_lock_ts->count(ts))

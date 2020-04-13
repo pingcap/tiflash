@@ -237,15 +237,14 @@ inline DecodedLockCFValue decodeLockCfValue(const TiKVValue & value)
                 }
                 default:
                 {
-                    std::string msg = "invalid flag in lock: ";
-                    msg += flag;
+                    std::string msg = std::string() + "invalid flag " + flag + " in lock value " + value.toHex();
                     throw Exception(msg, ErrorCodes::LOGICAL_ERROR);
                 }
             }
         }
     }
     if (len != 0)
-        throw Exception("invalid lock", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("invalid lock value " + value.toHex(), ErrorCodes::LOGICAL_ERROR);
 
     return std::make_tuple(lock_type, primary, ts, ttl);
 }

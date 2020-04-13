@@ -145,7 +145,8 @@ std::pair<RegionDataReadInfoList, RegionException::RegionReadStatus> resolveLock
         if (resolve_locks)
         {
             /// Check if there are any lock should be resolved, if so, throw LockException.
-            if (LockInfoPtr lock_info = scanner.getLockInfo(QueryTS{.ts = start_ts, .bypass_lock_ts = bypass_lock_ts}); lock_info)
+            if (LockInfoPtr lock_info = scanner.getLockInfo(RegionLockReadQuery{.read_tso = start_ts, .bypass_lock_ts = bypass_lock_ts});
+                lock_info)
             {
                 LockInfos lock_infos;
                 lock_infos.emplace_back(std::move(lock_info));
