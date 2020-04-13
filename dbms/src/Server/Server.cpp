@@ -6,6 +6,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/Macros.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Common/TiFlashBuildInfo.h>
 #include <Common/config.h>
 #include <Common/getFQDNOrHostName.h>
 #include <Common/getMultipleKeysFromConfig.h>
@@ -116,6 +117,8 @@ struct TiFlashProxyConfig
         }
 
         val_map["--pd-endpoints"] = config.getString("raft.pd_addr");
+        val_map["--tiflash-version"] = TiFlashBuildInfo::getReleaseVersion();
+        val_map["--tiflash-git-hash"] = TiFlashBuildInfo::getGitHash();
 
         args.push_back("TiFlash Proxy");
         for (const auto & v : val_map)
@@ -554,7 +557,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     TiFlashProxyConfig proxy_conf(config());
     TiFlashServer tiflash_instance_wrap{.tmt = global_context->getTMTContext()};
-    TiFlashServerHelper helper{.inner = &tiflash_instance_wrap,
+    TiFlashServerHelper helper{
+        // a special number, also defined in proxy
+        .magic_number = 0x13579BDF,
+        .version = 4,
+        .inner = &tiflash_instance_wrap,
         .fn_gc_buff = GcBuff,
         .fn_handle_write_raft_cmd = HandleWriteRaftCmd,
         .fn_handle_admin_raft_cmd = HandleAdminRaftCmd,
@@ -563,10 +570,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         .fn_handle_destroy = HandleDestroy,
         .fn_handle_ingest_sst = HandleIngestSST,
         .fn_handle_check_terminated = HandleCheckTerminated,
-
-        // a special number, also defined in proxy
-        .magic_number = 0x13579BDF,
-        .version = 4};
+    };
 
     auto proxy_runner = std::thread([&proxy_conf, &log, &helper]() {
         if (!proxy_conf.inited)

@@ -1,13 +1,3 @@
-#include <Parsers/ASTPartition.h>
-#include <common/ThreadPool.h>
-#include <common/config_common.h>
-
-#include <random>
-
-#if USE_TCMALLOC
-#include <gperftools/malloc_extension.h>
-#endif
-
 #include <Common/TiFlashMetrics.h>
 #include <Common/formatReadable.h>
 #include <Common/typeid_cast.h>
@@ -23,6 +13,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTPartition.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
@@ -36,6 +27,10 @@
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <common/ThreadPool.h>
+#include <common/config_common.h>
+
+#include <random>
 
 namespace DB
 {
@@ -56,8 +51,6 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
     Context & global_context_)
     : IManageableStorage{columns_},
       path(path_ + "/" + table_name_),
-      db_name(db_name_),
-      table_name(table_name_),
       max_column_id_used(0),
       global_context(global_context_.getGlobalContext()),
       log(&Logger::get("StorageDeltaMerge"))
@@ -139,24 +132,14 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
 
     assert(!handle_column_define.name.empty());
     assert(!table_column_defines.empty());
-    store = std::make_shared<DeltaMergeStore>(global_context, path, db_name, table_name, std::move(table_column_defines),
+    store = std::make_shared<DeltaMergeStore>(global_context, path, db_name_, table_name_, std::move(table_column_defines),
         std::move(handle_column_define), DeltaMergeStore::Settings());
 }
 
 void StorageDeltaMerge::drop()
 {
     shutdown();
-#if USE_TCMALLOC
-    // Reclaim memory.
-    MallocExtension::instance()->ReleaseFreeMemory();
-#endif
-    // Remove data in extra paths;
-    for (auto & p : global_context.getExtraPaths().listPaths())
-    {
-        Poco::File file(p + "/" + db_name + "/" + table_name);
-        if (file.exists())
-            file.remove(true);
-    }
+    store->drop();
 }
 
 Block StorageDeltaMerge::buildInsertBlock(bool is_import, bool is_delete, const Block & old_block)
@@ -809,10 +792,7 @@ void StorageDeltaMerge::flushCache(const Context & context, const DM::HandleRang
     store->flushCache(context, range_to_flush);
 }
 
-void StorageDeltaMerge::mergeDelta(const Context & context)
-{
-    store->mergeDeltaAll(context);
-}
+void StorageDeltaMerge::mergeDelta(const Context & context) { store->mergeDeltaAll(context); }
 
 void StorageDeltaMerge::deleteRange(const DM::HandleRange & range_to_delete, const Settings & settings)
 {
@@ -986,18 +966,24 @@ void StorageDeltaMerge::rename(const String & new_path_to_db, const String & new
     ColumnDefine handle_column_define = store->getHandle();
     DeltaMergeStore::Settings settings = store->getSettings();
 
-    store = {};
+    // remove background tasks
+    store->shutdown();
+    // rename directories for multi disks
+    store->rename(new_path, new_database_name, new_table_name);
 
-    // rename path and generate a new store
-    Poco::File(path).renameTo(new_path);
+    store = {}; // reset store object
+
+    // generate a new store
     store = std::make_shared<DeltaMergeStore>(global_context, //
         new_path, new_database_name, new_table_name,          //
         std::move(table_column_defines), std::move(handle_column_define), settings);
 
     path = new_path;
-    db_name = new_database_name;
-    table_name = new_table_name;
 }
+
+String StorageDeltaMerge::getTableName() const { return store->getTableName(); }
+
+String StorageDeltaMerge::getDatabaseName() const { return store->getDatabaseName(); }
 
 void updateDeltaMergeTableCreateStatement(                   //
     const String & database_name, const String & table_name, //
