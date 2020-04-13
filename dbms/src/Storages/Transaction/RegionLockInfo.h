@@ -18,4 +18,10 @@ struct LockInfo
 using LockInfoPtr = std::unique_ptr<LockInfo>;
 using LockInfos = std::vector<LockInfoPtr>;
 
+struct QueryTS
+{
+    const UInt64 ts;
+    const std::unordered_set<UInt64> * bypass_lock_ts;
+};
+
 } // namespace DB

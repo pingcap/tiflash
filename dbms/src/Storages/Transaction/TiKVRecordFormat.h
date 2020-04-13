@@ -27,6 +27,9 @@ namespace RecordKVFormat
 static const char TABLE_PREFIX = 't';
 static const char * RECORD_PREFIX_SEP = "_r";
 static const char SHORT_VALUE_PREFIX = 'v';
+static const char MIN_COMMIT_TS_PREFIX = 'c';
+static const char FOR_UPDATE_TS_PREFIX = 'f';
+static const char TXN_SIZE_PREFIX = 't';
 
 static const size_t SHORT_VALUE_MAX_LEN = 64;
 
@@ -171,7 +174,7 @@ inline TiKVValue encodeLockCfValue(UInt8 lock_type, const String & primary, Time
     return internalEncodeLockCfValue(lock_type, primary, ts, ttl, nullptr);
 }
 
-using DecodedLockCFValue = std::tuple<UInt8, String, Timestamp, UInt64, std::shared_ptr<const TiKVValue>>;
+using DecodedLockCFValue = std::tuple<UInt8, String, Timestamp, UInt64>;
 
 inline DecodedLockCFValue decodeLockCfValue(const TiKVValue & value)
 {
@@ -179,7 +182,6 @@ inline DecodedLockCFValue decodeLockCfValue(const TiKVValue & value)
     String primary;
     UInt64 ts;
     UInt64 ttl = 0;
-    std::shared_ptr<const TiKVValue> short_value = nullptr;
 
     const char * data = value.data();
     size_t len = value.dataSize();
@@ -196,22 +198,56 @@ inline DecodedLockCFValue decodeLockCfValue(const TiKVValue & value)
     {
         cur = TiKV::readVarUInt(ttl, data, len); // ttl
         len -= cur - data, data = cur;
-        if (len > 0)
+        while (len > 0)
         {
             char flag = *data;
-            data += 1, len -= 1; //  SHORT_VALUE_PREFIX
-            if (flag == SHORT_VALUE_PREFIX)
+            data += 1, len -= 1;
+            switch (flag)
             {
-                size_t slen = static_cast<UInt8>(*data);
-                data += 1, len -= 1;
-                if (len < slen)
-                    throw Exception("content len shorter than short value len", ErrorCodes::LOGICAL_ERROR);
-                short_value = std::make_shared<const TiKVValue>(data, slen);
+                case SHORT_VALUE_PREFIX:
+                {
+                    size_t slen = static_cast<UInt8>(*data);
+                    data += 1, len -= 1;
+                    if (len < slen)
+                        throw Exception("content len shorter than short value len", ErrorCodes::LOGICAL_ERROR);
+                    // no need short value
+                    data += slen, len -= slen;
+                    break;
+                };
+                case MIN_COMMIT_TS_PREFIX:
+                {
+                    readBigEndian<UInt64>(data);
+                    data += sizeof(UInt64);
+                    len -= sizeof(UInt64);
+                    break;
+                }
+                case FOR_UPDATE_TS_PREFIX:
+                {
+                    readBigEndian<UInt64>(data);
+                    data += sizeof(UInt64);
+                    len -= sizeof(UInt64);
+                    break;
+                }
+                case TXN_SIZE_PREFIX:
+                {
+                    readBigEndian<UInt64>(data);
+                    data += sizeof(UInt64);
+                    len -= sizeof(UInt64);
+                    break;
+                }
+                default:
+                {
+                    std::string msg = "invalid flag in lock: ";
+                    msg += flag;
+                    throw Exception(msg, ErrorCodes::LOGICAL_ERROR);
+                }
             }
-            // flash only need short value (if have), just ignore others.
         }
     }
-    return std::make_tuple(lock_type, primary, ts, ttl, short_value);
+    if (len != 0)
+        throw Exception("invalid lock", ErrorCodes::LOGICAL_ERROR);
+
+    return std::make_tuple(lock_type, primary, ts, ttl);
 }
 
 using DecodedWriteCFValue = std::tuple<UInt8, Timestamp, std::shared_ptr<const TiKVValue>>;
