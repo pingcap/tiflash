@@ -303,8 +303,6 @@ void StorageMergeTree::rename(const String & new_path_to_db, const String & new_
 {
     std::string new_full_path = new_path_to_db + escapeForFileName(new_table_name) + '/';
 
-    /// After we remove "database" related information in path, we can simply ignore these piece of code?
-
     data.setPath(new_full_path);
 
     for (auto & path : context.getPartPathSelector().getAllPath())

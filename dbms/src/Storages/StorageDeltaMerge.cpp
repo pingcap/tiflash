@@ -1,5 +1,4 @@
 #include <Common/TiFlashMetrics.h>
-#include <Common/escapeForFileName.h>
 #include <Common/formatReadable.h>
 #include <Common/typeid_cast.h>
 #include <Core/Defines.h>

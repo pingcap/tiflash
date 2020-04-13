@@ -205,7 +205,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     {
-        // Create "default" database
+        // Create "default" database with database engine "TiFlash", some mock tests may create table within default database.
         std::string default_database_meta = path + "metadata/" + escapeForFileName(default_database);
         Poco::File(default_database_meta).createDirectories();
         std::string default_database_meta_file = default_database_meta + ".sql";
@@ -410,7 +410,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     format_schema_path.createDirectories();
 
     LOG_INFO(log, "Loading metadata.");
-    loadMetadataSystem(*global_context); // Load "system" database. TODO: Is it ok to keep Ordinary?
+    loadMetadataSystem(*global_context); // Load "system" database. Its engine keeps as Ordinary.
     /// After attaching system databases we can initialize system log.
     global_context->initializeSystemLogs();
     /// After the system database is created, attach virtual system tables (in addition to query_log and part_log)
