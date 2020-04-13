@@ -110,7 +110,7 @@ Block FilterBlockInputStream::readImpl()
         size_t rows = res.rows();
         ColumnPtr column_of_filter = res.safeGetByPosition(filter_column).column;
 
-        std::vector<UInt8 > column_of_filter_for_bloom;
+        IColumn::Filter  column_of_filter_for_bloom;
         if (bfs[0] != nullptr) {
             for (unsigned i = 0;i < rows;i++) {
                 column_of_filter_for_bloom.push_back(1);
@@ -193,7 +193,7 @@ Block FilterBlockInputStream::readImpl()
             return res;
         }
 
-        IColumn::Filter * filter;
+        IColumn::Filter * filter = nullptr ;
         ColumnPtr filter_holder;
 
         if (constant_filter_description.always_true)
@@ -201,7 +201,9 @@ Block FilterBlockInputStream::readImpl()
             if (child_filter)
                 filter = child_filter;
             else
-                return res;
+            {
+                if (bfs[0] == nullptr)return res;
+            }
         }
         else
         {
@@ -223,6 +225,9 @@ Block FilterBlockInputStream::readImpl()
             }
         }
 
+        if (filter == nullptr) {
+            filter = &column_of_filter_for_bloom;
+        } else
         if (!column_of_filter_for_bloom.empty()) {
             UInt8 *a = filter->data();
             for (size_t i = 0;i < rows;++i) {
