@@ -240,7 +240,7 @@ struct PartitionInfo
 
 struct DBInfo
 {
-    DatabaseID id;
+    DatabaseID id = -1;
     String name;
     String charset;
     String collate;
@@ -248,6 +248,8 @@ struct DBInfo
 
     DBInfo() = default;
     DBInfo(const String & json) { deserialize(json); }
+
+    String serialize() const;
 
     void deserialize(const String & json_str);
 };
