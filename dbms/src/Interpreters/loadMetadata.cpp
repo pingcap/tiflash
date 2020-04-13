@@ -25,11 +25,6 @@
 namespace DB
 {
 
-namespace ErrorCodes
-{
-extern const int FILE_DOESNT_EXIST;
-}
-
 static void executeCreateQuery(const String & query,
     Context & context,
     const String & database,
@@ -70,7 +65,7 @@ static void loadDatabase(
     }
     else
     {
-        // Old fasion way.
+        // Old fashioned way, keep engine as "Ordinary"
         database_attach_query = "ATTACH DATABASE " + backQuoteIfNeed(database) + " ENGINE=Ordinary";
     }
 

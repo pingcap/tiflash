@@ -12,7 +12,7 @@
 => DBGInvoke __set_flush_threshold(1000000, 1000000)
 
 # Mock test keep table name but use DatabaseTiFlash,
-# can NOT create tow table with the same name, or they will
+# can NOT create two tables with the same name, or they will
 # share the same data path
 => DBGInvoke __mock_tidb_db(db3)
 => DBGInvoke __mock_tidb_db(db4)
