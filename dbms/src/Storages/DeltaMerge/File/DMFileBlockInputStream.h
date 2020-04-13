@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
@@ -8,7 +9,6 @@ namespace DB
 {
 namespace DM
 {
-
 class DMFileBlockInputStream : public SkippableBlockInputStream
 {
 public:
@@ -20,6 +20,7 @@ public:
                            const ColumnDefines & read_columns,
                            const HandleRange &   handle_range,
                            const RSOperatorPtr & filter,
+                           ColumnCachePtr &      column_cache_,
                            const IdSetPtr &      read_packs,
                            size_t                expected_size = DMFILE_READ_ROWS_THRESHOLD)
         : reader(enable_clean_read,
@@ -28,6 +29,8 @@ public:
                  read_columns,
                  handle_range,
                  filter,
+                 column_cache_,
+                 context.getGlobalContext().getSettingsRef().dt_enable_stable_column_cache,
                  read_packs,
                  context.getGlobalContext().getMarkCache().get(),
                  context.getGlobalContext().getMinMaxIndexCache().get(),

@@ -31,6 +31,7 @@ public:
         dm_file        = DMFile::create(0, path);
         db_context     = std::make_unique<Context>(DMTestEnv::getContext(settings));
         table_columns_ = std::make_shared<ColumnDefines>();
+        column_cache_  = std::make_shared<ColumnCache>();
 
         reload();
     }
@@ -76,7 +77,8 @@ private:
     DeltaMergeStore::Settings    settings;
 
 protected:
-    DMFilePtr dm_file;
+    DMFilePtr      dm_file;
+    ColumnCachePtr column_cache_;
 };
 
 
@@ -109,6 +111,7 @@ try
             *cols,
             HandleRange::newAll(),
             RSOperatorPtr{},
+            column_cache_,
             IdSetPtr{});
 
         size_t num_rows_read = 0;
@@ -185,6 +188,7 @@ try
             *cols,
             HandleRange::newAll(),
             RSOperatorPtr{},
+            column_cache_,
             IdSetPtr{});
 
         size_t num_rows_read = 0;
@@ -260,6 +264,7 @@ TEST_F(DMFile_Test, StringType)
             *cols,
             HandleRange::newAll(),
             RSOperatorPtr{},
+            column_cache_,
             IdSetPtr{});
 
         size_t num_rows_read = 0;
@@ -333,6 +338,7 @@ try
             *cols,
             HandleRange::newAll(),
             RSOperatorPtr{},
+            column_cache_,
             IdSetPtr{});
 
         size_t num_rows_read = 0;
@@ -455,6 +461,7 @@ try
             *cols_after_ddl,
             HandleRange::newAll(),
             RSOperatorPtr{},
+            column_cache_,
             IdSetPtr{});
 
         size_t num_rows_read = 0;
@@ -547,6 +554,7 @@ try
             *cols_after_ddl,
             HandleRange::newAll(),
             RSOperatorPtr{},
+            column_cache_,
             IdSetPtr{});
 
         size_t num_rows_read = 0;
@@ -617,6 +625,7 @@ try
             *cols_after_ddl,
             HandleRange::newAll(),
             RSOperatorPtr{},
+            column_cache_,
             IdSetPtr{});
 
         size_t num_rows_read = 0;
@@ -688,6 +697,7 @@ try
             *cols_after_ddl,
             HandleRange::newAll(),
             RSOperatorPtr{},
+            column_cache_,
             IdSetPtr{});
 
         size_t num_rows_read = 0;
