@@ -171,10 +171,10 @@ template<> struct PromoteType<Int128> {using Type = Int256;};
 template<> struct PromoteType<Int256> {using Type = Int512;};
 
 template <typename DataType> constexpr bool IsDecimal = false;
-template <> constexpr bool IsDecimal<Decimal32>  = true;
-template <> constexpr bool IsDecimal<Decimal64>  = true;
-template <> constexpr bool IsDecimal<Decimal128> = true;
-template <> constexpr bool IsDecimal<Decimal256> = true;
+template <> inline constexpr bool IsDecimal<Decimal32>  = true;
+template <> inline constexpr bool IsDecimal<Decimal64>  = true;
+template <> inline constexpr bool IsDecimal<Decimal128> = true;
+template <> inline constexpr bool IsDecimal<Decimal256> = true;
 
 class Field;
 
