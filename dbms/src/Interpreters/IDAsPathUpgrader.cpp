@@ -47,7 +47,7 @@ std::shared_ptr<ASTFunction> getDatabaseEngine(const String & db_name, const Str
         ReadBufferFromFile in(filename, 1024);
         readStringUntilEOF(query, in);
     }
-    else if (db_name == "default")
+    else if (db_name == SYSTEM_DATABASE)
     {
         return std::static_pointer_cast<ASTFunction>(makeASTFunction("Ordinary"));
     }
@@ -93,33 +93,45 @@ std::optional<TiDB::TableInfo> getTableInfo(const String & table_metadata_file)
     TiDB::TableInfo info;
     ASTFunction * engine = storage->engine;
     auto * args = typeid_cast<const ASTExpressionList *>(engine->arguments.get());
+    if (args == nullptr)
+        throw Exception("Can not cast database engine arguments", ErrorCodes::BAD_ARGUMENTS);
+
+    const ASTLiteral * table_info_ast = nullptr;
     if (engine->name == MutableSupport::delta_tree_storage_name)
     {
         if (args->children.size() >= 2)
         {
-            auto ast = typeid_cast<const ASTLiteral *>(args->children[1].get());
-            if (ast && ast->value.getType() == Field::Types::String)
-            {
-                const auto table_info_json = safeGet<String>(ast->value);
-                if (!table_info_json.empty())
-                {
-                    info.deserialize(table_info_json);
-                    if (unlikely(info.columns.empty()))
-                    {
-                        throw Exception("", ErrorCodes::BAD_ARGUMENTS);
-                    }
-                    return std::make_optional(info);
-                }
-            }
+            table_info_ast = typeid_cast<const ASTLiteral *>(args->children[1].get());
         }
     }
     else if (engine->name == MutableSupport::txn_storage_name)
     {
-        // TODO:
+        if (args->children.size() >= 3)
+        {
+            table_info_ast = typeid_cast<const ASTLiteral *>(args->children[2].get());
+        }
     }
     else
     {
         throw Exception("Unknown storage engine: " + engine->name, ErrorCodes::LOGICAL_ERROR);
+    }
+
+    if (table_info_ast && table_info_ast->value.getType() == Field::Types::String)
+    {
+        const auto table_info_json = safeGet<String>(table_info_ast->value);
+        if (!table_info_json.empty())
+        {
+            info.deserialize(table_info_json);
+            if (unlikely(info.columns.empty()))
+            {
+                throw Exception("Columns is empty, invalid TableInfo in file: "+ table_metadata_file, ErrorCodes::BAD_ARGUMENTS);
+            }
+            return std::make_optional(info);
+        }
+    }
+    else
+    {
+        throw Exception("Can not get TableInfo for file: " + table_metadata_file, ErrorCodes::BAD_ARGUMENTS);
     }
 
     return std::nullopt;
@@ -236,7 +248,7 @@ String IDAsPathUpgrader::TableDiskInfo::getExtraDirectory(const String & root_pa
     return db.getExtraDirectory(root_path) + escapeForFileName(name) + "/";
 }
 
-// "metadata/t_${id}.sql"
+// "metadata/db_${db_id}/t_${id}.sql"
 String IDAsPathUpgrader::TableDiskInfo::getNewMetaFilePath(const String & root_path, const DatabaseDiskInfo & db) const
 {
     return db.getNewMetaDirectory(root_path) + escapeForFileName(SchemaNameMapper::mapTableName(id)) + ".sql";
