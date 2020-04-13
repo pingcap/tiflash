@@ -5,9 +5,11 @@
 #include <Databases/IDatabase.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Databases/DatabaseTiFlash.h>
+#include <Storages/MutableSupport.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/System/StorageSystemDTTables.h>
-#include <Storages/MutableSupport.h>
+#include <Storages/Transaction/SchemaNameMapper.h>
 
 namespace DB
 {
@@ -17,6 +19,9 @@ StorageSystemDTTables::StorageSystemDTTables(const std::string & name_) : name(n
     setColumns(ColumnsDescription({
         {"database", std::make_shared<DataTypeString>()},
         {"table", std::make_shared<DataTypeString>()},
+
+        {"tidb_database", std::make_shared<DataTypeString>()},
+        {"tidb_table", std::make_shared<DataTypeString>()},
         {"table_id", std::make_shared<DataTypeInt64>()},
 
         {"segment_count", std::make_shared<DataTypeUInt64>()},
@@ -91,11 +96,15 @@ BlockInputStreams StorageSystemDTTables::read(const Names & column_names,
 
     MutableColumns res_columns = getSampleBlock().cloneEmptyColumns();
 
+    SchemaNameMapper mapper;
+
     auto databases = context.getDatabases();
     for (const auto & d : databases)
     {
         String database_name = d.first;
         auto & database = d.second;
+        const DatabaseTiFlash * db_tiflash = typeid_cast<DatabaseTiFlash *>(database.get());
+
         auto it = database->getIterator(context);
         for (; it->isValid(); it->next())
         {
@@ -105,69 +114,78 @@ BlockInputStreams StorageSystemDTTables::read(const Names & column_names,
                 continue;
 
             auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-            auto table_id = dm_storage->getTableInfo().id;
+            auto & table_info = dm_storage->getTableInfo();
+            auto table_id = table_info.id;
             auto stat = dm_storage->getStore()->getStat();
 
-            res_columns[0]->insert(database_name);
-            res_columns[1]->insert(table_name);
-            res_columns[2]->insert(table_id);
+            size_t j = 0;
+            res_columns[j++]->insert(database_name);
+            res_columns[j++]->insert(table_name);
 
-            res_columns[3]->insert(stat.segment_count);
+            String tidb_db_name;
+            if (db_tiflash)
+                tidb_db_name = mapper.displayDatabaseName(db_tiflash->getDatabaseInfo(), false);
+            res_columns[j++]->insert(tidb_db_name);
+            String tidb_table_name = mapper.displayTableName(table_info, false);
+            res_columns[j++]->insert(tidb_table_name);
+            res_columns[j++]->insert(table_id);
 
-            res_columns[4]->insert(stat.total_rows);
-            res_columns[5]->insert(stat.total_size);
-            res_columns[6]->insert(stat.total_delete_ranges);
+            res_columns[j++]->insert(stat.segment_count);
 
-            res_columns[7]->insert(stat.delta_rate_rows);
-            res_columns[8]->insert(stat.delta_rate_segments);
+            res_columns[j++]->insert(stat.total_rows);
+            res_columns[j++]->insert(stat.total_size);
+            res_columns[j++]->insert(stat.total_delete_ranges);
 
-            res_columns[9]->insert(stat.delta_placed_rate);
-            res_columns[10]->insert(stat.delta_cache_size);
-            res_columns[11]->insert(stat.delta_cache_rate);
-            res_columns[12]->insert(stat.delta_cache_wasted_rate);
+            res_columns[j++]->insert(stat.delta_rate_rows);
+            res_columns[j++]->insert(stat.delta_rate_segments);
 
-            res_columns[13]->insert(stat.avg_segment_rows);
-            res_columns[14]->insert(stat.avg_segment_size);
+            res_columns[j++]->insert(stat.delta_placed_rate);
+            res_columns[j++]->insert(stat.delta_cache_size);
+            res_columns[j++]->insert(stat.delta_cache_rate);
+            res_columns[j++]->insert(stat.delta_cache_wasted_rate);
 
-            res_columns[15]->insert(stat.delta_count);
-            res_columns[16]->insert(stat.total_delta_rows);
-            res_columns[17]->insert(stat.total_delta_size);
-            res_columns[18]->insert(stat.avg_delta_rows);
-            res_columns[19]->insert(stat.avg_delta_size);
-            res_columns[20]->insert(stat.avg_delta_delete_ranges);
+            res_columns[j++]->insert(stat.avg_segment_rows);
+            res_columns[j++]->insert(stat.avg_segment_size);
 
-            res_columns[21]->insert(stat.stable_count);
-            res_columns[22]->insert(stat.total_stable_rows);
-            res_columns[23]->insert(stat.total_stable_size);
-            res_columns[24]->insert(stat.avg_stable_rows);
-            res_columns[25]->insert(stat.avg_stable_size);
+            res_columns[j++]->insert(stat.delta_count);
+            res_columns[j++]->insert(stat.total_delta_rows);
+            res_columns[j++]->insert(stat.total_delta_size);
+            res_columns[j++]->insert(stat.avg_delta_rows);
+            res_columns[j++]->insert(stat.avg_delta_size);
+            res_columns[j++]->insert(stat.avg_delta_delete_ranges);
 
-            res_columns[26]->insert(stat.total_pack_count_in_delta);
-            res_columns[27]->insert(stat.avg_pack_count_in_delta);
-            res_columns[28]->insert(stat.avg_pack_rows_in_delta);
-            res_columns[29]->insert(stat.avg_pack_size_in_delta);
+            res_columns[j++]->insert(stat.stable_count);
+            res_columns[j++]->insert(stat.total_stable_rows);
+            res_columns[j++]->insert(stat.total_stable_size);
+            res_columns[j++]->insert(stat.avg_stable_rows);
+            res_columns[j++]->insert(stat.avg_stable_size);
 
-            res_columns[30]->insert(stat.total_pack_count_in_stable);
-            res_columns[31]->insert(stat.avg_pack_count_in_stable);
-            res_columns[32]->insert(stat.avg_pack_rows_in_stable);
-            res_columns[33]->insert(stat.avg_pack_size_in_stable);
+            res_columns[j++]->insert(stat.total_pack_count_in_delta);
+            res_columns[j++]->insert(stat.avg_pack_count_in_delta);
+            res_columns[j++]->insert(stat.avg_pack_rows_in_delta);
+            res_columns[j++]->insert(stat.avg_pack_size_in_delta);
 
-            res_columns[34]->insert(stat.storage_stable_num_snapshots);
-            res_columns[35]->insert(stat.storage_stable_num_pages);
-            res_columns[36]->insert(stat.storage_stable_num_normal_pages);
-            res_columns[37]->insert(stat.storage_stable_max_page_id);
+            res_columns[j++]->insert(stat.total_pack_count_in_stable);
+            res_columns[j++]->insert(stat.avg_pack_count_in_stable);
+            res_columns[j++]->insert(stat.avg_pack_rows_in_stable);
+            res_columns[j++]->insert(stat.avg_pack_size_in_stable);
 
-            res_columns[38]->insert(stat.storage_delta_num_snapshots);
-            res_columns[39]->insert(stat.storage_delta_num_pages);
-            res_columns[40]->insert(stat.storage_delta_num_normal_pages);
-            res_columns[41]->insert(stat.storage_delta_max_page_id);
+            res_columns[j++]->insert(stat.storage_stable_num_snapshots);
+            res_columns[j++]->insert(stat.storage_stable_num_pages);
+            res_columns[j++]->insert(stat.storage_stable_num_normal_pages);
+            res_columns[j++]->insert(stat.storage_stable_max_page_id);
 
-            res_columns[42]->insert(stat.storage_meta_num_snapshots);
-            res_columns[43]->insert(stat.storage_meta_num_pages);
-            res_columns[44]->insert(stat.storage_meta_num_normal_pages);
-            res_columns[45]->insert(stat.storage_meta_max_page_id);
+            res_columns[j++]->insert(stat.storage_delta_num_snapshots);
+            res_columns[j++]->insert(stat.storage_delta_num_pages);
+            res_columns[j++]->insert(stat.storage_delta_num_normal_pages);
+            res_columns[j++]->insert(stat.storage_delta_max_page_id);
 
-            res_columns[46]->insert(stat.background_tasks_length);
+            res_columns[j++]->insert(stat.storage_meta_num_snapshots);
+            res_columns[j++]->insert(stat.storage_meta_num_pages);
+            res_columns[j++]->insert(stat.storage_meta_num_normal_pages);
+            res_columns[j++]->insert(stat.storage_meta_max_page_id);
+
+            res_columns[j++]->insert(stat.background_tasks_length);
         }
     }
 

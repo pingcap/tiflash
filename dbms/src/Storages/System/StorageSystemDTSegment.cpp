@@ -2,12 +2,15 @@
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Databases/DatabaseTiFlash.h>
 #include <Databases/IDatabase.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/MutableSupport.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/System/StorageSystemDTSegments.h>
-#include <Storages/MutableSupport.h>
+#include <Storages/Transaction/SchemaNameMapper.h>
+#include <Storages/Transaction/Types.h>
 
 namespace DB
 {
@@ -16,6 +19,9 @@ StorageSystemDTSegments::StorageSystemDTSegments(const std::string & name_) : na
     setColumns(ColumnsDescription({
         {"database", std::make_shared<DataTypeString>()},
         {"table", std::make_shared<DataTypeString>()},
+
+        {"tidb_database", std::make_shared<DataTypeString>()},
+        {"tidb_table", std::make_shared<DataTypeString>()},
         {"table_id", std::make_shared<DataTypeInt64>()},
 
         {"segment_id", std::make_shared<DataTypeUInt64>()},
@@ -48,11 +54,15 @@ BlockInputStreams StorageSystemDTSegments::read(const Names & column_names,
 
     MutableColumns res_columns = getSampleBlock().cloneEmptyColumns();
 
+    SchemaNameMapper mapper;
+
     auto databases = context.getDatabases();
     for (const auto & d : databases)
     {
         String database_name = d.first;
         auto & database = d.second;
+        const DatabaseTiFlash * db_tiflash = typeid_cast<DatabaseTiFlash *>(database.get());
+
         auto it = database->getIterator(context);
         for (; it->isValid(); it->next())
         {
@@ -62,28 +72,37 @@ BlockInputStreams StorageSystemDTSegments::read(const Names & column_names,
                 continue;
 
             auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-            auto table_id = dm_storage->getTableInfo().id;
+            auto & table_info = dm_storage->getTableInfo();
+            auto table_id = table_info.id;
             auto segment_stats = dm_storage->getStore()->getSegmentStats();
             for (auto & stat : segment_stats)
             {
-                res_columns[0]->insert(database_name);
-                res_columns[1]->insert(table_name);
-                res_columns[2]->insert(table_id);
+                size_t j = 0;
+                res_columns[j++]->insert(database_name);
+                res_columns[j++]->insert(table_name);
 
-                res_columns[3]->insert(stat.segment_id);
-                res_columns[4]->insert(stat.range.toString());
-                res_columns[5]->insert(stat.rows);
-                res_columns[6]->insert(stat.size);
-                res_columns[7]->insert(stat.delete_ranges);
+                String tidb_db_name;
+                if (db_tiflash)
+                    tidb_db_name = mapper.displayDatabaseName(db_tiflash->getDatabaseInfo(), false);
+                res_columns[j++]->insert(tidb_db_name);
+                String tidb_table_name = mapper.displayTableName(table_info, false);
+                res_columns[j++]->insert(tidb_table_name);
+                res_columns[j++]->insert(table_id);
 
-                res_columns[8]->insert(stat.delta_pack_count);
-                res_columns[9]->insert(stat.stable_pack_count);
+                res_columns[j++]->insert(stat.segment_id);
+                res_columns[j++]->insert(stat.range.toString());
+                res_columns[j++]->insert(stat.rows);
+                res_columns[j++]->insert(stat.size);
+                res_columns[j++]->insert(stat.delete_ranges);
 
-                res_columns[10]->insert(stat.avg_delta_pack_rows);
-                res_columns[11]->insert(stat.avg_stable_pack_rows);
+                res_columns[j++]->insert(stat.delta_pack_count);
+                res_columns[j++]->insert(stat.stable_pack_count);
 
-                res_columns[12]->insert(stat.delta_rate);
-                res_columns[13]->insert(stat.delta_cache_size);
+                res_columns[j++]->insert(stat.avg_delta_pack_rows);
+                res_columns[j++]->insert(stat.avg_stable_pack_rows);
+
+                res_columns[j++]->insert(stat.delta_rate);
+                res_columns[j++]->insert(stat.delta_cache_size);
             }
         }
     }
