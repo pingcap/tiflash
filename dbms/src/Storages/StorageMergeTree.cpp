@@ -67,7 +67,7 @@ StorageMergeTree::StorageMergeTree(const String & path_,
     Timestamp tombstone)
     : IManageableStorage{tombstone},
       path(path_),
-      data_path_contains_database_name(db_engine_ == "TiFlash"),
+      data_path_contains_database_name(db_engine_ != "TiFlash"),
       database_name(database_name_),
       table_name(table_name_),
       full_path(path + escapeForFileName(table_name) + '/'),
