@@ -355,7 +355,7 @@ bool InterpreterDAG::addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, Pi
         return false;
 
     ExpressionActionsChain chain;
-    if (analyzer->appendTimeZoneCastsAfterTS(chain, is_ts_column, dag.getDAGRequest()))
+    if (analyzer->appendTimeZoneCastsAfterTS(chain, is_ts_column))
     {
         pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions()); });
         return true;
@@ -386,7 +386,7 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
         chain.clear();
 
         // add cast if type is not match
-        analyzer->appendAggSelect(chain, dag.getAggregation(), dag.getDAGRequest(), keep_session_timezone_info);
+        analyzer->appendAggSelect(chain, dag.getAggregation(), keep_session_timezone_info);
         //todo use output_offset to reconstruct the final project columns
         for (auto & element : analyzer->getCurrentInputColumns())
         {
