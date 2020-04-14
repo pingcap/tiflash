@@ -560,7 +560,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     TiFlashServerHelper helper{
         // a special number, also defined in proxy
         .magic_number = 0x13579BDF,
-        .version = 4,
+        .version = 5,
         .inner = &tiflash_instance_wrap,
         .fn_gc_buff = GcBuff,
         .fn_handle_write_raft_cmd = HandleWriteRaftCmd,
@@ -570,6 +570,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         .fn_handle_destroy = HandleDestroy,
         .fn_handle_ingest_sst = HandleIngestSST,
         .fn_handle_check_terminated = HandleCheckTerminated,
+        .fn_handle_compute_fs_stats = HandleComputeFsStats,
     };
 
     auto proxy_runner = std::thread([&proxy_conf, &log, &helper]() {
