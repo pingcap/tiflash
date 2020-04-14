@@ -39,6 +39,7 @@
 #include <Databases/IDatabase.h>
 
 #include <Common/ZooKeeper/ZooKeeper.h>
+#include <Common/FailPoint.h>
 
 
 namespace DB
@@ -140,12 +141,23 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
         if (need_write_metadata)
             Poco::File(metadata_file_tmp_path).renameTo(metadata_file_path);
 
+        FAIL_POINT_TRIGGER_EXCEPTION(exception_between_alter_data_and_meta);
+        // meta file (not temporary) of database exist means create database success, 
+        // we need to create meta directory for it if not exists.
+        if (auto db_meta_path = Poco::File(database->getMetadataPath()); !db_meta_path.exists())
+        {
+            db_meta_path.createDirectory();
+        }
+
         database->loadTables(context, thread_pool, has_force_restore_data_flag);
     }
     catch (...)
     {
         if (need_write_metadata)
-            Poco::File(metadata_file_tmp_path).remove();
+        {
+            if (auto file = Poco::File(metadata_file_tmp_path); file.exists())
+                file.remove();
+        }
 
         throw;
     }

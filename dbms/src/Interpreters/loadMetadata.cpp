@@ -75,7 +75,7 @@ static void loadDatabase(
 
 void loadMetadata(Context & context)
 {
-    String path = context.getPath() + "metadata";
+    const String path = context.getPath() + "metadata/";
 
     /** There may exist 'force_restore_data' file, that means,
       *  skip safety threshold on difference of data parts while initializing tables.
@@ -87,23 +87,38 @@ void loadMetadata(Context & context)
 
     /// For parallel tables loading.
     ThreadPool thread_pool(SettingMaxThreads().getAutoValue());
+    Poco::Logger * log = &Poco::Logger::get("loadMetadata");
 
-    /// Loop over databases.
+    /// Loop over databases sql files. This ensure filename ends with ".sql".
     std::map<String, String> databases;
-    Poco::DirectoryIterator dir_end;
-    for (Poco::DirectoryIterator it(path); it != dir_end; ++it)
+    auto sql_files = DatabaseLoading::listSQLFilenames(path, log);
+    for (const auto & file : sql_files)
     {
-        if (!it->isDirectory())
+        const auto db_name = unescapeForFileName(file.substr(0, file.size() - strlen(".sql")));
+        // Ignore "system" database.
+        if (db_name == SYSTEM_DATABASE)
             continue;
 
-        /// For '.svn', '.gitignore' directory and similar.
-        if (it.name().at(0) == '.')
-            continue;
+        const auto file_path = path + file;
+        databases.emplace(db_name, file_path);
+    }
 
-        if (it.name() == SYSTEM_DATABASE)
-            continue;
-
-        databases.emplace(unescapeForFileName(it.name()), it.path().toString());
+    {
+        // Sanity check if we miss some directories that have no related sql file.
+        Poco::DirectoryIterator dir_end;
+        for (Poco::DirectoryIterator it(path); it != dir_end; ++it)
+        {
+            if (!it->isDirectory())
+                continue;
+            /// For '.svn', '.gitignore' directory and similar. Ignore "system" database.
+            if (it.name().at(0) == '.' || it.name() == SYSTEM_DATABASE)
+                continue;
+            const auto db_name = unescapeForFileName(it.name());
+            if (databases.find(db_name) != databases.end()) // already detected
+                continue;
+            LOG_WARNING(
+                log, "Directory \"" + it.path().toString() + "\" is ignored while loading metadata since we can't find its .sql file.");
+        }
     }
 
     for (const auto & elem : databases)
