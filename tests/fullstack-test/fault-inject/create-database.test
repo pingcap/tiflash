@@ -1,0 +1,27 @@
+mysql> drop database if exists db_test
+
+>> DBGInvoke __init_fail_point()
+
+# Process crash between create database meta file and its directory.
+>> DBGInvoke __enable_fail_point(exception_between_create_database_meta_and_directory)
+
+>> DBGInvoke __refresh_schemas()
+
+# Ensure that we can create table for that database
+mysql> create table db_test.t(a int not null, b int not null)
+mysql> alter table db_test.t set tiflash replica 1 location labels 'rack', 'host', 'abc'
+
+func> wait_table db_test t
+
+mysql> insert into db_test.t values (1, 1)
+mysql> insert into db_test.t values (1, 2)
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from db_test.t;
++---+---+
+| c | b |
++---+---+
+| 1 | 1 |
+| 1 | 2 |
++---+---+
+
+mysql> drop table if exists db_test.t

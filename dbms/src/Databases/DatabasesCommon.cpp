@@ -233,11 +233,11 @@ ASTPtr getCreateQueryFromMetadata(const String & metadata_path, const String & d
 }
 
 
-std::vector<String> listSQLFilenames(const String & database_dir, Poco::Logger * log)
+std::vector<String> listSQLFilenames(const String & meta_dir, Poco::Logger * log)
 {
     std::vector<String> filenames;
     Poco::DirectoryIterator dir_end;
-    for (Poco::DirectoryIterator dir_it(database_dir); dir_it != dir_end; ++dir_it)
+    for (Poco::DirectoryIterator dir_it(meta_dir); dir_it != dir_end; ++dir_it)
     {
         // Ignore directories
         if (!dir_it->isFile())
@@ -264,7 +264,7 @@ std::vector<String> listSQLFilenames(const String & database_dir, Poco::Logger *
             filenames.push_back(dir_it.name());
         else
             throw Exception(
-                "Incorrect file extension: " + dir_it.name() + " in metadata directory " + database_dir, ErrorCodes::INCORRECT_FILE_NAME);
+                "Incorrect file extension: " + dir_it.name() + " in metadata directory " + meta_dir, ErrorCodes::INCORRECT_FILE_NAME);
     }
     return filenames;
 }

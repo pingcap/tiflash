@@ -30,24 +30,6 @@ static inline ValueType safeGetLiteralValue(const ASTPtr & ast, const String & e
 DatabasePtr DatabaseFactory::get(
     const String & database_name, const String & metadata_path, const ASTStorage * engine_define, Context & context)
 {
-    try
-    {
-        // Create meta directory for this database, if fail to parse arguments, remove that directory.
-        Poco::File(metadata_path).createDirectory();
-        return getImpl(database_name, metadata_path, engine_define, context);
-    }
-    catch (...)
-    {
-        if (Poco::File metadata_dir(metadata_path); metadata_dir.exists())
-            metadata_dir.remove(true);
-
-        throw;
-    }
-}
-
-DatabasePtr DatabaseFactory::getImpl(
-    const String & database_name, const String & metadata_path, const ASTStorage * engine_define, Context & context)
-{
     String engine_name = engine_define->engine->name;
     if (engine_name == "TiFlash")
     {
