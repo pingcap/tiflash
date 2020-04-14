@@ -363,6 +363,8 @@ RegionID Region::id() const { return meta.regionId(); }
 
 bool Region::isPendingRemove() const { return peerState() == raft_serverpb::PeerState::Tombstone; }
 
+bool Region::isMerging() const { return peerState() == raft_serverpb::PeerState::Merging; }
+
 void Region::setPendingRemove()
 {
     meta.setPeerState(raft_serverpb::PeerState::Tombstone);
