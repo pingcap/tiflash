@@ -114,6 +114,8 @@ public:
     bool isPeerRemoved() const;
     raft_serverpb::PeerState peerState() const;
 
+    bool isMerging() const;
+
     size_t dataSize() const;
     size_t writeCFCount() const;
     std::string dataInfo() const;
