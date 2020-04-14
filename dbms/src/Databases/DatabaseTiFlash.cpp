@@ -329,14 +329,8 @@ ASTPtr DatabaseTiFlash::getCreateTableQueryImpl(const Context & context, const S
     ASTPtr ast = DatabaseLoading::getCreateQueryFromMetadata(table_metadata_path, name, throw_on_error);
     if (!ast && throw_on_error)
     {
-        /// Handle system.* tables for which there are no table.sql files.
-        bool has_table = tryGetTable(context, table_name) != nullptr;
-
-        auto msg = has_table ? "There is no CREATE TABLE query for table " : "There is no metadata file for table ";
-
-        throw Exception(msg + table_name, ErrorCodes::CANNOT_GET_CREATE_TABLE_QUERY);
+        throw Exception("There is no metadata file for table " + table_name, ErrorCodes::CANNOT_GET_CREATE_TABLE_QUERY);
     }
-
     return ast;
 }
 
@@ -356,12 +350,8 @@ ASTPtr DatabaseTiFlash::getCreateDatabaseQuery(const Context & /*context*/) cons
     ASTPtr ast = DatabaseLoading::getCreateQueryFromMetadata(database_metadata_path, name, true);
     if (!ast)
     {
-        /// Handle databases (such as default) for which there are no database.sql files.
-        String query = "CREATE DATABASE " + backQuoteIfNeed(name) + " ENGINE = " + getEngineName();
-        ParserCreateQuery parser;
-        ast = parseQuery(parser, query.data(), query.data() + query.size(), "", 0);
+        throw Exception("There is no metadata file for database " + name, ErrorCodes::LOGICAL_ERROR);
     }
-
     return ast;
 }
 
