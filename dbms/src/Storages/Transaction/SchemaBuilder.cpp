@@ -641,10 +641,10 @@ template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(TiDB::DBInfoPtr db_info)
 {
     GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_create_db).Increment();
-    LOG_INFO(log, "Creating database " << name_mapper.displayDatabaseName(*db_info));
+    LOG_INFO(log, "Creating database " << name_mapper.debugDatabaseName(*db_info));
     auto mapped = name_mapper.mapDatabaseName(*db_info);
     if (isReservedDatabase(context, mapped))
-        throw Exception("Database " + name_mapper.displayDatabaseName(*db_info) + " is reserved", ErrorCodes::DDL_ERROR);
+        throw Exception("Database " + name_mapper.debugDatabaseName(*db_info) + " is reserved", ErrorCodes::DDL_ERROR);
 
     const String statement = "CREATE DATABASE IF NOT EXISTS " + backQuoteIfNeed(mapped) + " ENGINE = TiFlash('" + db_info->serialize()
         + "', " + DB::toString(DatabaseTiFlash::CURRENT_VERSION) + ")";
@@ -656,7 +656,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(TiDB::DBInfoPtr db_inf
     interpreter.execute();
 
     databases[db_info->id] = db_info;
-    LOG_INFO(log, "Created database " << name_mapper.displayDatabaseName(*db_info));
+    LOG_INFO(log, "Created database " << name_mapper.debugDatabaseName(*db_info));
 }
 
 template <typename Getter, typename NameMapper>
@@ -872,7 +872,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
         return;
     }
     GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_drop_table).Increment();
-    LOG_INFO(log, "Tombstoning table " << db_name << "." << name_mapper.displayTableName(storage->getTableInfo()));
+    LOG_INFO(log, "Tombstoning table " << db_name << "." << name_mapper.debugTableName(storage->getTableInfo()));
     AlterCommands commands;
     {
         AlterCommand command;
@@ -886,7 +886,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDropPhysicalTable(const String & db
         commands.emplace_back(std::move(command));
     }
     storage->alterFromTiDB(commands, db_name, storage->getTableInfo(), name_mapper, context);
-    LOG_INFO(log, "Tombstoned table " << db_name << "." << name_mapper.displayTableName(storage->getTableInfo()));
+    LOG_INFO(log, "Tombstoned table " << db_name << "." << name_mapper.debugTableName(storage->getTableInfo()));
 }
 
 template <typename Getter, typename NameMapper>
@@ -929,7 +929,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
         if (databases.find(db->id) == databases.end())
         {
             applyCreateSchema(db);
-            LOG_DEBUG(log, "Database " << name_mapper.displayDatabaseName(*db) << " created during sync all schemas");
+            LOG_DEBUG(log, "Database " << name_mapper.debugDatabaseName(*db) << " created during sync all schemas");
         }
     }
 
@@ -984,7 +984,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
             applyAlterLogicalTable(db, table, storage);
             LOG_DEBUG(log, "Table " << name_mapper.displayCanonicalName(*db, *table) << " synced during sync all schemas");
         }
-        LOG_DEBUG(log, "Database " << name_mapper.displayDatabaseName(*db) << " synced during sync all schemas");
+        LOG_DEBUG(log, "Database " << name_mapper.debugDatabaseName(*db) << " synced during sync all schemas");
     }
 
     /// Drop all unmapped tables.
@@ -995,7 +995,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
         {
             applyDropPhysicalTable(it->second->getDatabaseName(), it->first);
             LOG_DEBUG(log,
-                "Table " << it->second->getDatabaseName() << "." << name_mapper.displayTableName(it->second->getTableInfo())
+                "Table " << it->second->getDatabaseName() << "." << name_mapper.debugTableName(it->second->getTableInfo())
                          << " dropped during sync all schemas");
         }
     }

@@ -121,8 +121,8 @@ void loadMetadata(Context & context)
         }
     }
 
-    for (const auto & elem : databases)
-        loadDatabase(context, elem.first, elem.second + ".sql", &thread_pool, has_force_restore_data_flag);
+    for (const auto & [db_name, meta_file]: databases)
+        loadDatabase(context, db_name, meta_file, &thread_pool, has_force_restore_data_flag);
 
     thread_pool.wait();
 

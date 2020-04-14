@@ -56,7 +56,7 @@ BlockInputStreams StorageSystemDatabases::read(const Names & column_names,
         if (db_tiflash)
         {
             auto & db_info = db_tiflash->getDatabaseInfo();
-            tidb_db_name = mapper.displayDatabaseName(db_info, false);
+            tidb_db_name = mapper.displayDatabaseName(db_info);
             database_id = db_info.id;
         }
 

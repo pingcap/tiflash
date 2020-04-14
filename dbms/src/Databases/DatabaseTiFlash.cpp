@@ -323,7 +323,7 @@ time_t DatabaseTiFlash::getTableMetadataModificationTime(const Context & /*conte
     }
 }
 
-ASTPtr DatabaseTiFlash::getCreateTableQueryImpl(const Context & context, const String & table_name, bool throw_on_error) const
+ASTPtr DatabaseTiFlash::getCreateTableQueryImpl(const Context & /*context*/, const String & table_name, bool throw_on_error) const
 {
     const auto table_metadata_path = getTableMetadataPath(table_name);
     ASTPtr ast = DatabaseLoading::getCreateQueryFromMetadata(table_metadata_path, name, throw_on_error);

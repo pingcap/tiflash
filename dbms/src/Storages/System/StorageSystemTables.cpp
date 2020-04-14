@@ -209,9 +209,9 @@ BlockInputStreams StorageSystemTables::read(const Names & column_names,
                 if (managed_storage)
                 {
                     if (db_tiflash)
-                        tidb_database_name = mapper.displayDatabaseName(db_tiflash->getDatabaseInfo(), false);
+                        tidb_database_name = mapper.displayDatabaseName(db_tiflash->getDatabaseInfo());
                     auto & table_info = managed_storage->getTableInfo();
-                    tidb_table_name = mapper.displayTableName(table_info, false);
+                    tidb_table_name = mapper.displayTableName(table_info);
                     table_id = table_info.id;
                 }
             }
