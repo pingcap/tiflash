@@ -50,7 +50,8 @@ grpc::Status BatchCoprocessorHandler::execute()
                     for (auto & r : cop_request->regions())
                     {
                         auto res = regions.emplace(r.region_id(),
-                            RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), GenCopKeyRange(r.ranges())));
+                            RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), GenCopKeyRange(r.ranges()),
+                                nullptr));
                         if (!res.second)
                             throw Exception(
                                 std::string(__PRETTY_FUNCTION__) + ": contain duplicate region " + std::to_string(r.region_id()),

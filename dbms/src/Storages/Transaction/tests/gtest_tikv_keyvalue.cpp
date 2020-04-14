@@ -1,11 +1,10 @@
-#include <gtest/gtest.h>
-
-#include "region_helper.h"
-
 #include <Storages/Transaction/CHTableHandle.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TiKVHelper.h>
 #include <Storages/Transaction/TiKVRange.h>
+#include <gtest/gtest.h>
+
+#include "region_helper.h"
 
 using namespace DB;
 
@@ -59,22 +58,20 @@ TEST(TiKVKeyValue_test, DISABLED_PortedTests)
     {
         auto lock_value
             = RecordKVFormat::encodeLockCfValue(Region::PutFlag, "primary key", 421321, std::numeric_limits<UInt64>::max(), "value");
-        auto [lock_type, primary, ts, ttl, short_value] = RecordKVFormat::decodeLockCfValue(lock_value);
+        auto [lock_type, primary, ts, ttl] = RecordKVFormat::decodeLockCfValue(lock_value);
         ASSERT_TRUE(Region::PutFlag == lock_type);
         ASSERT_TRUE("primary key" == primary);
         ASSERT_TRUE(421321 == ts);
         ASSERT_TRUE(std::numeric_limits<UInt64>::max() == ttl);
-        ASSERT_TRUE("value" == *short_value);
     }
 
     {
         auto lock_value = RecordKVFormat::encodeLockCfValue(Region::PutFlag, "primary key", 421321, std::numeric_limits<UInt64>::max());
-        auto [lock_type, primary, ts, ttl, short_value] = RecordKVFormat::decodeLockCfValue(lock_value);
+        auto [lock_type, primary, ts, ttl] = RecordKVFormat::decodeLockCfValue(lock_value);
         ASSERT_TRUE(Region::PutFlag == lock_type);
         ASSERT_TRUE("primary key" == primary);
         ASSERT_TRUE(421321 == ts);
         ASSERT_TRUE(std::numeric_limits<UInt64>::max() == ttl);
-        ASSERT_TRUE(nullptr == short_value);
     }
 
     {
@@ -327,7 +324,7 @@ HandleRange<HandleID> parseTestCase2(std::vector<std::vector<u_char>> && seq)
     return range.getHandleRangeByTable(45);
 }
 
-std::string rangeToString(const HandleRange<HandleID> &r)
+std::string rangeToString(const HandleRange<HandleID> & r)
 {
     std::stringstream ss;
     ss << "[" << r.first.toString() << "," << r.second.toString() << ")";
