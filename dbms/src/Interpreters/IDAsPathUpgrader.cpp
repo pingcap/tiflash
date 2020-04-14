@@ -78,7 +78,7 @@ std::optional<TiDB::TableInfo> getTableInfo(const String & table_metadata_file)
     }
     else
     {
-        throw Exception("Can not open database schema file: " + table_metadata_file, ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Can not open table schema file: " + table_metadata_file, ErrorCodes::LOGICAL_ERROR);
     }
 
     ParserCreateQuery parser;
@@ -94,7 +94,7 @@ std::optional<TiDB::TableInfo> getTableInfo(const String & table_metadata_file)
     ASTFunction * engine = storage->engine;
     auto * args = typeid_cast<const ASTExpressionList *>(engine->arguments.get());
     if (args == nullptr)
-        throw Exception("Can not cast database engine arguments", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception("Can not cast table engine arguments", ErrorCodes::BAD_ARGUMENTS);
 
     const ASTLiteral * table_info_ast = nullptr;
     if (engine->name == MutableSupport::delta_tree_storage_name)
@@ -122,10 +122,6 @@ std::optional<TiDB::TableInfo> getTableInfo(const String & table_metadata_file)
         if (!table_info_json.empty())
         {
             info.deserialize(table_info_json);
-            if (unlikely(info.columns.empty()))
-            {
-                throw Exception("Columns is empty, invalid TableInfo in file: " + table_metadata_file, ErrorCodes::BAD_ARGUMENTS);
-            }
             return std::make_optional(info);
         }
     }
@@ -146,9 +142,9 @@ void renamePath(const String & old_path, const String & new_path, Poco::Logger *
     else
     {
         if (must_success)
-            throw Exception("Path \"" + old_path + "\" is missed.");
+            throw Exception("Path \"" + old_path + "\" is missing.");
         else
-            LOG_WARNING(log, "Path \"" << old_path << "\" is missed.");
+            LOG_WARNING(log, "Path \"" << old_path << "\" is missing.");
     }
 }
 
@@ -540,14 +536,6 @@ void IDAsPathUpgrader::doRename()
     for (const auto & [db_name, db_info] : databases)
     {
         renameDatabase(db_name, db_info);
-    }
-
-    {
-        // After all, if there is a "system" (empty directory) in metadata, remove it.
-        const String system_metadata_dir = global_context.getPath() + "/metadata/" + SYSTEM_DATABASE;
-        tryRemoveDirectory(system_metadata_dir, log);
-        const String system_data_dir = global_context.getPath() + "/data/" + SYSTEM_DATABASE;
-        tryRemoveDirectory(system_data_dir, log);
     }
 }
 

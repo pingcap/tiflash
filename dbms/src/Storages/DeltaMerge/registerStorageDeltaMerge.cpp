@@ -75,8 +75,6 @@ void registerStorageDeltaMerge(StorageFactory & factory)
                 if (!table_info_json.empty())
                 {
                     info.deserialize(table_info_json);
-                    if (unlikely(info.columns.empty()))
-                        throw Exception("Engine DeltaMerge table info is invalid. # of columns = 0", ErrorCodes::BAD_ARGUMENTS);
                     table_info = info;
                 }
             }
