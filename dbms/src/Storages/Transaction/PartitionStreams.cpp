@@ -134,6 +134,13 @@ std::pair<RegionDataReadInfoList, RegionException::RegionReadStatus> resolveLock
             if (region->isPendingRemove())
                 return {{}, RegionException::PENDING_REMOVE};
 
+            /**
+             * special check: when source region is merging, read_index can not guarantee the behavior about target region.
+             * Reject all read request for safety.
+             */
+            if (region->isMerging())
+                return {{}, RegionException::NOT_FOUND};
+
             const auto & [version, conf_ver, key_range] = region->dumpVersionRange();
             if (version != region_version || conf_ver != conf_version)
                 return {{}, RegionException::VERSION_ERROR};
