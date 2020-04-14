@@ -41,24 +41,6 @@ namespace ErrorCodes
 static const Int64 SECOND_IN_ONE_DAY = 86400;
 static const Int64 E6 = 1000000;
 
-//calculates days since 0000-00-00(may 0000-01-01??)
-inline int calcDayNum(int year, int month, int day)
-{
-    if(year == 0 || month == 0)
-            return 0;
-    int delsum = 365*year + 31*(month-1) + day;
-    if (month <= 2)
-    {
-        year--;
-    }
-    else
-    {
-        delsum -= (month*4 + 23) / 10;
-    }
-    int temp = ((year/100 + 1) * 3) / 4;
-    return delsum + year/4 - temp;
-}
-
 // day number per 400 years, from the year that year % 400 = 1
 static const int DAY_NUM_PER_400_YEARS = 365 * 400 + 97;
 // day number per 100 years in every 400 years, from the year that year % 100 = 1

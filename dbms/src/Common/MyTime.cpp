@@ -1,10 +1,9 @@
 #include <Common/MyTime.h>
+#include <Poco/String.h>
 
 #include <cctype>
 #include <initializer_list>
 #include <vector>
-
-#include <Poco/String.h>
 
 namespace DB
 {
@@ -115,6 +114,7 @@ UInt64 MyTimeBase::toPackedUInt() const
     return (ymd << 17 | hms) << 24 | micro_second;
 }
 
+// the implementation is the same as TiDB
 String MyTimeBase::dateFormat(const String & layout) const
 {
     String result;
@@ -137,29 +137,210 @@ String MyTimeBase::dateFormat(const String & layout) const
     return result;
 }
 
+// the implementation is the same as TiDB
+int MyTimeBase::yearDay() const
+{
+    if (month == 0 || day == 0)
+    {
+        return 0;
+    }
+    return calcDayNum(year, month, day) - calcDayNum(year, 1, 1) + 1;
+}
+
+UInt32 adjustWeekMode(UInt32 mode)
+{
+    mode &= 7u;
+    if (!(mode & MyTimeBase::WEEK_BEHAVIOR_MONDAY_FIRST))
+        mode ^= MyTimeBase::WEEK_BEHAVIOR_FIRST_WEEKDAY;
+    return mode;
+}
+
+// the implementation is the same as TiDB
+int MyTimeBase::week(UInt32 mode) const
+{
+    if (month == 0 || day == 0)
+    {
+        return 0;
+    }
+    auto [year, week] = calcWeek(adjustWeekMode(mode));
+    std::ignore = year;
+    return week;
+}
+
+// calcWeekday calculates weekday from daynr, returns 0 for Monday, 1 for Tuesday ...
+// the implementation is the same as TiDB
+int calcWeekday(int day_num, bool sunday_first_day_of_week)
+{
+    day_num += 5;
+    if (sunday_first_day_of_week)
+        day_num++;
+    return day_num % 7;
+}
+
+// the implementation is the same as TiDB
+int calcDaysInYear(int year)
+{
+    if ((year & 3u) == 0 && (year % 100 != 0 || (year % 400 == 0 && (year != 0))))
+        return 366;
+    return 365;
+}
+
+// the implementation is the same as TiDB
+std::tuple<int, int> MyTimeBase::calcWeek(UInt32 mode) const
+{
+    int days, ret_year, ret_week;
+    int ty = year, tm = month, td = day;
+    int day_num = calcDayNum(ty, tm, td);
+    int first_day_num = calcDayNum(ty, 1, 1);
+    bool monday_first = mode & WEEK_BEHAVIOR_MONDAY_FIRST;
+    bool week_year = mode & WEEK_BEHAVIOR_YEAR;
+    bool first_week_day = mode & WEEK_BEHAVIOR_FIRST_WEEKDAY;
+
+    int week_day = calcWeekday(first_day_num, !monday_first);
+
+    ret_year = ty;
+
+    if (tm == 1 && td <= 7 - week_day)
+    {
+        if (!week_year && ((first_week_day && week_day != 0) || (!first_week_day && week_day >= 4)))
+        {
+            ret_week = 0;
+            return std::make_tuple(ret_year, ret_week);
+        }
+        week_year = true;
+        ret_year--;
+        days = calcDaysInYear(ret_year);
+        first_day_num -= days;
+        week_day = (week_day + 53 * 7 - days) % 7;
+    }
+
+    if ((first_week_day && week_day != 0) || (!first_week_day && week_day >= 4))
+    {
+        days = day_num - (first_day_num + 7 - week_day);
+    }
+    else
+    {
+        days = day_num - (first_day_num - week_day);
+    }
+
+    if (week_year && days >= 52 * 7)
+    {
+        week_day = (week_day + calcDaysInYear(year)) % 7;
+        if ((!first_week_day && week_day < 4) || (first_week_day && week_day == 0))
+        {
+            ret_year++;
+            ret_week = 1;
+            return std::make_tuple(ret_year, ret_week);
+        }
+    }
+    ret_week = days / 7 + 1;
+    return std::make_tuple(ret_year, ret_week);
+}
+
+static const String month_names[] = {
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+};
+
+static const String abbrev_month_names[] = {
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+};
+
+static const String abbrev_weekday_names[] = {
+    "Sun",
+    "Mon",
+    "Tue",
+    "Wed",
+    "Thu",
+    "Fri",
+    "Sat",
+};
+
+static const String weekday_names[] = {
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+};
+
+String abbrDayOfMonth(int day)
+{
+    switch (day)
+    {
+        case 1:
+        case 21:
+        case 31:
+            return "st";
+        case 2:
+        case 22:
+            return "nd";
+        case 3:
+        case 23:
+            return "rd";
+        default:
+            return "th";
+    }
+}
+
+int MyTimeBase::weekDay() const
+{
+    int current_abs_day_num = calcDayNum(year, month, day);
+    // 1986-01-05 is sunday
+    int reference_abs_day_num = calcDayNum(1986, 1, 5);
+    int diff = current_abs_day_num - reference_abs_day_num;
+    if (diff < 0)
+        diff += (-diff / 7 + 1) * 7;
+    diff = diff % 7;
+    return diff;
+}
+
+// the implementation is the same as TiDB
 void MyTimeBase::convertDateFormat(char c, String & result) const
 {
-    // TODO:: Implement other formats.
     switch (c)
     {
-        //case 'b':
-        //{
-        //    if (month == 0 || month > 12)
-        //    {
-        //        throw Exception("invalid time format");
-        //    }
-        //    result.append(String(MonthNames[month-1], 3));
-        //    break;
-        //}
-        //case 'M':
-        //{
-        //    if (month == 0 || month > 12)
-        //    {
-        //        throw Exception("invalid time format");
-        //    }
-        //    result.append(String(MonthNames[month-1], 3));
-        //    break;
-        //}
+        case 'b':
+        {
+            if (month == 0 || month > 12)
+            {
+                throw Exception("invalid time format");
+            }
+            result.append(abbrev_month_names[month - 1]);
+            break;
+        }
+        case 'M':
+        {
+            if (month == 0 || month > 12)
+            {
+                throw Exception("invalid time format");
+            }
+            result.append(month_names[month - 1]);
+            break;
+        }
         case 'm':
         {
             char buf[16];
@@ -174,14 +355,14 @@ void MyTimeBase::convertDateFormat(char c, String & result) const
             result.append(String(buf));
             break;
         }
-        //case 'D':
-        //{
-        //    char buf[16];
-        //    sprintf(buf, "%d", month);
-        //    result.append(String(buf));
-        //    result.append(abbrDayOfMonth(day));
-        //    break;
-        //}
+        case 'D':
+        {
+            char buf[16];
+            sprintf(buf, "%d", day);
+            result.append(String(buf));
+            result.append(abbrDayOfMonth(day));
+            break;
+        }
         case 'd':
         {
             char buf[16];
@@ -196,13 +377,13 @@ void MyTimeBase::convertDateFormat(char c, String & result) const
             result.append(String(buf));
             break;
         }
-        //case 'j':
-        //{
-        //    char buf[16];
-        //    sprintf(buf, "%03d", yearDay());
-        //    result.append(String(buf));
-        //    break;
-        //}
+        case 'j':
+        {
+            char buf[16];
+            sprintf(buf, "%03d", yearDay());
+            result.append(String(buf));
+            break;
+        }
         case 'H':
         {
             char buf[16];
@@ -290,50 +471,75 @@ void MyTimeBase::convertDateFormat(char c, String & result) const
             result.append(String(buf));
             break;
         }
-        //case 'U':
-        //{
-        //    char buf[16];
-        //    auto w = week(0);
-        //    sprintf(buf, "%02d", w);
-        //    result.append(String(buf));
-        //    break;
-        //}
-        //case 'u':
-        //{
-        //    char buf[16];
-        //    auto w = week(1);
-        //    sprintf(buf, "%02d", w);
-        //    result.append(String(buf));
-        //    break;
-        //}
-        //case 'V':
-        //{
-        //    char buf[16];
-        //    auto w = week(2);
-        //    sprintf(buf, "%02d", w);
-        //    result.append(String(buf));
-        //    break;
-        //}
-        //case 'v':
-        //{
-        //    char buf[16];
-        //    auto w = yearWeek(2);
-        //    sprintf(buf, "%02d", w);
-        //    result.append(String(buf));
-        //    break;
-        //}
-        //case 'a':
-        //{
-        //    auto weekDay = weekDay();
-        //    result.append(String(abbrevWeekdayName[weekDay]));
-        //    break;
-        //}
-        //case 'w':
-        //{
-        //    auto weekDay = weekDay();
-        //    result.append(std::to_string(weekDay));
-        //    break;
-        //}
+        case 'U':
+        {
+            char buf[16];
+            auto w = week(0);
+            sprintf(buf, "%02d", w);
+            result.append(String(buf));
+            break;
+        }
+        case 'u':
+        {
+            char buf[16];
+            auto w = week(1);
+            sprintf(buf, "%02d", w);
+            result.append(String(buf));
+            break;
+        }
+        case 'V':
+        {
+            char buf[16];
+            auto w = week(2);
+            sprintf(buf, "%02d", w);
+            result.append(String(buf));
+            break;
+        }
+        case 'v':
+        {
+            char buf[16];
+            auto [year, week] = calcWeek(3);
+            std::ignore = year;
+            sprintf(buf, "%02d", week);
+            result.append(String(buf));
+            break;
+        }
+        case 'a':
+        {
+            auto week_day = weekDay();
+            result.append(abbrev_weekday_names[week_day]);
+            break;
+        }
+        case 'W':
+        {
+            auto week_day = weekDay();
+            result.append(weekday_names[week_day]);
+            break;
+        }
+        case 'w':
+        {
+            auto week_day = weekDay();
+            result.append(std::to_string(week_day));
+            break;
+        }
+        case 'X':
+        {
+            char buf[16];
+            auto [year, week] = calcWeek(6);
+            std::ignore = week;
+            sprintf(buf, "%04d", year);
+            result.append(String(buf));
+            break;
+        }
+        case 'x':
+        {
+            char buf[16];
+            auto [year, week] = calcWeek(3);
+            std::ignore = week;
+            sprintf(buf, "%04d", year);
+            result.append(String(buf));
+            break;
+        }
         case 'Y':
         {
             char buf[16];
@@ -463,10 +669,7 @@ String MyDateTime::toString(int fsp) const
     return result;
 }
 
-bool isZeroDate(UInt64 time)
-{
-    return time == 0;
-}
+bool isZeroDate(UInt64 time) { return time == 0; }
 
 void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to)
 {
@@ -494,9 +697,101 @@ void convertTimeZoneByOffset(UInt64 from_time, UInt64 & to_time, Int64 offset, c
     time_t epoch = time_zone.makeDateTime(
         from_my_time.year, from_my_time.month, from_my_time.day, from_my_time.hour, from_my_time.minute, from_my_time.second);
     epoch += offset;
-    MyDateTime to_my_time(time_zone.toYear(epoch), time_zone.toMonth(epoch), time_zone.toDayOfMonth(epoch),
-                          time_zone.toHour(epoch), time_zone.toMinute(epoch), time_zone.toSecond(epoch), from_my_time.micro_second);
+    MyDateTime to_my_time(time_zone.toYear(epoch), time_zone.toMonth(epoch), time_zone.toDayOfMonth(epoch), time_zone.toHour(epoch),
+        time_zone.toMinute(epoch), time_zone.toSecond(epoch), from_my_time.micro_second);
     to_time = to_my_time.toPackedUInt();
+}
+
+// the implementation is the same as TiDB
+int calcDayNum(int year, int month, int day)
+{
+    if (year == 0 || month == 0)
+        return 0;
+    int delsum = 365 * year + 31 * (month - 1) + day;
+    if (month <= 2)
+    {
+        year--;
+    }
+    else
+    {
+        delsum -= (month * 4 + 23) / 10;
+    }
+    int temp = ((year / 100 + 1) * 3) / 4;
+    return delsum + year / 4 - temp;
+}
+
+size_t maxFormattedDateTimeStringLength(const String & format)
+{
+    size_t result = 0;
+    bool in_pattern_match = false;
+    for (size_t i = 0; i < format.size(); i++)
+    {
+        char x = format[i];
+        if (in_pattern_match)
+        {
+            switch (x)
+            {
+                case 'b':
+                case 'j':
+                case 'a':
+                    result += 3;
+                    break;
+                case 'M':
+                case 'W':
+                    result += 9;
+                    break;
+                case 'm':
+                case 'c':
+                case 'd':
+                case 'e':
+                case 'H':
+                case 'k':
+                case 'h':
+                case 'I':
+                case 'l':
+                case 'i':
+                case 'p':
+                case 'S':
+                case 's':
+                case 'U':
+                case 'u':
+                case 'V':
+                case 'v':
+                case 'y':
+                    result += 2;
+                    break;
+                case 'D':
+                case 'X':
+                case 'x':
+                case 'Y':
+                    result += 4;
+                    break;
+                case 'r':
+                    result += 11;
+                    break;
+                case 'T':
+                    result += 8;
+                    break;
+                case 'f':
+                    result += 6;
+                    break;
+                case 'w':
+                    result += 1;
+                    break;
+                default:
+                    result += 1;
+                    break;
+            }
+            in_pattern_match = false;
+            continue;
+        }
+
+        if (x == '%')
+            in_pattern_match = true;
+        else
+            result++;
+    }
+    return std::max<size_t>(result, 1);
 }
 
 } // namespace DB
