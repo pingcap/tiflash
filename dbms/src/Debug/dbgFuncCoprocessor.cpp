@@ -265,6 +265,28 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
             }
             return;
         }
+        else if (func_name_lowercase == "from_unixtime")
+        {
+            if (func->arguments->children.size() == 1)
+            {
+                expr->set_sig(tipb::ScalarFuncSig::FromUnixTime1Arg);
+                auto * ft = expr->mutable_field_type();
+                ft->set_tp(TiDB::TypeDatetime);
+                ft->set_decimal(6);
+            }
+            else
+            {
+                expr->set_sig(tipb::ScalarFuncSig::FromUnixTime2Arg);
+                auto * ft = expr->mutable_field_type();
+                ft->set_tp(TiDB::TypeString);
+            }
+        }
+        else if (func_name_lowercase == "date_format")
+        {
+            expr->set_sig(tipb::ScalarFuncSig::DateFormatSig);
+            auto * ft = expr->mutable_field_type();
+            ft->set_tp(TiDB::TypeString);
+        }
         else
         {
             throw Exception("Unsupported function: " + func_name_lowercase, ErrorCodes::LOGICAL_ERROR);

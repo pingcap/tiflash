@@ -379,21 +379,12 @@ void DAGExpressionAnalyzer::appendFinalProject(ExpressionActionsChain & chain, c
     }
 }
 
-void constructTZExpr(tipb::Expr & tz_expr, const tipb::DAGRequest & rqst, bool from_utc)
+void constructTZExpr(tipb::Expr & tz_expr, const TimezoneInfo & dag_timezone_info, bool from_utc)
 {
-    if (rqst.has_time_zone_name() && rqst.time_zone_name().length() > 0)
-        constructStringLiteralTiExpr(tz_expr, rqst.time_zone_name());
+    if (dag_timezone_info.is_name_based)
+        constructStringLiteralTiExpr(tz_expr, dag_timezone_info.timezone_name);
     else
-        constructInt64LiteralTiExpr(tz_expr, from_utc ? rqst.time_zone_offset() : -rqst.time_zone_offset());
-}
-
-bool hasMeaningfulTZInfo(const tipb::DAGRequest & rqst)
-{
-    if (rqst.has_time_zone_name() && rqst.time_zone_name().length() > 0)
-        return rqst.time_zone_name() != "UTC";
-    if (rqst.has_time_zone_offset())
-        return rqst.has_time_zone_offset() != 0;
-    return false;
+        constructInt64LiteralTiExpr(tz_expr, from_utc ? dag_timezone_info.timezone_offset : -dag_timezone_info.timezone_offset);
 }
 
 String DAGExpressionAnalyzer::appendTimeZoneCast(
@@ -414,20 +405,18 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
 // useless casts to all the timestamp columns, in order to avoid redundant cast, when cast the ts
 // column to the columns with session-level timezone info, the original ts columns with UTC timezone
 // are still kept, and the InterpreterDAG will choose the correct column based on encode type
-bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(
-    ExpressionActionsChain & chain, std::vector<bool> is_ts_column, const tipb::DAGRequest & rqst)
+bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(ExpressionActionsChain & chain, std::vector<bool> is_ts_column)
 {
-    if (!hasMeaningfulTZInfo(rqst))
+    if (context.getTimezoneInfo().is_utc_timezone)
         return false;
 
     bool ret = false;
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsPtr actions = chain.getLastActions();
     tipb::Expr tz_expr;
-    constructTZExpr(tz_expr, rqst, true);
+    constructTZExpr(tz_expr, context.getTimezoneInfo(), true);
     String tz_col;
-    String func_name
-        = rqst.has_time_zone_name() && rqst.time_zone_name().length() > 0 ? "ConvertTimeZoneFromUTC" : "ConvertTimeZoneByOffset";
+    String func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneFromUTC" : "ConvertTimeZoneByOffset";
     for (size_t i = 0; i < is_ts_column.size(); i++)
     {
         if (is_ts_column[i])
@@ -444,19 +433,18 @@ bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(
 }
 
 void DAGExpressionAnalyzer::appendAggSelect(
-    ExpressionActionsChain & chain, const tipb::Aggregation & aggregation, const tipb::DAGRequest & rqst, bool keep_session_timezone_info)
+    ExpressionActionsChain & chain, const tipb::Aggregation & aggregation, bool keep_session_timezone_info)
 {
     initChain(chain, getCurrentInputColumns());
     bool need_update_aggregated_columns = false;
     std::vector<NameAndTypePair> updated_aggregated_columns;
     ExpressionActionsChain::Step step = chain.steps.back();
-    bool need_append_timezone_cast = !keep_session_timezone_info && hasMeaningfulTZInfo(rqst);
+    bool need_append_timezone_cast = !keep_session_timezone_info && !context.getTimezoneInfo().is_utc_timezone;
     tipb::Expr tz_expr;
     if (need_append_timezone_cast)
-        constructTZExpr(tz_expr, rqst, false);
+        constructTZExpr(tz_expr, context.getTimezoneInfo(), false);
     String tz_col;
-    String tz_cast_func_name
-        = rqst.has_time_zone_name() && rqst.time_zone_name().length() > 0 ? "ConvertTimeZoneToUTC" : "ConvertTimeZoneByOffset";
+    String tz_cast_func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneToUTC" : "ConvertTimeZoneByOffset";
     for (Int32 i = 0; i < aggregation.agg_func_size(); i++)
     {
         String & name = aggregated_columns[i].name;
