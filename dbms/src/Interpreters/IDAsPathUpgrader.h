@@ -1,5 +1,4 @@
 #include <Core/Types.h>
-#include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/Types.h>
 
 #include <map>
@@ -24,6 +23,7 @@ namespace DB
 
 class Context;
 class PathPool;
+struct SchemaNameMapper;
 
 class IDAsPathUpgrader
 {
@@ -32,8 +32,17 @@ public:
 
     struct TableDiskInfo
     {
-        TableID id;
-        String name;
+    public:
+        String name() const;
+        String newName() const;
+
+        TableDiskInfo(TiDB::TableInfoPtr info_, std::shared_ptr<SchemaNameMapper> mapper_)
+            : tidb_table_info(std::move(info_)), mapper(std::move(mapper_))
+        {}
+
+    private:
+        TiDB::TableInfoPtr tidb_table_info;
+        std::shared_ptr<SchemaNameMapper> mapper;
 
     public:
         // "metadata/${db_name}/${tbl_name}.sql"
@@ -55,24 +64,26 @@ public:
     {
     public:
         static constexpr auto TMP_SUFFIX = "_flash_upgrade";
-        static constexpr auto UNINIT_ID = -1;
 
         String engine;
         std::vector<TableDiskInfo> tables;
 
     private:
         String name;
+        std::shared_ptr<SchemaNameMapper> mapper;
         bool moved_to_tmp = false;
         TiDB::DBInfoPtr tidb_db_info = nullptr;
 
+        const TiDB::DBInfo & getInfo() const;
+
     public:
-        DatabaseDiskInfo(String name_) : name(std::move(name_)) {}
+        DatabaseDiskInfo(String name_, std::shared_ptr<SchemaNameMapper> mapper_) : name(std::move(name_)), mapper(std::move(mapper_)) {}
 
         void setDBInfo(TiDB::DBInfoPtr info_);
 
         bool hasValidTiDBInfo() const { return tidb_db_info != nullptr; }
 
-        DatabaseID getID() const;
+        String newName() const;
 
         String getTiDBSerializeInfo() const;
 
@@ -110,8 +121,8 @@ public:
 public:
     /// Upgrader
     // If some database can not find in TiDB, they will be dropped
-    // if theirs name is not default_db or not in ignore_dbs
-    IDAsPathUpgrader(Context & global_ctx_, String default_db, std::unordered_set<std::string> ignore_dbs);
+    // if theirs name is not in ignore_dbs
+    IDAsPathUpgrader(Context & global_ctx_, bool is_mock_);
 
     bool needUpgrade();
 
@@ -134,13 +145,13 @@ private:
 private:
     Context & global_context;
 
-    std::unordered_set<std::string> non_drop_databases;
-
     const String root_path;
 
     std::map<String, DatabaseDiskInfo> databases;
 
-    SchemaNameMapper mapper;
+    const bool is_mock = false;
+
+    std::shared_ptr<SchemaNameMapper> mapper;
 
     Poco::Logger * log;
 };

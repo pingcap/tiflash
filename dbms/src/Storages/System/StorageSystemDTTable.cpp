@@ -124,9 +124,9 @@ BlockInputStreams StorageSystemDTTables::read(const Names & column_names,
 
             String tidb_db_name;
             if (db_tiflash)
-                tidb_db_name = mapper.displayDatabaseName(db_tiflash->getDatabaseInfo(), false);
+                tidb_db_name = mapper.displayDatabaseName(db_tiflash->getDatabaseInfo());
             res_columns[j++]->insert(tidb_db_name);
-            String tidb_table_name = mapper.displayTableName(table_info, false);
+            String tidb_table_name = mapper.displayTableName(table_info);
             res_columns[j++]->insert(tidb_table_name);
             res_columns[j++]->insert(table_id);
 

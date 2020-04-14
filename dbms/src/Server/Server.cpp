@@ -203,31 +203,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         Poco::File(candidate_path + "data/" + default_database).createDirectories();
     }
-
-    {
-        // Create "default" database with database engine "TiFlash", some mock tests may create table within default database.
-        std::string default_database_meta = path + "metadata/" + escapeForFileName(default_database);
-        Poco::File(default_database_meta).createDirectories();
-        std::string default_database_meta_file = default_database_meta + ".sql";
-        if (auto file = Poco::File{default_database_meta_file}; !file.exists())
-        {
-            std::string default_database_meta_file_tmp = default_database_meta_file + ".tmp";
-            if (auto file = Poco::File{default_database_meta_file_tmp}; file.exists())
-                file.remove();
-
-            const String statement = "CREATE DATABASE IF NOT EXISTS " + backQuoteIfNeed(default_database) + " ENGINE = TiFlash";
-            {
-                WriteBufferFromFile out(default_database_meta_file_tmp, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
-                writeString(statement, out);
-                out.next();
-                const auto & settings = global_context->getSettingsRef();
-                if (settings.fsync_metadata)
-                    out.sync();
-                out.close();
-            }
-            Poco::File(default_database_meta_file_tmp).renameTo(default_database_meta_file);
-        }
-    }
+    Poco::File(path + "metadata/" + default_database).createDirectories();
 
     StatusFile status{path + "status"};
 
@@ -450,13 +426,18 @@ int Server::main(const std::vector<std::string> & /*args*/)
             String ignore_dbs = config().getString("raft.ignore_databases");
             Poco::StringTokenizer string_tokens(ignore_dbs, ",");
             std::stringstream ss;
+            bool first = true;
             for (auto string_token : string_tokens)
             {
                 string_token = Poco::trimInPlace(string_token);
                 ignore_databases.emplace(string_token);
-                ss << string_token << std::endl;
+                if (first)
+                    first = false;
+                else
+                    ss << ", ";
+                ss << string_token;
             }
-            LOG_INFO(log, "Found ignore databases:\n" << ss.str());
+            LOG_INFO(log, "Found ignore databases:" << ss.str());
         }
 
         if (config().has("raft.kvstore_path"))
@@ -510,7 +491,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         do
         {
             // Check whether we need to upgrade directories hierarchy
-            IDAsPathUpgrader upgrader(*global_context, default_database, ignore_databases);
+            // If some database can not find in TiDB, they will be dropped
+            // if theirs name is not in ignore_dbs
+            IDAsPathUpgrader upgrader(*global_context, /*is_mock=*/pd_addrs.empty());
             if (!upgrader.needUpgrade())
                 break;
             upgrader.doUpgrade();

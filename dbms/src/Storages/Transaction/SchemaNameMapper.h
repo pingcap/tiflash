@@ -13,30 +13,22 @@ struct SchemaNameMapper
     static constexpr auto DATABASE_PREFIX = "db_";
     static constexpr auto TABLE_PREFIX = "t_";
 
-    static String mapDatabaseName(DatabaseID id) { return DATABASE_PREFIX + std::to_string(id); }
-    static String mapTableName(TableID id) { return TABLE_PREFIX + std::to_string(id); }
+    virtual String mapDatabaseName(const TiDB::DBInfo & db_info) const { return DATABASE_PREFIX + std::to_string(db_info.id); }
+    virtual String displayDatabaseName(const TiDB::DBInfo & db_info) const { return db_info.name; }
+    virtual String mapTableName(const TiDB::TableInfo & table_info) const { return TABLE_PREFIX + std::to_string(table_info.id); }
+    virtual String displayTableName(const TiDB::TableInfo & table_info) const { return table_info.name; }
+    virtual String mapPartitionName(const TiDB::TableInfo & table_info) const { return mapTableName(table_info); }
 
-    virtual String mapDatabaseName(const TiDB::DBInfo & db_info) const { return mapDatabaseName(db_info.id); }
-    virtual String displayDatabaseName(const TiDB::DBInfo & db_info, bool show_id = true) const
+    // Only use for logging / debugging
+    virtual String debugDatabaseName(const TiDB::DBInfo & db_info) const { return db_info.name + "(" + std::to_string(db_info.id) + ")"; }
+    virtual String debugTableName(const TiDB::TableInfo & table_info) const
     {
-        String res = db_info.name;
-        if (show_id)
-            res += "(" + std::to_string(db_info.id) + ")";
-        return res;
-    }
-    virtual String mapTableName(const TiDB::TableInfo & table_info) const { return mapTableName(table_info.id); }
-    virtual String displayTableName(const TiDB::TableInfo & table_info, bool show_id = true) const
-    {
-        String res = table_info.name;
-        if (show_id)
-            res += "(" + std::to_string(table_info.id) + ")";
-        return res;
+        return table_info.name + "(" + std::to_string(table_info.id) + ")";
     }
     virtual String displayCanonicalName(const TiDB::DBInfo & db_info, const TiDB::TableInfo & table_info) const
     {
-        return displayDatabaseName(db_info) + "." + displayTableName(table_info);
+        return debugDatabaseName(db_info) + "." + debugTableName(table_info);
     }
-    virtual String mapPartitionName(const TiDB::TableInfo & table_info) const { return mapTableName(table_info); }
 };
 
 } // namespace DB

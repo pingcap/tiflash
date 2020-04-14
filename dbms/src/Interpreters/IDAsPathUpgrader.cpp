@@ -3,6 +3,7 @@
 #include <Common/typeid_cast.h>
 #include <Databases/DatabaseOrdinary.h>
 #include <Databases/DatabasesCommon.h>
+#include <Debug/MockSchemaNameMapper.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Interpreters/Context.h>
@@ -39,7 +40,7 @@ static constexpr auto SYSTEM_DATABASE = "system";
 
 namespace
 {
-std::shared_ptr<ASTFunction> getDatabaseEngine(const String & db_name, const String & filename)
+std::shared_ptr<ASTFunction> getDatabaseEngine(const String & filename)
 {
     String query;
     if (Poco::File(filename).exists())
@@ -47,13 +48,10 @@ std::shared_ptr<ASTFunction> getDatabaseEngine(const String & db_name, const Str
         ReadBufferFromFile in(filename, 1024);
         readStringUntilEOF(query, in);
     }
-    else if (db_name == SYSTEM_DATABASE)
-    {
-        return std::static_pointer_cast<ASTFunction>(makeASTFunction("Ordinary"));
-    }
     else
     {
-        throw Exception("Can not open database schema file: " + filename, ErrorCodes::LOGICAL_ERROR);
+        // only directory exists, "default" database, return "Ordinary" engine by default.
+        return std::static_pointer_cast<ASTFunction>(makeASTFunction("Ordinary"));
     }
 
     ParserCreateQuery parser;
@@ -68,7 +66,7 @@ std::shared_ptr<ASTFunction> getDatabaseEngine(const String & db_name, const Str
     return std::static_pointer_cast<ASTFunction>(storage->engine->clone());
 }
 
-std::optional<TiDB::TableInfo> getTableInfo(const String & table_metadata_file)
+TiDB::TableInfo getTableInfo(const String & table_metadata_file)
 {
     String definition;
     if (Poco::File(table_metadata_file).exists())
@@ -122,15 +120,11 @@ std::optional<TiDB::TableInfo> getTableInfo(const String & table_metadata_file)
         if (!table_info_json.empty())
         {
             info.deserialize(table_info_json);
-            return std::make_optional(info);
+            return info;
         }
     }
-    else
-    {
-        throw Exception("Can not get TableInfo for file: " + table_metadata_file, ErrorCodes::BAD_ARGUMENTS);
-    }
 
-    return std::nullopt;
+    throw Exception("Can not get TableInfo for file: " + table_metadata_file, ErrorCodes::BAD_ARGUMENTS);
 }
 
 void renamePath(const String & old_path, const String & new_path, Poco::Logger * log, bool must_success)
@@ -228,36 +222,39 @@ inline bool isSamePath(const String & lhs, const String & rhs) { return Poco::Pa
 //   TableDiskInfo
 // ================================================
 
+String IDAsPathUpgrader::TableDiskInfo::name() const { return tidb_table_info->name; }
+String IDAsPathUpgrader::TableDiskInfo::newName() const { return mapper->mapTableName(*tidb_table_info); }
+
 // "metadata/${db_name}/${tbl_name}.sql"
 String IDAsPathUpgrader::TableDiskInfo::getMetaFilePath(const String & root_path, const DatabaseDiskInfo & db) const
 {
-    return db.getMetaDirectory(root_path) + escapeForFileName(name) + ".sql";
+    return db.getMetaDirectory(root_path) + escapeForFileName(name()) + ".sql";
 }
 // "data/${db_name}/${tbl_name}/"
 String IDAsPathUpgrader::TableDiskInfo::getDataDirectory(const String & root_path, const DatabaseDiskInfo & db) const
 {
-    return db.getDataDirectory(root_path) + escapeForFileName(name) + "/";
+    return db.getDataDirectory(root_path) + escapeForFileName(name()) + "/";
 }
 // "extra_data/${db_name}/${tbl_name}/"
 String IDAsPathUpgrader::TableDiskInfo::getExtraDirectory(const String & root_path, const DatabaseDiskInfo & db) const
 {
-    return db.getExtraDirectory(root_path) + escapeForFileName(name) + "/";
+    return db.getExtraDirectory(root_path) + escapeForFileName(name()) + "/";
 }
 
 // "metadata/db_${db_id}/t_${id}.sql"
 String IDAsPathUpgrader::TableDiskInfo::getNewMetaFilePath(const String & root_path, const DatabaseDiskInfo & db) const
 {
-    return db.getNewMetaDirectory(root_path) + escapeForFileName(SchemaNameMapper::mapTableName(id)) + ".sql";
+    return db.getNewMetaDirectory(root_path) + escapeForFileName(newName()) + ".sql";
 }
 // "data/t_${id}/"
 String IDAsPathUpgrader::TableDiskInfo::getNewDataDirectory(const String & root_path, const DatabaseDiskInfo & db) const
 {
-    return db.getNewDataDirectory(root_path) + escapeForFileName(SchemaNameMapper::mapTableName(id)) + "/";
+    return db.getNewDataDirectory(root_path) + escapeForFileName(newName()) + "/";
 }
 // "extra_data/t_${id}"
 String IDAsPathUpgrader::TableDiskInfo::getNewExtraDirectory(const String & root_path, const DatabaseDiskInfo & db) const
 {
-    return db.getNewExtraDirectory(root_path) + escapeForFileName(SchemaNameMapper::mapTableName(id)) + "/";
+    return db.getNewExtraDirectory(root_path) + escapeForFileName(newName()) + "/";
 }
 
 // ================================================
@@ -266,12 +263,14 @@ String IDAsPathUpgrader::TableDiskInfo::getNewExtraDirectory(const String & root
 
 void IDAsPathUpgrader::DatabaseDiskInfo::setDBInfo(TiDB::DBInfoPtr info_) { tidb_db_info = info_; }
 
-DatabaseID IDAsPathUpgrader::DatabaseDiskInfo::getID() const
+const TiDB::DBInfo & IDAsPathUpgrader::DatabaseDiskInfo::getInfo() const
 {
     if (!hasValidTiDBInfo())
-        throw Exception("Try to get database id of not inited database: " + name);
-    return tidb_db_info->id;
+        throw Exception("Try to get database info of not inited database: " + name);
+    return *tidb_db_info;
 }
+
+String IDAsPathUpgrader::DatabaseDiskInfo::newName() const { return mapper->mapDatabaseName(getInfo()); }
 
 String IDAsPathUpgrader::DatabaseDiskInfo::getTiDBSerializeInfo() const
 {
@@ -311,7 +310,7 @@ String IDAsPathUpgrader::DatabaseDiskInfo::getNewMetaFilePath(const String & roo
 // "metadata/db_${id}/"
 String IDAsPathUpgrader::DatabaseDiskInfo::getNewMetaDirectory(const String & root_path) const
 {
-    return root_path + "/metadata/" + escapeForFileName(SchemaNameMapper::mapDatabaseName(getID())) + "/";
+    return root_path + "/metadata/" + escapeForFileName(newName()) + "/";
 }
 // "data/"
 String IDAsPathUpgrader::DatabaseDiskInfo::getNewDataDirectory(const String & root_path) const { return root_path + "/data/"; }
@@ -345,15 +344,14 @@ void IDAsPathUpgrader::DatabaseDiskInfo::renameToTmpDirectories(const Context & 
 //   IDAsPathUpgrader
 // ================================================
 
-IDAsPathUpgrader::IDAsPathUpgrader(Context & global_ctx_, String default_db, std::unordered_set<std::string> ignore_dbs)
+IDAsPathUpgrader::IDAsPathUpgrader(Context & global_ctx_, bool is_mock_)
     : global_context(global_ctx_),
-      non_drop_databases(std::move(ignore_dbs)),
       root_path{global_context.getPath()},
+      is_mock(is_mock_),
+      mapper(is_mock ? std::make_shared<MockSchemaNameMapper>() //
+                     : std::make_shared<SchemaNameMapper>()),
       log{&Logger::get("IDAsPathUpgrader")}
-{
-    if (!default_db.empty())
-        non_drop_databases.emplace(default_db);
-}
+{}
 
 bool IDAsPathUpgrader::needUpgrade()
 {
@@ -374,14 +372,15 @@ bool IDAsPathUpgrader::needUpgrade()
             continue;
 
         String db_name = unescapeForFileName(it.name());
-        databases.emplace(db_name, DatabaseDiskInfo{db_name});
+        databases.emplace(db_name, DatabaseDiskInfo{db_name, mapper});
     }
 
     bool has_old_db_engine = false;
     for (auto && [db_name, db_info] : databases)
     {
+        (void)db_name;
         const String database_metadata_file = db_info.getMetaFilePath(root_path);
-        auto engine = getDatabaseEngine(db_name, database_metadata_file);
+        auto engine = getDatabaseEngine(database_metadata_file);
         db_info.engine = engine->name;
         if (db_info.engine != "TiFlash")
         {
@@ -400,10 +399,11 @@ std::vector<TiDB::DBInfoPtr> IDAsPathUpgrader::fetchInfosFromTiDB() const
     return schema_syncer->fetchAllDBs();
 }
 
-static void dropAbsentDatabase(Context & context, const IDAsPathUpgrader::DatabaseDiskInfo & db_info, Poco::Logger * log)
+static void dropAbsentDatabase(
+    Context & context, const String & db_name, const IDAsPathUpgrader::DatabaseDiskInfo & db_info, Poco::Logger * log)
 {
     if (db_info.hasValidTiDBInfo())
-        throw Exception("Invalid call for dropAbsentDatabase with id=" + DB::toString(db_info.getID()));
+        throw Exception("Invalid call for dropAbsentDatabase for database " + db_name + " with info: " + db_info.getTiDBSerializeInfo());
 
     /// tryRemoveDirectory with recursive=true to clean up
 
@@ -438,32 +438,32 @@ void IDAsPathUpgrader::linkDatabaseTableInfos(const std::vector<TiDB::DBInfoPtr>
     }
 
     // list all table in old style.
-    bool is_mock_test = global_context.getTMTContext().getSchemaSyncer()->isMock();
     for (auto iter = databases.begin(); iter != databases.end(); /*empty*/)
     {
         const auto & db_name = iter->first;
         auto & db_info = iter->second;
-        if (unlikely(is_mock_test && non_drop_databases.count(db_name) > 0))
+        if (!db_info.hasValidTiDBInfo())
         {
-            LOG_DEBUG(log, "Database `" << db_name << "` is default database or ignore databas, won't drop it in mock test.");
+            // If we can't find it in TiDB, maybe it already dropped.
+            if (is_mock)
+            {
+                // For mock test or develop environment, which we don't actually sync
+                // anything from TiDB, just keep them as what they are for convenience.
+                // Print warnings and ignore it in later upgrade.
+                LOG_WARNING(log, "Database " + db_name + " not found in TiDB, ignored in upgrade.");
+            }
+            else
+            {
+                // If we keep them as "Ordinary", when user actually create database with
+                // same name, next time TiFlash restart and will try to do "upgrade" on
+                // those legacy data, and it will mess everything up.
+                // Drop them.
+                dropAbsentDatabase(global_context, db_name, db_info, log);
+            }
             iter = databases.erase(iter);
             continue;
         }
 
-        if (!db_info.hasValidTiDBInfo())
-        {
-            if (non_drop_databases.count(db_name) == 0)
-            {
-                LOG_WARNING(log, "Database " << db_name << " may already dropped in TiDB, drop it..");
-                dropAbsentDatabase(global_context, db_info, log);
-            }
-            else
-            {
-                LOG_DEBUG(log, "Database `" << db_name << "` is default database or ignore databas, won't drop it.");
-            }
-            iter = databases.erase(iter);
-            continue;
-        }
         if (db_info.engine == "TiFlash")
         {
             ++iter;
@@ -476,13 +476,8 @@ void IDAsPathUpgrader::linkDatabaseTableInfos(const std::vector<TiDB::DBInfoPtr>
         {
             String table_meta_file = db_meta_dir + "/" + table_filename;
             auto table_info = getTableInfo(table_meta_file);
-            if (table_info.has_value())
-            {
-                TableDiskInfo disk_info;
-                disk_info.id = table_info->id;
-                disk_info.name = table_info->name;
-                db_info.tables.emplace_back(std::move(disk_info));
-            }
+            db_info.tables.emplace_back( //
+                TableDiskInfo{std::make_shared<TiDB::TableInfo>(table_info), mapper});
         }
         ++iter;
     }
@@ -497,27 +492,27 @@ void IDAsPathUpgrader::resolveConflictDirectories()
         // First detect if there is any database may have cyclic rename with table.
         for (const auto & table : db_info.tables)
         {
-            const auto new_tbl_name = mapper.mapTableName(table.id);
+            const auto new_tbl_name = table.newName();
             if (auto iter = databases.find(new_tbl_name); iter != databases.end())
             {
                 conflict_databases.insert(iter->first);
                 LOG_INFO(log,
                     "Detect cyclic renaming between table `" //
-                        << db_name << "`.`" << table.name    //
-                        << "`(id:" << table.id               //
+                        << db_name << "`.`" << table.name()  //
+                        << "`(new name:" << new_tbl_name     //
                         << ") and database `" << iter->first << "`");
             }
         }
 
         // In theory, user can create two database naming "db_xx" and there is cyclic renaming.
         // We need to break that cyclic.
-        const auto new_database_name = mapper.mapDatabaseName(db_info.getID());
+        const auto new_database_name = db_info.newName();
         if (auto iter = databases.find(new_database_name); iter != databases.end())
         {
             conflict_databases.insert(iter->first);
             LOG_INFO(log,
-                "Detect cyclic renaming between database `"  //
-                    << db_name << "`(id:" << db_info.getID() //
+                "Detect cyclic renaming between database `"          //
+                    << db_name << "`(new name:" << new_database_name //
                     << ") and database `" << iter->first << "`");
         }
     }
@@ -541,7 +536,7 @@ void IDAsPathUpgrader::doRename()
 
 void IDAsPathUpgrader::renameDatabase(const String & db_name, const DatabaseDiskInfo & db_info)
 {
-    const auto mapped_db_name = mapper.mapDatabaseName(db_info.getID());
+    const auto mapped_db_name = db_info.newName();
 
     {
         // Create directory for target database
@@ -591,9 +586,9 @@ void IDAsPathUpgrader::renameDatabase(const String & db_name, const DatabaseDisk
 void IDAsPathUpgrader::renameTable(
     const String & db_name, const DatabaseDiskInfo & db_info, const String & mapped_db_name, const TableDiskInfo & table)
 {
-    const auto mapped_table_name = mapper.mapTableName(table.id);
+    const auto mapped_table_name = table.newName();
     LOG_INFO(log,
-        "table `" << db_name << "`.`" << table.name << "` to `" //
+        "table `" << db_name << "`.`" << table.name() << "` to `" //
                   << mapped_db_name << "`.`" << mapped_table_name << "` renaming");
 
     String old_tbl_data_path;
@@ -621,7 +616,7 @@ void IDAsPathUpgrader::renameTable(
         auto old_tbl_meta_file = table.getMetaFilePath(root_path, db_info);
         auto ast = DatabaseLoading::getQueryFromMetadata(old_tbl_meta_file, /*throw_on_error=*/true);
         if (!ast)
-            throw Exception("There is no metadata file for table " + table.name + ", expected file: " + old_tbl_meta_file,
+            throw Exception("There is no metadata file for table " + table.name() + ", expected file: " + old_tbl_meta_file,
                 ErrorCodes::FILE_DOESNT_EXIST);
         ASTCreateQuery & ast_create_query = typeid_cast<ASTCreateQuery &>(*ast);
         ast_create_query.table = mapped_table_name;
@@ -635,7 +630,7 @@ void IDAsPathUpgrader::renameTable(
     }
 
     LOG_INFO(log,
-        "table `" << db_name << "`.`" << table.name << "` to `" //
+        "table `" << db_name << "`.`" << table.name() << "` to `" //
                   << mapped_db_name << "`.`" << mapped_table_name << "` rename done.");
 }
 

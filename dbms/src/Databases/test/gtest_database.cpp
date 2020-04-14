@@ -31,16 +31,9 @@ class DatabaseTiFlash_test : public ::testing::Test
 public:
     constexpr static const char * TEST_DB_NAME = "test";
 
-    DatabaseTiFlash_test()
-    {
-        try
-        {
-            registerStorages();
-        }
-        catch (DB::Exception &)
-        {
-        }
-    }
+    static void SetUpTestCase() { registerStorages(); }
+
+    DatabaseTiFlash_test() {}
 
     void SetUp() override { recreateMetadataPath(); }
 

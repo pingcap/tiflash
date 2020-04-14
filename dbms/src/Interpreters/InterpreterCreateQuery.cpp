@@ -90,7 +90,7 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
     {
         const ASTStorage & storage = *create.storage;
         const ASTFunction & engine = *storage.engine;
-        /// Currently, only "TiFlash" database engines support arguments.
+        /// Currently, only "TiFlash" database engine support arguments.
         if ((engine.name != "TiFlash" && engine.arguments) || engine.parameters || storage.partition_by || storage.order_by || storage.sample_by || storage.settings)
         {
             std::stringstream ostr;
@@ -142,7 +142,7 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
             Poco::File(metadata_file_tmp_path).renameTo(metadata_file_path);
 
         FAIL_POINT_TRIGGER_EXCEPTION(exception_between_alter_data_and_meta);
-        // meta file (not temporary) of database exist means create database success, 
+        // meta file (not temporary) of database exists means create database success, 
         // we need to create meta directory for it if not exists.
         if (auto db_meta_path = Poco::File(database->getMetadataPath()); !db_meta_path.exists())
         {
