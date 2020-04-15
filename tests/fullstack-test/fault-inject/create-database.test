@@ -19,7 +19,7 @@ mysql> insert into db_test.t values (1, 2)
 
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from db_test.t;
 +---+---+
-| c | b |
+| a | b |
 +---+---+
 | 1 | 1 |
 | 1 | 2 |
