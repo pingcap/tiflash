@@ -153,6 +153,12 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
     }
     catch (...)
     {
+        if (context.tryGetDatabase(database_name) != nullptr)
+        {
+            // We need to detach database from context
+            context.detachDatabase(database_name);
+        }
+
         if (need_write_metadata)
         {
             if (auto file = Poco::File(metadata_file_tmp_path); file.exists())
