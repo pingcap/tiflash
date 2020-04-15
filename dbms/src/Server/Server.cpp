@@ -513,7 +513,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             // Check whether we need to upgrade directories hierarchy
             // If some database can not find in TiDB, they will be dropped
-            IDAsPathUpgrader upgrader(*global_context, /*is_mock=*/raft_config.pd_addrs.empty());
+            // if theirs name is not in reserved_databases
+            IDAsPathUpgrader upgrader(
+                *global_context, /*is_mock=*/raft_config.pd_addrs.empty(), /*reserved_databases=*/raft_config.ignore_databases);
             if (!upgrader.needUpgrade())
                 break;
             upgrader.doUpgrade();

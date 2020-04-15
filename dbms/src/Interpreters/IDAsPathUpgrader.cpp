@@ -345,12 +345,13 @@ void IDAsPathUpgrader::DatabaseDiskInfo::renameToTmpDirectories(const Context & 
 //   IDAsPathUpgrader
 // ================================================
 
-IDAsPathUpgrader::IDAsPathUpgrader(Context & global_ctx_, bool is_mock_)
+IDAsPathUpgrader::IDAsPathUpgrader(Context & global_ctx_, bool is_mock_, std::unordered_set<std::string> reserved_databases_)
     : global_context(global_ctx_),
       root_path{global_context.getPath()},
       is_mock(is_mock_),
       mapper(is_mock ? std::make_shared<MockSchemaNameMapper>() //
                      : std::make_shared<SchemaNameMapper>()),
+      reserved_databases{std::move(reserved_databases_)},
       log{&Logger::get("IDAsPathUpgrader")}
 {}
 
@@ -446,12 +447,12 @@ void IDAsPathUpgrader::linkDatabaseTableInfos(const std::vector<TiDB::DBInfoPtr>
         if (!db_info.hasValidTiDBInfo())
         {
             // If we can't find it in TiDB, maybe it already dropped.
-            if (is_mock)
+            if (reserved_databases.count(db_name) > 0)
             {
-                // For mock test or develop environment, which we don't actually sync
-                // anything from TiDB, just keep them as what they are for convenience.
-                // Print warnings and ignore it in later upgrade.
-                LOG_WARNING(log, "Database " + db_name + " not found in TiDB, ignored in upgrade.");
+                // For mock test or develop environment, we may reserve some database 
+                // for convenience. Keep them as what they are. Print warnings and 
+                // ignore it in later upgrade.
+                LOG_WARNING(log, "Database " + db_name + " is reserved, ignored in upgrade.");
             }
             else
             {
