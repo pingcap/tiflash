@@ -305,31 +305,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         Poco::File(candidate_path + "data/" + default_database).createDirectories();
     }
-
-    {
-        // Create "default" database with database engine "TiFlash", some mock tests may create table within default database.
-        std::string default_database_meta = path + "metadata/" + escapeForFileName(default_database);
-        Poco::File(default_database_meta).createDirectories();
-        std::string default_database_meta_file = default_database_meta + ".sql";
-        if (auto file = Poco::File{default_database_meta_file}; !file.exists())
-        {
-            std::string default_database_meta_file_tmp = default_database_meta_file + ".tmp";
-            if (auto file = Poco::File{default_database_meta_file_tmp}; file.exists())
-                file.remove();
-
-            const String statement = "CREATE DATABASE IF NOT EXISTS " + backQuoteIfNeed(default_database) + " ENGINE = TiFlash";
-            {
-                WriteBufferFromFile out(default_database_meta_file_tmp, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
-                writeString(statement, out);
-                out.next();
-                const auto & settings = global_context->getSettingsRef();
-                if (settings.fsync_metadata)
-                    out.sync();
-                out.close();
-            }
-            Poco::File(default_database_meta_file_tmp).renameTo(default_database_meta_file);
-        }
-    }
+    Poco::File(path + "metadata/" + default_database).createDirectories();
 
     StatusFile status{path + "status"};
 
@@ -548,8 +524,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     LOG_DEBUG(log, "Load metadata done.");
 
-    global_context->setCurrentDatabase(default_database);
-
     /// Then, sync schemas with TiDB, and initialize schema sync service.
     for (int i = 0; i < 180; i++) // retry for 3 mins
     {
@@ -566,6 +540,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     }
     LOG_DEBUG(log, "Sync schemas done.");
+
+    // After schema synced, set current database.
+    global_context->setCurrentDatabase(default_database);
+
     global_context->initializeSchemaSyncService();
 
     SCOPE_EXIT({
