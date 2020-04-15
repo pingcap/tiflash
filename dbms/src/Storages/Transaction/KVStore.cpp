@@ -105,7 +105,7 @@ void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
     }
 }
 
-bool KVStore::onSnapshot(RegionPtr new_region, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt)
+void KVStore::onSnapshot(RegionPtr new_region, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt)
 {
     RegionID region_id = new_region->id();
 
@@ -131,7 +131,8 @@ bool KVStore::onSnapshot(RegionPtr new_region, RegionPtr old_region, UInt64 old_
 
         if (getRegion(region_id) != old_region || (old_region && old_region_index != old_region->appliedIndex()))
         {
-            Exception(std::string(__PRETTY_FUNCTION__) + ": region " + std::to_string(region_id) + " instance changed, should not happen",
+            throw Exception(
+                std::string(__PRETTY_FUNCTION__) + ": region " + std::to_string(region_id) + " instance changed, should not happen",
                 ErrorCodes::LOGICAL_ERROR);
         }
 
@@ -153,8 +154,6 @@ bool KVStore::onSnapshot(RegionPtr new_region, RegionPtr old_region, UInt64 old_
 
         tmt.getRegionTable().shrinkRegionRange(*new_region);
     }
-
-    return true;
 }
 
 void KVStore::tryPersist(const RegionID region_id)
