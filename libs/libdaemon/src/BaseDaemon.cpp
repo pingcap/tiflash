@@ -45,6 +45,7 @@
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <Poco/Message.h>
+#include <Poco/String.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Poco/Util/XMLConfiguration.h>
 #include <Poco/Util/MapConfiguration.h>
@@ -637,6 +638,20 @@ static bool tryCreateDirectories(Poco::Logger * logger, const std::string & path
     return false;
 }
 
+static std::string normalize(const std::string & log_level)
+{
+    std::string norm = Poco::toLower(log_level);
+    // normalize
+    // info -> information
+    // warn -> warning
+    if (norm == "info")
+        return "information";
+    else if (norm == "warn")
+        return "warning";
+    else
+        return norm;
+}
+
 
 void BaseDaemon::reloadConfiguration()
 {
@@ -706,7 +721,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
     // Split log and error log.
     Poco::AutoPtr<SplitterChannel> split = new SplitterChannel;
 
-    auto log_level = config.getString("logger.level", "trace");
+    auto log_level = normalize(config.getString("logger.level", "trace"));
     const auto log_path = config.getString("logger.log", "");
     if (!log_path.empty())
     {
