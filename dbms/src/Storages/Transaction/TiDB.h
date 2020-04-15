@@ -259,8 +259,6 @@ using TableInfoPtr = std::shared_ptr<TableInfo>;
 
 struct TableInfo
 {
-    static constexpr TableID DEFAULT_UNSPECIFIED_TABLE_ID = -1;
-
     TableInfo() = default;
 
     TableInfo(const TableInfo &) = default;
@@ -275,7 +273,7 @@ struct TableInfo
     // It is the physical table ID, i.e. table ID for non-partition table,
     // and partition ID for partition table,
     // whereas field `belonging_table_id` below actually means the table ID this partition belongs to.
-    TableID id = DEFAULT_UNSPECIFIED_TABLE_ID;
+    TableID id = DB::InvalidTableID;
     String name;
     // Columns are listed in the order in which they appear in the schema.
     std::vector<ColumnInfo> columns;
@@ -284,7 +282,7 @@ struct TableInfo
     String comment;
     Timestamp update_timestamp = 0;
     bool is_partition_table = false;
-    TableID belonging_table_id = DEFAULT_UNSPECIFIED_TABLE_ID;
+    TableID belonging_table_id = DB::InvalidTableID;
     PartitionInfo partition;
     // If the table is view, we should ignore it.
     bool is_view = false;
