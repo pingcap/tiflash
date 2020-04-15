@@ -61,7 +61,10 @@ public:
 
     void deleteRange(const DM::HandleRange & range_to_delete, const Settings & settings);
 
-    void rename(const String & /*new_path_to_db*/, const String & /*new_database_name*/, const String & /*new_table_name*/) override;
+    void rename(const String & new_path_to_db,
+        const String & new_database_name,
+        const String & new_table_name,
+        const String & new_display_table_name) override;
 
     void modifyASTStorage(ASTStorage * storage_ast, const TiDB::TableInfo & table_info) override;
 

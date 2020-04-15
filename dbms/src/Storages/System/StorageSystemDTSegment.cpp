@@ -23,6 +23,7 @@ StorageSystemDTSegments::StorageSystemDTSegments(const std::string & name_) : na
         {"tidb_database", std::make_shared<DataTypeString>()},
         {"tidb_table", std::make_shared<DataTypeString>()},
         {"table_id", std::make_shared<DataTypeInt64>()},
+        {"is_tombstone", std::make_shared<DataTypeUInt64>()},
 
         {"segment_id", std::make_shared<DataTypeUInt64>()},
         {"range", std::make_shared<DataTypeString>()},
@@ -88,6 +89,7 @@ BlockInputStreams StorageSystemDTSegments::read(const Names & column_names,
                 String tidb_table_name = mapper.displayTableName(table_info);
                 res_columns[j++]->insert(tidb_table_name);
                 res_columns[j++]->insert(table_id);
+                res_columns[j++]->insert(dm_storage->getTombstone());
 
                 res_columns[j++]->insert(stat.segment_id);
                 res_columns[j++]->insert(stat.range.toString());

@@ -126,6 +126,7 @@ StorageSystemTables::StorageSystemTables(const std::string & name_) : name(name_
         {"tidb_database", std::make_shared<DataTypeString>()},
         {"tidb_name", std::make_shared<DataTypeString>()},
         {"tidb_table_id", std::make_shared<DataTypeInt64>()},
+        {"is_tombstone", std::make_shared<DataTypeUInt64>()},
         {"is_temporary", std::make_shared<DataTypeUInt8>()},
         {"data_path", std::make_shared<DataTypeString>()},
         {"metadata_path", std::make_shared<DataTypeString>()},
@@ -203,6 +204,7 @@ BlockInputStreams StorageSystemTables::read(const Names & column_names,
             String tidb_database_name;
             String tidb_table_name;
             TableID table_id = -1;
+            Timestamp tombstone = 0;
             if (engine_name == MutableSupport::txn_storage_name || engine_name == MutableSupport::delta_tree_storage_name)
             {
                 auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(iterator->table());
@@ -213,12 +215,14 @@ BlockInputStreams StorageSystemTables::read(const Names & column_names,
                     auto & table_info = managed_storage->getTableInfo();
                     tidb_table_name = mapper.displayTableName(table_info);
                     table_id = table_info.id;
+                    tombstone = managed_storage->getTombstone();
                 }
             }
 
             res_columns[j++]->insert(tidb_database_name);
             res_columns[j++]->insert(tidb_table_name);
             res_columns[j++]->insert(Int64(table_id));
+            res_columns[j++]->insert(UInt64(tombstone));
 
             res_columns[j++]->insert(UInt64(0));
             res_columns[j++]->insert(iterator->table()->getDataPath());

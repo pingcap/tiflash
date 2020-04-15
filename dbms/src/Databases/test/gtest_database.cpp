@@ -219,7 +219,7 @@ try
     const String to_tbl_name = "t_112";
     {
         // Rename table
-        db->renameTable(ctx, tbl_name, *db, to_tbl_name);
+        typeid_cast<DatabaseTiFlash *>(db.get())->renameTable(ctx, tbl_name, *db, to_tbl_name, db_name, to_tbl_name);
 
         auto old_storage = db->tryGetTable(ctx, tbl_name);
         ASSERT_EQ(old_storage, nullptr);
@@ -339,7 +339,7 @@ try
     const String to_tbl_name = "t_112";
     {
         // Rename table
-        db->renameTable(ctx, tbl_name, *db2, to_tbl_name);
+        typeid_cast<DatabaseTiFlash *>(db.get())->renameTable(ctx, tbl_name, *db2, to_tbl_name, db2_name, to_tbl_name);
 
         auto old_storage = db->tryGetTable(ctx, tbl_name);
         ASSERT_EQ(old_storage, nullptr);
@@ -450,9 +450,10 @@ try
     EXPECT_TRUE(db->isTableExist(ctx, tbl_name));
 
     const String to_tbl_name = "t_112";
-    FailPointHelper::enableFailPoint("exception_before_rename_table_old_meta_removed");
     // Rename table to another database, and mock crash by failed point
-    ASSERT_THROW(db->renameTable(ctx, tbl_name, *db2, to_tbl_name), DB::Exception);
+    FailPointHelper::enableFailPoint("exception_before_rename_table_old_meta_removed");
+    ASSERT_THROW(
+        typeid_cast<DatabaseTiFlash *>(db.get())->renameTable(ctx, tbl_name, *db2, to_tbl_name, db2_name, to_tbl_name), DB::Exception);
 
     {
         // After fail point triggled we should have both meta file in disk

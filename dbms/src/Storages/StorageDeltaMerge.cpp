@@ -981,7 +981,8 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
 
 String StorageDeltaMerge::getName() const { return MutableSupport::delta_tree_storage_name; }
 
-void StorageDeltaMerge::rename(const String & new_path_to_db, const String & new_database_name, const String & new_table_name)
+void StorageDeltaMerge::rename(
+    const String & new_path_to_db, const String & new_database_name, const String & new_table_name, const String & new_display_table_name)
 {
     // For DatabaseTiFlash, simply update store's database is OK.
     // `store->getTableName() == new_table_name` only keep for mock test.
@@ -989,6 +990,7 @@ void StorageDeltaMerge::rename(const String & new_path_to_db, const String & new
     if (likely(clean_rename))
     {
         store->rename(new_path_to_db, clean_rename, new_database_name, new_table_name);
+        tidb_table_info.name = new_display_table_name;
         return;
     }
 
