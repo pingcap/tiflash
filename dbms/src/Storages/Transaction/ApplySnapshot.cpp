@@ -42,7 +42,7 @@ bool KVStore::tryApplySnapshot(RegionPtr new_region, Context & context)
         {
             LOG_INFO(log, old_region->toString() << " set state to Applying");
             // Set original region state to `Applying` and any read request toward this region should be rejected because
-            // dt engine may physical delete data.
+            // engine may delete data unsafely.
             auto task_lock = genTaskLock();
             auto region_lock = region_manager.genRegionTaskLock(old_region->id());
             old_region->setStateApplying();
