@@ -124,7 +124,7 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
         thread_pool->wait();
 
     // After all tables was basically initialized, startup them.
-    DatabaseLoading::startupTables(tables, thread_pool, log);
+    DatabaseLoading::startupTables(*this, name, tables, thread_pool, log);
 }
 
 
@@ -222,41 +222,75 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
             throw Exception("Table " + name + "." + table_name + " is not manageable storage.", ErrorCodes::UNKNOWN_TABLE);
     }
 
-    /// Notify the table that it is renamed. If the table does not support renaming, exception is thrown.
-    try
+    // First move table meta file to new database directory.
+    const String old_tbl_meta_file = getTableMetadataPath(table_name);
     {
-        if (name != to_database_concrete->name || table_name != to_table_name)
-        {
-            // First move table meta file to new database directory.
-            const String old_tbl_meta_file = getTableMetadataPath(table_name);
-            const String new_tbl_meta_file = to_database_concrete->getTableMetadataPath(to_table_name);
-            Poco::File{old_tbl_meta_file}.renameTo(new_tbl_meta_file);
+        // Generate new meta file according to ast in old meta file and to_table_name
+        const String new_tbl_meta_file = to_database_concrete->getTableMetadataPath(to_table_name);
+        const String new_tbl_meta_file_tmp = new_tbl_meta_file + ".tmp";
 
-            // Detach from this database and attach to new database
-            // Not atomic between two databases in memory, but not big deal,
-            // because of locks in InterpreterRenameQuery
-            StoragePtr detach_storage = detachTable(table_name);
-            to_database_concrete->attachTable(to_table_name, detach_storage);
+        ASTPtr ast;
+        String statement;
+        {
+            {
+                char in_buf[METADATA_FILE_BUFFER_SIZE];
+                ReadBufferFromFile in(old_tbl_meta_file, METADATA_FILE_BUFFER_SIZE, -1, in_buf);
+                readStringUntilEOF(statement, in);
+            }
+            ParserCreateQuery parser;
+            ast = parseQuery(parser, statement.data(), statement.data() + statement.size(), "in file " + old_tbl_meta_file, 0);
         }
 
-        // Update `table->getDatabase()` for IManageableStorage
-        table->rename(/*new_path_to_db=*/context.getPath() + "/data/", // DeltaTree just ignored this param
-            /*new_database_name=*/to_database_concrete->name, to_table_name);
+        ASTCreateQuery & ast_create_query = typeid_cast<ASTCreateQuery &>(*ast);
+        {
+            ast_create_query.table = to_table_name;
+            ASTStorage * storage_ast = ast_create_query.storage;
+            auto updated_table_info = table->getTableInfo();
+            updated_table_info.name = to_table_name;
+            table->modifyASTStorage(storage_ast, updated_table_info);
+        }
+        statement = getTableDefinitionFromCreateQuery(ast);
 
-        /// Nothing changed in table meta file, we can remove these comments later.
-        // auto updated_table_info = table->getTableInfo();
-        // updated_table_info.name = to_table_name;
-        // storage->alterFromTiDB(AlterCommands{}, to_database_concrete->name, name_mapper, context);
+        {
+            WriteBufferFromFile out(new_tbl_meta_file_tmp, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+            writeString(statement, out);
+            out.next();
+            if (context.getSettingsRef().fsync_metadata)
+                out.sync();
+            out.close();
+        }
+
+        try
+        {
+            /// rename atomically replaces the old file with the new one.
+            Poco::File(new_tbl_meta_file_tmp).renameTo(new_tbl_meta_file);
+        }
+        catch (...)
+        {
+            Poco::File(new_tbl_meta_file_tmp).remove();
+            throw;
+        }
     }
-    catch (const Exception & e)
-    {
-        throw;
-    }
-    catch (const Poco::Exception & e)
-    {
-        /// Better diagnostics.
-        throw Exception{e};
-    }
+
+    FAIL_POINT_TRIGGER_EXCEPTION(exception_before_rename_table_old_meta_removed);
+
+    // If process crash before removing old table meta file, we will continue or rollback this
+    // rename command next time `loadTables` is called. See `loadTables` and
+    // `DatabaseLoading::startupTables` for more details.
+    Poco::File{old_tbl_meta_file}.remove(); // Then remove old meta file
+
+    //// Note that remains codes should only change variables in memory if this rename command
+    //// is synced from TiDB, aka table_name always equal to to_table_name.
+
+    // Detach from this database and attach to new database
+    // Not atomic between two databases in memory, but not big deal,
+    // because of locks in InterpreterRenameQuery
+    StoragePtr detach_storage = detachTable(table_name);
+    to_database_concrete->attachTable(to_table_name, detach_storage);
+
+    // Update `table->getDatabase()` for IManageableStorage
+    table->rename(/*new_path_to_db=*/context.getPath() + "/data/", // DeltaTree just ignored this param
+        /*new_database_name=*/to_database_concrete->name, to_table_name);
 }
 
 void DatabaseTiFlash::alterTable(

@@ -570,37 +570,28 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
         "Renaming table " << old_db_name << "." << old_table_name << " to "
                           << name_mapper.displayCanonicalName(*new_db_info, *new_table_info));
 
-    if (old_db_name != name_mapper.mapDatabaseName(*new_db_info)
-        || storage->getTableName() != name_mapper.mapTableName(*new_table_info) /* this condition only holds for mock tests */)
-    {
-        /// Renaming table across databases, we need to move storage between database objects, and update storage->getDatabase. See `DatabaseTiFlash::renameTable` for detail.
-        auto rename = std::make_shared<ASTRenameQuery>();
+    /// Renaming table across databases, we need to move storage between database objects, and update storage->getDatabase. See `DatabaseTiFlash::renameTable` for detail.
+    auto rename = std::make_shared<ASTRenameQuery>();
 
-        ASTRenameQuery::Table from;
-        from.database = old_db_name;
-        from.table = old_table_name;
+    ASTRenameQuery::Table from;
+    from.database = old_db_name;
+    from.table = old_table_name;
 
-        ASTRenameQuery::Table to;
-        to.database = name_mapper.mapDatabaseName(*new_db_info);
-        to.table = name_mapper.mapTableName(*new_table_info);
+    ASTRenameQuery::Table to;
+    to.database = name_mapper.mapDatabaseName(*new_db_info);
+    to.table = name_mapper.mapTableName(*new_table_info);
 
-        ASTRenameQuery::Element elem;
-        elem.from = from;
-        elem.to = to;
+    ASTRenameQuery::Element elem;
+    elem.from = from;
+    elem.to = to;
 
-        rename->elements.emplace_back(elem);
+    rename->elements.emplace_back(elem);
 
-        InterpreterRenameQuery(rename, context).execute();
-    }
-
-    // Seems we don't need this, table name is always t_${id} if it is synced from TiDB. Or we need to keep it for mocked tests?
-    /// Update metadata, through calling alterFromTiDB.
-    // Using copy of original table info with updated table name instead of using new_table_info directly,
+    // Note that rename will update table info in table create statement by modifying original table info
+    // with updated table name instead of using new_table_info directly,
     // so that other changes (ALTER commands) won't be saved.
     // Besides, no need to update schema_version as table name is not structural.
-    auto updated_table_info = storage->getTableInfo();
-    updated_table_info.name = new_table_info->name;
-    storage->alterFromTiDB(AlterCommands{}, name_mapper.mapDatabaseName(*new_db_info), updated_table_info, name_mapper, context);
+    InterpreterRenameQuery(rename, context).execute();
 
     LOG_INFO(log,
         "Renamed table " << old_db_name << "." << old_table_name << " to "

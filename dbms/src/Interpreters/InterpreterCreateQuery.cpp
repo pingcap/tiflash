@@ -141,7 +141,7 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
         if (need_write_metadata)
             Poco::File(metadata_file_tmp_path).renameTo(metadata_file_path);
 
-        FAIL_POINT_TRIGGER_EXCEPTION(exception_between_alter_data_and_meta);
+        FAIL_POINT_TRIGGER_EXCEPTION(exception_between_create_database_meta_and_directory);
         // meta file (not temporary) of database exists means create database success, 
         // we need to create meta directory for it if not exists.
         if (auto db_meta_path = Poco::File(database->getMetadataPath()); !db_meta_path.exists())

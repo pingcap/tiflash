@@ -127,7 +127,7 @@ void DatabaseOrdinary::loadTables(
         thread_pool->wait();
 
     /// After all tables was basically initialized, startup them.
-    DatabaseLoading::startupTables(tables, thread_pool, log);
+    DatabaseLoading::startupTables(*this, name, tables, thread_pool, log);
 }
 
 void DatabaseOrdinary::createTable(

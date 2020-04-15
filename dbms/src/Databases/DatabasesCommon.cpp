@@ -26,6 +26,7 @@ namespace ErrorCodes
     extern const int INCORRECT_FILE_NAME;
     extern const int CANNOT_CREATE_TABLE_FROM_METADATA;
     extern const int SYNTAX_ERROR;
+    extern const int TIDB_TABLE_ALREADY_EXISTS;
 }
 
 
@@ -319,13 +320,35 @@ static constexpr size_t PRINT_MESSAGE_EACH_N_TABLES = 256;
 static constexpr size_t PRINT_MESSAGE_EACH_N_SECONDS = 5;
 static constexpr size_t TABLES_PARALLEL_LOAD_BUNCH_SIZE = 100;
 
-void startupTables(Tables & tables, ThreadPool * thread_pool, Poco::Logger * log)
+void cleanupTables(IDatabase & database, const String & db_name, const Tables & tables, Poco::Logger * log)
+{
+    if (tables.empty())
+        return;
+
+    for (auto it = tables.begin(); it != tables.end(); ++it)
+    {
+        const String & table_name = it->first;
+        LOG_WARNING(log, "Detected startup failed table " + db_name + "." + table_name + ", removing it from TiFlash");
+        const String table_meta_path = database.getTableMetadataPath(table_name);
+        if (!table_meta_path.empty())
+        {
+            Poco::File{table_meta_path}.remove();
+        }
+        // detach from this database
+        database.detachTable(table_name);
+    }
+}
+
+void startupTables(IDatabase & database, const String & db_name, Tables & tables, ThreadPool * thread_pool, Poco::Logger * log)
 {
     LOG_INFO(log, "Starting up " << tables.size() << " tables.");
 
     AtomicStopwatch watch;
     std::atomic<size_t> tables_processed{0};
     size_t total_tables = tables.size();
+
+    std::mutex failed_tables_mutex;
+    Tables tables_failed_to_startup;
 
     auto task_function = [&](Tables::iterator begin, Tables::iterator end) {
         for (auto it = begin; it != end; ++it)
@@ -336,7 +359,26 @@ void startupTables(Tables & tables, ThreadPool * thread_pool, Poco::Logger * log
                 watch.restart();
             }
 
-            it->second->startup();
+            try
+            {
+                it->second->startup();
+            }
+            catch (DB::Exception & e)
+            {
+                if (e.code() == ErrorCodes::TIDB_TABLE_ALREADY_EXISTS)
+                {
+                    // While doing IStorage::startup, Exception thorwn with TIDB_TABLE_ALREADY_EXISTS,
+                    // means that we may crashed in the middle of renaming tables. We clean the meta file
+                    // for those storages by `cleanupTables`.
+                    // - If the storage is the outdated one after renaming, remove it is right.
+                    // - If the storage should be the target table, remove it means we "rollback" the 
+                    //   rename action. And the table will be renamed by TiDBSchemaSyncer later.
+                    std::lock_guard lock(failed_tables_mutex);
+                    tables_failed_to_startup.emplace(it->first, it->second);
+                }
+                else
+                    throw;
+            }
         }
     };
 
@@ -365,7 +407,11 @@ void startupTables(Tables & tables, ThreadPool * thread_pool, Poco::Logger * log
 
     if (thread_pool)
         thread_pool->wait();
+
+    // Cleanup to asure the atomic of renaming
+    cleanupTables(database, db_name, tables_failed_to_startup, log);
 }
+
 } // namespace DatabaseLoading
 
 } // namespace DB

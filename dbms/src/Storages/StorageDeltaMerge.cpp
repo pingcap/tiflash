@@ -1083,6 +1083,26 @@ void updateDeltaMergeTableCreateStatement(                   //
     context.getDatabase(database_name)->alterTable(context, table_name, columns_without_hidden, storage_modifier);
 }
 
+// somehow duplicated with `storage_modifier` in updateDeltaMergeTableCreateStatement ...
+void StorageDeltaMerge::modifyASTStorage(ASTStorage * storage_ast, const TiDB::TableInfo & table_info_)
+{
+    if (!storage_ast || !storage_ast->engine)
+        return;
+    auto * args = typeid_cast<ASTExpressionList *>(storage_ast->engine->arguments.get());
+    if (!args)
+        return;
+    std::shared_ptr<ASTLiteral> literal = std::make_shared<ASTLiteral>(Field(table_info_.serialize()));
+    if (args->children.size() == 1)
+        args->children.emplace_back(literal);
+    else if (args->children.size() == 2)
+        args->children.back() = literal;
+    else if (args->children.size() == 3)
+        args->children.at(1) = literal;
+    else
+        throw Exception(
+            "Wrong arguments num: " + DB::toString(args->children.size()) + " in table: " + store->getTableName() + " in modifyASTStorage",
+            ErrorCodes::BAD_ARGUMENTS);
+}
 
 BlockInputStreamPtr StorageDeltaMerge::status()
 {

@@ -1,3 +1,4 @@
+#include <Common/FailPoint.h>
 #include <Databases/DatabaseTiFlash.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
@@ -12,6 +13,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TMTStorages.h>
 #include <Storages/registerStorages.h>
+#include <common/ThreadPool.h>
 #include <test_utils/TiflashTestBasic.h>
 
 #include <optional>
@@ -31,7 +33,11 @@ class DatabaseTiFlash_test : public ::testing::Test
 public:
     constexpr static const char * TEST_DB_NAME = "test";
 
-    static void SetUpTestCase() { registerStorages(); }
+    static void SetUpTestCase()
+    {
+        registerStorages();
+        fiu_init(0);
+    }
 
     DatabaseTiFlash_test() {}
 
@@ -389,5 +395,105 @@ try
 }
 CATCH
 
+
+TEST_F(DatabaseTiFlash_test, AtomicRenameTableBetweenDatabase)
+try
+{
+    TiFlashTestEnv::setupLogger();
+
+    const String db_name = "db_1";
+    const String db2_name = "db_2";
+    auto ctx = TiFlashTestEnv::getContext();
+
+    {
+        // Create database
+        const String statement = "CREATE DATABASE " + db_name + " ENGINE=TiFlash";
+        ASTPtr ast = parseCreateStatement(statement);
+        InterpreterCreateQuery interpreter(ast, ctx);
+        interpreter.setInternal(true);
+        interpreter.setForceRestoreData(false);
+        interpreter.execute();
+    }
+
+    {
+        // Create database2
+        const String statement = "CREATE DATABASE " + db2_name + " ENGINE=TiFlash";
+        ASTPtr ast = parseCreateStatement(statement);
+        InterpreterCreateQuery interpreter(ast, ctx);
+        interpreter.setInternal(true);
+        interpreter.setForceRestoreData(false);
+        interpreter.execute();
+    }
+
+    auto db = ctx.getDatabase(db_name);
+
+    auto db2 = ctx.getDatabase(db2_name);
+
+    const String tbl_name = "t_111";
+    {
+        /// Create table
+        ParserCreateQuery parser;
+        const String stmt = "CREATE TABLE `" + db_name + "`.`" + tbl_name + "`" + R"(
+            (i Nullable(Int32), f Nullable(Float32), _tidb_rowid Int64) ENGINE = DeltaMerge(_tidb_rowid,
+            '{"cols":[{"comment":"","default":null,"id":1,"name":{"L":"i","O":"i"},"offset":0,"origin_default":null,"state":5,"type":{"Decimal":0,"Elems":null,"Flag":0,"Flen":11,"Tp":3}},{"comment":"","default":null,"id":2,"name":{"L":"f","O":"f"},"offset":1,"origin_default":null,"state":5,"type":{"Decimal":-1,"Elems":null,"Flag":0,"Flen":12,"Tp":4}}],"comment":"","id":50,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":27,"state":5,"update_timestamp":415992658599346193}')
+
+            )";
+        ASTPtr ast = parseQuery(parser, stmt, 0);
+
+        InterpreterCreateQuery interpreter(ast, ctx);
+        interpreter.setInternal(true);
+        interpreter.setForceRestoreData(false);
+        interpreter.execute();
+    }
+
+    EXPECT_FALSE(db->empty(ctx));
+    EXPECT_TRUE(db->isTableExist(ctx, tbl_name));
+
+    const String to_tbl_name = "t_112";
+    FailPointHelper::enableFailPoint("exception_before_rename_table_old_meta_removed");
+    // Rename table to another database, and mock crash by failed point
+    ASSERT_THROW(db->renameTable(ctx, tbl_name, *db2, to_tbl_name), DB::Exception);
+
+    {
+        // After fail point triggled we should have both meta file in disk
+        Poco::File old_meta_file{db->getTableMetadataPath(tbl_name)};
+        ASSERT_TRUE(old_meta_file.exists());
+        Poco::File new_meta_file(db2->getTableMetadataPath(to_tbl_name));
+        ASSERT_TRUE(new_meta_file.exists());
+        // Old table should remain in db
+        auto old_storage = db->tryGetTable(ctx, tbl_name);
+        ASSERT_NE(old_storage, nullptr);
+        // New table is not exists in db2
+        auto new_storage = db2->tryGetTable(ctx, tbl_name);
+        ASSERT_EQ(new_storage, nullptr);
+    }
+
+    {
+        // If we loadTable for db2, new table meta should be removed.
+        ThreadPool thread_pool(2);
+        db2->loadTables(ctx, &thread_pool, true);
+
+        Poco::File new_meta_file(db2->getTableMetadataPath(to_tbl_name));
+        ASSERT_FALSE(new_meta_file.exists());
+
+        auto storage = db2->tryGetTable(ctx, to_tbl_name);
+        ASSERT_EQ(storage, nullptr);
+    }
+
+    {
+        // Drop table
+        auto drop_query = std::make_shared<ASTDropQuery>();
+        drop_query->database = db_name;
+        drop_query->table = tbl_name;
+        drop_query->if_exists = false;
+        ASTPtr ast_drop_query = drop_query;
+        InterpreterDropQuery drop_interpreter(ast_drop_query, ctx);
+        drop_interpreter.execute();
+
+        auto storage = db->tryGetTable(ctx, tbl_name);
+        ASSERT_EQ(storage, nullptr);
+    }
+}
+CATCH
 } // namespace tests
 } // namespace DB

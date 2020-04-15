@@ -490,6 +490,15 @@ void StorageMergeTree::alterInternal(
         data.loadDataParts(false);
 }
 
+// somehow duplicated with `storage_modifier` in alterInternal ...
+void StorageMergeTree::modifyASTStorage(ASTStorage * storage_ast, const TiDB::TableInfo & table_info_)
+{
+    if (!storage_ast || !storage_ast->engine || !storage_ast->engine->arguments)
+        return;
+    auto literal = std::make_shared<ASTLiteral>(Field(table_info_.serialize()));
+    typeid_cast<ASTExpressionList &>(*storage_ast->engine->arguments).children.at(2) = literal;
+}
+
 /// While exists, marks parts as 'currently_merging' and reserves free space on filesystem.
 /// It's possible to mark parts before.
 struct CurrentlyMergingPartsTagger
