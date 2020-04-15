@@ -557,9 +557,11 @@ template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
     DBInfoPtr new_db_info, TableInfoPtr new_table_info, ManageableStoragePtr storage)
 {
-    auto old_db_name = storage->getDatabaseName();
-    const auto & old_table_name = storage->getTableInfo().name;
-    if (old_db_name == name_mapper.mapDatabaseName(*new_db_info) && old_table_name == new_table_info->name)
+    const auto old_db_name = storage->getDatabaseName();
+    const auto old_tbl_name = storage->getTableName();
+    const auto & old_table_info = storage->getTableInfo();
+    const auto & old_display_table_name = old_table_info.name;
+    if (old_db_name == name_mapper.mapDatabaseName(*new_db_info) && old_display_table_name == new_table_info->name)
     {
         LOG_DEBUG(log, "Table " << name_mapper.displayCanonicalName(*new_db_info, *new_table_info) << " name identical, not renaming.");
         return;
@@ -567,25 +569,17 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
 
     GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_rename_column).Increment();
     LOG_INFO(log,
-        "Renaming table " << old_db_name << "." << old_table_name << " to "
+        "Renaming table " << old_db_name << "." << old_tbl_name << " (display name:" << old_display_table_name << ") to "
                           << name_mapper.displayCanonicalName(*new_db_info, *new_table_info));
 
     /// Renaming table across databases, we need to move storage between database objects, and update storage->getDatabase. See `DatabaseTiFlash::renameTable` for detail.
     auto rename = std::make_shared<ASTRenameQuery>();
 
-    ASTRenameQuery::Table from;
-    from.database = old_db_name;
-    from.table = old_table_name;
-
-    ASTRenameQuery::Table to;
-    to.database = name_mapper.mapDatabaseName(*new_db_info);
-    to.table = name_mapper.mapTableName(*new_table_info);
-
-    ASTRenameQuery::Element elem;
-    elem.from = from;
-    elem.to = to;
-
-    rename->elements.emplace_back(elem);
+    ASTRenameQuery::Table from{old_db_name, name_mapper.mapTableName(old_table_info)};
+    ASTRenameQuery::Table to{name_mapper.mapDatabaseName(*new_db_info), name_mapper.mapTableName(*new_table_info)};
+    ASTRenameQuery::Table display{name_mapper.displayDatabaseName(*new_db_info), name_mapper.displayTableName(*new_table_info)};
+    ASTRenameQuery::Element elem{.from = std::move(from), .to = std::move(to), .tidb_display = std::move(display)};
+    rename->elements.emplace_back(std::move(elem));
 
     // Note that rename will update table info in table create statement by modifying original table info
     // with updated table name instead of using new_table_info directly,
@@ -594,7 +588,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
     InterpreterRenameQuery(rename, context).execute();
 
     LOG_INFO(log,
-        "Renamed table " << old_db_name << "." << old_table_name << " to "
+        "Renamed table " << old_db_name << "." << old_tbl_name << " (display name:" << old_display_table_name << ") to "
                          << name_mapper.displayCanonicalName(*new_db_info, *new_table_info));
 }
 

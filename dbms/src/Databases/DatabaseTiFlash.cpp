@@ -205,7 +205,13 @@ void DatabaseTiFlash::removeTable(const Context & /*context*/, const String & ta
     }
 }
 
-void DatabaseTiFlash::renameTable(const Context & context, const String & table_name, IDatabase & to_database, const String & to_table_name)
+void DatabaseTiFlash::renameTable(const Context & /*context*/, const String & /*table_name*/, IDatabase & /*to_database*/, const String & /*to_table_name*/)
+{
+    throw Exception(DB::toString(__PRETTY_FUNCTION__) + " should never called!");
+}
+
+void DatabaseTiFlash::renameTable(const Context & context, const String & table_name, IDatabase & to_database, const String & to_table_name,
+    const String & /* display_database */, const String & display_table)
 {
     DatabaseTiFlash * to_database_concrete = typeid_cast<DatabaseTiFlash *>(&to_database);
     if (!to_database_concrete)
@@ -246,7 +252,7 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
             ast_create_query.table = to_table_name;
             ASTStorage * storage_ast = ast_create_query.storage;
             auto updated_table_info = table->getTableInfo();
-            updated_table_info.name = to_table_name;
+            updated_table_info.name = display_table;
             table->modifyASTStorage(storage_ast, updated_table_info);
         }
         statement = getTableDefinitionFromCreateQuery(ast);
@@ -288,9 +294,9 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
     StoragePtr detach_storage = detachTable(table_name);
     to_database_concrete->attachTable(to_table_name, detach_storage);
 
-    // Update `table->getDatabase()` for IManageableStorage
+    // Update database and table name in TiDB table info for IManageableStorage
     table->rename(/*new_path_to_db=*/context.getPath() + "/data/", // DeltaTree just ignored this param
-        /*new_database_name=*/to_database_concrete->name, to_table_name);
+        /*new_database_name=*/to_database_concrete->name, to_table_name, display_table);
 }
 
 void DatabaseTiFlash::alterTable(

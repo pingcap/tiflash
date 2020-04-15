@@ -299,7 +299,8 @@ void StorageMergeTree::drop()
     data.dropAllData();
 }
 
-void StorageMergeTree::rename(const String & new_path_to_db, const String & new_database_name, const String & new_table_name)
+void StorageMergeTree::rename(
+    const String & new_path_to_db, const String & new_database_name, const String & new_table_name, const String & new_display_table_name)
 {
     std::string new_full_path = new_path_to_db + escapeForFileName(new_table_name) + '/';
 
@@ -330,6 +331,7 @@ void StorageMergeTree::rename(const String & new_path_to_db, const String & new_
 
     data.table_name = new_table_name;
     data.database_name = new_database_name;
+    data.table_info->name = new_display_table_name; // update name in table info
     /// NOTE: Logger names are not updated.
 }
 
