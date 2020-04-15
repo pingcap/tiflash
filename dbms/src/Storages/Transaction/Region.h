@@ -115,6 +115,7 @@ public:
     raft_serverpb::PeerState peerState() const;
 
     bool isMerging() const;
+    void setStateApplying();
 
     size_t dataSize() const;
     size_t writeCFCount() const;
@@ -158,8 +159,6 @@ public:
     /// Only can be used for applying snapshot. only can be called by single thread.
     /// Try to fill record with delmark if it exists in ch but has been remove by GC in leader.
     void compareAndCompleteSnapshot(HandleMap & handle_map, const Timestamp safe_point);
-    /// Traverse all data in source_region and get handle with largest version.
-    void compareAndUpdateHandleMaps(const Region & source_region, HandleMap & handle_map);
 
     RegionRaftCommandDelegate & makeRaftCommandDelegate(const KVStoreTaskLock &);
     metapb::Region getMetaRegion() const;
@@ -187,6 +186,7 @@ private:
     LockInfoPtr getLockInfo(const RegionLockReadQuery & query) const;
 
     RegionPtr splitInto(RegionMeta && meta);
+    void setPeerState(raft_serverpb::PeerState state);
 
 private:
     RegionData data;

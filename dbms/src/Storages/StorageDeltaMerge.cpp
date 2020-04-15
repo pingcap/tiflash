@@ -327,7 +327,7 @@ void throwRetryRegion(const MvccQueryInfo::RegionsQueryInfo & regions_info, Regi
 /// Check if region is invalid.
 RegionException::RegionReadStatus isValidRegion(const RegionQueryInfo & region_to_query, const RegionPtr & region_in_mem)
 {
-    if (region_in_mem->isPendingRemove())
+    if (region_in_mem->peerState() != raft_serverpb::PeerState::Normal)
         return RegionException::RegionReadStatus::PENDING_REMOVE;
 
     const auto & [version, conf_ver, key_range] = region_in_mem->dumpVersionRange();
