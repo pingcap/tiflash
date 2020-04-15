@@ -59,6 +59,8 @@ public:
         String getNewDataDirectory(const String & root_path, const DatabaseDiskInfo & db) const;
         // "extra_data/t_${id}"
         String getNewExtraDirectory(const String & root_path, const DatabaseDiskInfo & db) const;
+
+        const TiDB::TableInfo & getInfo() const;
     };
 
     struct DatabaseDiskInfo

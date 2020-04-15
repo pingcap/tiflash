@@ -224,6 +224,7 @@ inline bool isSamePath(const String & lhs, const String & rhs) { return Poco::Pa
 
 String IDAsPathUpgrader::TableDiskInfo::name() const { return tidb_table_info->name; }
 String IDAsPathUpgrader::TableDiskInfo::newName() const { return mapper->mapTableName(*tidb_table_info); }
+const TiDB::TableInfo & IDAsPathUpgrader::TableDiskInfo::getInfo() const { return *tidb_table_info; }
 
 // "metadata/${db_name}/${tbl_name}.sql"
 String IDAsPathUpgrader::TableDiskInfo::getMetaFilePath(const String & root_path, const DatabaseDiskInfo & db) const
@@ -618,8 +619,35 @@ void IDAsPathUpgrader::renameTable(
         if (!ast)
             throw Exception("There is no metadata file for table " + table.name() + ", expected file: " + old_tbl_meta_file,
                 ErrorCodes::FILE_DOESNT_EXIST);
+
         ASTCreateQuery & ast_create_query = typeid_cast<ASTCreateQuery &>(*ast);
         ast_create_query.table = mapped_table_name;
+        ASTStorage * storage_ast = ast_create_query.storage;
+        TiDB::TableInfo table_info = table.getInfo(); // get a copy
+        if (table_info.is_partition_table)
+        {
+            LOG_INFO(log,
+                "partition table `" << db_name << "`.`" << table.name() //
+                                    << "` to `" << mapped_db_name << "`.`" << mapped_table_name << "` update table info");
+            // Old partition name is "${table_name}_${physical_id}" while new name is "t_${physical_id}"
+            // If it is a partition table, we need to update TiDB::TableInfo::name
+            do
+            {
+                if (!storage_ast || !storage_ast->engine)
+                    break;
+                auto * args = typeid_cast<ASTExpressionList *>(storage_ast->engine->arguments.get());
+                if (!args)
+                    break;
+
+                table_info.name = mapper->mapPartitionName(table_info);
+                std::shared_ptr<ASTLiteral> literal = std::make_shared<ASTLiteral>(Field(table_info.serialize()));
+                if (args->children.size() == 1)
+                    args->children.emplace_back(literal);
+                else if (args->children.size() >= 2)
+                    args->children.at(1) = literal;
+            } while (0);
+        }
+
         const String new_tbl_meta_file = table.getNewMetaFilePath(root_path, db_info);
         const auto & settings = global_context.getSettingsRef();
         writeTableDefinitionToFile(new_tbl_meta_file, ast, settings.fsync_metadata);
