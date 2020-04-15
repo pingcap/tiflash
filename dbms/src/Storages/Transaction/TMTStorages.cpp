@@ -4,14 +4,22 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int TIDB_TABLE_ALREADY_EXISTS;
+}
 
 void ManagedStorages::put(ManageableStoragePtr storage)
 {
     std::lock_guard lock(mutex);
 
     TableID table_id = storage->getTableInfo().id;
-    if (storages.find(table_id) != storages.end())
-        return;
+    if (storages.find(table_id) != storages.end() && table_id != TiDB::TableInfo::DEFAULT_UNSPECIFIED_TABLE_ID)
+    {
+        // If table already exists, and is not created through ch-client (which table_id could be unspecified)
+        // throw Exception
+        throw Exception("TiDB table with id " + DB::toString(table_id) + " already exists.", ErrorCodes::TIDB_TABLE_ALREADY_EXISTS);
+    }
     storages.emplace(table_id, storage);
 }
 

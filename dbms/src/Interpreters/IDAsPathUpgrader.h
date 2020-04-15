@@ -2,6 +2,7 @@
 #include <Storages/Transaction/Types.h>
 
 #include <map>
+#include <memory>
 #include <unordered_set>
 
 namespace Poco

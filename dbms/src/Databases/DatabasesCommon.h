@@ -50,7 +50,9 @@ ASTPtr getCreateQueryFromMetadata(const String & metadata_path, const String & d
 
 std::vector<String> listSQLFilenames(const String & database_dir, Poco::Logger * log);
 
-void startupTables(Tables & tables, ThreadPool * thread_pool, Poco::Logger * log);
+// Startup tables with thread_pool. If exception with code TIDB_TABLE_ALREADY_EXISTS thrown in startup,
+// those tables' meta will be removed and deatch from database.
+void startupTables(IDatabase & database, const String & db_name, Tables & tables, ThreadPool * thread_pool, Poco::Logger * log);
 
 void loadTable(Context & context,
     IDatabase & database,
