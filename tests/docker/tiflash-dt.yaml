@@ -22,7 +22,10 @@ services:
       - ./config/tikv-learner.toml:/tikv.toml:ro
       - ./data/tikv-learner_dt:/data
       - ./log/tikv-learner_dt:/log
+      - ./gcov:/tiflash/gcov
     command:
       - --config-file
       - /config.toml
+    environment:
+      - GCOV_PREFIX=/tiflash/gcov
     restart: on-failure

@@ -22,6 +22,9 @@ services:
       - ./config/tikv-learner.toml:/tikv.toml:ro
       - ./data/tikv-learner_tmt:/data
       - ./log/tikv-learner_tmt:/log
+      - ./gcov:/tiflash/gcov
+    environment:
+      - GCOV_PREFIX=/tiflash/gcov
     command:
       - --config-file
       - /config.toml

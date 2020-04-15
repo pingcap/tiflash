@@ -16,6 +16,9 @@ services:
       - ./log/tics_tmt:/tmp/tiflash/log
       - ..:/tests
       - ./_env.sh:/tests/_env.sh
+      - ./gcov:/tiflash/gcov
+    environment:
+      - GCOV_PREFIX=/tiflash/gcov
     command:
       - --config-file
       - /config.toml

@@ -27,6 +27,13 @@ if (NOT NO_WERROR)
     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 endif ()
 
+# Flags for test coverage
+if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+    include(CodeCoverage)
+    set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} --coverage")
+    # set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} --coverage -DIS_DEBUG -fprofile-exclude-files=${CMAKE_SOURCE_DIR}/contrib/.*")
+endif ()
+
 find_package (Threads)
 
 include_directories (src)
@@ -302,8 +309,8 @@ if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
             '/usr/include/*'
             '/usr/local/*'
             '/usr/lib/*'
-            '${CMAKE_SOURCE_DIR}/cmake-build-*/*'
-            '${CMAKE_SOURCE_DIR}/contrib/*'
+            ${CMAKE_SOURCE_DIR}'/cmake-build-*/*'
+            ${CMAKE_SOURCE_DIR}'/contrib/*'
             )
     SETUP_TARGET_FOR_COVERAGE_LCOV(
             NAME tiflash_lcov_coverage

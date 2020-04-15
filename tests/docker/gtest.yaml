@@ -10,4 +10,7 @@ services:
       - ./log/tics-gtest:/tmp/tiflash/log
       - ..:/tests
       - ./_env.sh:/tests/_env.sh
+      - ./gcov:/tiflash/gcov
+    environment:
+      - GCOV_PREFIX=/tiflash/gcov
     entrypoint: sleep infinity # just wait

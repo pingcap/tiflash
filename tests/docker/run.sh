@@ -6,6 +6,14 @@ set -xe
 # tiflash-dt && tiflash-tmt share the same name "tiflash0", we just need one here
 docker-compose -f gtest.yaml -f cluster.yaml -f tiflash-dt.yaml -f mock-test-dt.yaml down
 
+# Cleanup gcov files.
+rm -rf ./gcov
+
+# Copy gcov files from container.
+docker create -ti --name dummy hub.pingcap.net/tiflash/tics:${TAG:-master} bash
+docker cp dummy:/tiflash/gcov ./
+docker rm -f dummy
+
 rm -rf ./data ./log
 # run gtest cases. (only tics-gtest up)
 docker-compose -f gtest.yaml up -d
@@ -50,3 +58,6 @@ rm -rf ./data ./log
 docker-compose -f mock-test-tmt.yaml up -d
 docker-compose -f mock-test-tmt.yaml exec -T tics0 bash -c 'cd /tests ; ./run-test.sh mutable-test'
 docker-compose -f mock-test-tmt.yaml down
+
+# Generate codecov report and upload.
+./codecov.sh
