@@ -12,13 +12,13 @@ try
 {
     TiFlashTestEnv::setupLogger();
     auto ctx = TiFlashTestEnv::getContext();
-    IDAsPathUpgrader upgrader(ctx, false);
+    IDAsPathUpgrader upgrader(ctx, false, {});
     ASSERT_TRUE(upgrader.needUpgrade());
     upgrader.doUpgrade();
 
     {
         // After upgrade, next time we don't need it.
-        IDAsPathUpgrader checker_after_upgrade(ctx, false);
+        IDAsPathUpgrader checker_after_upgrade(ctx, false, {});
         ASSERT_FALSE(checker_after_upgrade.needUpgrade());
     }
 

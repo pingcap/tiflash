@@ -124,8 +124,8 @@ public:
 public:
     /// Upgrader
     // If some database can not find in TiDB, they will be dropped
-    // if theirs name is not in ignore_dbs
-    IDAsPathUpgrader(Context & global_ctx_, bool is_mock_);
+    // if theirs name is not in reserved_databases
+    IDAsPathUpgrader(Context & global_ctx_, bool is_mock_, std::unordered_set<std::string> reserved_databases_);
 
     bool needUpgrade();
 
@@ -155,6 +155,8 @@ private:
     const bool is_mock = false;
 
     std::shared_ptr<SchemaNameMapper> mapper;
+
+    const std::unordered_set<std::string> reserved_databases;
 
     Poco::Logger * log;
 };
