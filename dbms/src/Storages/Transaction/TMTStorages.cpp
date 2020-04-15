@@ -14,7 +14,7 @@ void ManagedStorages::put(ManageableStoragePtr storage)
     std::lock_guard lock(mutex);
 
     TableID table_id = storage->getTableInfo().id;
-    if (storages.find(table_id) != storages.end() && table_id != TiDB::TableInfo::DEFAULT_UNSPECIFIED_TABLE_ID)
+    if (storages.find(table_id) != storages.end() && table_id != DB::InvalidTableID)
     {
         // If table already exists, and is not created through ch-client (which table_id could be unspecified)
         // throw Exception
