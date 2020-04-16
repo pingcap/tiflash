@@ -63,9 +63,11 @@ grpc::Status CoprocessorHandler::execute()
                     throw Exception("DAG request with rpn expression is not supported in TiFlash", ErrorCodes::NOT_IMPLEMENTED);
                 tipb::SelectResponse dag_response;
                 std::unordered_map<RegionID, RegionInfo> regions;
+                const std::unordered_set<UInt64> bypass_lock_ts(
+                    cop_context.kv_context.resolved_locks().begin(), cop_context.kv_context.resolved_locks().end());
                 regions.emplace(cop_context.kv_context.region_id(),
                     RegionInfo(cop_context.kv_context.region_id(), cop_context.kv_context.region_epoch().version(),
-                        cop_context.kv_context.region_epoch().conf_ver(), GenCopKeyRange(cop_request->ranges())));
+                        cop_context.kv_context.region_epoch().conf_ver(), GenCopKeyRange(cop_request->ranges()), &bypass_lock_ts));
                 DAGDriver driver(cop_context.db_context, dag_request, regions,
                     cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(),
                     &dag_response);
@@ -105,7 +107,6 @@ grpc::Status CoprocessorHandler::execute()
         switch (e.status)
         {
             case RegionException::RegionReadStatus::NOT_FOUND:
-            case RegionException::RegionReadStatus::PENDING_REMOVE:
                 GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_error, reason_region_not_found).Increment();
                 region_err = cop_response->mutable_region_error();
                 region_err->mutable_region_not_found()->set_region_id(cop_request->context().region_id());

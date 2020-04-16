@@ -100,6 +100,8 @@ DMFileReader::DMFileReader(bool                  enable_clean_read_,
                            const ColumnDefines & read_columns_,
                            const HandleRange &   handle_range_,
                            const RSOperatorPtr & filter_,
+                           ColumnCachePtr &      column_cache_,
+                           bool                  enable_column_cache_,
                            const IdSetPtr &      read_packs_,
                            MarkCache *           mark_cache_,
                            MinMaxIndexCache *    index_cache_,
@@ -116,6 +118,8 @@ DMFileReader::DMFileReader(bool                  enable_clean_read_,
       hash_salt(hash_salt_),
       rows_threshold_per_read(rows_threshold_per_read_),
       pack_filter(dmfile_, index_cache_, hash_salt_, handle_range_, filter_, read_packs_),
+      column_cache(column_cache_),
+      enable_column_cache(enable_column_cache_),
       handle_res(pack_filter.getHandleRes()),
       use_packs(pack_filter.getUsePacks()),
       skip_packs_by_column(read_columns.size(), 0),
@@ -168,6 +172,11 @@ bool DMFileReader::getSkippedRows(size_t & skip_rows)
 bool isExtraColumn(const ColumnDefine & cd)
 {
     return cd.id == EXTRA_HANDLE_COLUMN_ID || cd.id == VERSION_COLUMN_ID || cd.id == TAG_COLUMN_ID;
+}
+
+bool isCacheableColumn(const ColumnDefine & cd)
+{
+    return cd.id == EXTRA_HANDLE_COLUMN_ID || cd.id == VERSION_COLUMN_ID;
 }
 
 Block DMFileReader::read()
@@ -243,48 +252,103 @@ Block DMFileReader::read()
             const String stream_name = DMFile::getFileNameBase(cd.id);
             if (auto iter = column_streams.find(stream_name); iter != column_streams.end())
             {
-                auto & top_stream  = iter->second;
-                bool   should_seek = shouldSeek(start_pack_id) || skip_packs_by_column[i] > 0;
+                if (enable_column_cache && isCacheableColumn(cd))
+                {
+                    auto read_strategy = column_cache->getReadStrategy(start_pack_id, read_packs, cd.id);
 
-                auto data_type = dmfile->getColumnStat(cd.id).type;
-                auto column    = data_type->createColumn();
-                data_type->deserializeBinaryBulkWithMultipleStreams( //
-                    *column,
-                    [&](const IDataType::SubstreamPath & substream_path) {
-                        String substream_name = DMFile::getFileNameBase(cd.id, substream_path);
-                        auto & sub_stream     = column_streams.at(substream_name);
-
-                        if (should_seek)
+                    auto data_type = dmfile->getColumnStat(cd.id).type;
+                    auto column    = data_type->createColumn();
+                    column->reserve(read_rows);
+                    for (auto & [range, strategy] : read_strategy)
+                    {
+                        if (strategy == ColumnCache::Strategy::Memory)
                         {
-                            auto & mark = (*sub_stream->marks)[start_pack_id];
-                            sub_stream->buf->seek(mark.offset_in_compressed_file, mark.offset_in_decompressed_block);
+                            for (size_t cursor = range.first; cursor < range.second; cursor++)
+                            {
+                                auto cache_element = column_cache->getColumn(cursor, cd.id);
+                                column->insertRangeFrom(*(cache_element.first), cache_element.second.first, cache_element.second.second);
+                            }
+                            skip_packs_by_column[i] += (range.second - range.first);
                         }
-
-                        return sub_stream->buf.get();
-                    },
-                    read_rows,
-                    top_stream->avg_size_hint,
-                    true,
-                    {});
-                IDataType::updateAvgValueSizeHint(*column, top_stream->avg_size_hint);
-
-                // Cast column's data from DataType in disk to what we need now
-                auto converted_column = convertColumnByColumnDefineIfNeed(data_type, std::move(column), cd);
-
-                res.insert(ColumnWithTypeAndName{std::move(converted_column), cd.type, cd.name, cd.id});
+                        else if (strategy == ColumnCache::Strategy::Disk)
+                        {
+                            size_t rows_count = 0;
+                            for (size_t cursor = range.first; cursor < range.second; cursor++)
+                            {
+                                rows_count += pack_stats[cursor].rows;
+                            }
+                            readFromDisk(cd, column, range.first, rows_count, skip_packs_by_column[i]);
+                            skip_packs_by_column[i] = 0;
+                        }
+                        else
+                        {
+                            throw Exception("Unknown strategy", ErrorCodes::LOGICAL_ERROR);
+                        }
+                    }
+                    ColumnPtr result_column = std::move(column);
+                    size_t    rows_offset   = 0;
+                    for (size_t cursor = start_pack_id; cursor < start_pack_id + read_packs; cursor++)
+                    {
+                        column_cache->tryPutColumn(cursor, cd.id, result_column, rows_offset, pack_stats[cursor].rows);
+                        rows_offset += pack_stats[cursor].rows;
+                    }
+                    // Cast column's data from DataType in disk to what we need now
+                    auto converted_column = convertColumnByColumnDefineIfNeed(data_type, std::move(result_column), cd);
+                    res.insert(ColumnWithTypeAndName{converted_column, cd.type, cd.name, cd.id});
+                }
+                else
+                {
+                    auto data_type = dmfile->getColumnStat(cd.id).type;
+                    auto column    = data_type->createColumn();
+                    readFromDisk(cd, column, start_pack_id, read_rows, skip_packs_by_column[i]);
+                    auto converted_column = convertColumnByColumnDefineIfNeed(data_type, std::move(column), cd);
+                    res.insert(ColumnWithTypeAndName{std::move(converted_column), cd.type, cd.name, cd.id});
+                    skip_packs_by_column[i] = 0;
+                }
             }
             else
             {
                 // New column after ddl is not exist in this DMFile, fill with default value
                 ColumnPtr column = createColumnWithDefaultValue(cd, read_rows);
                 res.insert(ColumnWithTypeAndName{std::move(column), cd.type, cd.name, cd.id});
+                skip_packs_by_column[i] = 0;
             }
-
-            skip_packs_by_column[i] = 0;
         }
     }
 
     return res;
+}
+
+void DMFileReader::readFromDisk(
+    ColumnDefine & column_define, MutableColumnPtr & column, size_t start_pack_id, size_t read_rows, size_t skip_packs)
+{
+    const String stream_name = DMFile::getFileNameBase(column_define.id);
+    if (auto iter = column_streams.find(stream_name); iter != column_streams.end())
+    {
+        auto & top_stream  = iter->second;
+        bool   should_seek = shouldSeek(start_pack_id) || skip_packs > 0;
+
+        auto data_type = dmfile->getColumnStat(column_define.id).type;
+        data_type->deserializeBinaryBulkWithMultipleStreams( //
+            *column,
+            [&](const IDataType::SubstreamPath & substream_path) {
+                String substream_name = DMFile::getFileNameBase(column_define.id, substream_path);
+                auto & sub_stream     = column_streams.at(substream_name);
+
+                if (should_seek)
+                {
+                    auto & mark = (*sub_stream->marks)[start_pack_id];
+                    sub_stream->buf->seek(mark.offset_in_compressed_file, mark.offset_in_decompressed_block);
+                }
+
+                return sub_stream->buf.get();
+            },
+            read_rows,
+            top_stream->avg_size_hint,
+            true,
+            {});
+        IDataType::updateAvgValueSizeHint(*column, top_stream->avg_size_hint);
+    }
 }
 
 } // namespace DM

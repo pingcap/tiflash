@@ -37,6 +37,8 @@
 #include <Functions/FunctionsMiscellaneous.h>
 #include <Functions/FunctionsDateTime.h>
 #include <Functions/FunctionHelpers.h>
+#include <Functions/FunctionFactory.h>
+#include <Interpreters/Context.h>
 
 
 namespace DB
@@ -1277,6 +1279,263 @@ public:
         else
             throw Exception("Unexpected column: " + column->getName(), ErrorCodes::ILLEGAL_COLUMN);
     }
+};
+
+class FunctionFromUnixTime : public IFunction
+{
+public:
+    static constexpr auto name = "fromUnixTime";
+    static FunctionPtr create(const Context & context_) { return std::make_shared<FunctionFromUnixTime>(context_); };
+    FunctionFromUnixTime(const Context & context_) : context(context_) {};
+
+    String getName() const override
+    {
+        return name;
+    }
+
+    bool isVariadic() const override { return true; }
+    size_t getNumberOfArguments() const override { return 0; }
+    bool isInjective(const Block &) override { return true; }
+    bool useDefaultImplementationForNulls() const override { return false; }
+
+    DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
+    {
+        if (arguments.size() != 1 && arguments.size() != 2)
+            throw Exception("Function " + getName() + " only accept 1 or 2 arguments");
+        if (!removeNullable(arguments[0].type)->isDecimal())
+            throw Exception("First argument for function " + getName() + " must be decimal type", ErrorCodes::ILLEGAL_COLUMN);
+        if (arguments.size() == 2 && (!removeNullable(arguments[1].type)->isString()))
+            throw Exception("Second argument of function " + getName() + " must be string constant", ErrorCodes::ILLEGAL_COLUMN);
+
+        auto scale = std::min<UInt32>(6, getDecimalScale(*removeNullable(arguments[0].type), 6));
+        if (arguments.size() == 1)
+            return makeNullable(std::make_shared<DataTypeMyDateTime>(scale));
+        return makeNullable(std::make_shared<DataTypeString>());
+    }
+
+    /// scale_multiplier is used to compensate the fsp part if the scale is less than 6
+    /// for example, for decimal xxxx.23, the decimal part is 23, and it should be
+    /// converted to 230000
+    static constexpr int scale_multiplier[] = {1000000,100000,10000,1000,100,10,1};
+
+    template<typename T>
+    void decimalToMyDatetime(const ColumnPtr & input_col, ColumnUInt64::Container & datetime_res, ColumnUInt8::Container & null_res,
+            UInt32 scale, Int256 & scale_divisor, Int256 & scale_round_divisor)
+    {
+        const auto & timezone_info = context.getTimezoneInfo();
+        const auto * datelut = timezone_info.timezone;
+        const auto decimal_col = checkAndGetColumn<ColumnDecimal<T>>(input_col.get());
+        const typename ColumnDecimal<T>::Container & vec_from = decimal_col->getData();
+        Int64 scale_divisor_64 = 1;
+        Int64 scale_round_divisor_64 = 1;
+        bool scale_divisor_fit_64 = false;
+        if (scale_divisor < std::numeric_limits<Int64>::max())
+        {
+            scale_divisor_64 = static_cast<Int64>(scale_divisor);
+            scale_round_divisor_64 = static_cast<Int64>(scale_round_divisor);
+            scale_divisor_fit_64 = true;
+        }
+        for (size_t i = 0; i < decimal_col->size(); i++)
+        {
+            const auto & decimal = vec_from[i];
+            if (decimal.value < 0)
+            {
+                null_res[i] = 1;
+                datetime_res[i] = 0;
+                continue;
+            }
+            Int64 integer_part;
+            Int64 fsp_part = 0;
+            if (likely(scale_divisor_fit_64 && decimal.value < std::numeric_limits<Int64>::max()))
+            {
+                auto value = static_cast<Int64>(decimal.value);
+                integer_part = value / scale_divisor_64;
+                fsp_part = value % scale_divisor_64;
+                if (scale <= 6)
+                    fsp_part *= scale_multiplier[scale];
+                else
+                {
+                    /// according to TiDB impl, should use half even round mode
+                    if (fsp_part % scale_round_divisor_64 >= scale_round_divisor_64 / 2)
+                        fsp_part = (fsp_part / scale_round_divisor_64) + 1;
+                    else
+                        fsp_part = fsp_part / scale_round_divisor_64;
+                }
+            }
+            else
+            {
+                Int256 value = decimal.value;
+                Int256 integer_part_256 = value / scale_divisor;
+                Int256 fsp_part_256 = value % scale_divisor;
+                if (integer_part_256 > std::numeric_limits<Int32>::max())
+                    integer_part = -1;
+                else
+                {
+                    integer_part = static_cast<Int64>(integer_part_256);
+                    if (fsp_part_256 % scale_round_divisor >= scale_round_divisor / 2)
+                        fsp_part_256 = (fsp_part_256 / scale_round_divisor) + 1;
+                    else
+                        fsp_part_256 = fsp_part_256 / scale_round_divisor;
+                    fsp_part = static_cast<Int64>(fsp_part_256);
+                }
+            }
+            if (integer_part > std::numeric_limits<Int32>::max() || integer_part < 0)
+            {
+                null_res[i] = 1;
+                datetime_res[i] = 0;
+                continue;
+            }
+
+            if (timezone_info.timezone_offset != 0)
+                integer_part += timezone_info.timezone_offset;
+            MyDateTime result(datelut->toYear(integer_part), datelut->toMonth(integer_part), datelut->toDayOfMonth(integer_part),
+                                  datelut->toHour(integer_part), datelut->toMinute(integer_part), datelut->toSecond(integer_part), fsp_part);
+            null_res[i] = 0;
+            datetime_res[i] = result.toPackedUInt();
+        }
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    {
+        const auto & input_column = block.getByPosition(arguments[0]).column;
+        const auto & decimal_column = input_column->isColumnNullable() ? dynamic_cast<const ColumnNullable &>(*input_column).getNestedColumnPtr() : input_column;
+        size_t rows = decimal_column->size();
+
+
+        auto scale = getDecimalScale(*removeNullable(block.getByPosition(arguments[0]).type), 6);
+        /// scale_divisor is used to extract the integer/decimal part from the origin decimal
+        Int256 scale_divisor = 1;
+        for (size_t i = 0; i < scale; i++)
+            scale_divisor *= 10;
+        /// scale_round_divisor is used to round the decimal part if the scale is bigger than 6(which is the max fsp for datetime type)
+        Int256 scale_round_divisor = 1;
+        for (size_t i = 6; i < scale; i++)
+            scale_round_divisor *= 10;
+
+        auto datetime_column = ColumnVector<UInt64>::create();
+        auto null_column = ColumnUInt8::create();
+
+        auto & datetime_res = datetime_column->getData();
+        datetime_res.assign(rows, (UInt64)0);
+        auto & null_res = null_column->getData();
+        null_res.assign(rows, (UInt8)0);
+        if (input_column->isColumnNullable())
+        {
+            for (size_t i = 0; i < rows; i++)
+                null_res[i] = input_column->isNullAt(i);
+        }
+        if (checkDataType<DataTypeDecimal32>(removeNullable(block.getByPosition(arguments[0]).type).get()))
+        {
+            decimalToMyDatetime<Decimal32>(decimal_column, datetime_res, null_res, scale, scale_divisor, scale_round_divisor);
+        }
+        else if (checkDataType<DataTypeDecimal64>(removeNullable(block.getByPosition(arguments[0]).type).get()))
+        {
+            decimalToMyDatetime<Decimal64>(decimal_column, datetime_res, null_res, scale, scale_divisor, scale_round_divisor);
+        }
+        else if (checkDataType<DataTypeDecimal128>(removeNullable(block.getByPosition(arguments[0]).type).get()))
+        {
+            decimalToMyDatetime<Decimal128>(decimal_column, datetime_res, null_res, scale, scale_divisor, scale_round_divisor);
+        }
+        else if (checkDataType<DataTypeDecimal256>(removeNullable(block.getByPosition(arguments[0]).type).get()))
+        {
+            decimalToMyDatetime<Decimal256>(decimal_column, datetime_res, null_res, scale, scale_divisor, scale_round_divisor);
+        }
+        else
+        {
+            throw Exception("The first argument of " + getName() + " must be decimal type", ErrorCodes::ILLEGAL_COLUMN);
+        }
+
+        if (arguments.size() == 1)
+            block.getByPosition(result).column = ColumnNullable::create(std::move(datetime_column), std::move(null_column));
+        else
+        {
+            // need append date format
+            Block temporary_block
+            {
+                    {
+                        ColumnNullable::create(std::move(datetime_column), std::move(null_column)),
+                        makeNullable(std::make_shared<DataTypeMyDateTime>(std::min<UInt32>(scale, 6))),
+                        ""
+                    },
+                    block.getByPosition(arguments[1]),
+                    {
+                        nullptr,
+                        makeNullable(std::make_shared<DataTypeString>()),
+                        ""
+                    }
+            };
+            FunctionBuilderPtr func_builder_date_format = FunctionFactory::instance().get("dateFormat", context);
+            ColumnsWithTypeAndName args{ temporary_block.getByPosition(0), temporary_block.getByPosition(1) };
+            auto func_date_format = func_builder_date_format->build(args);
+
+            func_date_format->execute(temporary_block, {0, 1}, 2);
+            block.getByPosition(result).column = std::move(temporary_block.getByPosition(2).column);
+        }
+    }
+
+private:
+    const Context & context;
+
+};
+
+class FunctionDateFormat : public IFunction
+{
+public:
+    static constexpr auto name = "dateFormat";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionDateFormat>(); };
+
+    String getName() const override
+    {
+        return name;
+    }
+
+    size_t getNumberOfArguments() const override { return 2; }
+    bool isInjective(const Block &) override { return false; }
+
+    DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
+    {
+        if (!arguments[0].type->isDateOrDateTime())
+            throw Exception("First argument for function " + getName() + " must be date or datetime type", ErrorCodes::ILLEGAL_COLUMN);
+        if (!arguments[1].type->isString() || !arguments[1].column)
+            throw Exception("Second argument for function " + getName() + " must be String constant", ErrorCodes::ILLEGAL_COLUMN);
+
+        return std::make_shared<DataTypeString>();
+    }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1}; }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    {
+        const auto * col_from = checkAndGetColumn<ColumnVector<UInt64>>(block.getByPosition(arguments[0]).column.get());
+        const auto & vec_from = col_from->getData();
+        auto col_to = ColumnString::create();
+        size_t size = col_from->size();
+        const auto & format_col = block.getByPosition(arguments[1]).column;
+        if (format_col->isColumnConst())
+        {
+            const auto & col_const = checkAndGetColumnConst<ColumnString>(format_col.get());
+            auto format = col_const->getValue<String>();
+            ColumnString::Chars_t & data_to = col_to->getChars();
+            ColumnString::Offsets & offsets_to = col_to->getOffsets();
+            data_to.resize(size * maxFormattedDateTimeStringLength(format));
+            offsets_to.resize(size);
+            WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
+            for (size_t i = 0; i < size; i++)
+            {
+                writeMyDateTimeTextWithFormat(vec_from[i], write_buffer, format);
+                writeChar(0, write_buffer);
+                offsets_to[i] = write_buffer.count();
+            }
+            data_to.resize(write_buffer.count());
+            block.getByPosition(result).column = std::move(col_to);
+        }
+        else
+        {
+            throw Exception("Second argument for function " + getName() + " must be String constant", ErrorCodes::ILLEGAL_COLUMN);
+        }
+    }
+
 };
 
 

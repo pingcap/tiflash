@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/Page/PageStorage.h>
@@ -16,7 +17,7 @@ using StableValueSpacePtr = std::shared_ptr<StableValueSpace>;
 
 static const String STABLE_FOLDER_NAME = "stable";
 
-class StableValueSpace
+class StableValueSpace : public std::enable_shared_from_this<StableValueSpace>
 {
 public:
     StableValueSpace(PageId id_) : id(id_), log(&Logger::get("StableValueSpace")) {}
@@ -34,16 +35,48 @@ public:
 
     void enableDMFilesGC();
 
-    SkippableBlockInputStreamPtr getInputStream(const DMContext &     context,
-                                                const ColumnDefines & read_columns,
-                                                const HandleRange &   handle_range,
-                                                const RSOperatorPtr & filter,
-                                                UInt64                max_data_version,
-                                                bool                  enable_clean_read);
-
     static StableValueSpacePtr restore(DMContext & context, PageId id);
 
     void recordRemovePacksPages(WriteBatches & wbs) const;
+
+    struct Snapshot : public std::enable_shared_from_this<Snapshot>, private boost::noncopyable
+    {
+        Snapshot() : log(&Logger::get("StableValueSpace::Snapshot")) {}
+        StableValueSpacePtr stable;
+        ColumnCachePtrs     column_caches;
+
+        PageId id;
+        UInt64 valid_rows;
+
+        PageId getId() { return id; }
+
+        size_t getRows() { return valid_rows; }
+
+        const DMFiles & getDMFiles() { return stable->getDMFiles(); }
+
+        size_t getPacks()
+        {
+            size_t packs = 0;
+            for (auto & file : getDMFiles())
+                packs += file->getPacks();
+            return packs;
+        }
+
+        ColumnCachePtrs & getColumnCaches() { return column_caches; }
+
+        SkippableBlockInputStreamPtr getInputStream(const DMContext &     context, //
+                                                    const ColumnDefines & read_columns,
+                                                    const HandleRange &   handle_range,
+                                                    const RSOperatorPtr & filter,
+                                                    UInt64                max_data_version,
+                                                    bool                  enable_clean_read);
+
+    private:
+        Logger * log;
+    };
+    using SnapshotPtr = std::shared_ptr<Snapshot>;
+
+    SnapshotPtr createSnapshot();
 
 private:
     static const Int64 CURRENT_VERSION;
@@ -58,6 +91,9 @@ private:
 
     Logger * log;
 };
+
+using StableSnapshot    = StableValueSpace::Snapshot;
+using StableSnapshotPtr = StableValueSpace::SnapshotPtr;
 
 } // namespace DM
 } // namespace DB

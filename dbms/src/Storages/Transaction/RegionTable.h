@@ -141,6 +141,7 @@ public:
         RegionVersion conf_version,
         bool resolve_locks,
         Timestamp start_ts,
+        const std::unordered_set<UInt64> * bypass_lock_ts,
         DB::HandleRange<HandleID> & handle_range,
         RegionScanFilterPtr scan_filter = nullptr);
 
@@ -150,6 +151,7 @@ public:
         const TiDB::TableID table_id,
         const RegionPtr & region,
         const Timestamp start_ts,
+        const std::unordered_set<UInt64> * bypass_lock_ts,
         RegionVersion region_version,
         RegionVersion conf_version,
         DB::HandleRange<HandleID> & handle_range,

@@ -29,7 +29,7 @@ RegionDataReadInfo Region::readDataByWriteIt(const RegionData::ConstWriteCFIter 
     return data.readDataByWriteIt(write_it, need_value);
 }
 
-LockInfoPtr Region::getLockInfo(UInt64 start_ts) const { return data.getLockInfo(start_ts); }
+LockInfoPtr Region::getLockInfo(const RegionLockReadQuery & query) const { return data.getLockInfo(query); }
 
 void Region::insert(const std::string & cf, TiKVKey && key, TiKVValue && value)
 {
@@ -363,10 +363,14 @@ RegionID Region::id() const { return meta.regionId(); }
 
 bool Region::isPendingRemove() const { return peerState() == raft_serverpb::PeerState::Tombstone; }
 
-void Region::setPendingRemove()
+bool Region::isMerging() const { return peerState() == raft_serverpb::PeerState::Merging; }
+
+void Region::setPendingRemove() { setPeerState(raft_serverpb::PeerState::Tombstone); }
+
+void Region::setStateApplying()
 {
-    meta.setPeerState(raft_serverpb::PeerState::Tombstone);
-    meta.notifyAll();
+    setPeerState(raft_serverpb::PeerState::Applying);
+    snapshot_event_flag++;
 }
 
 raft_serverpb::PeerState Region::peerState() const { return meta.peerState(); }
@@ -666,40 +670,6 @@ RegionRaftCommandDelegate & Region::makeRaftCommandDelegate(const KVStoreTaskLoc
     return static_cast<RegionRaftCommandDelegate &>(*this);
 }
 
-void Region::compareAndUpdateHandleMaps(const Region & source_region, HandleMap & handle_map)
-{
-    const auto range = getRange();
-    const auto & [start_key, end_key] = range->comparableKeys();
-    {
-        std::shared_lock<std::shared_mutex> source_lock(source_region.mutex);
-
-        const auto & write_map = source_region.data.writeCF().getData();
-        if (write_map.empty())
-            return;
-
-        for (auto write_map_it = write_map.begin(); write_map_it != write_map.end(); ++write_map_it)
-        {
-            const auto & key = RegionWriteCFData::getTiKVKey(write_map_it->second);
-
-            if (start_key.compare(key) <= 0 && end_key.compare(key) > 0)
-                ;
-            else
-                continue;
-
-            const auto & [handle, ts] = write_map_it->first;
-            const HandleMap::mapped_type cur_ele = {ts, RegionData::getWriteType(write_map_it) == DelFlag};
-            auto [it, ok] = handle_map.emplace(handle, cur_ele);
-            if (!ok)
-            {
-                auto & ele = it->second;
-                ele = std::max(ele, cur_ele);
-            }
-        }
-
-        LOG_DEBUG(log, __FUNCTION__ << ": memory cache: source " << source_region.toString(false) << ", record size " << write_map.size());
-    }
-}
-
 std::tuple<RegionVersion, RegionVersion, ImutRegionRangePtr> Region::dumpVersionRange() const { return meta.dumpVersionRange(); }
 
 Region::Region(RegionMeta && meta_) : Region(std::move(meta_), []() { return nullptr; }) {}
@@ -712,6 +682,12 @@ Region::Region(DB::RegionMeta && meta_, const DB::IndexReaderCreateFunc & index_
 {}
 
 TableID Region::getMappedTableID() const { return mapped_table_id; }
+
+void Region::setPeerState(raft_serverpb::PeerState state)
+{
+    meta.setPeerState(state);
+    meta.notifyAll();
+}
 
 const RegionRangeKeys & RegionRaftCommandDelegate::getRange() { return *meta.makeRaftCommandDelegate().regionState().getRange(); }
 UInt64 RegionRaftCommandDelegate::appliedIndex() { return meta.makeRaftCommandDelegate().applyState().applied_index(); }

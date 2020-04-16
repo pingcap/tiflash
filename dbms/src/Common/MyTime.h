@@ -28,20 +28,29 @@ struct MyTimeBase
     // Since s`Date` does not require `fsp`, we could use `fspTt` == 0b1110 to represent it.
     static const UInt64 FSPTT_BIT_FIELD_OFFSET = 0, FSPTT_BIT_FIELD_WIDTH = 4;
 
-    static const UInt64 YEAR_BIT_FIELD_MASK        = ((1ull << YEAR_BIT_FIELD_WIDTH) - 1) << YEAR_BIT_FIELD_OFFSET;
-    static const UInt64 MONTH_BIT_FIELD_MASK       = ((1ull << MONTH_BIT_FIELD_WIDTH) - 1) << MONTH_BIT_FIELD_OFFSET;
-    static const UInt64 DAY_BIT_FIELD_MASK         = ((1ull << DAY_BIT_FIELD_WIDTH) - 1) << DAY_BIT_FIELD_OFFSET;
-    static const UInt64 HOUR_BIT_FIELD_MASK        = ((1ull << HOUR_BIT_FIELD_WIDTH) - 1) << HOUR_BIT_FIELD_OFFSET;
-    static const UInt64 MINUTE_BIT_FIELD_MASK      = ((1ull << MINUTE_BIT_FIELD_WIDTH) - 1) << MINUTE_BIT_FIELD_OFFSET;
-    static const UInt64 SECOND_BIT_FIELD_MASK      = ((1ull << SECOND_BIT_FIELD_WIDTH) - 1) << SECOND_BIT_FIELD_OFFSET;
+    static const UInt64 YEAR_BIT_FIELD_MASK = ((1ull << YEAR_BIT_FIELD_WIDTH) - 1) << YEAR_BIT_FIELD_OFFSET;
+    static const UInt64 MONTH_BIT_FIELD_MASK = ((1ull << MONTH_BIT_FIELD_WIDTH) - 1) << MONTH_BIT_FIELD_OFFSET;
+    static const UInt64 DAY_BIT_FIELD_MASK = ((1ull << DAY_BIT_FIELD_WIDTH) - 1) << DAY_BIT_FIELD_OFFSET;
+    static const UInt64 HOUR_BIT_FIELD_MASK = ((1ull << HOUR_BIT_FIELD_WIDTH) - 1) << HOUR_BIT_FIELD_OFFSET;
+    static const UInt64 MINUTE_BIT_FIELD_MASK = ((1ull << MINUTE_BIT_FIELD_WIDTH) - 1) << MINUTE_BIT_FIELD_OFFSET;
+    static const UInt64 SECOND_BIT_FIELD_MASK = ((1ull << SECOND_BIT_FIELD_WIDTH) - 1) << SECOND_BIT_FIELD_OFFSET;
     static const UInt64 MICROSECOND_BIT_FIELD_MASK = ((1ull << MICROSECOND_BIT_FIELD_WIDTH) - 1) << MICROSECOND_BIT_FIELD_OFFSET;
-    static const UInt64 FSPTT_BIT_FIELD_MASK       = ((1ull << FSPTT_BIT_FIELD_WIDTH) - 1) << FSPTT_BIT_FIELD_OFFSET;
+    static const UInt64 FSPTT_BIT_FIELD_MASK = ((1ull << FSPTT_BIT_FIELD_WIDTH) - 1) << FSPTT_BIT_FIELD_OFFSET;
 
-    static const UInt64 FSPTT_FOR_DATE           = 0b1110;
-    static const UInt64 FSP_BIT_FIELD_MASK       = 0b1110;
+    static const UInt64 FSPTT_FOR_DATE = 0b1110;
+    static const UInt64 FSP_BIT_FIELD_MASK = 0b1110;
     static const UInt64 CORE_TIME_BIT_FIELD_MASK = ~FSPTT_BIT_FIELD_MASK;
 
-    static const UInt64 YMD_MASK = ~((1ull << 41) -1);
+    static const UInt64 YMD_MASK = ~((1ull << 41) - 1);
+
+    // weekBehaviourMondayFirst set Monday as first day of week; otherwise Sunday is first day of week
+    static const UInt32 WEEK_BEHAVIOR_MONDAY_FIRST = 1;
+    // If set, Week is in range 1-53, otherwise Week is in range 0-53.
+    // Note that this flag is only relevant if WEEK_JANUARY is not set
+    static const UInt32 WEEK_BEHAVIOR_YEAR = 2;
+    // If not set, Weeks are numbered according to ISO 8601:1988.
+    // If set, the week that contains the first 'first-day-of-week' is week 1.
+    static const UInt32 WEEK_BEHAVIOR_FIRST_WEEKDAY = 4;
 
     enum MyTimeType : UInt8
     {
@@ -72,6 +81,15 @@ struct MyTimeBase
     // See http://dev.mysql.com/doc/refman/5.7/en/date-and-time-functions.html#function_date-format
     String dateFormat(const String & layout) const;
 
+    // returns the week day of current date(0 as sunday)
+    int weekDay() const;
+    // the following methods are port from TiDB
+    int yearDay() const;
+
+    int week(UInt32 mode) const;
+
+    std::tuple<int, int> calcWeek(UInt32 mode) const;
+
 protected:
     void convertDateFormat(char c, String & result) const;
 };
@@ -101,5 +119,10 @@ Field parseMyDateTime(const String & str);
 void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to);
 
 void convertTimeZoneByOffset(UInt64 from_time, UInt64 & to_time, Int64 offset, const DateLUTImpl & time_zone);
+
+int calcDayNum(int year, int month, int day);
+
+size_t maxFormattedDateTimeStringLength(const String & format);
+
 
 } // namespace DB

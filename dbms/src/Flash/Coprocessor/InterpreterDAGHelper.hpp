@@ -15,8 +15,8 @@ RegionException::RegionReadStatus GetRegionReadStatus(const RegionPtr & current_
         return RegionException::NOT_FOUND;
     if (current_region->version() != region_version || current_region->confVer() != region_conf_version)
         return RegionException::VERSION_ERROR;
-    if (current_region->isPendingRemove())
-        return RegionException::PENDING_REMOVE;
+    if (current_region->peerState() != raft_serverpb::PeerState::Normal)
+        return RegionException::NOT_FOUND;
     return RegionException::OK;
 }
 
@@ -58,6 +58,7 @@ std::tuple<std::optional<std::unordered_map<RegionID, const RegionInfo &>>, Regi
                 info.required_handle_ranges.emplace_back(std::make_pair(start, end));
             }
             info.range_in_table = current_region->getHandleRangeByTable(table_id);
+            info.bypass_lock_ts = r.bypass_lock_ts;
         }
         mvcc_info.regions_query_info.emplace_back(std::move(info));
     }
