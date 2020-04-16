@@ -214,7 +214,7 @@ struct PartitionDefinition
 
     void deserialize(Poco::JSON::Object::Ptr json);
 
-    TableID id = -1;
+    TableID id = DB::InvalidTableID;
     String name;
     // LessThan []string `json:"less_than"`
     String comment;
