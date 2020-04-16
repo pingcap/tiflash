@@ -43,12 +43,31 @@ public:
 
     void SetUp() override { recreateMetadataPath(); }
 
+    void TearDown() override
+    {
+        // Clean all database from context.
+        auto & ctx = TiFlashTestEnv::getContext();
+        for (const auto & [name, db] : ctx.getDatabases())
+        {
+            ctx.detachDatabase(name);
+            db->shutdown();
+        }
+    }
+
     void recreateMetadataPath() const
     {
-        String path = TiFlashTestEnv::getContext().getPath() + "metadata/";
-        if (Poco::File file(path); file.exists())
+        String path = TiFlashTestEnv::getContext().getPath();
+
+        auto p = path + "/metadata/";
+
+        if (Poco::File file(p); file.exists())
             file.remove(true);
-        Poco::File(path).createDirectory();
+        Poco::File{p}.createDirectory();
+
+        p = path + "/data/";
+        if (Poco::File file(p); file.exists())
+            file.remove(true);
+        Poco::File{p}.createDirectory();
     }
 };
 
@@ -436,7 +455,6 @@ try
         const String stmt = "CREATE TABLE `" + db_name + "`.`" + tbl_name + "`" + R"(
             (i Nullable(Int32), f Nullable(Float32), _tidb_rowid Int64) ENGINE = DeltaMerge(_tidb_rowid,
             '{"cols":[{"comment":"","default":null,"id":1,"name":{"L":"i","O":"i"},"offset":0,"origin_default":null,"state":5,"type":{"Decimal":0,"Elems":null,"Flag":0,"Flen":11,"Tp":3}},{"comment":"","default":null,"id":2,"name":{"L":"f","O":"f"},"offset":1,"origin_default":null,"state":5,"type":{"Decimal":-1,"Elems":null,"Flag":0,"Flen":12,"Tp":4}}],"comment":"","id":50,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":27,"state":5,"update_timestamp":415992658599346193}')
-
             )";
         ASTPtr ast = parseQuery(parser, stmt, 0);
 
@@ -496,5 +514,107 @@ try
     }
 }
 CATCH
+
+TEST_F(DatabaseTiFlash_test, RenameTableOnlyUpdateDisplayName)
+try
+{
+    TiFlashTestEnv::setupLogger();
+
+    const String db_name = "db_1";
+    auto ctx = TiFlashTestEnv::getContext();
+
+    {
+        // Create database
+        const String statement = "CREATE DATABASE " + db_name + " ENGINE=TiFlash";
+        ASTPtr ast = parseCreateStatement(statement);
+        InterpreterCreateQuery interpreter(ast, ctx);
+        interpreter.setInternal(true);
+        interpreter.setForceRestoreData(false);
+        interpreter.execute();
+    }
+
+    auto db = ctx.getDatabase(db_name);
+
+    const String tbl_name = "t_111";
+    {
+        /// Create table
+        ParserCreateQuery parser;
+        const String stmt = "CREATE TABLE `" + db_name + "`.`" + tbl_name + "`" + R"(
+            (i Nullable(Int32), f Nullable(Float32), _tidb_rowid Int64) ENGINE = DeltaMerge(_tidb_rowid,
+            '{"cols":[{"comment":"","default":null,"id":1,"name":{"L":"i","O":"i"},"offset":0,"origin_default":null,"state":5,"type":{"Decimal":0,"Elems":null,"Flag":0,"Flen":11,"Tp":3}},{"comment":"","default":null,"id":2,"name":{"L":"f","O":"f"},"offset":1,"origin_default":null,"state":5,"type":{"Decimal":-1,"Elems":null,"Flag":0,"Flen":12,"Tp":4}}],"comment":"","id":50,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":false,"schema_version":27,"state":5,"update_timestamp":415992658599346193}')
+            )";
+        ASTPtr ast = parseQuery(parser, stmt, 0);
+
+        InterpreterCreateQuery interpreter(ast, ctx);
+        interpreter.setInternal(true);
+        interpreter.setForceRestoreData(false);
+        interpreter.execute();
+    }
+
+    EXPECT_FALSE(db->empty(ctx));
+    EXPECT_TRUE(db->isTableExist(ctx, tbl_name));
+
+    {
+        // Get storage from database
+        auto storage = db->tryGetTable(ctx, tbl_name);
+        ASSERT_NE(storage, nullptr);
+
+        EXPECT_EQ(storage->getName(), MutableSupport::delta_tree_storage_name);
+        EXPECT_EQ(storage->getTableName(), tbl_name);
+
+        auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
+        EXPECT_EQ(managed_storage->getDatabaseName(), db_name);
+        EXPECT_EQ(managed_storage->getTableInfo().name, "t");
+    }
+
+    const String new_display_tbl_name = "accounts";
+    {
+        // Rename table
+        typeid_cast<DatabaseTiFlash *>(db.get())->renameTable(ctx, tbl_name, *db, tbl_name, db_name, new_display_tbl_name);
+
+        auto storage = db->tryGetTable(ctx, tbl_name);
+        ASSERT_NE(storage, nullptr);
+        EXPECT_EQ(storage->getName(), MutableSupport::delta_tree_storage_name);
+        EXPECT_EQ(storage->getTableName(), tbl_name);
+
+        auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
+        EXPECT_EQ(managed_storage->getDatabaseName(), db_name);
+        EXPECT_EQ(managed_storage->getTableInfo().name, new_display_tbl_name); // check display name
+    }
+
+    ASTPtr create_db_ast;
+    {
+        // Detach database and attach, we should get that table
+        auto deatched_db = ctx.detachDatabase(db_name);
+
+        // Attach database
+        create_db_ast = deatched_db->getCreateDatabaseQuery(ctx);
+        deatched_db->shutdown();
+        deatched_db.reset();
+    }
+    {
+        InterpreterCreateQuery interpreter(create_db_ast, ctx);
+        interpreter.setInternal(true);
+        interpreter.setForceRestoreData(false);
+        interpreter.execute();
+
+        // Get database
+        auto db = ctx.tryGetDatabase(db_name);
+        ASSERT_NE(db, nullptr);
+        EXPECT_TRUE(db->isTableExist(ctx, tbl_name));
+        EXPECT_EQ(db->getEngineName(), "TiFlash");
+        // Get storage from database
+        auto storage = db->tryGetTable(ctx, tbl_name);
+        ASSERT_NE(storage, nullptr);
+        EXPECT_EQ(storage->getName(), MutableSupport::delta_tree_storage_name);
+        EXPECT_EQ(storage->getTableName(), tbl_name);
+
+        auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
+        EXPECT_EQ(managed_storage->getDatabaseName(), db_name);
+        EXPECT_EQ(managed_storage->getTableInfo().name, new_display_tbl_name);
+    }
+}
+CATCH
+
 } // namespace tests
 } // namespace DB
