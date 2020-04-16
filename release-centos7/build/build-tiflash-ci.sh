@@ -7,13 +7,13 @@ SRCPATH=${1:-$(cd $SCRIPTPATH/../..; pwd -P)}
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
 
 ENABLE_TEST=${ENABLE_TEST:-1}
-ENABLE_TEST_COVERAGE=${ENABLE_TEST_COVERAGE:-1}
+TEST_COVERAGE=${TEST_COVERAGE:-1}
 ENABLE_EMBEDDED_COMPILER="FALSE"
 CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-Debug}
 
 if [[ "${CMAKE_BUILD_TYPE}" != "Debug" ]]; then
     ENABLE_TEST=0
-    ENABLE_TEST_COVERAGE=0
+    TEST_COVERAGE=0
 fi
 
 set -xe
@@ -51,7 +51,7 @@ mkdir -p $build_dir && cd $build_dir
 cmake "$SRCPATH" \
     -DENABLE_EMBEDDED_COMPILER=$ENABLE_EMBEDDED_COMPILER \
     -DENABLE_TESTS=$ENABLE_TEST \
-    -DENABLE_TEST_COVERAGE=$ENABLE_TEST_COVERAGE \
+    -DTEST_COVERAGE=$TEST_COVERAGE \
     -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE
 make -j $NPROC
 
@@ -67,7 +67,7 @@ if [[ "${CMAKE_BUILD_TYPE}" = "Debug" && ${ENABLE_TEST} -ne 0 ]]; then
 fi
 
 # copy gcno files under Debug mode
-if [[ "${CMAKE_BUILD_TYPE}" = "Debug" && ${ENABLE_TEST_COVERAGE} -ne 0 ]]; then
+if [[ "${CMAKE_BUILD_TYPE}" = "Debug" && ${TEST_COVERAGE} -ne 0 ]]; then
     mkdir "${install_dir}/gcov"
     find "${build_dir}" -name "*.gcno" -exec cp --parents \{\} "${install_dir}/gcov" \;
 fi
