@@ -25,7 +25,7 @@ struct SchemaNameMapper
     {
         return table_info.name + "(" + std::to_string(table_info.id) + ")";
     }
-    virtual String displayCanonicalName(const TiDB::DBInfo & db_info, const TiDB::TableInfo & table_info) const
+    virtual String debugCanonicalName(const TiDB::DBInfo & db_info, const TiDB::TableInfo & table_info) const
     {
         return debugDatabaseName(db_info) + "." + debugTableName(table_info);
     }
