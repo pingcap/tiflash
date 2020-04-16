@@ -18,7 +18,7 @@ rm -rf ./data ./log
 # run gtest cases. (only tics-gtest up)
 docker-compose -f gtest.yaml up -d
 docker-compose -f gtest.yaml exec -T tics-gtest bash -c 'cd /tests && ./run-gtest.sh'
-docker-compose -f gtest.yaml down
+docker-compose -f gtest.yaml down -t 60
 
 
 rm -rf ./data ./log
@@ -28,7 +28,7 @@ sleep 60
 docker-compose -f cluster.yaml -f tiflash-dt.yaml up -d --build
 sleep 10
 docker-compose -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test true'
-docker-compose -f cluster.yaml -f tiflash-dt.yaml down
+docker-compose -f cluster.yaml -f tiflash-dt.yaml down -t 60
 
 
 # We need to separate mock-test for dt and tmt, since this behavior
@@ -39,7 +39,7 @@ rm -rf ./data ./log
 # (only tics0 up) (for engine DetlaTree)
 docker-compose -f mock-test-dt.yaml up -d
 docker-compose -f mock-test-dt.yaml exec -T tics0 bash -c 'cd /tests ; ./run-test.sh delta-merge-test'
-docker-compose -f mock-test-dt.yaml down
+docker-compose -f mock-test-dt.yaml down -t 60
 
 
 
@@ -50,14 +50,14 @@ sleep 60
 docker-compose -f cluster.yaml -f tiflash-tmt.yaml up -d --build
 sleep 10
 docker-compose -f cluster.yaml -f tiflash-tmt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test true'
-docker-compose -f cluster.yaml -f tiflash-tmt.yaml down
+docker-compose -f cluster.yaml -f tiflash-tmt.yaml down -t 60
 
 
 rm -rf ./data ./log
 # (only tics0 up) (for engine TxnMergeTree)
 docker-compose -f mock-test-tmt.yaml up -d
 docker-compose -f mock-test-tmt.yaml exec -T tics0 bash -c 'cd /tests ; ./run-test.sh mutable-test'
-docker-compose -f mock-test-tmt.yaml down
+docker-compose -f mock-test-tmt.yaml down -t 60
 
 # Generate codecov report and upload.
 ./codecov.sh
