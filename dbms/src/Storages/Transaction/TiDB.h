@@ -301,7 +301,7 @@ struct TableInfo
 
     TableInfoPtr producePartitionTableInfo(TableID table_or_partition_id, const DB::SchemaNameMapper & name_mapper) const;
 
-    bool isLogicalPartitionTable() const { return is_partition_table && belonging_table_id == -1 && partition.enable; }
+    bool isLogicalPartitionTable() const { return is_partition_table && belonging_table_id == DB::InvalidTableID && partition.enable; }
 };
 
 using DBInfoPtr = std::shared_ptr<DBInfo>;
