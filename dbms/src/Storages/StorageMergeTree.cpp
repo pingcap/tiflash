@@ -317,11 +317,12 @@ void StorageMergeTree::rename(
         }
         orig_parts_path += escapeForFileName(data.table_name) + '/';
         new_parts_path += escapeForFileName(new_table_name) + '/';
-        if (Poco::File{new_parts_path}.exists())
+        if (data_path_contains_database_name && Poco::File{new_parts_path}.exists())
             throw Exception{"Target path already exists: " + new_parts_path,
                 /// @todo existing target can also be a file, not directory
                 ErrorCodes::DIRECTORY_ALREADY_EXISTS};
-        Poco::File(orig_parts_path).renameTo(new_parts_path);
+        else
+            Poco::File(orig_parts_path).renameTo(new_parts_path);
     }
     context.dropCaches();
     path = new_path_to_db;
