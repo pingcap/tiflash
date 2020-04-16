@@ -392,7 +392,7 @@ try
     {
         json->set("belonging_table_id", belonging_table_id);
         json->set("partition", partition.getJSONObject());
-        if (belonging_table_id != -1)
+        if (belonging_table_id != DB::InvalidTableID)
         {
             json->set("is_partition_sub_table", true);
         }

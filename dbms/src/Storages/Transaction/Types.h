@@ -13,7 +13,7 @@ using TableIDSet = std::unordered_set<TableID>;
 
 enum : TableID
 {
-    InvalidTableID = 0,
+    InvalidTableID = -1,
 };
 
 using DatabaseID = Int64;
