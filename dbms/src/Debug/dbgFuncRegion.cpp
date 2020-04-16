@@ -66,7 +66,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
 
     TMTContext & tmt = context.getTMTContext();
     RegionPtr region = RegionBench::createRegion(table_id, region_id, start, end);
-    tmt.getKVStore()->onSnapshot(region, tmt);
+    tmt.getKVStore()->onSnapshot(region, nullptr, 0, tmt);
 
     std::stringstream ss;
     ss << "put region #" << region_id << ", range[" << start << ", " << end << ")"
@@ -154,7 +154,7 @@ void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvo
         MockTiKV::instance().getRaftIndex(region_id);
     }
 
-    tmt.getKVStore()->tryApplySnapshot(region, context, false);
+    tmt.getKVStore()->tryApplySnapshot(region, context);
 
     std::stringstream ss;
     ss << "put region #" << region_id << ", range[" << start << ", " << end << ")"

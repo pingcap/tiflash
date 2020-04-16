@@ -43,15 +43,13 @@ public:
     void restore(const IndexReaderCreateFunc & index_reader_create);
     RegionPtr getRegion(const RegionID region_id) const;
 
-    using RegionsAppliedindexMap = std::unordered_map<RegionID, std::pair<RegionPtr, UInt64>>;
     using RegionRange = std::pair<TiKVRangeKey, TiKVRangeKey>;
     /// Get and callback all regions whose range overlapped with start/end key.
     void handleRegionsByRangeOverlap(const RegionRange & range, std::function<void(RegionMap, const KVStoreTaskLock &)> && callback) const;
 
     void traverseRegions(std::function<void(RegionID, const RegionPtr &)> && callback) const;
 
-    bool onSnapshot(
-        RegionPtr new_region, TMTContext & tmt, const RegionsAppliedindexMap & regions_to_check = {}, bool try_flush_region = false);
+    void onSnapshot(RegionPtr new_region, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt);
 
     void gcRegionCache(Seconds gc_persist_period = REGION_CACHE_GC_PERIOD);
 
@@ -71,7 +69,7 @@ public:
     TiFlashApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
     void handleApplySnapshot(
         metapb::Region && region, uint64_t peer_id, const SnapshotViewArray snaps, uint64_t index, uint64_t term, TMTContext & tmt);
-    bool tryApplySnapshot(RegionPtr new_region, Context & context, bool try_flush_region);
+    void tryApplySnapshot(RegionPtr new_region, Context & context);
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
     void setRegionCompactLogPeriod(Seconds period);
     void handleIngestSST(UInt64 region_id, const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt);
