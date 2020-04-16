@@ -107,7 +107,6 @@ grpc::Status CoprocessorHandler::execute()
         switch (e.status)
         {
             case RegionException::RegionReadStatus::NOT_FOUND:
-            case RegionException::RegionReadStatus::PENDING_REMOVE:
                 GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_error, reason_region_not_found).Increment();
                 region_err = cop_response->mutable_region_error();
                 region_err->mutable_region_not_found()->set_region_id(cop_request->context().region_id());
