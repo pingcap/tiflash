@@ -569,7 +569,7 @@ try
 
     const String new_display_tbl_name = "accounts";
     {
-        // Rename table
+        // Rename table with only display table name updated.
         typeid_cast<DatabaseTiFlash *>(db.get())->renameTable(ctx, tbl_name, *db, tbl_name, db_name, new_display_tbl_name);
 
         auto storage = db->tryGetTable(ctx, tbl_name);
@@ -580,6 +580,9 @@ try
         auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
         EXPECT_EQ(managed_storage->getDatabaseName(), db_name);
         EXPECT_EQ(managed_storage->getTableInfo().name, new_display_tbl_name); // check display name
+
+        auto tbl_meta = db->getTableMetadataPath(tbl_name);
+        ASSERT_TRUE(Poco::File(tbl_meta).exists());
     }
 
     ASTPtr create_db_ast;
