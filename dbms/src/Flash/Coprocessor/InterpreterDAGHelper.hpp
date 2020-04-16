@@ -16,7 +16,7 @@ RegionException::RegionReadStatus GetRegionReadStatus(const RegionPtr & current_
     if (current_region->version() != region_version || current_region->confVer() != region_conf_version)
         return RegionException::VERSION_ERROR;
     if (current_region->peerState() != raft_serverpb::PeerState::Normal)
-        return RegionException::PENDING_REMOVE;
+        return RegionException::NOT_FOUND;
     return RegionException::OK;
 }
 
