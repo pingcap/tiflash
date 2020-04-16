@@ -301,7 +301,7 @@ std::vector<DiagnosticsService::Disk> getAllDisks()
             DiagnosticsService::Disk disk;
 
             disk.name = values[0].substr(5, values[0].size() - 5); // trim '/dev/' prefix
-            boost::trim_if(disk.name, boost::is_digit()); // trim partition number
+            boost::trim_if(disk.name, boost::is_digit());          // trim partition number
 
             disk.mount_point = values[1];
 
@@ -747,6 +747,7 @@ void DiagnosticsService::processInfo(std::vector<diagnosticspb::ServerInfoItem> 
         io_info = getIOInfo();
         nic_info = getNICInfo();
         // Sleep 100ms to sample
+        std::this_thread::sleep_for(std::chrono::microseconds(100));
     }
 
     switch (tp)
@@ -783,7 +784,6 @@ void DiagnosticsService::processInfo(std::vector<diagnosticspb::ServerInfoItem> 
         return l < r;
     });
 
-    // auto resp = ServerInfoResponse::default_instance();
     auto & resp = *response;
     for (auto item : items)
     {
