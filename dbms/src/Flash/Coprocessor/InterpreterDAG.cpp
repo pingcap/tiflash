@@ -280,8 +280,8 @@ RegionException::RegionReadStatus InterpreterDAG::getRegionReadStatus(const Regi
         return RegionException::NOT_FOUND;
     if (current_region->version() != dag.getRegionVersion() || current_region->confVer() != dag.getRegionConfVersion())
         return RegionException::VERSION_ERROR;
-    if (current_region->isPendingRemove())
-        return RegionException::PENDING_REMOVE;
+    if (current_region->peerState() != raft_serverpb::PeerState::Normal)
+        return RegionException::NOT_FOUND;
     return RegionException::OK;
 }
 
