@@ -30,8 +30,7 @@ endif ()
 # Flags for test coverage
 if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
     include(CodeCoverage)
-    set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} --coverage")
-    # set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} --coverage -DIS_DEBUG -fprofile-exclude-files=${CMAKE_SOURCE_DIR}/contrib/.*")
+    APPEND_COVERAGE_COMPILER_FLAGS()
 endif ()
 
 find_package (Threads)
@@ -303,7 +302,7 @@ if (ENABLE_TESTS)
     add_check(gtests_dbms)
 endif ()
 
-if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+if (TEST_COVERAGE AND TEST_COVERAGE_LCOV AND CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(COVERAGE_LCOV_EXCLUDES
             '/Library/Developer/CommandLineTools/usr/include/*'
             '/usr/include/*'
@@ -317,6 +316,8 @@ if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
             DEPENDENCIES gtests_dbms
             EXECUTABLE gtests_dbms
     )
+endif()
+if (TEST_COVERAGE AND TEST_COVERAGE_GCOVR AND CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(COVERAGE_GCOVR_EXCLUDES
             'contrib'
             'cmake-build-debugwithcov'

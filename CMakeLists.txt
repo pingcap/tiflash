@@ -63,6 +63,8 @@ if (ARCH_LINUX)
 endif ()
 
 option (TEST_COVERAGE "Enables flags for test coverage" OFF)
+option (TEST_COVERAGE_LCOV "Enables build target and flags for test coverage report using lcov" OFF)
+option (TEST_COVERAGE_GCOVR "Enables build target and flags for test coverage report using gcovr" OFF)
 option (ENABLE_TESTS "Enables tests" ${NOT_MSVC})
 
 option (USE_STATIC_LIBRARIES "Set to FALSE to use shared libraries" ON)
