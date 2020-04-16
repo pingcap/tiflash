@@ -29,7 +29,7 @@ public:
 
     void removeTable(const Context & context, const String & table_name) override;
 
-    // Rename action synced from TiFlash should use this method.
+    // Rename action synced from TiDB should use this method.
     // We need display database / table name for updating TiDB::TableInfo
     void renameTable(const Context & context, const String & table_name, IDatabase & to_database, const String & to_table_name,
         const String & display_database, const String & display_table);
