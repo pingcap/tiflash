@@ -327,8 +327,8 @@ void throwRetryRegion(const MvccQueryInfo::RegionsQueryInfo & regions_info, Regi
 /// Check if region is invalid.
 RegionException::RegionReadStatus isValidRegion(const RegionQueryInfo & region_to_query, const RegionPtr & region_in_mem)
 {
-    if (region_in_mem->isPendingRemove())
-        return RegionException::RegionReadStatus::PENDING_REMOVE;
+    if (region_in_mem->peerState() != raft_serverpb::PeerState::Normal)
+        return RegionException::RegionReadStatus::NOT_FOUND;
 
     const auto & [version, conf_ver, key_range] = region_in_mem->dumpVersionRange();
     (void)key_range;
@@ -338,7 +338,18 @@ RegionException::RegionReadStatus isValidRegion(const RegionQueryInfo & region_t
     return RegionException::RegionReadStatus::OK;
 }
 
-RegionMap doLearnerRead(const TiDB::TableID table_id,           //
+struct RegionMapNode : RegionPtr
+{
+    UInt64 snapshot_event_flag{0};
+
+    RegionMapNode() = default;
+    RegionMapNode(const RegionPtr & region) : RegionPtr(region), snapshot_event_flag(region->getSnapshotEventFlag()) {}
+    bool operator!=(const RegionPtr & tar) const { return (tar != *this) || (tar && snapshot_event_flag != tar->getSnapshotEventFlag()); }
+};
+
+using InternalRegionMap = std::unordered_map<RegionID, RegionMapNode>;
+
+InternalRegionMap doLearnerRead(const TiDB::TableID table_id,   //
     const MvccQueryInfo::RegionsQueryInfo & regions_query_info, //
     const bool resolve_locks, const Timestamp start_ts,
     size_t concurrent_num, //
@@ -369,7 +380,7 @@ RegionMap doLearnerRead(const TiDB::TableID table_id,           //
 
     KVStorePtr & kvstore = tmt.getKVStore();
     Context & context = tmt.getContext();
-    RegionMap kvstore_region;
+    InternalRegionMap kvstore_region;
     // check region is not null and store region map.
     for (const auto & info : regions_info)
     {
@@ -662,7 +673,7 @@ BlockInputStreams StorageDeltaMerge::read( //
         size_t concurrent_num = std::max<size_t>(num_streams * mvcc_query_info.concurrent, 1);
 
         // With `no_kvstore` is true, we do not do learner read
-        RegionMap regions_in_learner_read;
+        InternalRegionMap regions_in_learner_read;
         if (likely(!select_query.no_kvstore))
         {
             /// Learner read.
@@ -748,7 +759,7 @@ BlockInputStreams StorageDeltaMerge::read( //
             {
                 RegionException::RegionReadStatus status = RegionException::RegionReadStatus::OK;
                 auto region = tmt.getKVStore()->getRegion(region_query_info.region_id);
-                if (region != regions_in_learner_read[region_query_info.region_id])
+                if (regions_in_learner_read[region_query_info.region_id] != region)
                     status = RegionException::RegionReadStatus::NOT_FOUND;
                 else if (region->version() != region_query_info.version)
                 {

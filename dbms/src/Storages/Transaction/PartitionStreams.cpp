@@ -130,14 +130,12 @@ std::pair<RegionDataReadInfoList, RegionException::RegionReadStatus> resolveLock
 
         /// Some sanity checks for region meta.
         {
-            if (region->isPendingRemove())
-                return {{}, RegionException::PENDING_REMOVE};
-
             /**
              * special check: when source region is merging, read_index can not guarantee the behavior about target region.
              * Reject all read request for safety.
+             * Only when region is Normal can continue read process.
              */
-            if (region->isMerging())
+            if (region->peerState() != raft_serverpb::PeerState::Normal)
                 return {{}, RegionException::NOT_FOUND};
 
             const auto & [version, conf_ver, key_range] = region->dumpVersionRange();
