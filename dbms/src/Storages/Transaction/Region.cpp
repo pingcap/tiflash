@@ -367,7 +367,11 @@ bool Region::isMerging() const { return peerState() == raft_serverpb::PeerState:
 
 void Region::setPendingRemove() { setPeerState(raft_serverpb::PeerState::Tombstone); }
 
-void Region::setStateApplying() { setPeerState(raft_serverpb::PeerState::Applying); }
+void Region::setStateApplying()
+{
+    setPeerState(raft_serverpb::PeerState::Applying);
+    snapshot_event_flag++;
+}
 
 raft_serverpb::PeerState Region::peerState() const { return meta.peerState(); }
 

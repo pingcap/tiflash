@@ -170,6 +170,8 @@ public:
     TiFlashApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt);
     void handleIngestSST(const SnapshotViewArray snaps, UInt64 index, UInt64 term);
 
+    UInt64 getSnapshotEventFlag() const { return snapshot_event_flag; }
+
 private:
     Region() = delete;
     friend class RegionRaftCommandDelegate;
@@ -206,6 +208,8 @@ private:
     Logger * log;
 
     const TableID mapped_table_id;
+
+    std::atomic<UInt64> snapshot_event_flag{1};
 };
 
 class RegionRaftCommandDelegate : public Region, private boost::noncopyable
