@@ -325,8 +325,9 @@ void IDAsPathUpgrader::DatabaseDiskInfo::renameToTmpDirectories(const Context & 
         return;
 
     auto root_path = ctx.getPath();
-    // Rename database meta file, meta dir
-    renamePath(getMetaFilePath(root_path, false), getMetaFilePath(root_path, true), log, true);
+    // Rename database meta file if exist
+    renamePath(getMetaFilePath(root_path, false), getMetaFilePath(root_path, true), log, false);
+    // Rename database meta dir
     renamePath(getMetaDirectory(root_path, false), getMetaDirectory(root_path, true), log, true);
 
     // Rename database data dir
