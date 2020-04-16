@@ -287,7 +287,7 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
         FAIL_POINT_TRIGGER_EXCEPTION(exception_before_rename_table_old_meta_removed);
 
         // If only display name updated, don't remove `old_tbl_meta_file`.
-        if (isSamePath(old_tbl_meta_file, new_tbl_meta_file))
+        if (!isSamePath(old_tbl_meta_file, new_tbl_meta_file))
         {
             // If process crash before removing old table meta file, we will continue or rollback this
             // rename command next time `loadTables` is called. See `loadTables` and
