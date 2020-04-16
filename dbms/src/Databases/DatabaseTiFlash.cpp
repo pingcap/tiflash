@@ -10,6 +10,7 @@
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Poco/File.h>
+#include <Poco/Path.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TMTStorages.h>
@@ -205,10 +206,15 @@ void DatabaseTiFlash::removeTable(const Context & /*context*/, const String & ta
     }
 }
 
-void DatabaseTiFlash::renameTable(const Context & /*context*/, const String & /*table_name*/, IDatabase & /*to_database*/, const String & /*to_table_name*/)
+void DatabaseTiFlash::renameTable(
+    const Context & /*context*/, const String & /*table_name*/, IDatabase & /*to_database*/, const String & /*to_table_name*/)
 {
     throw Exception(DB::toString(__PRETTY_FUNCTION__) + " should never called!");
 }
+
+// This function will tidy up path and compare if them are the same one.
+// For example "/tmp/data/a.sql" is equal to "/tmp//data//a.sql"
+static inline bool isSamePath(const String & lhs, const String & rhs) { return Poco::Path{lhs}.toString() == Poco::Path{rhs}.toString(); }
 
 void DatabaseTiFlash::renameTable(const Context & context, const String & table_name, IDatabase & to_database, const String & to_table_name,
     const String & /* display_database */, const String & display_table)
@@ -230,6 +236,7 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
 
     // First move table meta file to new database directory.
     const String old_tbl_meta_file = getTableMetadataPath(table_name);
+    do
     {
         // Generate new meta file according to ast in old meta file and to_table_name
         const String new_tbl_meta_file = to_database_concrete->getTableMetadataPath(to_table_name);
@@ -276,14 +283,18 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
             Poco::File(new_tbl_meta_file_tmp).remove();
             throw;
         }
-    }
 
-    FAIL_POINT_TRIGGER_EXCEPTION(exception_before_rename_table_old_meta_removed);
+        FAIL_POINT_TRIGGER_EXCEPTION(exception_before_rename_table_old_meta_removed);
 
-    // If process crash before removing old table meta file, we will continue or rollback this
-    // rename command next time `loadTables` is called. See `loadTables` and
-    // `DatabaseLoading::startupTables` for more details.
-    Poco::File{old_tbl_meta_file}.remove(); // Then remove old meta file
+        // If only display name updated, don't remove `old_tbl_meta_file`.
+        if (isSamePath(old_tbl_meta_file, new_tbl_meta_file))
+        {
+            // If process crash before removing old table meta file, we will continue or rollback this
+            // rename command next time `loadTables` is called. See `loadTables` and
+            // `DatabaseLoading::startupTables` for more details.
+            Poco::File{old_tbl_meta_file}.remove(); // Then remove old meta file
+        }
+    } while (0);
 
     //// Note that remains codes should only change variables in memory if this rename command
     //// is synced from TiDB, aka table_name always equal to to_table_name.
