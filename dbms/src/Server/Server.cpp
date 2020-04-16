@@ -296,6 +296,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     const std::string path = all_normal_path[0];
     TiFlashRaftConfig raft_config(path, config(), log);
     // Use pd address to define which default_database we use by defauly.
+    // For mock test, we use "default". For deployed with pd/tidb/tikv use "db_1" , whose name is "test" in TiDB.
     std::string default_database = config().getString("default_database", raft_config.pd_addrs.empty() ? "default" : "db_1");
     global_context->setPath(path);
     global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
@@ -513,7 +514,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             // Check whether we need to upgrade directories hierarchy
             // If some database can not find in TiDB, they will be dropped
-            // if theirs name is not in reserved_databases
+            // if theirs name is not in reserved_databases.
+            // Besides, database engine in reserved_databases just keep as
+            // what they are.
             IDAsPathUpgrader upgrader(
                 *global_context, /*is_mock=*/raft_config.pd_addrs.empty(), /*reserved_databases=*/raft_config.ignore_databases);
             if (!upgrader.needUpgrade())

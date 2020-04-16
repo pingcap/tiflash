@@ -235,9 +235,8 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
     }
 
     // First move table meta file to new database directory.
-    const String old_tbl_meta_file = getTableMetadataPath(table_name);
-    do
     {
+        const String old_tbl_meta_file = getTableMetadataPath(table_name);
         // Generate new meta file according to ast in old meta file and to_table_name
         const String new_tbl_meta_file = to_database_concrete->getTableMetadataPath(to_table_name);
         const String new_tbl_meta_file_tmp = new_tbl_meta_file + ".tmp";
@@ -294,7 +293,7 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
             // `DatabaseLoading::startupTables` for more details.
             Poco::File{old_tbl_meta_file}.remove(); // Then remove old meta file
         }
-    } while (0);
+    }
 
     //// Note that remains codes should only change variables in memory if this rename command
     //// is synced from TiDB, aka table_name always equal to to_table_name.

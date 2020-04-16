@@ -74,7 +74,6 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
     if (create.if_not_exists && context.isDatabaseExist(database_name))
         return {};
 
-    // TODO: Add version for database engine TiFlash
     String database_engine_name;
     if (!create.storage)
     {
