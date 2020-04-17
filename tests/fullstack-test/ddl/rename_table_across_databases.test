@@ -19,10 +19,10 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 +------+------+
 
 # check table info in tiflash
->> select engine,tidb_database,tidb_name from system.tables where tidb_database = 'test' and tidb_name='t' and is_tombstone = 0
-┌─engine─────┬─tidb_database─┬─tidb_name─┐
-│ DeltaMerge │ test          │ t         │
-└────────────┴───────────────┴───────────┘
+>> select tidb_database,tidb_name from system.tables where tidb_database = 'test' and tidb_name='t' and is_tombstone = 0
+┌─tidb_database─┬─tidb_name─┐
+│ test          │ t         │
+└───────────────┴───────────┘
 
 # rename table across databases
 mysql> create database if not exists test_new;
@@ -38,10 +38,10 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test_new
 +------+------+
 
 # check if table info updated.
->> select engine,tidb_database,tidb_name from system.tables where is_tombstone = 0 and (tidb_database = 'test' and tidb_name='t') or (tidb_database='test_new' and tidb_name='t2')
-┌─engine─────┬─tidb_database─┬─tidb_name─┐
-│ DeltaMerge │ test_new      │ t2        │
-└────────────┴───────────────┴───────────┘
+>> select tidb_database,tidb_name from system.tables where is_tombstone = 0 and (tidb_database = 'test' and tidb_name='t') or (tidb_database='test_new' and tidb_name='t2')
+┌─tidb_database─┬─tidb_name─┐
+│ test_new      │ t2        │
+└───────────────┴───────────┘
 
 
 mysql> drop table if exists test.t;
