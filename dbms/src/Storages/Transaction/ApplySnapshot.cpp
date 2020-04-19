@@ -44,6 +44,7 @@ void KVStore::tryApplySnapshot(RegionPtr new_region, Context & context)
             LOG_WARNING(log,
                 old_region->toString(false) << " already has same applied index, just ignore next process. "
                                             << "Please check log whether server crashed after successfully applied snapshot.");
+            return;
         }
 
         {
