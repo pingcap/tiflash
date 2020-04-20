@@ -1466,7 +1466,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 55
+            "y": 4
           },
           "id": 40,
           "legend": {
@@ -1523,8 +1523,8 @@
           "yaxes": [
             {
               "decimals": null,
-              "format": "none",
-              "label": null,
+              "format": "ops",
+              "label": "",
               "logBase": 1,
               "max": null,
               "min": "0",
@@ -1556,7 +1556,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 62
+            "y": 11
           },
           "id": 39,
           "legend": {
@@ -1645,7 +1645,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 62
+            "y": 11
           },
           "id": 42,
           "legend": {
@@ -1758,7 +1758,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 69
+            "y": 18
           },
           "id": 43,
           "legend": {
@@ -1847,7 +1847,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 69
+            "y": 18
           },
           "id": 44,
           "legend": {
@@ -1877,6 +1877,7 @@
             {
               "expr": "histogram_quantile(0.999, sum(rate(tiflash_storage_page_gc_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "999",
               "refId": "A"
@@ -1898,6 +1899,7 @@
             {
               "expr": "histogram_quantile(0.80, sum(rate(tiflash_storage_page_gc_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "80",
               "refId": "D"
@@ -1956,7 +1958,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 76
+            "y": 25
           },
           "id": 41,
           "legend": {
@@ -2012,7 +2014,7 @@
           "yaxes": [
             {
               "decimals": null,
-              "format": "none",
+              "format": "ops",
               "label": null,
               "logBase": 1,
               "max": null,
