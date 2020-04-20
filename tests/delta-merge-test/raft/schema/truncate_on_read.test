@@ -2,6 +2,7 @@
 => DBGInvoke __enable_schema_sync_service('false')
 
 => DBGInvoke __drop_tidb_table(default, test)
+=> DBGInvoke __refresh_schemas()
 => drop table if exists default.test
 
 => DBGInvoke __set_flush_threshold(1000000, 1000000)
@@ -19,9 +20,12 @@
 ┌─col_1─┬─_tidb_rowid─┐
 │ test1 │          50 │
 └───────┴─────────────┘
+=> drop table default.test;
 => select * from default.test " --schema_version "10000000
 
 => DBGInvoke __drop_tidb_table(default, test)
+=> DBGInvoke __refresh_schemas()
 => drop table if exists default.test
+
 => DBGInvoke __enable_schema_sync_service('true')
 => DBGInvoke __clean_up_region()

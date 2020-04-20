@@ -15,10 +15,6 @@ mysql> select table_schema,table_name,replica_count,location_labels,available fr
 +--------------+------------+---------------+-----------------+-----------+
 | test         | t          |             1 | rack,host,abc   |         1 |
 +--------------+------------+---------------+-----------------+-----------+
->> select database,name from system.tables where database='test' and name='t';
-┌─database─┬─name─┐
-│ test     │ t    │
-└──────────┴──────┘
 >> DBGInvoke __try_flush()
 >> DBGInvoke __init_fail_point()
 
