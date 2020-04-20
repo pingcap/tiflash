@@ -1,7 +1,3 @@
-
-#TODO: atomic rename table
-#RETURN
-
 mysql> drop table if exists test.t;
 mysql> create table test.t(a int not null, b int not null);
 mysql> alter table test.t set tiflash replica 1 location labels 'rack', 'host', 'abc'
@@ -18,27 +14,23 @@ mysql> select table_schema,table_name,replica_count,location_labels,available fr
 +--------------+------------+---------------+-----------------+-----------+
 | test         | t          |             1 | rack,host,abc   |         1 |
 +--------------+------------+---------------+-----------------+-----------+
->> select database,name from system.tables where database='test' and name='t';
-┌─database─┬─name─┐
-│ test     │ t    │
-└──────────┴──────┘
 >> DBGInvoke __try_flush()
 >> DBGInvoke __init_fail_point()
 
 # Process crash when rename table data is done but not for its metadata file.
->> DBGInvoke __enable_fail_point(exception_between_rename_table_metadata_and_data)
+>> DBGInvoke __enable_fail_point(exception_between_rename_table_data_and_metadata)
 
 mysql> drop table if exists test.t_2;
 mysql> rename table test.t to test.t_2;
 
 func> wait_table test t_2
 
-# After restart, test.t is rename to test.t_2, we can still read data from tiflash
->> select database,name from system.tables where database='test' and name='t';
->> select database,name from system.tables where database='test' and name='t_2';
-┌─database─┬─name─┐
-│ test     │ t_2  │
-└──────────┴──────┘
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_2;
++---+---+
+| a | b |
++---+---+
+| 1 | 1 |
+| 1 | 2 |
++---+---+
 
 mysql> drop table if exists test.t

@@ -30,8 +30,12 @@ using PartitionDefinition = TiDB::PartitionDefinition;
 using Table = MockTiDB::Table;
 using TablePtr = MockTiDB::TablePtr;
 
-Table::Table(const String & database_name_, const String & table_name_, TableInfo && table_info_)
-    : table_info(std::move(table_info_)), database_name(database_name_), table_name(table_name_), col_id(table_info_.columns.size())
+Table::Table(const String & database_name_, DatabaseID database_id_, const String & table_name_, TableInfo && table_info_)
+    : table_info(std::move(table_info_)),
+      database_name(database_name_),
+      database_id(database_id_),
+      table_name(table_name_),
+      col_id(table_info_.columns.size())
 {}
 
 MockTiDB::MockTiDB() { databases["default"] = 0; }
@@ -80,7 +84,7 @@ void MockTiDB::dropDB(Context & context, const String & database_name, bool drop
 
     std::vector<String> table_names;
     std::for_each(tables_by_id.begin(), tables_by_id.end(), [&](const auto & pair) {
-        if (pair.second->table_info.db_name == database_name)
+        if (pair.second->database_name == database_name)
             table_names.emplace_back(pair.second->table_info.name);
     });
 
@@ -113,7 +117,7 @@ void MockTiDB::dropTable(Context & context, const String & database_name, const 
 
     SchemaDiff diff;
     diff.type = SchemaActionDropTable;
-    diff.schema_id = table->table_info.db_id;
+    diff.schema_id = table->database_id;
     diff.table_id = table->id();
     diff.version = version;
     version_diff[version] = diff;
@@ -156,8 +160,6 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
     }
 
     TableInfo table_info;
-    table_info.db_id = databases[database_name];
-    table_info.db_name = database_name;
     table_info.id = table_id_allocator++;
     table_info.name = table_name;
     table_info.pk_is_handle = false;
@@ -193,14 +195,14 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
     else
         throw Exception("Unknown engine type : " + engine_type + ", must be 'tmt' or 'dt'", ErrorCodes::BAD_ARGUMENTS);
 
-    auto table = std::make_shared<Table>(database_name, table_name, std::move(table_info));
+    auto table = std::make_shared<Table>(database_name, databases[database_name], table_name, std::move(table_info));
     tables_by_id.emplace(table->table_info.id, table);
     tables_by_name.emplace(qualified_name, table);
 
     version++;
     SchemaDiff diff;
     diff.type = SchemaActionCreateTable;
-    diff.schema_id = table->table_info.db_id;
+    diff.schema_id = table->database_id;
     diff.table_id = table->id();
     diff.version = version;
     version_diff[version] = diff;
@@ -250,7 +252,7 @@ void MockTiDB::newPartition(const String & database_name, const String & table_n
 
         SchemaDiff diff;
         diff.type = SchemaActionAddTablePartition;
-        diff.schema_id = table->table_info.db_id;
+        diff.schema_id = table->database_id;
         diff.table_id = table->id();
         diff.version = version;
         version_diff[version] = diff;
@@ -277,7 +279,7 @@ void MockTiDB::dropPartition(const String & database_name, const String & table_
 
     SchemaDiff diff;
     diff.type = SchemaActionDropTablePartition;
-    diff.schema_id = table->table_info.db_id;
+    diff.schema_id = table->database_id;
     diff.table_id = table->id();
     diff.version = version;
     version_diff[version] = diff;
@@ -302,7 +304,7 @@ void MockTiDB::addColumnToTable(
 
     SchemaDiff diff;
     diff.type = SchemaActionAddColumn;
-    diff.schema_id = table->table_info.db_id;
+    diff.schema_id = table->database_id;
     diff.table_id = table->id();
     diff.version = version;
     version_diff[version] = diff;
@@ -325,7 +327,7 @@ void MockTiDB::dropColumnFromTable(const String & database_name, const String & 
 
     SchemaDiff diff;
     diff.type = SchemaActionDropColumn;
-    diff.schema_id = table->table_info.db_id;
+    diff.schema_id = table->database_id;
     diff.table_id = table->id();
     diff.version = version;
     version_diff[version] = diff;
@@ -354,7 +356,7 @@ void MockTiDB::modifyColumnInTable(const String & database_name, const String & 
     version++;
     SchemaDiff diff;
     diff.type = SchemaActionModifyColumn;
-    diff.schema_id = table->table_info.db_id;
+    diff.schema_id = table->database_id;
     diff.table_id = table->id();
     diff.version = version;
     version_diff[version] = diff;
@@ -381,7 +383,7 @@ void MockTiDB::renameColumnInTable(
     version++;
     SchemaDiff diff;
     diff.type = SchemaActionModifyColumn;
-    diff.schema_id = table->table_info.db_id;
+    diff.schema_id = table->database_id;
     diff.table_id = table->id();
     diff.version = version;
     version_diff[version] = diff;
@@ -397,7 +399,7 @@ void MockTiDB::renameTable(const String & database_name, const String & table_na
 
     TableInfo new_table_info = table->table_info;
     new_table_info.name = new_table_name;
-    auto new_table = std::make_shared<Table>(database_name, new_table_name, std::move(new_table_info));
+    auto new_table = std::make_shared<Table>(database_name, table->database_id, new_table_name, std::move(new_table_info));
 
     tables_by_id[new_table->table_info.id] = new_table;
     tables_by_name.erase(qualified_name);
@@ -406,8 +408,8 @@ void MockTiDB::renameTable(const String & database_name, const String & table_na
     version++;
     SchemaDiff diff;
     diff.type = SchemaActionRenameTable;
-    diff.schema_id = table->table_info.db_id;
-    diff.old_schema_id = table->table_info.db_id;
+    diff.schema_id = table->database_id;
+    diff.old_schema_id = table->database_id;
     diff.table_id = table->id();
     diff.version = version;
     version_diff[version] = diff;
@@ -428,7 +430,7 @@ void MockTiDB::truncateTable(const String & database_name, const String & table_
     version++;
     SchemaDiff diff;
     diff.type = SchemaActionTruncateTable;
-    diff.schema_id = table->table_info.db_id;
+    diff.schema_id = table->database_id;
     diff.old_table_id = old_table_id;
     diff.table_id = table->id();
     diff.version = version;
@@ -479,6 +481,6 @@ TiDB::DBInfoPtr MockTiDB::getDBInfoByID(DatabaseID db_id)
     return db_ptr;
 }
 
-SchemaDiff MockTiDB::getSchemaDiff(Int64 version) { return version_diff[version]; }
+SchemaDiff MockTiDB::getSchemaDiff(Int64 version_) { return version_diff[version_]; }
 
 } // namespace DB

@@ -25,6 +25,7 @@
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionException.h>
+#include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <common/ThreadPool.h>
@@ -48,8 +49,9 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
     const OptionTableInfoConstRef table_info_,
     const ColumnsDescription & columns_,
     const ASTPtr & primary_expr_ast_,
+    Timestamp tombstone,
     Context & global_context_)
-    : IManageableStorage{columns_},
+    : IManageableStorage{columns_, tombstone},
       path(path_ + "/" + table_name_),
       max_column_id_used(0),
       global_context(global_context_.getGlobalContext()),
@@ -865,11 +867,11 @@ void StorageDeltaMerge::deleteRows(const Context & context, size_t delete_rows)
 //==========================================================================================
 // DDL methods.
 //==========================================================================================
-void StorageDeltaMerge::alterFromTiDB(
-    const AlterCommands & params, const TiDB::TableInfo & table_info, const String & database_name, const Context & context)
+void StorageDeltaMerge::alterFromTiDB(const AlterCommands & params, const String & database_name, const TiDB::TableInfo & table_info,
+    const SchemaNameMapper & name_mapper, const Context & context)
 {
-    tidb_table_info = table_info;
-    alterImpl(params, database_name, table_info.name, std::optional<std::reference_wrapper<const TiDB::TableInfo>>(table_info), context);
+    alterImpl(params, database_name, name_mapper.mapTableName(table_info),
+        std::optional<std::reference_wrapper<const TiDB::TableInfo>>(table_info), context);
 }
 
 void StorageDeltaMerge::alter(
@@ -885,7 +887,7 @@ static void updateDeltaMergeTableCreateStatement(            //
     const ColumnsDescription & columns,
     const OrderedNameSet & hidden_columns,                                                         //
     const OptionTableInfoConstRef table_info_from_tidb, const ColumnDefines & store_table_columns, //
-    const Context & context);
+    Timestamp tombstone, const Context & context);
 
 void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
     const String & database_name,
@@ -899,6 +901,8 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
     cols_drop_forbidden.insert(EXTRA_HANDLE_COLUMN_NAME);
     cols_drop_forbidden.insert(VERSION_COLUMN_NAME);
     cols_drop_forbidden.insert(TAG_COLUMN_NAME);
+
+    auto tombstone = getTombstone();
 
     for (const auto & command : commands)
     {
@@ -914,6 +918,14 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
             if (cols_drop_forbidden.count(command.column_name) > 0)
                 throw Exception("Storage engine " + getName() + " doesn't support drop primary key / hidden column: " + command.column_name,
                     ErrorCodes::BAD_ARGUMENTS);
+        }
+        else if (command.type == AlterCommand::TOMBSTONE)
+        {
+            tombstone = command.tombstone;
+        }
+        else if (command.type == AlterCommand::RECOVER)
+        {
+            tombstone = 0;
         }
     }
 
@@ -946,8 +958,11 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
     // after update `new_columns` and store's table columns, we need to update create table statement,
     // so that we can restore table next time.
     updateDeltaMergeTableCreateStatement(
-        database_name, table_name_, new_columns, hidden_columns, table_info, store->getTableColumns(), context);
+        database_name, table_name_, new_columns, hidden_columns, table_info, store->getTableColumns(), tombstone, context);
     setColumns(std::move(new_columns));
+    if (table_info)
+        tidb_table_info = table_info.value();
+    setTombstone(tombstone);
 }
 
 String StorageDeltaMerge::getName() const { return MutableSupport::delta_tree_storage_name; }
@@ -991,7 +1006,7 @@ void updateDeltaMergeTableCreateStatement(                   //
     const ColumnsDescription & columns,
     const OrderedNameSet & hidden_columns,                                                         //
     const OptionTableInfoConstRef table_info_from_tidb, const ColumnDefines & store_table_columns, //
-    const Context & context)
+    Timestamp tombstone, const Context & context)
 {
     /// Filter out hidden columns in the `create table statement`
     ColumnsDescription columns_without_hidden;
@@ -1028,12 +1043,24 @@ void updateDeltaMergeTableCreateStatement(                   //
             literal = std::make_shared<ASTLiteral>(Field(table_info_from_tidb->get().serialize()));
         else
             literal = std::make_shared<ASTLiteral>(Field(table_info_from_store.serialize()));
+        auto tombstone_ast = std::make_shared<ASTLiteral>(Field(tombstone));
         auto & storage_ast = typeid_cast<ASTStorage &>(ast);
         auto & args = typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments);
         if (args.children.size() == 1)
+        {
             args.children.emplace_back(literal);
+            args.children.emplace_back(tombstone_ast);
+        }
         else if (args.children.size() == 2)
+        {
             args.children.back() = literal;
+            args.children.emplace_back(tombstone_ast);
+        }
+        else if (args.children.size() == 3)
+        {
+            args.children.at(1) = literal;
+            args.children.back() = tombstone_ast;
+        }
         else
             throw Exception("Wrong arguments num:" + DB::toString(args.children.size()) + " in table: " + table_name
                     + " with engine=" + MutableSupport::delta_tree_storage_name,

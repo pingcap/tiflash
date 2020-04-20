@@ -101,6 +101,7 @@ try
                                             std::nullopt,
                                             ColumnsDescription{names_and_types_list},
                                             astptr,
+                                            0,
                                             DMTestEnv::getContext());
         storage->startup();
     }
