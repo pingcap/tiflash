@@ -70,8 +70,6 @@ private:
     const String data_path;
     Poco::Logger * log;
 
-    void startupTables(ThreadPool * thread_pool);
-
     ASTPtr getCreateTableQueryImpl(const Context & context, const String & table_name, bool throw_on_error) const;
 };
 

@@ -29,6 +29,7 @@ public:
         const String & data_path;
         const String & table_name;
         const String & database_name;
+        const String & database_engine;
         Context & local_context;
         Context & context;
         const ColumnsDescription & columns;
@@ -43,6 +44,7 @@ public:
         const String & data_path,
         const String & table_name,
         const String & database_name,
+        const String & database_engine,
         Context & local_context,
         Context & context,
         const ColumnsDescription & columns,

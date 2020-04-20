@@ -47,7 +47,8 @@ public:
     BlockOutputStreamPtr write(const ASTPtr & query, const Settings & settings) override;
 
     void drop() override;
-    void rename(const String & /*new_path_to_db*/, const String & new_database_name, const String & new_table_name) override;
+    void rename(const String & new_path_to_db, const String & new_database_name, const String & new_table_name,
+        const String & new_display_table_name) override;
 
 
     ::TiDB::StorageEngine engineType() const override { return ::TiDB::StorageEngine::DEBUGGING_MEMORY; }

@@ -198,7 +198,7 @@ StorageReplicatedMergeTree::StorageReplicatedMergeTree(
     zookeeper_path(context.getMacros()->expand(zookeeper_path_)),
     replica_name(context.getMacros()->expand(replica_name_)),
     data(database_name, table_name,
-        full_path, columns_,
+        full_path, false, columns_,
         context_, primary_expr_ast_, secondary_sorting_expr_list_, date_column_name, partition_expr_ast_,
         sampling_expression_, merging_params_,
         settings_, true, attach,

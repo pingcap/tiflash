@@ -392,7 +392,7 @@ try
     {
         json->set("belonging_table_id", belonging_table_id);
         json->set("partition", partition.getJSONObject());
-        if (belonging_table_id != -1)
+        if (belonging_table_id != DB::InvalidTableID)
         {
             json->set("is_partition_sub_table", true);
         }
@@ -412,6 +412,33 @@ catch (const Poco::Exception & e)
 {
     throw DB::Exception(
         std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (TableInfo): " + e.displayText(), DB::Exception(e));
+}
+
+String DBInfo::serialize() const
+try
+{
+    std::stringstream buf;
+
+    Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
+    json->set("id", id);
+    Poco::JSON::Object::Ptr name_json = new Poco::JSON::Object();
+    name_json->set("O", name);
+    name_json->set("L", name);
+    json->set("db_name", name_json);
+
+    json->set("charset", charset);
+    json->set("collate", collate);
+
+    json->set("state", static_cast<Int32>(state));
+
+    json->stringify(buf);
+
+    return buf.str();
+}
+catch (const Poco::Exception & e)
+{
+    throw DB::Exception(
+        std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (DBInfo): " + e.displayText(), DB::Exception(e));
 }
 
 void DBInfo::deserialize(const String & json_str)
