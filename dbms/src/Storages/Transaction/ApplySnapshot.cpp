@@ -33,12 +33,20 @@ void KVStore::tryApplySnapshot(RegionPtr new_region, Context & context)
     if (old_region)
     {
         old_applied_index = old_region->appliedIndex();
-        if (old_applied_index >= new_region->appliedIndex())
+        if (auto new_index = new_region->appliedIndex(); old_applied_index > new_index)
         {
             throw Exception(std::string(__PRETTY_FUNCTION__) + ": region " + std::to_string(region_id) + " already has newer index "
                     + std::to_string(old_applied_index) + ", should not happen",
                 ErrorCodes::LOGICAL_ERROR);
         }
+        else if (old_applied_index == new_index)
+        {
+            LOG_WARNING(log,
+                old_region->toString(false) << " already has same applied index, just ignore next process. "
+                                            << "Please check log whether server crashed after successfully applied snapshot.");
+            return;
+        }
+
         {
             LOG_INFO(log, old_region->toString() << " set state to Applying");
             // Set original region state to `Applying` and any read request toward this region should be rejected because
@@ -58,7 +66,7 @@ void KVStore::tryApplySnapshot(RegionPtr new_region, Context & context)
             {
                 if (region.first != region_id)
                 {
-                    throw Exception(std::string(__PRETTY_FUNCTION__) + ": range of region " + std::to_string(old_region->id())
+                    throw Exception(std::string(__PRETTY_FUNCTION__) + ": range of region " + std::to_string(region_id)
                             + " is overlapped with region " + std::to_string(region.first) + ", should not happen",
                         ErrorCodes::LOGICAL_ERROR);
                 }
