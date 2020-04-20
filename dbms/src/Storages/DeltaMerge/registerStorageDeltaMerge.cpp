@@ -75,8 +75,6 @@ void registerStorageDeltaMerge(StorageFactory & factory)
                 if (!table_info_json.empty())
                 {
                     info.deserialize(table_info_json);
-                    if (unlikely(info.columns.empty()))
-                        throw Exception("Engine DeltaMerge table info is invalid. # of columns = 0", ErrorCodes::BAD_ARGUMENTS);
                     table_info = info;
                 }
             }
@@ -92,7 +90,7 @@ void registerStorageDeltaMerge(StorageFactory & factory)
                 throw Exception("Engine DeltaMerge tombstone must be a UInt64" + getDeltaMergeVerboseHelp(), ErrorCodes::BAD_ARGUMENTS);
         }
         return StorageDeltaMerge::create(
-            args.data_path, args.database_name, args.table_name, table_info, args.columns, primary_expr_list, tombstone, args.context);
+            args.data_path, args.database_engine, args.database_name, args.table_name, table_info, args.columns, primary_expr_list, tombstone, args.context);
     });
 }
 

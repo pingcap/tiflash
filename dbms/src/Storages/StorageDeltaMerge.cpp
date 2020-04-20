@@ -44,6 +44,7 @@ extern const int DIRECTORY_ALREADY_EXISTS;
 using namespace DM;
 
 StorageDeltaMerge::StorageDeltaMerge(const String & path_,
+    const String & db_engine,
     const String & db_name_,
     const String & table_name_,
     const OptionTableInfoConstRef table_info_,
@@ -53,6 +54,7 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
     Context & global_context_)
     : IManageableStorage{columns_, tombstone},
       path(path_ + "/" + table_name_),
+      data_path_contains_database_name(db_engine != "TiFlash"),
       max_column_id_used(0),
       global_context(global_context_.getGlobalContext()),
       log(&Logger::get("StorageDeltaMerge"))
@@ -134,8 +136,8 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
 
     assert(!handle_column_define.name.empty());
     assert(!table_column_defines.empty());
-    store = std::make_shared<DeltaMergeStore>(global_context, path, db_name_, table_name_, std::move(table_column_defines),
-        std::move(handle_column_define), DeltaMergeStore::Settings());
+    store = std::make_shared<DeltaMergeStore>(global_context, path, data_path_contains_database_name, db_name_, table_name_,
+        std::move(table_column_defines), std::move(handle_column_define), DeltaMergeStore::Settings());
 }
 
 void StorageDeltaMerge::drop()
@@ -978,8 +980,20 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
 
 String StorageDeltaMerge::getName() const { return MutableSupport::delta_tree_storage_name; }
 
-void StorageDeltaMerge::rename(const String & new_path_to_db, const String & new_database_name, const String & new_table_name)
+void StorageDeltaMerge::rename(
+    const String & new_path_to_db, const String & new_database_name, const String & new_table_name, const String & new_display_table_name)
 {
+    tidb_table_info.name = new_display_table_name; // update name in table info
+    // For DatabaseTiFlash, simply update store's database is OK.
+    // `store->getTableName() == new_table_name` only keep for mock test.
+    bool clean_rename = !data_path_contains_database_name && store->getTableName() == new_table_name;
+    if (likely(clean_rename))
+    {
+        store->rename(new_path_to_db, clean_rename, new_database_name, new_table_name);
+        return;
+    }
+
+    // For DatabaseOrdinary, we need to rename data path, then recreate a new store.
     const String new_path = new_path_to_db + "/" + new_table_name;
 
     if (Poco::File{new_path}.exists())
@@ -996,13 +1010,13 @@ void StorageDeltaMerge::rename(const String & new_path_to_db, const String & new
     // remove background tasks
     store->shutdown();
     // rename directories for multi disks
-    store->rename(new_path, new_database_name, new_table_name);
+    store->rename(new_path, clean_rename, new_database_name, new_table_name);
 
     store = {}; // reset store object
 
     // generate a new store
-    store = std::make_shared<DeltaMergeStore>(global_context, //
-        new_path, new_database_name, new_table_name,          //
+    store = std::make_shared<DeltaMergeStore>(global_context,                          //
+        new_path, data_path_contains_database_name, new_database_name, new_table_name, //
         std::move(table_column_defines), std::move(handle_column_define), settings);
 
     path = new_path;
@@ -1081,6 +1095,26 @@ void updateDeltaMergeTableCreateStatement(                   //
     context.getDatabase(database_name)->alterTable(context, table_name, columns_without_hidden, storage_modifier);
 }
 
+// somehow duplicated with `storage_modifier` in updateDeltaMergeTableCreateStatement ...
+void StorageDeltaMerge::modifyASTStorage(ASTStorage * storage_ast, const TiDB::TableInfo & table_info_)
+{
+    if (!storage_ast || !storage_ast->engine)
+        return;
+    auto * args = typeid_cast<ASTExpressionList *>(storage_ast->engine->arguments.get());
+    if (!args)
+        return;
+    std::shared_ptr<ASTLiteral> literal = std::make_shared<ASTLiteral>(Field(table_info_.serialize()));
+    if (args->children.size() == 1)
+        args->children.emplace_back(literal);
+    else if (args->children.size() == 2)
+        args->children.back() = literal;
+    else if (args->children.size() == 3)
+        args->children.at(1) = literal;
+    else
+        throw Exception(
+            "Wrong arguments num: " + DB::toString(args->children.size()) + " in table: " + store->getTableName() + " in modifyASTStorage",
+            ErrorCodes::BAD_ARGUMENTS);
+}
 
 BlockInputStreamPtr StorageDeltaMerge::status()
 {

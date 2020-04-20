@@ -5,6 +5,7 @@
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Databases/DatabaseTiFlash.h>
 #include <Databases/IDatabase.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -12,6 +13,7 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/System/StorageSystemTables.h>
+#include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
 #include <Storages/VirtualColumnUtils.h>
@@ -121,7 +123,10 @@ StorageSystemTables::StorageSystemTables(const std::string & name_) : name(name_
         {"database", std::make_shared<DataTypeString>()},
         {"name", std::make_shared<DataTypeString>()},
         {"engine", std::make_shared<DataTypeString>()},
+        {"tidb_database", std::make_shared<DataTypeString>()},
+        {"tidb_name", std::make_shared<DataTypeString>()},
         {"tidb_table_id", std::make_shared<DataTypeInt64>()},
+        {"is_tombstone", std::make_shared<DataTypeUInt64>()},
         {"is_temporary", std::make_shared<DataTypeUInt8>()},
         {"data_path", std::make_shared<DataTypeString>()},
         {"metadata_path", std::make_shared<DataTypeString>()},
@@ -170,6 +175,8 @@ BlockInputStreams StorageSystemTables::read(const Names & column_names,
 
     ColumnPtr filtered_databases_column = getFilteredDatabases(query_info.query, context);
 
+    SchemaNameMapper mapper;
+
     for (size_t row_number = 0; row_number < filtered_databases_column->size(); ++row_number)
     {
         std::string database_name = filtered_databases_column->getDataAt(row_number).toString();
@@ -182,6 +189,8 @@ BlockInputStreams StorageSystemTables::read(const Names & column_names,
             continue;
         }
 
+        const DatabaseTiFlash * db_tiflash = typeid_cast<DatabaseTiFlash *>(database.get());
+
         for (auto iterator = database->getIterator(context); iterator->isValid(); iterator->next())
         {
             auto table_name = iterator->name();
@@ -191,16 +200,30 @@ BlockInputStreams StorageSystemTables::read(const Names & column_names,
             res_columns[j++]->insert(table_name);
             const String engine_name = iterator->table()->getName();
             res_columns[j++]->insert(engine_name);
+
+            String tidb_database_name;
+            String tidb_table_name;
             TableID table_id = -1;
+            Timestamp tombstone = 0;
             if (engine_name == MutableSupport::txn_storage_name || engine_name == MutableSupport::delta_tree_storage_name)
             {
                 auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(iterator->table());
                 if (managed_storage)
                 {
-                    table_id = managed_storage->getTableInfo().id;
+                    if (db_tiflash)
+                        tidb_database_name = mapper.displayDatabaseName(db_tiflash->getDatabaseInfo());
+                    auto & table_info = managed_storage->getTableInfo();
+                    tidb_table_name = mapper.displayTableName(table_info);
+                    table_id = table_info.id;
+                    tombstone = managed_storage->getTombstone();
                 }
             }
+
+            res_columns[j++]->insert(tidb_database_name);
+            res_columns[j++]->insert(tidb_table_name);
             res_columns[j++]->insert(Int64(table_id));
+            res_columns[j++]->insert(UInt64(tombstone));
+
             res_columns[j++]->insert(UInt64(0));
             res_columns[j++]->insert(iterator->table()->getDataPath());
             res_columns[j++]->insert(database->getTableMetadataPath(table_name));
