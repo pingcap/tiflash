@@ -72,9 +72,6 @@ BlockIO InterpreterDropQuery::execute()
     String database_name = drop.database.empty() ? current_database : drop.database;
     String database_name_escaped = escapeForFileName(database_name);
 
-    String metadata_path = path + "metadata/" + database_name_escaped + "/";
-    String database_metadata_path = path + "metadata/" + database_name_escaped + ".sql";
-
     auto database = context.tryGetDatabase(database_name);
     if (!database && !drop.if_exists)
         throw Exception("Database " + database_name + " doesn't exist", ErrorCodes::UNKNOWN_DATABASE);
@@ -179,20 +176,8 @@ BlockIO InterpreterDropQuery::execute()
         /// Delete database information from the RAM
         auto database = context.detachDatabase(database_name);
 
-        /// Delete the database.
+        /// Delete the database and remove its data / meta directory if need.
         database->drop();
-
-        /// Remove data directory if it is not virtual database. TODO: should IDatabase::drop() do that?
-        String database_data_path = database->getDataPath();
-        if (!database_data_path.empty())
-            Poco::File(database_data_path).remove(false);
-
-        Poco::File(metadata_path).remove(false);
-
-        /// Old ClickHouse versions did not store database.sql files
-        Poco::File database_metadata_file(database_metadata_path);
-        if (database_metadata_file.exists())
-            database_metadata_file.remove(false);
     }
 
     return {};

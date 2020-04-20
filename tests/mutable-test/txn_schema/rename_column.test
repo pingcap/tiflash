@@ -1,10 +1,13 @@
-
 # Preparation.
 => DBGInvoke __enable_schema_sync_service('false')
 
+=> DBGInvoke __clean_up_region()
+
 => DBGInvoke __drop_tidb_table(default, test)
-=> drop table if exists default.test
+=> DBGInvoke __drop_tidb_table(default, test1)
 => DBGInvoke __refresh_schemas()
+=> drop table if exists default.test
+=> drop table if exists default.test1
 
 => DBGInvoke __set_flush_threshold(1000000, 1000000)
 
@@ -212,5 +215,7 @@
 └───┴───┘
 
 => DBGInvoke __drop_tidb_table(default, test1)
-=> drop table if exists default.test
 => DBGInvoke __refresh_schemas()
+=> drop table if exists default.test
+=> drop table if exists default.test1
+=> DBGInvoke __enable_schema_sync_service('true')

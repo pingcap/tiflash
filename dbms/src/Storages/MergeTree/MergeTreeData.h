@@ -280,6 +280,7 @@ public:
     /// attach - whether the existing table is attached or the new table is created.
     MergeTreeData(const String & database_, const String & table_,
                   const String & full_path_,
+                  bool data_path_contains_database_name_,
                   const ColumnsDescription & columns_,
                   Context & context_,
                   const ASTPtr & primary_expr_ast_,
@@ -345,7 +346,14 @@ public:
 
     String getFullPath() const { return full_path; }
 
-    String getDataPartsPath(const String& path) const { return path + "data/" + escapeForFileName(database_name) + "/" + escapeForFileName(table_name) + "/"; }
+    String getDataPartsPath(const String & path) const
+    {
+        String res = path + "data/";
+        if (data_path_contains_database_name)
+            res += escapeForFileName(database_name) + "/";
+        res += escapeForFileName(table_name) + "/";
+        return res;
+    }
 
     String getLogName() const { return log_name; }
 
@@ -556,6 +564,7 @@ private:
     String database_name;
     String table_name;
     String full_path;
+    bool data_path_contains_database_name;
 
     /// Current column sizes in compressed and uncompressed form.
     ColumnSizeByName column_sizes;

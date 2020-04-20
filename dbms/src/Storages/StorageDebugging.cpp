@@ -1,14 +1,12 @@
-#include <map>
-
 #include <Common/Exception.h>
-
 #include <DataStreams/IProfilingBlockInputStream.h>
-
 #include <Parsers/ASTLiteral.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/StorageDebugging.h>
 #include <Storages/StorageFactory.h>
 #include <Storages/Transaction/TMTContext.h>
+
+#include <map>
 
 
 namespace DB
@@ -83,9 +81,9 @@ private:
 
 
 StorageDebugging::StorageDebugging( //
-    String database_name_, String table_name_, const ColumnsDescription& columns_,
-    std::optional<std::reference_wrapper<const TiDB::TableInfo>> table_info, const Context & context_, Mode mode_)
-    : IManageableStorage{},
+    String database_name_, String table_name_, const ColumnsDescription & columns_,
+    std::optional<std::reference_wrapper<const TiDB::TableInfo>> table_info, Timestamp tombstone, const Context & context_, Mode mode_)
+    : IManageableStorage{tombstone},
       database_name(std::move(database_name_)),
       table_name(std::move(table_name_)),
       mode(mode_),
@@ -166,13 +164,16 @@ std::string StorageDebugging::getName() const
     }
 }
 
-void StorageDebugging::rename(const String &, const String & new_database_name, const String & new_table_name)
+void StorageDebugging::rename(const String & /*new_path_to_db*/, const String & new_database_name, const String & new_table_name,
+    const String & new_display_table_name)
 {
     database_name = new_database_name;
     table_name = new_table_name;
+    tidb_table_info.name = new_display_table_name;
 }
 
-void StorageDebugging::alterFromTiDB(const AlterCommands &, const TiDB::TableInfo &, const String &, const Context &)
+void StorageDebugging::alterFromTiDB(
+    const AlterCommands &, const String &, const TiDB::TableInfo &, const SchemaNameMapper &, const Context &)
 {
     throw Exception("Method alterFromTiDB is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
 }
@@ -211,7 +212,7 @@ void StorageDebugging::removeFromTMTContext()
 void registerStorageDebugging(StorageFactory & factory)
 {
     factory.registerStorage("Debugging", [](const StorageFactory::Arguments & args) {
-        if (args.engine_args.size() != 1)
+        if (args.engine_args.size() > 2)
             throw Exception(
                 "Engine " + args.engine_name + " doesn't support any arguments (" + toString(args.engine_args.size()) + " given)",
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
@@ -219,7 +220,8 @@ void registerStorageDebugging(StorageFactory & factory)
         TiDB::TableInfo info;
         // Note: if `table_info_json` is not empty, `table_info` store a ref to `info`
         std::optional<std::reference_wrapper<const TiDB::TableInfo>> table_info = std::nullopt;
-        if (args.engine_args.size() == 1)
+        Timestamp tombstone = 0;
+        if (args.engine_args.size() >= 1)
         {
             auto ast = typeid_cast<const ASTLiteral *>(args.engine_args[0].get());
             if (ast && ast->value.getType() == Field::Types::String)
@@ -236,9 +238,19 @@ void registerStorageDebugging(StorageFactory & factory)
             else
                 throw Exception("Engine Debugging table info must be a string", ErrorCodes::BAD_ARGUMENTS);
         }
+        if (args.engine_args.size() == 2)
+        {
+            auto ast = typeid_cast<const ASTLiteral *>(args.engine_args[1].get());
+            if (ast && ast->value.getType() == Field::Types::UInt64)
+            {
+                tombstone = safeGet<UInt64>(ast->value);
+            }
+            else
+                throw Exception("Engine Debugging tombstone must be a UInt64", ErrorCodes::BAD_ARGUMENTS);
+        }
 
-        return StorageDebugging::create(
-            args.database_name, args.table_name, args.columns, table_info, args.context, StorageDebugging::Mode::RejectFirstWrite);
+        return StorageDebugging::create(args.database_name, args.table_name, args.columns, table_info, tombstone, args.context,
+            StorageDebugging::Mode::RejectFirstWrite);
     });
 }
 

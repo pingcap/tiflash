@@ -1,9 +1,13 @@
 #include <sstream>
 
+#include <Common/Stopwatch.h>
+#include <common/ThreadPool.h>
+#include <Poco/DirectoryIterator.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/formatAST.h>
+#include <IO/ReadBufferFromFile.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Storages/StorageFactory.h>
@@ -19,6 +23,10 @@ namespace ErrorCodes
     extern const int TABLE_ALREADY_EXISTS;
     extern const int UNKNOWN_TABLE;
     extern const int LOGICAL_ERROR;
+    extern const int INCORRECT_FILE_NAME;
+    extern const int CANNOT_CREATE_TABLE_FROM_METADATA;
+    extern const int SYNTAX_ERROR;
+    extern const int TIDB_TABLE_ALREADY_EXISTS;
 }
 
 
@@ -48,11 +56,35 @@ String getTableDefinitionFromCreateQuery(const ASTPtr & query)
     return statement_stream.str();
 }
 
+String getDatabaseDefinitionFromCreateQuery(const ASTPtr & query)
+{
+    ASTPtr query_clone = query->clone();
+    ASTCreateQuery & create = typeid_cast<ASTCreateQuery &>(*query_clone.get());
 
-std::pair<String, StoragePtr> createTableFromDefinition(
-    const String & definition,
+    /// We remove everything that is not needed for ATTACH from the query
+    create.attach = true;
+    create.table.clear();
+    create.as_database.clear();
+    create.as_table.clear();
+    create.if_not_exists = false;
+    create.is_populate = false;
+
+    create.select = nullptr;
+
+    create.format = nullptr;
+    create.out_file = nullptr;
+
+    std::ostringstream statement_stream;
+    formatAST(create, statement_stream, false);
+    statement_stream << '\n';
+    return statement_stream.str();
+}
+
+
+std::pair<String, StoragePtr> createTableFromDefinition(const String & definition,
     const String & database_name,
     const String & database_data_path,
+    const String & database_engine,
     Context & context,
     bool has_force_restore_data_flag,
     const String & description_for_error_message)
@@ -72,15 +104,9 @@ std::pair<String, StoragePtr> createTableFromDefinition(
 
     ColumnsDescription columns = InterpreterCreateQuery::getColumnsDescription(*ast_create_query.columns, context);
 
-    return
-    {
-        ast_create_query.table,
-        StorageFactory::instance().get(
-            ast_create_query,
-            database_data_path, ast_create_query.table, database_name, context, context.getGlobalContext(),
-            columns,
-            true, has_force_restore_data_flag)
-    };
+    return {ast_create_query.table,
+        StorageFactory::instance().get(ast_create_query, database_data_path, ast_create_query.table, database_name, database_engine,
+            context, context.getGlobalContext(), columns, true, has_force_restore_data_flag)};
 }
 
 
@@ -169,4 +195,223 @@ DatabaseWithOwnTablesBase::~DatabaseWithOwnTablesBase()
     }
 }
 
+namespace DatabaseLoading
+{
+
+ASTPtr getQueryFromMetadata(const String & metadata_path, bool throw_on_error)
+{
+    if (!Poco::File(metadata_path).exists())
+        return nullptr;
+
+    String query;
+    {
+        ReadBufferFromFile in(metadata_path, 4096);
+        readStringUntilEOF(query, in);
+    }
+
+    ParserCreateQuery parser;
+    const char * pos = query.data();
+    std::string error_message;
+    auto ast = tryParseQuery(parser, pos, pos + query.size(), error_message, /* hilite = */ false, "in file " + metadata_path,
+        /* allow_multi_statements = */ false, 0);
+
+    if (!ast && throw_on_error)
+        throw Exception(error_message, ErrorCodes::SYNTAX_ERROR);
+
+    return ast;
 }
+
+ASTPtr getCreateQueryFromMetadata(const String & metadata_path, const String & database, bool throw_on_error)
+{
+    ASTPtr ast = DatabaseLoading::getQueryFromMetadata(metadata_path, throw_on_error);
+    if (ast)
+    {
+        ASTCreateQuery & ast_create_query = typeid_cast<ASTCreateQuery &>(*ast);
+        ast_create_query.attach = false;
+        ast_create_query.database = database;
+    }
+    return ast;
+}
+
+
+std::vector<String> listSQLFilenames(const String & meta_dir, Poco::Logger * log)
+{
+    std::vector<String> filenames;
+    Poco::DirectoryIterator dir_end;
+    for (Poco::DirectoryIterator dir_it(meta_dir); dir_it != dir_end; ++dir_it)
+    {
+        // Ignore directories
+        if (!dir_it->isFile())
+            continue;
+
+        /// For '.svn', '.gitignore' directory and similar.
+        if (dir_it.name().at(0) == '.')
+            continue;
+
+        /// There are .sql.bak files - skip them.
+        if (endsWith(dir_it.name(), ".sql.bak"))
+            continue;
+
+        /// There are files .sql.tmp - delete.
+        if (endsWith(dir_it.name(), ".sql.tmp"))
+        {
+            LOG_INFO(log, "Removing file " << dir_it->path());
+            Poco::File(dir_it->path()).remove();
+            continue;
+        }
+
+        /// The required files have names like `table_name.sql`
+        if (endsWith(dir_it.name(), ".sql"))
+            filenames.push_back(dir_it.name());
+        else
+            throw Exception(
+                "Incorrect file extension: " + dir_it.name() + " in metadata directory " + meta_dir, ErrorCodes::INCORRECT_FILE_NAME);
+    }
+    return filenames;
+}
+
+void loadTable(Context & context,
+    IDatabase & database,
+    const String & database_metadata_path,
+    const String & database_name,
+    const String & database_data_path,
+    const String & database_engine,
+    const String & file_name,
+    bool has_force_restore_data_flag)
+{
+    Logger * log = &Logger::get("loadTable");
+
+    const String table_metadata_path = database_metadata_path + "/" + file_name;
+
+    String s;
+    {
+        ReadBufferFromFile in(table_metadata_path, 1024);
+        readStringUntilEOF(s, in);
+    }
+
+    /** Empty files with metadata are generated after a rough restart of the server.
+      * Remove these files to slightly reduce the work of the admins on startup.
+      */
+    if (s.empty())
+    {
+        LOG_ERROR(log, "File " << table_metadata_path << " is empty. Removing.");
+        Poco::File(table_metadata_path).remove();
+        return;
+    }
+
+    try
+    {
+        String table_name;
+        StoragePtr table;
+        std::tie(table_name, table) = createTableFromDefinition(
+            s, database_name, database_data_path, database_engine, context, has_force_restore_data_flag, "in file " + table_metadata_path);
+        database.attachTable(table_name, table);
+    }
+    catch (const Exception & e)
+    {
+        throw Exception("Cannot create table from metadata file " + table_metadata_path + ", error: " + e.displayText() + ", stack trace:\n"
+                + e.getStackTrace().toString(),
+            ErrorCodes::CANNOT_CREATE_TABLE_FROM_METADATA);
+    }
+}
+
+
+static constexpr size_t PRINT_MESSAGE_EACH_N_TABLES = 256;
+static constexpr size_t PRINT_MESSAGE_EACH_N_SECONDS = 5;
+static constexpr size_t TABLES_PARALLEL_LOAD_BUNCH_SIZE = 100;
+
+void cleanupTables(IDatabase & database, const String & db_name, const Tables & tables, Poco::Logger * log)
+{
+    if (tables.empty())
+        return;
+
+    for (auto it = tables.begin(); it != tables.end(); ++it)
+    {
+        const String & table_name = it->first;
+        LOG_WARNING(log, "Detected startup failed table " + db_name + "." + table_name + ", removing it from TiFlash");
+        const String table_meta_path = database.getTableMetadataPath(table_name);
+        if (!table_meta_path.empty())
+        {
+            Poco::File{table_meta_path}.remove();
+        }
+        // detach from this database
+        database.detachTable(table_name);
+    }
+}
+
+void startupTables(IDatabase & database, const String & db_name, Tables & tables, ThreadPool * thread_pool, Poco::Logger * log)
+{
+    LOG_INFO(log, "Starting up " << tables.size() << " tables.");
+
+    AtomicStopwatch watch;
+    std::atomic<size_t> tables_processed{0};
+    size_t total_tables = tables.size();
+
+    std::mutex failed_tables_mutex;
+    Tables tables_failed_to_startup;
+
+    auto task_function = [&](Tables::iterator begin, Tables::iterator end) {
+        for (auto it = begin; it != end; ++it)
+        {
+            if ((++tables_processed) % PRINT_MESSAGE_EACH_N_TABLES == 0 || watch.compareAndRestart(PRINT_MESSAGE_EACH_N_SECONDS))
+            {
+                LOG_INFO(log, DB::toString(tables_processed * 100.0 / total_tables, 2) << "%");
+                watch.restart();
+            }
+
+            try
+            {
+                it->second->startup();
+            }
+            catch (DB::Exception & e)
+            {
+                if (e.code() == ErrorCodes::TIDB_TABLE_ALREADY_EXISTS)
+                {
+                    // While doing IStorage::startup, Exception thorwn with TIDB_TABLE_ALREADY_EXISTS,
+                    // means that we may crashed in the middle of renaming tables. We clean the meta file
+                    // for those storages by `cleanupTables`.
+                    // - If the storage is the outdated one after renaming, remove it is right.
+                    // - If the storage should be the target table, remove it means we "rollback" the 
+                    //   rename action. And the table will be renamed by TiDBSchemaSyncer later.
+                    std::lock_guard lock(failed_tables_mutex);
+                    tables_failed_to_startup.emplace(it->first, it->second);
+                }
+                else
+                    throw;
+            }
+        }
+    };
+
+    const size_t bunch_size = TABLES_PARALLEL_LOAD_BUNCH_SIZE;
+    size_t num_bunches = (total_tables + bunch_size - 1) / bunch_size;
+
+    auto begin = tables.begin();
+    for (size_t i = 0; i < num_bunches; ++i)
+    {
+        auto end = begin;
+
+        if (i + 1 == num_bunches)
+            end = tables.end();
+        else
+            std::advance(end, bunch_size);
+
+        auto task = std::bind(task_function, begin, end);
+
+        if (thread_pool)
+            thread_pool->schedule(task);
+        else
+            task();
+
+        begin = end;
+    }
+
+    if (thread_pool)
+        thread_pool->wait();
+
+    // Cleanup to asure the atomic of renaming
+    cleanupTables(database, db_name, tables_failed_to_startup, log);
+}
+
+} // namespace DatabaseLoading
+
+} // namespace DB
