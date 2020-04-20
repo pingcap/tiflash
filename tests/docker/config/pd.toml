@@ -30,6 +30,7 @@ region-schedule-limit = 20
 replica-schedule-limit = 20
 split-merge-interval = "1h"
 tolerant-size-ratio = 5.0
+low-space-ratio = 0.9
 
 # [[schedule.schedulers]]
 # type = "balance-hot-region-scheduler"
