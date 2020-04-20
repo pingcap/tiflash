@@ -8,6 +8,7 @@
 #include <Debug/dbgFuncMockTiDBTable.h>
 #include <Debug/dbgFuncRegion.h>
 #include <Debug/dbgFuncSchema.h>
+#include <Debug/dbgFuncSchemaName.h>
 #include <Parsers/ASTLiteral.h>
 
 #include <cstring>
@@ -77,6 +78,7 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("enable_schema_sync_service", dbgFuncEnableSchemaSyncService);
     regSchemalessFunc("refresh_schemas", dbgFuncRefreshSchemas);
     regSchemalessFunc("reset_schemas", dbgFuncResetSchemas);
+    regSchemalessFunc("is_tombstone", dbgFuncIsTombstone);
 
     regSchemalessFunc("region_split", MockRaftCommand::dbgFuncRegionBatchSplit);
     regSchemalessFunc("region_prepare_merge", MockRaftCommand::dbgFuncPrepareMerge);
@@ -90,6 +92,10 @@ DBGInvoker::DBGInvoker()
     regSchemafulFunc("mock_dag", dbgFuncMockDAG);
 
     regSchemalessFunc("region_mock_ingest_sst", dbgFuncIngestSST);
+
+    regSchemalessFunc("mapped_database", dbgFuncMappedDatabase);
+    regSchemalessFunc("mapped_table", dbgFuncMappedTable);
+    regSchemafulFunc("query_mapped", dbgFuncQueryMapped);
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)

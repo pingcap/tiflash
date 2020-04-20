@@ -22,6 +22,11 @@ namespace DB::ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
+namespace DB
+{
+struct SchemaNameMapper;
+}
+
 namespace TiDB
 {
 
@@ -209,7 +214,7 @@ struct PartitionDefinition
 
     void deserialize(Poco::JSON::Object::Ptr json);
 
-    Int64 id = -1;
+    TableID id = -1;
     String name;
     // LessThan []string `json:"less_than"`
     String comment;
@@ -235,7 +240,7 @@ struct PartitionInfo
 
 struct DBInfo
 {
-    Int64 id;
+    DatabaseID id;
     String name;
     String charset;
     String collate;
@@ -262,8 +267,6 @@ struct TableInfo
 
     void deserialize(const String & json_str);
 
-    DatabaseID db_id = -1;
-    String db_name;
     // The meaning of this ID changed after we support TiDB partition table.
     // It is the physical table ID, i.e. table ID for non-partition table,
     // and partition ID for partition table,
@@ -294,11 +297,9 @@ struct TableInfo
 
     std::optional<std::reference_wrapper<const ColumnInfo>> getPKHandleColumn() const;
 
-    TableInfo producePartitionTableInfo(TableID table_or_partition_id) const;
+    TableInfoPtr producePartitionTableInfo(TableID table_or_partition_id, const DB::SchemaNameMapper & name_mapper) const;
 
     bool isLogicalPartitionTable() const { return is_partition_table && belonging_table_id == -1 && partition.enable; }
-
-    String getPartitionTableName(TableID part_id) const;
 };
 
 using DBInfoPtr = std::shared_ptr<DBInfo>;

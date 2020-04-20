@@ -32,12 +32,11 @@ void writeRegionDataToStorage(Context & context, const RegionPtr & region, Regio
     auto atomicReadWrite = [&](bool force_decode) {
         /// Get storage based on table ID.
         auto storage = tmt.getStorages().get(table_id);
-        if (storage == nullptr)
+        if (storage == nullptr || storage->isTombstone())
         {
             if (!force_decode) // Need to update.
                 return false;
             // Table must have just been dropped or truncated.
-            // TODO: What if we support delete range? Do we still want to remove KVs from region cache?
             return true;
         }
 
