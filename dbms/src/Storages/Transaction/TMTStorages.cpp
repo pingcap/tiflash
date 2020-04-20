@@ -30,13 +30,13 @@ std::unordered_map<TableID, ManageableStoragePtr> ManagedStorages::getAllStorage
     return storages;
 }
 
-ManageableStoragePtr ManagedStorages::getByName(const std::string & db, const std::string & table) const
+ManageableStoragePtr ManagedStorages::getByName(const std::string & db, const std::string & table, bool include_tombstone) const
 {
     std::lock_guard lock(mutex);
 
     auto it = std::find_if(storages.begin(), storages.end(), [&](const std::pair<TableID, ManageableStoragePtr> & pair) {
-        auto & storage = pair.second;
-        return storage->getDatabaseName() == db && storage->getTableName() == table;
+        const auto & storage = pair.second;
+        return (include_tombstone || !storage->isTombstone()) && storage->getDatabaseName() == db && storage->getTableInfo().name == table;
     });
     if (it == storages.end())
         return nullptr;

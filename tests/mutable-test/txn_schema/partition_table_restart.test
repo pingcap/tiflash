@@ -2,13 +2,24 @@
 
 => DBGInvoke __drop_tidb_table(default, test)
 => DBGInvoke __drop_tidb_table(default, test1)
+=> DBGInvoke __refresh_schemas()
+=> drop table if exists default.test
+=> drop table if exists default.test_9999
+=> drop table if exists default.test_9998
+=> drop table if exists default.test_9997
+=> drop table if exists default.test1
+=> drop table if exists default.test1_9999
+=> drop table if exists default.test1_9998
+=> drop table if exists default.test1_9997
 
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int64')
 => DBGInvoke __mock_tidb_partition(default, test, 9999)
 => DBGInvoke __mock_tidb_partition(default, test, 9998)
 => DBGInvoke __mock_tidb_partition(default, test, 9997)
 => DBGInvoke __refresh_schemas()
-=> drop table test_9997
+=> drop table default.test_9997
+# schema syncer guarantees logical table creation at last, so there won't be cases that logical table exists whereas physical table not.
+=> drop table default.test
 => DBGInvoke __reset_schemas()
 
 => DBGInvoke __add_column_to_tidb_table(default, test, 'col_3 Nullable(Int8)')
@@ -33,11 +44,17 @@ Code: 60. DB::Exception: Received from {#WORD} DB::Exception: Table default.test
 => DBGInvoke __reset_schemas()
 => DBGInvoke __drop_tidb_partition(default, test1, 9997)
 => DBGInvoke __refresh_schemas()
-=> select * from default.test1_9997
-Received exception from server (version {#WORD}):
-Code: 60. DB::Exception: Received from {#WORD} DB::Exception: Table default.test1_9997 doesn't exist..
+=> DBGInvoke is_tombstone(default, test1_9997)
+┌─is_tombstone(default, test1_9997)─┐
+│ true                              │
+└───────────────────────────────────┘
 => select * from default.test1_9999
+
 => DBGInvoke __drop_tidb_table(default, test1)
 => DBGInvoke __refresh_schemas()
+=> drop table if exists default.test1
+=> drop table if exists default.test1_9999
+=> drop table if exists default.test1_9998
+=> drop table if exists default.test1_9997
 
 => DBGInvoke __enable_schema_sync_service('true')

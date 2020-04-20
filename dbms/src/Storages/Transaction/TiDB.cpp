@@ -3,6 +3,7 @@
 #include <IO/ReadBufferFromString.h>
 #include <Poco/StringTokenizer.h>
 #include <Storages/MutableSupport.h>
+#include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TiDB.h>
 
 namespace DB
@@ -20,6 +21,7 @@ using DB::Decimal32;
 using DB::Decimal64;
 using DB::DecimalField;
 using DB::Field;
+using DB::SchemaNameMapper;
 
 ColumnInfo::ColumnInfo(Poco::JSON::Object::Ptr json) { deserialize(json); }
 
@@ -237,7 +239,7 @@ catch (const Poco::Exception & e)
 void ColumnInfo::deserialize(Poco::JSON::Object::Ptr json)
 try
 {
-    id = json->getValue<Int64>("id");
+    id = json->getValue<ColumnID>("id");
     name = json->getObject("name")->getValue<String>("L");
     offset = json->getValue<Int32>("offset");
     if (!json->isNull("origin_default"))
@@ -294,7 +296,7 @@ catch (const Poco::Exception & e)
 void PartitionDefinition::deserialize(Poco::JSON::Object::Ptr json)
 try
 {
-    id = json->getValue<Int64>("id");
+    id = json->getValue<TableID>("id");
     name = json->getObject("name")->getValue<String>("L");
     if (json->has("comment"))
         comment = json->getValue<String>("comment");
@@ -418,7 +420,7 @@ try
     Poco::JSON::Parser parser;
     Poco::Dynamic::Var result = parser.parse(json_str);
     auto obj = result.extract<Poco::JSON::Object::Ptr>();
-    id = obj->getValue<Int64>("id");
+    id = obj->getValue<DatabaseID>("id");
     name = obj->get("db_name").extract<Poco::JSON::Object::Ptr>()->get("L").convert<String>();
     charset = obj->get("charset").convert<String>();
     collate = obj->get("collate").convert<String>();
@@ -445,7 +447,7 @@ try
     Poco::Dynamic::Var result = parser.parse(json_str);
 
     auto obj = result.extract<Poco::JSON::Object::Ptr>();
-    id = obj->getValue<Int64>("id");
+    id = obj->getValue<TableID>("id");
     name = obj->getObject("name")->getValue<String>("L");
 
     auto cols_arr = obj->getArray("cols");
@@ -557,8 +559,7 @@ String TableInfo::getColumnName(const ColumnID id) const
         }
     }
 
-    throw DB::Exception(
-        std::string(__PRETTY_FUNCTION__) + ": Invalidate column id " + std::to_string(id) + " for table " + db_name + "." + name,
+    throw DB::Exception(std::string(__PRETTY_FUNCTION__) + ": Invalidate column id " + std::to_string(id) + " for table " + name,
         DB::ErrorCodes::LOGICAL_ERROR);
 }
 
@@ -572,8 +573,7 @@ const ColumnInfo & TableInfo::getColumnInfo(const ColumnID id) const
         }
     }
 
-    throw DB::Exception(
-        std::string(__PRETTY_FUNCTION__) + ": Invalidate column id " + std::to_string(id) + " for table " + db_name + "." + name,
+    throw DB::Exception(std::string(__PRETTY_FUNCTION__) + ": Invalidate column id " + std::to_string(id) + " for table " + name,
         DB::ErrorCodes::LOGICAL_ERROR);
 }
 
@@ -588,11 +588,10 @@ std::optional<std::reference_wrapper<const ColumnInfo>> TableInfo::getPKHandleCo
             return std::optional<std::reference_wrapper<const ColumnInfo>>(col);
     }
 
-    throw DB::Exception(
-        std::string(__PRETTY_FUNCTION__) + ": Cannot get handle column for table " + db_name + "." + name, DB::ErrorCodes::LOGICAL_ERROR);
+    throw DB::Exception(std::string(__PRETTY_FUNCTION__) + ": Cannot get handle column for table " + name, DB::ErrorCodes::LOGICAL_ERROR);
 }
 
-TableInfo TableInfo::producePartitionTableInfo(TableID table_or_partition_id) const
+TableInfoPtr TableInfo::producePartitionTableInfo(TableID table_or_partition_id, const SchemaNameMapper & name_mapper) const
 {
     // Some sanity checks for partition table.
     if (unlikely(!(is_partition_table && partition.enable)))
@@ -607,17 +606,15 @@ TableInfo TableInfo::producePartitionTableInfo(TableID table_or_partition_id) co
             DB::ErrorCodes::LOGICAL_ERROR);
 
     // This is a TiDB partition table, adjust the table ID by making it to physical table ID (partition ID).
-    TableInfo new_table = *this;
-    new_table.belonging_table_id = id;
-    new_table.id = table_or_partition_id;
+    auto new_table = std::make_shared<TableInfo>();
+    *new_table = *this;
+    new_table->belonging_table_id = id;
+    new_table->id = table_or_partition_id;
 
-    // Mangle the table name by appending partition name.
-    new_table.name = getPartitionTableName(table_or_partition_id);
+    new_table->name = name_mapper.mapPartitionName(*new_table);
 
     return new_table;
 }
-
-String TableInfo::getPartitionTableName(TableID part_id) const { return name + "_" + std::to_string(part_id); }
 
 String genJsonNull()
 {

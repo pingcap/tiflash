@@ -1,15 +1,14 @@
 #pragma once
 
-#include <mutex>
-#include <utility>
-
-#include <ext/shared_ptr_helper.h>
-
 #include <Core/NamesAndTypes.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
 #include <Storages/Transaction/TiDB.h>
+
+#include <ext/shared_ptr_helper.h>
+#include <mutex>
+#include <utility>
 
 
 namespace DB
@@ -60,8 +59,9 @@ public:
     const TiDB::TableInfo & getTableInfo() const override;
 
     void alterFromTiDB(const AlterCommands & /*commands*/,
-        const TiDB::TableInfo & /*table_info*/,
         const String & /*database_name*/,
+        const TiDB::TableInfo & /*table_info*/,
+        const SchemaNameMapper & /*name_mapper*/,
         const Context & /*context*/) override;
 
     SortDescription getPrimarySortDescription() const override;
@@ -97,9 +97,10 @@ private:
 protected:
     StorageDebugging(String database_name_,
         String table_name_,
-        const ColumnsDescription& columns_description_,
+        const ColumnsDescription & columns_description_,
         std::optional<std::reference_wrapper<const TiDB::TableInfo>>
             table_info,
+        Timestamp tombstone,
         const Context & context_,
         Mode mode_ = Mode::Normal);
 };

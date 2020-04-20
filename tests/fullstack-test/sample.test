@@ -7,10 +7,12 @@ mysql> insert into test.t values('Hello world', 666)
 
 func> wait_table test t
 
-=> select s, i from test.t
-┌─s───────────┬───i─┐
-│ Hello world │ 666 │
-└─────────────┴─────┘
+mysql> set session tidb_isolation_read_engines='tiflash'; select s, i from test.t
++-------------+------+
+| s           | i    |
++-------------+------+
+| Hello world | 666  |
++-------------+------+
 
 mysql> delete from test.t
 
