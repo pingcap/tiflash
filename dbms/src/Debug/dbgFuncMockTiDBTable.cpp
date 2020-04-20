@@ -1,5 +1,6 @@
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncMockTiDBTable.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterRenameQuery.h>
 #include <Parsers/ASTExpressionList.h>
@@ -26,7 +27,9 @@ extern const int LOGICAL_ERROR;
 void MockTiDBTable::dbgFuncMockTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() != 3 && args.size() != 4 && args.size() != 5)
-        throw Exception("Args not matched, should be: database-name, table-name, schema-string [, handle_pk_name], [, engine-type(tmt|dt|buggy)]", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(
+            "Args not matched, should be: database-name, table-name, schema-string [, handle_pk_name], [, engine-type(tmt|dt|buggy)]",
+            ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;

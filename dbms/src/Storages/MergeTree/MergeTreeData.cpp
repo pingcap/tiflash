@@ -81,7 +81,9 @@ namespace ErrorCodes
 
 MergeTreeData::MergeTreeData(
     const String & database_, const String & table_,
-    const String & full_path_, const ColumnsDescription & columns_,
+    const String & full_path_, 
+    bool data_path_contains_database_name_,
+    const ColumnsDescription & columns_,
     Context & context_,
     const ASTPtr & primary_expr_ast_,
     const ASTPtr & secondary_sort_expr_ast_,
@@ -106,6 +108,7 @@ MergeTreeData::MergeTreeData(
     require_part_metadata(require_part_metadata_),
     database_name(database_), table_name(table_),
     full_path(full_path_),
+    data_path_contains_database_name(data_path_contains_database_name_),
     broken_part_callback(broken_part_callback_),
     log_name(database_name + "." + table_name), log(&Logger::get(log_name + " (Data)")),
     data_parts_by_info(data_parts_indexes.get<TagByInfo>()),
@@ -814,7 +817,10 @@ void MergeTreeData::dropAllData()
 
     for (const auto & path : context.getPartPathSelector().getAllPath())
     {
-        Poco::File(getDataPartsPath(path)).remove(true);
+        if (auto file = Poco::File(getDataPartsPath(path)); file.exists())
+        {
+            file.remove(true);
+        }
     }
 
     LOG_TRACE(log, "dropAllData: done.");

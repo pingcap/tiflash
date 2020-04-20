@@ -6,6 +6,7 @@
 #include <Debug/MockSchemaNameMapper.h>
 #include <Storages/Transaction/SchemaBuilder.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiDB.h>
 #include <pingcap/kv/Cluster.h>
 #include <pingcap/kv/Snapshot.h>
 
@@ -38,8 +39,9 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     bool isTooOldSchema(Int64 cur_ver, Int64 new_version) { return cur_ver == 0 || new_version - cur_ver > maxNumberOfDiffs; }
 
-    Getter createSchemaGetter(UInt64 tso [[maybe_unused]])
+    Getter createSchemaGetter()
     {
+        [[maybe_unused]] auto tso = cluster->pd_client->getTS();
         if constexpr (mock_getter)
         {
             return Getter();
@@ -59,6 +61,12 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         cur_version = 0;
     }
 
+    std::vector<TiDB::DBInfoPtr> fetchAllDBs() override
+    {
+        auto getter = createSchemaGetter();
+        return getter.listDBs();
+    }
+
     Int64 getCurrentVersion() override
     {
         std::lock_guard<std::mutex> lock(schema_mutex);
@@ -69,8 +77,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     {
         std::lock_guard<std::mutex> lock(schema_mutex);
 
-        auto tso = cluster->pd_client->getTS();
-        auto getter = createSchemaGetter(tso);
+        auto getter = createSchemaGetter();
         Int64 version = getter.getVersion();
         if (version <= cur_version)
         {
@@ -108,9 +115,8 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     {
         std::lock_guard<std::mutex> lock(schema_mutex);
 
-        auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) {
-            return NameMapper().mapDatabaseName(*pair.second) == mapped_database_name;
-        });
+        auto it = std::find_if(databases.begin(), databases.end(),
+            [&](const auto & pair) { return NameMapper().mapDatabaseName(*pair.second) == mapped_database_name; });
         if (it == databases.end())
             return nullptr;
         return it->second;

@@ -214,7 +214,7 @@ struct PartitionDefinition
 
     void deserialize(Poco::JSON::Object::Ptr json);
 
-    TableID id = -1;
+    TableID id = DB::InvalidTableID;
     String name;
     // LessThan []string `json:"less_than"`
     String comment;
@@ -240,7 +240,7 @@ struct PartitionInfo
 
 struct DBInfo
 {
-    DatabaseID id;
+    DatabaseID id = -1;
     String name;
     String charset;
     String collate;
@@ -248,6 +248,8 @@ struct DBInfo
 
     DBInfo() = default;
     DBInfo(const String & json) { deserialize(json); }
+
+    String serialize() const;
 
     void deserialize(const String & json_str);
 };
@@ -271,7 +273,7 @@ struct TableInfo
     // It is the physical table ID, i.e. table ID for non-partition table,
     // and partition ID for partition table,
     // whereas field `belonging_table_id` below actually means the table ID this partition belongs to.
-    TableID id = -1;
+    TableID id = DB::InvalidTableID;
     String name;
     // Columns are listed in the order in which they appear in the schema.
     std::vector<ColumnInfo> columns;
@@ -280,7 +282,7 @@ struct TableInfo
     String comment;
     Timestamp update_timestamp = 0;
     bool is_partition_table = false;
-    TableID belonging_table_id = -1;
+    TableID belonging_table_id = DB::InvalidTableID;
     PartitionInfo partition;
     // If the table is view, we should ignore it.
     bool is_view = false;
@@ -299,7 +301,7 @@ struct TableInfo
 
     TableInfoPtr producePartitionTableInfo(TableID table_or_partition_id, const DB::SchemaNameMapper & name_mapper) const;
 
-    bool isLogicalPartitionTable() const { return is_partition_table && belonging_table_id == -1 && partition.enable; }
+    bool isLogicalPartitionTable() const { return is_partition_table && belonging_table_id == DB::InvalidTableID && partition.enable; }
 };
 
 using DBInfoPtr = std::shared_ptr<DBInfo>;
