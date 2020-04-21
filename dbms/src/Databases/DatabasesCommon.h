@@ -20,6 +20,12 @@ class Context;
   */
 String getTableDefinitionFromCreateQuery(const ASTPtr & query);
 
+/** Get the row with the database definition based on the CREATE query.
+  * It is an ATTACH query that you can execute to create a database.
+  * See the implementation.
+  */
+String getDatabaseDefinitionFromCreateQuery(const ASTPtr & query);
+
 
 /** Create a table by its definition, without using InterpreterCreateQuery.
   *  (InterpreterCreateQuery has more complex functionality, and it can not be used if the database has not been created yet)
@@ -30,9 +36,33 @@ std::pair<String, StoragePtr> createTableFromDefinition(
     const String & definition,
     const String & database_name,
     const String & database_data_path,
+    const String & database_engine,
     Context & context,
     bool has_force_restore_data_flag,
     const String & description_for_error_message);
+
+/// Some helper functions for loading database metadata.
+namespace DatabaseLoading
+{
+ASTPtr getQueryFromMetadata(const String & metadata_path, bool throw_on_error = true);
+
+ASTPtr getCreateQueryFromMetadata(const String & metadata_path, const String & database, bool throw_on_error);
+
+std::vector<String> listSQLFilenames(const String & database_dir, Poco::Logger * log);
+
+// Startup tables with thread_pool. If exception with code TIDB_TABLE_ALREADY_EXISTS thrown in startup,
+// those tables' meta will be removed and deatch from database.
+void startupTables(IDatabase & database, const String & db_name, Tables & tables, ThreadPool * thread_pool, Poco::Logger * log);
+
+void loadTable(Context & context,
+    IDatabase & database,
+    const String & database_metadata_path,
+    const String & database_name,
+    const String & database_data_path,
+    const String & database_engine,
+    const String & file_name,
+    bool has_force_restore_data_flag);
+} // namespace DatabaseLoading
 
 
 /// Copies list of tables and iterates through such snapshot.

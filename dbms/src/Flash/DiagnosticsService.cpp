@@ -784,6 +784,7 @@ void DiagnosticsService::processInfo(std::vector<diagnosticspb::ServerInfoItem> 
         return l < r;
     });
 
+    // auto resp = ServerInfoResponse::default_instance();
     auto & resp = *response;
     for (auto item : items)
     {

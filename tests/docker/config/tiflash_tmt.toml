@@ -35,5 +35,6 @@ interserver_http_port = 9009
 
 [raft]
 	pd_addr = "pd0:2379"
+  ignore_databases = "system,default"
 	# specify which storage engine we use. tmt or dt 
 	storage_engine = "tmt"

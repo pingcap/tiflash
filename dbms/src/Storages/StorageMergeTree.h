@@ -83,7 +83,12 @@ public:
 
     void truncate(const ASTPtr & /*query*/, const Context & /*context*/) override;
 
-    void rename(const String & new_path_to_db, const String & new_database_name, const String & new_table_name) override;
+    void rename(const String & new_path_to_db,
+        const String & new_database_name,
+        const String & new_table_name,
+        const String & new_display_table_name) override;
+
+    void modifyASTStorage(ASTStorage * storage_ast, const TiDB::TableInfo & table_info) override;
 
     void alter(const AlterCommands & params, const String & database_name, const String & table_name, const Context & context) override;
 
@@ -96,7 +101,7 @@ public:
     }
 
     void alterFromTiDB(
-        const AlterCommands & params, const TiDB::TableInfo & table_info, const String & database_name, const Context & context) override;
+        const AlterCommands & params, const String & database_name, const TiDB::TableInfo & table_info, const SchemaNameMapper & name_mapper, const Context & context) override;
 
     bool checkTableCanBeDropped() const override;
 
@@ -112,6 +117,7 @@ public:
 
 private:
     String path;
+    const bool data_path_contains_database_name = false;
     String database_name;
     String table_name;
     String full_path;
@@ -167,6 +173,7 @@ protected:
           otherwise, partition_expr_ast is used as the partitioning expression;
       */
     StorageMergeTree(const String & path_,
+        const String & db_engine,
         const String & database_name_,
         const String & table_name_,
         const ColumnsDescription & columns_,
@@ -180,7 +187,8 @@ protected:
         const ASTPtr & sampling_expression_, /// nullptr, if sampling is not supported.
         const MergeTreeData::MergingParams & merging_params_,
         const MergeTreeSettings & settings_,
-        bool has_force_restore_data_flag);
+        bool has_force_restore_data_flag,
+        Timestamp tombstone);
 };
 
 } // namespace DB

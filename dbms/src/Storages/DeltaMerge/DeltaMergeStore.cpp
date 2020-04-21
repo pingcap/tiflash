@@ -100,6 +100,7 @@ ColumnDefinesPtr getStoreColumns(const ColumnDefines & table_columns)
 
 DeltaMergeStore::DeltaMergeStore(Context &             db_context,
                                  const String &        path_,
+                                 bool                  data_path_contains_database_name,
                                  const String &        db_name_,
                                  const String &        table_name_,
                                  const ColumnDefines & columns,
@@ -119,7 +120,7 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
     LOG_INFO(log, "Restore DeltaMerge Store start [" << db_name << "." << table_name << "]");
 
     auto & extra_paths_root = global_context.getExtraPaths();
-    extra_paths             = extra_paths_root.withTable(db_name, table_name_);
+    extra_paths             = extra_paths_root.withTable(db_name, table_name_, data_path_contains_database_name);
 
     loadDMFiles();
 
@@ -218,12 +219,21 @@ DeltaMergeStore::~DeltaMergeStore()
     LOG_INFO(log, "Release DeltaMerge Store end [" << db_name << "." << table_name << "]");
 }
 
-void DeltaMergeStore::rename(String new_path, String new_database_name, String new_table_name)
+void DeltaMergeStore::rename(String new_path, bool clean_rename, String new_database_name, String new_table_name)
 {
-    // These few lines can be removed after PR "id as path" and "flatten storage path hierarchy" is merged.
+    if (clean_rename)
     {
-        shutdown();                                            // Remove all background task first
-        extra_paths.rename(new_database_name, new_table_name); // rename for multi-disk
+        extra_paths.rename(new_database_name, new_table_name, clean_rename);
+    }
+    else
+    {
+        LOG_WARNING(log,
+                    "Applying heavy renaming for table " << db_name << "." << table_name //
+                                                         << " to " << new_database_name << "." << new_table_name);
+
+        // Remove all background task first
+        shutdown();
+        extra_paths.rename(new_database_name, new_table_name, clean_rename); // rename for multi-disk
         // Check if path is covered by extra_paths, if not, rename
         if (auto dir = Poco::File(path); dir.exists())
         {

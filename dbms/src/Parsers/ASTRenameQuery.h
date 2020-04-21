@@ -1,8 +1,10 @@
 #pragma once
 
-#include <Parsers/IAST.h>
-#include <Parsers/ASTQueryWithOutput.h>
 #include <Parsers/ASTQueryWithOnCluster.h>
+#include <Parsers/ASTQueryWithOutput.h>
+#include <Parsers/IAST.h>
+
+#include <optional>
 
 namespace DB
 {
@@ -17,12 +19,17 @@ public:
     {
         String database;
         String table;
+
+        Table() = default;
+        Table(String db, String tbl) : database(std::move(db)), table(std::move(tbl)) {}
     };
 
     struct Element
     {
         Table from;
         Table to;
+        // The display database, table name in TiDB
+        std::optional<Table> tidb_display;
     };
 
     using Elements = std::vector<Element>;
@@ -66,12 +73,12 @@ protected:
                 settings.ostr << ", ";
 
             settings.ostr << (!it->from.database.empty() ? backQuoteIfNeed(it->from.database) + "." : "") << backQuoteIfNeed(it->from.table)
-                << (settings.hilite ? hilite_keyword : "") << " TO " << (settings.hilite ? hilite_none : "")
-                << (!it->to.database.empty() ? backQuoteIfNeed(it->to.database) + "." : "") << backQuoteIfNeed(it->to.table);
+                          << (settings.hilite ? hilite_keyword : "") << " TO " << (settings.hilite ? hilite_none : "")
+                          << (!it->to.database.empty() ? backQuoteIfNeed(it->to.database) + "." : "") << backQuoteIfNeed(it->to.table);
         }
 
         formatOnCluster(settings);
     }
 };
 
-}
+} // namespace DB

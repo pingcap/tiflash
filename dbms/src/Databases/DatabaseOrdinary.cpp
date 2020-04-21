@@ -54,52 +54,6 @@ namespace detail
 
 }
 
-static void loadTable(
-    Context & context,
-    const String & database_metadata_path,
-    DatabaseOrdinary & database,
-    const String & database_name,
-    const String & database_data_path,
-    const String & file_name,
-    bool has_force_restore_data_flag)
-{
-    Logger * log = &Logger::get("loadTable");
-
-    const String table_metadata_path = database_metadata_path + "/" + file_name;
-
-    String s;
-    {
-        char in_buf[METADATA_FILE_BUFFER_SIZE];
-        ReadBufferFromFile in(table_metadata_path, METADATA_FILE_BUFFER_SIZE, -1, in_buf);
-        readStringUntilEOF(s, in);
-    }
-
-    /** Empty files with metadata are generated after a rough restart of the server.
-      * Remove these files to slightly reduce the work of the admins on startup.
-      */
-    if (s.empty())
-    {
-        LOG_ERROR(log, "File " << table_metadata_path << " is empty. Removing.");
-        Poco::File(table_metadata_path).remove();
-        return;
-    }
-
-    try
-    {
-        String table_name;
-        StoragePtr table;
-        std::tie(table_name, table) = createTableFromDefinition(
-            s, database_name, database_data_path, context, has_force_restore_data_flag, "in file " + table_metadata_path);
-        database.attachTable(table_name, table);
-    }
-    catch (const Exception & e)
-    {
-        throw Exception("Cannot create table from metadata file " + table_metadata_path + ", error: " + e.displayText() +
-            ", stack trace:\n" + e.getStackTrace().toString(),
-            ErrorCodes::CANNOT_CREATE_TABLE_FROM_METADATA);
-    }
-}
-
 
 DatabaseOrdinary::DatabaseOrdinary(String name_, const String & metadata_path_, const Context & context)
     : DatabaseWithOwnTablesBase(std::move(name_))
@@ -117,34 +71,7 @@ void DatabaseOrdinary::loadTables(
     bool has_force_restore_data_flag)
 {
     using FileNames = std::vector<std::string>;
-    FileNames file_names;
-
-    Poco::DirectoryIterator dir_end;
-    for (Poco::DirectoryIterator dir_it(metadata_path); dir_it != dir_end; ++dir_it)
-    {
-        /// For '.svn', '.gitignore' directory and similar.
-        if (dir_it.name().at(0) == '.')
-            continue;
-
-        /// There are .sql.bak files - skip them.
-        if (endsWith(dir_it.name(), ".sql.bak"))
-            continue;
-
-        /// There are files .sql.tmp - delete.
-        if (endsWith(dir_it.name(), ".sql.tmp"))
-        {
-            LOG_INFO(log, "Removing file " << dir_it->path());
-            Poco::File(dir_it->path()).remove();
-            continue;
-        }
-
-        /// The required files have names like `table_name.sql`
-        if (endsWith(dir_it.name(), ".sql"))
-            file_names.push_back(dir_it.name());
-        else
-            throw Exception("Incorrect file extension: " + dir_it.name() + " in metadata directory " + metadata_path,
-                ErrorCodes::INCORRECT_FILE_NAME);
-    }
+    FileNames file_names = DatabaseLoading::listSQLFilenames(metadata_path, log);
 
     /** Tables load faster if they are loaded in sorted (by name) order.
       * Otherwise (for the ext4 filesystem), `DirectoryIterator` iterates through them in some order,
@@ -174,7 +101,7 @@ void DatabaseOrdinary::loadTables(
                 watch.restart();
             }
 
-            loadTable(context, metadata_path, *this, name, data_path, table, has_force_restore_data_flag);
+            DatabaseLoading::loadTable(context, *this, metadata_path, name, data_path, getEngineName(), table, has_force_restore_data_flag);
         }
     };
 
@@ -200,60 +127,8 @@ void DatabaseOrdinary::loadTables(
         thread_pool->wait();
 
     /// After all tables was basically initialized, startup them.
-    startupTables(thread_pool);
+    DatabaseLoading::startupTables(*this, name, tables, thread_pool, log);
 }
-
-
-void DatabaseOrdinary::startupTables(ThreadPool * thread_pool)
-{
-    LOG_INFO(log, "Starting up tables.");
-
-    AtomicStopwatch watch;
-    std::atomic<size_t> tables_processed {0};
-    size_t total_tables = tables.size();
-
-    auto task_function = [&](Tables::iterator begin, Tables::iterator end)
-    {
-        for (auto it = begin; it != end; ++it)
-        {
-            if ((++tables_processed) % PRINT_MESSAGE_EACH_N_TABLES == 0
-                || watch.compareAndRestart(PRINT_MESSAGE_EACH_N_SECONDS))
-            {
-                LOG_INFO(log, std::fixed << std::setprecision(2) << tables_processed * 100.0 / total_tables << "%");
-                watch.restart();
-            }
-
-            it->second->startup();
-        }
-    };
-
-    const size_t bunch_size = TABLES_PARALLEL_LOAD_BUNCH_SIZE;
-    size_t num_bunches = (total_tables + bunch_size - 1) / bunch_size;
-
-    auto begin = tables.begin();
-    for (size_t i = 0; i < num_bunches; ++i)
-    {
-        auto end = begin;
-
-        if (i + 1 == num_bunches)
-            end = tables.end();
-        else
-            std::advance(end, bunch_size);
-
-        auto task = std::bind(task_function, begin, end);
-
-        if (thread_pool)
-            thread_pool->schedule(task);
-        else
-            task();
-
-        begin = end;
-    }
-
-    if (thread_pool)
-        thread_pool->wait();
-}
-
 
 void DatabaseOrdinary::createTable(
     const Context & context,
@@ -341,45 +216,6 @@ void DatabaseOrdinary::removeTable(
     }
 }
 
-static ASTPtr getQueryFromMetadata(const String & metadata_path, bool throw_on_error = true)
-{
-    if (!Poco::File(metadata_path).exists())
-        return nullptr;
-
-    String query;
-
-    {
-        ReadBufferFromFile in(metadata_path, 4096);
-        readStringUntilEOF(query, in);
-    }
-
-    ParserCreateQuery parser;
-    const char * pos = query.data();
-    std::string error_message;
-    auto ast = tryParseQuery(parser, pos, pos + query.size(), error_message, /* hilite = */ false,
-                             "in file " + metadata_path, /* allow_multi_statements = */ false, 0);
-
-    if (!ast && throw_on_error)
-        throw Exception(error_message, ErrorCodes::SYNTAX_ERROR);
-
-    return ast;
-}
-
-static ASTPtr getCreateQueryFromMetadata(const String & metadata_path, const String & database, bool throw_on_error)
-{
-    ASTPtr ast = getQueryFromMetadata(metadata_path, throw_on_error);
-
-    if (ast)
-    {
-        ASTCreateQuery & ast_create_query = typeid_cast<ASTCreateQuery &>(*ast);
-        ast_create_query.attach = false;
-        ast_create_query.database = database;
-    }
-
-    return ast;
-}
-
-
 void DatabaseOrdinary::renameTable(
     const Context & context,
     const String & table_name,
@@ -416,7 +252,7 @@ void DatabaseOrdinary::renameTable(
     // TODO: Atomic rename table is not fixed.
     FAIL_POINT_TRIGGER_EXCEPTION(exception_between_rename_table_data_and_metadata);
 
-    ASTPtr ast = getQueryFromMetadata(detail::getTableMetadataPath(metadata_path, table_name));
+    ASTPtr ast = DatabaseLoading::getQueryFromMetadata(detail::getTableMetadataPath(metadata_path, table_name));
     if (!ast)
         throw Exception("There is no metadata file for table " + table_name, ErrorCodes::FILE_DOESNT_EXIST);
     ASTCreateQuery & ast_create_query = typeid_cast<ASTCreateQuery &>(*ast);
@@ -452,7 +288,7 @@ ASTPtr DatabaseOrdinary::getCreateTableQueryImpl(const Context & context,
     ASTPtr ast;
 
     auto table_metadata_path = detail::getTableMetadataPath(metadata_path, table_name);
-    ast = getCreateQueryFromMetadata(table_metadata_path, name, throw_on_error);
+    ast = DatabaseLoading::getCreateQueryFromMetadata(table_metadata_path, name, throw_on_error);
     if (!ast && throw_on_error)
     {
         /// Handle system.* tables for which there are no table.sql files.
@@ -483,7 +319,7 @@ ASTPtr DatabaseOrdinary::getCreateDatabaseQuery(const Context & /*context*/) con
     ASTPtr ast;
 
     auto database_metadata_path = detail::getDatabaseMetadataPath(metadata_path);
-    ast = getCreateQueryFromMetadata(database_metadata_path, name, true);
+    ast = DatabaseLoading::getCreateQueryFromMetadata(database_metadata_path, name, true);
     if (!ast)
     {
         /// Handle databases (such as default) for which there are no database.sql files.
@@ -519,7 +355,20 @@ void DatabaseOrdinary::shutdown()
 
 void DatabaseOrdinary::drop()
 {
-    /// No additional removal actions are required.
+    // Remove data dir for this database
+    const String database_data_path = getDataPath();
+    if (!database_data_path.empty())
+        Poco::File(database_data_path).remove(false);
+    // Remove metadata dir for this database
+    if (auto dir = Poco::File(getMetadataPath()); dir.exists())
+    {
+        dir.remove(false);
+    }
+    /// Old ClickHouse versions did not store database.sql files
+    if (auto meta_file = Poco::File(detail::getDatabaseMetadataPath(getMetadataPath())); meta_file.exists())
+    {
+        meta_file.remove();
+    }
 }
 
 void DatabaseOrdinary::alterTable(

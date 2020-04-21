@@ -16,8 +16,8 @@
 #include <Storages/ColumnsDescription.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
-#include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/StorageDeltaMerge.h>
+#include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
 #include <gtest/gtest.h>
@@ -96,11 +96,13 @@ try
         astptr->children.emplace_back(new ASTIdentifier("col1"));
 
         storage = StorageDeltaMerge::create(path_name,
+                                            "TiFlash",
                                             /* db_name= */ "default",
                                             table_name,
                                             std::nullopt,
                                             ColumnsDescription{names_and_types_list},
                                             astptr,
+                                            0,
                                             DMTestEnv::getContext());
         storage->startup();
     }

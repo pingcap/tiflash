@@ -8,6 +8,7 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/config.h>
+#include <Common/escapeForFileName.h>
 #include <Common/getFQDNOrHostName.h>
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
@@ -17,6 +18,7 @@
 #include <IO/HTTPCommon.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/DDLWorker.h>
+#include <Interpreters/IDAsPathUpgrader.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/loadMetadata.h>
 #include <Poco/DirectoryIterator.h>
@@ -133,6 +135,106 @@ struct TiFlashProxyConfig
 
 const std::string TiFlashProxyConfig::config_prefix = "flash.proxy";
 
+struct TiFlashRaftConfig
+{
+    const std::string learner_key = "engine";
+    const std::string learner_value = "tiflash";
+    std::vector<std::string> pd_addrs;
+    std::unordered_set<std::string> ignore_databases{"system"};
+    std::string kvstore_path;
+    // Actually it is "flash.service_addr"
+    std::string flash_server_addr;
+
+    static const TiDB::StorageEngine DEFAULT_ENGINE = TiDB::StorageEngine::DT;
+    bool disable_bg_flush = false;
+    TiDB::StorageEngine engine = DEFAULT_ENGINE;
+
+public:
+    TiFlashRaftConfig(const std::string & path, Poco::Util::LayeredConfiguration & config, Poco::Logger * log);
+};
+
+/// Load raft related configs.
+TiFlashRaftConfig::TiFlashRaftConfig(const std::string & path, Poco::Util::LayeredConfiguration & config, Poco::Logger * log)
+    : ignore_databases{"system"}, kvstore_path{path + "kvstore/"}
+{
+    flash_server_addr = config.getString("flash.service_addr", "0.0.0.0:3930");
+
+    if (config.has("raft"))
+    {
+        if (config.has("raft.pd_addr"))
+        {
+            String pd_service_addrs = config.getString("raft.pd_addr");
+            Poco::StringTokenizer string_tokens(pd_service_addrs, ",");
+            for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
+            {
+                pd_addrs.push_back(*it);
+            }
+            LOG_INFO(log, "Found pd addrs: " << pd_service_addrs);
+        }
+        else
+        {
+            LOG_INFO(log, "Not found pd addrs.");
+        }
+
+        if (config.has("raft.ignore_databases"))
+        {
+            String ignore_dbs = config.getString("raft.ignore_databases");
+            Poco::StringTokenizer string_tokens(ignore_dbs, ",");
+            std::stringstream ss;
+            bool first = true;
+            for (auto string_token : string_tokens)
+            {
+                string_token = Poco::trimInPlace(string_token);
+                ignore_databases.emplace(string_token);
+                if (first)
+                    first = false;
+                else
+                    ss << ", ";
+                ss << string_token;
+            }
+            LOG_INFO(log, "Found ignore databases:" << ss.str());
+        }
+
+        if (config.has("raft.kvstore_path"))
+        {
+            kvstore_path = config.getString("raft.kvstore_path");
+        }
+
+        if (config.has("raft.storage_engine"))
+        {
+            String s_engine = config.getString("raft.storage_engine");
+            std::transform(s_engine.begin(), s_engine.end(), s_engine.begin(), [](char ch) { return std::tolower(ch); });
+            if (s_engine == "tmt")
+                engine = ::TiDB::StorageEngine::TMT;
+            else if (s_engine == "dt")
+                engine = ::TiDB::StorageEngine::DT;
+            else
+                engine = DEFAULT_ENGINE;
+        }
+
+        /// "tmt" engine ONLY support disable_bg_flush = false.
+        /// "dt" engine ONLY support disable_bg_flush = true.
+
+        String disable_bg_flush_conf = "raft.disable_bg_flush";
+        if (engine == ::TiDB::StorageEngine::TMT)
+        {
+            if (config.has(disable_bg_flush_conf) && config.getBool(disable_bg_flush_conf))
+                throw Exception("Illegal arguments: disable background flush while using engine " + MutableSupport::txn_storage_name,
+                    ErrorCodes::INVALID_CONFIG_PARAMETER);
+            disable_bg_flush = false;
+        }
+        else if (engine == ::TiDB::StorageEngine::DT)
+        {
+            /// If background flush is enabled, read will not triggle schema sync.
+            /// Which means that we may get the wrong result with outdated schema.
+            if (config.has(disable_bg_flush_conf) && !config.getBool(disable_bg_flush_conf))
+                throw Exception("Illegal arguments: enable background flush while using engine " + MutableSupport::delta_tree_storage_name,
+                    ErrorCodes::INVALID_CONFIG_PARAMETER);
+            disable_bg_flush = true;
+        }
+    }
+}
+
 int Server::main(const std::vector<std::string> & /*args*/)
 {
     Logger * log = &logger();
@@ -192,8 +294,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     else
         global_context->setExtraPaths(extra_paths);
 
-    std::string path = all_normal_path[0];
-    std::string default_database = config().getString("default_database", "default");
+    const std::string path = all_normal_path[0];
+    TiFlashRaftConfig raft_config(path, config(), log);
+    // Use pd address to define which default_database we use by defauly.
+    // For mock test, we use "default". For deployed with pd/tidb/tikv use "db_1" , whose name is "test" in TiDB.
+    std::string default_database = config().getString("default_database", raft_config.pd_addrs.empty() ? "default" : "db_1");
     global_context->setPath(path);
     global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
 
@@ -383,106 +488,45 @@ int Server::main(const std::vector<std::string> & /*args*/)
     format_schema_path.createDirectories();
 
     LOG_INFO(log, "Loading metadata.");
-    loadMetadataSystem(*global_context);
+    loadMetadataSystem(*global_context); // Load "system" database. Its engine keeps as Ordinary.
     /// After attaching system databases we can initialize system log.
     global_context->initializeSystemLogs();
     /// After the system database is created, attach virtual system tables (in addition to query_log and part_log)
     attachSystemTablesServer(*global_context->getDatabase("system"), has_zookeeper);
-    /// Load raft related configs ahead of loading metadata, as TMT storage relies on TMT context, which needs these configs.
-    std::vector<std::string> pd_addrs;
-    const std::string learner_key = "engine";
-    const std::string learner_value = "tiflash";
-    std::unordered_set<std::string> ignore_databases{"system"};
-    std::string kvstore_path = path + "kvstore/";
-    String flash_server_addr = config().getString("flash.service_addr", "0.0.0.0:3930");
-
-    bool disable_bg_flush = false;
-
-    ::TiDB::StorageEngine engine_if_empty = ::TiDB::StorageEngine::DT;
-    ::TiDB::StorageEngine engine = engine_if_empty;
-
-    if (config().has("raft"))
-    {
-        if (config().has("raft.pd_addr"))
-        {
-            String pd_service_addrs = config().getString("raft.pd_addr");
-            Poco::StringTokenizer string_tokens(pd_service_addrs, ",");
-            for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
-            {
-                pd_addrs.push_back(*it);
-            }
-            LOG_INFO(log, "Found pd addrs: " << pd_service_addrs);
-        }
-        else
-        {
-            LOG_INFO(log, "Not found pd addrs.");
-        }
-
-        if (config().has("raft.ignore_databases"))
-        {
-            String ignore_dbs = config().getString("raft.ignore_databases");
-            Poco::StringTokenizer string_tokens(ignore_dbs, ",");
-            std::stringstream ss;
-            for (auto string_token : string_tokens)
-            {
-                string_token = Poco::trimInPlace(string_token);
-                ignore_databases.emplace(string_token);
-                ss << string_token << std::endl;
-            }
-            LOG_INFO(log, "Found ignore databases:\n" << ss.str());
-        }
-
-        if (config().has("raft.kvstore_path"))
-        {
-            kvstore_path = config().getString("raft.kvstore_path");
-        }
-
-        if (config().has("raft.storage_engine"))
-        {
-            String s_engine = config().getString("raft.storage_engine");
-            std::transform(s_engine.begin(), s_engine.end(), s_engine.begin(), [](char ch) { return std::tolower(ch); });
-            if (s_engine == "tmt")
-                engine = ::TiDB::StorageEngine::TMT;
-            else if (s_engine == "dt")
-                engine = ::TiDB::StorageEngine::DT;
-            else
-                engine = engine_if_empty;
-        }
-
-        /// "tmt" engine ONLY support disable_bg_flush = false.
-        /// "dt" engine ONLY support disable_bg_flush = true.
-
-        String disable_bg_flush_conf = "raft.disable_bg_flush";
-        if (engine == ::TiDB::StorageEngine::TMT)
-        {
-            if (config().has(disable_bg_flush_conf) && config().getBool(disable_bg_flush_conf))
-                throw Exception("Illegal arguments: disable background flush while using engine " + MutableSupport::txn_storage_name,
-                    ErrorCodes::INVALID_CONFIG_PARAMETER);
-            disable_bg_flush = false;
-        }
-        else if (engine == ::TiDB::StorageEngine::DT)
-        {
-            /// If background flush is enabled, read will not triggle schema sync.
-            /// Which means that we may get the wrong result with outdated schema.
-            if (config().has(disable_bg_flush_conf) && !config().getBool(disable_bg_flush_conf))
-                throw Exception("Illegal arguments: enable background flush while using engine " + MutableSupport::delta_tree_storage_name,
-                    ErrorCodes::INVALID_CONFIG_PARAMETER);
-            disable_bg_flush = true;
-        }
-    }
 
     {
-        LOG_DEBUG(log, "Default storage engine: " << static_cast<Int64>(engine));
+        LOG_DEBUG(log, "Default storage engine: " << static_cast<Int64>(raft_config.engine));
         /// create TMTContext
-        global_context->createTMTContext(pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, engine, disable_bg_flush);
+        global_context->createTMTContext(raft_config.pd_addrs,
+            raft_config.learner_key,
+            raft_config.learner_value,
+            raft_config.ignore_databases,
+            raft_config.kvstore_path,
+            raft_config.engine,
+            raft_config.disable_bg_flush);
         global_context->getTMTContext().reloadConfig(config());
     }
 
-    /// Then, load remaining databases
-    loadMetadata(*global_context);
-    LOG_DEBUG(log, "Loaded metadata.");
+    {
+        // Note that this must do before initialize schema sync service.
+        do
+        {
+            // Check whether we need to upgrade directories hierarchy
+            // If some database can not find in TiDB, they will be dropped
+            // if theirs name is not in reserved_databases.
+            // Besides, database engine in reserved_databases just keep as
+            // what they are.
+            IDAsPathUpgrader upgrader(
+                *global_context, /*is_mock=*/raft_config.pd_addrs.empty(), /*reserved_databases=*/raft_config.ignore_databases);
+            if (!upgrader.needUpgrade())
+                break;
+            upgrader.doUpgrade();
+        } while (0);
 
-    global_context->setCurrentDatabase(default_database);
+        /// Then, load remaining databases
+        loadMetadata(*global_context);
+    }
+    LOG_DEBUG(log, "Load metadata done.");
 
     /// Then, sync schemas with TiDB, and initialize schema sync service.
     for (int i = 0; i < 180; i++) // retry for 3 mins
@@ -500,6 +544,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     }
     LOG_DEBUG(log, "Sync schemas done.");
+
+    // After schema synced, set current database.
+    global_context->setCurrentDatabase(default_database);
+
     global_context->initializeSchemaSyncService();
 
     SCOPE_EXIT({
@@ -524,7 +572,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::unique_ptr<grpc::Server> flash_grpc_server = nullptr;
     {
         grpc::ServerBuilder builder;
-        builder.AddListeningPort(flash_server_addr, grpc::InsecureServerCredentials());
+        builder.AddListeningPort(raft_config.flash_server_addr, grpc::InsecureServerCredentials());
 
         /// Init and register flash service.
         flash_service = std::make_unique<FlashService>(*this);
@@ -539,7 +587,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         builder.SetMaxReceiveMessageSize(-1);
         builder.SetMaxSendMessageSize(-1);
         flash_grpc_server = builder.BuildAndStart();
-        LOG_INFO(log, "Flash grpc server listening on [" << flash_server_addr << "]");
+        LOG_INFO(log, "Flash grpc server listening on [" << raft_config.flash_server_addr << "]");
     }
 
     SCOPE_EXIT({
