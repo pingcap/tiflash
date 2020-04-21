@@ -139,6 +139,7 @@ Block FilterBlockInputStream::readImpl()
                     for (unsigned j = 0;j < join_key.size();j++) {
                         if (IsInt(cols[j].type->getName())) {
                             for (unsigned i = 0;i < rows;i++) {
+                                if (column_of_filter_for_bloom[i] == 0) continue;
                                 flag[0] = 8;
                                 *(UInt64 *)(tmp) = cols[j].column->get64(i);
                                 fnvHash->myhash(i,flag,1);
@@ -147,6 +148,7 @@ Block FilterBlockInputStream::readImpl()
                         }
                         if (IsUInt(cols[j].type->getName())) {
                             for (unsigned i = 0;i < rows;i++) {
+                                if (column_of_filter_for_bloom[i] == 0) continue;
                                 flag[0] = 9;
                                 *(UInt64 *)(tmp) = cols[j].column->get64(i);
                                 fnvHash->myhash(i,flag,1);
@@ -155,6 +157,7 @@ Block FilterBlockInputStream::readImpl()
                         }
                         if (IsString(cols[j].type->getName())) {
                             for (unsigned i = 0;i < rows;i++) {
+                                if (column_of_filter_for_bloom[i] == 0) continue;
                                 flag[0] = 2;
                                 auto t = (*cols[j].column)[i].get<String>();
                                 fnvHash->myhash(i,flag, 1);
