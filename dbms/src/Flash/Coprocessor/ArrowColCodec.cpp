@@ -33,9 +33,8 @@ const IColumn * getNestedCol(const IColumn * flash_col)
 }
 
 template <typename T>
-void decimalToVector(T dec, std::vector<Int32> & vec, UInt32 scale)
+void decimalToVector(T value, std::vector<Int32> & vec, UInt32 scale)
 {
-    Int256 value = dec.value;
     if (value < 0)
     {
         value = -value;
@@ -60,6 +59,7 @@ bool flashDecimalColToArrowColInternal(
     {
         const ColumnDecimal<T> * flash_col = checkAndGetColumn<ColumnDecimal<T>>(nested_col);
         const DataTypeDecimal<T> * type = checkAndGetDataType<DataTypeDecimal<T>>(data_type);
+        UInt32 scale = type->getScale();
         for (size_t i = start_index; i < end_index; i++)
         {
             if constexpr (is_nullable)
@@ -72,8 +72,8 @@ bool flashDecimalColToArrowColInternal(
             }
             const T & dec = flash_col->getElement(i);
             std::vector<Int32> digits;
-            UInt32 scale = type->getScale();
-            decimalToVector<T>(dec, digits, scale);
+            digits.reserve(type->getPrec());
+            decimalToVector<typename T::NativeType>(dec.value, digits, scale);
             TiDBDecimal tiDecimal(scale, digits, dec.value < 0);
             dag_column.append(tiDecimal);
         }
