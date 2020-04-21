@@ -56,11 +56,11 @@ struct SchemaDiff
 {
     Int64 version;
     SchemaActionType type;
-    Int64 schema_id;
-    Int64 table_id;
+    DatabaseID schema_id;
+    TableID table_id;
 
-    Int64 old_table_id;
-    Int64 old_schema_id;
+    DatabaseID old_table_id;
+    TableID old_schema_id;
 
     void deserialize(const String & data);
 };

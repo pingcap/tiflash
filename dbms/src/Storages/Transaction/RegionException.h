@@ -14,7 +14,6 @@ public:
         OK,
         NOT_FOUND,
         VERSION_ERROR,
-        PENDING_REMOVE,
     };
 
     static const char * RegionReadStatusString(RegionReadStatus s)
@@ -27,8 +26,6 @@ public:
                 return "NOT_FOUND";
             case VERSION_ERROR:
                 return "VERSION_ERROR";
-            case PENDING_REMOVE:
-                return "PENDING_REMOVE";
         }
         return "Unknown";
     };

@@ -3,8 +3,10 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Debug/MockSchemaGetter.h>
+#include <Debug/MockSchemaNameMapper.h>
 #include <Storages/Transaction/SchemaBuilder.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiDB.h>
 #include <pingcap/kv/Cluster.h>
 #include <pingcap/kv/Snapshot.h>
 
@@ -19,6 +21,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     using Getter = std::conditional_t<mock_getter, MockSchemaGetter, SchemaGetter>;
 
+    using NameMapper = std::conditional_t<mock_getter, MockSchemaNameMapper, SchemaNameMapper>;
 
     KVClusterPtr cluster;
 
@@ -28,7 +31,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     std::mutex schema_mutex;
 
-    std::unordered_map<DB::DatabaseID, String> databases;
+    std::unordered_map<DB::DatabaseID, TiDB::DBInfoPtr> databases;
 
     Logger * log;
 
@@ -36,8 +39,9 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     bool isTooOldSchema(Int64 cur_ver, Int64 new_version) { return cur_ver == 0 || new_version - cur_ver > maxNumberOfDiffs; }
 
-    Getter createSchemaGetter(UInt64 tso [[maybe_unused]])
+    Getter createSchemaGetter()
     {
+        [[maybe_unused]] auto tso = cluster->pd_client->getTS();
         if constexpr (mock_getter)
         {
             return Getter();
@@ -57,6 +61,12 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         cur_version = 0;
     }
 
+    std::vector<TiDB::DBInfoPtr> fetchAllDBs() override
+    {
+        auto getter = createSchemaGetter();
+        return getter.listDBs();
+    }
+
     Int64 getCurrentVersion() override
     {
         std::lock_guard<std::mutex> lock(schema_mutex);
@@ -67,8 +77,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     {
         std::lock_guard<std::mutex> lock(schema_mutex);
 
-        auto tso = cluster->pd_client->getTS();
-        auto getter = createSchemaGetter(tso);
+        auto getter = createSchemaGetter();
         Int64 version = getter.getVersion();
         if (version <= cur_version)
         {
@@ -92,6 +101,27 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         return true;
     }
 
+    TiDB::DBInfoPtr getDBInfoByName(const String & database_name) override
+    {
+        std::lock_guard<std::mutex> lock(schema_mutex);
+
+        auto it = std::find_if(databases.begin(), databases.end(), [&](const auto & pair) { return pair.second->name == database_name; });
+        if (it == databases.end())
+            return nullptr;
+        return it->second;
+    }
+
+    TiDB::DBInfoPtr getDBInfoByMappedName(const String & mapped_database_name) override
+    {
+        std::lock_guard<std::mutex> lock(schema_mutex);
+
+        auto it = std::find_if(databases.begin(), databases.end(),
+            [&](const auto & pair) { return NameMapper().mapDatabaseName(*pair.second) == mapped_database_name; });
+        if (it == databases.end())
+            return nullptr;
+        return it->second;
+    }
+
     bool tryLoadSchemaDiffs(Getter & getter, Int64 version, Context & context)
     {
         if (isTooOldSchema(cur_version, version))
@@ -101,7 +131,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
         LOG_DEBUG(log, "try load schema diffs.");
 
-        SchemaBuilder<Getter> builder(getter, context, databases, version);
+        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, version);
 
         Int64 used_version = cur_version;
         std::vector<SchemaDiff> diffs;
@@ -141,7 +171,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     void loadAllSchema(Getter & getter, Int64 version, Context & context)
     {
-        SchemaBuilder<Getter> builder(getter, context, databases, version);
+        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, version);
         builder.syncAllSchema();
     }
 };
