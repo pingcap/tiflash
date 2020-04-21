@@ -11,6 +11,7 @@
 #include <Common/getFQDNOrHostName.h>
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
+#include <Flash/DiagnosticsService.h>
 #include <Flash/FlashService.h>
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
@@ -307,8 +308,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->setMacros(std::make_unique<Macros>(config(), "macros"));
 
     /// Initialize main config reloader.
-    auto main_config_reloader = std::make_unique<ConfigReloader>(
-        config_path,
+    auto main_config_reloader = std::make_unique<ConfigReloader>(config_path,
         [&](ConfigurationPtr config) {
             buildLoggers(*config);
             global_context->setClustersConfig(config);
@@ -327,8 +327,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (Poco::File(config_dir + users_config_path).exists())
             users_config_path = config_dir + users_config_path;
     }
-    auto users_config_reloader = std::make_unique<ConfigReloader>(
-        users_config_path,
+    auto users_config_reloader = std::make_unique<ConfigReloader>(users_config_path,
         [&](ConfigurationPtr config) { global_context->setUsersConfig(config); },
         /* already_loaded = */ false);
 
@@ -521,6 +520,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// Then, startup grpc server to serve raft and/or flash services.
     std::unique_ptr<FlashService> flash_service = nullptr;
+    std::unique_ptr<DiagnosticsService> diagnostics_service = nullptr;
     std::unique_ptr<grpc::Server> flash_grpc_server = nullptr;
     {
         grpc::ServerBuilder builder;
@@ -528,8 +528,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         /// Init and register flash service.
         flash_service = std::make_unique<FlashService>(*this);
+        diagnostics_service = std::make_unique<DiagnosticsService>();
         builder.RegisterService(flash_service.get());
         LOG_INFO(log, "Flash service registered");
+        builder.RegisterService(diagnostics_service.get());
+        LOG_INFO(log, "Diagnostics service registered");
 
         /// Kick off grpc server.
         // Prevent TiKV from throwing "Received message larger than max (4404462 vs. 4194304)" error.
