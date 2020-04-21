@@ -215,6 +215,7 @@ public:
 
     DeltaMergeStore(Context &             db_context, //
                     const String &        path_,
+                    bool                  data_path_contains_database_name,
                     const String &        db_name,
                     const String &        tbl_name,
                     const ColumnDefines & columns,
@@ -224,6 +225,10 @@ public:
 
     const String & getDatabaseName() const { return db_name; }
     const String & getTableName() const { return table_name; }
+
+    void rename(String new_path, bool clean_rename, String new_database_name, String new_table_name);
+
+    void drop();
 
     // Stop all background tasks.
     void shutdown();

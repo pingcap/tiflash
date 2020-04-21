@@ -1,33 +1,31 @@
-#include <iomanip>
-#include <thread>
-#include <future>
-
-#include <common/ThreadPool.h>
-
+#include <Common/Stopwatch.h>
+#include <Common/escapeForFileName.h>
+#include <Databases/DatabaseOrdinary.h>
+#include <Databases/DatabaseTiFlash.h>
+#include <Databases/DatabasesCommon.h>
+#include <IO/ReadBufferFromFile.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/InterpreterCreateQuery.h>
+#include <Interpreters/loadMetadata.h>
+#include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ParserCreateQuery.h>
+#include <Parsers/parseQuery.h>
 #include <Poco/DirectoryIterator.h>
 #include <Poco/FileStream.h>
+#include <Storages/Transaction/SchemaNameMapper.h>
+#include <Storages/Transaction/SchemaSyncer.h>
+#include <Storages/Transaction/TMTContext.h>
+#include <common/ThreadPool.h>
 
-#include <Parsers/ParserCreateQuery.h>
-#include <Parsers/ASTCreateQuery.h>
-#include <Parsers/parseQuery.h>
-
-#include <Interpreters/InterpreterCreateQuery.h>
-#include <Interpreters/Context.h>
-#include <Interpreters/loadMetadata.h>
-
-#include <Databases/DatabaseOrdinary.h>
-
-#include <IO/ReadBufferFromFile.h>
-#include <Common/escapeForFileName.h>
-
-#include <Common/Stopwatch.h>
+#include <future>
+#include <iomanip>
+#include <thread>
 
 
 namespace DB
 {
 
-static void executeCreateQuery(
-    const String & query,
+static void executeCreateQuery(const String & query,
     Context & context,
     const String & database,
     const String & file_name,
@@ -50,18 +48,15 @@ static void executeCreateQuery(
 }
 
 
+#define SYSTEM_DATABASE "system"
+
 static void loadDatabase(
-    Context & context,
-    const String & database,
-    const String & database_path,
-    ThreadPool * thread_pool,
-    bool force_restore_data)
+    Context & context, const String & database, const String & database_metadata_file, ThreadPool * thread_pool, bool force_restore_data)
 {
     /// There may exist .sql file with database creation statement.
     /// Or, if it is absent, then database with default engine is created.
 
     String database_attach_query;
-    String database_metadata_file = database_path + ".sql";
 
     if (Poco::File(database_metadata_file).exists())
     {
@@ -69,18 +64,18 @@ static void loadDatabase(
         readStringUntilEOF(database_attach_query, in);
     }
     else
-        database_attach_query = "ATTACH DATABASE " + backQuoteIfNeed(database);
+    {
+        // Old fashioned way, keep engine as "Ordinary"
+        database_attach_query = "ATTACH DATABASE " + backQuoteIfNeed(database) + " ENGINE=Ordinary";
+    }
 
     executeCreateQuery(database_attach_query, context, database, database_metadata_file, thread_pool, force_restore_data);
 }
 
 
-#define SYSTEM_DATABASE "system"
-
-
 void loadMetadata(Context & context)
 {
-    String path = context.getPath() + "metadata";
+    const String path = context.getPath() + "metadata/";
 
     /** There may exist 'force_restore_data' file, that means,
       *  skip safety threshold on difference of data parts while initializing tables.
@@ -92,27 +87,42 @@ void loadMetadata(Context & context)
 
     /// For parallel tables loading.
     ThreadPool thread_pool(SettingMaxThreads().getAutoValue());
+    Poco::Logger * log = &Poco::Logger::get("loadMetadata");
 
-    /// Loop over databases.
+    /// Loop over databases sql files. This ensure filename ends with ".sql".
     std::map<String, String> databases;
-    Poco::DirectoryIterator dir_end;
-    for (Poco::DirectoryIterator it(path); it != dir_end; ++it)
+    auto sql_files = DatabaseLoading::listSQLFilenames(path, log);
+    for (const auto & file : sql_files)
     {
-        if (!it->isDirectory())
+        const auto db_name = unescapeForFileName(file.substr(0, file.size() - strlen(".sql")));
+        // Ignore "system" database.
+        if (db_name == SYSTEM_DATABASE)
             continue;
 
-        /// For '.svn', '.gitignore' directory and similar.
-        if (it.name().at(0) == '.')
-            continue;
-
-        if (it.name() == SYSTEM_DATABASE)
-            continue;
-
-        databases.emplace(unescapeForFileName(it.name()), it.path().toString());
+        const auto file_path = path + file;
+        databases.emplace(db_name, file_path);
     }
 
-    for (const auto & elem : databases)
-        loadDatabase(context, elem.first, elem.second, &thread_pool, has_force_restore_data_flag);
+    {
+        // Sanity check if we miss some directories that have no related sql file.
+        Poco::DirectoryIterator dir_end;
+        for (Poco::DirectoryIterator it(path); it != dir_end; ++it)
+        {
+            if (!it->isDirectory())
+                continue;
+            /// For '.svn', '.gitignore' directory and similar. Ignore "system" database.
+            if (it.name().at(0) == '.' || it.name() == SYSTEM_DATABASE)
+                continue;
+            const auto db_name = unescapeForFileName(it.name());
+            if (databases.find(db_name) != databases.end()) // already detected
+                continue;
+            LOG_WARNING(
+                log, "Directory \"" + it.path().toString() + "\" is ignored while loading metadata since we can't find its .sql file.");
+        }
+    }
+
+    for (const auto & [db_name, meta_file]: databases)
+        loadDatabase(context, db_name, meta_file, &thread_pool, has_force_restore_data_flag);
 
     thread_pool.wait();
 
@@ -120,26 +130,25 @@ void loadMetadata(Context & context)
         force_restore_data_flag_file.remove();
 }
 
-
 void loadMetadataSystem(Context & context)
 {
-    String path = context.getPath() + "metadata/" SYSTEM_DATABASE;
+    const String path = context.getPath() + "metadata/" SYSTEM_DATABASE;
     if (Poco::File(path).exists())
     {
         /// 'has_force_restore_data_flag' is true, to not fail on loading query_log table, if it is corrupted.
-        loadDatabase(context, SYSTEM_DATABASE, path, nullptr, true);
+        loadDatabase(context, SYSTEM_DATABASE, path + ".sql", nullptr, true);
     }
     else
     {
         /// Initialize system database manually
-        String global_path = context.getPath();
+        const String global_path = context.getPath();
         Poco::File(global_path + "data/" SYSTEM_DATABASE).createDirectories();
         Poco::File(global_path + "metadata/" SYSTEM_DATABASE).createDirectories();
 
+        // Keep DatabaseOrdinary for database "system". Storages in this database is not IManageableStorage.
         auto system_database = std::make_shared<DatabaseOrdinary>(SYSTEM_DATABASE, global_path + "metadata/" SYSTEM_DATABASE, context);
         context.addDatabase(SYSTEM_DATABASE, system_database);
     }
-
 }
 
-}
+} // namespace DB

@@ -19,54 +19,65 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-bool KVStore::tryApplySnapshot(RegionPtr new_region, Context & context, bool try_flush_region)
+void KVStore::tryApplySnapshot(RegionPtr new_region, Context & context)
 {
     auto & tmt = context.getTMTContext();
 
-    auto old_region = getRegion(new_region->id());
+    auto region_id = new_region->id();
+    auto old_region = getRegion(region_id);
     UInt64 old_applied_index = 0;
-    KVStore::RegionsAppliedindexMap regions_to_check;
 
+    /**
+     * When applying snapshot of a region, its range must not be overlapped with any other(different id) region's.
+     */
     if (old_region)
     {
         old_applied_index = old_region->appliedIndex();
-        if (old_applied_index >= new_region->appliedIndex())
+        if (auto new_index = new_region->appliedIndex(); old_applied_index > new_index)
         {
-            LOG_WARNING(log, new_region->toString(false) << " already has newer index " << old_applied_index);
-            return false;
+            throw Exception(std::string(__PRETTY_FUNCTION__) + ": region " + std::to_string(region_id) + " already has newer index "
+                    + std::to_string(old_applied_index) + ", should not happen",
+                ErrorCodes::LOGICAL_ERROR);
         }
+        else if (old_applied_index == new_index)
+        {
+            LOG_WARNING(log,
+                old_region->toString(false) << " already has same applied index, just ignore next process. "
+                                            << "Please check log whether server crashed after successfully applied snapshot.");
+            return;
+        }
+
+        {
+            LOG_INFO(log, old_region->toString() << " set state to Applying");
+            // Set original region state to `Applying` and any read request toward this region should be rejected because
+            // engine may delete data unsafely.
+            auto region_lock = region_manager.genRegionTaskLock(old_region->id());
+            old_region->setStateApplying();
+            tmt.getRegionTable().tryFlushRegion(old_region, false);
+            tryFlushRegionCacheInStorage(tmt, *old_region, log);
+            region_persister.persist(*old_region, region_lock);
+        }
+    }
+
+    {
+        const auto & new_range = new_region->getRange();
+        handleRegionsByRangeOverlap(new_range->comparableKeys(), [&](RegionMap region_map, const KVStoreTaskLock &) {
+            for (const auto & region : region_map)
+            {
+                if (region.first != region_id)
+                {
+                    throw Exception(std::string(__PRETTY_FUNCTION__) + ": range of region " + std::to_string(region_id)
+                            + " is overlapped with region " + std::to_string(region.first) + ", should not happen",
+                        ErrorCodes::LOGICAL_ERROR);
+                }
+            }
+        });
     }
 
     {
         Timestamp safe_point = PDClientHelper::getGCSafePointWithRetry(tmt.getPDClient(), /* ignore_cache= */ true);
 
         HandleMap handle_map;
-
-        {
-            std::stringstream ss;
-            // Get all regions whose range overlapped with the one of new_region.
-            const auto & new_range = new_region->getRange();
-
-            ss << "New range " << new_range->comparableKeys().first.key.toHex() << "," << new_range->comparableKeys().second.key.toHex()
-               << " is overlapped with ";
-
-            handleRegionsByRangeOverlap(new_range->comparableKeys(), [&](RegionMap region_map, const KVStoreTaskLock & task_lock) {
-                for (const auto & region : region_map)
-                {
-                    auto & region_delegate = region.second->makeRaftCommandDelegate(task_lock);
-                    regions_to_check.emplace(region.first, std::make_pair(region.second, region_delegate.appliedIndex()));
-                    ss << region_delegate.toString(true) << " ";
-                }
-            });
-            if (!regions_to_check.empty())
-                LOG_DEBUG(log, ss.str());
-            else
-                LOG_DEBUG(log, ss.str() << "no region");
-
-            // Get all handle with largest version in those regions.
-            for (const auto & region_info : regions_to_check)
-                new_region->compareAndUpdateHandleMaps(*region_info.second.first, handle_map);
-        }
 
         // Traverse all table in ch and update handle_maps.
         auto table_id = new_region->getMappedTableID();
@@ -112,21 +123,7 @@ bool KVStore::tryApplySnapshot(RegionPtr new_region, Context & context, bool try
         new_region->compareAndCompleteSnapshot(handle_map, safe_point);
     }
 
-    if (old_region)
-    {
-        auto info = std::make_pair(old_region, old_applied_index);
-        auto res = regions_to_check.emplace(old_region->id(), info);
-        if (!res.second)
-        {
-            if (res.first->second != info)
-            {
-                LOG_WARNING(log, old_region->toString() << " doesn't match index");
-                return false;
-            }
-        }
-    }
-
-    return onSnapshot(new_region, tmt, regions_to_check, try_flush_region);
+    onSnapshot(new_region, old_region, old_applied_index, tmt);
 }
 
 static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 peer_id)
@@ -184,9 +181,9 @@ void KVStore::handleApplySnapshot(
 
     new_region->tryPreDecodeTiKVValue(tmt);
 
-    bool status = tryApplySnapshot(new_region, tmt.getContext(), true);
+    tryApplySnapshot(new_region, tmt.getContext());
 
-    LOG_INFO(log, new_region->toString(false) << " apply snapshot " << (status ? "success" : "fail"));
+    LOG_INFO(log, new_region->toString(false) << " apply snapshot success");
 }
 
 void KVStore::handleIngestSST(UInt64 region_id, const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt)

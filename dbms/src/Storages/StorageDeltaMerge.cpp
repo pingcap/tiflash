@@ -1,13 +1,3 @@
-#include <Parsers/ASTPartition.h>
-#include <common/ThreadPool.h>
-#include <common/config_common.h>
-
-#include <random>
-
-#if USE_TCMALLOC
-#include <gperftools/malloc_extension.h>
-#endif
-
 #include <Common/TiFlashMetrics.h>
 #include <Common/formatReadable.h>
 #include <Common/typeid_cast.h>
@@ -23,6 +13,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTPartition.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
@@ -34,8 +25,13 @@
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionException.h>
+#include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <common/ThreadPool.h>
+#include <common/config_common.h>
+
+#include <random>
 
 namespace DB
 {
@@ -48,16 +44,17 @@ extern const int DIRECTORY_ALREADY_EXISTS;
 using namespace DM;
 
 StorageDeltaMerge::StorageDeltaMerge(const String & path_,
+    const String & db_engine,
     const String & db_name_,
     const String & table_name_,
     const OptionTableInfoConstRef table_info_,
     const ColumnsDescription & columns_,
     const ASTPtr & primary_expr_ast_,
+    Timestamp tombstone,
     Context & global_context_)
-    : IManageableStorage{columns_},
+    : IManageableStorage{columns_, tombstone},
       path(path_ + "/" + table_name_),
-      db_name(db_name_),
-      table_name(table_name_),
+      data_path_contains_database_name(db_engine != "TiFlash"),
       max_column_id_used(0),
       global_context(global_context_.getGlobalContext()),
       log(&Logger::get("StorageDeltaMerge"))
@@ -139,24 +136,14 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
 
     assert(!handle_column_define.name.empty());
     assert(!table_column_defines.empty());
-    store = std::make_shared<DeltaMergeStore>(global_context, path, db_name, table_name, std::move(table_column_defines),
-        std::move(handle_column_define), DeltaMergeStore::Settings());
+    store = std::make_shared<DeltaMergeStore>(global_context, path, data_path_contains_database_name, db_name_, table_name_,
+        std::move(table_column_defines), std::move(handle_column_define), DeltaMergeStore::Settings());
 }
 
 void StorageDeltaMerge::drop()
 {
     shutdown();
-#if USE_TCMALLOC
-    // Reclaim memory.
-    MallocExtension::instance()->ReleaseFreeMemory();
-#endif
-    // Remove data in extra paths;
-    for (auto & p : global_context.getExtraPaths().listPaths())
-    {
-        Poco::File file(p + "/" + db_name + "/" + table_name);
-        if (file.exists())
-            file.remove(true);
-    }
+    store->drop();
 }
 
 Block StorageDeltaMerge::buildInsertBlock(bool is_import, bool is_delete, const Block & old_block)
@@ -344,8 +331,8 @@ void throwRetryRegion(const MvccQueryInfo::RegionsQueryInfo & regions_info, Regi
 /// Check if region is invalid.
 RegionException::RegionReadStatus isValidRegion(const RegionQueryInfo & region_to_query, const RegionPtr & region_in_mem)
 {
-    if (region_in_mem->isPendingRemove())
-        return RegionException::RegionReadStatus::PENDING_REMOVE;
+    if (region_in_mem->peerState() != raft_serverpb::PeerState::Normal)
+        return RegionException::RegionReadStatus::NOT_FOUND;
 
     const auto & [version, conf_ver, key_range] = region_in_mem->dumpVersionRange();
     (void)key_range;
@@ -355,7 +342,18 @@ RegionException::RegionReadStatus isValidRegion(const RegionQueryInfo & region_t
     return RegionException::RegionReadStatus::OK;
 }
 
-RegionMap doLearnerRead(const TiDB::TableID table_id,           //
+struct RegionMapNode : RegionPtr
+{
+    UInt64 snapshot_event_flag{0};
+
+    RegionMapNode() = default;
+    RegionMapNode(const RegionPtr & region) : RegionPtr(region), snapshot_event_flag(region->getSnapshotEventFlag()) {}
+    bool operator!=(const RegionPtr & tar) const { return (tar != *this) || (tar && snapshot_event_flag != tar->getSnapshotEventFlag()); }
+};
+
+using InternalRegionMap = std::unordered_map<RegionID, RegionMapNode>;
+
+InternalRegionMap doLearnerRead(const TiDB::TableID table_id,   //
     const MvccQueryInfo::RegionsQueryInfo & regions_query_info, //
     const bool resolve_locks, const Timestamp start_ts,
     size_t concurrent_num, //
@@ -387,7 +385,7 @@ RegionMap doLearnerRead(const TiDB::TableID table_id,           //
 
     KVStorePtr & kvstore = tmt.getKVStore();
     Context & context = tmt.getContext();
-    RegionMap kvstore_region;
+    InternalRegionMap kvstore_region;
     // check region is not null and store region map.
     for (const auto & info : regions_info)
     {
@@ -466,6 +464,7 @@ RegionMap doLearnerRead(const TiDB::TableID table_id,           //
                     table_id,                                     //
                     region,                                       //
                     start_ts,                                     //
+                    region_to_query.bypass_lock_ts,               //
                     region_to_query.version,                      //
                     region_to_query.conf_version,                 //
                     region_to_query.range_in_table, log);
@@ -680,7 +679,7 @@ BlockInputStreams StorageDeltaMerge::read( //
         size_t concurrent_num = std::max<size_t>(num_streams * mvcc_query_info.concurrent, 1);
 
         // With `no_kvstore` is true, we do not do learner read
-        RegionMap regions_in_learner_read;
+        InternalRegionMap regions_in_learner_read;
         if (likely(!select_query.no_kvstore))
         {
             /// Learner read.
@@ -775,7 +774,7 @@ BlockInputStreams StorageDeltaMerge::read( //
             {
                 RegionException::RegionReadStatus status = RegionException::RegionReadStatus::OK;
                 auto region = tmt.getKVStore()->getRegion(region_query_info.region_id);
-                if (region != regions_in_learner_read[region_query_info.region_id])
+                if (regions_in_learner_read[region_query_info.region_id] != region)
                     status = RegionException::RegionReadStatus::NOT_FOUND;
                 else if (region->version() != region_query_info.version)
                 {
@@ -809,10 +808,7 @@ void StorageDeltaMerge::flushCache(const Context & context, const DM::HandleRang
     store->flushCache(context, range_to_flush);
 }
 
-void StorageDeltaMerge::mergeDelta(const Context & context)
-{
-    store->mergeDeltaAll(context);
-}
+void StorageDeltaMerge::mergeDelta(const Context & context) { store->mergeDeltaAll(context); }
 
 void StorageDeltaMerge::deleteRange(const DM::HandleRange & range_to_delete, const Settings & settings)
 {
@@ -884,11 +880,11 @@ void StorageDeltaMerge::deleteRows(const Context & context, size_t delete_rows)
 //==========================================================================================
 // DDL methods.
 //==========================================================================================
-void StorageDeltaMerge::alterFromTiDB(
-    const AlterCommands & params, const TiDB::TableInfo & table_info, const String & database_name, const Context & context)
+void StorageDeltaMerge::alterFromTiDB(const AlterCommands & params, const String & database_name, const TiDB::TableInfo & table_info,
+    const SchemaNameMapper & name_mapper, const Context & context)
 {
-    tidb_table_info = table_info;
-    alterImpl(params, database_name, table_info.name, std::optional<std::reference_wrapper<const TiDB::TableInfo>>(table_info), context);
+    alterImpl(params, database_name, name_mapper.mapTableName(table_info),
+        std::optional<std::reference_wrapper<const TiDB::TableInfo>>(table_info), context);
 }
 
 void StorageDeltaMerge::alter(
@@ -904,7 +900,7 @@ static void updateDeltaMergeTableCreateStatement(            //
     const ColumnsDescription & columns,
     const OrderedNameSet & hidden_columns,                                                         //
     const OptionTableInfoConstRef table_info_from_tidb, const ColumnDefines & store_table_columns, //
-    const Context & context);
+    Timestamp tombstone, const Context & context);
 
 void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
     const String & database_name,
@@ -918,6 +914,8 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
     cols_drop_forbidden.insert(EXTRA_HANDLE_COLUMN_NAME);
     cols_drop_forbidden.insert(VERSION_COLUMN_NAME);
     cols_drop_forbidden.insert(TAG_COLUMN_NAME);
+
+    auto tombstone = getTombstone();
 
     for (const auto & command : commands)
     {
@@ -933,6 +931,14 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
             if (cols_drop_forbidden.count(command.column_name) > 0)
                 throw Exception("Storage engine " + getName() + " doesn't support drop primary key / hidden column: " + command.column_name,
                     ErrorCodes::BAD_ARGUMENTS);
+        }
+        else if (command.type == AlterCommand::TOMBSTONE)
+        {
+            tombstone = command.tombstone;
+        }
+        else if (command.type == AlterCommand::RECOVER)
+        {
+            tombstone = 0;
         }
     }
 
@@ -965,14 +971,29 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
     // after update `new_columns` and store's table columns, we need to update create table statement,
     // so that we can restore table next time.
     updateDeltaMergeTableCreateStatement(
-        database_name, table_name_, new_columns, hidden_columns, table_info, store->getTableColumns(), context);
+        database_name, table_name_, new_columns, hidden_columns, table_info, store->getTableColumns(), tombstone, context);
     setColumns(std::move(new_columns));
+    if (table_info)
+        tidb_table_info = table_info.value();
+    setTombstone(tombstone);
 }
 
 String StorageDeltaMerge::getName() const { return MutableSupport::delta_tree_storage_name; }
 
-void StorageDeltaMerge::rename(const String & new_path_to_db, const String & new_database_name, const String & new_table_name)
+void StorageDeltaMerge::rename(
+    const String & new_path_to_db, const String & new_database_name, const String & new_table_name, const String & new_display_table_name)
 {
+    tidb_table_info.name = new_display_table_name; // update name in table info
+    // For DatabaseTiFlash, simply update store's database is OK.
+    // `store->getTableName() == new_table_name` only keep for mock test.
+    bool clean_rename = !data_path_contains_database_name && store->getTableName() == new_table_name;
+    if (likely(clean_rename))
+    {
+        store->rename(new_path_to_db, clean_rename, new_database_name, new_table_name);
+        return;
+    }
+
+    // For DatabaseOrdinary, we need to rename data path, then recreate a new store.
     const String new_path = new_path_to_db + "/" + new_table_name;
 
     if (Poco::File{new_path}.exists())
@@ -986,25 +1007,31 @@ void StorageDeltaMerge::rename(const String & new_path_to_db, const String & new
     ColumnDefine handle_column_define = store->getHandle();
     DeltaMergeStore::Settings settings = store->getSettings();
 
-    store = {};
+    // remove background tasks
+    store->shutdown();
+    // rename directories for multi disks
+    store->rename(new_path, clean_rename, new_database_name, new_table_name);
 
-    // rename path and generate a new store
-    Poco::File(path).renameTo(new_path);
-    store = std::make_shared<DeltaMergeStore>(global_context, //
-        new_path, new_database_name, new_table_name,          //
+    store = {}; // reset store object
+
+    // generate a new store
+    store = std::make_shared<DeltaMergeStore>(global_context,                          //
+        new_path, data_path_contains_database_name, new_database_name, new_table_name, //
         std::move(table_column_defines), std::move(handle_column_define), settings);
 
     path = new_path;
-    db_name = new_database_name;
-    table_name = new_table_name;
 }
+
+String StorageDeltaMerge::getTableName() const { return store->getTableName(); }
+
+String StorageDeltaMerge::getDatabaseName() const { return store->getDatabaseName(); }
 
 void updateDeltaMergeTableCreateStatement(                   //
     const String & database_name, const String & table_name, //
     const ColumnsDescription & columns,
     const OrderedNameSet & hidden_columns,                                                         //
     const OptionTableInfoConstRef table_info_from_tidb, const ColumnDefines & store_table_columns, //
-    const Context & context)
+    Timestamp tombstone, const Context & context)
 {
     /// Filter out hidden columns in the `create table statement`
     ColumnsDescription columns_without_hidden;
@@ -1041,12 +1068,24 @@ void updateDeltaMergeTableCreateStatement(                   //
             literal = std::make_shared<ASTLiteral>(Field(table_info_from_tidb->get().serialize()));
         else
             literal = std::make_shared<ASTLiteral>(Field(table_info_from_store.serialize()));
+        auto tombstone_ast = std::make_shared<ASTLiteral>(Field(tombstone));
         auto & storage_ast = typeid_cast<ASTStorage &>(ast);
         auto & args = typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments);
         if (args.children.size() == 1)
+        {
             args.children.emplace_back(literal);
+            args.children.emplace_back(tombstone_ast);
+        }
         else if (args.children.size() == 2)
+        {
             args.children.back() = literal;
+            args.children.emplace_back(tombstone_ast);
+        }
+        else if (args.children.size() == 3)
+        {
+            args.children.at(1) = literal;
+            args.children.back() = tombstone_ast;
+        }
         else
             throw Exception("Wrong arguments num:" + DB::toString(args.children.size()) + " in table: " + table_name
                     + " with engine=" + MutableSupport::delta_tree_storage_name,
@@ -1056,6 +1095,26 @@ void updateDeltaMergeTableCreateStatement(                   //
     context.getDatabase(database_name)->alterTable(context, table_name, columns_without_hidden, storage_modifier);
 }
 
+// somehow duplicated with `storage_modifier` in updateDeltaMergeTableCreateStatement ...
+void StorageDeltaMerge::modifyASTStorage(ASTStorage * storage_ast, const TiDB::TableInfo & table_info_)
+{
+    if (!storage_ast || !storage_ast->engine)
+        return;
+    auto * args = typeid_cast<ASTExpressionList *>(storage_ast->engine->arguments.get());
+    if (!args)
+        return;
+    std::shared_ptr<ASTLiteral> literal = std::make_shared<ASTLiteral>(Field(table_info_.serialize()));
+    if (args->children.size() == 1)
+        args->children.emplace_back(literal);
+    else if (args->children.size() == 2)
+        args->children.back() = literal;
+    else if (args->children.size() == 3)
+        args->children.at(1) = literal;
+    else
+        throw Exception(
+            "Wrong arguments num: " + DB::toString(args->children.size()) + " in table: " + store->getTableName() + " in modifyASTStorage",
+            ErrorCodes::BAD_ARGUMENTS);
+}
 
 BlockInputStreamPtr StorageDeltaMerge::status()
 {

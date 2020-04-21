@@ -242,13 +242,14 @@ struct Settings
     M(SettingUInt64, dt_segment_delta_small_pack_rows, 512, "Determine whether a pack in delta is small or not")\
     M(SettingUInt64, dt_segment_stable_pack_rows, DEFAULT_MERGE_BLOCK_SIZE, "Expected stable pack rows in DeltaTree Engine")\
     M(SettingUInt64, dt_insert_max_rows, 0, "Max rows of insert blocks when write into DeltaTree Engine. By default 0 means no limit.")\
-    M(SettingBool, dt_enable_rough_set_filter, true, "Whether to parse where expression as Rough Set Index filter or not") \
+    M(SettingBool, dt_enable_rough_set_filter, false, "Whether to parse where expression as Rough Set Index filter or not") \
     M(SettingBool, dt_raw_filter_range, true, "Do range filter or not when read data in raw mode in DeltaTree Engine.")\
     M(SettingBool, dt_read_delta_only, false, "Only read delta data in DeltaTree Engine.")\
     M(SettingBool, dt_read_stable_only, false, "Only read stable data in DeltaTree Engine.")\
     M(SettingBool, dt_enable_logical_split, true, "Enable logical split or not in DeltaTree Engine.")\
     M(SettingBool, dt_flush_after_write, false, "Flush cache or not after write in DeltaTree Engine.")\
     M(SettingBool, dt_enable_skippable_place, true, "Enable skippable place or not in DeltaTree Engine.")\
+    M(SettingBool, dt_enable_stable_column_cache, true, "Enable column cache for StorageDeltaMerge.") \
     M(SettingUInt64, dt_storage_pool_log_write_slots, 4, "Max write concurrency for each StoragePool.log") \
     M(SettingUInt64, dt_storage_pool_data_write_slots, 1, "Max write concurrency for each StoragePool.data") \
     M(SettingUInt64, dt_storage_pool_meta_write_slots, 2, "Max write concurrency for each StoragePool.meta") \

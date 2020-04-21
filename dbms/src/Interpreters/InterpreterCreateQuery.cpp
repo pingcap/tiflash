@@ -39,6 +39,7 @@
 #include <Databases/IDatabase.h>
 
 #include <Common/ZooKeeper/ZooKeeper.h>
+#include <Common/FailPoint.h>
 
 
 namespace DB
@@ -76,6 +77,7 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
     String database_engine_name;
     if (!create.storage)
     {
+        // Keep default database engine as "Ordinary", need to specify "ENGINE = TiFlash" if needed.
         database_engine_name = "Ordinary"; /// Default database engine.
         auto engine = std::make_shared<ASTFunction>();
         engine->name = database_engine_name;
@@ -87,8 +89,8 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
     {
         const ASTStorage & storage = *create.storage;
         const ASTFunction & engine = *storage.engine;
-        /// Currently, there are no database engines, that support any arguments.
-        if (engine.arguments || engine.parameters || storage.partition_by || storage.order_by || storage.sample_by || storage.settings)
+        /// Currently, only "TiFlash" database engine support arguments.
+        if ((engine.name != "TiFlash" && engine.arguments) || engine.parameters || storage.partition_by || storage.order_by || storage.sample_by || storage.settings)
         {
             std::stringstream ostr;
             formatAST(storage, ostr, false, false);
@@ -100,12 +102,10 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
 
     String database_name_escaped = escapeForFileName(database_name);
 
-    /// Create directories for tables metadata.
+    /// Create directories for storing all tables' metadata sql file for this database.
     String path = context.getPath();
     String metadata_path = path + "metadata/" + database_name_escaped + "/";
-    Poco::File(metadata_path).createDirectory();
-
-    DatabasePtr database = DatabaseFactory::get(database_engine_name, database_name, metadata_path, context);
+    DatabasePtr database = DatabaseFactory::get(database_name, metadata_path, create.storage, context);
 
     /// Will write file with database metadata, if needed.
     String metadata_file_tmp_path = path + "metadata/" + database_name_escaped + ".sql.tmp";
@@ -140,12 +140,29 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
         if (need_write_metadata)
             Poco::File(metadata_file_tmp_path).renameTo(metadata_file_path);
 
+        FAIL_POINT_TRIGGER_EXCEPTION(exception_between_create_database_meta_and_directory);
+        // meta file (not temporary) of database exists means create database success, 
+        // we need to create meta directory for it if not exists.
+        if (auto db_meta_path = Poco::File(database->getMetadataPath()); !db_meta_path.exists())
+        {
+            db_meta_path.createDirectory();
+        }
+
         database->loadTables(context, thread_pool, has_force_restore_data_flag);
     }
     catch (...)
     {
+        if (context.tryGetDatabase(database_name) != nullptr)
+        {
+            // We need to detach database from context
+            context.detachDatabase(database_name);
+        }
+
         if (need_write_metadata)
-            Poco::File(metadata_file_tmp_path).remove();
+        {
+            if (auto file = Poco::File(metadata_file_tmp_path); file.exists())
+                file.remove();
+        }
 
         throw;
     }
@@ -527,6 +544,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
             data_path,
             table_name,
             database_name,
+            database->getEngineName(),
             context,
             context.getGlobalContext(),
             columns,

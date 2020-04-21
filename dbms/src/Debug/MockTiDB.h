@@ -1,12 +1,12 @@
 #pragma once
 
-#include <atomic>
-
 #include <Storages/ColumnsDescription.h>
 #include <Storages/Transaction/SchemaGetter.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
+
+#include <atomic>
 
 namespace DB
 {
@@ -29,9 +29,10 @@ public:
         friend class MockTiDB;
 
     public:
-        Table(const String & database_name, const String & table_name, TiDB::TableInfo && table_info);
+        Table(const String & database_name, DatabaseID database_id, const String & table_name, TiDB::TableInfo && table_info);
 
         TableID id() { return table_info.id; }
+        DatabaseID dbID() { return database_id; }
 
         ColumnID allocColumnID() { return ++col_id; }
 
@@ -49,14 +50,15 @@ public:
 
     private:
         const String database_name;
+        DatabaseID database_id;
         const String table_name;
         ColumnID col_id;
     };
     using TablePtr = std::shared_ptr<Table>;
 
 public:
-    TableID newTable(const String & database_name, const String & table_name,
-            const ColumnsDescription & columns, Timestamp tso, const String & handle_pk_name, String engine_type);
+    TableID newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns, Timestamp tso,
+        const String & handle_pk_name, String engine_type);
 
     DatabaseID newDataBase(const String & database_name);
 

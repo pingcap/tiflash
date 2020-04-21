@@ -1,11 +1,11 @@
 #pragma once
 
-#include <memory>
-
-#include <common/logger_useful.h>
-#include <boost/noncopyable.hpp>
-
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
+#include <Storages/Transaction/Types.h>
+#include <common/logger_useful.h>
+
+#include <boost/noncopyable.hpp>
+#include <memory>
 
 namespace DB
 {
@@ -18,6 +18,16 @@ class SchemaSyncService : public std::enable_shared_from_this<SchemaSyncService>
 public:
     SchemaSyncService(Context & context_);
     ~SchemaSyncService();
+
+private:
+    bool syncSchemas();
+
+    struct GCContext
+    {
+        Timestamp last_gc_safe_point = 0;
+    } gc_context;
+
+    bool gc(Timestamp gc_safe_point);
 
 private:
     Context & context;

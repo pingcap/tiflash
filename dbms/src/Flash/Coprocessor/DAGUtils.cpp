@@ -674,7 +674,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::JsonKeys2ArgsSig, "cast"},
     //{tipb::ScalarFuncSig::JsonValidStringSig, "cast"},
 
-    //{tipb::ScalarFuncSig::DateFormatSig, "cast"},
+    {tipb::ScalarFuncSig::DateFormatSig, "dateFormat"},
     //{tipb::ScalarFuncSig::DateLiteral, "cast"},
     //{tipb::ScalarFuncSig::DateDiff, "cast"},
     //{tipb::ScalarFuncSig::NullTimeDiff, "cast"},
@@ -791,8 +791,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::StrToDateDate, "cast"},
     //{tipb::ScalarFuncSig::StrToDateDatetime, "cast"},
     //{tipb::ScalarFuncSig::StrToDateDuration, "cast"},
-    //{tipb::ScalarFuncSig::FromUnixTime1Arg, "cast"},
-    //{tipb::ScalarFuncSig::FromUnixTime2Arg, "cast"},
+    {tipb::ScalarFuncSig::FromUnixTime1Arg, "fromUnixTime"}, {tipb::ScalarFuncSig::FromUnixTime2Arg, "fromUnixTime"},
     //{tipb::ScalarFuncSig::ExtractDatetime, "cast"},
     //{tipb::ScalarFuncSig::ExtractDuration, "cast"},
 

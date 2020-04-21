@@ -29,6 +29,7 @@
 
 #include <Poco/DirectoryIterator.h>
 #include <Poco/File.h>
+#include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
 
@@ -47,8 +48,8 @@ namespace ErrorCodes
 }
 
 
-StorageMergeTree::StorageMergeTree(
-    const String & path_,
+StorageMergeTree::StorageMergeTree(const String & path_,
+    const String & db_engine_,
     const String & database_name_,
     const String & table_name_,
     const ColumnsDescription & columns_,
@@ -62,16 +63,23 @@ StorageMergeTree::StorageMergeTree(
     const ASTPtr & sampling_expression_, /// nullptr, if sampling is not supported.
     const MergeTreeData::MergingParams & merging_params_,
     const MergeTreeSettings & settings_,
-    bool has_force_restore_data_flag)
-    : IManageableStorage{}, path(path_), database_name(database_name_), table_name(table_name_), full_path(path + escapeForFileName(table_name) + '/'),
-    context(context_), background_pool(context_.getBackgroundPool()),
-    data(database_name, table_name,
-         full_path, columns_,
-         context_, primary_expr_ast_, secondary_sorting_expr_list_, date_column_name, partition_expr_ast_,
-         sampling_expression_, merging_params_,
-         settings_, false, attach),
-    reader(data), writer(data), merger(data, context.getBackgroundPool()),
-    log(&Logger::get(database_name_ + "." + table_name + " (StorageMergeTree)"))
+    bool has_force_restore_data_flag,
+    Timestamp tombstone)
+    : IManageableStorage{tombstone},
+      path(path_),
+      data_path_contains_database_name(db_engine_ != "TiFlash"),
+      database_name(database_name_),
+      table_name(table_name_),
+      full_path(path + escapeForFileName(table_name) + '/'),
+      context(context_),
+      background_pool(context_.getBackgroundPool()),
+      data(database_name, table_name, full_path, data_path_contains_database_name, columns_, context_, primary_expr_ast_,
+          secondary_sorting_expr_list_, date_column_name, partition_expr_ast_, sampling_expression_, merging_params_, settings_, false,
+          attach),
+      reader(data),
+      writer(data),
+      merger(data, context.getBackgroundPool()),
+      log(&Logger::get(database_name_ + "." + table_name + " (StorageMergeTree)"))
 {
     *data.table_info = table_info_;
     if (path_.empty())
@@ -291,7 +299,8 @@ void StorageMergeTree::drop()
     data.dropAllData();
 }
 
-void StorageMergeTree::rename(const String & new_path_to_db, const String & new_database_name, const String & new_table_name)
+void StorageMergeTree::rename(
+    const String & new_path_to_db, const String & new_database_name, const String & new_table_name, const String & new_display_table_name)
 {
     std::string new_full_path = new_path_to_db + escapeForFileName(new_table_name) + '/';
 
@@ -299,14 +308,21 @@ void StorageMergeTree::rename(const String & new_path_to_db, const String & new_
 
     for (auto & path : context.getPartPathSelector().getAllPath())
     {
-        std::string orig_parts_path = path + "data/" + escapeForFileName(data.database_name) + '/' + escapeForFileName(data.table_name) + '/';
-        std::string new_parts_path = path + "data/" + escapeForFileName(new_database_name) + '/' + escapeForFileName(new_table_name) + '/';
-        if (Poco::File{new_parts_path}.exists())
-            throw Exception{
-                    "Target path already exists: " + new_parts_path,
-                    /// @todo existing target can also be a file, not directory
-                    ErrorCodes::DIRECTORY_ALREADY_EXISTS};
-        Poco::File(orig_parts_path).renameTo(new_parts_path);
+        std::string orig_parts_path = path + "data/";
+        std::string new_parts_path = path + "data/";
+        if (data_path_contains_database_name)
+        {
+            orig_parts_path += escapeForFileName(data.database_name) + '/';
+            new_parts_path += escapeForFileName(new_database_name) + '/';
+        }
+        orig_parts_path += escapeForFileName(data.table_name) + '/';
+        new_parts_path += escapeForFileName(new_table_name) + '/';
+        if (data_path_contains_database_name && Poco::File{new_parts_path}.exists())
+            throw Exception{"Target path already exists: " + new_parts_path,
+                /// @todo existing target can also be a file, not directory
+                ErrorCodes::DIRECTORY_ALREADY_EXISTS};
+        else
+            Poco::File(orig_parts_path).renameTo(new_parts_path);
     }
     context.dropCaches();
     path = new_path_to_db;
@@ -316,6 +332,7 @@ void StorageMergeTree::rename(const String & new_path_to_db, const String & new_
 
     data.table_name = new_table_name;
     data.database_name = new_database_name;
+    data.table_info->name = new_display_table_name; // update name in table info
     /// NOTE: Logger names are not updated.
 }
 
@@ -330,11 +347,12 @@ void StorageMergeTree::alter(
 
 void StorageMergeTree::alterFromTiDB(
     const AlterCommands & params,
-    const TiDB::TableInfo & table_info,
     const String & database_name,
+    const TiDB::TableInfo & table_info,
+    const SchemaNameMapper & name_mapper,
     const Context & context)
 {
-    alterInternal(params, database_name, table_info.name, std::optional<std::reference_wrapper<const TableInfo>>(table_info), context);
+    alterInternal(params, database_name, name_mapper.mapTableName(table_info), std::optional<std::reference_wrapper<const TableInfo>>(table_info), context);
 }
 
 void StorageMergeTree::alterInternal(
@@ -361,6 +379,9 @@ void StorageMergeTree::alterInternal(
     ASTPtr new_primary_key_ast = data.primary_expr_ast;
 
     bool rename_column = false;
+
+    std::optional<Timestamp> tombstone = std::nullopt;
+
     for (const AlterCommand & param : params)
     {
         if (param.type == AlterCommand::MODIFY_PRIMARY_KEY)
@@ -381,6 +402,14 @@ void StorageMergeTree::alterInternal(
             {
                 throw Exception("There is an internal error for rename columns, params size is " + std::to_string(params.size()) + ", but should be 1", ErrorCodes::LOGICAL_ERROR);
             }
+        }
+        else if (param.type == AlterCommand::TOMBSTONE)
+        {
+            tombstone = param.tombstone;
+        }
+        else if (param.type == AlterCommand::RECOVER)
+        {
+            tombstone = 0;
         }
     }
 
@@ -403,7 +432,7 @@ void StorageMergeTree::alterInternal(
 
     auto table_hard_lock = lockStructureForAlter(__PRETTY_FUNCTION__);
 
-    IDatabase::ASTModifier storage_modifier = [primary_key_is_modified, new_primary_key_ast, table_info] (IAST & ast)
+    IDatabase::ASTModifier storage_modifier = [primary_key_is_modified, new_primary_key_ast, table_info, tombstone] (IAST & ast)
     {
         auto & storage_ast = typeid_cast<ASTStorage &>(ast);
 
@@ -422,7 +451,16 @@ void StorageMergeTree::alterInternal(
         if (table_info)
         {
             auto literal = std::make_shared<ASTLiteral>(Field(table_info->get().serialize()));
-            typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments).children.back() = literal;
+            typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments).children.at(2) = literal;
+        }
+
+        if (tombstone)
+        {
+            auto tombstone_ast = std::make_shared<ASTLiteral>(Field(tombstone.value()));
+            if (storage_ast.engine->arguments->children.size() == 3)
+                typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments).children.emplace_back(tombstone_ast);
+            else
+                typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments).children.at(3) = tombstone_ast;
         }
     };
 
@@ -438,6 +476,8 @@ void StorageMergeTree::alterInternal(
     setColumns(std::move(new_columns));
     if (table_info)
         setTableInfo(table_info->get());
+    if (tombstone)
+        setTombstone(tombstone.value());
 
     if (new_primary_key_ast != nullptr)
     {
@@ -451,6 +491,15 @@ void StorageMergeTree::alterInternal(
 
     if (primary_key_is_modified)
         data.loadDataParts(false);
+}
+
+// somehow duplicated with `storage_modifier` in alterInternal ...
+void StorageMergeTree::modifyASTStorage(ASTStorage * storage_ast, const TiDB::TableInfo & table_info_)
+{
+    if (!storage_ast || !storage_ast->engine || !storage_ast->engine->arguments)
+        return;
+    auto literal = std::make_shared<ASTLiteral>(Field(table_info_.serialize()));
+    typeid_cast<ASTExpressionList &>(*storage_ast->engine->arguments).children.at(2) = literal;
 }
 
 /// While exists, marks parts as 'currently_merging' and reserves free space on filesystem.

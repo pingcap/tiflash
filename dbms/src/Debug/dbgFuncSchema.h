@@ -23,5 +23,9 @@ void dbgFuncRefreshSchemas(Context & context, const ASTs & args, DBGInvoker::Pri
 //   ./storages-client.sh "DBGInvoke reset_schemas()"
 void dbgFuncResetSchemas(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
+// Check if table is tombstone.
+// Usage:
+//   ./storage-client.sh "DBGInvoke is_tombstone(db_name, table_name)"
+void dbgFuncIsTombstone(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
 } // namespace DB

@@ -56,7 +56,7 @@ public:
 
         auto next(bool need_value = true) { return store->readDataByWriteIt(write_map_it++, need_value); }
 
-        LockInfoPtr getLockInfo(UInt64 start_ts) { return store->getLockInfo(start_ts); }
+        LockInfoPtr getLockInfo(const RegionLockReadQuery & query) { return store->getLockInfo(query); }
 
         size_t writeMapSize() const { return write_map_size; }
 
@@ -114,6 +114,9 @@ public:
     bool isPeerRemoved() const;
     raft_serverpb::PeerState peerState() const;
 
+    bool isMerging() const;
+    void setStateApplying();
+
     size_t dataSize() const;
     size_t writeCFCount() const;
     std::string dataInfo() const;
@@ -156,8 +159,6 @@ public:
     /// Only can be used for applying snapshot. only can be called by single thread.
     /// Try to fill record with delmark if it exists in ch but has been remove by GC in leader.
     void compareAndCompleteSnapshot(HandleMap & handle_map, const Timestamp safe_point);
-    /// Traverse all data in source_region and get handle with largest version.
-    void compareAndUpdateHandleMaps(const Region & source_region, HandleMap & handle_map);
 
     RegionRaftCommandDelegate & makeRaftCommandDelegate(const KVStoreTaskLock &);
     metapb::Region getMetaRegion() const;
@@ -168,6 +169,8 @@ public:
     TableID getMappedTableID() const;
     TiFlashApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt);
     void handleIngestSST(const SnapshotViewArray snaps, UInt64 index, UInt64 term);
+
+    UInt64 getSnapshotEventFlag() const { return snapshot_event_flag; }
 
 private:
     Region() = delete;
@@ -182,9 +185,10 @@ private:
     RegionDataReadInfo readDataByWriteIt(const RegionData::ConstWriteCFIter & write_it, bool need_value = true) const;
     RegionData::WriteCFIter removeDataByWriteIt(const RegionData::WriteCFIter & write_it);
 
-    LockInfoPtr getLockInfo(UInt64 start_ts) const;
+    LockInfoPtr getLockInfo(const RegionLockReadQuery & query) const;
 
     RegionPtr splitInto(RegionMeta && meta);
+    void setPeerState(raft_serverpb::PeerState state);
 
 private:
     RegionData data;
@@ -204,6 +208,8 @@ private:
     Logger * log;
 
     const TableID mapped_table_id;
+
+    std::atomic<UInt64> snapshot_event_flag{1};
 };
 
 class RegionRaftCommandDelegate : public Region, private boost::noncopyable

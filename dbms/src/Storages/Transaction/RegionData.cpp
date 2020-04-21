@@ -110,8 +110,7 @@ RegionDataReadInfo RegionData::readDataByWriteIt(const ConstWriteCFIter & write_
     return std::make_tuple(handle, write_type, ts, short_value);
 }
 
-// https://github.com/tikv/tikv/blob/master/components/txn_types/src/lock.rs#L179-L203
-LockInfoPtr RegionData::getLockInfo(Timestamp start_ts) const
+LockInfoPtr RegionData::getLockInfo(const RegionLockReadQuery & query) const
 {
     enum LockType : UInt8
     {
@@ -125,15 +124,18 @@ LockInfoPtr RegionData::getLockInfo(Timestamp start_ts) const
     {
         std::ignore = handle;
 
-        const auto & [tikv_key, tikv_val, decoded_val] = value;
-        const auto & [lock_type, primary, ts, ttl, data] = decoded_val;
+        const auto & [tikv_key, tikv_val, decoded_val, decoded_key] = value;
+        const auto & [lock_type, primary, ts, ttl] = decoded_val;
+        std::ignore = tikv_key;
         std::ignore = tikv_val;
-        std::ignore = data;
 
-        if (ts > start_ts || lock_type == Lock || lock_type == Pessimistic)
+        if (ts > query.read_tso || lock_type == Lock || lock_type == Pessimistic)
             continue;
 
-        return std::make_unique<LockInfo>(LockInfo{primary, ts, RecordKVFormat::decodeTiKVKey(*tikv_key), ttl});
+        if (query.bypass_lock_ts && query.bypass_lock_ts->count(ts))
+            continue;
+
+        return std::make_unique<LockInfo>(LockInfo{primary, ts, *decoded_key, ttl});
     }
 
     return nullptr;
