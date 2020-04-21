@@ -57,7 +57,7 @@ template <bool batch>
 void DAGDriver<batch>::execute()
 try
 {
-    DAGContext dag_context(dag_request.executors_size());
+    DAGContext dag_context;
     DAGQuerySource dag(context, dag_context, regions, dag_request, writer, batch);
 
     BlockIO streams = executeQuery(dag, context, internal, QueryProcessingStage::Complete);
@@ -90,13 +90,13 @@ try
     if (!dag_request.has_collect_execution_summaries() || !dag_request.collect_execution_summaries())
         return;
     // add ExecutorExecutionSummary info
-    for (auto & p_streams : dag_context.profile_streams_list)
+    for (auto & p : dag_context.profile_streams_map)
     {
         auto * executeSummary = dag_response->add_execution_summaries();
         UInt64 time_processed_ns = 0;
         UInt64 num_produced_rows = 0;
         UInt64 num_iterations = 0;
-        for (auto & streamPtr : p_streams)
+        for (auto & streamPtr : p.second)
         {
             if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streamPtr.get()))
             {
@@ -108,6 +108,7 @@ try
         executeSummary->set_time_processed_ns(time_processed_ns);
         executeSummary->set_num_produced_rows(num_produced_rows);
         executeSummary->set_num_iterations(num_iterations);
+        executeSummary->set_executor_id(p.first);
     }
 }
 catch (const RegionException & e)

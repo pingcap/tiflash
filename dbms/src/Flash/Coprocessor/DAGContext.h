@@ -11,8 +11,8 @@ class Context;
 /// A context used to track the information that needs to be passed around during DAG planning.
 struct DAGContext
 {
-    DAGContext(size_t profile_list_size) { profile_streams_list.resize(profile_list_size); };
-    std::vector<BlockInputStreams> profile_streams_list;
+    DAGContext(){};
+    std::map<String, BlockInputStreams> profile_streams_map;
 };
 
 } // namespace DB
