@@ -98,7 +98,6 @@ void DAGBlockOutputStream<true>::encodeChunkToDAGResponse()
     auto dag_chunk = dag_response.add_chunks();
     dag_chunk->set_rows_data(chunk_codec_stream->getString());
     chunk_codec_stream->clear();
-    dag_response.add_output_counts(current_records_num);
     current_records_num = 0;
     std::string dag_data;
     dag_response.SerializeToString(&dag_data);
