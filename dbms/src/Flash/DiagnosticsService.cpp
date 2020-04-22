@@ -10,7 +10,7 @@
 #include <regex>
 #include <thread>
 
-#ifdef __unix__
+#ifdef __linux__
 // #include <arpa/inet.h>
 // #include <ifaddrs.h>
 // #include <linux/if_packet.h>
@@ -281,6 +281,7 @@ void getCacheSize(const uint & level, size_t & size, size_t & line_size)
 std::vector<DiagnosticsService::Disk> getAllDisks()
 {
     std::vector<DiagnosticsService::Disk> disks;
+#ifdef __linux__
     {
         Poco::File mount_file("/proc/mounts");
         if (!mount_file.exists())
@@ -327,7 +328,7 @@ std::vector<DiagnosticsService::Disk> getAllDisks()
             disks.emplace_back(std::move(disk));
         }
     }
-
+#endif
     return disks;
 }
 
