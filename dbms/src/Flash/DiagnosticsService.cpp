@@ -1,4 +1,4 @@
-#include "DiagnosticsService.h"
+#include <Flash/DiagnosticsService.h>
 #include <Common/Exception.h>
 
 #include <Poco/File.h>
