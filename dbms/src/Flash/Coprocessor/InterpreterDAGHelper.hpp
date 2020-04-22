@@ -51,13 +51,18 @@ std::tuple<std::optional<std::unordered_map<RegionID, const RegionInfo &>>, Regi
             info.region_id = id;
             info.version = r.region_version;
             info.conf_version = r.region_conf_version;
+            info.range_in_table = current_region->getHandleRangeByTable(table_id);
             for (const auto & p : r.key_ranges)
             {
                 TiKVRange::Handle start = TiKVRange::getRangeHandle<true>(p.first, table_id);
                 TiKVRange::Handle end = TiKVRange::getRangeHandle<false>(p.second, table_id);
-                info.required_handle_ranges.emplace_back(std::make_pair(start, end));
+                auto range = std::make_pair(start, end);
+                if (range.first < info.range_in_table.first || range.second > info.range_in_table.second)
+                    throw Exception(
+                        "Income key ranges is illegal for region: " + std::to_string(r.region_id), ErrorCodes::COP_BAD_DAG_REQUEST);
+
+                info.required_handle_ranges.emplace_back(range);
             }
-            info.range_in_table = current_region->getHandleRangeByTable(table_id);
             info.bypass_lock_ts = r.bypass_lock_ts;
         }
         mvcc_info.regions_query_info.emplace_back(std::move(info));

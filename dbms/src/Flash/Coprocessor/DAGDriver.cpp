@@ -86,7 +86,7 @@ try
     {
         LOG_DEBUG(log,
             __PRETTY_FUNCTION__ << ": dag request with encode cost: " << p_stream->getProfileInfo().execution_time / (double)1000000000
-                                << " seconds.");
+                                << " seconds, produce " << p_stream->getProfileInfo().rows << " rows.");
     }
 
     if (!dag_request.has_collect_execution_summaries() || !dag_request.collect_execution_summaries())
