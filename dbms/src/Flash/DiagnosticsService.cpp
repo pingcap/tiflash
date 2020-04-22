@@ -90,6 +90,7 @@ DiagnosticsService::NICInfo getNICInfo()
     if (!net_dir.exists())
     {
         LOG_WARNING(&Logger::get("DiagnosticsService"), "/sys/class/net doesn't exist");
+        return nic_info;
     }
 
     std::vector<Poco::File> devices;
@@ -142,6 +143,7 @@ DiagnosticsService::IOInfo getIOInfo()
     if (!io_dir.exists())
     {
         LOG_WARNING(&Logger::get("DiagnosticsService"), "/sys/block doesn't exist");
+        return io_info;
     }
 
     std::vector<Poco::File> devices;
