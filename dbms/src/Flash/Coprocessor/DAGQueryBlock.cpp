@@ -187,8 +187,7 @@ void DAGQueryBlock::collectAllPossibleChildrenJoinSubqueryAlias(std::unordered_m
     for (auto & child : children)
     {
         child->collectAllPossibleChildrenJoinSubqueryAlias(result);
-        all_qb_join_subquery_alias.insert(all_qb_join_subquery_alias.end(),
-            result[child->id].begin(), result[child->id].end());
+        all_qb_join_subquery_alias.insert(all_qb_join_subquery_alias.end(), result[child->id].begin(), result[child->id].end());
     }
     all_qb_join_subquery_alias.push_back(qb_join_subquery_alias);
     result[id] = all_qb_join_subquery_alias;

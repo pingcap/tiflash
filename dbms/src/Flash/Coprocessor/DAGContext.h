@@ -8,7 +8,8 @@ namespace DB
 
 class Context;
 
-struct ProfileStreamsInfo {
+struct ProfileStreamsInfo
+{
     UInt32 qb_id;
     BlockInputStreams input_streams;
 };

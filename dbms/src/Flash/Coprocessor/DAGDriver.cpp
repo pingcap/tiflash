@@ -107,7 +107,8 @@ try
         }
         for (auto & join_alias : dag_context.qb_id_to_join_alias_map[p.second.qb_id])
         {
-            if (dag_context.profile_streams_map_for_join_build_side.find(join_alias) != dag_context.profile_streams_map_for_join_build_side.end())
+            if (dag_context.profile_streams_map_for_join_build_side.find(join_alias)
+                != dag_context.profile_streams_map_for_join_build_side.end())
             {
                 UInt64 process_time_for_build = 0;
                 for (auto & join_stream : dag_context.profile_streams_map_for_join_build_side[join_alias])
