@@ -108,7 +108,8 @@ try
         executeSummary->set_time_processed_ns(time_processed_ns);
         executeSummary->set_num_produced_rows(num_produced_rows);
         executeSummary->set_num_iterations(num_iterations);
-        executeSummary->set_executor_id(p.first);
+        if (dag_request.has_root_executor())
+            executeSummary->set_executor_id(p.first);
     }
 }
 catch (const RegionException & e)

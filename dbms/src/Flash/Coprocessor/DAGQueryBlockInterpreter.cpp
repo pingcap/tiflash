@@ -1053,15 +1053,17 @@ void DAGQueryBlockInterpreter::recordProfileStreams(Pipeline & pipeline, const S
 }
 
 void copyExecutorTreeWithLocalTableScan(
-    tipb::DAGRequest & dag_req, const tipb::Executor * root, tipb::EncodeType encode_type, const tipb::DAGRequest org_req)
+    tipb::DAGRequest & dag_req, const tipb::Executor * root, tipb::EncodeType encode_type, const tipb::DAGRequest & org_req)
 {
     const tipb::Executor * current = root;
-    auto * exec = dag_req.add_executors();
+    auto * exec = dag_req.mutable_root_executor();
+    int i = 0;
     while (current->tp() != tipb::ExecType::TypeTableScan)
     {
         if (current->tp() == tipb::ExecType::TypeSelection)
         {
             exec->set_tp(tipb::ExecType::TypeSelection);
+            exec->set_executor_id("selection_" + std::to_string(i));
             auto * sel = exec->mutable_selection();
             for (auto const & condition : current->selection().conditions())
             {
@@ -1074,6 +1076,7 @@ void copyExecutorTreeWithLocalTableScan(
         else if (current->tp() == tipb::ExecType::TypeAggregation || current->tp() == tipb::ExecType::TypeStreamAgg)
         {
             exec->set_tp(current->tp());
+            exec->set_executor_id("aggregation_" + std::to_string(i));
             auto * agg = exec->mutable_aggregation();
             for (auto const & expr : current->aggregation().agg_func())
             {
@@ -1092,6 +1095,7 @@ void copyExecutorTreeWithLocalTableScan(
         else if (current->tp() == tipb::ExecType::TypeLimit)
         {
             exec->set_tp(current->tp());
+            exec->set_executor_id("limit_" + std::to_string(i));
             auto * limit = exec->mutable_limit();
             limit->set_limit(current->limit().limit());
             exec = limit->mutable_child();
@@ -1100,6 +1104,7 @@ void copyExecutorTreeWithLocalTableScan(
         else if (current->tp() == tipb::ExecType::TypeTopN)
         {
             exec->set_tp(current->tp());
+            exec->set_executor_id("topN_" + std::to_string(i));
             auto * topn = exec->mutable_topn();
             topn->set_limit(current->topn().limit());
             for (auto const & expr : current->topn().order_by())
@@ -1114,11 +1119,13 @@ void copyExecutorTreeWithLocalTableScan(
         {
             throw Exception("Not supported yet");
         }
+        i++;
     }
 
     if (current->tp() != tipb::ExecType::TypeTableScan)
         throw Exception("Only support copy from table scan sourced query block");
     exec->set_tp(tipb::ExecType::TypeTableScan);
+    exec->set_executor_id("tablescan_" + std::to_string(i));
     auto * new_ts = new tipb::TableScan(current->tbl_scan());
     new_ts->set_next_read_engine(tipb::EngineType::Local);
     exec->set_allocated_tbl_scan(new_ts);
