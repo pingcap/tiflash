@@ -8,4 +8,5 @@ target_link_libraries(flash_service dbms)
 
 if (ENABLE_TESTS)
     add_subdirectory (Coprocessor/tests)
+    add_subdirectory (tests)
 endif ()
