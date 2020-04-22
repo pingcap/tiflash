@@ -744,8 +744,8 @@ void DiagnosticsService::processInfo(std::vector<diagnosticspb::ServerInfoItem> 
 
     if (tp == ServerInfoType::LoadInfo || tp == ServerInfoType::All)
     {
-        io_info = getIOInfo();
-        nic_info = getNICInfo();
+        // io_info = getIOInfo();
+        // nic_info = getNICInfo();
         // Sleep 100ms to sample
         std::this_thread::sleep_for(std::chrono::microseconds(100));
     }
