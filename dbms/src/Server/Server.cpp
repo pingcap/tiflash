@@ -413,7 +413,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->setMacros(std::make_unique<Macros>(config(), "macros"));
 
     /// Initialize main config reloader.
-    auto main_config_reloader = std::make_unique<ConfigReloader>(config_path,
+    auto main_config_reloader = std::make_unique<ConfigReloader>(
+        config_path,
         [&](ConfigurationPtr config) {
             buildLoggers(*config);
             global_context->setClustersConfig(config);
@@ -432,7 +433,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (Poco::File(config_dir + users_config_path).exists())
             users_config_path = config_dir + users_config_path;
     }
-    auto users_config_reloader = std::make_unique<ConfigReloader>(users_config_path,
+    auto users_config_reloader = std::make_unique<ConfigReloader>(
+        users_config_path,
         [&](ConfigurationPtr config) { global_context->setUsersConfig(config); },
         /* already_loaded = */ false);
 
