@@ -731,6 +731,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     right_query.source = right_pipeline.firstStream();
     right_query.join = joinPtr;
     right_query.join->setSampleBlock(right_query.source->getHeader());
+    dag.getDAGContext().profile_streams_map_for_join_build_side[query_block.qb_join_subquery_alias].push_back(right_query.source);
 
     std::vector<NameAndTypePair> source_columns;
     for (const auto & p : left_streams[0]->getHeader().getNamesAndTypesList())
@@ -1046,9 +1047,10 @@ void DAGQueryBlockInterpreter::executeOrder(Pipeline & pipeline, Strings & order
 
 void DAGQueryBlockInterpreter::recordProfileStreams(Pipeline & pipeline, const String & key)
 {
+    dag.getDAGContext().profile_streams_map[key].qb_id = query_block.id;
     for (auto & stream : pipeline.streams)
     {
-        dag.getDAGContext().profile_streams_map[key].push_back(stream);
+        dag.getDAGContext().profile_streams_map[key].input_streams.push_back(stream);
     }
 }
 
@@ -1308,7 +1310,7 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     if (query_block.source->tp() == tipb::ExecType::TypeJoin)
     {
         SubqueriesForSets subquries;
-        subquries[query_block.qb_column_prefix + "join"] = right_query;
+        subquries[query_block.qb_join_subquery_alias] = right_query;
         subqueriesForSets.emplace_back(subquries);
     }
 }

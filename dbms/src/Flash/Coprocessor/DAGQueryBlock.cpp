@@ -61,7 +61,7 @@ void collectOutPutFieldTypesFromAgg(std::vector<tipb::FieldType> & field_type, c
 }
 
 DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_)
-    : id(id_), root(&root_), qb_column_prefix("__QB_" + std::to_string(id_) + "_")
+    : id(id_), root(&root_), qb_column_prefix("__QB_" + std::to_string(id_) + "_"), qb_join_subquery_alias(qb_column_prefix + "join")
 {
     const tipb::Executor * current = root;
     while (!isSourceNode(current) && current->has_executor_id())
@@ -113,7 +113,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_)
 }
 
 DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrField<tipb::Executor> & executors)
-    : id(id_), root(nullptr), qb_column_prefix("__QB_" + std::to_string(id_) + "_")
+    : id(id_), root(nullptr), qb_column_prefix("__QB_" + std::to_string(id_) + "_"), qb_join_subquery_alias(qb_column_prefix + "join")
 {
     for (int i = (int)executors.size() - 1; i >= 0; i--)
     {
@@ -121,6 +121,10 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
         {
             case tipb::ExecType::TypeTableScan:
                 assignOrThrowException(&source, &executors[i], SOURCE_NAME);
+                /// use index as the prefix for executor name so when we sort by
+                /// the executor name, it will result in the same order as it is
+                /// in the dag_request, this is needed when filling executeSummary
+                /// in DAGDriver
                 source_name = std::to_string(i) + "_tablescan";
                 break;
             case tipb::ExecType::TypeSelection:
@@ -175,6 +179,19 @@ void DAGQueryBlock::fillOutputFieldTypes()
             }
         }
     }
+}
+
+void DAGQueryBlock::collectAllPossibleChildrenJoinSubqueryAlias(std::unordered_map<UInt32, std::vector<String>> & result)
+{
+    std::vector<String> all_qb_join_subquery_alias;
+    for (auto & child : children)
+    {
+        child->collectAllPossibleChildrenJoinSubqueryAlias(result);
+        all_qb_join_subquery_alias.insert(all_qb_join_subquery_alias.end(),
+            result[child->id].begin(), result[child->id].end());
+    }
+    all_qb_join_subquery_alias.push_back(qb_join_subquery_alias);
+    result[id] = all_qb_join_subquery_alias;
 }
 
 } // namespace DB

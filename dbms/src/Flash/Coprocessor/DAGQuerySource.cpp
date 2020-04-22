@@ -32,6 +32,7 @@ DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, co
     {
         root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request.executors());
     }
+    root_query_block->collectAllPossibleChildrenJoinSubqueryAlias(dag_context.qb_id_to_join_alias_map);
     for (Int32 i : dag_request.output_offsets())
         root_query_block->output_offsets.push_back(i);
     if (root_query_block->aggregation != nullptr)

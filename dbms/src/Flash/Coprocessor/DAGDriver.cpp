@@ -96,13 +96,26 @@ try
         UInt64 time_processed_ns = 0;
         UInt64 num_produced_rows = 0;
         UInt64 num_iterations = 0;
-        for (auto & streamPtr : p.second)
+        for (auto & streamPtr : p.second.input_streams)
         {
             if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streamPtr.get()))
             {
                 time_processed_ns = std::max(time_processed_ns, p_stream->getProfileInfo().execution_time);
                 num_produced_rows += p_stream->getProfileInfo().rows;
                 num_iterations += p_stream->getProfileInfo().blocks;
+            }
+        }
+        for (auto & join_alias : dag_context.qb_id_to_join_alias_map[p.second.qb_id])
+        {
+            if (dag_context.profile_streams_map_for_join_build_side.find(join_alias) != dag_context.profile_streams_map_for_join_build_side.end())
+            {
+                UInt64 process_time_for_build = 0;
+                for (auto & join_stream : dag_context.profile_streams_map_for_join_build_side[join_alias])
+                {
+                    if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(join_stream.get()))
+                        process_time_for_build = std::max(process_time_for_build, p_stream->getProfileInfo().execution_time);
+                }
+                time_processed_ns += process_time_for_build;
             }
         }
         executeSummary->set_time_processed_ns(time_processed_ns);
