@@ -17,15 +17,15 @@ namespace DB
 /// Serializes the stream of blocks in TiDB DAG response format.
 /// TODO: May consider using some parallelism.
 /// TODO: Consider using output schema in DAG request, do some conversion or checking between DAG schema and block schema.
-template<bool streaming>
+template <bool streaming>
 class DAGBlockOutputStream : public IBlockOutputStream
 {
 public:
     DAGBlockOutputStream(tipb::SelectResponse * response_, Int64 records_per_chunk_, tipb::EncodeType encodeType_,
         std::vector<tipb::FieldType> result_field_types, Block && header_);
 
-    DAGBlockOutputStream(::grpc::ServerWriter<::coprocessor::BatchResponse> * writer, Int64 records_per_chunk_, tipb::EncodeType encodeType_,
-                         std::vector<tipb::FieldType> result_field_types, Block && header_);
+    DAGBlockOutputStream(::grpc::ServerWriter<::coprocessor::BatchResponse> * writer, Int64 records_per_chunk_,
+        tipb::EncodeType encodeType_, std::vector<tipb::FieldType> result_field_types, Block && header_);
 
     Block getHeader() const override { return header; }
     void write(const Block & block) override;

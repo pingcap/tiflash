@@ -86,7 +86,17 @@ try
     {
         LOG_DEBUG(log,
             __PRETTY_FUNCTION__ << ": dag request with encode cost: " << p_stream->getProfileInfo().execution_time / (double)1000000000
-                                << " seconds, produce " << p_stream->getProfileInfo().rows << " rows.");
+                                << " seconds, produce " << p_stream->getProfileInfo().rows << " rows, " << p_stream->getProfileInfo().bytes
+                                << " bytes.");
+
+        if constexpr (!batch)
+        {
+            // Under some test cases, there may be dag response whose size is bigger than INT_MAX, and GRPC can not limit it.
+            // Throw exception to prevent receiver from getting wrong response.
+            if (p_stream->getProfileInfo().bytes > std::numeric_limits<int>::max())
+                throw Exception(
+                    "DAG response is too big, please check config about region size or region merge scheduler", ErrorCodes::LOGICAL_ERROR);
+        }
     }
 
     if (!dag_request.has_collect_execution_summaries() || !dag_request.collect_execution_summaries())
