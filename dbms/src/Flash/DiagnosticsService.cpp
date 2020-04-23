@@ -1,4 +1,4 @@
-#include "DiagnosticsService.h"
+#include <Flash/DiagnosticsService.h>
 #include <Common/Exception.h>
 
 #include <Poco/File.h>
@@ -10,7 +10,7 @@
 #include <regex>
 #include <thread>
 
-#ifdef __unix__
+#ifdef __linux__
 // #include <arpa/inet.h>
 // #include <ifaddrs.h>
 // #include <linux/if_packet.h>
@@ -37,7 +37,7 @@ namespace
 {
 
 static constexpr uint KB = 1024;
-static constexpr uint MB = 1024 * 1024;
+// static constexpr uint MB = 1024 * 1024;
 
 DiagnosticsService::AvgLoad getAvgLoad()
 {
@@ -90,6 +90,7 @@ DiagnosticsService::NICInfo getNICInfo()
     if (!net_dir.exists())
     {
         LOG_WARNING(&Logger::get("DiagnosticsService"), "/sys/class/net doesn't exist");
+        return nic_info;
     }
 
     std::vector<Poco::File> devices;
@@ -142,6 +143,7 @@ DiagnosticsService::IOInfo getIOInfo()
     if (!io_dir.exists())
     {
         LOG_WARNING(&Logger::get("DiagnosticsService"), "/sys/block doesn't exist");
+        return io_info;
     }
 
     std::vector<Poco::File> devices;
@@ -279,6 +281,7 @@ void getCacheSize(const uint & level, size_t & size, size_t & line_size)
 std::vector<DiagnosticsService::Disk> getAllDisks()
 {
     std::vector<DiagnosticsService::Disk> disks;
+#ifdef __linux__
     {
         Poco::File mount_file("/proc/mounts");
         if (!mount_file.exists())
@@ -325,7 +328,7 @@ std::vector<DiagnosticsService::Disk> getAllDisks()
             disks.emplace_back(std::move(disk));
         }
     }
-
+#endif
     return disks;
 }
 
