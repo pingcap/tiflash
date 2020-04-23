@@ -1,4 +1,3 @@
-#include <DataTypes/isSupportedDataTypeCast.h>
 #include <Functions/FunctionHelpers.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <IO/ReadHelpers.h>
@@ -6,14 +5,10 @@
 #include <Storages/DeltaMerge/Delta/Pack.h>
 #include <Storages/DeltaMerge/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/HandleFilter.h>
+#include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/PathPool.h>
 
 #include <ext/scope_guard.h>
-// Some internal cpp file
-
-#include <Storages/DeltaMerge/Delta/CompactDelta.cpp>
-#include <Storages/DeltaMerge/Delta/FlushDelta.cpp>
-#include <Storages/DeltaMerge/Delta/Snapshot.cpp>
 
 namespace DB
 {
@@ -86,7 +81,8 @@ void DeltaValueSpace::checkNewPacks(const Packs & new_packs)
 // Public methods
 // ================================================
 
-DeltaValueSpace::DeltaValueSpace(PageId id_, const Packs & packs_) : id(id_), packs(packs_), log(&Logger::get("DeltaValueSpace"))
+DeltaValueSpace::DeltaValueSpace(PageId id_, const Packs & packs_)
+    : id(id_), packs(packs_), delta_index(std::make_shared<DeltaIndex>()), log(&Logger::get("DeltaValueSpace"))
 {
     setUp();
 }
@@ -278,12 +274,10 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
     if (abandoned.load(std::memory_order_relaxed))
         return false;
 
-    // If last pack has a valid cache block, then we will use the cache block;
-    // And, if last pack is mutable (haven't been saved to disk yet), we will merge the newly block into last pack.
+    // If last pack has a valid cache block, and it is mutable (haven't been saved to disk yet), we will merge the newly block into last pack.
     // Otherwise, create a new cache block and write into it.
 
-    PackPtr  mutable_pack{};
-    CachePtr cache{};
+    PackPtr mutable_pack{};
     if (!packs.empty())
     {
         auto & last_pack = packs.back();
@@ -300,7 +294,6 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
             if (!is_overflow && is_same_schema)
             {
                 // The last cache block is available
-                cache        = last_pack->cache;
                 mutable_pack = last_pack;
             }
             else
@@ -310,28 +303,9 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
         }
     }
 
-    if (!cache)
-    {
-        cache = std::make_shared<Cache>(block);
-    }
-
-    if constexpr (0)
-    {
-        if (unlikely(!checkSchema(cache->block, block)))
-        {
-            const String block_schema_str = block.dumpStructure();
-            const String cache_schema_str = cache->block.dumpStructure();
-            throw Exception("Try to append block(rows:" + DB::toString(block.rows())
-                                + ") to a cache but schema not match! block: " + block_schema_str + ", cache: " + cache_schema_str,
-                            ErrorCodes::LOGICAL_ERROR);
-        }
-    }
-
-    size_t cache_offset;
-    {
+    auto append_data_to_cache = [&](const CachePtr & cache) {
         std::scoped_lock cache_lock(cache->mutex);
 
-        cache_offset = cache->block.rows();
         for (size_t i = 0; i < cache->block.columns(); ++i)
         {
             auto & col               = block.getByPosition(i).column;
@@ -339,7 +313,7 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
             auto * mutable_cache_col = const_cast<IColumn *>(&cache_col);
             mutable_cache_col->insertRangeFrom(*col, offset, limit);
         }
-    }
+    };
 
     size_t append_bytes = block.bytes() * ((double)limit / block.rows());
     if (mutable_pack)
@@ -347,15 +321,18 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
         // Merge into last pack.
         mutable_pack->rows += limit;
         mutable_pack->bytes += append_bytes;
+
+        append_data_to_cache(mutable_pack->cache);
     }
     else
     {
         // Create a new pack.
-        auto pack          = std::make_shared<Pack>();
-        pack->rows         = limit;
-        pack->bytes        = append_bytes;
-        pack->cache        = cache;
-        pack->cache_offset = cache_offset;
+        auto pack   = std::make_shared<Pack>();
+        pack->rows  = limit;
+        pack->bytes = append_bytes;
+        pack->cache = std::make_shared<Cache>(block);
+
+        append_data_to_cache(pack->cache);
 
         auto last_schema = lastSchema();
         if (last_schema && checkSchema(block, *last_schema))

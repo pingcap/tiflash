@@ -15,6 +15,21 @@ namespace DB::DM
 using Snapshot    = DeltaValueSpace::Snapshot;
 using SnapshotPtr = std::shared_ptr<Snapshot>;
 
+DeltaValueSpace::Snapshot::~Snapshot()
+{
+    if (is_update)
+    {
+        bool v = true;
+        if (!delta->is_updating.compare_exchange_strong(v, false))
+        {
+            Logger * logger = &Logger::get("DeltaValueSpace::Snapshot");
+            LOG_ERROR(logger,
+                      "!!!=========================delta [" << delta->getId()
+                                                            << "] is expected to be updating=========================!!!");
+        }
+    }
+}
+
 SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool is_update)
 {
     if (is_update)
@@ -38,6 +53,8 @@ SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool is_u
     snap->rows         = rows;
     snap->deletes      = deletes;
     snap->packs.reserve(packs.size());
+
+    snap->shared_delta_index = delta_index;
 
     if (is_update)
     {
@@ -204,8 +221,7 @@ size_t DeltaValueSpace::Snapshot::read(const HandleRange & range, MutableColumns
     auto [end_pack_index, rows_end_in_end_pack]       = findPack(pack_rows_end, end);
 
     size_t actually_read = 0;
-    size_t pack_index    = start_pack_index;
-    for (; pack_index <= end_pack_index && pack_index < packs.size(); ++pack_index)
+    for (size_t pack_index = start_pack_index; pack_index <= end_pack_index && pack_index < packs.size(); ++pack_index)
     {
         size_t rows_start_in_pack = pack_index == start_pack_index ? rows_start_in_start_pack : 0;
         size_t rows_end_in_pack   = pack_index == end_pack_index ? rows_end_in_end_pack : pack_rows[pack_index];
@@ -307,6 +323,44 @@ BlockOrDeletes DeltaValueSpace::Snapshot::getMergeBlocks(size_t rows_begin, size
     }
 
     return res;
+}
+
+bool DeltaValueSpace::Snapshot::shouldPlace(const DMContext &   context,
+                                            DeltaIndexPtr       my_delta_index,
+                                            const HandleRange & segment_range,
+                                            const HandleRange & relevant_range,
+                                            UInt64              max_version)
+{
+    auto [placed_rows, placed_delete_ranges] = my_delta_index->getPlacedStatus();
+
+    // Already placed.
+    if (placed_rows >= rows && placed_delete_ranges == deletes)
+        return false;
+
+    if (relevant_range.all() || relevant_range == segment_range //
+        || rows - placed_rows > context.delta_cache_limit_rows  //
+        || placed_delete_ranges != deletes)
+        return true;
+
+    auto [start_pack_index, rows_start_in_start_pack] = findPack(pack_rows_end, placed_rows);
+
+    for (size_t pack_index = start_pack_index; pack_index < packs.size(); ++pack_index)
+    {
+        size_t rows_start_in_pack = pack_index == start_pack_index ? rows_start_in_start_pack : 0;
+        size_t rows_end_in_pack   = pack_rows[pack_index];
+
+        auto & columns          = getColumnsOfPack(pack_index, /* handle and version */ 2);
+        auto & handle_col_data  = toColumnVectorData<Handle>(columns[0]);
+        auto & version_col_data = toColumnVectorData<UInt64>(columns[1]);
+
+        for (auto i = rows_start_in_pack; i < rows_end_in_pack; ++i)
+        {
+            if (version_col_data[i] <= max_version && relevant_range.check(handle_col_data[i]))
+                return true;
+        }
+    }
+
+    return false;
 }
 
 } // namespace DB::DM
