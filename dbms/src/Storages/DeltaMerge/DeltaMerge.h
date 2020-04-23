@@ -29,14 +29,6 @@ private:
     using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
     using SharedLock         = std::shared_lock<std::shared_mutex>;
 
-    struct IndexEntry
-    {
-        UInt64 sid;
-        UInt16 type;
-        UInt32 count;
-        UInt64 value;
-    };
-
     SkippableBlockInputStreamPtr stable_input_stream;
 
     // How many rows we need to ignore before writing stable rows into output.
@@ -52,11 +44,8 @@ private:
     Block  sk_first_block;
 
     DeltaValueSpacePtr delta_value_space;
-
-    IndexEntry * index;
-    size_t       index_capacity;
-    size_t       index_valid_size;
-    size_t       index_pos;
+    IndexIterator      delta_index_it;
+    IndexIterator      delta_index_end;
 
     HandleRange handle_range;
 
@@ -88,16 +77,14 @@ private:
 public:
     DeltaMergeBlockInputStream(const SkippableBlockInputStreamPtr & stable_input_stream_,
                                DeltaValueSpacePtr &                 delta_value_space_,
-                               IndexIterator                        index_begin,
-                               IndexIterator                        index_end,
-                               size_t                               index_size_,
+                               const IndexIterator &                delta_index_start_,
+                               const IndexIterator &                delta_index_end_,
                                const HandleRange                    handle_range_,
                                size_t                               max_block_size_)
         : stable_input_stream(stable_input_stream_),
           delta_value_space(delta_value_space_),
-          index((IndexEntry *)(alloc(sizeof(IndexEntry) * index_size_))),
-          index_capacity(index_size_),
-          index_pos(0),
+          delta_index_it(delta_index_start_),
+          delta_index_end(delta_index_end_),
           handle_range(handle_range_),
           max_block_size(max_block_size_)
     {
@@ -110,51 +97,16 @@ public:
         header      = stable_input_stream->getHeader();
         num_columns = header.columns();
 
-        // Let's compact the index.
-        IndexIterator it  = index_begin;
-        size_t        pos = 0;
-        while (it != index_end)
-        {
-            if (pos > 0 && it.getType() == DT_INS)
-            {
-                auto & prev_index = index[pos - 1];
-                if (prev_index.type == DT_INS        //
-                    && prev_index.sid == it.getSid() //
-                    && prev_index.value + prev_index.count == it.getValue())
-                {
-                    // Merge current insert entry into previous one.
-                    index[pos - 1].count += it.getCount();
-                    ++it;
-                    continue;
-                }
-            }
-
-            index[pos] = IndexEntry{
-                .sid   = it.getSid(),
-                .type  = it.getType(),
-                .count = it.getCount(),
-                .value = it.getValue(),
-            };
-            ++pos;
-            ++it;
-        }
-        index_valid_size = pos;
-
-        if (unlikely(it != index_end))
-            throw Exception("Index iterator is expected to be equal to index_end");
-
-        if (!index_valid_size)
+        if (delta_index_it == delta_index_end)
         {
             use_stable_rows = UNLIMITED;
             delta_done      = true;
         }
         else
         {
-            use_stable_rows = index[index_pos].sid;
+            use_stable_rows = delta_index_it.getSid();
         }
     }
-
-    ~DeltaMergeBlockInputStream() { free(index, sizeof(IndexEntry) * index_capacity); }
 
     String getName() const override { return "DeltaMerge"; }
     Block  getHeader() const override { return header; }
@@ -299,35 +251,35 @@ private:
             }
             else
             {
-                auto cur_index = index[index_pos];
-                switch (cur_index.type)
+                switch (delta_index_it.getType())
                 {
                 case DT_DEL:
-                    writeDeleteFromDelta(cur_index.count);
+                    writeDeleteFromDelta(delta_index_it.getCount());
                     break;
                 case DT_INS:
                 {
                     bool do_write = true;
                     if constexpr (skippable_place)
                     {
-                        if (cur_index.sid < sk_skip_stable_rows)
+                        if (delta_index_it.getSid() < sk_skip_stable_rows)
                         {
                             do_write = false;
-                            sk_skip_total_rows += cur_index.count;
+                            sk_skip_total_rows += delta_index_it.getCount();
                         }
                     }
 
                     if (do_write)
                     {
-                        use_delta_offset = cur_index.value;
-                        use_delta_rows   = cur_index.count;
+                        use_delta_offset = delta_index_it.getValue();
+                        use_delta_rows   = delta_index_it.getCount();
                         writeInsertFromDelta(output_columns, output_write_limit);
                     }
                     break;
                 }
                 default:
-                    throw Exception("Entry type " + DTTypeString(cur_index.type) + " is not supported, is end: "
-                                    + DB::toString(index_pos == index_valid_size) + ", use_stable_rows: " + DB::toString(use_stable_rows)
+                    throw Exception("Entry type " + DTTypeString(delta_index_it.getType())
+                                    + " is not supported, is end: " + DB::toString(delta_index_it == delta_index_end)
+                                    + ", use_stable_rows: " + DB::toString(use_stable_rows)
                                     + ", stable_ignore: " + DB::toString(stable_ignore) + ", stable_done: " + DB::toString(stable_done)
                                     + ", delta_done: " + DB::toString(delta_done) + ", delta_done: " + DB::toString(delta_done));
                 }
@@ -538,22 +490,21 @@ private:
     {
         UInt64 prev_sid;
         {
-            auto cur_index = index[index_pos];
-            prev_sid       = cur_index.sid;
-            if (cur_index.type == DT_DEL)
-                prev_sid += cur_index.count;
+            prev_sid       = delta_index_it.getSid();
+            if (delta_index_it.getType() == DT_DEL)
+                prev_sid += delta_index_it.getCount();
         }
 
-        ++index_pos;
+        ++delta_index_it;
 
-        if (index_pos == index_valid_size)
+        if (delta_index_it == delta_index_end)
         {
             delta_done      = true;
             use_stable_rows = UNLIMITED;
         }
         else
         {
-            use_stable_rows = index[index_pos].sid - prev_sid;
+            use_stable_rows = delta_index_it.getSid() - prev_sid;
         }
     }
 }; // namespace DM
