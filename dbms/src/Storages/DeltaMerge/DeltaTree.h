@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <memory>
+#include <queue>
 
 #include <Core/Types.h>
 #include <IO/WriteHelpers.h>
@@ -26,6 +27,8 @@ using DTModifies    = std::vector<DTModify>;
 using DTModifiesPtr = DTModifies *;
 static_assert(sizeof(UInt64) >= sizeof(DTModifiesPtr));
 
+using TupleRefs = std::vector<size_t>;
+
 #define as(T, p) (reinterpret_cast<T *>(p))
 #define asNode(p) (reinterpret_cast<void *>(p))
 #define isLeaf(p) (((*reinterpret_cast<size_t *>(p)) & 0x01) != 0)
@@ -43,9 +46,8 @@ inline std::string addrToHex(const void * addr)
 /// DTMutation type available values.
 using DT_TYPE = UInt16;
 
-static constexpr DT_TYPE DT_INS           = 65535;
-static constexpr DT_TYPE DT_DEL           = 65534;
-static constexpr DT_TYPE DT_MAX_COLUMN_ID = 65500;
+static constexpr DT_TYPE DT_INS = 65535;
+static constexpr DT_TYPE DT_DEL = 65534;
 
 inline std::string DTTypeString(UInt16 type)
 {
@@ -75,7 +77,7 @@ struct DTMutation
     UInt16 type = 0;
     /// For DT_INS and DT_DEL, "count" is the number of values got inserted or delete from "value".
     UInt32 count = 0;
-    /// For DT_INS and DT_MOD, "value" is the value index in value space;
+    /// For DT_INS, "value" is the value index (tuple_id) in value space;
     UInt64 value = 0;
 
     inline bool isModify() const { return type != DT_INS && type != DT_DEL; }
@@ -114,6 +116,8 @@ struct DTLeaf
     LeafPtr   prev   = nullptr;
     LeafPtr   next   = nullptr;
     InternPtr parent = nullptr;
+
+    DTLeaf(const Leaf & o) = default;
 
     std::string toString()
     {
@@ -302,6 +306,8 @@ struct DTIntern
 
     InternPtr parent = nullptr;
 
+    DTIntern(const Intern & o) = default;
+
     std::string toString() { return "{count:" + DB::toString(count) + ",parent:" + addrToHex(parent) + "}"; }
 
     inline UInt64 sid(size_t pos) const { return sids[pos]; }
@@ -473,6 +479,9 @@ public:
 
     DTEntryIterator & operator++()
     {
+        if (unlikely(pos >= leaf->count))
+            throw Exception("Illegal ++ operation on " + toString());
+
         if (leaf->type(pos) == DT_INS)
             delta += 1;
         else if (leaf->type(pos) == DT_DEL)
@@ -514,6 +523,7 @@ public:
     UInt16     getType() const { return leaf->mutations[pos].type; }
     UInt32     getCount() const { return leaf->mutations[pos].count; }
     UInt64     getValue() const { return leaf->mutations[pos].value; }
+    UInt64 &   getValueRef() const { return leaf->mutations[pos].value; }
     UInt64     getSid() const { return leaf->sids[pos]; }
     UInt64     getRid() const { return leaf->sids[pos] + delta; }
 };
@@ -606,7 +616,73 @@ public:
 
     static Iterator begin(const std::shared_ptr<DTEntriesCopy> & entries) { return {entries, 0, 0}; }
     static Iterator end(const std::shared_ptr<DTEntriesCopy> & entries) { return {entries, entries->entry_count, entries->delta}; }
-}; // namespace DM
+};
+
+/// Compact the continuing inserts.
+template <size_t M, size_t F, size_t S>
+class DTCompactedEntries
+{
+    using EntryIterator = DTEntryIterator<M, F, S>;
+
+public:
+    struct Entry
+    {
+        UInt64 sid;
+        UInt16 type;
+        UInt32 count;
+        UInt64 value;
+    };
+    using Entries = std::vector<Entry>;
+
+    struct Iterator
+    {
+        typename Entries::iterator it;
+
+        Iterator(typename Entries::iterator it_) : it(it_) {}
+        bool       operator==(const Iterator & rhs) const { return it == rhs.it; }
+        bool       operator!=(const Iterator & rhs) const { return it != rhs.it; }
+        Iterator & operator++()
+        {
+            ++it;
+            return *this;
+        }
+
+        UInt64 getSid() const { return it->sid; }
+        UInt16 getType() const { return it->type; }
+        UInt32 getCount() const { return it->count; }
+        UInt64 getValue() const { return it->value; }
+    };
+
+private:
+    Entries entries;
+
+public:
+    DTCompactedEntries(const EntryIterator & begin, const EntryIterator & end, size_t entry_count)
+    {
+        entries.reserve(entry_count);
+
+        for (auto it = begin; it != end; ++it)
+        {
+            if (!entries.empty() && it.getType() == DT_INS)
+            {
+                auto & prev_index = entries.back();
+                if (prev_index.type == DT_INS        //
+                    && prev_index.sid == it.getSid() //
+                    && prev_index.value + prev_index.count == it.getValue())
+                {
+                    // Merge current insert entry into previous one.
+                    prev_index.count += it.getCount();
+                    continue;
+                }
+            }
+            Entry entry = {it.getSid(), it.getType(), it.getCount(), it.getValue()};
+            entries.emplace_back(entry);
+        }
+    }
+
+    auto begin() { return Iterator(entries.begin()); }
+    auto end() { return Iterator(entries.end()); }
+};
 
 template <class ValueSpace, size_t M, size_t F, size_t S, typename Allocator>
 class DeltaTree
@@ -620,6 +696,9 @@ public:
     using InternPtr     = Intern *;
     using EntryIterator = DTEntryIterator<M, F, S>;
     using ValueSpacePtr = std::shared_ptr<ValueSpace>;
+
+    using CompactedEntries    = DTCompactedEntries<M, F, S>;
+    using CompactedEntriesPtr = std::shared_ptr<CompactedEntries>;
 
     static_assert(M >= 2);
     static_assert(F >= 2);
@@ -637,13 +716,13 @@ private:
     size_t num_deletes = 0;
     size_t num_entries = 0;
 
-    Logger * log;
-
     Allocator * allocator;
 
+    Logger * log;
+
 public:
+    // For test cases only.
     ValueSpacePtr insert_value_space;
-    ValueSpacePtr modify_value_space;
 
 private:
     inline bool isRootOnly() const { return height == 1; }
@@ -700,7 +779,6 @@ private:
     template <typename T>
     void freeNode(T * node)
     {
-
         allocator->free(reinterpret_cast<char *>(node), sizeof(T));
     }
 
@@ -732,14 +810,13 @@ private:
         freeNode<T>(node);
     }
 
-    void init(const ValueSpacePtr & insert_value_space_, const ValueSpacePtr & modify_value_space_)
+    void init(const ValueSpacePtr & insert_value_space_)
     {
         allocator = new Allocator();
 
         log = &Logger::get("DeltaTree");
 
         insert_value_space = insert_value_space_;
-        modify_value_space = modify_value_space_;
 
         root      = createNode<Leaf>();
         left_leaf = right_leaf = as(Leaf, root);
@@ -748,15 +825,21 @@ private:
     }
 
 public:
-    DeltaTree(const ValueSpacePtr & insert_value_space_, const ValueSpacePtr & modify_value_space_)
+    DeltaTree() { init(std::make_shared<ValueSpace>()); }
+    DeltaTree(const ValueSpacePtr & insert_value_space_) { init(insert_value_space_); }
+    DeltaTree(const Self & o);
+
+    DeltaTree & operator=(const Self & o)
     {
-        init(insert_value_space_, modify_value_space_);
+        Self tmp(o);
+        this->swap(tmp);
+        return *this;
     }
 
-    DeltaTree()
+    DeltaTree & operator=(Self && o) noexcept
     {
-        // We don't use modify by default.
-        init(std::make_shared<ValueSpace>(), {});
+        this->swap(o);
+        return *this;
     }
 
     void swap(Self & other)
@@ -776,7 +859,6 @@ public:
         std::swap(allocator, allocator);
 
         insert_value_space.swap(other.insert_value_space);
-        modify_value_space.swap(other.modify_value_space);
     }
 
     ~DeltaTree()
@@ -821,16 +903,92 @@ public:
         return std::make_shared<DTEntriesCopy<M, F, S, CopyAllocator>>(left_leaf, num_entries, delta);
     }
 
+    CompactedEntriesPtr getCompactedEntries() { return std::make_shared<CompactedEntries>(begin(), end(), num_entries); }
+
     size_t numEntries() const { return num_entries; }
     size_t numInserts() const { return num_inserts; }
     size_t numDeletes() const { return num_deletes; }
 
     void addDelete(const UInt64 rid);
     void addInsert(const UInt64 rid, const UInt64 tuple_id);
+    void removeInsertsStartFrom(UInt64 tuple_id_start);
+    void updateTupleId(const TupleRefs & tuple_refs, size_t offset);
 };
 
 #define DT_TEMPLATE template <class ValueSpace, size_t M, size_t F, size_t S, typename Allocator>
 #define DT_CLASS DeltaTree<ValueSpace, M, F, S, Allocator>
+
+DT_TEMPLATE
+DT_CLASS::DeltaTree(const DT_CLASS::Self & o)
+    : height(o.height),
+      num_inserts(o.num_inserts),
+      num_deletes(o.num_deletes),
+      num_entries(o.num_entries),
+      allocator(new Allocator()),
+      log(&Logger::get("DeltaTree"))
+{
+    NodePtr my_root;
+    if (isLeaf(o.root))
+        my_root = new (createNode<Leaf>()) Leaf(*as(Leaf, o.root));
+    else
+        my_root = new (createNode<Intern>()) Intern(*as(Intern, o.root));
+
+    std::queue<NodePtr> nodes;
+    nodes.push(my_root);
+
+    LeafPtr first_leaf = nullptr;
+    LeafPtr last_leaf  = nullptr;
+    while (!nodes.empty())
+    {
+        auto node = nodes.front();
+        nodes.pop();
+
+        if (isLeaf(node))
+        {
+            auto leaf = as(Leaf, node);
+
+            leaf->prev = last_leaf;
+            if (last_leaf)
+                last_leaf->next = leaf;
+            if (!first_leaf)
+                first_leaf = leaf;
+
+            last_leaf = leaf;
+        }
+        else
+        {
+            auto intern = as(Intern, node);
+            if (unlikely(!intern->count))
+                throw Exception("Unexpected internal node which count = 0");
+            if (isLeaf(intern->children[0]))
+            {
+                for (size_t i = 0; i < intern->count; ++i)
+                {
+                    auto child = new (createNode<Leaf>()) Leaf(*as(Leaf, intern->children[i]));
+                    nodes.push(child);
+                    intern->children[i] = child;
+
+                    child->parent = intern;
+                }
+            }
+            else
+            {
+                for (size_t i = 0; i < intern->count; ++i)
+                {
+                    auto child = new (createNode<Intern>()) Intern(*as(Intern, intern->children[i]));
+                    nodes.push(child);
+                    intern->children[i] = child;
+
+                    child->parent = intern;
+                }
+            }
+        }
+    }
+
+    this->root       = my_root;
+    this->left_leaf  = first_leaf;
+    this->right_leaf = last_leaf;
+}
 
 DT_TEMPLATE
 void DT_CLASS::check(NodePtr node, bool recursive) const
@@ -983,6 +1141,32 @@ void DT_CLASS::addInsert(const UInt64 rid, const UInt64 tuple_id)
 
     if (unlikely(!isRootOnly() && !leaf->legal()))
         throw Exception("Illegal leaf state: " + leaf->state());
+}
+
+DT_TEMPLATE
+void DT_CLASS::removeInsertsStartFrom(UInt64 tuple_id_start)
+{
+    std::vector<UInt64> rids;
+    for (EntryIterator entry_it(this->begin()), entry_end(this->end()); entry_it != entry_end; ++entry_it)
+    {
+        if (entry_it.getType() == DT_INS && entry_it.getValue() >= tuple_id_start)
+            rids.push_back(entry_it.getRid());
+    }
+    // Must remove the bigger rids first. Because after a rid got removed, the later value of rids changed.
+    for (auto it = rids.rbegin(); it != rids.rend(); ++it)
+        addDelete(*it);
+}
+
+DT_TEMPLATE
+void DT_CLASS::updateTupleId(const TupleRefs & tuple_refs, size_t offset)
+{
+    size_t tuple_id_end = offset + tuple_refs.size();
+    for (EntryIterator entry_it(this->begin()), entry_end(this->end()); entry_it != entry_end; ++entry_it)
+    {
+        auto & id = entry_it.getValueRef();
+        if (entry_it.getType() == DT_INS && id >= offset && id < tuple_id_end)
+            id = tuple_refs[id - offset] + offset;
+    }
 }
 
 DT_TEMPLATE
