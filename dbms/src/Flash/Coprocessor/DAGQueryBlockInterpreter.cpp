@@ -1059,13 +1059,13 @@ void copyExecutorTreeWithLocalTableScan(
 {
     const tipb::Executor * current = root;
     auto * exec = dag_req.mutable_root_executor();
-    int i = 0;
+    int exec_id = 0;
     while (current->tp() != tipb::ExecType::TypeTableScan)
     {
         if (current->tp() == tipb::ExecType::TypeSelection)
         {
             exec->set_tp(tipb::ExecType::TypeSelection);
-            exec->set_executor_id("selection_" + std::to_string(i));
+            exec->set_executor_id("selection_" + std::to_string(exec_id));
             auto * sel = exec->mutable_selection();
             for (auto const & condition : current->selection().conditions())
             {
@@ -1078,7 +1078,7 @@ void copyExecutorTreeWithLocalTableScan(
         else if (current->tp() == tipb::ExecType::TypeAggregation || current->tp() == tipb::ExecType::TypeStreamAgg)
         {
             exec->set_tp(current->tp());
-            exec->set_executor_id("aggregation_" + std::to_string(i));
+            exec->set_executor_id("aggregation_" + std::to_string(exec_id));
             auto * agg = exec->mutable_aggregation();
             for (auto const & expr : current->aggregation().agg_func())
             {
@@ -1097,7 +1097,7 @@ void copyExecutorTreeWithLocalTableScan(
         else if (current->tp() == tipb::ExecType::TypeLimit)
         {
             exec->set_tp(current->tp());
-            exec->set_executor_id("limit_" + std::to_string(i));
+            exec->set_executor_id("limit_" + std::to_string(exec_id));
             auto * limit = exec->mutable_limit();
             limit->set_limit(current->limit().limit());
             exec = limit->mutable_child();
@@ -1106,7 +1106,7 @@ void copyExecutorTreeWithLocalTableScan(
         else if (current->tp() == tipb::ExecType::TypeTopN)
         {
             exec->set_tp(current->tp());
-            exec->set_executor_id("topN_" + std::to_string(i));
+            exec->set_executor_id("topN_" + std::to_string(exec_id));
             auto * topn = exec->mutable_topn();
             topn->set_limit(current->topn().limit());
             for (auto const & expr : current->topn().order_by())
@@ -1121,13 +1121,13 @@ void copyExecutorTreeWithLocalTableScan(
         {
             throw Exception("Not supported yet");
         }
-        i++;
+        exec_id++;
     }
 
     if (current->tp() != tipb::ExecType::TypeTableScan)
         throw Exception("Only support copy from table scan sourced query block");
     exec->set_tp(tipb::ExecType::TypeTableScan);
-    exec->set_executor_id("tablescan_" + std::to_string(i));
+    exec->set_executor_id("tablescan_" + std::to_string(exec_id));
     auto * new_ts = new tipb::TableScan(current->tbl_scan());
     new_ts->set_next_read_engine(tipb::EngineType::Local);
     exec->set_allocated_tbl_scan(new_ts);
@@ -1209,6 +1209,9 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
         }
     }
 
+    /// For simplicity, remote subquery only record the CopBlockInputStream time, for example,
+    /// if the remote subquery is TS, then it's execute time is the execute time of CopBlockInputStream,
+    /// if the remote subquery is TS SEL, then both TS and SEL's execute time is the same as the CopBlockInputStream
     recordProfileStreams(pipeline, query_block.source_name);
     if (query_block.selection)
         recordProfileStreams(pipeline, query_block.selection_name);

@@ -60,6 +60,8 @@ void collectOutPutFieldTypesFromAgg(std::vector<tipb::FieldType> & field_type, c
     }
 }
 
+/// construct DAGQueryBlock from a tree struct based executors, which is the
+/// format after supporting join in dag request
 DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_)
     : id(id_), root(&root_), qb_column_prefix("__QB_" + std::to_string(id_) + "_"), qb_join_subquery_alias(qb_column_prefix + "join")
 {
@@ -112,6 +114,8 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_)
     fillOutputFieldTypes();
 }
 
+/// construct DAGQueryBlock from a list struct based executors, which is the
+/// format before supporting join in dag request
 DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrField<tipb::Executor> & executors)
     : id(id_), root(nullptr), qb_column_prefix("__QB_" + std::to_string(id_) + "_"), qb_join_subquery_alias(qb_column_prefix + "join")
 {
