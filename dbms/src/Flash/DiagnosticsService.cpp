@@ -37,7 +37,7 @@ namespace
 {
 
 static constexpr uint KB = 1024;
-static constexpr uint MB = 1024 * 1024;
+// static constexpr uint MB = 1024 * 1024;
 
 DiagnosticsService::AvgLoad getAvgLoad()
 {
