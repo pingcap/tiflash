@@ -1,10 +1,10 @@
 #include <Common/TiFlashMetrics.h>
 #include <IO/CompressedReadBuffer.h>
-#include <IO/CompressedWriteBuffer.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/Pack.h>
+#include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
 
@@ -30,7 +30,12 @@ struct FlushPackTask
 
     ConstPackPtr pack;
 
+    Block  block_data;
     PageId data_page = 0;
+
+    bool   sorted         = false;
+    size_t rows_offset    = 0;
+    size_t deletes_offset = 0;
 };
 using FlushPackTasks = std::vector<FlushPackTask>;
 
@@ -44,6 +49,8 @@ bool DeltaValueSpace::flush(DMContext & context)
     size_t flush_rows    = 0;
     size_t flush_bytes   = 0;
     size_t flush_deletes = 0;
+
+    DeltaIndexPtr cur_delta_index;
     {
         /// Prepare data which will be written to disk.
         std::scoped_lock lock(mutex);
@@ -74,7 +81,9 @@ bool DeltaValueSpace::flush(DMContext & context)
                 {
                     if (unlikely(!pack->cache))
                         throw Exception("Mutable pack does not have cache", ErrorCodes::LOGICAL_ERROR);
-                    task.data_page = writePackData(context, pack->cache->block, pack->cache_offset, pack->rows, wbs);
+                    task.rows_offset    = total_rows;
+                    task.deletes_offset = total_deletes;
+                    task.block_data     = readPackFromCache(pack);
                 }
                 flush_rows += pack->rows;
                 flush_bytes += pack->bytes;
@@ -89,6 +98,8 @@ bool DeltaValueSpace::flush(DMContext & context)
 
         if (unlikely(flush_rows != unsaved_rows || flush_deletes != unsaved_deletes || total_rows != rows || total_deletes != deletes))
             throw Exception("Rows and deletes check failed", ErrorCodes::LOGICAL_ERROR);
+
+        cur_delta_index = delta_index;
     }
 
     // No update, return successfully.
@@ -98,9 +109,29 @@ bool DeltaValueSpace::flush(DMContext & context)
         return true;
     }
 
+    DeltaIndex::Updates delta_index_updates;
+    DeltaIndexPtr       new_delta_index;
     {
         /// Write prepared data to disk.
+        for (auto & task : tasks)
+        {
+            if (!task.block_data)
+                continue;
+            IColumn::Permutation perm;
+            task.sorted = sortBlockByPk(getExtraHandleColumnDefine(), task.block_data, perm);
+            if (task.sorted)
+                delta_index_updates.emplace_back(task.deletes_offset, task.rows_offset, perm);
+            task.data_page = writePackData(context, task.block_data, 0, task.block_data.rows(), wbs);
+        }
+
         wbs.writeLogAndData();
+    }
+
+    if (!delta_index_updates.empty())
+    {
+        LOG_DEBUG(log, simpleInfo() << " Update index start");
+        new_delta_index = cur_delta_index->cloneWithUpdates(delta_index_updates);
+        LOG_DEBUG(log, simpleInfo() << " Update index done");
     }
 
     {
@@ -120,7 +151,7 @@ bool DeltaValueSpace::flush(DMContext & context)
 
         {
             /// Do some checks before continue, in case other threads do some modifications during current operation,
-            /// as we don't always have the lock.
+            /// as we didn't always hold the lock.
 
             auto p_it = packs.begin();
             auto t_it = tasks.begin();
@@ -150,19 +181,22 @@ bool DeltaValueSpace::flush(DMContext & context)
         /// Things look good, let's continue.
 
         // Create a temporary packs copy, used to generate serialized data.
-        // Save the previous saved packs, and the packs we are saving, and the later packs appended during the io operation.
+        // Save the previous saved packs, and the packs we are saving, and the later packs appended during the period we did not held the lock.
         Packs packs_copy(packs.begin(), flush_start_point);
         for (auto & task : tasks)
         {
             // Use a new pack instance to do the serializing.
-            auto shadow = std::make_shared<Pack>(*task.pack);
+            auto new_pack = std::make_shared<Pack>(*task.pack);
             // Set saved to true, otherwise it cannot be serialized.
-            shadow->saved = true;
+            new_pack->saved = true;
             // If it's data have been updated, use the new pages info.
             if (task.data_page != 0)
-                shadow->data_page = task.data_page;
+                new_pack->data_page = task.data_page;
+            // Task pack was sorted, update it's cache data.
+            if (task.sorted)
+                new_pack->cache = std::make_shared<Cache>(std::move(task.block_data));
 
-            packs_copy.push_back(shadow);
+            packs_copy.push_back(new_pack);
         }
         packs_copy.insert(packs_copy.end(), flush_end_point, packs.end());
 
@@ -200,13 +234,16 @@ bool DeltaValueSpace::flush(DMContext & context)
         /// Commit updates in memory.
         packs.swap(packs_copy);
 
+        /// Update delta tree
+        if (new_delta_index)
+            delta_index = new_delta_index;
+
         for (auto & pack : packs)
         {
             if (pack->cache && pack->data_page != 0 && pack->rows >= context.delta_small_pack_rows)
             {
                 // This pack is too large to use cache.
-                pack->cache        = {};
-                pack->cache_offset = 0;
+                pack->cache = {};
             }
         }
 

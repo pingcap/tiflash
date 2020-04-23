@@ -308,6 +308,9 @@ Block DMFileReader::read()
             }
             else
             {
+                LOG_TRACE(log,
+                          "Column [id:" << cd.id << ",name:" << cd.name << ",type:" << cd.type->getName()
+                                        << "] not found, use default value. DMFile: " << dmfile->path());
                 // New column after ddl is not exist in this DMFile, fill with default value
                 ColumnPtr column = createColumnWithDefaultValue(cd, read_rows);
                 res.insert(ColumnWithTypeAndName{std::move(column), cd.type, cd.name, cd.id});
