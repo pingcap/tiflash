@@ -64,6 +64,8 @@ public:
 
     bool isBatchCop() const { return is_batch_cop; }
 
+    DAGContext & getDAGContext() const { return dag_context; }
+
     StreamWriterPtr writer;
 
 protected:

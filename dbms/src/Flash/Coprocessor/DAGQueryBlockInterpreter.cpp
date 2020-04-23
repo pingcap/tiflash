@@ -373,7 +373,8 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         else
         {
             for (size_t i = 0; i < required_columns.size(); i++)
-                /// for child query block, add alias start with qb_column_prefix to avoid column name conflict
+                /// for child query block, the final project is all the columns read from
+                /// the table and add alias start with qb_column_prefix to avoid column name conflict
                 final_project.emplace_back(required_columns[i], query_block.qb_column_prefix + required_columns[i]);
         }
     }
@@ -559,7 +560,27 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         });
     }
 
-    addTimeZoneCastAfterTS(is_ts_column, pipeline);
+    if (addTimeZoneCastAfterTS(is_ts_column, pipeline) && !query_block.aggregation
+        && (keep_session_timezone_info || !query_block.isRootQueryBlock()))
+    {
+        if (query_block.isRootQueryBlock())
+        {
+            for (size_t i = 0; i < query_block.output_offsets.size(); i++)
+            {
+                int column_index = query_block.output_offsets[i];
+                if (is_ts_column[column_index])
+                    final_project[i].first = analyzer->getCurrentInputColumns()[column_index].name;
+            }
+        }
+        else
+        {
+            for (size_t i = 0; i < final_project.size(); i++)
+            {
+                if (is_ts_column[i])
+                    final_project[i].first = analyzer->getCurrentInputColumns()[i].name;
+            }
+        }
+    }
 }
 
 void DAGQueryBlockInterpreter::prepareJoinKeys(
@@ -710,6 +731,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     right_query.source = right_pipeline.firstStream();
     right_query.join = joinPtr;
     right_query.join->setSampleBlock(right_query.source->getHeader());
+    dag.getDAGContext().profile_streams_map_for_join_build_side[query_block.qb_join_subquery_alias].push_back(right_query.source);
 
     std::vector<NameAndTypePair> source_columns;
     for (const auto & p : left_streams[0]->getHeader().getNamesAndTypesList())
@@ -1023,23 +1045,27 @@ void DAGQueryBlockInterpreter::executeOrder(Pipeline & pipeline, Strings & order
         limit, settings.max_bytes_before_external_sort, context.getTemporaryPath());
 }
 
-//void DAGQueryBlockInterpreter::recordProfileStreams(Pipeline & pipeline, Int32 index)
-//{
-//    for (auto & stream : pipeline.streams)
-//    {
-//        dag.getDAGContext().profile_streams_list[index].push_back(stream);
-//    }
-//}
+void DAGQueryBlockInterpreter::recordProfileStreams(Pipeline & pipeline, const String & key)
+{
+    dag.getDAGContext().profile_streams_map[key].qb_id = query_block.id;
+    for (auto & stream : pipeline.streams)
+    {
+        dag.getDAGContext().profile_streams_map[key].input_streams.push_back(stream);
+    }
+}
 
-void copyExecutorTreeWithLocalTableScan(tipb::DAGRequest & dag_req, const tipb::Executor * root)
+void copyExecutorTreeWithLocalTableScan(
+    tipb::DAGRequest & dag_req, const tipb::Executor * root, tipb::EncodeType encode_type, const tipb::DAGRequest & org_req)
 {
     const tipb::Executor * current = root;
-    auto * exec = dag_req.add_executors();
+    auto * exec = dag_req.mutable_root_executor();
+    int exec_id = 0;
     while (current->tp() != tipb::ExecType::TypeTableScan)
     {
         if (current->tp() == tipb::ExecType::TypeSelection)
         {
             exec->set_tp(tipb::ExecType::TypeSelection);
+            exec->set_executor_id("selection_" + std::to_string(exec_id));
             auto * sel = exec->mutable_selection();
             for (auto const & condition : current->selection().conditions())
             {
@@ -1052,6 +1078,7 @@ void copyExecutorTreeWithLocalTableScan(tipb::DAGRequest & dag_req, const tipb::
         else if (current->tp() == tipb::ExecType::TypeAggregation || current->tp() == tipb::ExecType::TypeStreamAgg)
         {
             exec->set_tp(current->tp());
+            exec->set_executor_id("aggregation_" + std::to_string(exec_id));
             auto * agg = exec->mutable_aggregation();
             for (auto const & expr : current->aggregation().agg_func())
             {
@@ -1070,6 +1097,7 @@ void copyExecutorTreeWithLocalTableScan(tipb::DAGRequest & dag_req, const tipb::
         else if (current->tp() == tipb::ExecType::TypeLimit)
         {
             exec->set_tp(current->tp());
+            exec->set_executor_id("limit_" + std::to_string(exec_id));
             auto * limit = exec->mutable_limit();
             limit->set_limit(current->limit().limit());
             exec = limit->mutable_child();
@@ -1078,6 +1106,7 @@ void copyExecutorTreeWithLocalTableScan(tipb::DAGRequest & dag_req, const tipb::
         else if (current->tp() == tipb::ExecType::TypeTopN)
         {
             exec->set_tp(current->tp());
+            exec->set_executor_id("topN_" + std::to_string(exec_id));
             auto * topn = exec->mutable_topn();
             topn->set_limit(current->topn().limit());
             for (auto const & expr : current->topn().order_by())
@@ -1092,16 +1121,22 @@ void copyExecutorTreeWithLocalTableScan(tipb::DAGRequest & dag_req, const tipb::
         {
             throw Exception("Not supported yet");
         }
+        exec_id++;
     }
 
     if (current->tp() != tipb::ExecType::TypeTableScan)
         throw Exception("Only support copy from table scan sourced query block");
     exec->set_tp(tipb::ExecType::TypeTableScan);
+    exec->set_executor_id("tablescan_" + std::to_string(exec_id));
     auto * new_ts = new tipb::TableScan(current->tbl_scan());
     new_ts->set_next_read_engine(tipb::EngineType::Local);
     exec->set_allocated_tbl_scan(new_ts);
 
-    dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
+    dag_req.set_encode_type(encode_type);
+    if (org_req.has_time_zone_name() && org_req.time_zone_name().length() > 0)
+        dag_req.set_time_zone_name(org_req.time_zone_name());
+    else if (org_req.has_time_zone_offset())
+        dag_req.set_time_zone_offset(org_req.time_zone_offset());
 }
 
 void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
@@ -1130,18 +1165,59 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
     sort(cop_key_ranges.begin(), cop_key_ranges.end());
 
     ::tipb::DAGRequest dag_req;
-    copyExecutorTreeWithLocalTableScan(dag_req, query_block.root);
+
+    tipb::EncodeType encode_type;
+    if (!isUnsupportedEncodeType(query_block.output_field_types, tipb::EncodeType::TypeCHBlock))
+        encode_type = tipb::EncodeType::TypeCHBlock;
+    else if (!isUnsupportedEncodeType(query_block.output_field_types, tipb::EncodeType::TypeChunk))
+        encode_type = tipb::EncodeType::TypeChunk;
+    else
+        encode_type = tipb::EncodeType::TypeDefault;
+
+    copyExecutorTreeWithLocalTableScan(dag_req, query_block.root, encode_type, rqst);
     DAGSchema schema;
     ColumnsWithTypeAndName columns;
+    std::vector<bool> is_ts_column;
+    std::vector<NameAndTypePair> source_columns;
     for (int i = 0; i < (int)query_block.output_field_types.size(); i++)
     {
         dag_req.add_output_offsets(i);
         ColumnInfo info = fieldTypeToColumnInfo(query_block.output_field_types[i]);
         String col_name = query_block.qb_column_prefix + "col_" + std::to_string(i);
         schema.push_back(std::make_pair(col_name, info));
+        is_ts_column.push_back(query_block.output_field_types[i].tp() == TiDB::TypeTimestamp);
+        source_columns.emplace_back(col_name, getDataTypeByFieldType(query_block.output_field_types[i]));
+        final_project.emplace_back(col_name, "");
     }
 
     executeRemoteQueryImpl(pipeline, cop_key_ranges, dag_req, schema);
+
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
+    bool need_append_final_project = false;
+    if (encode_type == tipb::EncodeType::TypeDefault)
+    {
+        /// if the encode type is default, the timestamp column in dag response is UTC based
+        /// so need to cast the timezone
+        if (addTimeZoneCastAfterTS(is_ts_column, pipeline))
+        {
+            for (size_t i = 0; i < final_project.size(); i++)
+            {
+                if (is_ts_column[i])
+                    final_project[i].first = analyzer->getCurrentInputColumns()[i].name;
+            }
+            need_append_final_project = true;
+        }
+    }
+
+    /// For simplicity, remote subquery only record the CopBlockInputStream time, for example,
+    /// if the remote subquery is TS, then it's execute time is the execute time of CopBlockInputStream,
+    /// if the remote subquery is TS SEL, then both TS and SEL's execute time is the same as the CopBlockInputStream
+    recordProfileStreams(pipeline, query_block.source_name);
+    if (query_block.selection)
+        recordProfileStreams(pipeline, query_block.selection_name);
+
+    if (need_append_final_project)
+        executeFinalProject(pipeline);
 }
 
 void DAGQueryBlockInterpreter::executeRemoteQueryImpl(Pipeline & pipeline,
@@ -1187,21 +1263,22 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     if (query_block.source->tp() == tipb::ExecType::TypeJoin)
     {
         executeJoin(query_block.source->join(), pipeline, right_query);
+        // todo the join execution time is not accurate because only probe time is
+        //  recorded here
+        recordProfileStreams(pipeline, query_block.source_name);
     }
     else
     {
         executeTS(query_block.source->tbl_scan(), pipeline);
+        recordProfileStreams(pipeline, query_block.source_name);
     }
-    // todo enable profile stream info
-    //recordProfileStreams(pipeline, dag.getTSIndex());
 
     auto res = analyzeExpressions();
     // execute selection
     if (res.has_where)
     {
         executeWhere(pipeline, res.before_where, res.filter_column_name);
-        //if (dag.hasSelection())
-        //recordProfileStreams(pipeline, dag.getSelectionIndex());
+        recordProfileStreams(pipeline, query_block.selection_name);
     }
     LOG_INFO(log,
         "execution stream size for query block(before aggregation) " << query_block.qb_column_prefix << " is " << pipeline.streams.size());
@@ -1209,7 +1286,7 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     {
         // execute aggregation
         executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregate_descriptions);
-        //recordProfileStreams(pipeline, dag.getAggregationIndex());
+        recordProfileStreams(pipeline, query_block.aggregation_name);
     }
     if (res.before_order_and_select)
     {
@@ -1220,7 +1297,7 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     {
         // execute topN
         executeOrder(pipeline, res.order_column_names);
-        //recordProfileStreams(pipeline, dag.getTopNIndex());
+        recordProfileStreams(pipeline, query_block.limitOrTopN_name);
     }
 
     // execute projection
@@ -1230,13 +1307,13 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     if (query_block.limitOrTopN != nullptr && query_block.limitOrTopN->tp() == tipb::TypeLimit)
     {
         executeLimit(pipeline);
-        //recordProfileStreams(pipeline, dag.getLimitIndex());
+        recordProfileStreams(pipeline, query_block.limitOrTopN_name);
     }
 
     if (query_block.source->tp() == tipb::ExecType::TypeJoin)
     {
         SubqueriesForSets subquries;
-        subquries[query_block.qb_column_prefix + "join"] = right_query;
+        subquries[query_block.qb_join_subquery_alias] = right_query;
         subqueriesForSets.emplace_back(subquries);
     }
 }

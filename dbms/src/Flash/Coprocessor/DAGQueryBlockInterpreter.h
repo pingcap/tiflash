@@ -104,7 +104,7 @@ private:
     void getAndLockStorageWithSchemaVersion(TableID table_id, Int64 schema_version);
     SortDescription getSortDescription(Strings & order_column_names);
     AnalysisResult analyzeExpressions();
-    //void recordProfileStreams(Pipeline & pipeline, Int32 index);
+    void recordProfileStreams(Pipeline & pipeline, const String & key);
     bool addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, Pipeline & pipeline);
 
 private:

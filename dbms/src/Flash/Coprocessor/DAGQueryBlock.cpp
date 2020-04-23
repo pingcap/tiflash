@@ -60,30 +60,36 @@ void collectOutPutFieldTypesFromAgg(std::vector<tipb::FieldType> & field_type, c
     }
 }
 
-DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor * root_)
-    : id(id_), root(root_), qb_column_prefix("__QB_" + std::to_string(id_) + "_")
+/// construct DAGQueryBlock from a tree struct based executors, which is the
+/// format after supporting join in dag request
+DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_)
+    : id(id_), root(&root_), qb_column_prefix("__QB_" + std::to_string(id_) + "_"), qb_join_subquery_alias(qb_column_prefix + "join")
 {
     const tipb::Executor * current = root;
-    while (!isSourceNode(current))
+    while (!isSourceNode(current) && current->has_executor_id())
     {
         switch (current->tp())
         {
             case tipb::ExecType::TypeSelection:
                 assignOrThrowException(&selection, current, SEL_NAME);
+                selection_name = current->executor_id();
                 current = &current->selection().child();
                 break;
             case tipb::ExecType::TypeAggregation:
             case tipb::ExecType::TypeStreamAgg:
                 assignOrThrowException(&aggregation, current, AGG_NAME);
+                aggregation_name = current->executor_id();
                 collectOutPutFieldTypesFromAgg(output_field_types, current->aggregation());
                 current = &current->aggregation().child();
                 break;
             case tipb::ExecType::TypeLimit:
                 assignOrThrowException(&limitOrTopN, current, LIMIT_NAME);
+                limitOrTopN_name = current->executor_id();
                 current = &current->limit().child();
                 break;
             case tipb::ExecType::TypeTopN:
                 assignOrThrowException(&limitOrTopN, current, TOPN_NAME);
+                limitOrTopN_name = current->executor_id();
                 current = &current->topn().child();
                 break;
             case tipb::ExecType::TypeIndexScan:
@@ -92,87 +98,63 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor * root_)
                 throw Exception("Should not reach here", ErrorCodes::LOGICAL_ERROR);
         }
     }
+
+    if (!current->has_executor_id())
+        throw Exception("Tree struct based executor must have executor id", ErrorCodes::COP_BAD_DAG_REQUEST);
+
     assignOrThrowException(&source, current, SOURCE_NAME);
+    source_name = current->executor_id();
     if (current->tp() == tipb::ExecType::TypeJoin)
     {
         if (source->join().children_size() != 2)
-            throw Exception("Join executor children size not equal to 2field type", ErrorCodes::COP_BAD_DAG_REQUEST);
-        children.push_back(std::make_shared<DAGQueryBlock>(id * 2, &source->join().children(0)));
-        children.push_back(std::make_shared<DAGQueryBlock>(id * 2 + 1, &source->join().children(1)));
+            throw Exception("Join executor children size not equal to 2", ErrorCodes::COP_BAD_DAG_REQUEST);
+        children.push_back(std::make_shared<DAGQueryBlock>(id * 2, source->join().children(0)));
+        children.push_back(std::make_shared<DAGQueryBlock>(id * 2 + 1, source->join().children(1)));
     }
     fillOutputFieldTypes();
 }
 
-/*
-DAGQueryBlock::DAGQueryBlock(UInt32 id_, std::vector<const tipb::Executor *> & executors, int start_index, int end_index)
-: id(id_), qb_column_prefix("___QB_" + std::to_string(id_) + "_")
+/// construct DAGQueryBlock from a list struct based executors, which is the
+/// format before supporting join in dag request
+DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrField<tipb::Executor> & executors)
+    : id(id_), root(nullptr), qb_column_prefix("__QB_" + std::to_string(id_) + "_"), qb_join_subquery_alias(qb_column_prefix + "join")
 {
-    for (int i = end_index; i >= start_index; i--)
+    for (int i = (int)executors.size() - 1; i >= 0; i--)
     {
-        //int build_end_index, build_start_index;
-        //int probe_end_index, probe_start_index;
-        switch (executors[i]->tp())
+        switch (executors[i].tp())
         {
             case tipb::ExecType::TypeTableScan:
-                assignOrThrowException(&source, executors[i], SOURCE_NAME);
+                assignOrThrowException(&source, &executors[i], SOURCE_NAME);
+                /// use index as the prefix for executor name so when we sort by
+                /// the executor name, it will result in the same order as it is
+                /// in the dag_request, this is needed when filling executeSummary
+                /// in DAGDriver
+                source_name = std::to_string(i) + "_tablescan";
                 break;
             case tipb::ExecType::TypeSelection:
-                assignOrThrowException(&selection, executors[i], SEL_NAME);
+                assignOrThrowException(&selection, &executors[i], SEL_NAME);
+                selection_name = std::to_string(i) + "_selection";
                 break;
             case tipb::ExecType::TypeStreamAgg:
             case tipb::ExecType::TypeAggregation:
-                assignOrThrowException(&aggregation, executors[i], AGG_NAME);
-                collectOutPutFieldTypesFromAgg(output_field_types, executors[i]->aggregation());
+                assignOrThrowException(&aggregation, &executors[i], AGG_NAME);
+                aggregation_name = std::to_string(i) + "_aggregation";
+                collectOutPutFieldTypesFromAgg(output_field_types, executors[i].aggregation());
                 break;
             case tipb::ExecType::TypeTopN:
-                assignOrThrowException(&limitOrTopN, executors[i], TOPN_NAME);
+                assignOrThrowException(&limitOrTopN, &executors[i], TOPN_NAME);
+                limitOrTopN_name = std::to_string(i) + "_limitOrTopN";
                 break;
             case tipb::ExecType::TypeLimit:
-                assignOrThrowException(&limitOrTopN, executors[i], LIMIT_NAME);
+                assignOrThrowException(&limitOrTopN, &executors[i], LIMIT_NAME);
+                limitOrTopN_name = std::to_string(i) + "_limitOrTopN";
                 break;
-//            case tipb::ExecType::TypeJoin:
-//                if (i <= start_index)
-//                    throw Exception("Join executor without child executor", ErrorCodes::LOGICAL_ERROR);
-//                if (executors[i - 1] == &(executors[i]->join().build_exec()))
-//                {
-//                    build_end_index = i - 1;
-//                    build_start_index = build_end_index;
-//                    while (build_start_index >= start_index && executors[build_start_index] != &(executors[i]->join().probe_exec()))
-//                        build_start_index--;
-//                    if (build_start_index < start_index)
-//                        throw Exception("Join executor without child executor", ErrorCodes::LOGICAL_ERROR);
-//                    probe_end_index = build_start_index;
-//                    build_start_index++;
-//                    probe_start_index = start_index;
-//                }
-//                else if (executors[i - 1] == &(executors[i]->join().probe_exec()))
-//                {
-//                    probe_end_index = i - 1;
-//                    probe_start_index = probe_end_index;
-//                    while (probe_start_index >= start_index && executors[probe_start_index] != &(executors[i]->join().build_exec()))
-//                        probe_start_index--;
-//                    if (probe_start_index < start_index)
-//                        throw Exception("Join executor without child executor", ErrorCodes::LOGICAL_ERROR);
-//                    build_end_index = probe_start_index;
-//                    probe_start_index++;
-//                    build_start_index = start_index;
-//                }
-//                else
-//                {
-//                    throw Exception("Join executor without child executor", ErrorCodes::LOGICAL_ERROR);
-//                }
-//                children.push_back(std::make_shared<DAGQueryBlock>(id * 2, executors, probe_start_index, probe_end_index));
-//                children.push_back(std::make_shared<DAGQueryBlock>(id * 2 + 1, executors, build_start_index, build_end_index));
-//                // to break the for loop
-//                i = start_index - 1;
-//                break;
             default:
-                throw Exception("Unsupported executor in DAG request: " + executors[i]->DebugString(), ErrorCodes::NOT_IMPLEMENTED);
+                throw Exception("Unsupported executor in DAG request: " + executors[i].DebugString(), ErrorCodes::NOT_IMPLEMENTED);
         }
     }
     fillOutputFieldTypes();
 }
-*/
 
 void DAGQueryBlock::fillOutputFieldTypes()
 {
@@ -201,6 +183,18 @@ void DAGQueryBlock::fillOutputFieldTypes()
             }
         }
     }
+}
+
+void DAGQueryBlock::collectAllPossibleChildrenJoinSubqueryAlias(std::unordered_map<UInt32, std::vector<String>> & result)
+{
+    std::vector<String> all_qb_join_subquery_alias;
+    for (auto & child : children)
+    {
+        child->collectAllPossibleChildrenJoinSubqueryAlias(result);
+        all_qb_join_subquery_alias.insert(all_qb_join_subquery_alias.end(), result[child->id].begin(), result[child->id].end());
+    }
+    all_qb_join_subquery_alias.push_back(qb_join_subquery_alias);
+    result[id] = all_qb_join_subquery_alias;
 }
 
 } // namespace DB

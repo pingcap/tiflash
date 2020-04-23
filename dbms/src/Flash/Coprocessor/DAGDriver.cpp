@@ -57,7 +57,7 @@ template <bool batch>
 void DAGDriver<batch>::execute()
 try
 {
-    DAGContext dag_context(dag_request.executors_size());
+    DAGContext dag_context;
     DAGQuerySource dag(context, dag_context, regions, dag_request, writer, batch);
 
     BlockIO streams = executeQuery(dag, context, internal, QueryProcessingStage::Complete);
@@ -90,13 +90,13 @@ try
     if (!dag_request.has_collect_execution_summaries() || !dag_request.collect_execution_summaries())
         return;
     // add ExecutorExecutionSummary info
-    for (auto & p_streams : dag_context.profile_streams_list)
+    for (auto & p : dag_context.profile_streams_map)
     {
         auto * executeSummary = dag_response->add_execution_summaries();
         UInt64 time_processed_ns = 0;
         UInt64 num_produced_rows = 0;
         UInt64 num_iterations = 0;
-        for (auto & streamPtr : p_streams)
+        for (auto & streamPtr : p.second.input_streams)
         {
             if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streamPtr.get()))
             {
@@ -105,9 +105,25 @@ try
                 num_iterations += p_stream->getProfileInfo().blocks;
             }
         }
+        for (auto & join_alias : dag_context.qb_id_to_join_alias_map[p.second.qb_id])
+        {
+            if (dag_context.profile_streams_map_for_join_build_side.find(join_alias)
+                != dag_context.profile_streams_map_for_join_build_side.end())
+            {
+                UInt64 process_time_for_build = 0;
+                for (auto & join_stream : dag_context.profile_streams_map_for_join_build_side[join_alias])
+                {
+                    if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(join_stream.get()))
+                        process_time_for_build = std::max(process_time_for_build, p_stream->getProfileInfo().execution_time);
+                }
+                time_processed_ns += process_time_for_build;
+            }
+        }
         executeSummary->set_time_processed_ns(time_processed_ns);
         executeSummary->set_num_produced_rows(num_produced_rows);
         executeSummary->set_num_iterations(num_iterations);
+        if (dag_request.has_root_executor())
+            executeSummary->set_executor_id(p.first);
     }
 }
 catch (const RegionException & e)
