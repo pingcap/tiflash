@@ -9,14 +9,18 @@ extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
 
-RegionException::RegionReadStatus GetRegionReadStatus(const RegionPtr & current_region, UInt64 region_version, UInt64 region_conf_version)
+RegionException::RegionReadStatus GetRegionReadStatus(
+    const RegionInfo & check_info, const RegionPtr & current_region, ImutRegionRangePtr & region_range)
 {
     if (!current_region)
         return RegionException::NOT_FOUND;
-    if (current_region->version() != region_version || current_region->confVer() != region_conf_version)
+    auto [version, conf_ver, range] = current_region->dumpVersionRange();
+    if (version != check_info.region_version || conf_ver != check_info.region_conf_version)
         return RegionException::VERSION_ERROR;
     if (current_region->peerState() != raft_serverpb::PeerState::Normal)
         return RegionException::NOT_FOUND;
+
+    region_range = std::move(range);
     return RegionException::OK;
 }
 
@@ -39,8 +43,8 @@ std::tuple<std::optional<std::unordered_map<RegionID, const RegionInfo &>>, Regi
             status_res = RegionException::NOT_FOUND;
             continue;
         }
-        auto current_region = tmt.getKVStore()->getRegion(id);
-        if (auto status = GetRegionReadStatus(current_region, r.region_version, r.region_conf_version); status != RegionException::OK)
+        ImutRegionRangePtr region_range{nullptr};
+        if (auto status = GetRegionReadStatus(r, tmt.getKVStore()->getRegion(id), region_range); status != RegionException::OK)
         {
             region_need_retry.emplace(id, r);
             status_res = status;
@@ -51,7 +55,7 @@ std::tuple<std::optional<std::unordered_map<RegionID, const RegionInfo &>>, Regi
             info.region_id = id;
             info.version = r.region_version;
             info.conf_version = r.region_conf_version;
-            info.range_in_table = current_region->getHandleRangeByTable(table_id);
+            info.range_in_table = region_range->getHandleRangeByTable(table_id);
             for (const auto & p : r.key_ranges)
             {
                 TiKVRange::Handle start = TiKVRange::getRangeHandle<true>(p.first, table_id);
