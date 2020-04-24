@@ -271,8 +271,16 @@ RegionMergeResult MetaRaftCommandDelegate::checkBeforeCommitMerge(
     return res;
 }
 
+static void CheckRegionForMergeCmd(const raft_cmdpb::AdminResponse & response, const RegionState & region_state)
+{
+    if (response.has_split() && !(response.split().left() == region_state.getRegion()))
+        throw Exception(std::string(__PRETTY_FUNCTION__) + ": current region:\n" + region_state.getRegion().DebugString() + "\nexpect:\n"
+                + response.split().left().DebugString() + "\nshould not happen",
+            ErrorCodes::LOGICAL_ERROR);
+}
+
 void MetaRaftCommandDelegate::execRollbackMerge(
-    const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse &, const UInt64 index, const UInt64 term)
+    const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term)
 {
     auto & rollback_request = request.rollback_merge();
 
@@ -290,10 +298,12 @@ void MetaRaftCommandDelegate::execRollbackMerge(
     region_state.setState(raft_serverpb::PeerState::Normal);
     region_state.clearMergeState();
     doSetApplied(index, term);
+
+    CheckRegionForMergeCmd(response, region_state);
 }
 
-void MetaRaftCommandDelegate::execCommitMerge(
-    const RegionMergeResult & res, UInt64 index, UInt64 term, const MetaRaftCommandDelegate & source_meta)
+void MetaRaftCommandDelegate::execCommitMerge(const RegionMergeResult & res, UInt64 index, UInt64 term,
+    const MetaRaftCommandDelegate & source_meta, const raft_cmdpb::AdminResponse & response)
 {
     std::lock_guard<std::mutex> lock(mutex);
     region_state.setVersion(res.version);
@@ -305,10 +315,12 @@ void MetaRaftCommandDelegate::execCommitMerge(
     region_state.setState(raft_serverpb::PeerState::Normal);
     region_state.clearMergeState();
     doSetApplied(index, term);
+
+    CheckRegionForMergeCmd(response, region_state);
 }
 
 void MetaRaftCommandDelegate::execPrepareMerge(
-    const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse &, UInt64 index, UInt64 term)
+    const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term)
 {
     auto & prepare_merge_request = request.prepare_merge();
     auto & target = prepare_merge_request.target();
@@ -328,6 +340,8 @@ void MetaRaftCommandDelegate::execPrepareMerge(
 
     region_state.setState(raft_serverpb::PeerState::Merging);
     doSetApplied(index, term);
+
+    CheckRegionForMergeCmd(response, region_state);
 }
 
 bool RegionMeta::isPeerRemoved() const
