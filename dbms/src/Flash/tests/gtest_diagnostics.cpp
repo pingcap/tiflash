@@ -20,7 +20,7 @@ public:
 };
 
 
-TEST_F(Diagnostics_Test, ServerInfoTest)
+TEST_F(Diagnostics_Test, DISABLED_ServerInfoTest)
 {
     std::vector<ServerInfoItem> items;
     service.cpuLoadInfo(items);
