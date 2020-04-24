@@ -104,6 +104,7 @@ public:
     std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
     static RegionPtr deserialize(ReadBuffer & buf, const IndexReaderCreateFunc * index_reader_create = nullptr);
 
+    std::string getDebugString(std::stringstream & ss) const;
     RegionID id() const;
     ImutRegionRangePtr getRange() const;
 
