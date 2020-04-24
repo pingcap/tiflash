@@ -950,10 +950,7 @@ void PageFile::setLegacy()
     type = Type::Legacy;
     formal_dir.renameTo(folderPath());
     // remove the data part
-    if (auto data_file = Poco::File(dataPath()); data_file.exists())
-    {
-        data_file.remove();
-    }
+    removeDataIfExists();
 }
 
 void PageFile::setCheckpoint()
@@ -974,10 +971,7 @@ void PageFile::setCheckpoint()
     type = Type::Checkpoint;
     file.renameTo(folderPath());
     // Remove the data part, should be a emtpy file.
-    if (auto data_file = Poco::File(dataPath()); data_file.exists())
-    {
-        data_file.remove();
-    }
+    removeDataIfExists();
 }
 
 void PageFile::removeDataIfExists() const
