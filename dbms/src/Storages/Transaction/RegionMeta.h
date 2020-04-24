@@ -123,7 +123,8 @@ class MetaRaftCommandDelegate : public RegionMeta, private boost::noncopyable
 
     void execChangePeer(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
     void execPrepareMerge(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
-    void execCommitMerge(const RegionMergeResult & result, UInt64 index, UInt64 term, const MetaRaftCommandDelegate & source_meta);
+    void execCommitMerge(const RegionMergeResult & result, UInt64 index, UInt64 term, const MetaRaftCommandDelegate & source_meta,
+        const raft_cmdpb::AdminResponse & response);
     RegionMergeResult checkBeforeCommitMerge(const raft_cmdpb::AdminRequest & request, const MetaRaftCommandDelegate & source_meta) const;
     void execRollbackMerge(
         const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);

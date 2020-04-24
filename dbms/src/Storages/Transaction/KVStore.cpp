@@ -283,7 +283,7 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt)
     const auto region = getRegion(region_id);
     if (region == nullptr)
     {
-        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": [region " << region_id << "] is not found, might be removed already");
+        LOG_INFO(log, __PRETTY_FUNCTION__ << ": [region " << region_id << "] is not found, might be removed already");
         return;
     }
     LOG_INFO(log, "Handle destroy " << region->toString());
@@ -437,7 +437,6 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
             persist_region(curr_region);
             {
                 auto source_region = getRegion(source_region_id);
-                source_region->setPendingRemove();
                 // `source_region` is merged, don't remove its data in storage.
                 removeRegion(
                     source_region_id, /* remove_data */ false, region_table, task_lock, region_manager.genRegionTaskLock(source_region_id));

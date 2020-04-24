@@ -494,15 +494,8 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
         }
         else
         {
-            const auto ori_range = internal_region.range_in_table;
             internal_region.range_in_table.first = std::min(new_handle_range.first, internal_region.range_in_table.first);
             internal_region.range_in_table.second = std::max(new_handle_range.second, internal_region.range_in_table.second);
-
-            LOG_INFO(log,
-                __FUNCTION__ << ": table " << table_id << ", internal region " << region_id << " extend range from ["
-                             << ori_range.first.toString() << "," << ori_range.second.toString() << ") to ["
-                             << internal_region.range_in_table.first.toString() << "," << internal_region.range_in_table.second.toString()
-                             << ")");
         }
     }
     else
