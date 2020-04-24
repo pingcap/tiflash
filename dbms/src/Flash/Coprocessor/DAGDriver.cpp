@@ -72,13 +72,15 @@ try
     BlockOutputStreamPtr dag_output_stream;
     if constexpr (batch)
     {
-        dag_output_stream = std::make_shared<DAGBlockOutputStream<true>>(
-            writer, context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), streams.in->getHeader());
+        dag_output_stream = std::make_shared<DAGBlockOutputStream<true>>(writer, context.getSettings().dag_records_per_chunk,
+            dag.getEncodeType(), dag.getResultFieldTypes(), streams.in->getHeader(), dag_context,
+            dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries());
     }
     else
     {
         dag_output_stream = std::make_shared<DAGBlockOutputStream<false>>(dag_response, context.getSettings().dag_records_per_chunk,
-            dag.getEncodeType(), dag.getResultFieldTypes(), streams.in->getHeader());
+            dag.getEncodeType(), dag.getResultFieldTypes(), streams.in->getHeader(), dag_context,
+            dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries());
     }
     copyData(*streams.in, *dag_output_stream);
 
@@ -97,29 +99,6 @@ try
                 throw Exception(
                     "DAG response is too big, please check config about region size or region merge scheduler", ErrorCodes::LOGICAL_ERROR);
         }
-    }
-
-    if (!dag_request.has_collect_execution_summaries() || !dag_request.collect_execution_summaries())
-        return;
-    // add ExecutorExecutionSummary info
-    for (auto & p_streams : dag_context.profile_streams_list)
-    {
-        auto * executeSummary = dag_response->add_execution_summaries();
-        UInt64 time_processed_ns = 0;
-        UInt64 num_produced_rows = 0;
-        UInt64 num_iterations = 0;
-        for (auto & streamPtr : p_streams)
-        {
-            if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streamPtr.get()))
-            {
-                time_processed_ns = std::max(time_processed_ns, p_stream->getProfileInfo().execution_time);
-                num_produced_rows += p_stream->getProfileInfo().rows;
-                num_iterations += p_stream->getProfileInfo().blocks;
-            }
-        }
-        executeSummary->set_time_processed_ns(time_processed_ns);
-        executeSummary->set_num_produced_rows(num_produced_rows);
-        executeSummary->set_num_iterations(num_iterations);
     }
 }
 catch (const RegionException & e)
