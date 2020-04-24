@@ -89,16 +89,23 @@ try
 
     const size_t num_rows_write = 128;
 
+    size_t block_bytes_in_memory = 0;
     {
         // Prepare for write
         Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write / 2, false);
+        block_bytes_in_memory += block1.bytes();
         Block block2 = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write, false);
+        block_bytes_in_memory += block2.bytes();
         auto  stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
         stream->writePrefix();
         stream->write(block1, 0);
         stream->write(block2, 0);
         stream->writeSuffix();
     }
+
+    std::cout << " block bytes: "<< block_bytes_in_memory << std::endl;
+    std::cout << " dm bytes: " << dm_file->getBytesInDisk() << std::endl;
+
 
     {
         // Test read
