@@ -5,6 +5,7 @@
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/ColumnStat.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/File/DMFileDefines.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -54,9 +55,6 @@ public:
     static DMFilePtr create(UInt64 file_id, const String & parent_path);
     static DMFilePtr restore(UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta = true);
 
-    void writeMeta();
-    void readMeta();
-
     static std::set<UInt64> listAllInPath(const String & parent_path, bool can_gc);
 
     bool canGC();
@@ -90,12 +88,21 @@ public:
         return bytes;
     }
 
+    size_t getBytesInDisk() const
+    {
+        // This include column data & its index bytes in disk.
+        // Not counting DMFile's meta and pack stat, they are usally small enough to ignore.
+        size_t bytes = 0;
+        for (const auto & c : column_stats)
+            bytes += c.second.serialized_bytes;
+        return bytes;
+    }
+
     size_t            getPacks() const { return pack_stats.size(); }
     const PackStats & getPackStats() const { return pack_stats; }
     const PackStat &  getPackStat(size_t pack_index) const { return pack_stats[pack_index]; }
 
-    const ColumnStats & getColumnStats() const { return column_stats; }
-    const ColumnStat &  getColumnStat(ColId col_id) const
+    const ColumnStat & getColumnStat(ColId col_id) const
     {
         if (auto it = column_stats.find(col_id); it != column_stats.end())
         {
@@ -117,6 +124,11 @@ private:
         : file_id(file_id_), ref_id(ref_id_), parent_path(parent_path_), status(status_), log(log_)
     {
     }
+
+    void writeMeta();
+    void readMeta();
+
+    void upgradeMetaIfNeed(DMFileVersion ver);
 
     void addPack(const PackStat & pack_stat) { pack_stats.push_back(pack_stat); }
     void setStatus(Status status_) { status = status_; }

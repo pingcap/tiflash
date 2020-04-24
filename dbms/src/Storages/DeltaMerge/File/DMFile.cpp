@@ -52,19 +52,61 @@ DMFilePtr DMFile::restore(UInt64 file_id, UInt64 ref_id, const String & parent_p
 
 void DMFile::writeMeta()
 {
-    WriteBufferFromFile buf(metaPath(), 4096);
-    writeString("DTFile format: 0", buf);
+    String meta_path = metaPath();
+    String tmp_meta_path = meta_path + ".tmp";
+    WriteBufferFromFile buf(tmp_meta_path, 4096);
+    writeString("DTFile format: ", buf);
+    writeIntText(static_cast<std::underlying_type_t<DMFileVersion>>(DMFileVersion::CURRENT_VERSION), buf);
     writeString("\n", buf);
-    writeText(column_stats, buf);
+    writeText(column_stats, CURRENT_VERSION, buf);
+    
+    Poco::File(tmp_meta_path).renameTo(meta_path);
+}
+
+void DMFile::upgradeMetaIfNeed(DMFileVersion ver)
+{
+    if (unlikely(ver == DMFileVersion::VERSION_BASE))
+    {
+        // Update ColumnStat.serialized_bytes
+        for (auto && c : column_stats)
+        {
+            auto   col_id = c.first;
+            auto & stat   = c.second;
+            c.second.type->enumerateStreams(
+                [col_id, &stat, this](const IDataType::SubstreamPath & substream) {
+                    String stream_name = DMFile::getFileNameBase(col_id, substream);
+                    String data_file   = colDataPath(stream_name);
+                    if (Poco::File f(data_file); f.exists())
+                        stat.serialized_bytes += f.getSize();
+                    String mark_file = colDataPath(stream_name);
+                    if (Poco::File f(mark_file); f.exists())
+                        stat.serialized_bytes += f.getSize();
+                    String index_file = colIndexPath(stream_name);
+                    if (Poco::File f(index_file); f.exists())
+                        stat.serialized_bytes += f.getSize();
+                },
+                {});
+        }
+        // Update ColumnStat in meta.
+        writeMeta();
+    }
 }
 
 void DMFile::readMeta()
 {
+    DMFileVersion ver; // Binary version
     {
         auto buf = openForRead(metaPath());
-        assertString("DTFile format: 0", buf);
+        assertString("DTFile format: ", buf);
+        {
+            std::underlying_type_t<DMFileVersion> ver_int;
+            DB::readText(ver_int, buf);
+            ver = static_cast<DMFileVersion>(ver_int);
+        }
         assertString("\n", buf);
-        readText(column_stats, buf);
+        readText(column_stats, ver, buf);
+
+        upgradeMetaIfNeed(ver);
     }
 
     {
@@ -83,7 +125,7 @@ void DMFile::finalize()
     if (status != Status::WRITING)
         throw Exception("Expected WRITING status, now " + statusString(status));
     Poco::File old_file(path());
-    status = Status ::READABLE;
+    status = Status::READABLE;
 
     auto new_path = path();
 

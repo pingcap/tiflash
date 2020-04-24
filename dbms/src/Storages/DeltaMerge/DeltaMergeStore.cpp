@@ -1477,7 +1477,7 @@ void DeltaMergeStore::loadDMFiles()
         for (auto & file_id : DMFile::listAllInPath(parent_path, false))
         {
             auto dmfile = DMFile::restore(file_id, /* ref_id= */ 0, parent_path, true);
-            extra_paths.addDMFile(file_id, dmfile->getBytes(), root_path);
+            extra_paths.addDMFile(file_id, dmfile->getBytesInDisk(), root_path);
         }
     }
 }
