@@ -271,7 +271,6 @@ public:
     PageFileIdAndLevel fileIdLevel() const { return std::make_pair(file_id, level); }
     bool               isValid() const { return file_id; }
     bool               isExist() const;
-    void               removeDataIfExists() const;
     Type               getType() const { return type; }
 
     void setFileAppendPos(size_t meta_pos, size_t data_pos)
@@ -299,6 +298,8 @@ private:
     constexpr static const char * folder_prefix_temp       = ".temp.page";
     constexpr static const char * folder_prefix_legacy     = "legacy.page";
     constexpr static const char * folder_prefix_checkpoint = "checkpoint.page";
+
+    void removeDataIfExists() const;
 
 private:
     UInt64 file_id = 0; // Valid id start from 1.
