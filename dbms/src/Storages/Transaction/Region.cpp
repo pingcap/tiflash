@@ -584,7 +584,7 @@ TiFlashApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 in
     {
         // optimize: if index is 6, cmd should be empty.
         if (cmds.len)
-            throw Exception(std::string(__PRETTY_FUNCTION__) + " index 6 should be with empty cmd list", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(std::string(__PRETTY_FUNCTION__) + ": index 6 should be with empty cmd list", ErrorCodes::LOGICAL_ERROR);
     }
 
     if (index <= appliedIndex())
@@ -663,8 +663,8 @@ TiFlashApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 in
         { // make sure no more write cmd after region is destroyed or merged into other.
             if (auto state = peerState(); state == raft_serverpb::PeerState::Tombstone)
             {
-                throw Exception(std::string(__PRETTY_FUNCTION__) + toString(false) + " execute normal raft cmd at index "
-                        + std::to_string(index) + " under state Tombstone",
+                throw Exception(std::string(__PRETTY_FUNCTION__) + ": " + toString(false) + " execute normal raft cmd at index "
+                        + std::to_string(index) + " under state Tombstone, should not happen",
                     ErrorCodes::LOGICAL_ERROR);
             }
         }
