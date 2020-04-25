@@ -76,8 +76,8 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
                     auto name = st->getTableInfo().getColumnName(col_id);
                     one_join_key.push_back(name);
                 }
-                bf[i] = one_bf;
-                join_key[i] = one_join_key;
+                bf.push_back(one_bf);
+                join_key.push_back(one_join_key);
             }
         }
     }
@@ -434,12 +434,9 @@ void InterpreterDAG::executeWhere(Pipeline & pipeline, const ExpressionActionsPt
 {
     pipeline.transform([&](auto & stream) {
         const auto & tmp = std::make_shared<FilterBlockInputStream>(stream, expr, filter_column);
-        for (int i = 0;;i++) {
-            if (join_key[i].empty()) {
-                break;
-            }
-            (*tmp).bfs[i] = bf[i];
-            (*tmp).join_keys[i] = join_key[i];
+        for (unsigned i = 0;i < bf.size();i++) {
+            (*tmp).bfs.push_back(bf[i]);
+            (*tmp).join_keys.push_back(join_key[i]);
         }
         stream = tmp;
     });

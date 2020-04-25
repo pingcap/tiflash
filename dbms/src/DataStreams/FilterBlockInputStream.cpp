@@ -116,7 +116,7 @@ Block FilterBlockInputStream::readImpl()
                 column_of_filter_for_bloom.push_back(1);
             }
             auto fnvHash = std::make_shared<FNVhash>();
-            for (unsigned bfnum = 0; !join_keys[bfnum].empty() ;bfnum++) {
+            for (unsigned bfnum = 0; bfnum < bfs.size();bfnum++) {
                 auto join_key = join_keys[bfnum];
                 auto bf = bfs[bfnum];
 

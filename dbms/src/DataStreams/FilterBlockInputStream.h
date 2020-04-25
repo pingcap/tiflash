@@ -30,15 +30,16 @@ public:
 protected:
     Block readImpl() override;
 
-public:
+private:
     ExpressionActionsPtr expression;
     Block header;
     ssize_t filter_column;
 
     ConstantFilterDescription constant_filter_description;
 
-    std::shared_ptr<BloomFilter>  bfs[100];
-    std::vector<String> join_keys[100];
+public:
+    std::vector<std::shared_ptr<BloomFilter>>  bfs;
+    std::vector<std::vector<String>> join_keys;
 };
 
 }

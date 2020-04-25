@@ -109,8 +109,8 @@ private:
 
     std::vector<const tipb::Expr *> conditions;
 
-    std::vector<String> join_key[100];
-    std::shared_ptr<BloomFilter> bf[100];
+    std::vector<std::vector<String>> join_key;
+    std::vector<std::shared_ptr<BloomFilter>> bf;
 
     Poco::Logger * log;
 };

@@ -1,7 +1,3 @@
-//
-// Created by Shenghui Wu on 2020/3/4.
-//
-
 #include "BloomFilter.h"
 
 namespace DB {
