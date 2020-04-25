@@ -56,6 +56,15 @@ try
         dag_response, context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), streams.in->getHeader());
     copyData(*streams.in, *dag_output_stream);
 
+    if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streams.in.get()))
+    {
+        // Under some test cases, there may be dag response whose size is bigger than INT_MAX, and GRPC can not limit it.
+        // Throw exception to prevent receiver from getting wrong response.
+        if (p_stream->getProfileInfo().bytes > std::numeric_limits<int>::max())
+            throw Exception(
+                "DAG response is too big, please check config about region size or region merge scheduler", ErrorCodes::LOGICAL_ERROR);
+    }
+
     if (!dag_request.has_collect_execution_summaries() || !dag_request.collect_execution_summaries())
         return;
     // add ExecutorExecutionSummary info
