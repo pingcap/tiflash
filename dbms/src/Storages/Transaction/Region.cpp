@@ -303,6 +303,7 @@ void RegionRaftCommandDelegate::handleAdminRaftCmd(const raft_cmdpb::AdminReques
 
             break;
         }
+        case raft_cmdpb::AdminCmdType::Split:
         case raft_cmdpb::AdminCmdType::BatchSplit:
         {
             result.ori_region_range = meta.makeRaftCommandDelegate().regionState().getRange();
