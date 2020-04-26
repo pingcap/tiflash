@@ -273,10 +273,13 @@ RegionMergeResult MetaRaftCommandDelegate::checkBeforeCommitMerge(
 
 static void CheckRegionForMergeCmd(const raft_cmdpb::AdminResponse & response, const RegionState & region_state)
 {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
     if (response.has_split() && !(response.split().left() == region_state.getRegion()))
         throw Exception(std::string(__PRETTY_FUNCTION__) + ": current region:\n" + region_state.getRegion().DebugString() + "\nexpect:\n"
                 + response.split().left().DebugString() + "\nshould not happen",
             ErrorCodes::LOGICAL_ERROR);
+#pragma clang diagnostic push
 }
 
 void MetaRaftCommandDelegate::execRollbackMerge(

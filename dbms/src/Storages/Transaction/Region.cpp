@@ -303,7 +303,12 @@ void RegionRaftCommandDelegate::handleAdminRaftCmd(const raft_cmdpb::AdminReques
 
             break;
         }
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
         case raft_cmdpb::AdminCmdType::Split:
+#pragma clang diagnostic pop
+
         case raft_cmdpb::AdminCmdType::BatchSplit:
         {
             result.ori_region_range = meta.makeRaftCommandDelegate().regionState().getRange();
