@@ -588,8 +588,8 @@ void PageFile::Writer::closeFd()
         ::close(data_file_fd);
         ::close(meta_file_fd);
 
-        data_file_fd = 0;
         meta_file_fd = 0;
+        data_file_fd = 0;
     });
     PageUtil::syncFile(data_file_fd, data_file_path);
     PageUtil::syncFile(meta_file_fd, meta_file_path);
