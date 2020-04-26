@@ -53,6 +53,8 @@ public:
         // Minimum number of legacy files to be selected for compaction
         size_t gc_compact_legacy_min_num = 3;
 
+        Seconds open_file_max_idle_time{15};
+
         ::DB::MVCC::VersionSetConfig version_set_config;
     };
 
