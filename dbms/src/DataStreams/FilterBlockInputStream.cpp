@@ -103,7 +103,7 @@ Block FilterBlockInputStream::readImpl()
 
         expression->execute(res);
 
-        if (constant_filter_description.always_true && !child_filter && bfs[0] == nullptr)
+        if (constant_filter_description.always_true && !child_filter && bfs.size())
             return res;
 
         size_t columns = res.columns();
@@ -205,7 +205,7 @@ Block FilterBlockInputStream::readImpl()
                 filter = child_filter;
             else
             {
-                if (bfs[0] == nullptr)return res;
+                if (bfs.size() == 0) return res;
             }
         }
         else
