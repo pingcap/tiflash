@@ -82,6 +82,7 @@ public:
         database = path_pool.database;
         table = path_pool.table;
         path_need_database_name = path_pool.path_need_database_name;
+        global_capacity = path_pool.global_capacity;
         log = path_pool.log;
         return *this;
     }
@@ -303,7 +304,7 @@ private:
 
     bool path_need_database_name = false;
 
-    const PathCapacityMetricsPtr global_capacity;
+    PathCapacityMetricsPtr global_capacity;
 
     Poco::Logger * log;
 };

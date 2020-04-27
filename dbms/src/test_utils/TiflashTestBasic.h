@@ -77,7 +77,6 @@ public:
     {
         static Context context = DB::Context::createGlobal();
         context.setPath(getTemporaryPath());
-        context.setExtraPaths(getExtraPaths());
         context.setGlobalContext(context);
         try
         {
@@ -90,11 +89,15 @@ public:
             context.setApplicationType(DB::Context::ApplicationType::SERVER);
 
             context.initializeTiFlashMetrics();
+            std::vector<String> all_paths{getTemporaryPath()};
+            std::vector<size_t> all_capacity{0};
+            context.initializePathCapacityMetric(all_paths, std::move(all_capacity));
 
             context.createTMTContext({}, "", "", {"default"}, getTemporaryPath() + "/kvstore", TiDB::StorageEngine::TMT, false);
             context.getTMTContext().restore();
         }
         context.getSettingsRef() = settings;
+        context.setExtraPaths(getExtraPaths(), context.getPathCapacity());
         return context;
     }
 };

@@ -534,7 +534,7 @@ PageFile::Writer::~Writer()
     closeFd();
 }
 
-void PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
+size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
 {
     ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
 
@@ -564,6 +564,9 @@ void PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
     page_file.meta_file_pos += meta_buf.size();
 
     last_write_time = Clock::now();
+
+    // return how may bytes written
+    return data_buf.size() + meta_buf.size();
 }
 
 void PageFile::Writer::tryCloseIdleFd(const Seconds & max_idle_time)
@@ -940,23 +943,23 @@ void PageFile::setFormal()
     file.renameTo(folderPath());
 }
 
-void PageFile::setLegacy()
+size_t PageFile::setLegacy()
 {
     if (type != Type::Formal)
-        return;
+        return 0;
     // Rename to legacy dir. Note that we can NOT remove the data part before
     // successfully rename to legacy status.
     Poco::File formal_dir(folderPath());
     type = Type::Legacy;
     formal_dir.renameTo(folderPath());
     // remove the data part
-    removeDataIfExists();
+    return removeDataIfExists();
 }
 
-void PageFile::setCheckpoint()
+size_t PageFile::setCheckpoint()
 {
     if (type != Type::Temp)
-        return;
+        return 0;
 
     {
         // The data part of checkpoint file should be empty.
@@ -971,15 +974,18 @@ void PageFile::setCheckpoint()
     type = Type::Checkpoint;
     file.renameTo(folderPath());
     // Remove the data part, should be a emtpy file.
-    removeDataIfExists();
+    return removeDataIfExists();
 }
 
-void PageFile::removeDataIfExists() const
+size_t PageFile::removeDataIfExists() const
 {
+    size_t bytes_removed = 0;
     if (auto data_file = Poco::File(dataPath()); data_file.exists())
     {
+        bytes_removed = data_file.getSize();
         data_file.remove();
     }
+    return bytes_removed;
 }
 
 void PageFile::destroy() const
@@ -1015,6 +1021,11 @@ bool PageFile::isExist() const
         return file.exists() && meta_file.exists();
     else
         throw Exception("Should not call isExist for " + toString());
+}
+
+UInt64 PageFile::getDiskSize() const
+{
+    return getDataFileSize() + getMetaFileSize();
 }
 
 UInt64 PageFile::getDataFileSize() const

@@ -40,7 +40,7 @@ public:
         Writer(PageFile &, bool sync_on_write);
         ~Writer();
 
-        void write(WriteBatch & wb, PageEntriesEdit & edit);
+        [[nodiscard]] size_t write(WriteBatch & wb, PageEntriesEdit & edit);
         void tryCloseIdleFd(const Seconds & max_idle_time);
 
         PageFileIdAndLevel fileIdLevel() const;
@@ -111,7 +111,6 @@ public:
 
     class MetaMergingReader : private boost::noncopyable
     {
-
     public:
         MetaMergingReader(PageFile & page_file_) : page_file(page_file_) {}
 
@@ -244,9 +243,9 @@ public:
     /// Rename this page file into formal style.
     void setFormal();
     /// Rename this page file into legacy style and remove data.
-    void setLegacy();
+    size_t setLegacy();
     /// Rename this page file into checkpoint style.
-    void setCheckpoint();
+    size_t setCheckpoint();
     /// Destroy underlying system files.
     void destroy() const;
 
@@ -280,6 +279,10 @@ public:
     }
     UInt64 getDataFileAppendPos() const { return data_file_pos; }
     UInt64 getMetaFileAppendPos() const { return meta_file_pos; }
+
+    /// Get disk usage
+    // Total size, data && meta. 
+    UInt64 getDiskSize() const;
     UInt64 getDataFileSize() const;
     UInt64 getMetaFileSize() const;
 
@@ -299,7 +302,7 @@ private:
     constexpr static const char * folder_prefix_legacy     = "legacy.page";
     constexpr static const char * folder_prefix_checkpoint = "checkpoint.page";
 
-    void removeDataIfExists() const;
+    size_t removeDataIfExists() const;
 
 private:
     UInt64 file_id = 0; // Valid id start from 1.

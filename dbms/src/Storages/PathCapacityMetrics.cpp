@@ -52,7 +52,7 @@ FsStats PathCapacityMetrics::getFsStats() const
     // Now we expect size of path_infos not change, don't acquire hevay lock on `path_infos` now.
     FsStats total_stat;
     double max_used_rate = 0.0;
-    std::optional<uint64_t> first_avali_size = 0;
+    std::optional<uint64_t> first_avali_size = std::nullopt;
     for (size_t i = 0; i < path_infos.size(); ++i)
     {
         FsStats path_stat = path_infos[i].getStats(log);
@@ -89,9 +89,15 @@ ssize_t PathCapacityMetrics::locatePath(const std::string & file_path) const
     for (size_t i = 0; i < path_infos.size(); ++i)
     {
         const auto & path_info = path_infos[i];
+        const auto max_length_compare = std::min(path_info.path.size(), file_path.size());
         ssize_t match_size = 0;
-        for (size_t str_idx = 0; str_idx < path_info.path.size() && str_idx < file_path.size(); ++str_idx)
+        for (size_t str_idx = 0; str_idx <= max_length_compare; ++str_idx)
         {
+            if (str_idx == max_length_compare)
+            {
+                match_size = str_idx - 1;
+                break;
+            }
             if (path_info.path[str_idx] != file_path[str_idx])
             {
                 match_size = str_idx - 1;
@@ -144,6 +150,7 @@ FsStats PathCapacityMetrics::CapacityInfo::getStats(Poco::Logger * log) const
     if (avali > disk_free_bytes)
         avali = disk_free_bytes;
     res.avail_size = avali;
+    res.ok = 1;
 
     return res;
 }
