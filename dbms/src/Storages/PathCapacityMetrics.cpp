@@ -1,5 +1,6 @@
 #include <Common/Exception.h>
 #include <Common/formatReadable.h>
+#include <IO/WriteHelpers.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/Transaction/ProxyFFIType.h>
 #include <common/logger_useful.h>
@@ -11,6 +12,7 @@
 namespace DB
 {
 PathCapacityMetrics::PathCapacityMetrics(const std::vector<std::string> & all_paths, const std::vector<size_t> & capacities)
+    : log(&Poco::Logger::get("PathCapacityMetrics"))
 {
     for (size_t i = 0; i < all_paths.size(); ++i)
     {
@@ -75,6 +77,9 @@ FsStats PathCapacityMetrics::getFsStats() const
     total_stat.avail_size = total_stat.capacity_size - total_stat.used_size;
     total_stat.avail_size = std::min(total_stat.avail_size, *first_avali_size);
 
+    const double avali_rate = total_stat.avail_size / total_stat.capacity_size;
+    if (avali_rate <= 0.2)
+        LOG_WARNING(log, "Available space is only " << DB::toString(avali_rate * 100.0, 2) << "% of capacity size");
     total_stat.ok = 1;
 
     return total_stat;
