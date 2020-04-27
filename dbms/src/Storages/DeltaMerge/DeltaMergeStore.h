@@ -312,7 +312,7 @@ private:
 
     bool isSegmentValid(const SegmentPtr & segment);
 
-    void loadDMFiles();
+    void restoreExtraPathCapacity();
 
 private:
     String      path;
