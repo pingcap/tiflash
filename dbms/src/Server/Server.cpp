@@ -273,6 +273,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     std::vector<String> all_normal_path;
     std::vector<size_t> all_capacity;
+    if (config().has("capacity"))
     {
         String capacities = config().getString("capacity");
         Poco::trimInPlace(capacities);
