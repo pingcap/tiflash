@@ -648,6 +648,12 @@ bool PageStorage::gc()
             writing_file_id_levels.insert(write_files[i].fileIdLevel());
         }
         min_writing_file_id_level = *writing_file_id_levels.begin();
+
+        /// If writer has not been used for too long, close the opened file fd of them.
+        for (auto & writer : idle_writers)
+        {
+            writer->tryCloseIdleFd(config.open_file_max_idle_time);
+        }
     }
 
     GCDebugInfo debugging_info;
