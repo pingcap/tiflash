@@ -40,13 +40,13 @@ inline void readText(ColumnStats & column_sats, DMFileVersion ver, ReadBuffer & 
         DB::readText(id, buf);
         DB::assertChar(' ', buf);
         DB::readText(avg_size, buf);
-        DB::assertChar(' ', buf);
-        DB::readString(type_name, buf);
         if (ver >= DMFileVersion::VERSION_WITH_COLUMN_SIZE)
         {
             DB::assertChar(' ', buf);
             DB::readText(serialized_bytes, buf);
         }
+        DB::assertChar(' ', buf);
+        DB::readString(type_name, buf);
         DB::assertChar('\n', buf);
 
         auto type = data_type_factory.get(type_name);
@@ -65,13 +65,14 @@ inline void writeText(const ColumnStats & column_sats, DMFileVersion ver, WriteB
         DB::writeText(id, buf);
         DB::writeChar(' ', buf);
         DB::writeText(stat.avg_size, buf);
-        DB::writeChar(' ', buf);
-        DB::writeString(stat.type->getName(), buf);
         if (ver >= DMFileVersion::VERSION_WITH_COLUMN_SIZE)
         {
             DB::writeChar(' ', buf);
             DB::writeText(stat.serialized_bytes, buf);
         }
+        DB::writeChar(' ', buf);
+        // Note that name of DataType may contains ' '
+        DB::writeString(stat.type->getName(), buf); 
         DB::writeChar('\n', buf);
     }
 }
