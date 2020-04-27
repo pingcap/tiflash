@@ -121,8 +121,8 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
 
     auto & extra_paths_root = global_context.getExtraPaths();
     extra_paths             = extra_paths_root.withTable(db_name, table_name_, data_path_contains_database_name);
-
-    loadDMFiles();
+    // restore existing dm files and set capacity for extra_paths.
+    restoreExtraPathCapacity();
 
     original_table_columns.emplace_back(original_table_handle_define);
     original_table_columns.emplace_back(getVersionColumnDefine());
@@ -1466,7 +1466,7 @@ SortDescription DeltaMergeStore::getPrimarySortDescription() const
     return desc;
 }
 
-void DeltaMergeStore::loadDMFiles()
+void DeltaMergeStore::restoreExtraPathCapacity()
 {
     LOG_DEBUG(log, "Loading dm files");
 
