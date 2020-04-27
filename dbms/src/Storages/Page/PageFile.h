@@ -41,8 +41,12 @@ public:
         ~Writer();
 
         void write(WriteBatch & wb, PageEntriesEdit & edit);
+        void tryCloseIdleFd(const Seconds & max_idle_time);
 
         PageFileIdAndLevel fileIdLevel() const;
+
+    private:
+        void closeFd();
 
     private:
         PageFile & page_file;
@@ -51,8 +55,10 @@ public:
         String data_file_path;
         String meta_file_path;
 
-        int data_file_fd;
-        int meta_file_fd;
+        int data_file_fd = 0;
+        int meta_file_fd = 0;
+
+        Clock::time_point last_write_time;
     };
 
     /// Reader is safe to used by multi threads.

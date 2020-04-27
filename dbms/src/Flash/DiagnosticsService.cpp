@@ -312,11 +312,18 @@ std::vector<DiagnosticsService::Disk> getAllDisks()
             disk.mount_point = values[1];
 
             Poco::Path rotational_file_path("/sys/block/" + disk.name + "/queue/rotational");
-            std::ifstream rotational_file(rotational_file_path.toString());
-            std::string line;
-            std::getline(rotational_file, line);
-            int rotational = std::stoi(line);
-            disk.disk_type = rotational == 1 ? disk.HDD : disk.SSD;
+            if (Poco::File(rotational_file_path).exists())
+            {
+                std::ifstream rotational_file(rotational_file_path.toString());
+                std::string line;
+                std::getline(rotational_file, line);
+                int rotational = std::stoi(line);
+                disk.disk_type = rotational == 1 ? DiagnosticsService::Disk::DiskType::HDD : DiagnosticsService::Disk::DiskType::SSD;
+            }
+            else
+            {
+                disk.disk_type = DiagnosticsService::Disk::DiskType::UNKNOWN;
+            }
 
             disk.fs_type = values[2];
 
