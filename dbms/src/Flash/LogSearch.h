@@ -25,7 +25,7 @@ public:
         const std::vector<std::string> & _patterns, std::shared_ptr<std::istream> _log_file)
         : start_time(_start_time), end_time(_end_time), levels(_levels), log_file(_log_file), log(&Poco::Logger::get("LogIterator"))
     {
-        patterns.reserve(patterns.size());
+        patterns.reserve(_patterns.size());
         for (auto p : _patterns)
         {
             patterns.emplace_back(std::regex(p));
