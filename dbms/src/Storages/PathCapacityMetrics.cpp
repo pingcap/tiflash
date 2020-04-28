@@ -51,6 +51,12 @@ void PathCapacityMetrics::freeUsedSize(const std::string & file_path, size_t use
 
 FsStats PathCapacityMetrics::getFsStats() const
 {
+    /// Note that some disk usage is not count by this function.
+    /// - kvstore  <-- can be resolved if we use PageStorage instead of stable::PageStorage for `RegionPersister` later
+    /// - proxy's data
+    /// This function only report approximate used size and available size,
+    /// and we limit avaliable size by first path. It is good enough for now.
+
     // Now we expect size of path_infos not change, don't acquire hevay lock on `path_infos` now.
     FsStats total_stat;
     double max_used_rate = 0.0;
@@ -125,8 +131,9 @@ ssize_t PathCapacityMetrics::locatePath(const std::string & file_path) const
 FsStats PathCapacityMetrics::CapacityInfo::getStats(Poco::Logger * log) const
 {
     FsStats res;
-    // Similar to `handle_store_heartbeat` in TiKV release-4.0 branch
-    // https://github.com/tikv/tikv/blob/f14e8288f3/components/raftstore/src/store/worker/pd.rs#L593
+    /// Get capacity, used, avaliable size for one path.
+    /// Similar to `handle_store_heartbeat` in TiKV release-4.0 branch
+    /// https://github.com/tikv/tikv/blob/f14e8288f3/components/raftstore/src/store/worker/pd.rs#L593
     struct statvfs vfs;
     if (int code = statvfs(path.c_str(), &vfs); code != 0)
     {
