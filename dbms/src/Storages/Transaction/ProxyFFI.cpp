@@ -144,8 +144,17 @@ uint8_t HandleCheckTerminated(TiFlashServer * server) { return server->tmt.getTe
 
 FsStats HandleComputeFsStats(TiFlashServer * server)
 {
-    auto global_capacity = server->tmt.getContext().getPathCapacity();
-    return global_capacity->getFsStats();
+    FsStats res; // res.ok = false by default
+    try
+    {
+        auto global_capacity = server->tmt.getContext().getPathCapacity();
+        res = global_capacity->getFsStats();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+    }
+    return res;
 }
 
 } // namespace DB
