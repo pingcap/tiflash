@@ -124,6 +124,9 @@ public:
 
     void traverse(const std::function<void(const Page & page)> & acceptor, SnapshotPtr snapshot = {});
     void traversePageEntries(const std::function<void(PageId page_id, const PageEntry & page)> & acceptor, SnapshotPtr snapshot);
+
+    void drop();
+
     bool gc();
 
     PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot = {});
