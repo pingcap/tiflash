@@ -1529,6 +1529,7 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
 
             stat.total_stable_rows += stable->getRows();
             stat.total_stable_size += stable->getBytes();
+            stat.total_stable_size_in_disk += stable->getBytesInDisk();
         }
     }
 
@@ -1604,6 +1605,8 @@ SegmentStats DeltaMergeStore::getSegmentStats()
         stat.rows          = segment->getEstimatedRows();
         stat.size          = delta->getBytes() + stable->getBytes();
         stat.delete_ranges = delta->getDeletes();
+
+        stat.stable_size_in_disk = stable->getBytesInDisk();
 
         stat.delta_pack_count  = delta->getPackCount();
         stat.stable_pack_count = stable->getPacks();
