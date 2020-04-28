@@ -73,13 +73,17 @@ FsStats PathCapacityMetrics::getFsStats() const
     // all capacity * max used rate
     total_stat.used_size = total_stat.capacity_size * max_used_rate;
 
-    // appromix avali size
+    // appromix avail size
     total_stat.avail_size = total_stat.capacity_size - total_stat.used_size;
     total_stat.avail_size = std::min(total_stat.avail_size, *first_avali_size);
 
-    const double avali_rate = total_stat.avail_size / total_stat.capacity_size;
+    const double avali_rate = 1.0 * total_stat.avail_size / total_stat.capacity_size;
     if (avali_rate <= 0.2)
-        LOG_WARNING(log, "Available space is only " << DB::toString(avali_rate * 100.0, 2) << "% of capacity size");
+        LOG_WARNING(log,
+            "Available space is only " << DB::toString(avali_rate * 100.0, 2)
+                                       << "% of capacity size. Avail size: " << formatReadableSizeWithBinarySuffix(total_stat.avail_size)
+                                       << ", used size: " << formatReadableSizeWithBinarySuffix(total_stat.used_size)
+                                       << ", capacity size: " << formatReadableSizeWithBinarySuffix(total_stat.capacity_size));
     total_stat.ok = 1;
 
     return total_stat;
