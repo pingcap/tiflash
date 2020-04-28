@@ -64,6 +64,13 @@ void StoragePool::restore()
     max_meta_page_id = meta_storage.getMaxId();
 }
 
+void StoragePool::drop()
+{
+    meta_storage.drop();
+    data_storage.drop();
+    log_storage.drop();
+}
+
 bool StoragePool::gc(const Seconds & try_gc_period)
 {
     {

@@ -268,6 +268,7 @@ void DeltaMergeStore::drop()
 {
     // Remove all background task first
     shutdown();
+    storage_pool.drop();
     // Drop data in extra path (stable data by default)
     extra_paths.drop(true);
     // Check if path(delta && meta by default) is covered by extra_paths, if not, drop it.
