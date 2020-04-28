@@ -1,14 +1,13 @@
-#include <gtest/gtest.h>
-
-#include <Poco/Logger.h>
-
+#include <Debug/MockSchemaNameMapper.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
+#include <Poco/Logger.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/registerStorages.h>
+#include <gtest/gtest.h>
 
 
 using TableInfo = TiDB::TableInfo;
@@ -19,7 +18,7 @@ using namespace DB;
 namespace DB
 {
 
-String createTableStmt(const DBInfo & db_info, const TableInfo & table_info, Poco::Logger * log);
+String createTableStmt(const DBInfo & db_info, const TableInfo & table_info, const SchemaNameMapper & name_mapper, Poco::Logger * log);
 
 namespace tests
 {
@@ -38,7 +37,7 @@ struct Case
         DBInfo db_info(db_info_json);
         TableInfo table_info(table_info_json);
         if (table_info.is_partition_table)
-            table_info = table_info.producePartitionTableInfo(table_or_partition_id);
+            table_info = *table_info.producePartitionTableInfo(table_or_partition_id, MockSchemaNameMapper());
         auto json1 = table_info.serialize();
         TableInfo table_info2(json1);
         auto json2 = table_info2.serialize();
@@ -47,7 +46,7 @@ struct Case
         // generate create statement with db_info and table_info
         auto verify_stmt = [&](TiDB::StorageEngine engine_type) {
             table_info.engine_type = engine_type;
-            String stmt = createTableStmt(db_info, table_info, &Poco::Logger::get("TiDBTableInfo_test"));
+            String stmt = createTableStmt(db_info, table_info, MockSchemaNameMapper(), &Poco::Logger::get("TiDBTableInfo_test"));
             if (engine_type == TiDB::StorageEngine::TMT)
                 ASSERT_EQ(stmt, create_stmt_tmt) << "Table info create statement (TMT) mismatch:\n" + stmt + "\n" + create_stmt_tmt;
             else

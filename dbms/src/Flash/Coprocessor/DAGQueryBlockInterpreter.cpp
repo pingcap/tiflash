@@ -14,7 +14,6 @@
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Flash/Coprocessor/StreamingDAGBlockInputStream.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Join.h>
@@ -763,7 +762,7 @@ bool DAGQueryBlockInterpreter::addTimeZoneCastAfterTS(std::vector<bool> & is_ts_
     /// 2. keep_session_timezone_info is false
     /// 3. current query block does not have aggregation
     if (analyzer->appendTimeZoneCastsAfterTS(
-            chain, is_ts_column, rqst, query_block.isRootQueryBlock() && !keep_session_timezone_info && query_block.aggregation == nullptr))
+            chain, is_ts_column, query_block.isRootQueryBlock() && !keep_session_timezone_info && query_block.aggregation == nullptr))
     {
         pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions()); });
         return true;
@@ -795,7 +794,7 @@ AnalysisResult DAGQueryBlockInterpreter::analyzeExpressions()
 
         // add cast if type is not match
         analyzer->appendAggSelect(
-            chain, query_block.aggregation->aggregation(), rqst, keep_session_timezone_info || !query_block.isRootQueryBlock());
+            chain, query_block.aggregation->aggregation(), keep_session_timezone_info || !query_block.isRootQueryBlock());
         if (query_block.isRootQueryBlock())
         {
             // todo for root query block, use output offsets to reconstruct the final project

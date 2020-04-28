@@ -74,7 +74,6 @@ private:
         }
         else if constexpr (MODE == DM_VERSION_FILTER_MODE_COMPACT)
         {
-            //            filter[i]    = cur_version >= version_limit || (cur_handle != next_handle && !deleted);
             filter[i]    = cur_version >= version_limit || ((cur_handle != next_handle || next_version > version_limit) && !deleted);
             not_clean[i] = filter[i] && (cur_handle == next_handle || deleted);
         }

@@ -173,7 +173,7 @@ void AlterCommand::apply(ColumnsDescription & columns_description) const
             [&](const NameAndTypePair & orig_column){ return orig_column.name == new_column_name; });
         if(new_column_it != columns.end())
         {
-            throw Exception("Rename column fails, new column name: " + column_name + " has existed ", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Rename column fails, new column name: " + new_column_name + " has existed ", ErrorCodes::LOGICAL_ERROR);
         }
         String old_column_name = old_column_it->name;
         old_column_it->name = new_column_name;
@@ -185,6 +185,10 @@ void AlterCommand::apply(ColumnsDescription & columns_description) const
             columns_description.defaults.erase(default_it->first);
             columns_description.defaults.emplace(new_column_name, default_value);
         }
+    }
+    else if (type == TOMBSTONE || type == RECOVER)
+    {
+        // Nothing to do.
     }
     else
         throw Exception("Wrong parameter type in ALTER query", ErrorCodes::LOGICAL_ERROR);

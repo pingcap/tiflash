@@ -283,6 +283,7 @@ Context Context::createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime
     res.runtime_components_factory = runtime_components_factory;
     res.shared = std::make_shared<ContextShared>(runtime_components_factory);
     res.quota = std::make_shared<QuotaForIntervals>();
+    res.timezone_info.init();
     return res;
 }
 
@@ -1482,7 +1483,7 @@ void Context::initializeTiFlashMetrics()
     shared->tiflash_metrics = std::make_shared<TiFlashMetrics>();
 }
 
-TiFlashMetricsPtr Context::getTiFlashMetrics()
+TiFlashMetricsPtr Context::getTiFlashMetrics() const
 {
     auto lock = getLock();
     return shared->tiflash_metrics;

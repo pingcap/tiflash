@@ -31,7 +31,8 @@ public:
     bool supportsModification() const override { return true; }
 
     String getName() const override;
-    String getTableName() const override { return table_name; }
+    String getTableName() const override;
+    String getDatabaseName() const override;
 
     void drop() override;
 
@@ -47,10 +48,7 @@ public:
     /// Write from raft layer.
     void write(Block && block, const Settings & settings);
 
-    void flushCache(const Context & context) override
-    {
-        flushCache(context, DM::HandleRange::newAll());
-    }
+    void flushCache(const Context & context) override { flushCache(context, DM::HandleRange::newAll()); }
 
     void flushCache(const Context & context, const DB::HandleRange<HandleID> & range_to_flush) override
     {
@@ -63,17 +61,23 @@ public:
 
     void deleteRange(const DM::HandleRange & range_to_delete, const Settings & settings);
 
-    void rename(const String & /*new_path_to_db*/, const String & /*new_database_name*/, const String & /*new_table_name*/) override;
+    void rename(const String & new_path_to_db,
+        const String & new_database_name,
+        const String & new_table_name,
+        const String & new_display_table_name) override;
 
-    String getDatabaseName() const override { return db_name; }
+    void modifyASTStorage(ASTStorage * storage_ast, const TiDB::TableInfo & table_info) override;
 
     void alter(const AlterCommands & commands, const String & database_name, const String & table_name, const Context & context) override;
 
     ::TiDB::StorageEngine engineType() const override { return ::TiDB::StorageEngine::DT; }
 
     // Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
-    void alterFromTiDB(
-        const AlterCommands & commands, const TiDB::TableInfo & table_info, const String & database_name, const Context & context) override;
+    void alterFromTiDB(const AlterCommands & commands,
+        const String & database_name,
+        const TiDB::TableInfo & table_info,
+        const SchemaNameMapper & name_mapper,
+        const Context & context) override;
 
     void setTableInfo(const TiDB::TableInfo & table_info_) override { tidb_table_info = table_info_; }
 
@@ -98,11 +102,13 @@ public:
 
 protected:
     StorageDeltaMerge(const String & path_,
+        const String & db_engine,
         const String & db_name_,
         const String & name_,
         const DM::OptionTableInfoConstRef table_info_,
         const ColumnsDescription & columns_,
         const ASTPtr & primary_expr_ast_,
+        Timestamp tombstone,
         Context & global_context_);
 
     Block buildInsertBlock(bool is_import, bool is_delete, const Block & block);
@@ -120,8 +126,8 @@ private:
     using ColumnIdMap = std::unordered_map<String, size_t>;
 
     String path;
-    String db_name;
-    String table_name;
+
+    const bool data_path_contains_database_name = false;
 
     DM::DeltaMergeStorePtr store;
 

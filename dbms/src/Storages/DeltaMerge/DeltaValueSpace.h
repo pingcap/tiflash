@@ -3,8 +3,10 @@
 #include <Common/Exception.h>
 #include <Core/Block.h>
 #include <IO/WriteHelpers.h>
+#include <Storages/DeltaMerge/DeltaIndex.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
+#include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageDefines.h>
 
@@ -16,9 +18,16 @@ namespace DM
 using GenPageId = std::function<PageId()>;
 class DeltaValueSpace;
 using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
+
+using DeltaIndexCompacted    = DefaultDeltaTree::CompactedEntries;
+using DeltaIndexCompactedPtr = DefaultDeltaTree::CompactedEntriesPtr;
+using DeltaIndexIterator     = DeltaIndexCompacted::Iterator;
+
 struct WriteBatches;
 class StoragePool;
 struct DMContext;
+
+static std::atomic_uint64_t NEXT_PACK_ID{0};
 
 struct BlockOrDelete
 {
@@ -31,8 +40,6 @@ struct BlockOrDelete
 };
 using BlockOrDeletes = std::vector<BlockOrDelete>;
 
-static std::atomic_uint64_t NEXT_PACK_ID{0};
-
 class DeltaValueSpace : public std::enable_shared_from_this<DeltaValueSpace>, private boost::noncopyable
 {
 public:
@@ -42,6 +49,8 @@ public:
     struct Cache
     {
         Cache(const Block & header) : block(header.cloneEmpty()) {}
+        Cache(Block && block) : block(std::move(block)) {}
+
         std::mutex mutex;
         Block      block;
     };
@@ -62,7 +71,6 @@ public:
         /// The members below are not serialized.
 
         CachePtr cache;
-        size_t   cache_offset = 0;
 
         ColIdToOffset colid_to_offset;
 
@@ -106,7 +114,6 @@ public:
                 + ",delete_range:" + delete_range.toString()               //
                 + ",data_page:" + DB::toString(data_page)                  //
                 + ",has_cache:" + DB::toString((bool)cache)                //
-                + ",cache_offset:" + DB::toString(cache_offset)            //
                 + ",saved:" + DB::toString(saved)                          //
                 + ",appendable:" + DB::toString(appendable)                //
                 + ",schema:" + (schema ? schema->dumpStructure() : "none") //
@@ -122,6 +129,11 @@ public:
     {
         bool is_update;
 
+        // The delta index of cached.
+        DeltaIndexPtr shared_delta_index;
+        // The delta index which we actually use. Could be cloned from shared_delta_index with some updates and compacts.
+        DeltaIndexCompactedPtr compacted_delta_index;
+
         DeltaValueSpacePtr delta;
         StorageSnapshotPtr storage_snap;
 
@@ -136,20 +148,7 @@ public:
         // The data of packs when reading.
         std::vector<Columns> packs_data;
 
-        ~Snapshot()
-        {
-            if (is_update)
-            {
-                bool v = true;
-                if (!delta->is_updating.compare_exchange_strong(v, false))
-                {
-                    Logger * logger = &Logger::get("DeltaValueSpace::Snapshot");
-                    LOG_ERROR(logger,
-                              "!!!=========================delta [" << delta->getId()
-                                                                    << "] is expected to be updating=========================!!!");
-                }
-            }
-        }
+        ~Snapshot();
 
         size_t getPackCount() const { return packs.size(); }
         size_t getRows() const { return rows; }
@@ -167,6 +166,12 @@ public:
 
         Block  read(size_t pack_index);
         size_t read(const HandleRange & range, MutableColumns & output_columns, size_t offset, size_t limit);
+
+        bool shouldPlace(const DMContext &   context,
+                         DeltaIndexPtr       my_delta_index,
+                         const HandleRange & segment_range,
+                         const HandleRange & relevant_range,
+                         UInt64              max_version);
 
     private:
         Block read(size_t col_num, size_t offset, size_t limit);
@@ -197,6 +202,8 @@ private:
     std::atomic<size_t> last_try_merge_delta_rows = 0;
     std::atomic<size_t> last_try_split_rows       = 0;
 
+    DeltaIndexPtr delta_index;
+
     // Protects the operations in this instance.
     mutable std::mutex mutex;
 
@@ -210,7 +217,7 @@ private:
     void checkNewPacks(const Packs & new_packs);
 
 public:
-    DeltaValueSpace(PageId id_, const Packs & packs_ = {});
+    explicit DeltaValueSpace(PageId id_, const Packs & packs_ = {});
 
     String simpleInfo() const { return "Delta [" + DB::toString(id) + "]"; }
     String info() const
@@ -276,13 +283,34 @@ public:
     std::atomic<size_t> & getLastTryMergeDeltaRows() { return last_try_merge_delta_rows; }
     std::atomic<size_t> & getLastTrySplitRows() { return last_try_split_rows; }
 
+    size_t getPlacedDeltaRows() const
+    {
+        std::scoped_lock lock(mutex);
+        return delta_index->getPlacedStatus().first;
+    }
+    size_t getPlacedDeltaDeletes() const
+    {
+        std::scoped_lock lock(mutex);
+        return delta_index->getPlacedStatus().second;
+    }
+
+    size_t updatesInDeltaTree() const
+    {
+        std::scoped_lock lock(mutex);
+
+        auto delta_tree = delta_index->getDeltaTree();
+        return delta_tree->numInserts() + delta_tree->numDeletes();
+    }
+
 public:
     static PageId writePackData(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs);
 
     static PackPtr writePack(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs);
 
-    /// Return false means this operation failed, caused by other threads could have done some updates on this instance. E.g. this instance have been abandoned.
+    /// The following methods returning false means this operation failed, caused by other threads could have done
+    /// some updates on this instance. E.g. this instance have been abandoned.
     /// Caller should try again from the beginning.
+
     bool appendToDisk(DMContext & context, const PackPtr & pack);
 
     bool appendToCache(DMContext & context, const Block & block, size_t offset, size_t limit);
@@ -292,7 +320,7 @@ public:
     /// Flush the data of packs which haven't write to disk yet, and also save the metadata of packs.
     bool flush(DMContext & context);
 
-    /// Compacts the fragment packs into bigger one, to save some IOPS during reading.
+    /// Compacts fragment packs into bigger one, to save some IOPS during reading.
     bool compact(DMContext & context);
 
     /// Create a constant snapshot for read.

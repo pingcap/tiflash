@@ -43,8 +43,7 @@ public:
     void appendOrderBy(ExpressionActionsChain & chain, const tipb::TopN & topN, Strings & order_column_names);
     void appendAggregation(ExpressionActionsChain & chain, const tipb::Aggregation & agg, Names & aggregate_keys,
         AggregateDescriptions & aggregate_descriptions);
-    void appendAggSelect(
-        ExpressionActionsChain & chain, const tipb::Aggregation & agg, const tipb::DAGRequest & rqst, bool keep_session_timezone_info);
+    void appendAggSelect(ExpressionActionsChain & chain, const tipb::Aggregation & agg, bool keep_session_timezone_info);
     String appendCastIfNeeded(const tipb::Expr & expr, ExpressionActionsPtr & actions, const String & expr_name, bool explicit_cast);
     String appendCast(const DataTypePtr & target_type, ExpressionActionsPtr & actions, const String & expr_name);
     String alignReturnType(const tipb::Expr & expr, ExpressionActionsPtr & actions, const String & expr_name, bool force_uint8);
@@ -70,7 +69,7 @@ public:
     String applyFunction(const String & func_name, const Names & arg_names, ExpressionActionsPtr & actions);
     Int32 getImplicitCastCount() { return implicit_cast_count; };
     bool appendTimeZoneCastsAfterTS(
-        ExpressionActionsChain & chain, std::vector<bool> is_ts_column, const tipb::DAGRequest & rqst, bool keep_UTC_column);
+        ExpressionActionsChain & chain, std::vector<bool> is_ts_column, bool keep_UTC_column);
     bool appendJoinKey(
         ExpressionActionsChain & chain, const tipb::Join & join, const DataTypes & key_types, Names & key_names, bool tiflash_left);
     String appendTimeZoneCast(const String & tz_col, const String & ts_col, const String & func_name, ExpressionActionsPtr & actions);

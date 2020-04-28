@@ -13,6 +13,7 @@
 #include <Core/NamesAndTypes.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/ClientInfo.h>
+#include <Interpreters/TimezoneInfo.h>
 #include <IO/CompressionSettings.h>
 #include <Storages/PartPathSelector.h>
 #include <Storages/Transaction/StorageEngineType.h>
@@ -138,6 +139,8 @@ private:
     bool session_is_used = false;
 
     bool use_l0_opt = true;
+
+    TimezoneInfo timezone_info;
 
     using DatabasePtr = std::shared_ptr<IDatabase>;
     using Databases = std::map<String, std::shared_ptr<IDatabase>>;
@@ -387,7 +390,7 @@ public:
     PartPathSelector & getPartPathSelector();
 
     void initializeTiFlashMetrics();
-    TiFlashMetricsPtr getTiFlashMetrics();
+    TiFlashMetricsPtr getTiFlashMetrics() const;
 
     Clusters & getClusters() const;
     std::shared_ptr<Cluster> getCluster(const std::string & cluster_name) const;
@@ -447,6 +450,9 @@ public:
     void setFormatSchemaPath(const String & path);
 
     SharedQueriesPtr getSharedQueries();
+
+    const TimezoneInfo & getTimezoneInfo() const { return timezone_info; };
+    TimezoneInfo & getTimezoneInfo() { return timezone_info; };
 
     /// User name and session identifier. Named sessions are local to users.
     using SessionKey = std::pair<String, String>;

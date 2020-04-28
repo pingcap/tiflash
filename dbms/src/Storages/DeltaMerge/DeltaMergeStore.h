@@ -126,6 +126,7 @@ public:
 
     enum ThreadType
     {
+        Init,
         Write,
         Read,
         BG_Split,
@@ -142,12 +143,15 @@ public:
         MergeDelta,
         Compact,
         Flush,
+        PlaceIndex,
     };
 
     static std::string toString(ThreadType type)
     {
         switch (type)
         {
+        case Init:
+            return "Init";
         case Write:
             return "Write";
         case Read:
@@ -181,6 +185,8 @@ public:
             return "Compact";
         case Flush:
             return "Flush";
+        case PlaceIndex:
+            return "PlaceIndex";
         default:
             return "Unknown";
         }
@@ -215,6 +221,7 @@ public:
 
     DeltaMergeStore(Context &             db_context, //
                     const String &        path_,
+                    bool                  data_path_contains_database_name,
                     const String &        db_name,
                     const String &        tbl_name,
                     const ColumnDefines & columns,
@@ -222,8 +229,14 @@ public:
                     const Settings &      settings_);
     ~DeltaMergeStore();
 
+    void setUpBackgroundTask(const DMContextPtr & dm_context);
+
     const String & getDatabaseName() const { return db_name; }
     const String & getTableName() const { return table_name; }
+
+    void rename(String new_path, bool clean_rename, String new_database_name, String new_table_name);
+
+    void drop();
 
     // Stop all background tasks.
     void shutdown();
@@ -295,10 +308,6 @@ private:
     void        segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right);
     SegmentPtr  segmentMergeDelta(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
 
-    SegmentPtr segmentForegroundMergeDelta(DMContext & dm_context, const SegmentPtr & segment);
-    void       segmentBackgroundMergeDelta(DMContext & dm_context, const SegmentPtr & segment);
-    void       segmentForegroundMerge(DMContext & dm_context, const SegmentPtr & segment);
-
     bool handleBackgroundTask();
 
     bool isSegmentValid(const SegmentPtr & segment);
@@ -308,6 +317,8 @@ private:
 private:
     String      path;
     PathPool    extra_paths;
+    Context &   global_context;
+    Settings    settings;
     StoragePool storage_pool;
 
     String db_name;
@@ -325,9 +336,6 @@ private:
     BackgroundProcessingPool &           background_pool;
     BackgroundProcessingPool::TaskHandle gc_handle;
     BackgroundProcessingPool::TaskHandle background_task_handle;
-
-    Context & global_context;
-    Settings  settings;
 
     /// end of range -> segment
     SegmentSortedMap segments;

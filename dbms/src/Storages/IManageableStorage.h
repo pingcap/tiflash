@@ -23,6 +23,10 @@ struct TableInfo;
 
 namespace DB
 {
+
+struct SchemaNameMapper;
+class ASTStorage;
+
 /**
  * An interface for Storages synced from TiDB.
  *
@@ -39,8 +43,8 @@ public:
     };
 
 public:
-    explicit IManageableStorage() : IStorage() {}
-    explicit IManageableStorage(const ColumnsDescription & columns_) : IStorage(columns_) {}
+    explicit IManageableStorage(Timestamp tombstone_) : IStorage(), tombstone(tombstone_) {}
+    explicit IManageableStorage(const ColumnsDescription & columns_, Timestamp tombstone_) : IStorage(columns_), tombstone(tombstone_) {}
     ~IManageableStorage() override = default;
 
     virtual void flushCache(const Context & /*context*/) {}
@@ -61,16 +65,46 @@ public:
 
     virtual String getDatabaseName() const = 0;
 
+    // Update tidb table info in memory.
     virtual void setTableInfo(const TiDB::TableInfo & table_info_) = 0;
 
     virtual const TiDB::TableInfo & getTableInfo() const = 0;
 
+    bool isTombstone() const { return tombstone; }
+    Timestamp getTombstone() const { return tombstone; }
+    void setTombstone(Timestamp tombstone_) { IManageableStorage::tombstone = tombstone_; }
+
     // Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
-    virtual void alterFromTiDB(
-        const AlterCommands & commands, const TiDB::TableInfo & table_info, const String & database_name, const Context & context)
+    // Once called, table_info is guaranteed to be persisted, regardless commands being empty or not.
+    virtual void alterFromTiDB(const AlterCommands & commands, const String & database_name, const TiDB::TableInfo & table_info,
+        const SchemaNameMapper & name_mapper, const Context & context)
         = 0;
 
-    
+    /** Rename the table.
+      * 
+      * Renaming a name in a file with metadata, the name in the list of tables in the RAM, is done separately.
+      * Different from `IStorage::rename`, storage's data path do not contain database name, nothing to do with data path, `new_path_to_db` is ignored.
+      * But `getDatabaseName` and `getTableInfo` means we usally store database name / TiDB table info as member in storage,
+      * we need to update database name with `new_database_name`, and table name in tidb table info with `new_display_table_name`.
+      * 
+      * Called when the table structure is locked for write.
+      * TODO: For TiFlash, we can rename without any lock on data?
+      */
+    virtual void rename(const String & new_path_to_db, const String & new_database_name, const String & new_table_name,
+        const String & new_display_table_name)
+        = 0;
+
+    void rename(const String & new_path_to_db, const String & new_database_name, const String & new_table_name) override
+    {
+        // Keep for DatabaseOrdinary::rename, only use for develop
+        return rename(new_path_to_db, new_database_name, new_table_name, /*new_display_table_name=*/new_table_name);
+    }
+
+    virtual void modifyASTStorage(ASTStorage * /*storage*/, const TiDB::TableInfo & /*table_info*/)
+    {
+        throw Exception("Method modifyASTStorage is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     /// Remove this storage from TMTContext. Should be called after its metadata and data have been removed from disk.
     virtual void removeFromTMTContext() = 0;
 
@@ -91,6 +125,11 @@ public:
 
 private:
     virtual DataTypePtr getPKTypeImpl() const = 0;
+
+private:
+    /// Timestamp when this table is dropped.
+    /// Zero means this table is not dropped.
+    Timestamp tombstone;
 };
 
 } // namespace DB

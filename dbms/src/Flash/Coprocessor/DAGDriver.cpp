@@ -39,6 +39,7 @@ DAGDriver<false>::DAGDriver(Context & context_, const tipb::DAGRequest & dag_req
     if (schema_ver)
         // schema_ver being 0 means TiDB/TiSpark hasn't specified schema version.
         context.setSetting("schema_version", schema_ver);
+    context.getTimezoneInfo().resetByDAGRequest(dag_request);
 }
 
 template <>
@@ -51,6 +52,7 @@ DAGDriver<true>::DAGDriver(Context & context_, const tipb::DAGRequest & dag_requ
     if (schema_ver)
         // schema_ver being 0 means TiDB/TiSpark hasn't specified schema version.
         context.setSetting("schema_version", schema_ver);
+    context.getTimezoneInfo().resetByDAGRequest(dag_request);
 }
 
 template <bool batch>
@@ -65,11 +67,12 @@ try
         // Only query is allowed, so streams.in must not be null and streams.out must be null
         throw Exception("DAG is not query.", ErrorCodes::LOGICAL_ERROR);
 
-    BlockOutputStreamPtr dag_output_stream;
     if constexpr (!batch)
     {
-        dag_output_stream = std::make_shared<DAGBlockOutputStream>(*dag_response, context.getSettings().dag_records_per_chunk,
-            dag.getEncodeType(), dag.getResultFieldTypes(), streams.in->getHeader());
+        bool collect_exec_summary = dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries();
+        BlockOutputStreamPtr dag_output_stream
+            = std::make_shared<DAGBlockOutputStream<false>>(dag_response, context.getSettings().dag_records_per_chunk, dag.getEncodeType(),
+                dag.getResultFieldTypes(), streams.in->getHeader(), dag_context, collect_exec_summary);
         copyData(*streams.in, *dag_output_stream);
     }
     else
@@ -84,46 +87,17 @@ try
     {
         LOG_DEBUG(log,
             __PRETTY_FUNCTION__ << ": dag request with encode cost: " << p_stream->getProfileInfo().execution_time / (double)1000000000
-                                << " seconds.");
-    }
+                                << " seconds, produce " << p_stream->getProfileInfo().rows << " rows, " << p_stream->getProfileInfo().bytes
+                                << " bytes.");
 
-    if (!dag_request.has_collect_execution_summaries() || !dag_request.collect_execution_summaries())
-        return;
-    // add ExecutorExecutionSummary info
-    for (auto & p : dag_context.profile_streams_map)
-    {
-        auto * executeSummary = dag_response->add_execution_summaries();
-        UInt64 time_processed_ns = 0;
-        UInt64 num_produced_rows = 0;
-        UInt64 num_iterations = 0;
-        for (auto & streamPtr : p.second.input_streams)
+        if constexpr (!batch)
         {
-            if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streamPtr.get()))
-            {
-                time_processed_ns = std::max(time_processed_ns, p_stream->getProfileInfo().execution_time);
-                num_produced_rows += p_stream->getProfileInfo().rows;
-                num_iterations += p_stream->getProfileInfo().blocks;
-            }
+            // Under some test cases, there may be dag response whose size is bigger than INT_MAX, and GRPC can not limit it.
+            // Throw exception to prevent receiver from getting wrong response.
+            if (p_stream->getProfileInfo().bytes > std::numeric_limits<int>::max())
+                throw Exception(
+                    "DAG response is too big, please check config about region size or region merge scheduler", ErrorCodes::LOGICAL_ERROR);
         }
-        for (auto & join_alias : dag_context.qb_id_to_join_alias_map[p.second.qb_id])
-        {
-            if (dag_context.profile_streams_map_for_join_build_side.find(join_alias)
-                != dag_context.profile_streams_map_for_join_build_side.end())
-            {
-                UInt64 process_time_for_build = 0;
-                for (auto & join_stream : dag_context.profile_streams_map_for_join_build_side[join_alias])
-                {
-                    if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(join_stream.get()))
-                        process_time_for_build = std::max(process_time_for_build, p_stream->getProfileInfo().execution_time);
-                }
-                time_processed_ns += process_time_for_build;
-            }
-        }
-        executeSummary->set_time_processed_ns(time_processed_ns);
-        executeSummary->set_num_produced_rows(num_produced_rows);
-        executeSummary->set_num_iterations(num_iterations);
-        if (dag_request.has_root_executor())
-            executeSummary->set_executor_id(p.first);
     }
 }
 catch (const RegionException & e)

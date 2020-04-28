@@ -32,12 +32,11 @@ void writeRegionDataToStorage(Context & context, const RegionPtr & region, Regio
     auto atomicReadWrite = [&](bool force_decode) {
         /// Get storage based on table ID.
         auto storage = tmt.getStorages().get(table_id);
-        if (storage == nullptr)
+        if (storage == nullptr || storage->isTombstone())
         {
             if (!force_decode) // Need to update.
                 return false;
             // Table must have just been dropped or truncated.
-            // TODO: What if we support delete range? Do we still want to remove KVs from region cache?
             return true;
         }
 
@@ -118,6 +117,7 @@ void writeRegionDataToStorage(Context & context, const RegionPtr & region, Regio
 std::pair<RegionDataReadInfoList, RegionException::RegionReadStatus> resolveLocksAndReadRegionData(const TiDB::TableID table_id,
     const RegionPtr & region,
     const Timestamp start_ts,
+    const std::unordered_set<UInt64> * bypass_lock_ts,
     RegionVersion region_version,
     RegionVersion conf_version,
     DB::HandleRange<HandleID> & handle_range,
@@ -130,8 +130,13 @@ std::pair<RegionDataReadInfoList, RegionException::RegionReadStatus> resolveLock
 
         /// Some sanity checks for region meta.
         {
-            if (region->isPendingRemove())
-                return {{}, RegionException::PENDING_REMOVE};
+            /**
+             * special check: when source region is merging, read_index can not guarantee the behavior about target region.
+             * Reject all read request for safety.
+             * Only when region is Normal can continue read process.
+             */
+            if (region->peerState() != raft_serverpb::PeerState::Normal)
+                return {{}, RegionException::NOT_FOUND};
 
             const auto & [version, conf_ver, key_range] = region->dumpVersionRange();
             if (version != region_version || conf_ver != conf_version)
@@ -144,7 +149,8 @@ std::pair<RegionDataReadInfoList, RegionException::RegionReadStatus> resolveLock
         if (resolve_locks)
         {
             /// Check if there are any lock should be resolved, if so, throw LockException.
-            if (LockInfoPtr lock_info = scanner.getLockInfo(start_ts); lock_info)
+            if (LockInfoPtr lock_info = scanner.getLockInfo(RegionLockReadQuery{.read_tso = start_ts, .bypass_lock_ts = bypass_lock_ts});
+                lock_info)
             {
                 LockInfos lock_infos;
                 lock_infos.emplace_back(std::move(lock_info));
@@ -224,6 +230,7 @@ std::tuple<Block, RegionException::RegionReadStatus> RegionTable::readBlockByReg
     RegionVersion conf_version,
     bool resolve_locks,
     Timestamp start_ts,
+    const std::unordered_set<UInt64> * bypass_lock_ts,
     DB::HandleRange<HandleID> & handle_range,
     RegionScanFilterPtr scan_filter)
 {
@@ -233,7 +240,7 @@ std::tuple<Block, RegionException::RegionReadStatus> RegionTable::readBlockByReg
     // Tiny optimization for queries that need only handle, tso, delmark.
     bool need_value = column_names_to_read.size() != 3;
     auto [data_list_read, read_status] = resolveLocksAndReadRegionData(
-        table_info.id, region, start_ts, region_version, conf_version, handle_range, resolve_locks, need_value);
+        table_info.id, region, start_ts, bypass_lock_ts, region_version, conf_version, handle_range, resolve_locks, need_value);
     if (read_status != RegionException::OK)
         return {Block(), read_status};
 
@@ -256,13 +263,21 @@ RegionException::RegionReadStatus RegionTable::resolveLocksAndWriteRegion(TMTCon
     const TiDB::TableID table_id,
     const RegionPtr & region,
     const Timestamp start_ts,
+    const std::unordered_set<UInt64> * bypass_lock_ts,
     RegionVersion region_version,
     RegionVersion conf_version,
     DB::HandleRange<HandleID> & handle_range,
     Logger * log)
 {
-    auto [data_list_read, read_status] = resolveLocksAndReadRegionData(
-        table_id, region, start_ts, region_version, conf_version, handle_range, /* resolve_locks */ true, /* need_data_value */ true);
+    auto [data_list_read, read_status] = resolveLocksAndReadRegionData(table_id,
+        region,
+        start_ts,
+        bypass_lock_ts,
+        region_version,
+        conf_version,
+        handle_range,
+        /* resolve_locks */ true,
+        /* need_data_value */ true);
     if (read_status != RegionException::OK)
         return read_status;
 

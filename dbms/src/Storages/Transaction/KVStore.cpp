@@ -105,7 +105,7 @@ void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
     }
 }
 
-bool KVStore::onSnapshot(RegionPtr new_region, TMTContext & tmt, const RegionsAppliedindexMap & regions_to_check, bool try_flush_region)
+void KVStore::onSnapshot(RegionPtr new_region, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt)
 {
     RegionID region_id = new_region->id();
 
@@ -117,11 +117,8 @@ bool KVStore::onSnapshot(RegionPtr new_region, TMTContext & tmt, const RegionsAp
         // try to flush data into ch first.
         try
         {
-            if (try_flush_region)
-            {
-                region_table.tryFlushRegion(new_region, false);
-                tryFlushRegionCacheInStorage(tmt, *new_region, log);
-            }
+            region_table.tryFlushRegion(new_region, false);
+            tryFlushRegionCacheInStorage(tmt, *new_region, log);
         }
         catch (...)
         {
@@ -132,26 +129,13 @@ bool KVStore::onSnapshot(RegionPtr new_region, TMTContext & tmt, const RegionsAp
         auto task_lock = genTaskLock();
         auto region_lock = region_manager.genRegionTaskLock(region_id);
 
-        for (const auto & region_info : regions_to_check)
+        if (getRegion(region_id) != old_region || (old_region && old_region_index != old_region->appliedIndex()))
         {
-            const auto & region = region_info.second.first;
-
-            if (auto it = regions().find(region_info.first); it != regions().end())
-            {
-                if (it->second != region || region->appliedIndex() != region_info.second.second)
-                {
-                    LOG_WARNING(log, __FUNCTION__ << ": instance changed region " << region_info.first);
-                    return false;
-                }
-            }
-            else
-            {
-                LOG_WARNING(log, __FUNCTION__ << ": not found " << region->toString(false));
-                return false;
-            }
+            throw Exception(
+                std::string(__PRETTY_FUNCTION__) + ": region " + std::to_string(region_id) + " instance changed, should not happen",
+                ErrorCodes::LOGICAL_ERROR);
         }
 
-        RegionPtr old_region = getRegion(region_id);
         if (old_region != nullptr)
         {
             LOG_DEBUG(log, __FUNCTION__ << ": previous " << old_region->toString(true) << " ; new " << new_region->toString(true));
@@ -170,8 +154,6 @@ bool KVStore::onSnapshot(RegionPtr new_region, TMTContext & tmt, const RegionsAp
 
         tmt.getRegionTable().shrinkRegionRange(*new_region);
     }
-
-    return true;
 }
 
 void KVStore::tryPersist(const RegionID region_id)
@@ -301,7 +283,7 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt)
     const auto region = getRegion(region_id);
     if (region == nullptr)
     {
-        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": [region " << region_id << "] is not found, might be removed already");
+        LOG_INFO(log, __PRETTY_FUNCTION__ << ": [region " << region_id << "] is not found, might be removed already");
         return;
     }
     LOG_INFO(log, "Handle destroy " << region->toString());
@@ -455,7 +437,6 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
             persist_region(curr_region);
             {
                 auto source_region = getRegion(source_region_id);
-                source_region->setPendingRemove();
                 // `source_region` is merged, don't remove its data in storage.
                 removeRegion(
                     source_region_id, /* remove_data */ false, region_table, task_lock, region_manager.genRegionTaskLock(source_region_id));

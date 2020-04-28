@@ -5,8 +5,12 @@
 #include <Storages/Transaction/Types.h>
 #include <grpcpp/server_context.h>
 #include <kvproto/coprocessor.pb.h>
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <kvproto/tikvpb.grpc.pb.h>
 #include <tipb/select.pb.h>
+#pragma GCC diagnostic pop
 
 namespace DB
 {
@@ -20,8 +24,15 @@ public:
     UInt64 region_version;
     UInt64 region_conf_version;
     std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
-    RegionInfo(RegionID id, UInt64 ver, UInt64 conf_ver, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> && key_ranges_)
-        : region_id(id), region_version(ver), region_conf_version(conf_ver), key_ranges(std::move(key_ranges_))
+    const std::unordered_set<UInt64> * bypass_lock_ts;
+
+    RegionInfo(RegionID id, UInt64 ver, UInt64 conf_ver, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> && key_ranges_,
+        const std::unordered_set<UInt64> * bypass_lock_ts_)
+        : region_id(id),
+          region_version(ver),
+          region_conf_version(conf_ver),
+          key_ranges(std::move(key_ranges_)),
+          bypass_lock_ts(bypass_lock_ts_)
     {}
 };
 

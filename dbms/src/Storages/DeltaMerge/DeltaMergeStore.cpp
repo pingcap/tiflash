@@ -1,4 +1,5 @@
 #include <Columns/ColumnVector.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/typeid_cast.h>
 #include <Core/SortDescription.h>
 #include <Interpreters/sortBlock.h>
@@ -15,6 +16,11 @@
 #include <Storages/Transaction/TMTContext.h>
 
 #include <atomic>
+#include <ext/scope_guard.h>
+
+#if USE_TCMALLOC
+#include <gperftools/malloc_extension.h>
+#endif
 
 namespace ProfileEvents
 {
@@ -94,26 +100,27 @@ ColumnDefinesPtr getStoreColumns(const ColumnDefines & table_columns)
 
 DeltaMergeStore::DeltaMergeStore(Context &             db_context,
                                  const String &        path_,
+                                 bool                  data_path_contains_database_name,
                                  const String &        db_name_,
                                  const String &        table_name_,
                                  const ColumnDefines & columns,
                                  const ColumnDefine &  handle,
                                  const Settings &      settings_)
     : path(path_),
-      storage_pool(db_name_ + "." + table_name_, path, db_context.getSettingsRef()),
+      global_context(db_context.getGlobalContext()),
+      settings(settings_),
+      storage_pool(db_name_ + "." + table_name_, path, global_context, db_context.getSettingsRef()),
       db_name(db_name_),
       table_name(table_name_),
       original_table_handle_define(handle),
       background_pool(db_context.getBackgroundPool()),
-      global_context(db_context.getGlobalContext()),
-      settings(settings_),
       hash_salt(++DELTA_MERGE_STORE_HASH_SALT),
       log(&Logger::get("DeltaMergeStore[" + db_name + "." + table_name + "]"))
 {
     LOG_INFO(log, "Restore DeltaMerge Store start [" << db_name << "." << table_name << "]");
 
-    auto & extra_paths_root = db_context.getGlobalContext().getExtraPaths();
-    extra_paths             = extra_paths_root.withTable(db_name, table_name_);
+    auto & extra_paths_root = global_context.getExtraPaths();
+    extra_paths             = extra_paths_root.withTable(db_name, table_name_, data_path_contains_database_name);
 
     loadDMFiles();
 
@@ -163,9 +170,22 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
         throw;
     }
 
-    gc_handle              = background_pool.addTask([this] { return storage_pool.gc(); });
-    background_task_handle = background_pool.addTask([this] { return handleBackgroundTask(); });
+    setUpBackgroundTask(dm_context);
 
+    LOG_INFO(log, "Restore DeltaMerge Store end [" << db_name << "." << table_name << "]");
+}
+
+DeltaMergeStore::~DeltaMergeStore()
+{
+    LOG_INFO(log, "Release DeltaMerge Store start [" << db_name << "." << table_name << "]");
+
+    shutdown();
+
+    LOG_INFO(log, "Release DeltaMerge Store end [" << db_name << "." << table_name << "]");
+}
+
+void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
+{
     auto dmfile_scanner = [=]() {
         PageStorage::PathAndIdsVec path_and_ids_vec;
         for (auto & root_path : extra_paths.listPaths())
@@ -200,16 +220,65 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
     };
     storage_pool.data().registerExternalPagesCallbacks(dmfile_scanner, dmfile_remover);
 
-    LOG_INFO(log, "Restore DeltaMerge Store end [" << db_name << "." << table_name << "]");
+    // Do place delta index.
+    for (auto & [end, segment] : segments)
+    {
+        (void)end;
+        background_tasks.addTask(BackgroundTask{TaskType::PlaceIndex, dm_context, segment, {}}, ThreadType::Init, log);
+    }
+
+    gc_handle              = background_pool.addTask([this] { return storage_pool.gc(); });
+    background_task_handle = background_pool.addTask([this] { return handleBackgroundTask(); });
+
+    // Wake up to do place delta index tasks.
+    background_task_handle->wake();
 }
 
-DeltaMergeStore::~DeltaMergeStore()
+void DeltaMergeStore::rename(String new_path, bool clean_rename, String new_database_name, String new_table_name)
 {
-    LOG_INFO(log, "Release DeltaMerge Store start [" << db_name << "." << table_name << "]");
+    if (clean_rename)
+    {
+        extra_paths.rename(new_database_name, new_table_name, clean_rename);
+    }
+    else
+    {
+        LOG_WARNING(log,
+                    "Applying heavy renaming for table " << db_name << "." << table_name //
+                                                         << " to " << new_database_name << "." << new_table_name);
 
+        // Remove all background task first
+        shutdown();
+        extra_paths.rename(new_database_name, new_table_name, clean_rename); // rename for multi-disk
+        // Check if path is covered by extra_paths, if not, rename
+        if (auto dir = Poco::File(path); dir.exists())
+        {
+            LOG_INFO(log, "Renaming " << path << " to " << new_path);
+            dir.renameTo(new_path);
+        }
+        // setting `path` is useless, we need to restore the whole DeltaMergeStore object after path is changed.
+        // path = new_path;
+    }
+
+    // TODO: replacing these two variables is not atomic, but could be good enough?
+    table_name.swap(new_table_name);
+    db_name.swap(new_database_name);
+}
+
+void DeltaMergeStore::drop()
+{
+    // Remove all background task first
     shutdown();
+    // Drop data in extra path (stable data by default)
+    extra_paths.drop(true);
+    // Check if path(delta && meta by default) is covered by extra_paths, if not, drop it.
+    Poco::File dir(path);
+    if (dir.exists())
+        dir.remove(true);
 
-    LOG_INFO(log, "Release DeltaMerge Store end [" << db_name << "." << table_name << "]");
+#if USE_TCMALLOC
+    // Reclaim memory.
+    MallocExtension::instance()->ReleaseFreeMemory();
+#endif
 }
 
 void DeltaMergeStore::shutdown()
@@ -563,7 +632,7 @@ void DeltaMergeStore::compact(const Context & db_context, const HandleRange & ra
             end_handle     = seg_range.end;
 
             // compact could fail.
-            if (segment->getDelta()->compact(*dm_context))
+            if (segment->compactDelta(*dm_context))
             {
                 break;
             }
@@ -725,6 +794,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
         this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read);
     };
 
+    GET_METRIC(dm_context->metrics, tiflash_storage_read_tasks_count).Increment(tasks.size());
     size_t final_num_stream = std::min(num_streams, tasks.size());
     auto   read_task_pool   = std::make_shared<SegmentReadTaskPool>(std::move(tasks));
 
@@ -796,7 +866,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     auto & delta = segment->getDelta();
 
     size_t delta_saved_rows = delta->getRows(/* use_unsaved */ false);
-    size_t delta_check_rows = std::max(segment->updatesInDeltaTree(), delta_saved_rows);
+    size_t delta_check_rows = std::max(delta->updatesInDeltaTree(), delta_saved_rows);
 
     size_t delta_deletes = delta->getDeletes();
 
@@ -831,12 +901,12 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     bool should_compact = std::max((Int64)pack_count - delta_last_try_compact_packs, 0) >= 10;
 
     auto try_add_background_task = [&](const BackgroundTask & task) {
+        // Prevent too many tasks.
         if (background_tasks.length() <= std::max(id_to_segment.size() * 2, background_pool.getNumberOfThreads() * 5))
         {
             if (shutdown_called.load(std::memory_order_relaxed))
                 return;
 
-            // Prevent too many tasks.
             background_tasks.addTask(task, thread_type, log);
             background_task_handle->wake();
         }
@@ -850,6 +920,8 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
             delta_last_try_flush_rows = delta_rows;
             LOG_DEBUG(log, "Foreground flush cache " << segment->info());
             segment->flushCache(*dm_context);
+
+            try_add_background_task(BackgroundTask{TaskType::PlaceIndex, dm_context, segment, {}});
         }
         else if (should_background_flush)
         {
@@ -1022,18 +1094,22 @@ bool DeltaMergeStore::handleBackgroundTask()
             left = segmentMergeDelta(*task.dm_context, task.segment, false);
             type = ThreadType::BG_MergeDelta;
             break;
-        case Compact:
-        {
-            task.segment->getDelta()->compact(*task.dm_context);
+        case Compact: {
+            task.segment->compactDelta(*task.dm_context);
             left = task.segment;
             type = ThreadType::BG_Compact;
             break;
         }
-        case Flush:
-        {
-            task.segment->getDelta()->flush(*task.dm_context);
+        case Flush: {
+            task.segment->flushCache(*task.dm_context);
+            // After flush cache, better place delta index.
+            task.segment->placeDeltaIndex(*task.dm_context);
             left = task.segment;
             type = ThreadType::BG_Flush;
+            break;
+        }
+        case PlaceIndex: {
+            task.segment->placeDeltaIndex(*task.dm_context);
             break;
         }
         default:
@@ -1079,6 +1155,13 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
             return {};
         }
     }
+
+    // Not counting the early give up action.
+    GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_seg_split).Increment();
+    Stopwatch watch_seg_split;
+    SCOPE_EXIT({
+        GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_seg_split).Observe(watch_seg_split.elapsedSeconds());
+    });
 
     WriteBatches wbs(storage_pool);
     auto         range      = segment->getRange();
@@ -1165,6 +1248,13 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
         }
     }
 
+    // Not counting the early give up action.
+    GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_seg_merge).Increment();
+    Stopwatch watch_seg_merge;
+    SCOPE_EXIT({
+        GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_seg_merge).Observe(watch_seg_merge.elapsedSeconds());
+    });
+
     auto left_range  = left->getRange();
     auto right_range = right->getRange();
 
@@ -1240,6 +1330,14 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
             return {};
         }
     }
+
+    // Not counting the early give up action.
+    GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_delta_merge).Increment();
+    Stopwatch watch_delta_merge;
+    SCOPE_EXIT({
+        GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_delta_merge)
+            .Observe(watch_delta_merge.elapsedSeconds());
+    });
 
     WriteBatches wbs(storage_pool);
 
@@ -1402,7 +1500,7 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
         auto & delta  = segment->getDelta();
         auto & stable = segment->getStable();
 
-        total_placed_rows += segment->getPlacedDeltaRows();
+        total_placed_rows += delta->getPlacedDeltaRows();
 
         if (delta->getPackCount())
         {

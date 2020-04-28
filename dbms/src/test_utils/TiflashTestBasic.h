@@ -3,7 +3,11 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/IDataType.h>
 #include <Interpreters/Context.h>
+#include <Poco/ConsoleChannel.h>
+#include <Poco/File.h>
+#include <Poco/FormattingChannel.h>
 #include <Poco/Path.h>
+#include <Poco/PatternFormatter.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <gtest/gtest.h>
 
@@ -55,8 +59,18 @@ public:
     static std::vector<String> getExtraPaths()
     {
         std::vector<String> result;
-        result.push_back(getTemporaryPath());
+        result.push_back(getTemporaryPath() + "/data/");
         return result;
+    }
+
+    static void setupLogger(const String & level = "trace")
+    {
+        Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(std::cerr);
+        Poco::AutoPtr<Poco::PatternFormatter> formatter(new Poco::PatternFormatter);
+        formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i [%I] <%p> %s: %t");
+        Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
+        Logger::root().setChannel(formatting_channel);
+        Logger::root().setLevel(level);
     }
 
     static Context & getContext(const DB::Settings & settings = DB::Settings())
@@ -74,6 +88,8 @@ public:
             // set itself as global context
             context.setGlobalContext(context);
             context.setApplicationType(DB::Context::ApplicationType::SERVER);
+
+            context.initializeTiFlashMetrics();
 
             context.createTMTContext({}, "", "", {"default"}, getTemporaryPath() + "/kvstore", TiDB::StorageEngine::TMT, false);
             context.getTMTContext().restore();

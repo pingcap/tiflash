@@ -77,8 +77,21 @@ struct WriteCmdsView
     const uint64_t len;
 };
 
+struct FsStats
+{
+    uint64_t used_size;
+    uint64_t avail_size;
+    uint64_t capacity_size;
+
+    uint8_t ok = 0;
+};
+
 struct TiFlashServerHelper
 {
+    uint32_t magic_number; // use a very special number to check whether this struct is legal
+    uint32_t version;      // version of function interface
+    //
+
     TiFlashServer * inner;
     void (*fn_gc_buff)(BaseBuff *);
     TiFlashApplyRes (*fn_handle_write_raft_cmd)(const TiFlashServer *, WriteCmdsView, RaftCmdHeader);
@@ -88,10 +101,7 @@ struct TiFlashServerHelper
     void (*fn_handle_destroy)(TiFlashServer *, RegionId);
     void (*fn_handle_ingest_sst)(TiFlashServer *, SnapshotViewArray, RaftCmdHeader);
     uint8_t (*fn_handle_check_terminated)(TiFlashServer *);
-
-    //
-    uint32_t magic_number; // use a very special number to check whether this struct is legal
-    uint32_t version;      // version of function interface
+    FsStats (*fn_handle_compute_fs_stats)(TiFlashServer * server);
 };
 
 void run_tiflash_proxy_ffi(int argc, const char ** argv, const TiFlashServerHelper *);
@@ -112,4 +122,5 @@ void AtomicUpdateProxy(TiFlashServer * server, TiFlashRaftProxy * proxy);
 void HandleDestroy(TiFlashServer * server, RegionId region_id);
 void HandleIngestSST(TiFlashServer * server, SnapshotViewArray snaps, RaftCmdHeader header);
 uint8_t HandleCheckTerminated(TiFlashServer * server);
+FsStats HandleComputeFsStats(TiFlashServer * server);
 } // namespace DB

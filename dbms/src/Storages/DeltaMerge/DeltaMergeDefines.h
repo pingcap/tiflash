@@ -48,17 +48,13 @@ struct RefTuple;
 
 struct EmptyValueSpace
 {
-    void   removeFromInsert(UInt64) {}
-    void   removeFromModify(UInt64, size_t) {}
-    UInt64 withModify(UInt64, const EmptyValueSpace &, const RefTuple &) { throw Exception("Unsupported operation"); }
+    void removeFromInsert(UInt64) {}
 };
 
-using EntryIterator    = DTEntryIterator<DT_M, DT_F, DT_S>;
-using DefaultDeltaTree = DeltaTree<EmptyValueSpace, DT_M, DT_F, DT_S, ArenaWithFreeLists>;
-using DeltaTreePtr     = std::shared_ptr<DefaultDeltaTree>;
-using DeltaIndex       = DTEntriesCopy<DT_M, DT_F, DT_S>;
-using DeltaIndexPtr    = std::shared_ptr<DeltaIndex>;
-using BlockPtr         = std::shared_ptr<Block>;
+using EntryIterator     = DTEntryIterator<DT_M, DT_F, DT_S>;
+using DefaultDeltaTree  = DeltaTree<EmptyValueSpace, DT_M, DT_F, DT_S, ArenaWithFreeLists>;
+using DeltaTreePtr      = std::shared_ptr<DefaultDeltaTree>;
+using BlockPtr          = std::shared_ptr<Block>;
 
 using RowId = UInt64;
 using ColId = DB::ColumnID;

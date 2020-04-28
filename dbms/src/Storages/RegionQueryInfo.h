@@ -13,6 +13,7 @@ struct RegionQueryInfo
     HandleRange<HandleID> range_in_table;
     // required handle ranges is the handle range specified in DAG request
     std::vector<HandleRange<HandleID>> required_handle_ranges;
+    const std::unordered_set<UInt64> * bypass_lock_ts{nullptr};
 
     bool operator<(const RegionQueryInfo & o) const { return range_in_table < o.range_in_table; }
 };
