@@ -51,7 +51,8 @@ template <>
 DAGBlockOutputStream<true>::DAGBlockOutputStream(BlockInputStreamPtr input_, StreamWriterPtr writer_, Int64 records_per_chunk_,
     tipb::EncodeType encode_type_, std::vector<tipb::FieldType> result_field_types_, Block && header_, DAGContext & dag_context_,
     bool collect_execute_summary_)
-    : writer(writer_),
+    : finished(false),
+      writer(writer_),
       result_field_types(std::move(result_field_types_)),
       header(std::move(header_)),
       records_per_chunk(records_per_chunk_),
