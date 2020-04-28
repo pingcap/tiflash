@@ -1,21 +1,12 @@
 #pragma once
 
-#include <DataStreams/CoprocessorBlockInputStream.h>
 #include <DataStreams/IBlockInputStream.h>
-#include <DataStreams/LazyBlockInputStream.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Flash/Coprocessor/DAGQueryBlock.h>
 #include <Interpreters/Context.h>
 #include <Storages/IStorage.h>
-#include <Storages/RegionQueryInfo.h>
 #include <Storages/Transaction/StorageEngineType.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVHandle.h>
-#include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/Types.h>
-#include <pingcap/coprocessor/Client.h>
-#include <tipb/select.pb.h>
-
 namespace TiDB
 {
 struct TableInfo;

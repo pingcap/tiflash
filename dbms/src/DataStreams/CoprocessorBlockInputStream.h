@@ -99,7 +99,6 @@ private:
         return true;
     }
 
-    pingcap::coprocessor::Request req;
     pingcap::coprocessor::ResponseIter resp_iter;
     DAGSchema schema;
 

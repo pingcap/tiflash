@@ -26,8 +26,6 @@ public:
         std::vector<tipb::FieldType> result_field_types, Block && header_, DAGContext & dag_context_, bool collect_execute_summary_);
 
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Winconsistent-missing-override"
     Block getHeader() const { return header; }
     String getName() const { return "StreamingWriter"; }
     void write(const Block & block);
@@ -36,7 +34,6 @@ public:
     Block readImpl();
     void readPrefix();
     void readSuffix();
-#pragma clang diagnostic pop
 
     void encodeChunkToDAGResponse();
     void addExecuteSummaries(tipb::SelectResponse * dag_response);

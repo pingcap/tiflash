@@ -6,10 +6,6 @@
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTStorages.h>
 
-#include <unordered_set>
-
-#include <Flash/BatchCoprocessorHandler.h>
-
 namespace DB
 {
 
