@@ -90,17 +90,25 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
     return stable;
 }
 
-size_t StableValueSpace::getRows()
+size_t StableValueSpace::getRows() const
 {
     return valid_rows;
 }
 
-size_t StableValueSpace::getBytes()
+size_t StableValueSpace::getBytes() const
 {
     return valid_bytes;
 }
 
-size_t StableValueSpace::getPacks()
+size_t StableValueSpace::getBytesInDisk() const
+{
+    size_t bytes = 0;
+    for (const auto & file : files)
+        bytes += file->getBytesInDisk();
+    return bytes;
+}
+
+size_t StableValueSpace::getPacks() const
 {
     size_t packs = 0;
     for (auto & file : files)
