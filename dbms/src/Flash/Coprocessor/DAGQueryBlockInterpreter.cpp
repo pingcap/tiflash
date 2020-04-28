@@ -1,4 +1,5 @@
 #include <DataStreams/AggregatingBlockInputStream.h>
+#include <DataStreams/CoprocessorBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/LimitBlockInputStream.h>
