@@ -607,6 +607,29 @@ void PageStorage::registerExternalPagesCallbacks(ExternalPagesScanner scanner, E
     external_pages_remover = remover;
 }
 
+void PageStorage::drop()
+{
+    LOG_DEBUG(log, storage_name << " is going to drop");
+
+    ListPageFilesOption opt;
+    opt.ignore_checkpoint = false;
+    opt.ignore_legacy = false;
+    opt.remove_tmp_files = false;
+    auto   page_files      = PageStorage::listAllPageFiles(storage_path, page_file_log, opt);
+
+    // TODO: count how many bytes in "archive" directory.
+    size_t bytes_to_remove = 0;
+    for (const auto & page_file : page_files)
+        bytes_to_remove += page_file.getDiskSize();
+
+    if (Poco::File directory(storage_path); directory.exists())
+        directory.remove(true);
+
+    global_capacity->freeUsedSize(storage_path, bytes_to_remove);
+
+    LOG_INFO(log, storage_name << " drop done.");
+}
+
 struct GCDebugInfo
 {
     PageFileIdAndLevel min_file_id;
