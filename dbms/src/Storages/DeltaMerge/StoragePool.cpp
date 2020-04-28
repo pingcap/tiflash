@@ -13,6 +13,7 @@ static constexpr UInt64 STORAGE_META = 3;
 PageStorage::Config extractConfig(const Settings & settings, UInt64 subtype)
 {
     PageStorage::Config config;
+    config.open_file_max_idle_time = Seconds(settings.dt_open_file_max_idle_seconds);
     switch (subtype)
     {
     case STORAGE_LOG:
