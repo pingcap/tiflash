@@ -275,6 +275,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::vector<size_t> all_capacity;
     if (config().has("capacity"))
     {
+        // TODO: support human readable format for capacity, mark_cache_size, minmax_index_cache_size
+        // eg. 100GiB, 10MiB
         String capacities = config().getString("capacity");
         Poco::trimInPlace(capacities);
         Poco::StringTokenizer string_tokens(capacities, ",");
