@@ -72,7 +72,7 @@ try
         bool collect_exec_summary = dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries();
         BlockOutputStreamPtr dag_output_stream
             = std::make_shared<DAGBlockOutputStream>(dag_response, context.getSettings().dag_records_per_chunk, dag.getEncodeType(),
-                dag.getResultFieldTypes(), streams.in->getHeader(), dag_context, collect_exec_summary);
+                dag.getResultFieldTypes(), streams.in->getHeader(), dag_context, collect_exec_summary, dag_request.has_root_executor());
         copyData(*streams.in, *dag_output_stream);
     }
     else

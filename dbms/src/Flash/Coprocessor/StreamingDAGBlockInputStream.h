@@ -22,7 +22,7 @@ class StreamingDAGBlockInputStream : public IProfilingBlockInputStream
 public:
     StreamingDAGBlockInputStream(BlockInputStreamPtr input_, StreamWriterPtr writer_, Int64 records_per_chunk_,
         tipb::EncodeType encodeType_, std::vector<tipb::FieldType> && result_field_types, Block && header_, DAGContext & dag_context_,
-        bool collect_execute_summary_);
+        bool collect_execute_summary_, bool return_executor_id);
 
     Block getHeader() const override { return header; }
     Block readImpl() override;

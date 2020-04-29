@@ -18,11 +18,8 @@ template <bool streaming>
 class DAGResponseWriter
 {
 public:
-    DAGResponseWriter(tipb::SelectResponse * response_, Int64 records_per_chunk_, tipb::EncodeType encodeType_,
-        std::vector<tipb::FieldType> result_field_types, DAGContext & dag_context_, bool collect_execute_summary_);
-
-    DAGResponseWriter(StreamWriterPtr writer, Int64 records_per_chunk_, tipb::EncodeType encodeType_,
-        std::vector<tipb::FieldType> result_field_types, DAGContext & dag_context_, bool collect_execute_summary_);
+    DAGResponseWriter(tipb::SelectResponse * response_, StreamWriterPtr writer_, Int64 records_per_chunk_, tipb::EncodeType encodeType_,
+        std::vector<tipb::FieldType> result_field_types, DAGContext & dag_context_, bool collect_execute_summary_, bool return_executor_id_);
 
     void write(const Block & block);
     void finishWrite();
@@ -30,8 +27,6 @@ public:
     void addExecuteSummaries(tipb::SelectResponse * dag_response);
 
 private:
-    void init();
-
     tipb::SelectResponse * dag_response;
     StreamWriterPtr writer;
     std::vector<tipb::FieldType> result_field_types;
@@ -41,6 +36,7 @@ private:
     Int64 current_records_num;
     DAGContext & dag_context;
     bool collect_execute_summary;
+    bool return_executor_id;
     std::vector<std::tuple<UInt64, UInt64, UInt64>> previous_execute_stats;
 };
 

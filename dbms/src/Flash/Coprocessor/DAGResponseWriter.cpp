@@ -4,8 +4,6 @@
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 
-#include <utility>
-
 namespace DB
 {
 
@@ -15,37 +13,18 @@ extern const int UNSUPPORTED_PARAMETER;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-template <>
-DAGResponseWriter<false>::DAGResponseWriter(tipb::SelectResponse * dag_response_, Int64 records_per_chunk_, tipb::EncodeType encode_type_,
-    std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_, bool collect_execute_summary_)
-    : dag_response(dag_response_),
-      result_field_types(std::move(result_field_types_)),
-      records_per_chunk(records_per_chunk_),
-      encode_type(encode_type_),
-      current_records_num(0),
-      dag_context(dag_context_),
-      collect_execute_summary(collect_execute_summary_)
-{
-    init();
-    dag_response->set_encode_type(encode_type);
-}
-
-template <>
-DAGResponseWriter<true>::DAGResponseWriter(StreamWriterPtr writer_, Int64 records_per_chunk_, tipb::EncodeType encode_type_,
-    std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_, bool collect_execute_summary_)
-    : writer(writer_),
-      result_field_types(std::move(result_field_types_)),
-      records_per_chunk(records_per_chunk_),
-      encode_type(encode_type_),
-      current_records_num(0),
-      dag_context(dag_context_),
-      collect_execute_summary(collect_execute_summary_)
-{
-    init();
-}
-
 template <bool streaming>
-void DAGResponseWriter<streaming>::init()
+DAGResponseWriter<streaming>::DAGResponseWriter(tipb::SelectResponse * dag_response_, StreamWriterPtr writer_, Int64 records_per_chunk_, tipb::EncodeType encode_type_,
+    std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_, bool collect_execute_summary_, bool return_executor_id_)
+    : dag_response(dag_response_),
+      writer(std::move(writer_)),
+      result_field_types(std::move(result_field_types_)),
+      records_per_chunk(records_per_chunk_),
+      encode_type(encode_type_),
+      current_records_num(0),
+      dag_context(dag_context_),
+      collect_execute_summary(collect_execute_summary_),
+      return_executor_id(return_executor_id_)
 {
     previous_execute_stats.resize(dag_context.profile_streams_map.size(), std::make_tuple(0, 0, 0));
     if (encode_type == tipb::EncodeType::TypeDefault)
@@ -65,6 +44,8 @@ void DAGResponseWriter<streaming>::init()
     {
         throw Exception("Only Default and Arrow encode type is supported in DAGBlockOutputStream.", ErrorCodes::UNSUPPORTED_PARAMETER);
     }
+    if (dag_response)
+        dag_response->set_encode_type(encode_type);
 }
 
 template <bool streaming>
@@ -105,7 +86,7 @@ void DAGResponseWriter<streaming>::addExecuteSummaries(tipb::SelectResponse * re
         executeSummary->set_time_processed_ns(time_processed_ns);
         executeSummary->set_num_produced_rows(num_produced_rows);
         executeSummary->set_num_iterations(num_iterations);
-        if constexpr (streaming)
+        if (return_executor_id)
             executeSummary->set_executor_id(p.first);
     }
 }
