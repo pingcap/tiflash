@@ -232,14 +232,26 @@ String IDAsPathUpgrader::TableDiskInfo::getMetaFilePath(const String & root_path
     return db.getMetaDirectory(root_path) + escapeForFileName(name()) + ".sql";
 }
 // "data/${db_name}/${tbl_name}/"
-String IDAsPathUpgrader::TableDiskInfo::getDataDirectory(const String & root_path, const DatabaseDiskInfo & db) const
+String IDAsPathUpgrader::TableDiskInfo::getDataDirectory(
+    const String & root_path, const DatabaseDiskInfo & db, bool escape_db, bool escape_tbl) const
 {
-    return db.getDataDirectory(root_path) + escapeForFileName(name()) + "/";
+    String res = db.getDataDirectory(root_path, escape_db);
+    if (escape_tbl)
+        res += escapeForFileName(name());
+    else
+        res += name();
+    return res + "/";
 }
 // "extra_data/${db_name}/${tbl_name}/"
-String IDAsPathUpgrader::TableDiskInfo::getExtraDirectory(const String & root_path, const DatabaseDiskInfo & db) const
+String IDAsPathUpgrader::TableDiskInfo::getExtraDirectory(
+    const String & root_path, const DatabaseDiskInfo & db, bool escape_db, bool escape_tbl) const
 {
-    return db.getExtraDirectory(root_path) + escapeForFileName(name()) + "/";
+    String res = db.getExtraDirectory(root_path, escape_db);
+    if (escape_tbl)
+        res += escapeForFileName(name());
+    else
+        res += name();
+    return res + "/";
 }
 
 // "metadata/db_${db_id}/t_${id}.sql"
@@ -281,25 +293,38 @@ String IDAsPathUpgrader::DatabaseDiskInfo::getTiDBSerializeInfo() const
 }
 
 // "metadata/${db_name}.sql"
-String IDAsPathUpgrader::DatabaseDiskInfo::getMetaFilePath(const String & root_path, bool tmp) const
+String IDAsPathUpgrader::DatabaseDiskInfo::doGetMetaFilePath(const String & root_path, bool tmp) const
 {
-    String meta_dir = getMetaDirectory(root_path, tmp);
+    String meta_dir = doGetMetaDirectory(root_path, tmp);
     return (endsWith(meta_dir, "/") ? meta_dir.substr(0, meta_dir.size() - 1) : meta_dir) + ".sql";
 }
 // "metadata/${db_name}/"
-String IDAsPathUpgrader::DatabaseDiskInfo::getMetaDirectory(const String & root_path, bool tmp) const
+String IDAsPathUpgrader::DatabaseDiskInfo::doGetMetaDirectory(const String & root_path, bool tmp) const
 {
     return root_path + "/metadata/" + escapeForFileName(name + (tmp ? TMP_SUFFIX : "")) + "/";
 }
 // "data/${db_name}/"
-String IDAsPathUpgrader::DatabaseDiskInfo::getDataDirectory(const String & root_path, bool tmp) const
+String IDAsPathUpgrader::DatabaseDiskInfo::doGetDataDirectory(const String & root_path, bool escape, bool tmp) const
 {
-    return root_path + "/data/" + escapeForFileName(name + (tmp ? TMP_SUFFIX : "")) + "/";
+    // Old data path don't do escape for path
+    if (escape)
+        return root_path + "/data/" + escapeForFileName(name + (tmp ? TMP_SUFFIX : "")) + "/";
+    else
+    {
+        // Old extra data path (in PathPool) don't escape for path.
+        return root_path + "/data/" + name + (tmp ? TMP_SUFFIX : "") + "/";
+    }
 }
 // "extra_data/${db_name}/"
-String IDAsPathUpgrader::DatabaseDiskInfo::getExtraDirectory(const String & extra_root, bool tmp) const
+String IDAsPathUpgrader::DatabaseDiskInfo::doGetExtraDirectory(const String & extra_root, bool escape, bool tmp) const
 {
-    return extra_root + "/" + escapeForFileName(name + (tmp ? TMP_SUFFIX : "")) + "/";
+    if (escape)
+        return extra_root + "/" + escapeForFileName(name + (tmp ? TMP_SUFFIX : "")) + "/";
+    else
+    {
+        // Old extra data path (in PathPool) don't escape for path.
+        return extra_root + "/" + name + (tmp ? TMP_SUFFIX : "") + "/";
+    }
 }
 
 // "metadata/db_${id}.sql"
@@ -326,17 +351,23 @@ void IDAsPathUpgrader::DatabaseDiskInfo::renameToTmpDirectories(const Context & 
 
     auto root_path = ctx.getPath();
     // Rename database meta file if exist
-    renamePath(getMetaFilePath(root_path, false), getMetaFilePath(root_path, true), log, false);
+    renamePath(doGetMetaFilePath(root_path, false), doGetMetaFilePath(root_path, true), log, false);
     // Rename database meta dir
-    renamePath(getMetaDirectory(root_path, false), getMetaDirectory(root_path, true), log, true);
+    renamePath(doGetMetaDirectory(root_path, false), doGetMetaDirectory(root_path, true), log, true);
 
     // Rename database data dir
-    renamePath(getDataDirectory(root_path, false), getDataDirectory(root_path, true), log, true);
+    renamePath( //
+        doGetDataDirectory(root_path, /*escape*/ true, /*tmp*/ false),
+        doGetDataDirectory(root_path, /*escape*/ true, /*tmp*/ true),
+        log,
+        true);
 
     // Rename database data dir for multi-paths
     auto root_pool = ctx.getExtraPaths();
-    for (const auto & path : root_pool.listPaths())
-        renamePath(getExtraDirectory(path, false), getDataDirectory(path, true), log, false);
+    for (const auto & extra_path : root_pool.listPaths())
+        renamePath(                                                          //
+            doGetExtraDirectory(extra_path, /*escape*/ true, /*tmp*/ false), //
+            doGetExtraDirectory(extra_path, /*escape*/ true, /*tmp*/ true), log, false);
 
     moved_to_tmp = true;
 }
@@ -423,10 +454,15 @@ static void dropAbsentDatabase(
     // Remove old data dir
     const String old_data_dir = db_info.getDataDirectory(root_path);
     tryRemoveDirectory(old_data_dir, log, true);
+    // not escaped dir created by old PathPool
+    const String old_data_dir_not_escaped = db_info.getDataDirectory(root_path, false);
+    tryRemoveDirectory(old_data_dir_not_escaped, log, true);
+
     const auto & data_extra_paths = context.getExtraPaths();
     for (const auto & extra_root_path : data_extra_paths.listPaths())
     {
         tryRemoveDirectory(db_info.getExtraDirectory(extra_root_path), log, true);
+        tryRemoveDirectory(db_info.getExtraDirectory(extra_root_path, false), log, true);
     }
 }
 
@@ -450,8 +486,8 @@ void IDAsPathUpgrader::linkDatabaseTableInfos(const std::vector<TiDB::DBInfoPtr>
             // If we can't find it in TiDB, maybe it already dropped.
             if (reserved_databases.count(db_name) > 0)
             {
-                // For mock test or develop environment, we may reserve some database 
-                // for convenience. Keep them as what they are. Print warnings and 
+                // For mock test or develop environment, we may reserve some database
+                // for convenience. Keep them as what they are. Print warnings and
                 // ignore it in later upgrade.
                 LOG_WARNING(log, "Database " + db_name + " is reserved, ignored in upgrade.");
             }
@@ -483,6 +519,92 @@ void IDAsPathUpgrader::linkDatabaseTableInfos(const std::vector<TiDB::DBInfoPtr>
                 TableDiskInfo{std::make_shared<TiDB::TableInfo>(table_info), mapper});
         }
         ++iter;
+    }
+}
+
+void IDAsPathUpgrader::fixNotEscapedDirectories()
+{
+    for (const auto & [db_name, db_info] : databases)
+    {
+        const auto db_name_escaped = escapeForFileName(db_name);
+
+        // database's meta file, meta dir (created by old DatabaseOrdinary) is escaped.
+        // only need to create data path
+        if (db_name != db_name_escaped)
+        {
+            LOG_INFO(log, "database `" + db_name + "` fixing name escape to `" + db_name_escaped + "`");
+            // Create directory for escaped database
+            auto escaped_db_data_dir = db_info.getDataDirectory(root_path, /*escape=*/true);
+            if (Poco::File dir(escaped_db_data_dir); !dir.exists())
+                dir.createDirectory();
+
+            const auto & data_extra_paths = global_context.getExtraPaths();
+            for (const auto & extra_root_path : data_extra_paths.listPaths())
+            {
+                auto escaped_extra_dir = db_info.getExtraDirectory(extra_root_path, /*escape=*/true);
+                if (Poco::File dir(escaped_extra_dir); !dir.exists())
+                    dir.createDirectory();
+            }
+        }
+
+        /// Fix not escaped name for table
+        for (const auto & table : db_info.tables)
+        {
+            const auto table_name_escaped = escapeForFileName(table.name());
+            if (db_name_escaped == db_name && table_name_escaped == table.name())
+                continue;
+
+            LOG_INFO(log,
+                "table `" + db_name + "`.`" + table.name() + "` fixing name escape to `" //
+                    + db_name_escaped + "`.`" + table_name_escaped + "`");
+            // Table's metadata don't need to fix.
+
+            // Fix data path. It was create by DatabaseOrdinary and StorageDeltaMerge,
+            // database name is escaped but table name not.
+            auto not_escaped_path = table.getDataDirectory(root_path, db_info, /*escape_db*/ true, /*escape_tbl*/ false);
+            auto escaped_path = table.getDataDirectory(root_path, db_info, /*escape_db*/ true, /*escape_tbl*/ true);
+            renamePath(not_escaped_path, escaped_path, log, true);
+            auto db_tbl_not_escaped_path = not_escaped_path;
+            if (db_name != db_name_escaped)
+            {
+                // Stable dir was created by old PathPool, database name and table name are not escaped.
+                db_tbl_not_escaped_path = table.getDataDirectory(root_path, db_info, false, false);
+                auto not_escaped_stable = db_tbl_not_escaped_path + "/stable";
+                auto escaped_stable = table.getDataDirectory(root_path, db_info, true, true) + "/stable";
+                renamePath(not_escaped_stable, escaped_stable, log, true);
+            }
+
+            // Fix extra path.
+            const auto & data_extra_paths = global_context.getExtraPaths();
+            for (const auto & extra_root_path : data_extra_paths.listPaths())
+            {
+                // It was created by old PathPool, both database name and table name are not escaped.
+                auto not_escaped_extra_path = table.getExtraDirectory(extra_root_path, db_info, /*escape_db*/ false, /*escape_tbl*/ false);
+                if (isSamePath(not_escaped_extra_path, db_tbl_not_escaped_path))
+                    continue;
+                auto escaped_extra_path = table.getExtraDirectory(extra_root_path, db_info, /*escape_db*/ true, /*escape_tbl*/ true);
+                renamePath(not_escaped_extra_path, escaped_extra_path, log, false);
+            }
+            LOG_INFO(log,
+                "table `" + db_name + "`.`" + table.name() + "` fixing name escape to `" //
+                    + db_name_escaped + "`.`" + table_name_escaped + "` done.");
+        }
+
+        if (db_name != db_name_escaped)
+        {
+            // clean not escaped database dir created by old PathPool
+            const String not_escaped_data_dir = db_info.getDataDirectory(root_path, /*escape*/ false);
+            tryRemoveDirectory(not_escaped_data_dir, log, true);
+            const auto & data_extra_paths = global_context.getExtraPaths();
+            for (const auto & extra_root_path : data_extra_paths.listPaths())
+            {
+                auto not_escaped_extra_data_dir = db_info.getExtraDirectory(extra_root_path, /*escape*/ false);
+                if (isSamePath(not_escaped_data_dir, not_escaped_extra_data_dir))
+                    continue;
+                tryRemoveDirectory(not_escaped_extra_data_dir, log);
+            }
+        }
+        LOG_INFO(log, "database `" + db_name + "` fixing name escape to `" + db_name_escaped + "` done.");
     }
 }
 
@@ -668,6 +790,7 @@ void IDAsPathUpgrader::doUpgrade()
 {
     auto all_databases = fetchInfosFromTiDB();
     linkDatabaseTableInfos(all_databases);
+    fixNotEscapedDirectories();
     // Check if destination db / tbl file exists and resolve conflict
     resolveConflictDirectories();
     // Rename
