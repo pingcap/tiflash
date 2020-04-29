@@ -600,7 +600,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         /// Init and register flash service.
         flash_service = std::make_unique<FlashService>(*this);
-        diagnostics_service = std::make_unique<DiagnosticsService>();
+        diagnostics_service = std::make_unique<DiagnosticsService>(*this);
         builder.RegisterService(flash_service.get());
         LOG_INFO(log, "Flash service registered");
         builder.RegisterService(diagnostics_service.get());
