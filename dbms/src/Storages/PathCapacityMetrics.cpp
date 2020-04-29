@@ -55,12 +55,12 @@ FsStats PathCapacityMetrics::getFsStats() const
     /// - kvstore  <-- can be resolved if we use PageStorage instead of stable::PageStorage for `RegionPersister` later
     /// - proxy's data
     /// This function only report approximate used size and available size,
-    /// and we limit avaliable size by first path. It is good enough for now.
+    /// and we limit available size by first path. It is good enough for now.
 
     // Now we expect size of path_infos not change, don't acquire hevay lock on `path_infos` now.
     FsStats total_stat;
     double max_used_rate = 0.0;
-    std::optional<uint64_t> first_avali_size = std::nullopt;
+    std::optional<uint64_t> first_avail_size = std::nullopt;
     for (size_t i = 0; i < path_infos.size(); ++i)
     {
         FsStats path_stat = path_infos[i].getStats(log);
@@ -71,8 +71,8 @@ FsStats PathCapacityMetrics::getFsStats() const
         total_stat.capacity_size += path_stat.capacity_size;
 
         max_used_rate = std::max(max_used_rate, 1.0 * path_stat.used_size / path_stat.capacity_size);
-        if (!first_avali_size)
-            first_avali_size = path_stat.avail_size;
+        if (!first_avail_size)
+            first_avail_size = path_stat.avail_size;
     }
 
     // appromix used size, make pd happy
@@ -81,12 +81,12 @@ FsStats PathCapacityMetrics::getFsStats() const
 
     // appromix avail size
     total_stat.avail_size = total_stat.capacity_size - total_stat.used_size;
-    total_stat.avail_size = std::min(total_stat.avail_size, *first_avali_size);
+    total_stat.avail_size = std::min(total_stat.avail_size, *first_avail_size);
 
-    const double avali_rate = 1.0 * total_stat.avail_size / total_stat.capacity_size;
-    if (avali_rate <= 0.2)
+    const double avail_rate = 1.0 * total_stat.avail_size / total_stat.capacity_size;
+    if (avail_rate <= 0.2)
         LOG_WARNING(log,
-            "Available space is only " << DB::toString(avali_rate * 100.0, 2)
+            "Available space is only " << DB::toString(avail_rate * 100.0, 2)
                                        << "% of capacity size. Avail size: " << formatReadableSizeWithBinarySuffix(total_stat.avail_size)
                                        << ", used size: " << formatReadableSizeWithBinarySuffix(total_stat.used_size)
                                        << ", capacity size: " << formatReadableSizeWithBinarySuffix(total_stat.capacity_size));
@@ -131,13 +131,13 @@ ssize_t PathCapacityMetrics::locatePath(const std::string & file_path) const
 FsStats PathCapacityMetrics::CapacityInfo::getStats(Poco::Logger * log) const
 {
     FsStats res;
-    /// Get capacity, used, avaliable size for one path.
+    /// Get capacity, used, available size for one path.
     /// Similar to `handle_store_heartbeat` in TiKV release-4.0 branch
     /// https://github.com/tikv/tikv/blob/f14e8288f3/components/raftstore/src/store/worker/pd.rs#L593
     struct statvfs vfs;
     if (int code = statvfs(path.c_str(), &vfs); code != 0)
     {
-        LOG_ERROR(log, "Could not calculate avaliable disk space (statvfs) of path: " << path << ", errno: " << errno);
+        LOG_ERROR(log, "Could not calculate available disk space (statvfs) of path: " << path << ", errno: " << errno);
         return res;
     }
 
@@ -153,19 +153,19 @@ FsStats PathCapacityMetrics::CapacityInfo::getStats(Poco::Logger * log) const
     // used
     res.used_size = used_bytes.load();
 
-    // avali
-    uint64_t avali = 0;
+    // avail
+    uint64_t avail = 0;
     if (capacity > res.used_size)
-        avali = capacity - res.used_size;
+        avail = capacity - res.used_size;
     else
         LOG_WARNING(log,
-            "No avaliable space for path: " << path << ", capacity: " << formatReadableSizeWithBinarySuffix(capacity) //
+            "No available space for path: " << path << ", capacity: " << formatReadableSizeWithBinarySuffix(capacity) //
                                             << ", used: " << formatReadableSizeWithBinarySuffix(used_bytes));
 
     const uint64_t disk_free_bytes = vfs.f_bavail * vfs.f_frsize;
-    if (avali > disk_free_bytes)
-        avali = disk_free_bytes;
-    res.avail_size = avali;
+    if (avail > disk_free_bytes)
+        avail = disk_free_bytes;
+    res.avail_size = avail;
     res.ok = 1;
 
     return res;
