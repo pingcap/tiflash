@@ -88,7 +88,7 @@ public:
         return bytes;
     }
 
-    size_t getBytesInDisk() const
+    size_t getBytesOnDisk() const
     {
         // This include column data & its index bytes in disk.
         // Not counting DMFile's meta and pack stat, they are usally small enough to ignore.

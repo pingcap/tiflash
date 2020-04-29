@@ -100,11 +100,11 @@ size_t StableValueSpace::getBytes() const
     return valid_bytes;
 }
 
-size_t StableValueSpace::getBytesInDisk() const
+size_t StableValueSpace::getBytesOnDisk() const
 {
     size_t bytes = 0;
     for (const auto & file : files)
-        bytes += file->getBytesInDisk();
+        bytes += file->getBytesOnDisk();
     return bytes;
 }
 

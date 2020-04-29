@@ -111,7 +111,7 @@ StableValueSpacePtr createNewStable(DMContext & context, const BlockInputStreamP
     stable->setFiles({dmfile});
     stable->saveMeta(wbs.meta);
     wbs.data.putExternal(dmfile_id, 0);
-    context.extra_paths.addDMFile(dmfile_id, dmfile->getBytesInDisk(), store_path);
+    context.extra_paths.addDMFile(dmfile_id, dmfile->getBytesOnDisk(), store_path);
 
     return stable;
 }
