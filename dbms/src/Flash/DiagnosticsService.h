@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Server/IServer.h>
+
 #include <common/logger_useful.h>
 #include <boost/noncopyable.hpp>
 
@@ -17,14 +19,14 @@ class DiagnosticsService final : public ::diagnosticspb::Diagnostics::Service,
                                  private boost::noncopyable
 {
 public:
-    DiagnosticsService() : log(&Logger::get("DiagnosticsService")) {}
+    DiagnosticsService(IServer & _server) : log(&Logger::get("DiagnosticsService")), server(_server) {}
     ~DiagnosticsService() override {}
 
 public:
-    ::grpc::Status search_log(::grpc::ServerContext * context, const ::diagnosticspb::SearchLogRequest * request,
-        ::grpc::ServerWriter<::diagnosticspb::SearchLogResponse> * writer) override;
+    ::grpc::Status search_log(::grpc::ServerContext * grpc_context, const ::diagnosticspb::SearchLogRequest * request,
+        ::grpc::ServerWriter<::diagnosticspb::SearchLogResponse> * stream) override;
 
-    ::grpc::Status server_info(::grpc::ServerContext * context, const ::diagnosticspb::ServerInfoRequest * request,
+    ::grpc::Status server_info(::grpc::ServerContext * grpc_context, const ::diagnosticspb::ServerInfoRequest * request,
         ::diagnosticspb::ServerInfoResponse * response) override;
 
 public:
@@ -130,7 +132,10 @@ public:
     void systemInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
     void processInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items);
 
+private:
     Poco::Logger * log;
+
+    IServer & server;
 };
 
 } // namespace DB
