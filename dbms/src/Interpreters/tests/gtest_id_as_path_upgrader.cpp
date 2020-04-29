@@ -1,6 +1,7 @@
 #include <Interpreters/IDAsPathUpgrader.h>
-#include <test_utils/TiflashTestBasic.h>
 #include <Interpreters/loadMetadata.h>
+#include <Storages/registerStorages.h>
+#include <test_utils/TiflashTestBasic.h>
 
 namespace DB::tests
 {
@@ -11,6 +12,8 @@ TEST(IDAsPathUpgrader_test, DISABLED_test)
 try
 {
     TiFlashTestEnv::setupLogger();
+    registerStorages();
+
     auto ctx = TiFlashTestEnv::getContext();
     IDAsPathUpgrader upgrader(ctx, false, {});
     ASSERT_TRUE(upgrader.needUpgrade());
