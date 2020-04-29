@@ -295,7 +295,7 @@ String IDAsPathUpgrader::DatabaseDiskInfo::getTiDBSerializeInfo() const
 // "metadata/${db_name}.sql"
 String IDAsPathUpgrader::DatabaseDiskInfo::doGetMetaFilePath(const String & root_path, bool tmp) const
 {
-    String meta_dir = getMetaDirectory(root_path, tmp);
+    String meta_dir = doGetMetaDirectory(root_path, tmp);
     return (endsWith(meta_dir, "/") ? meta_dir.substr(0, meta_dir.size() - 1) : meta_dir) + ".sql";
 }
 // "metadata/${db_name}/"
