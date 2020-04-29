@@ -92,9 +92,9 @@ public:
         String getTiDBSerializeInfo() const;
 
         // "metadata/${db_name}.sql"
-        String getMetaFilePath(const String & root_path) const { return getMetaFilePath(root_path, moved_to_tmp); }
+        String getMetaFilePath(const String & root_path) const { return doGetMetaFilePath(root_path, moved_to_tmp); }
         // "metadata/${db_name}/"
-        String getMetaDirectory(const String & root_path) const { return getMetaDirectory(root_path, moved_to_tmp); }
+        String getMetaDirectory(const String & root_path) const { return doGetMetaDirectory(root_path, moved_to_tmp); }
         // "data/${db_name}/"
         String getDataDirectory(const String & root_path, bool escape = true) const
         {
@@ -119,9 +119,9 @@ public:
 
     private:
         // "metadata/${db_name}.sql"
-        String getMetaFilePath(const String & root_path, bool tmp) const;
+        String doGetMetaFilePath(const String & root_path, bool tmp) const;
         // "metadata/${db_name}/"
-        String getMetaDirectory(const String & root_path, bool tmp) const;
+        String doGetMetaDirectory(const String & root_path, bool tmp) const;
         // "data/${db_name}/"
         String doGetDataDirectory(const String & root_path, bool escape, bool tmp) const;
         // "extra_data/${db_name}/"
