@@ -293,13 +293,13 @@ String IDAsPathUpgrader::DatabaseDiskInfo::getTiDBSerializeInfo() const
 }
 
 // "metadata/${db_name}.sql"
-String IDAsPathUpgrader::DatabaseDiskInfo::getMetaFilePath(const String & root_path, bool tmp) const
+String IDAsPathUpgrader::DatabaseDiskInfo::doGetMetaFilePath(const String & root_path, bool tmp) const
 {
     String meta_dir = getMetaDirectory(root_path, tmp);
     return (endsWith(meta_dir, "/") ? meta_dir.substr(0, meta_dir.size() - 1) : meta_dir) + ".sql";
 }
 // "metadata/${db_name}/"
-String IDAsPathUpgrader::DatabaseDiskInfo::getMetaDirectory(const String & root_path, bool tmp) const
+String IDAsPathUpgrader::DatabaseDiskInfo::doGetMetaDirectory(const String & root_path, bool tmp) const
 {
     return root_path + "/metadata/" + escapeForFileName(name + (tmp ? TMP_SUFFIX : "")) + "/";
 }
@@ -351,17 +351,23 @@ void IDAsPathUpgrader::DatabaseDiskInfo::renameToTmpDirectories(const Context & 
 
     auto root_path = ctx.getPath();
     // Rename database meta file if exist
-    renamePath(getMetaFilePath(root_path, false), getMetaFilePath(root_path, true), log, false);
+    renamePath(doGetMetaFilePath(root_path, false), doGetMetaFilePath(root_path, true), log, false);
     // Rename database meta dir
-    renamePath(getMetaDirectory(root_path, false), getMetaDirectory(root_path, true), log, true);
+    renamePath(doGetMetaDirectory(root_path, false), doGetMetaDirectory(root_path, true), log, true);
 
     // Rename database data dir
-    renamePath(getDataDirectory(root_path, false), getDataDirectory(root_path, true), log, true);
+    renamePath( //
+        doGetDataDirectory(root_path, /*escape*/ true, /*tmp*/ false),
+        doGetDataDirectory(root_path, /*escape*/ true, /*tmp*/ true),
+        log,
+        true);
 
     // Rename database data dir for multi-paths
     auto root_pool = ctx.getExtraPaths();
-    for (const auto & path : root_pool.listPaths())
-        renamePath(getExtraDirectory(path, false), getDataDirectory(path, true), log, false);
+    for (const auto & extra_path : root_pool.listPaths())
+        renamePath(                                                          //
+            doGetExtraDirectory(extra_path, /*escape*/ true, /*tmp*/ false), //
+            doGetExtraDirectory(extra_path, /*escape*/ true, /*tmp*/ true), log, false);
 
     moved_to_tmp = true;
 }
