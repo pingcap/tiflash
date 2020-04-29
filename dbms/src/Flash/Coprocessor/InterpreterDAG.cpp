@@ -6,13 +6,11 @@
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
+#include <Flash/Coprocessor/StreamingDAGBlockInputStream.h>
 #include <Interpreters/Aggregator.h>
 #include <Storages/StorageMergeTree.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/SchemaSyncer.h>
 #include <pingcap/coprocessor/Client.h>
 
-#include "StreamingDAGBlockInputStream.h"
 
 namespace DB
 {
