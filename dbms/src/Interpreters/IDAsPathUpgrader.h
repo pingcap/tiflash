@@ -49,9 +49,10 @@ public:
         // "metadata/${db_name}/${tbl_name}.sql"
         String getMetaFilePath(const String & root_path, const DatabaseDiskInfo & db) const;
         // "data/${db_name}/${tbl_name}/"
-        String getDataDirectory(const String & root_path, const DatabaseDiskInfo & db) const;
+        String getDataDirectory(const String & root_path, const DatabaseDiskInfo & db, bool escape_db = true, bool escape_tbl = true) const;
         // "extra_data/${db_name}/${tbl_name}/"
-        String getExtraDirectory(const String & root_path, const DatabaseDiskInfo & db) const;
+        String getExtraDirectory(
+            const String & root_path, const DatabaseDiskInfo & db, bool escape_db = true, bool escape_tbl = true) const;
 
         // "metadata/db_${db_id}/t_${id}.sql"
         String getNewMetaFilePath(const String & root_path, const DatabaseDiskInfo & db) const;
@@ -95,9 +96,15 @@ public:
         // "metadata/${db_name}/"
         String getMetaDirectory(const String & root_path) const { return getMetaDirectory(root_path, moved_to_tmp); }
         // "data/${db_name}/"
-        String getDataDirectory(const String & root_path) const { return getDataDirectory(root_path, moved_to_tmp); }
-        // "extra_data/${db_name}/"
-        String getExtraDirectory(const String & extra_root) const { return getExtraDirectory(extra_root, moved_to_tmp); }
+        String getDataDirectory(const String & root_path, bool escape = true) const
+        {
+            return doGetDataDirectory(root_path, escape, moved_to_tmp);
+        }
+        // "extra_data/${db_name}/". db_name is not escaped.
+        String getExtraDirectory(const String & extra_root, bool escape = true) const
+        {
+            return doGetExtraDirectory(extra_root, escape, moved_to_tmp);
+        }
 
         void renameToTmpDirectories(const Context & ctx, Poco::Logger * log);
 
@@ -116,9 +123,9 @@ public:
         // "metadata/${db_name}/"
         String getMetaDirectory(const String & root_path, bool tmp) const;
         // "data/${db_name}/"
-        String getDataDirectory(const String & root_path, bool tmp) const;
+        String doGetDataDirectory(const String & root_path, bool escape, bool tmp) const;
         // "extra_data/${db_name}/"
-        String getExtraDirectory(const String & extra_root, bool tmp) const;
+        String doGetExtraDirectory(const String & extra_root, bool escape, bool tmp) const;
     };
 
 public:
@@ -135,6 +142,10 @@ private:
     std::vector<TiDB::DBInfoPtr> fetchInfosFromTiDB() const;
 
     void linkDatabaseTableInfos(const std::vector<TiDB::DBInfoPtr> & all_databases);
+
+    // Some path created by old PathPool, its database / table name is not escaped,
+    // normalized those names first.
+    void fixNotEscapedDirectories();
 
     void resolveConflictDirectories();
 
