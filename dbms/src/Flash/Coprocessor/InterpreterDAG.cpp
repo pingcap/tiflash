@@ -89,7 +89,8 @@ BlockIO InterpreterDAG::execute()
             = dag.getDAGRequest().has_collect_execution_summaries() && dag.getDAGRequest().collect_execution_summaries();
         for (auto & stream : pipeline.streams)
             stream = std::make_shared<StreamingDAGBlockInputStream>(stream, dag.writer, context.getSettings().dag_records_per_chunk,
-                dag.getEncodeType(), dag.getResultFieldTypes(), stream->getHeader(), dag.getDAGContext(), collect_exec_summary, dag.getDAGRequest().has_root_executor());
+                dag.getEncodeType(), dag.getResultFieldTypes(), stream->getHeader(), dag.getDAGContext(), collect_exec_summary,
+                dag.getDAGRequest().has_root_executor());
     }
     executeUnion(pipeline);
     if (!subqueriesForSets.empty())

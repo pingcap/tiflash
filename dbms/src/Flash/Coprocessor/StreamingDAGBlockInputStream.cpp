@@ -11,7 +11,8 @@ StreamingDAGBlockInputStream::StreamingDAGBlockInputStream(BlockInputStreamPtr i
     bool collect_execute_summary, bool return_executor_id)
     : finished(false),
       header(std::move(header_)),
-      response_writer(nullptr, writer, records_per_chunk, encode_type, result_field_types, dag_context, collect_execute_summary, return_executor_id)
+      response_writer(
+          nullptr, writer, records_per_chunk, encode_type, result_field_types, dag_context, collect_execute_summary, return_executor_id)
 {
     children.push_back(input);
 }
