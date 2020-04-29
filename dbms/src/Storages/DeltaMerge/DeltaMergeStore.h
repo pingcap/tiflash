@@ -39,7 +39,7 @@ struct SegmentStat
     UInt64 size          = 0;
     UInt64 delete_ranges = 0;
 
-    UInt64 stable_size_in_disk = 0;
+    UInt64 stable_size_on_disk = 0;
 
     UInt64 delta_pack_count  = 0;
     UInt64 stable_pack_count = 0;
@@ -81,7 +81,7 @@ struct DeltaMergeStoreStat
     UInt64  stable_count              = 0;
     UInt64  total_stable_rows         = 0;
     UInt64  total_stable_size         = 0;
-    UInt64  total_stable_size_in_disk = 0;
+    UInt64  total_stable_size_on_disk = 0;
     Float64 avg_stable_rows           = 0;
     Float64 avg_stable_size           = 0;
 

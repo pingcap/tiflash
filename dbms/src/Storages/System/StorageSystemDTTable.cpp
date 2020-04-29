@@ -52,7 +52,7 @@ StorageSystemDTTables::StorageSystemDTTables(const std::string & name_) : name(n
         {"stable_count", std::make_shared<DataTypeUInt64>()},
         {"total_stable_rows", std::make_shared<DataTypeUInt64>()},
         {"total_stable_size", std::make_shared<DataTypeUInt64>()},
-        {"total_stable_size_in_disk", std::make_shared<DataTypeUInt64>()},
+        {"total_stable_size_on_disk", std::make_shared<DataTypeUInt64>()},
         {"avg_stable_rows", std::make_shared<DataTypeFloat64>()},
         {"avg_stable_size", std::make_shared<DataTypeFloat64>()},
 
@@ -160,7 +160,7 @@ BlockInputStreams StorageSystemDTTables::read(const Names & column_names,
             res_columns[j++]->insert(stat.stable_count);
             res_columns[j++]->insert(stat.total_stable_rows);
             res_columns[j++]->insert(stat.total_stable_size);
-            res_columns[j++]->insert(stat.total_stable_size_in_disk);
+            res_columns[j++]->insert(stat.total_stable_size_on_disk);
             res_columns[j++]->insert(stat.avg_stable_rows);
             res_columns[j++]->insert(stat.avg_stable_size);
 

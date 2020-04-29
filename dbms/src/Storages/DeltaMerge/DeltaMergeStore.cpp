@@ -1477,7 +1477,7 @@ void DeltaMergeStore::restoreExtraPathCapacity()
         for (auto & file_id : DMFile::listAllInPath(parent_path, false))
         {
             auto dmfile = DMFile::restore(file_id, /* ref_id= */ 0, parent_path, true);
-            extra_paths.addDMFile(file_id, dmfile->getBytesInDisk(), root_path);
+            extra_paths.addDMFile(file_id, dmfile->getBytesOnDisk(), root_path);
         }
     }
 }
@@ -1530,7 +1530,7 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
 
             stat.total_stable_rows += stable->getRows();
             stat.total_stable_size += stable->getBytes();
-            stat.total_stable_size_in_disk += stable->getBytesInDisk();
+            stat.total_stable_size_on_disk += stable->getBytesOnDisk();
         }
     }
 
@@ -1607,7 +1607,7 @@ SegmentStats DeltaMergeStore::getSegmentStats()
         stat.size          = delta->getBytes() + stable->getBytes();
         stat.delete_ranges = delta->getDeletes();
 
-        stat.stable_size_in_disk = stable->getBytesInDisk();
+        stat.stable_size_on_disk = stable->getBytesOnDisk();
 
         stat.delta_pack_count  = delta->getPackCount();
         stat.stable_pack_count = stable->getPacks();

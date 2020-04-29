@@ -31,7 +31,7 @@ public:
 
     size_t getRows() const;
     size_t getBytes() const;
-    size_t getBytesInDisk() const;
+    size_t getBytesOnDisk() const;
     size_t getPacks() const;
 
     void enableDMFilesGC();
