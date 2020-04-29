@@ -2,15 +2,18 @@
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
+#include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
-#include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Interpreters/Aggregator.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <pingcap/coprocessor/Client.h>
+
+#include "StreamingDAGBlockInputStream.h"
+
 namespace DB
 {
 
@@ -82,9 +85,10 @@ BlockIO InterpreterDAG::execute()
 
     if (dag.writer->writer != nullptr)
     {
-        bool collect_exec_summary = dag.getDAGRequest().has_collect_execution_summaries() && dag.getDAGRequest().collect_execution_summaries();
+        bool collect_exec_summary
+            = dag.getDAGRequest().has_collect_execution_summaries() && dag.getDAGRequest().collect_execution_summaries();
         for (auto & stream : pipeline.streams)
-            stream = std::make_shared<DAGBlockOutputStream<true>>(stream, dag.writer, context.getSettings().dag_records_per_chunk,
+            stream = std::make_shared<StreamingDAGBlockInputStream>(stream, dag.writer, context.getSettings().dag_records_per_chunk,
                 dag.getEncodeType(), dag.getResultFieldTypes(), stream->getHeader(), dag.getDAGContext(), collect_exec_summary);
     }
     executeUnion(pipeline);
