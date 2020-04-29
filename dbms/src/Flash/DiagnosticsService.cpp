@@ -1,5 +1,6 @@
 #include <Common/Exception.h>
 #include <Flash/DiagnosticsService.h>
+#include <Flash/LogSearch.h>
 
 #include <Poco/File.h>
 #include <Poco/Path.h>
@@ -21,6 +22,8 @@
 namespace DB
 {
 
+using diagnosticspb::LogLevel;
+using diagnosticspb::SearchLogResponse;
 using diagnosticspb::ServerInfoItem;
 using diagnosticspb::ServerInfoPair;
 using diagnosticspb::ServerInfoResponse;
@@ -817,14 +820,71 @@ catch (const Exception & e)
     return grpc::Status(grpc::StatusCode::INTERNAL, "internal error");
 }
 
-::grpc::Status DiagnosticsService::search_log(::grpc::ServerContext * context, const ::diagnosticspb::SearchLogRequest * request,
-    ::grpc::ServerWriter<::diagnosticspb::SearchLogResponse> * writer)
+::grpc::Status DiagnosticsService::search_log(::grpc::ServerContext * grpc_context, const ::diagnosticspb::SearchLogRequest * request,
+    ::grpc::ServerWriter<::diagnosticspb::SearchLogResponse> * stream)
 {
-    (void)context;
-    (void)request;
-    (void)writer;
-    /// TODO: implement this
-    return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "unimplemented");
+    (void)grpc_context;
+
+    /// TODO: add error log
+    Poco::File log_file(Poco::Path(server.config().getString("logger.log")));
+    if (!log_file.exists())
+    {
+        LOG_ERROR(log, "Invalid log path: " << log_file.path());
+        return ::grpc::Status(grpc::StatusCode::INTERNAL, "internal error");
+    }
+
+    int64_t start_time = request->start_time();
+    int64_t end_time = request->end_time();
+    if (end_time == 0)
+    {
+        // default to now
+        end_time = std::chrono::milliseconds(std::time(NULL)).count();
+    }
+    std::vector<LogLevel> levels;
+    for (auto level : request->levels())
+    {
+        levels.push_back(static_cast<LogLevel>(level));
+    }
+
+    std::vector<std::string> patterns;
+    for (auto pattern : request->patterns())
+    {
+        patterns.push_back(pattern);
+    }
+
+    auto in_ptr = std::shared_ptr<std::ifstream>(new std::ifstream(log_file.path()));
+
+    LogIterator log_itr(start_time, end_time, levels, patterns, in_ptr);
+
+    static constexpr size_t LOG_BATCH_SIZE = 256;
+
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling SearchLog: " << request->DebugString());
+    for (;;)
+    {
+        size_t i = 0;
+        auto resp = SearchLogResponse::default_instance();
+        while (auto log_msg = log_itr.next())
+        {
+            i++;
+            auto added_msg = resp.add_messages();
+            *added_msg = *log_msg;
+
+            if (i == LOG_BATCH_SIZE - 1)
+                break;
+        }
+
+        if (i == 0)
+            break;
+
+        if (!stream->Write(resp))
+        {
+            LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Write response failed for unknown reason.");
+            return grpc::Status(grpc::StatusCode::UNKNOWN, "Write response failed for unknown reason.");
+        }
+    }
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling SearchLog done: " << request->DebugString());
+
+    return ::grpc::Status::OK;
 }
 
 } // namespace DB
