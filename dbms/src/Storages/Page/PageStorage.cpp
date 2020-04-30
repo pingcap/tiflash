@@ -8,6 +8,7 @@
 #include <Storages/Page/gc/DataCompactor.h>
 #include <Storages/Page/gc/LegacyCompactor.h>
 #include <Storages/Page/gc/restoreFromCheckpoints.h>
+#include <Storages/PathCapacityMetrics.h>
 #include <common/logger_useful.h>
 
 #include <ext/scope_guard.h>
@@ -103,7 +104,8 @@ PageFileSet PageStorage::listAllPageFiles(const String & storage_path, Poco::Log
     return page_files;
 }
 
-PageStorage::PageStorage(String name, const String & storage_path_, const Config & config_, TiFlashMetricsPtr metrics_)
+PageStorage::PageStorage(
+    String name, const String & storage_path_, const Config & config_, TiFlashMetricsPtr metrics_, PathCapacityMetricsPtr global_capacity_)
     : storage_name(std::move(name)),
       storage_path(storage_path_),
       config(config_),
@@ -111,7 +113,8 @@ PageStorage::PageStorage(String name, const String & storage_path_, const Config
       page_file_log(&Poco::Logger::get("PageFile")),
       log(&Poco::Logger::get("PageStorage")),
       versioned_page_entries(storage_name, config.version_set_config, log),
-      metrics(std::move(metrics_))
+      metrics(std::move(metrics_)),
+      global_capacity(std::move(global_capacity_))
 {
     // at least 1 write slots
     config.num_write_slots = std::max(1UL, config.num_write_slots);
@@ -222,12 +225,16 @@ void PageStorage::restore()
 
     // TODO: reuse some page_files
     // fill write_files
+    size_t total_recover_bytes = 0;
     for (auto & page_file : page_files)
     {
+        total_recover_bytes += page_file.getDiskSize();
         // We need to keep a PageFile with largest FileID in write_files
         if (page_file.getLevel() == 0)
             write_files[0] = page_file;
     }
+    if (global_capacity)
+        global_capacity->addUsedSize(storage_path, total_recover_bytes);
 #ifndef PAGE_STORAGE_UTIL_DEBUGGGING
     for (auto & page_file : write_files)
     {
@@ -342,7 +349,9 @@ void PageStorage::write(WriteBatch && wb)
 
     PageEntriesEdit edit;
     wb.setSequence(++write_batch_seq); // Set sequence number to keep ordering between writers.
-    file_to_write->write(wb, edit);
+    size_t bytes_written = file_to_write->write(wb, edit);
+    if (global_capacity)
+        global_capacity->addUsedSize(storage_path, bytes_written);
 
     {
         // Return writer to idle queue
@@ -598,6 +607,29 @@ void PageStorage::registerExternalPagesCallbacks(ExternalPagesScanner scanner, E
     external_pages_remover = remover;
 }
 
+void PageStorage::drop()
+{
+    LOG_DEBUG(log, storage_name << " is going to drop");
+
+    ListPageFilesOption opt;
+    opt.ignore_checkpoint = false;
+    opt.ignore_legacy = false;
+    opt.remove_tmp_files = false;
+    auto   page_files      = PageStorage::listAllPageFiles(storage_path, page_file_log, opt);
+
+    // TODO: count how many bytes in "archive" directory.
+    size_t bytes_to_remove = 0;
+    for (const auto & page_file : page_files)
+        bytes_to_remove += page_file.getDiskSize();
+
+    if (Poco::File directory(storage_path); directory.exists())
+        directory.remove(true);
+
+    global_capacity->freeUsedSize(storage_path, bytes_to_remove);
+
+    LOG_INFO(log, storage_name << " drop done.");
+}
+
 struct GCDebugInfo
 {
     PageFileIdAndLevel min_file_id;
@@ -607,12 +639,17 @@ struct GCDebugInfo
     size_t             page_files_size;
 
     size_t num_files_archive_in_compact_legacy = 0;
+    size_t num_bytes_written_in_compact_legacy = 0;
 
     DataCompactor::Result compact_result;
 
+    // bytes written during gc
+    size_t bytesWritten() const { return num_bytes_written_in_compact_legacy + compact_result.bytes_written; }
+
     PageStorage::StatisticsInfo gc_apply_stat;
 
-    size_t num_files_remove_data;
+    size_t num_files_remove_data = 0;
+    size_t num_bytes_remove_data = 0;
 };
 
 bool PageStorage::gc()
@@ -682,7 +719,14 @@ bool PageStorage::gc()
         }
 
         // Delete obsolete files that are not used by any version, without lock
-        debugging_info.num_files_remove_data = gcRemoveObsoleteData(page_files, min_writing_file_id_level, live_files);
+        std::tie(debugging_info.num_files_remove_data, debugging_info.num_bytes_remove_data)
+            = gcRemoveObsoleteData(page_files, min_writing_file_id_level, live_files);
+
+        if (global_capacity)
+        {
+            global_capacity->addUsedSize(storage_path, debugging_info.bytesWritten());
+            global_capacity->freeUsedSize(storage_path, debugging_info.num_bytes_remove_data);
+        }
 
         // Invoke callback with valid normal page id after gc.
         if (external_pages_remover)
@@ -732,7 +776,8 @@ bool PageStorage::gc()
         // Try to compact consecutive Legacy PageFiles into a snapshot
         LegacyCompactor compactor(*this);
         PageFileSet     page_files_to_archive;
-        std::tie(page_files, page_files_to_archive) = compactor.tryCompact(std::move(page_files), writing_file_id_levels);
+        std::tie(page_files, page_files_to_archive, debugging_info.num_bytes_written_in_compact_legacy)
+            = compactor.tryCompact(std::move(page_files), writing_file_id_levels);
         archivePageFiles(page_files_to_archive);
         debugging_info.num_files_archive_in_compact_legacy = page_files_to_archive.size();
     }
@@ -795,12 +840,15 @@ void PageStorage::archivePageFiles(const PageFileSet & page_files)
  * @param page_files            All available files in disk
  * @param writing_file_id_level The min PageFile id which is writing to
  * @param live_files            The live files after gc
+ * @return how many data removed, how many bytes removed
  */
-size_t PageStorage::gcRemoveObsoleteData(PageFileSet &                        page_files,
-                                         const PageFileIdAndLevel &           writing_file_id_level,
-                                         const std::set<PageFileIdAndLevel> & live_files)
+std::tuple<size_t, size_t> //
+PageStorage::gcRemoveObsoleteData(PageFileSet &                        page_files,
+                                  const PageFileIdAndLevel &           writing_file_id_level,
+                                  const std::set<PageFileIdAndLevel> & live_files)
 {
-    size_t num_data_removed = 0;
+    size_t num_data_removed  = 0;
+    size_t num_bytes_removed = 0;
     for (auto & page_file : page_files)
     {
         const auto page_id_and_lvl = page_file.fileIdLevel();
@@ -814,11 +862,11 @@ size_t PageStorage::gcRemoveObsoleteData(PageFileSet &                        pa
             /// The page file is not used by any version, remove the page file's data in disk.
             /// Page file's meta is left and will be compacted later.
             // LOG_INFO(log, storage_name << " remove data " << page_file.toString());
-            const_cast<PageFile &>(page_file).setLegacy();
+            num_bytes_removed += const_cast<PageFile &>(page_file).setLegacy();
             num_data_removed += 1;
         }
     }
-    return num_data_removed;
+    return {num_data_removed, num_bytes_removed};
 }
 
 } // namespace DB

@@ -20,6 +20,9 @@ namespace DB
 
 class TiFlashMetrics;
 using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
+class PathCapacityMetrics;
+using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
+
 
 /**
  * A storage system stored pages. Pages are serialized objects referenced by PageId. Store Page with the same PageId
@@ -95,7 +98,11 @@ public:
     };
 
 public:
-    PageStorage(String name, const String & storage_path, const Config & config_, TiFlashMetricsPtr metrics_ = nullptr);
+    PageStorage(String                 name,
+                const String &         storage_path,
+                const Config &         config_,
+                TiFlashMetricsPtr      metrics_ = nullptr,
+                PathCapacityMetricsPtr global_capacity_ = nullptr);
 
     void restore();
 
@@ -117,6 +124,9 @@ public:
 
     void traverse(const std::function<void(const Page & page)> & acceptor, SnapshotPtr snapshot = {});
     void traversePageEntries(const std::function<void(PageId page_id, const PageEntry & page)> & acceptor, SnapshotPtr snapshot);
+
+    void drop();
+
     bool gc();
 
     PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot = {});
@@ -137,9 +147,10 @@ private:
 
     void archivePageFiles(const PageFileSet & page_files_to_archive);
 
-    size_t gcRemoveObsoleteData(PageFileSet &                        page_files,
-                                const PageFileIdAndLevel &           writing_file_id_level,
-                                const std::set<PageFileIdAndLevel> & live_files);
+    std::tuple<size_t, size_t> //
+    gcRemoveObsoleteData(PageFileSet &                        page_files,
+                         const PageFileIdAndLevel &           writing_file_id_level,
+                         const std::set<PageFileIdAndLevel> & live_files);
 
     friend class LegacyCompactor;
     friend class DataCompactor;
@@ -174,6 +185,8 @@ private:
 
     // For reporting metrics to prometheus
     TiFlashMetricsPtr metrics;
+
+    const PathCapacityMetricsPtr global_capacity;
 };
 
 class PageReader
