@@ -84,6 +84,8 @@ using TiDBServicePtr = std::shared_ptr<TiDBService>;
 class SchemaSyncService;
 using SchemaSyncServicePtr = std::shared_ptr<SchemaSyncService>;
 class PathPool;
+class PathCapacityMetrics;
+using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
 
 namespace DM
 {
@@ -165,7 +167,7 @@ public:
     void setTemporaryPath(const String & path);
     void setFlagsPath(const String & path);
     void setUserFilesPath(const String & path);
-    void setExtraPaths(const std::vector<String> & extra_paths);
+    void setExtraPaths(const std::vector<String> & extra_paths, PathCapacityMetricsPtr global_capacity);
 
     using ConfigurationPtr = Poco::AutoPtr<Poco::Util::AbstractConfiguration>;
 
@@ -385,6 +387,9 @@ public:
 
     void initializeSchemaSyncService();
     SchemaSyncServicePtr & getSchemaSyncService();
+
+    void initializePathCapacityMetric(const std::vector<std::string> & all_path, std::vector<size_t> && all_capacity);
+    PathCapacityMetricsPtr getPathCapacity() const;
 
     void initializePartPathSelector(std::vector<std::string> && all_path, std::vector<std::string> && all_fast_path);
     PartPathSelector & getPartPathSelector();

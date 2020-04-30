@@ -627,7 +627,7 @@ try
             auto w = f.createWriter(false);
 
             PageEntriesEdit edit;
-            w->write(wb, edit);
+            (void)w->write(wb, edit);
         }
         f.setCheckpoint();
     }

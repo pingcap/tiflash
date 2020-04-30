@@ -39,6 +39,8 @@ struct SegmentStat
     UInt64 size          = 0;
     UInt64 delete_ranges = 0;
 
+    UInt64 stable_size_on_disk = 0;
+
     UInt64 delta_pack_count  = 0;
     UInt64 stable_pack_count = 0;
 
@@ -76,11 +78,12 @@ struct DeltaMergeStoreStat
     Float64 avg_delta_size          = 0;
     Float64 avg_delta_delete_ranges = 0;
 
-    UInt64  stable_count      = 0;
-    UInt64  total_stable_rows = 0;
-    UInt64  total_stable_size = 0;
-    Float64 avg_stable_rows   = 0;
-    Float64 avg_stable_size   = 0;
+    UInt64  stable_count              = 0;
+    UInt64  total_stable_rows         = 0;
+    UInt64  total_stable_size         = 0;
+    UInt64  total_stable_size_on_disk = 0;
+    Float64 avg_stable_rows           = 0;
+    Float64 avg_stable_size           = 0;
 
     UInt64  total_pack_count_in_delta = 0;
     Float64 avg_pack_count_in_delta   = 0;
@@ -312,7 +315,7 @@ private:
 
     bool isSegmentValid(const SegmentPtr & segment);
 
-    void loadDMFiles();
+    void restoreExtraPathCapacity();
 
 private:
     String      path;

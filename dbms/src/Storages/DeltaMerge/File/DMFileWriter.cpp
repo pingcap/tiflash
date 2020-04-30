@@ -53,7 +53,7 @@ void DMFileWriter::write(const Block & block, size_t not_clean_rows)
     DMFile::PackStat stat;
     stat.rows      = block.rows();
     stat.not_clean = not_clean_rows;
-    stat.bytes     = block.bytes();
+    stat.bytes     = block.bytes(); // This is bytes of pack data in memory.
 
     for (auto & cd : write_columns)
     {
@@ -135,19 +135,26 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
 
 void DMFileWriter::finalizeColumn(ColId col_id, const IDataType & type)
 {
-    auto callback = [&](const IDataType::SubstreamPath & substream) {
+    size_t bytes_written = 0;
+    auto   callback      = [&](const IDataType::SubstreamPath & substream) {
         String stream_name = DMFile::getFileNameBase(col_id, substream);
         auto & stream      = column_streams.at(stream_name);
         stream->flush();
+        bytes_written += stream->getWrittenBytes();
 
         if (stream->minmaxes)
         {
             WriteBufferFromFile buf(dmfile->colIndexPath(stream_name));
             stream->minmaxes->write(type, buf);
+            buf.sync();
+            bytes_written += buf.getPositionInFile();
         }
     };
 
     type.enumerateStreams(callback, {});
+
+    // Update column's bytes in disk
+    dmfile->column_stats.at(col_id).serialized_bytes = bytes_written;
 }
 
 } // namespace DM
