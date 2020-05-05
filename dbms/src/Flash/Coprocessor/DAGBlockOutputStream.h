@@ -8,49 +8,30 @@
 #include <common/logger_useful.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <tipb/select.pb.h>
+
 #pragma GCC diagnostic pop
 
 namespace DB
 {
 
 /// Serializes the stream of blocks in TiDB DAG response format.
-template <bool streaming>
-class DAGBlockOutputStream : public std::conditional_t<streaming, IProfilingBlockInputStream, IBlockOutputStream>
+class DAGBlockOutputStream : public IBlockOutputStream
 {
 public:
     DAGBlockOutputStream(tipb::SelectResponse * response_, Int64 records_per_chunk_, tipb::EncodeType encodeType_,
-        std::vector<tipb::FieldType> result_field_types, Block && header_, DAGContext & dag_context_, bool collect_execute_summary_);
-
-    DAGBlockOutputStream(BlockInputStreamPtr input_, StreamWriterPtr writer, Int64 records_per_chunk_, tipb::EncodeType encodeType_,
-        std::vector<tipb::FieldType> result_field_types, Block && header_, DAGContext & dag_context_, bool collect_execute_summary_);
-
+        std::vector<tipb::FieldType> result_field_types, Block && header_, DAGContext & dag_context_, bool collect_execute_summary_,
+        bool return_executor_id);
 
     Block getHeader() const { return header; }
-    String getName() const { return "StreamingWriter"; }
     void write(const Block & block);
     void writePrefix();
     void writeSuffix();
-    Block readImpl();
-    void readPrefix();
-    void readSuffix();
-
-    void encodeChunkToDAGResponse();
-    void addExecuteSummaries(tipb::SelectResponse * dag_response);
 
 private:
-    bool finished;
-    tipb::SelectResponse * dag_response;
-    StreamWriterPtr writer;
-    std::vector<tipb::FieldType> result_field_types;
     Block header;
-    Int64 records_per_chunk;
-    tipb::EncodeType encode_type;
-    std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
-    Int64 current_records_num;
-    DAGContext & dag_context;
-    bool collect_execute_summary;
-    std::vector<std::tuple<UInt64, UInt64, UInt64>> previous_execute_stats;
+    DAGResponseWriter<false> response_writer;
 };
 
 } // namespace DB
