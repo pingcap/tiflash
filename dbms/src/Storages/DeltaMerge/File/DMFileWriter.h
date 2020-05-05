@@ -39,6 +39,7 @@ public:
 
         void flush()
         {
+            // Note that this method won't flush minmaxes.
             original_hashing.next();
             compressed_buf.next();
             plain_hashing.next();
@@ -47,6 +48,11 @@ public:
             plain_file->sync();
             mark_file.sync();
         }
+
+        // Get written bytes of `plain_file` && `mark_file`. Should be called after `flush`.
+        // Note that this class don't take responsible for serializing `minmaxes`,
+        // bytes of `minmaxes` won't be counted in this method.
+        size_t getWrittenBytes() { return plain_file->getPositionInFile() + mark_file.getPositionInFile(); }
 
         /// original_hashing -> compressed_buf -> plain_hashing -> plain_file
         WriteBufferFromFileBasePtr plain_file;

@@ -29,9 +29,10 @@ public:
     const DMFiles & getDMFiles() { return files; }
     String          getDMFilesString();
 
-    size_t getRows();
-    size_t getBytes();
-    size_t getPacks();
+    size_t getRows() const;
+    size_t getBytes() const;
+    size_t getBytesOnDisk() const;
+    size_t getPacks() const;
 
     void enableDMFilesGC();
 

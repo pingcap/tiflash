@@ -100,6 +100,7 @@ try
         stream->writeSuffix();
     }
 
+
     {
         // Test read
         auto stream = std::make_shared<DMFileBlockInputStream>( //

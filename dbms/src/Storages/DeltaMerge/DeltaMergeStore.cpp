@@ -121,8 +121,8 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
 
     auto & extra_paths_root = global_context.getExtraPaths();
     extra_paths             = extra_paths_root.withTable(db_name, table_name_, data_path_contains_database_name);
-
-    loadDMFiles();
+    // restore existing dm files and set capacity for extra_paths.
+    restoreExtraPathCapacity();
 
     original_table_columns.emplace_back(original_table_handle_define);
     original_table_columns.emplace_back(getVersionColumnDefine());
@@ -268,6 +268,7 @@ void DeltaMergeStore::drop()
 {
     // Remove all background task first
     shutdown();
+    storage_pool.drop();
     // Drop data in extra path (stable data by default)
     extra_paths.drop(true);
     // Check if path(delta && meta by default) is covered by extra_paths, if not, drop it.
@@ -1467,7 +1468,7 @@ SortDescription DeltaMergeStore::getPrimarySortDescription() const
     return desc;
 }
 
-void DeltaMergeStore::loadDMFiles()
+void DeltaMergeStore::restoreExtraPathCapacity()
 {
     LOG_DEBUG(log, "Loading dm files");
 
@@ -1477,7 +1478,7 @@ void DeltaMergeStore::loadDMFiles()
         for (auto & file_id : DMFile::listAllInPath(parent_path, false))
         {
             auto dmfile = DMFile::restore(file_id, /* ref_id= */ 0, parent_path, true);
-            extra_paths.addDMFile(file_id, dmfile->getBytes(), root_path);
+            extra_paths.addDMFile(file_id, dmfile->getBytesOnDisk(), root_path);
         }
     }
 }
@@ -1530,6 +1531,7 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
 
             stat.total_stable_rows += stable->getRows();
             stat.total_stable_size += stable->getBytes();
+            stat.total_stable_size_on_disk += stable->getBytesOnDisk();
         }
     }
 
@@ -1605,6 +1607,8 @@ SegmentStats DeltaMergeStore::getSegmentStats()
         stat.rows          = segment->getEstimatedRows();
         stat.size          = delta->getBytes() + stable->getBytes();
         stat.delete_ranges = delta->getDeletes();
+
+        stat.stable_size_on_disk = stable->getBytesOnDisk();
 
         stat.delta_pack_count  = delta->getPackCount();
         stat.stable_pack_count = stable->getPacks();
