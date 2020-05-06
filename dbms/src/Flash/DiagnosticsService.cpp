@@ -699,8 +699,32 @@ void DiagnosticsService::memHardwareInfo(std::vector<diagnosticspb::ServerInfoIt
 
 void DiagnosticsService::diskHardwareInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items)
 {
-    std::vector<Disk> disks = getAllDisks();
-    for (auto disk : disks)
+    std::vector<Disk> all_disks = getAllDisks();
+
+    std::string data_path = server.config().getString("path");
+    std::vector<std::string> data_dirs;
+    boost::split(data_dirs, data_path, boost::is_any_of(","));
+
+    std::vector<Disk> disks_in_use;
+    disks_in_use.reserve(all_disks.size());
+
+    for (auto disk : all_disks)
+    {
+        bool is_in_use = false;
+        for (auto dir : data_dirs)
+        {
+            if (boost::starts_with(dir, disk.mount_point))
+            {
+                is_in_use = true;
+                break;
+            }
+        }
+
+        if (is_in_use)
+            disks_in_use.emplace_back(std::move(disk));
+    }
+
+    for (auto disk : disks_in_use)
     {
         size_t total = disk.total_space;
         size_t free = disk.available_space;
