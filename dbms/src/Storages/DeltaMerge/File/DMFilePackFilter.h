@@ -15,6 +15,7 @@ using IdSetPtr = std::shared_ptr<IdSet>;
 class DMFilePackFilter
 {
 public:
+    /// 
     DMFilePackFilter(const DMFilePtr &     dmfile_,
                      MinMaxIndexCache *    index_cache_,
                      UInt64                hash_salt_,
