@@ -102,6 +102,8 @@ size_t StableValueSpace::getBytes() const
 
 size_t StableValueSpace::getBytesOnDisk() const
 {
+    // If this stable value space is logical splited, some file may not used,
+    // and this will return more bytes than actual used.
     size_t bytes = 0;
     for (const auto & file : files)
         bytes += file->getBytesOnDisk();

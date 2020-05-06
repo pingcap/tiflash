@@ -558,7 +558,6 @@ Handle Segment::getSplitPointFast(DMContext & dm_context, const StableSnapshotPt
                     read_pack->insert(pack_id);
                     read_row_in_pack = split_row_index - cur_rows;
 
-
                     break;
                 }
             }
@@ -579,7 +578,7 @@ Handle Segment::getSplitPointFast(DMContext & dm_context, const StableSnapshotPt
                                   stable_snap->getColumnCaches()[file_index],
                                   read_pack);
 
-    stream.readSuffix();
+    stream.readPrefix();
     auto block = stream.read();
     if (!block)
         throw Exception("Unexpected empty block");
@@ -665,7 +664,10 @@ Segment::SplitInfo Segment::prepareSplit(DMContext & dm_context, const SegmentSn
         Handle split_point     = getSplitPointFast(dm_context, segment_snap->stable);
         bool   bad_split_point = !range.check(split_point) || split_point == range.start;
         if (bad_split_point)
+        {
+            LOG_WARNING(log, "Got bad split point for segment " << info() << ", fall back to split physical.");
             return prepareSplitPhysical(dm_context, segment_snap, wbs);
+        }
         else
             return prepareSplitLogical(dm_context, segment_snap, split_point, wbs);
     }
