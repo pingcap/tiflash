@@ -19,6 +19,7 @@ static const size_t DMFILE_READ_ROWS_THRESHOLD = DEFAULT_MERGE_BLOCK_SIZE * 3;
 class DMFileReader
 {
 public:
+    // Read stream for single column
     struct Stream
     {
         Stream(DMFileReader & reader, //
@@ -36,21 +37,24 @@ public:
     using StreamPtr     = std::unique_ptr<Stream>;
     using ColumnStreams = std::map<String, StreamPtr>;
 
-    DMFileReader(bool                  enable_clean_read_,
-                 UInt64                max_data_version_,
-                 const DMFilePtr &     dmfile_,
+    DMFileReader(const DMFilePtr &     dmfile_,
                  const ColumnDefines & read_columns_,
+                 // clean read
+                 bool   enable_clean_read_,
+                 UInt64 max_data_version_,
+                 // filters
                  const HandleRange &   handle_range_,
-                 const RSOperatorPtr & filter,
-                 ColumnCachePtr &      column_cache_,
-                 bool                  enable_column_cache_,
-                 const IdSetPtr &      read_packs,
-                 MarkCache *           mark_cache_,
-                 MinMaxIndexCache *    index_cache_,
-                 UInt64                hash_salt_,
-                 size_t                aio_threshold,
-                 size_t                max_read_buffer_size,
-                 size_t                rows_threshold_per_read_ = DMFILE_READ_ROWS_THRESHOLD);
+                 const RSOperatorPtr & filter_,
+                 const IdSetPtr &      read_packs_, // filter by pack index
+                 // caches
+                 UInt64             hash_salt_,
+                 MarkCache *        mark_cache_,
+                 MinMaxIndexCache * index_cache_,
+                 bool               enable_column_cache_,
+                 ColumnCachePtr &   column_cache_,
+                 size_t             aio_threshold,
+                 size_t             max_read_buffer_size,
+                 size_t             rows_threshold_per_read_ = DMFILE_READ_ROWS_THRESHOLD);
 
     Block getHeader() const { return toEmptyBlock(read_columns); }
 
@@ -64,29 +68,32 @@ private:
     void readFromDisk(ColumnDefine & column_define, MutableColumnPtr & column, size_t start_pack_id, size_t read_rows, size_t skip_packs);
 
 private:
-    bool          enable_clean_read;
-    UInt64        max_data_version;
     DMFilePtr     dmfile;
     ColumnDefines read_columns;
-    HandleRange   handle_range;
+    ColumnStreams column_streams;
 
-    MarkCache * mark_cache;
-    UInt64      hash_salt;
-    size_t      rows_threshold_per_read;
+    /// Clean read optimize
+    // If there is no delta for some packs in stable, we can try to do clean read.
+    const bool   enable_clean_read;
+    const UInt64 max_read_version;
 
-    DMFilePackFilter pack_filter;
-
-    ColumnCachePtr column_cache;
-    bool           enable_column_cache;
-
-    const std::vector<RSResult> & handle_res;
-    const std::vector<UInt8> &    use_packs;
+    /// Filters
+    DMFilePackFilter              pack_filter;
+    const std::vector<RSResult> & handle_res; // alias of handle res in pack_filter
+    const std::vector<UInt8> &    use_packs;  // alias of use_packs in pack_filter
 
     std::vector<size_t> skip_packs_by_column;
 
-    size_t next_pack_id = 0;
+    /// Caches
+    const UInt64   hash_salt;
+    MarkCache *    mark_cache;
+    const bool     enable_column_cache;
+    ColumnCachePtr column_cache;
 
-    ColumnStreams column_streams;
+
+    const size_t rows_threshold_per_read;
+
+    size_t next_pack_id = 0;
 
     Logger * log;
 };
