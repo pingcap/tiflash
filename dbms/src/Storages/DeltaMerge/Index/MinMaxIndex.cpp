@@ -1,6 +1,3 @@
-#include <Storages/DeltaMerge/DeltaMergeHelpers.h>
-#include <Storages/DeltaMerge/Index/MinMaxIndex.h>
-
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeEnum.h>
@@ -9,6 +6,8 @@
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Storages/DeltaMerge/DeltaMergeHelpers.h>
+#include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 
 namespace DB
 {
@@ -38,7 +37,7 @@ void MinMaxIndex::addPack(const IColumn & column, const ColumnVector<UInt8> * de
         }
     }
 
-    auto [min_index, max_index] = minmax(*column_ptr, del_mark, 0, column_ptr->size());
+    auto [min_index, max_index] = details::minmax(*column_ptr, del_mark, 0, column_ptr->size());
     if (min_index != NONE_EXIST)
     {
         has_null_marks->push_back(has_null);
@@ -100,16 +99,16 @@ std::pair<UInt64, UInt64> MinMaxIndex::getUInt64MinMax(size_t pack_index)
 RSResult MinMaxIndex::checkEqual(size_t pack_id, const Field & value, const DataTypePtr & type)
 {
     if ((*has_null_marks)[pack_id] || value.isNull())
-        return Some;
+        return RSResult::Some;
     if (!(*has_value_marks)[pack_id])
-        return RSResult ::None;
+        return RSResult::None;
 
 #define DISPATCH(TYPE)                                              \
     if (typeid_cast<const DataType##TYPE *>(type.get()))            \
     {                                                               \
         auto & minmaxes_data = toColumnVectorData<TYPE>(minmaxes);  \
-        auto   min           = minmaxes_data[pack_id * 2];         \
-        auto   max           = minmaxes_data[pack_id * 2 + 1];     \
+        auto   min           = minmaxes_data[pack_id * 2];          \
+        auto   max           = minmaxes_data[pack_id * 2 + 1];      \
         return RoughCheck::checkEqual<TYPE>(value, type, min, max); \
     }
     FOR_NUMERIC_TYPES(DISPATCH)
@@ -133,16 +132,16 @@ RSResult MinMaxIndex::checkEqual(size_t pack_id, const Field & value, const Data
 RSResult MinMaxIndex::checkGreater(size_t pack_id, const Field & value, const DataTypePtr & type, int /*nan_direction_hint*/)
 {
     if ((*has_null_marks)[pack_id] || value.isNull())
-        return Some;
+        return RSResult::Some;
     if (!(*has_value_marks)[pack_id])
-        return RSResult ::None;
+        return RSResult::None;
 
 #define DISPATCH(TYPE)                                                \
     if (typeid_cast<const DataType##TYPE *>(type.get()))              \
     {                                                                 \
         auto & minmaxes_data = toColumnVectorData<TYPE>(minmaxes);    \
-        auto   min           = minmaxes_data[pack_id * 2];           \
-        auto   max           = minmaxes_data[pack_id * 2 + 1];       \
+        auto   min           = minmaxes_data[pack_id * 2];            \
+        auto   max           = minmaxes_data[pack_id * 2 + 1];        \
         return RoughCheck::checkGreater<TYPE>(value, type, min, max); \
     }
     FOR_NUMERIC_TYPES(DISPATCH)
@@ -166,16 +165,16 @@ RSResult MinMaxIndex::checkGreater(size_t pack_id, const Field & value, const Da
 RSResult MinMaxIndex::checkGreaterEqual(size_t pack_id, const Field & value, const DataTypePtr & type, int /*nan_direction_hint*/)
 {
     if ((*has_null_marks)[pack_id] || value.isNull())
-        return Some;
+        return RSResult::Some;
     if (!(*has_value_marks)[pack_id])
-        return RSResult ::None;
+        return RSResult::None;
 
 #define DISPATCH(TYPE)                                                     \
     if (typeid_cast<const DataType##TYPE *>(type.get()))                   \
     {                                                                      \
         auto & minmaxes_data = toColumnVectorData<TYPE>(minmaxes);         \
-        auto   min           = minmaxes_data[pack_id * 2];                \
-        auto   max           = minmaxes_data[pack_id * 2 + 1];            \
+        auto   min           = minmaxes_data[pack_id * 2];                 \
+        auto   max           = minmaxes_data[pack_id * 2 + 1];             \
         return RoughCheck::checkGreaterEqual<TYPE>(value, type, min, max); \
     }
     FOR_NUMERIC_TYPES(DISPATCH)
