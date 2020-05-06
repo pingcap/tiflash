@@ -31,6 +31,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/PartPathSelector.h>
 #include <Storages/PathPool.h>
+#include <Storages/PathCapacityMetrics.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/RuntimeComponentsFactory.h>
@@ -158,6 +159,7 @@ struct ContextShared
     SharedQueriesPtr shared_queries;                        /// The cache of shared queries.
     SchemaSyncServicePtr schema_sync_service;               /// Schema sync service instance.
     PartPathSelectorPtr part_path_selector_ptr;             /// PartPathSelector service instance.
+    PathCapacityMetricsPtr path_capacity_ptr;               /// Path capacity metrics
     TiFlashMetricsPtr tiflash_metrics;                      /// TiFlash metrics registry.
 
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
@@ -551,10 +553,10 @@ void Context::setUserFilesPath(const String & path)
     shared->user_files_path = path;
 }
 
-void Context::setExtraPaths(const std::vector<String> & extra_paths_)
+void Context::setExtraPaths(const std::vector<String> & extra_paths_, PathCapacityMetricsPtr global_capacity_)
 {
     auto lock = getLock();
-    shared->extra_paths = PathPool(extra_paths_);
+    shared->extra_paths = PathPool(extra_paths_, global_capacity_);
 }
 
 void Context::setConfig(const ConfigurationPtr & config)
@@ -1443,6 +1445,22 @@ void Context::createTMTContext(const std::vector<std::string> & pd_addrs,
     if (shared->tmt_context)
         throw Exception("TMTContext has already existed", ErrorCodes::LOGICAL_ERROR);
     shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, engine, disable_bg_flush);
+}
+
+void Context::initializePathCapacityMetric(const std::vector<std::string> & all_path, std::vector<size_t> && all_capacity)
+{
+    auto lock = getLock();
+    if (shared->path_capacity_ptr)
+        throw Exception("PathCapacityMetrics instance has already existed", ErrorCodes::LOGICAL_ERROR);
+    shared->path_capacity_ptr = std::make_shared<PathCapacityMetrics>(all_path, all_capacity);
+}
+
+PathCapacityMetricsPtr Context::getPathCapacity() const
+{
+    auto lock = getLock();
+    if (!shared->path_capacity_ptr)
+        throw Exception("PathCapacityMetrics is not initialized.", ErrorCodes::LOGICAL_ERROR);
+    return shared->path_capacity_ptr;
 }
 
 void Context::initializePartPathSelector(std::vector<std::string> && all_normal_path, std::vector<std::string> && all_fast_path)

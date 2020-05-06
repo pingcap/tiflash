@@ -39,6 +39,9 @@ public:
     PageStorage & data() { return data_storage; }
     PageStorage & meta() { return meta_storage; }
 
+    // Caller must cancel gc tasks before drop
+    void drop();
+
     bool gc(const Seconds & try_gc_period = DELTA_MERGE_GC_PERIOD);
 
 private:

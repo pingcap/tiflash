@@ -21,7 +21,8 @@ public:
         bool   do_compaction     = false;
         size_t candidate_size    = 0;
         size_t num_migrate_pages = 0;
-        size_t bytes_migrate     = 0;
+        size_t bytes_migrate     = 0; // only contain migrate data part
+        size_t bytes_written     = 0; // written bytes of migrate file
     };
 
 public:
@@ -39,18 +40,20 @@ private:
         const ValidPages &                   file_valid_pages,
         const std::set<PageFileIdAndLevel> & writing_file_ids) const;
 
-    PageEntriesEdit migratePages(const SnapshotPtr & snapshot,
-                                 const ValidPages &  file_valid_pages,
-                                 const PageFileSet & candidates,
-                                 const size_t        migrate_page_count) const;
+    std::tuple<PageEntriesEdit, size_t> //
+    migratePages(const SnapshotPtr & snapshot,
+                 const ValidPages &  file_valid_pages,
+                 const PageFileSet & candidates,
+                 const size_t        migrate_page_count) const;
 
-    PageEntriesEdit mergeValidPages(PageStorage::MetaMergingQueue && merging_queue,
-                                    PageStorage::OpenReadFiles &&    data_readers,
-                                    const ValidPages &               file_valid_pages,
-                                    const SnapshotPtr &              snapshot,
-                                    const WriteBatch::SequenceID     compact_sequence,
-                                    PageFile &                       gc_file,
-                                    MigrateInfos &                   migrate_infos) const;
+    std::tuple<PageEntriesEdit, size_t> //
+    mergeValidPages(PageStorage::MetaMergingQueue && merging_queue,
+                    PageStorage::OpenReadFiles &&    data_readers,
+                    const ValidPages &               file_valid_pages,
+                    const SnapshotPtr &              snapshot,
+                    const WriteBatch::SequenceID     compact_sequence,
+                    PageFile &                       gc_file,
+                    MigrateInfos &                   migrate_infos) const;
 
     PageIdAndEntries collectValidEntries(PageEntriesEdit && edits, const PageIdSet & valid_pages, const SnapshotPtr & snap) const;
 

@@ -32,6 +32,8 @@ StorageSystemDTSegments::StorageSystemDTSegments(const std::string & name_) : na
         {"size", std::make_shared<DataTypeUInt64>()},
         {"delete_ranges", std::make_shared<DataTypeUInt64>()},
 
+        {"stable_size_on_disk", std::make_shared<DataTypeUInt64>()},
+
         {"delta_pack_count", std::make_shared<DataTypeUInt64>()},
         {"stable_pack_count", std::make_shared<DataTypeUInt64>()},
 
@@ -96,6 +98,8 @@ BlockInputStreams StorageSystemDTSegments::read(const Names & column_names,
                 res_columns[j++]->insert(stat.rows);
                 res_columns[j++]->insert(stat.size);
                 res_columns[j++]->insert(stat.delete_ranges);
+
+                res_columns[j++]->insert(stat.stable_size_on_disk);
 
                 res_columns[j++]->insert(stat.delta_pack_count);
                 res_columns[j++]->insert(stat.stable_pack_count);

@@ -179,8 +179,9 @@ try
     auto page_files       = PageStorage::listAllPageFiles(path, storage.page_file_log, opt);
 
     LegacyCompactor compactor(storage);
-    auto && [page_files_left, page_files_compacted] = compactor.tryCompact(std::move(page_files), {});
+    auto && [page_files_left, page_files_compacted, bytes_written] = compactor.tryCompact(std::move(page_files), {});
     (void)page_files_left;
+    (void)bytes_written;
     ASSERT_EQ(page_files_compacted.size(), 4UL);
 
     // TODO:
