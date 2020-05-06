@@ -2,10 +2,10 @@
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Databases/DatabaseTiFlash.h>
 #include <Databases/IDatabase.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Databases/DatabaseTiFlash.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/System/StorageSystemDTTables.h>
@@ -52,6 +52,7 @@ StorageSystemDTTables::StorageSystemDTTables(const std::string & name_) : name(n
         {"stable_count", std::make_shared<DataTypeUInt64>()},
         {"total_stable_rows", std::make_shared<DataTypeUInt64>()},
         {"total_stable_size", std::make_shared<DataTypeUInt64>()},
+        {"total_stable_size_on_disk", std::make_shared<DataTypeUInt64>()},
         {"avg_stable_rows", std::make_shared<DataTypeFloat64>()},
         {"avg_stable_size", std::make_shared<DataTypeFloat64>()},
 
@@ -159,6 +160,7 @@ BlockInputStreams StorageSystemDTTables::read(const Names & column_names,
             res_columns[j++]->insert(stat.stable_count);
             res_columns[j++]->insert(stat.total_stable_rows);
             res_columns[j++]->insert(stat.total_stable_size);
+            res_columns[j++]->insert(stat.total_stable_size_on_disk);
             res_columns[j++]->insert(stat.avg_stable_rows);
             res_columns[j++]->insert(stat.avg_stable_size);
 

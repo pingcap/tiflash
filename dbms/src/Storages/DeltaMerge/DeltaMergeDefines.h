@@ -51,10 +51,10 @@ struct EmptyValueSpace
     void removeFromInsert(UInt64) {}
 };
 
-using EntryIterator     = DTEntryIterator<DT_M, DT_F, DT_S>;
-using DefaultDeltaTree  = DeltaTree<EmptyValueSpace, DT_M, DT_F, DT_S, ArenaWithFreeLists>;
-using DeltaTreePtr      = std::shared_ptr<DefaultDeltaTree>;
-using BlockPtr          = std::shared_ptr<Block>;
+using EntryIterator    = DTEntryIterator<DT_M, DT_F, DT_S>;
+using DefaultDeltaTree = DeltaTree<EmptyValueSpace, DT_M, DT_F, DT_S, ArenaWithFreeLists>;
+using DeltaTreePtr     = std::shared_ptr<DefaultDeltaTree>;
+using BlockPtr         = std::shared_ptr<Block>;
 
 using RowId = UInt64;
 using ColId = DB::ColumnID;

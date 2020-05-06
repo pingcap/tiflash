@@ -15,6 +15,7 @@
 #include <Flash/FlashService.h>
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
+#include <IO/ReadHelpers.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/DDLWorker.h>
 #include <Interpreters/IDAsPathUpgrader.h>
@@ -25,6 +26,7 @@
 #include <Poco/Net/NetException.h>
 #include <Poco/StringTokenizer.h>
 #include <Storages/MutableSupport.h>
+#include <Storages/PathCapacityMetrics.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/Transaction/KVStore.h>
@@ -270,18 +272,38 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     }
     std::vector<String> all_normal_path;
+    std::vector<size_t> all_capacity;
+    if (config().has("capacity"))
     {
+        // TODO: support human readable format for capacity, mark_cache_size, minmax_index_cache_size
+        // eg. 100GiB, 10MiB
+        String capacities = config().getString("capacity");
+        Poco::trimInPlace(capacities);
+        Poco::StringTokenizer string_tokens(capacities, ",");
+        for (auto it = string_tokens.begin(); it != string_tokens.end(); ++it)
+        {
+            const std::string & s = *it;
+            size_t capacity = parse<size_t>(s.data(), s.size());
+            all_capacity.emplace_back(capacity);
+        }
+    }
+    {
+
         String paths = config().getString("path");
         Poco::trimInPlace(paths);
         if (paths.empty())
             throw Exception("path configuration parameter is empty");
         Poco::StringTokenizer string_tokens(paths, ",");
+        size_t idx = 0;
         for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
         {
             all_normal_path.emplace_back(getCanonicalPath(std::string(*it)));
-            LOG_DEBUG(log, "Data part candidate path: " << std::string(*it));
+            if (all_capacity.size() < all_normal_path.size())
+                all_capacity.emplace_back(0);
+            LOG_DEBUG(log, "Data part candidate path: " << std::string(*it) << ", capacity: " << all_capacity[idx++]);
         }
     }
+    global_context->initializePathCapacityMetric(all_normal_path, std::move(all_capacity));
 
     bool path_realtime_mode = config().getBool("path_realtime_mode", false);
     std::vector<String> extra_paths(all_normal_path.begin(), all_normal_path.end());
@@ -289,9 +311,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         p += "/data";
 
     if (path_realtime_mode && all_normal_path.size() > 1)
-        global_context->setExtraPaths(std::vector<String>(extra_paths.begin() + 1, extra_paths.end()));
+        global_context->setExtraPaths(std::vector<String>(extra_paths.begin() + 1, extra_paths.end()), global_context->getPathCapacity());
     else
-        global_context->setExtraPaths(extra_paths);
+        global_context->setExtraPaths(extra_paths, global_context->getPathCapacity());
 
     const std::string path = all_normal_path[0];
     TiFlashRaftConfig raft_config(path, config(), log);
