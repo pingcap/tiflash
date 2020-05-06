@@ -73,6 +73,43 @@ public:
         }
     }
 
+    const std::vector<RSResult> & getHandleRes() { return handle_res; }
+    const std::vector<UInt8> &    getUsePacks() { return use_packs; }
+
+    Handle getMinHandle(size_t pack_id)
+    {
+        if (!param.indexes.count(EXTRA_HANDLE_COLUMN_ID))
+            loadIndex(EXTRA_HANDLE_COLUMN_ID);
+        auto & minmax_index = param.indexes.find(EXTRA_HANDLE_COLUMN_ID)->second.minmax;
+        return minmax_index->getIntMinMax(pack_id).first;
+    }
+
+    UInt64 getMaxVersion(size_t pack_id)
+    {
+        if (!param.indexes.count(VERSION_COLUMN_ID))
+            loadIndex(VERSION_COLUMN_ID);
+        auto & minmax_index = param.indexes.find(VERSION_COLUMN_ID)->second.minmax;
+        return minmax_index->getUInt64MinMax(pack_id).second;
+    }
+
+    // Get valid rows and bytes after filter invalid packs by handle_range and filter
+    std::pair<size_t, size_t> validRowsAndBytes()
+    {
+        size_t rows       = 0;
+        size_t bytes      = 0;
+        auto & pack_stats = dmfile->getPackStats();
+        for (size_t i = 0; i < pack_stats.size(); ++i)
+        {
+            if (use_packs[i])
+            {
+                rows += pack_stats[i].rows;
+                bytes += pack_stats[i].bytes;
+            }
+        }
+        return {rows, bytes};
+    }
+
+private:
     void loadIndex(const ColId col_id)
     {
         if (param.indexes.count(col_id))
@@ -100,41 +137,6 @@ public:
         }
 
         param.indexes.emplace(col_id, RSIndex(type, minmax_index));
-    }
-
-    const std::vector<RSResult> & getHandleRes() { return handle_res; }
-    const std::vector<UInt8> &    getUsePacks() { return use_packs; }
-
-    Handle getMinHandle(size_t pack_id)
-    {
-        if (!param.indexes.count(EXTRA_HANDLE_COLUMN_ID))
-            loadIndex(EXTRA_HANDLE_COLUMN_ID);
-        auto & minmax_index = param.indexes.find(EXTRA_HANDLE_COLUMN_ID)->second.minmax;
-        return minmax_index->getIntMinMax(pack_id).first;
-    }
-
-    UInt64 getMaxVersion(size_t pack_id)
-    {
-        if (!param.indexes.count(VERSION_COLUMN_ID))
-            loadIndex(VERSION_COLUMN_ID);
-        auto & minmax_index = param.indexes.find(VERSION_COLUMN_ID)->second.minmax;
-        return minmax_index->getUInt64MinMax(pack_id).second;
-    }
-
-    std::pair<size_t, size_t> validRowsAndBytes()
-    {
-        size_t rows       = 0;
-        size_t bytes      = 0;
-        auto & pack_stats = dmfile->getPackStats();
-        for (size_t i = 0; i < pack_stats.size(); ++i)
-        {
-            if (use_packs[i])
-            {
-                rows += pack_stats[i].rows;
-                bytes += pack_stats[i].bytes;
-            }
-        }
-        return {rows, bytes};
     }
 
 private:

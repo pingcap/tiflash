@@ -138,6 +138,63 @@ try
 }
 CATCH
 
+
+TEST_F(DMFile_Test, ReadFilteredByHandle)
+try
+{
+    auto cols = DMTestEnv::getDefaultColumns();
+
+    const size_t num_rows_write = 128;
+
+    {
+        // Prepare for write
+        Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write / 2, false);
+        Block block2 = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write, false);
+        auto  stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
+        stream->writePrefix();
+        stream->write(block1, 0);
+        stream->write(block2, 0);
+        stream->writeSuffix();
+    }
+
+
+    {
+        // Test read
+        auto stream = std::make_shared<DMFileBlockInputStream>( //
+            dbContext(),
+            std::numeric_limits<UInt64>::max(),
+            false,
+            dmContext().hash_salt,
+            dm_file,
+            *cols,
+            HandleRange(32, 100),
+            RSOperatorPtr{},
+            column_cache_,
+            IdSetPtr{});
+
+        size_t num_rows_read = 0;
+        stream->readPrefix();
+        while (Block in = stream->read())
+        {
+            for (auto itr : in)
+            {
+                auto c = itr.column;
+                if (itr.name == DMTestEnv::pk_name)
+                {
+                    for (size_t i = 0; i < c->size(); i++)
+                    {
+                        EXPECT_EQ(c->getInt(i), Int64(i));
+                        num_rows_read++;
+                    }
+                }
+            }
+        }
+        stream->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+}
+CATCH
+
 TEST_F(DMFile_Test, NumberTypes)
 try
 {
