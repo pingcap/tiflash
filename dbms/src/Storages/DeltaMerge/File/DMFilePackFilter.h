@@ -1,8 +1,8 @@
 #pragma once
 
 #include <Storages/DeltaMerge/File/DMFile.h>
-#include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
+#include <Storages/DeltaMerge/Filter/RSOperator.h>
 
 namespace DB
 {
@@ -15,13 +15,14 @@ using IdSetPtr = std::shared_ptr<IdSet>;
 class DMFilePackFilter
 {
 public:
-    /// 
+    ///
     DMFilePackFilter(const DMFilePtr &     dmfile_,
                      MinMaxIndexCache *    index_cache_,
                      UInt64                hash_salt_,
-                     const HandleRange &   handle_range_,
-                     const RSOperatorPtr & filter_,
-                     const IdSetPtr &      read_packs_)
+                     const HandleRange &   handle_range_, // filter by handle range
+                     const RSOperatorPtr & filter_,       // filter by push down where clause
+                     const IdSetPtr &      read_packs_    // filter by pack index
+                     )
         : dmfile(dmfile_),
           index_cache(index_cache_),
           hash_salt(hash_salt_),
