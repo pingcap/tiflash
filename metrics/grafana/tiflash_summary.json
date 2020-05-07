@@ -2089,7 +2089,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "max(tiflash_raft_read_index_count{instance=~\"$instance\"}) by (instance)",
+              "expr": "sum(rate(tiflash_raft_read_index_count{instance=~\"$instance\"}[1m])) by (instance)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{instance}}",
@@ -2100,7 +2100,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Read Index Count",
+          "title": "Read Index",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -2117,7 +2117,7 @@
           "yaxes": [
             {
               "decimals": null,
-              "format": "none",
+              "format": "ops",
               "label": null,
               "logBase": 1,
               "max": null,
