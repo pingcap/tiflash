@@ -130,7 +130,7 @@ const int GeneralCICollator::cmp_ans[] = {
 #define M(s)             \
     {                    \
         s, sizeof(s) - 1 \
-    } // Prevent truncation by inside '\0' when constructing std::string using string literal, call std::string(const char *, size_t) instead.
+    } // Prevent truncation by middle '\0' when constructing std::string using string literal, call std::string(const char *, size_t) instead.
 const std::string GeneralCICollator::sk_ans[] = {
     M("\x00\x41"),
     M("\x00\x41"),
@@ -141,14 +141,10 @@ const std::string GeneralCICollator::sk_ans[] = {
     M("\x00\x41"),
 };
 
-TEST(CollatorSuite, BinCollator)
-{
-    std::cout << "BinCollator" << std::endl;
-    testCollator<BinCollator>();
-    std::cout << "BinPaddingCollator" << std::endl;
-    testCollator<BinPaddingCollator>();
-    std::cout << "GeneralCICollator" << std::endl;
-    testCollator<GeneralCICollator>();
-}
+TEST(CollatorSuite, BinCollator) { testCollator<BinCollator>(); }
+
+TEST(CollatorSuite, BinPaddingCollator) { testCollator<BinPaddingCollator>(); }
+
+TEST(CollatorSuite, GeneralCICollator) { testCollator<GeneralCICollator>(); }
 
 } // namespace DB::tests
