@@ -1,5 +1,6 @@
-#include "DiagnosticsService.h"
 #include <Common/Exception.h>
+#include <Flash/DiagnosticsService.h>
+#include <Flash/LogSearch.h>
 
 #include <Poco/File.h>
 #include <Poco/Path.h>
@@ -10,7 +11,7 @@
 #include <regex>
 #include <thread>
 
-#ifdef __unix__
+#ifdef __linux__
 // #include <arpa/inet.h>
 // #include <ifaddrs.h>
 // #include <linux/if_packet.h>
@@ -21,6 +22,8 @@
 namespace DB
 {
 
+using diagnosticspb::LogLevel;
+using diagnosticspb::SearchLogResponse;
 using diagnosticspb::ServerInfoItem;
 using diagnosticspb::ServerInfoPair;
 using diagnosticspb::ServerInfoResponse;
@@ -37,7 +40,7 @@ namespace
 {
 
 static constexpr uint KB = 1024;
-static constexpr uint MB = 1024 * 1024;
+// static constexpr uint MB = 1024 * 1024;
 
 DiagnosticsService::AvgLoad getAvgLoad()
 {
@@ -90,6 +93,7 @@ DiagnosticsService::NICInfo getNICInfo()
     if (!net_dir.exists())
     {
         LOG_WARNING(&Logger::get("DiagnosticsService"), "/sys/class/net doesn't exist");
+        return nic_info;
     }
 
     std::vector<Poco::File> devices;
@@ -142,6 +146,7 @@ DiagnosticsService::IOInfo getIOInfo()
     if (!io_dir.exists())
     {
         LOG_WARNING(&Logger::get("DiagnosticsService"), "/sys/block doesn't exist");
+        return io_info;
     }
 
     std::vector<Poco::File> devices;
@@ -279,6 +284,7 @@ void getCacheSize(const uint & level, size_t & size, size_t & line_size)
 std::vector<DiagnosticsService::Disk> getAllDisks()
 {
     std::vector<DiagnosticsService::Disk> disks;
+#ifdef __linux__
     {
         Poco::File mount_file("/proc/mounts");
         if (!mount_file.exists())
@@ -306,11 +312,18 @@ std::vector<DiagnosticsService::Disk> getAllDisks()
             disk.mount_point = values[1];
 
             Poco::Path rotational_file_path("/sys/block/" + disk.name + "/queue/rotational");
-            std::ifstream rotational_file(rotational_file_path.toString());
-            std::string line;
-            std::getline(rotational_file, line);
-            int rotational = std::stoi(line);
-            disk.disk_type = rotational == 1 ? disk.HDD : disk.SSD;
+            if (Poco::File(rotational_file_path).exists())
+            {
+                std::ifstream rotational_file(rotational_file_path.toString());
+                std::string line;
+                std::getline(rotational_file, line);
+                int rotational = std::stoi(line);
+                disk.disk_type = rotational == 1 ? DiagnosticsService::Disk::DiskType::HDD : DiagnosticsService::Disk::DiskType::SSD;
+            }
+            else
+            {
+                disk.disk_type = DiagnosticsService::Disk::DiskType::UNKNOWN;
+            }
 
             disk.fs_type = values[2];
 
@@ -325,7 +338,7 @@ std::vector<DiagnosticsService::Disk> getAllDisks()
             disks.emplace_back(std::move(disk));
         }
     }
-
+#endif
     return disks;
 }
 
@@ -686,8 +699,32 @@ void DiagnosticsService::memHardwareInfo(std::vector<diagnosticspb::ServerInfoIt
 
 void DiagnosticsService::diskHardwareInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items)
 {
-    std::vector<Disk> disks = getAllDisks();
-    for (auto disk : disks)
+    std::vector<Disk> all_disks = getAllDisks();
+
+    std::string data_path = server.config().getString("path");
+    std::vector<std::string> data_dirs;
+    boost::split(data_dirs, data_path, boost::is_any_of(","));
+
+    std::vector<Disk> disks_in_use;
+    disks_in_use.reserve(all_disks.size());
+
+    for (auto disk : all_disks)
+    {
+        bool is_in_use = false;
+        for (auto dir : data_dirs)
+        {
+            if (boost::starts_with(dir, disk.mount_point))
+            {
+                is_in_use = true;
+                break;
+            }
+        }
+
+        if (is_in_use)
+            disks_in_use.emplace_back(std::move(disk));
+    }
+
+    for (auto disk : disks_in_use)
     {
         size_t total = disk.total_space;
         size_t free = disk.available_space;
@@ -807,14 +844,71 @@ catch (const Exception & e)
     return grpc::Status(grpc::StatusCode::INTERNAL, "internal error");
 }
 
-::grpc::Status DiagnosticsService::search_log(::grpc::ServerContext * context, const ::diagnosticspb::SearchLogRequest * request,
-    ::grpc::ServerWriter<::diagnosticspb::SearchLogResponse> * writer)
+::grpc::Status DiagnosticsService::search_log(::grpc::ServerContext * grpc_context, const ::diagnosticspb::SearchLogRequest * request,
+    ::grpc::ServerWriter<::diagnosticspb::SearchLogResponse> * stream)
 {
-    (void)context;
-    (void)request;
-    (void)writer;
-    /// TODO: implement this
-    return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "unimplemented");
+    (void)grpc_context;
+
+    /// TODO: add error log
+    Poco::File log_file(Poco::Path(server.config().getString("logger.log")));
+    if (!log_file.exists())
+    {
+        LOG_ERROR(log, "Invalid log path: " << log_file.path());
+        return ::grpc::Status(grpc::StatusCode::INTERNAL, "internal error");
+    }
+
+    int64_t start_time = request->start_time();
+    int64_t end_time = request->end_time();
+    if (end_time == 0)
+    {
+        // default to now
+        end_time = std::chrono::milliseconds(std::time(NULL)).count();
+    }
+    std::vector<LogLevel> levels;
+    for (auto level : request->levels())
+    {
+        levels.push_back(static_cast<LogLevel>(level));
+    }
+
+    std::vector<std::string> patterns;
+    for (auto pattern : request->patterns())
+    {
+        patterns.push_back(pattern);
+    }
+
+    auto in_ptr = std::shared_ptr<std::ifstream>(new std::ifstream(log_file.path()));
+
+    LogIterator log_itr(start_time, end_time, levels, patterns, in_ptr);
+
+    static constexpr size_t LOG_BATCH_SIZE = 256;
+
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling SearchLog: " << request->DebugString());
+    for (;;)
+    {
+        size_t i = 0;
+        auto resp = SearchLogResponse::default_instance();
+        while (auto log_msg = log_itr.next())
+        {
+            i++;
+            auto added_msg = resp.add_messages();
+            *added_msg = *log_msg;
+
+            if (i == LOG_BATCH_SIZE - 1)
+                break;
+        }
+
+        if (i == 0)
+            break;
+
+        if (!stream->Write(resp))
+        {
+            LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Write response failed for unknown reason.");
+            return grpc::Status(grpc::StatusCode::UNKNOWN, "Write response failed for unknown reason.");
+        }
+    }
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling SearchLog done: " << request->DebugString());
+
+    return ::grpc::Status::OK;
 }
 
 } // namespace DB

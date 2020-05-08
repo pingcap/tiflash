@@ -121,8 +121,8 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
 
     auto & extra_paths_root = global_context.getExtraPaths();
     extra_paths             = extra_paths_root.withTable(db_name, table_name_, data_path_contains_database_name);
-
-    loadDMFiles();
+    // restore existing dm files and set capacity for extra_paths.
+    restoreExtraPathCapacity();
 
     original_table_columns.emplace_back(original_table_handle_define);
     original_table_columns.emplace_back(getVersionColumnDefine());
@@ -170,9 +170,22 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
         throw;
     }
 
-    gc_handle              = background_pool.addTask([this] { return storage_pool.gc(); });
-    background_task_handle = background_pool.addTask([this] { return handleBackgroundTask(); });
+    setUpBackgroundTask(dm_context);
 
+    LOG_INFO(log, "Restore DeltaMerge Store end [" << db_name << "." << table_name << "]");
+}
+
+DeltaMergeStore::~DeltaMergeStore()
+{
+    LOG_INFO(log, "Release DeltaMerge Store start [" << db_name << "." << table_name << "]");
+
+    shutdown();
+
+    LOG_INFO(log, "Release DeltaMerge Store end [" << db_name << "." << table_name << "]");
+}
+
+void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
+{
     auto dmfile_scanner = [=]() {
         PageStorage::PathAndIdsVec path_and_ids_vec;
         for (auto & root_path : extra_paths.listPaths())
@@ -207,16 +220,18 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
     };
     storage_pool.data().registerExternalPagesCallbacks(dmfile_scanner, dmfile_remover);
 
-    LOG_INFO(log, "Restore DeltaMerge Store end [" << db_name << "." << table_name << "]");
-}
+    // Do place delta index.
+    for (auto & [end, segment] : segments)
+    {
+        (void)end;
+        background_tasks.addTask(BackgroundTask{TaskType::PlaceIndex, dm_context, segment, {}}, ThreadType::Init, log);
+    }
 
-DeltaMergeStore::~DeltaMergeStore()
-{
-    LOG_INFO(log, "Release DeltaMerge Store start [" << db_name << "." << table_name << "]");
+    gc_handle              = background_pool.addTask([this] { return storage_pool.gc(); });
+    background_task_handle = background_pool.addTask([this] { return handleBackgroundTask(); });
 
-    shutdown();
-
-    LOG_INFO(log, "Release DeltaMerge Store end [" << db_name << "." << table_name << "]");
+    // Wake up to do place delta index tasks.
+    background_task_handle->wake();
 }
 
 void DeltaMergeStore::rename(String new_path, bool clean_rename, String new_database_name, String new_table_name)
@@ -253,6 +268,7 @@ void DeltaMergeStore::drop()
 {
     // Remove all background task first
     shutdown();
+    storage_pool.drop();
     // Drop data in extra path (stable data by default)
     extra_paths.drop(true);
     // Check if path(delta && meta by default) is covered by extra_paths, if not, drop it.
@@ -851,7 +867,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     auto & delta = segment->getDelta();
 
     size_t delta_saved_rows = delta->getRows(/* use_unsaved */ false);
-    size_t delta_check_rows = std::max(segment->updatesInDeltaTree(), delta_saved_rows);
+    size_t delta_check_rows = std::max(delta->updatesInDeltaTree(), delta_saved_rows);
 
     size_t delta_deletes = delta->getDeletes();
 
@@ -886,12 +902,12 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     bool should_compact = std::max((Int64)pack_count - delta_last_try_compact_packs, 0) >= 10;
 
     auto try_add_background_task = [&](const BackgroundTask & task) {
+        // Prevent too many tasks.
         if (background_tasks.length() <= std::max(id_to_segment.size() * 2, background_pool.getNumberOfThreads() * 5))
         {
             if (shutdown_called.load(std::memory_order_relaxed))
                 return;
 
-            // Prevent too many tasks.
             background_tasks.addTask(task, thread_type, log);
             background_task_handle->wake();
         }
@@ -905,6 +921,8 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
             delta_last_try_flush_rows = delta_rows;
             LOG_DEBUG(log, "Foreground flush cache " << segment->info());
             segment->flushCache(*dm_context);
+
+            try_add_background_task(BackgroundTask{TaskType::PlaceIndex, dm_context, segment, {}});
         }
         else if (should_background_flush)
         {
@@ -1085,8 +1103,14 @@ bool DeltaMergeStore::handleBackgroundTask()
         }
         case Flush: {
             task.segment->flushCache(*task.dm_context);
+            // After flush cache, better place delta index.
+            task.segment->placeDeltaIndex(*task.dm_context);
             left = task.segment;
             type = ThreadType::BG_Flush;
+            break;
+        }
+        case PlaceIndex: {
+            task.segment->placeDeltaIndex(*task.dm_context);
             break;
         }
         default:
@@ -1444,7 +1468,7 @@ SortDescription DeltaMergeStore::getPrimarySortDescription() const
     return desc;
 }
 
-void DeltaMergeStore::loadDMFiles()
+void DeltaMergeStore::restoreExtraPathCapacity()
 {
     LOG_DEBUG(log, "Loading dm files");
 
@@ -1454,7 +1478,7 @@ void DeltaMergeStore::loadDMFiles()
         for (auto & file_id : DMFile::listAllInPath(parent_path, false))
         {
             auto dmfile = DMFile::restore(file_id, /* ref_id= */ 0, parent_path, true);
-            extra_paths.addDMFile(file_id, dmfile->getBytes(), root_path);
+            extra_paths.addDMFile(file_id, dmfile->getBytesOnDisk(), root_path);
         }
     }
 }
@@ -1477,7 +1501,7 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
         auto & delta  = segment->getDelta();
         auto & stable = segment->getStable();
 
-        total_placed_rows += segment->getPlacedDeltaRows();
+        total_placed_rows += delta->getPlacedDeltaRows();
 
         if (delta->getPackCount())
         {
@@ -1507,6 +1531,7 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
 
             stat.total_stable_rows += stable->getRows();
             stat.total_stable_size += stable->getBytes();
+            stat.total_stable_size_on_disk += stable->getBytesOnDisk();
         }
     }
 
@@ -1582,6 +1607,8 @@ SegmentStats DeltaMergeStore::getSegmentStats()
         stat.rows          = segment->getEstimatedRows();
         stat.size          = delta->getBytes() + stable->getBytes();
         stat.delete_ranges = delta->getDeletes();
+
+        stat.stable_size_on_disk = stable->getBytesOnDisk();
 
         stat.delta_pack_count  = delta->getPackCount();
         stat.stable_pack_count = stable->getPacks();

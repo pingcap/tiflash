@@ -52,13 +52,10 @@ public:
 
     struct ReadInfo
     {
-        DeltaIndexPtr        index;
-        DeltaIndex::Iterator index_begin;
-        DeltaIndex::Iterator index_end;
+        DeltaIndexIterator index_begin;
+        DeltaIndexIterator index_end;
 
         ColumnDefines read_columns;
-
-        explicit operator bool() const { return (bool)index; }
     };
 
     struct SplitInfo
@@ -157,12 +154,12 @@ public:
 
     /// Flush delta's cache packs.
     bool flushCache(DMContext & dm_context);
+    void placeDeltaIndex(DMContext & dm_context);
 
     bool compactDelta(DMContext & dm_context);
 
-    size_t getEstimatedRows() const;
-    size_t getEstimatedStableRows() const;
-    size_t getEstimatedBytes() const;
+    size_t getEstimatedRows() const { return delta->getRows() + stable->getRows(); }
+    size_t getEstimatedBytes() const { return delta->getBytes() + stable->getBytes(); }
 
     PageId segmentId() const { return segment_id; }
     PageId nextSegmentId() const { return next_segment_id; }
@@ -172,13 +169,6 @@ public:
     const HandleRange &         getRange() const { return range; }
     const DeltaValueSpacePtr &  getDelta() const { return delta; }
     const StableValueSpacePtr & getStable() const { return stable; }
-
-    size_t getPlacedDeltaRows() const { return placed_delta_rows; }
-    size_t getPlacedDeltaDeletes() const { return placed_delta_deletes; }
-
-    size_t getDeltaRawRows(bool use_unsaved = true) const;
-    // Insert and delete operations' count in DeltaTree
-    size_t updatesInDeltaTree() const;
 
     String simpleInfo() const;
     String info() const;
@@ -202,21 +192,26 @@ public:
     bool hasAbandoned() { return delta->hasAbandoned(); }
 
 private:
-    ReadInfo getReadInfo(const DMContext & dm_context, const ColumnDefines & read_columns, const SegmentSnapshotPtr & segment_snap) const;
+    ReadInfo getReadInfo(const DMContext &          dm_context,
+                         const ColumnDefines &      read_columns,
+                         const SegmentSnapshotPtr & segment_snap,
+                         const HandleRanges &       read_ranges = {HandleRange::newAll()},
+                         UInt64                     max_version = MAX_UINT64) const;
 
     static ColumnDefines arrangeReadColumns(const ColumnDefine & handle, const ColumnDefines & columns_to_read);
 
-    template <class IndexIterator = DeltaIndex::Iterator, bool skippable_place = false>
-    SkippableBlockInputStreamPtr getPlacedStream(const DMContext &         dm_context,
-                                                 const ColumnDefines &     read_columns,
-                                                 const HandleRange &       handle_range,
-                                                 const RSOperatorPtr &     filter,
-                                                 const StableSnapshotPtr & stable_snap,
-                                                 DeltaSnapshotPtr &        delta_snap,
-                                                 const IndexIterator &     delta_index_begin,
-                                                 const IndexIterator &     delta_index_end,
-                                                 size_t                    index_size,
-                                                 size_t                    expected_block_size) const;
+    /// Create a stream which merged delta and stable streams together.
+    template <bool skippable_place = false, class IndexIterator = DeltaIndexIterator>
+    static SkippableBlockInputStreamPtr getPlacedStream(const DMContext &         dm_context,
+                                                        const ColumnDefines &     read_columns,
+                                                        const HandleRange &       handle_range,
+                                                        const RSOperatorPtr &     filter,
+                                                        const StableSnapshotPtr & stable_snap,
+                                                        DeltaSnapshotPtr &        delta_snap,
+                                                        const IndexIterator &     delta_index_begin,
+                                                        const IndexIterator &     delta_index_end,
+                                                        size_t                    expected_block_size,
+                                                        UInt64                    max_version = MAX_UINT64);
 
     /// Merge delta & stable, and then take the middle one.
     Handle getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, const SegmentSnapshotPtr & segment_snap) const;
@@ -231,45 +226,42 @@ private:
 
 
     /// Make sure that all delta packs have been placed.
-    DeltaIndexPtr ensurePlace(const DMContext & dm_context, const StableSnapshotPtr & stable_snap, DeltaSnapshotPtr & delta_snap) const;
+    /// Note that the index returned could be partial index, and cannot be updated to shared index.
+    /// Returns <placed index, this index is fully indexed or not>
+    std::pair<DeltaIndexPtr, bool> ensurePlace(const DMContext &         dm_context,
+                                               const StableSnapshotPtr & stable_snap,
+                                               DeltaSnapshotPtr &        delta_snap,
+                                               const HandleRanges &      read_ranges,
+                                               UInt64                    max_version) const;
 
     /// Reference the inserts/updates by delta tree.
+    /// Returns fully placed or not. Some rows not match relevant_range are not placed.
     template <bool skippable_place>
-    void placeUpsert(const DMContext &         dm_context,
+    bool placeUpsert(const DMContext &         dm_context,
                      const StableSnapshotPtr & stable_snap,
                      DeltaSnapshotPtr &        delta_snap,
                      size_t                    delta_value_space_offset,
                      Block &&                  block,
-                     DeltaTree &               delta_tree) const;
+                     DeltaTree &               delta_tree,
+                     const HandleRange &       relevant_range) const;
     /// Reference the deletes by delta tree.
+    /// Returns fully placed or not. Some rows not match relevant_range are not placed.
     template <bool skippable_place>
-    void placeDelete(const DMContext &         dm_context,
+    bool placeDelete(const DMContext &         dm_context,
                      const StableSnapshotPtr & stable_snap,
                      DeltaSnapshotPtr &        delta_snap,
                      const HandleRange &       delete_range,
-                     DeltaTree &               delta_tree) const;
-
-    size_t stableRows() const;
-    size_t deltaRows() const;
-    size_t estimatedRows() const;
-    size_t estimatedBytes() const;
+                     DeltaTree &               delta_tree,
+                     const HandleRange &       relevant_range) const;
 
 private:
-    const UInt64      epoch; // After split / merge / merge delta, epoch got increase by 1.
+    const UInt64      epoch; // After split / merge / merge delta, epoch got increased by 1.
     const HandleRange range;
     const PageId      segment_id;
     const PageId      next_segment_id;
 
     const DeltaValueSpacePtr  delta;
     const StableValueSpacePtr stable;
-
-    mutable DeltaTreePtr delta_tree;
-    mutable size_t       placed_delta_rows    = 0;
-    mutable size_t       placed_delta_deletes = 0;
-
-    // Used to synchronize between read threads.
-    // Mainly to protect delta_tree's update between them.
-    mutable std::mutex read_read_mutex;
 
     Logger * log;
 };

@@ -4,6 +4,7 @@
 #include <Core/Types.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
+#include <Storages/PathCapacityMetrics.h>
 #include <common/logger_useful.h>
 
 #include <random>
@@ -25,7 +26,8 @@ public:
 
     PathPool() = default;
 
-    PathPool(const std::vector<String> & paths_) : log{&Logger::get("PathPool")}
+    PathPool(const std::vector<String> & paths_, PathCapacityMetricsPtr global_capacity_)
+        : global_capacity{std::move(global_capacity_)}, log{&Logger::get("PathPool")}
     {
         for (auto & path : paths_)
         {
@@ -37,8 +39,13 @@ public:
     }
 
 private:
-    PathPool(const std::vector<String> & paths_, const String & database_, const String & table_, bool path_need_database_name_)
-        : database(database_), table(table_), path_need_database_name{path_need_database_name_}, log{&Logger::get("PathPool")}
+    PathPool(const std::vector<String> & paths_, const String & database_, const String & table_, bool path_need_database_name_,
+        PathCapacityMetricsPtr global_capacity_)
+        : database(database_),
+          table(table_),
+          path_need_database_name{path_need_database_name_},
+          global_capacity{std::move(global_capacity_)},
+          log{&Logger::get("PathPool")}
     {
         for (auto & path : paths_)
         {
@@ -50,7 +57,7 @@ private:
     }
 
 public:
-    PathPool(const PathPool & path_pool)
+    PathPool(const PathPool & path_pool) : global_capacity{path_pool.global_capacity}
     {
         path_infos.clear();
         path_map = path_pool.path_map;
@@ -75,6 +82,7 @@ public:
         database = path_pool.database;
         table = path_pool.table;
         path_need_database_name = path_pool.path_need_database_name;
+        global_capacity = path_pool.global_capacity;
         log = path_pool.log;
         return *this;
     }
@@ -88,7 +96,7 @@ public:
         {
             paths_.emplace_back(path_info.path);
         }
-        return PathPool(paths_, database_, table_, path_need_database_name_);
+        return PathPool(paths_, database_, table_, path_need_database_name_, global_capacity);
     }
 
     void rename(const String & new_database, const String & new_table, bool clean_rename)
@@ -150,6 +158,9 @@ public:
                 Poco::File dir(path_info.path);
                 if (dir.exists())
                     dir.remove(recursive);
+
+                // update global used size
+                global_capacity->freeUsedSize(path_info.path, path_info.total_size);
             }
             catch (Poco::DirectoryNotEmptyException & e)
             {
@@ -229,6 +240,8 @@ public:
         path_map.emplace(file_id, index);
         path_infos[index].file_size_map.emplace(file_id, file_size);
         path_infos[index].total_size += file_size;
+        // update global used size
+        global_capacity->addUsedSize(path, file_size);
     }
 
     void removeDMFile(UInt64 file_id)
@@ -237,9 +250,12 @@ public:
         if (unlikely(path_map.find(file_id) == path_map.end()))
             throw Exception("Cannot find DMFile for id " + std::to_string(file_id));
         UInt32 index = path_map.at(file_id);
-        path_infos[index].total_size -= path_infos[index].file_size_map.at(file_id);
+        const auto file_size = path_infos[index].file_size_map.at(file_id);
+        path_infos[index].total_size -= file_size;
         path_map.erase(file_id);
         path_infos[index].file_size_map.erase(file_id);
+        // update global used size
+        global_capacity->freeUsedSize(path_infos[index].path, file_size);
     }
 
     std::vector<String> listPaths() const
@@ -287,6 +303,8 @@ private:
     mutable std::mutex mutex;
 
     bool path_need_database_name = false;
+
+    PathCapacityMetricsPtr global_capacity;
 
     Poco::Logger * log;
 };

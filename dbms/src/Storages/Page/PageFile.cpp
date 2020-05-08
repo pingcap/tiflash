@@ -519,28 +519,30 @@ void PageFile::MetaMergingReader::moveNext()
 // =========================================================
 
 PageFile::Writer::Writer(PageFile & page_file_, bool sync_on_write_)
-    : page_file(page_file_),
-      sync_on_write(sync_on_write_),
-      data_file_path(page_file.dataPath()),
-      meta_file_path(page_file.metaPath()),
-      data_file_fd(PageUtil::openFile<false>(data_file_path)),
-      meta_file_fd(PageUtil::openFile<false>(meta_file_path))
+    : page_file(page_file_), sync_on_write(sync_on_write_), data_file_path(page_file.dataPath()), meta_file_path(page_file.metaPath())
 {
+    // Create data and meta file, prevent empty page folder from being removed by GC.
+    PageUtil::touchFile(data_file_path);
+    PageUtil::touchFile(meta_file_path);
 }
 
 PageFile::Writer::~Writer()
 {
-    SCOPE_EXIT({
-        ::close(data_file_fd);
-        ::close(meta_file_fd);
-    });
-    PageUtil::syncFile(data_file_fd, data_file_path);
-    PageUtil::syncFile(meta_file_fd, meta_file_path);
+    if (!data_file_fd)
+        return;
+
+    closeFd();
 }
 
-void PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
+size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
 {
     ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
+
+    if (!data_file_fd)
+    {
+        data_file_fd = PageUtil::openFile<false>(data_file_path);
+        meta_file_fd = PageUtil::openFile<false>(meta_file_path);
+    }
 
     // TODO: investigate if not copy data into heap, write big pages can be faster?
     ByteBuffer meta_buf, data_buf;
@@ -560,11 +562,40 @@ void PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
 
     page_file.data_file_pos += data_buf.size();
     page_file.meta_file_pos += meta_buf.size();
+
+    last_write_time = Clock::now();
+
+    // return how may bytes written
+    return data_buf.size() + meta_buf.size();
+}
+
+void PageFile::Writer::tryCloseIdleFd(const Seconds & max_idle_time)
+{
+    if (max_idle_time.count() == 0 || !data_file_fd)
+        return;
+    if (Clock::now() - last_write_time >= max_idle_time)
+        closeFd();
 }
 
 PageFileIdAndLevel PageFile::Writer::fileIdLevel() const
 {
     return page_file.fileIdLevel();
+}
+
+void PageFile::Writer::closeFd()
+{
+    if (!data_file_fd)
+        return;
+
+    SCOPE_EXIT({
+        ::close(data_file_fd);
+        ::close(meta_file_fd);
+
+        meta_file_fd = 0;
+        data_file_fd = 0;
+    });
+    PageUtil::syncFile(data_file_fd, data_file_path);
+    PageUtil::syncFile(meta_file_fd, meta_file_path);
 }
 
 // =========================================================
@@ -912,26 +943,23 @@ void PageFile::setFormal()
     file.renameTo(folderPath());
 }
 
-void PageFile::setLegacy()
+size_t PageFile::setLegacy()
 {
     if (type != Type::Formal)
-        return;
+        return 0;
     // Rename to legacy dir. Note that we can NOT remove the data part before
     // successfully rename to legacy status.
     Poco::File formal_dir(folderPath());
     type = Type::Legacy;
     formal_dir.renameTo(folderPath());
     // remove the data part
-    if (auto data_file = Poco::File(dataPath()); data_file.exists())
-    {
-        data_file.remove();
-    }
+    return removeDataIfExists();
 }
 
-void PageFile::setCheckpoint()
+size_t PageFile::setCheckpoint()
 {
     if (type != Type::Temp)
-        return;
+        return 0;
 
     {
         // The data part of checkpoint file should be empty.
@@ -946,18 +974,18 @@ void PageFile::setCheckpoint()
     type = Type::Checkpoint;
     file.renameTo(folderPath());
     // Remove the data part, should be a emtpy file.
-    if (auto data_file = Poco::File(dataPath()); data_file.exists())
-    {
-        data_file.remove();
-    }
+    return removeDataIfExists();
 }
 
-void PageFile::removeDataIfExists() const
+size_t PageFile::removeDataIfExists() const
 {
+    size_t bytes_removed = 0;
     if (auto data_file = Poco::File(dataPath()); data_file.exists())
     {
+        bytes_removed = data_file.getSize();
         data_file.remove();
     }
+    return bytes_removed;
 }
 
 void PageFile::destroy() const
@@ -993,6 +1021,11 @@ bool PageFile::isExist() const
         return file.exists() && meta_file.exists();
     else
         throw Exception("Should not call isExist for " + toString());
+}
+
+UInt64 PageFile::getDiskSize() const
+{
+    return getDataFileSize() + getMetaFileSize();
 }
 
 UInt64 PageFile::getDataFileSize() const

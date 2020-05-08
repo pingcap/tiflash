@@ -31,7 +31,7 @@ DataCompactor::tryMigrate(const PageFileSet & page_files, SnapshotPtr && snapsho
     PageEntriesEdit migrate_entries_edit;
     if (result.do_compaction)
     {
-        migrate_entries_edit = migratePages(snapshot, valid_pages, candidates, result.num_migrate_pages);
+        std::tie(migrate_entries_edit, result.bytes_written) = migratePages(snapshot, valid_pages, candidates, result.num_migrate_pages);
     }
     else
     {
@@ -112,13 +112,13 @@ std::tuple<PageFileSet, size_t, size_t> DataCompactor::selectCandidateFiles( // 
     return {candidates, candidate_total_size, num_migrate_pages};
 }
 
-PageEntriesEdit DataCompactor::migratePages(const SnapshotPtr & snapshot,
-                                            const ValidPages &  file_valid_pages,
-                                            const PageFileSet & candidates,
-                                            const size_t        migrate_page_count) const
+std::tuple<PageEntriesEdit, size_t> DataCompactor::migratePages(const SnapshotPtr & snapshot,
+                                                                const ValidPages &  file_valid_pages,
+                                                                const PageFileSet & candidates,
+                                                                const size_t        migrate_page_count) const
 {
     if (candidates.empty())
-        return {};
+        return {PageEntriesEdit{}, 0};
 
     // merge `candidates` to PageFile which PageId = max of all `candidates` and level = level + 1
     auto [largest_file_id, level] = candidates.rbegin()->fileIdLevel();
@@ -130,7 +130,7 @@ PageEntriesEdit DataCompactor::migratePages(const SnapshotPtr & snapshot,
         LOG_INFO(log,
                  storage_name << " GC migration to PageFile_" //
                               << migrate_file_id.first << "_" << migrate_file_id.second << " is done before.");
-        return {};
+        return {PageEntriesEdit{}, 0};
     }
 
     // Create a tmp PageFile for migration
@@ -141,6 +141,7 @@ PageEntriesEdit DataCompactor::migratePages(const SnapshotPtr & snapshot,
                           << " pages to PageFile_" << gc_file.getFileId() << "_" << gc_file.getLevel());
 
     PageEntriesEdit gc_file_edit;
+    size_t          bytes_written = 0;
     MigrateInfos    migrate_infos;
     {
         PageStorage::OpenReadFiles    data_readers;
@@ -179,7 +180,7 @@ PageEntriesEdit DataCompactor::migratePages(const SnapshotPtr & snapshot,
         }
 
         // Merge all WriteBatch with valid pages, sorted by WriteBatch::sequence
-        gc_file_edit = mergeValidPages(
+        std::tie(gc_file_edit, bytes_written) = mergeValidPages(
             std::move(merging_queue), std::move(data_readers), file_valid_pages, snapshot, compact_seq, gc_file, migrate_infos);
     }
 
@@ -203,21 +204,23 @@ PageEntriesEdit DataCompactor::migratePages(const SnapshotPtr & snapshot,
                  storage_name << " GC have migrated " << num_migrate_pages //
                               << " Pages to PageFile_" << migrate_file_id.first << "_" << migrate_file_id.second);
     }
-    return gc_file_edit;
+    return {std::move(gc_file_edit), bytes_written};
 }
 
-PageEntriesEdit DataCompactor::mergeValidPages(PageStorage::MetaMergingQueue && merging_queue,
-                                               PageStorage::OpenReadFiles &&    data_readers,
-                                               const ValidPages &               file_valid_pages,
-                                               const SnapshotPtr &              snapshot,
-                                               const WriteBatch::SequenceID     compact_sequence,
-                                               PageFile &                       gc_file,
-                                               MigrateInfos &                   migrate_infos) const
+std::tuple<PageEntriesEdit, size_t> //
+DataCompactor::mergeValidPages(PageStorage::MetaMergingQueue && merging_queue,
+                               PageStorage::OpenReadFiles &&    data_readers,
+                               const ValidPages &               file_valid_pages,
+                               const SnapshotPtr &              snapshot,
+                               const WriteBatch::SequenceID     compact_sequence,
+                               PageFile &                       gc_file,
+                               MigrateInfos &                   migrate_infos) const
 {
     PageEntriesEdit gc_file_edit;
     const auto      gc_file_id = gc_file.fileIdLevel();
     // No need to sync after each write. Do sync before closing is enough.
-    auto gc_file_writer = gc_file.createWriter(/* sync_on_write= */ false);
+    auto   gc_file_writer = gc_file.createWriter(/* sync_on_write= */ false);
+    size_t bytes_written  = 0;
 
     while (!merging_queue.empty())
     {
@@ -227,7 +230,8 @@ PageEntriesEdit DataCompactor::mergeValidPages(PageStorage::MetaMergingQueue && 
         auto it = file_valid_pages.find(reader->fileIdLevel());
         if (it == file_valid_pages.end())
         {
-            throw Exception();
+            throw Exception("Can not find valid pages for reader: " + reader->toString() + ", should not happen",
+                            ErrorCodes::LOGICAL_ERROR);
         }
 
         auto & valid_pages_in_file = it->second.second;
@@ -250,7 +254,7 @@ PageEntriesEdit DataCompactor::mergeValidPages(PageStorage::MetaMergingQueue && 
                               page.data.size(),
                               entry.field_offsets);
             }
-            gc_file_writer->write(wb, gc_file_edit);
+            bytes_written += gc_file_writer->write(wb, gc_file_edit);
         }
 
         if (auto iter = migrate_infos.find(reader->fileIdLevel()); iter != migrate_infos.end())
@@ -271,7 +275,7 @@ PageEntriesEdit DataCompactor::mergeValidPages(PageStorage::MetaMergingQueue && 
     }
 
     // Free gc_file_writer and sync
-    return gc_file_edit;
+    return {std::move(gc_file_edit), bytes_written};
 }
 
 PageIdAndEntries

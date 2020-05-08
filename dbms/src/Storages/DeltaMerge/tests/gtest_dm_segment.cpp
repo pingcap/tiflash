@@ -24,7 +24,7 @@ public:
     Segment_test() : name("tmp"), path(DB::tests::TiFlashTestEnv::getTemporaryPath() + name), storage_pool() {}
 
 private:
-    void dropDataInDisk()
+    void dropDataOnDisk()
     {
         // drop former-gen table's data in disk
         Poco::File file(path);
@@ -47,7 +47,7 @@ public:
     {
         db_context     = std::make_unique<Context>(DMTestEnv::getContext(DB::Settings()));
         table_columns_ = std::make_shared<ColumnDefines>();
-        dropDataInDisk();
+        dropDataOnDisk();
 
         segment = reload();
         ASSERT_EQ(segment->segmentId(), DELTA_MERGE_FIRST_SEGMENT_ID);

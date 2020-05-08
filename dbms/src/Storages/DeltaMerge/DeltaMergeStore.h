@@ -39,6 +39,8 @@ struct SegmentStat
     UInt64 size          = 0;
     UInt64 delete_ranges = 0;
 
+    UInt64 stable_size_on_disk = 0;
+
     UInt64 delta_pack_count  = 0;
     UInt64 stable_pack_count = 0;
 
@@ -76,11 +78,12 @@ struct DeltaMergeStoreStat
     Float64 avg_delta_size          = 0;
     Float64 avg_delta_delete_ranges = 0;
 
-    UInt64  stable_count      = 0;
-    UInt64  total_stable_rows = 0;
-    UInt64  total_stable_size = 0;
-    Float64 avg_stable_rows   = 0;
-    Float64 avg_stable_size   = 0;
+    UInt64  stable_count              = 0;
+    UInt64  total_stable_rows         = 0;
+    UInt64  total_stable_size         = 0;
+    UInt64  total_stable_size_on_disk = 0;
+    Float64 avg_stable_rows           = 0;
+    Float64 avg_stable_size           = 0;
 
     UInt64  total_pack_count_in_delta = 0;
     Float64 avg_pack_count_in_delta   = 0;
@@ -126,6 +129,7 @@ public:
 
     enum ThreadType
     {
+        Init,
         Write,
         Read,
         BG_Split,
@@ -142,12 +146,15 @@ public:
         MergeDelta,
         Compact,
         Flush,
+        PlaceIndex,
     };
 
     static std::string toString(ThreadType type)
     {
         switch (type)
         {
+        case Init:
+            return "Init";
         case Write:
             return "Write";
         case Read:
@@ -181,6 +188,8 @@ public:
             return "Compact";
         case Flush:
             return "Flush";
+        case PlaceIndex:
+            return "PlaceIndex";
         default:
             return "Unknown";
         }
@@ -222,6 +231,8 @@ public:
                     const ColumnDefine &  handle,
                     const Settings &      settings_);
     ~DeltaMergeStore();
+
+    void setUpBackgroundTask(const DMContextPtr & dm_context);
 
     const String & getDatabaseName() const { return db_name; }
     const String & getTableName() const { return table_name; }
@@ -300,15 +311,11 @@ private:
     void        segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right);
     SegmentPtr  segmentMergeDelta(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
 
-    SegmentPtr segmentForegroundMergeDelta(DMContext & dm_context, const SegmentPtr & segment);
-    void       segmentBackgroundMergeDelta(DMContext & dm_context, const SegmentPtr & segment);
-    void       segmentForegroundMerge(DMContext & dm_context, const SegmentPtr & segment);
-
     bool handleBackgroundTask();
 
     bool isSegmentValid(const SegmentPtr & segment);
 
-    void loadDMFiles();
+    void restoreExtraPathCapacity();
 
 private:
     String      path;

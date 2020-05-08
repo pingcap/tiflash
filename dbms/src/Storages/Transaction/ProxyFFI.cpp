@@ -1,4 +1,5 @@
 #include <Interpreters/Context.h>
+#include <Storages/PathCapacityMetrics.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFIType.h>
 #include <Storages/Transaction/Region.h>
@@ -143,32 +144,16 @@ uint8_t HandleCheckTerminated(TiFlashServer * server) { return server->tmt.getTe
 
 FsStats HandleComputeFsStats(TiFlashServer * server)
 {
-    FsStats res;
-    uint64_t first_capacity_size = 0;
-    double min_available_rate = 1.0;
-    for (auto & path : server->tmt.getContext().getPartPathSelector().getAllPath())
+    FsStats res; // res.ok = false by default
+    try
     {
-        struct statvfs vfs;
-        if (statvfs(path.data(), &vfs) != 0)
-        {
-            LOG_ERROR(&Logger::get(__FUNCTION__), "Could not calculate available disk space (statvfs) of path: " << path);
-            return res;
-        }
-        {
-            uint64_t capacity_size = vfs.f_blocks * vfs.f_frsize;
-            uint64_t avail_size = vfs.f_bavail * vfs.f_frsize;
-            if (!first_capacity_size)
-                first_capacity_size = capacity_size;
-            min_available_rate = std::min(avail_size * 1.0 / capacity_size, min_available_rate);
-        }
+        auto global_capacity = server->tmt.getContext().getPathCapacity();
+        res = global_capacity->getFsStats();
     }
-    if (min_available_rate <= 0.2)
-        LOG_WARNING(&Logger::get(__FUNCTION__), "Available space is only " << min_available_rate * 100.0 << "% of capacity size");
-
-    res.capacity_size = first_capacity_size;
-    res.avail_size = min_available_rate * res.capacity_size;
-    res.used_size = res.capacity_size - res.avail_size;
-    res.ok = 1;
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+    }
     return res;
 }
 
