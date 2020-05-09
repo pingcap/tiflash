@@ -1,5 +1,3 @@
-#include <regex>
-
 #include <Flash/LogSearch.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
@@ -70,9 +68,9 @@ bool LogIterator::match(const LogMessage & log_msg) const
 
     // Grep
     auto & content = log_msg.message();
-    for (auto regex : patterns)
+    for (auto & regex : patterns)
     {
-        if (!std::regex_match(content, regex))
+        if (!RE2::FullMatch(content, regex))
             return false;
     }
 
