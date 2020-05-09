@@ -92,13 +92,13 @@ LogIterator::Result<LogIterator::LogEntry> LogIterator::readLog()
     std::stringstream buff;
 
     // TiFlash log format: YYYY.MM.DD hh:mm:ss.mmmmmm [ ThreadID ] <Level> channel: message
-    std::regex head_line_pattern("^\\d{4}\\.\\d{2}\\.\\d{2}\\s\\d{2}\\:\\d{2}\\:\\d{2}\\.\\d{6}\\s\\[\\s\\d+\\s\\]\\s\\<\\w+\\>\\s.*");
-    if (std::regex_match(line, head_line_pattern))
+    RE2 head_line_pattern("^\\d{4}\\.\\d{2}\\.\\d{2}\\s\\d{2}\\:\\d{2}\\:\\d{2}\\.\\d{6}\\s\\[\\s\\d+\\s\\]\\s\\<\\w+\\>\\s.*");
+    if (RE2::FullMatch(line, head_line_pattern))
     {
         buff << line;
         while (getline(*log_file, line))
         {
-            if (!std::regex_match(line, head_line_pattern))
+            if (!RE2::FullMatch(line, head_line_pattern))
             {
                 buff << "\n";
                 buff << line;
