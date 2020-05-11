@@ -29,7 +29,7 @@ public:
     public:
         virtual ~IPattern() = default;
 
-        virtual void compile(const std::string & pattern, char escape) const = 0;
+        virtual void compile(const std::string & pattern, char escape) = 0;
         virtual bool match(const char * s, size_t length) const = 0;
 
     protected:
