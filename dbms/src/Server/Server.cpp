@@ -237,7 +237,7 @@ TiFlashRaftConfig::TiFlashRaftConfig(const std::string & path, Poco::Util::Layer
     }
 }
 
-Logger * grpc_log = &Logger::get("grpc");
+Logger * grpc_log = nullptr;
 
 void printGRPCLog(gpr_log_func_args * args)
 {
@@ -268,6 +268,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     CurrentMetrics::set(CurrentMetrics::Revision, ClickHouseRevision::get());
 
     // print necessary grpc log.
+    grpc_log = Logger::get("grpc");
+    gpr_set_log_verbosity(GPR_LOG_SEVERITY_DEBUG);
     gpr_set_log_function(&printGRPCLog);
 
     /** Context contains all that query execution is dependent:
