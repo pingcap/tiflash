@@ -6,139 +6,114 @@ namespace DB::tests
 
 using namespace TiDB;
 
-template <typename Collator>
 struct CollatorCases
 {
-    using CompareCase = std::tuple<std::string, std::string, int>;
+    enum
+    {
+        Bin = 0,
+        BinPadding = 1,
+        GeneralCI = 2,
+    };
+    template <typename T>
+    using Answer = std::tuple<T, T, T>;
+    using CompareCase = std::tuple<std::string, std::string, Answer<int>>;
     static const CompareCase cmp_cases[];
 
-    using SortKeyCase = std::pair<std::string, const std::string &>;
+    using SortKeyCase = std::pair<std::string, Answer<std::string>>;
     static const SortKeyCase sk_cases[];
+
+    using PatternCase = std::pair<std::string, std::vector<std::pair<std::string, Answer<bool>>>>;
+    static const PatternCase pattern_cases[];
 };
-template <typename Collator>
-const typename CollatorCases<Collator>::CompareCase CollatorCases<Collator>::cmp_cases[] = {
-    {"a", "b", Collator::cmp_ans[0]},
-    {"a", "A", Collator::cmp_ans[1]},
-    {"À", "A", Collator::cmp_ans[2]},
-    {"abc", "abc", Collator::cmp_ans[3]},
-    {"abc", "ab", Collator::cmp_ans[4]},
-    {"😜", "😃", Collator::cmp_ans[5]},
-    {"a", "a ", Collator::cmp_ans[6]},
-    {"a ", "a  ", Collator::cmp_ans[7]},
-    {"a\t", "a", Collator::cmp_ans[8]},
+const typename CollatorCases::CompareCase CollatorCases::cmp_cases[] = {
+    {"a", "b", {-1, -1, -1}},
+    {"a", "A", {1, 1, 0}},
+    {"À", "A", {1, 1, 0}},
+    {"abc", "abc", {0, 0, 0}},
+    {"abc", "ab", {1, 1, 1}},
+    {"😜", "😃", {1, 1, 0}},
+    {"a", "a ", {-1, 0, 0}},
+    {"a ", "a  ", {-1, 0, 0}},
+    {"a\t", "a", {1, 1, 1}},
 };
-template <typename Collator>
-const typename CollatorCases<Collator>::SortKeyCase CollatorCases<Collator>::sk_cases[] = {
-    {"a", Collator::sk_ans[0]},
-    {"A", Collator::sk_ans[1]},
-    {"😃", Collator::sk_ans[2]},
-    {"Foo © bar 𝌆 baz ☃ qux", Collator::sk_ans[3]},
-    {"\x88\xe6", Collator::sk_ans[4]},
-    {"a ", Collator::sk_ans[5]},
+#define PREVENT_TRUNC(s) \
+    {                    \
+        s, sizeof(s) - 1 \
+    } // Prevent truncation by middle '\0' when constructing std::string using string literal, call std::string(const char *, size_t) instead.
+const typename CollatorCases::SortKeyCase CollatorCases::sk_cases[] = {
+    {"a", {PREVENT_TRUNC("\x61"), PREVENT_TRUNC("\x61"), PREVENT_TRUNC("\x00\x41")}},
+    {"A", {PREVENT_TRUNC("\x41"), PREVENT_TRUNC("\x41"), PREVENT_TRUNC("\x00\x41")}},
+    {"😃", {PREVENT_TRUNC("\xf0\x9f\x98\x83"), PREVENT_TRUNC("\xf0\x9f\x98\x83"), PREVENT_TRUNC("\xff\xfd")}},
+    {"Foo © bar 𝌆 baz ☃ qux",
+        {PREVENT_TRUNC("\x46\x6f\x6f\x20\xc2\xa9\x20\x62\x61\x72\x20\xf0\x9d\x8c\x86\x20\x62\x61\x7a\x20\xe2\x98\x83\x20\x71\x75\x78"),
+            PREVENT_TRUNC("\x46\x6f\x6f\x20\xc2\xa9\x20\x62\x61\x72\x20\xf0\x9d\x8c\x86\x20\x62\x61\x7a\x20\xe2\x98\x83\x20\x71\x75\x78"),
+            PREVENT_TRUNC("\x00\x46\x00\x4f\x00\x4f\x00\x20\x00\xa9\x00\x20\x00\x42\x00\x41\x00\x52\x00\x20\xff\xfd\x00\x20\x00\x42\x00\x41"
+                          "\x00\x5a\x00\x20\x26\x03\x00\x20\x00\x51\x00\x55\x00\x58")}},
+    {PREVENT_TRUNC("\x88\xe6"), {PREVENT_TRUNC("\x88\xe6"), PREVENT_TRUNC("\x88\xe6"), PREVENT_TRUNC("\xff\xfd\xff\xfd")}},
+    {"a ", {PREVENT_TRUNC("\x61\x20"), PREVENT_TRUNC("\x61"), PREVENT_TRUNC("\x00\x41")}},
+};
+const typename CollatorCases::PatternCase CollatorCases::pattern_cases[] = {
+    {"A", {{"a", {false, false, true}}, {"A", {true, true, true}}, {"À", {false, false, true}}}},
+    {"_A", {{"aA", {true, true, true}}, {"ÀA", {false, false, true}}, {"ÀÀ", {false, false, true}}}},
+    {"%A", {{"a", {false, false, true}}, {"ÀA", {true, true, true}}, {"À", {false, false, true}}}},
+    {"À", {{"a", {false, false, true}}, {"A", {false, false, true}}, {"À", {true, true, true}}}},
+    {"_À", {{" À", {true, true, true}}, {"ÀA", {false, false, true}}, {"ÀÀ", {false, false, true}}}},
+    {"%À", {{"À", {true, true, true}}, {"ÀÀÀ", {true, true, true}}, {"ÀA", {false, false, true}}}},
+    {"À_", {{"À ", {true, true, true}}, {"ÀAA", {false, false, false}}, {"À", {false, false, false}}}},
+    {"À%", {{"À", {true, true, true}}, {"ÀÀÀ", {true, true, true}}, {"AÀ", {false, false, true}}}},
 };
 
 template <typename Collator>
 void testCollator()
 {
     const auto collator = ICollator::getCollator(Collator::collation);
-    for (const auto & c : CollatorCases<Collator>::cmp_cases)
+    for (const auto & c : CollatorCases::cmp_cases)
     {
         const std::string & s1 = std::get<0>(c);
         const std::string & s2 = std::get<1>(c);
-        int ans = std::get<2>(c);
+        int ans = std::get<Collator::collation_case>(std::get<2>(c));
         std::cout << "Compare case (" << s1 << ", " << s2 << ", " << ans << ")" << std::endl;
         ASSERT_EQ(collator->compare(s1.data(), s1.length(), s2.data(), s2.length()), ans);
     }
-    for (const auto & c : CollatorCases<Collator>::sk_cases)
+    for (const auto & c : CollatorCases::sk_cases)
     {
         const std::string & s = c.first;
-        const std::string & ans = c.second;
+        const std::string & ans = std::get<Collator::collation_case>(c.second);
         std::cout << "Sort key case (" << s << ", " << ans << ")" << std::endl;
         ASSERT_EQ(collator->sortKey(s.data(), s.length()), ans);
+    }
+    auto pattern = collator->pattern();
+    for (const auto & c : CollatorCases::pattern_cases)
+    {
+        const std::string & p = c.first;
+        pattern->compile(p, '\\');
+        const auto & inner_cases = c.second;
+        for (const auto & inner_c : inner_cases)
+        {
+            const std::string & s = inner_c.first;
+            bool ans = std::get<Collator::collation_case>(inner_c.second);
+            std::cout << "Pattern case (" << p << ", " << s << ", " << ans << ")" << std::endl;
+            ASSERT_EQ(pattern->match(s.data(), s.length()), ans);
+        }
     }
 }
 
 struct BinCollator
 {
     static constexpr int collation = ICollator::BINARY;
-    static const int cmp_ans[];
-    static const std::string sk_ans[];
-};
-const int BinCollator::cmp_ans[] = {
-    -1,
-    1,
-    1,
-    0,
-    1,
-    1,
-    -1,
-    -1,
-    1,
-};
-const std::string BinCollator::sk_ans[] = {
-    "\x61",
-    "\x41",
-    "\xf0\x9f\x98\x83",
-    "\x46\x6f\x6f\x20\xc2\xa9\x20\x62\x61\x72\x20\xf0\x9d\x8c\x86\x20\x62\x61\x7a\x20\xe2\x98\x83\x20\x71\x75\x78",
-    "\x88\xe6",
-    "\x61\x20",
+    static constexpr auto collation_case = CollatorCases::Bin;
 };
 
 struct BinPaddingCollator
 {
     static constexpr int collation = ICollator::ASCII_BIN;
-    static const int cmp_ans[];
-    static const std::string sk_ans[];
-};
-const int BinPaddingCollator::cmp_ans[] = {
-    -1,
-    1,
-    1,
-    0,
-    1,
-    1,
-    0,
-    0,
-    1,
-};
-const std::string BinPaddingCollator::sk_ans[] = {
-    "\x61",
-    "\x41",
-    "\xf0\x9f\x98\x83",
-    "\x46\x6f\x6f\x20\xc2\xa9\x20\x62\x61\x72\x20\xf0\x9d\x8c\x86\x20\x62\x61\x7a\x20\xe2\x98\x83\x20\x71\x75\x78",
-    "\x88\xe6",
-    "\x61",
+    static constexpr auto collation_case = CollatorCases::BinPadding;
 };
 
 struct GeneralCICollator
 {
     static constexpr int collation = ICollator::UTF8MB4_GENERAL_CI;
-    static const int cmp_ans[];
-    static const std::string sk_ans[];
-};
-const int GeneralCICollator::cmp_ans[] = {
-    -1,
-    0,
-    0,
-    0,
-    1,
-    0,
-    0,
-    0,
-    1,
-};
-#define M(s)             \
-    {                    \
-        s, sizeof(s) - 1 \
-    } // Prevent truncation by middle '\0' when constructing std::string using string literal, call std::string(const char *, size_t) instead.
-const std::string GeneralCICollator::sk_ans[] = {
-    M("\x00\x41"),
-    M("\x00\x41"),
-    M("\xff\xfd"),
-    M("\x00\x46\x00\x4f\x00\x4f\x00\x20\x00\xa9\x00\x20\x00\x42\x00\x41\x00\x52\x00\x20\xff\xfd\x00\x20\x00\x42\x00\x41\x00\x5a\x00\x20\x26"
-      "\x03\x00\x20\x00\x51\x00\x55\x00\x58"),
-    M("\xff\xfd\xff\xfd"),
-    M("\x00\x41"),
+    static constexpr auto collation_case = CollatorCases::GeneralCI;
 };
 
 TEST(CollatorSuite, BinCollator) { testCollator<BinCollator>(); }

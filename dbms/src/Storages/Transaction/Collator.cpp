@@ -27,6 +27,9 @@ class Pattern : public ICollator::IPattern
 public:
     void compile(const std::string & pattern, char escape) override
     {
+        weights.clear();
+        match_types.clear();
+
         const auto & decoded = Collator::decode(pattern.data(), pattern.length());
         weights.reserve(decoded.size());
         match_types.reserve(decoded.size());
@@ -88,6 +91,7 @@ public:
                             s_idx++;
                             continue;
                         }
+                        break;
                     case One:
                         if (s_idx < decoded.size())
                         {
@@ -95,6 +99,7 @@ public:
                             s_idx++;
                             continue;
                         }
+                        break;
                     case Any:
                         next_p_idx = p_idx;
                         next_s_idx = s_idx + 1;
@@ -145,7 +150,7 @@ public:
             return std::string(s, length);
     }
 
-    std::unique_ptr<IPattern> pattern() const override { return std::unique_ptr<Pattern<BinCollator<padding>>>(); }
+    std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<BinCollator<padding>>>(); }
 
 private:
     static inline std::string_view decode(const char * s, size_t length) { return std::string_view(s, length); }
@@ -209,7 +214,7 @@ public:
         return buf.str();
     }
 
-    std::unique_ptr<IPattern> pattern() const override { return std::unique_ptr<Pattern<GeneralCICollator>>(); }
+    std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<GeneralCICollator>>(); }
 
 private:
     using CharType = UChar32;
