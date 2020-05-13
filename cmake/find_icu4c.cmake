@@ -1,8 +1,8 @@
 option (ENABLE_ICU "Enable ICU" ON)
 
 if (ENABLE_ICU)
-    set (ICU_PATHS "/usr/local/opt/icu4c/lib")
-    set (ICU_INCLUDE_PATHS "/usr/local/opt/icu4c/include")
+    set (ICU_PATHS "/usr/local/opt/icu4c/lib" "/usr/lib64")
+    set (ICU_INCLUDE_PATHS "/usr/local/opt/icu4c/include" "/usr/include")
     find_library (ICUI18N icui18n PATHS ${ICU_PATHS})
     find_library (ICUUC icuuc PATHS ${ICU_PATHS})
     find_library (ICUDATA icudata PATHS ${ICU_PATHS})
