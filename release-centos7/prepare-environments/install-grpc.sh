@@ -2,7 +2,7 @@
 
 set -e
 
-VERSION="v1.24.3"
+VERSION="v1.25.1"
 THREADS=$(nproc || grep -c ^processor /proc/cpuinfo)
 
 cd ~
