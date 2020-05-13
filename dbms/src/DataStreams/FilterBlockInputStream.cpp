@@ -110,8 +110,25 @@ Block FilterBlockInputStream::readImpl()
         size_t rows = res.rows();
         ColumnPtr column_of_filter = res.safeGetByPosition(filter_column).column;
 
-        IColumn::Filter  column_of_filter_for_bloom;
+        constant_filter_description = ConstantFilterDescription(*column_of_filter);
+        if (constant_filter_description.always_false)
+        {
+            res.clear();
+            return res;
+        }
+
+        IColumn::Filter column_of_filter_for_bloom;
         if (bfs.size()) {
+            auto filter_always_true = false;
+            UInt8 * filter;
+            if (constant_filter_description.always_true)
+            {
+                filter_always_true = true;
+            } else {
+                FilterDescription filter_and_holder(*column_of_filter);
+                IColumn::Filter * Ifilter = const_cast<IColumn::Filter *>(filter_and_holder.data);
+                filter = Ifilter->data();
+            }
             for (unsigned i = 0;i < rows;i++) {
                 column_of_filter_for_bloom.push_back(1);
             }
@@ -139,7 +156,7 @@ Block FilterBlockInputStream::readImpl()
                     for (unsigned j = 0;j < join_key.size();j++) {
                         if (IsInt(cols[j].type->getName())) {
                             for (unsigned i = 0;i < rows;i++) {
-                                if (column_of_filter_for_bloom[i] == 0) continue;
+                                if (column_of_filter_for_bloom[i] == 0 || (!filter_always_true && filter[i] == 0)) continue;
                                 flag[0] = 8;
                                 *(UInt64 *)(tmp) = cols[j].column->get64(i);
                                 fnvHash->myhash(i,flag,1);
@@ -148,7 +165,7 @@ Block FilterBlockInputStream::readImpl()
                         }
                         if (IsUInt(cols[j].type->getName())) {
                             for (unsigned i = 0;i < rows;i++) {
-                                if (column_of_filter_for_bloom[i] == 0) continue;
+                                if (column_of_filter_for_bloom[i] == 0 || (!filter_always_true && filter[i] == 0)) continue;
                                 flag[0] = 9;
                                 *(UInt64 *)(tmp) = cols[j].column->get64(i);
                                 fnvHash->myhash(i,flag,1);
@@ -157,7 +174,7 @@ Block FilterBlockInputStream::readImpl()
                         }
                         if (IsString(cols[j].type->getName())) {
                             for (unsigned i = 0;i < rows;i++) {
-                                if (column_of_filter_for_bloom[i] == 0) continue;
+                                if (column_of_filter_for_bloom[i] == 0 || (!filter_always_true && filter[i] == 0)) continue;
                                 flag[0] = 2;
                                 auto t = (*cols[j].column)[i].get<String>();
                                 fnvHash->myhash(i,flag, 1);
@@ -188,14 +205,6 @@ Block FilterBlockInputStream::readImpl()
             * This happens if the function returns a constant for a non-constant argument.
             * For example, `ignore` function.
             */
-        constant_filter_description = ConstantFilterDescription(*column_of_filter);
-
-        if (constant_filter_description.always_false)
-        {
-            res.clear();
-            return res;
-        }
-
         IColumn::Filter * filter = nullptr ;
         ColumnPtr filter_holder;
 
