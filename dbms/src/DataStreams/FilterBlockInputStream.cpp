@@ -103,7 +103,7 @@ Block FilterBlockInputStream::readImpl()
 
         expression->execute(res);
 
-        if (constant_filter_description.always_true && !child_filter && bfs.size())
+        if (constant_filter_description.always_true && !child_filter && bfs.size() == 0)
             return res;
 
         size_t columns = res.columns();
@@ -111,7 +111,7 @@ Block FilterBlockInputStream::readImpl()
         ColumnPtr column_of_filter = res.safeGetByPosition(filter_column).column;
 
         IColumn::Filter  column_of_filter_for_bloom;
-        if (bfs[0] != nullptr) {
+        if (bfs.size()) {
             for (unsigned i = 0;i < rows;i++) {
                 column_of_filter_for_bloom.push_back(1);
             }
