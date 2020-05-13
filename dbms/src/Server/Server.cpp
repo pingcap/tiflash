@@ -237,6 +237,25 @@ TiFlashRaftConfig::TiFlashRaftConfig(const std::string & path, Poco::Util::Layer
     }
 }
 
+Logger * grpc_log = nullptr;
+
+void printGRPCLog(gpr_log_func_args * args)
+{
+    std::string log_msg = std::string(args->file) + ", line number : " + std::to_string(args->line) + ", log msg : " + args->message;
+    if (args->severity == GPR_LOG_SEVERITY_DEBUG)
+    {
+        LOG_DEBUG(grpc_log, log_msg);
+    }
+    else if (args->severity == GPR_LOG_SEVERITY_INFO)
+    {
+        LOG_INFO(grpc_log, log_msg);
+    }
+    else if (args->severity == GPR_LOG_SEVERITY_ERROR)
+    {
+        LOG_ERROR(grpc_log, log_msg);
+    }
+}
+
 int Server::main(const std::vector<std::string> & /*args*/)
 {
     Logger * log = &logger();
@@ -247,6 +266,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     registerStorages();
 
     CurrentMetrics::set(CurrentMetrics::Revision, ClickHouseRevision::get());
+
+    // print necessary grpc log.
+    grpc_log = &Logger::get("grpc");
+    gpr_set_log_verbosity(GPR_LOG_SEVERITY_DEBUG);
+    gpr_set_log_function(&printGRPCLog);
 
     /** Context contains all that query execution is dependent:
       *  settings, available functions, data types, aggregate functions, databases...
