@@ -3,11 +3,11 @@
 #include <fstream>
 #include <istream>
 #include <memory>
-#include <regex>
 #include <variant>
 
 #include <Poco/File.h>
 #include <common/logger_useful.h>
+#include <re2/re2.h>
 #include <boost/noncopyable.hpp>
 
 #pragma GCC diagnostic push
@@ -23,14 +23,13 @@ class LogIterator : private boost::noncopyable
 public:
     explicit LogIterator(int64_t _start_time, int64_t _end_time, const std::vector<::diagnosticspb::LogLevel> & _levels,
         const std::vector<std::string> & _patterns, std::shared_ptr<std::istream> _log_file)
-        : start_time(_start_time), end_time(_end_time), levels(_levels), log_file(_log_file), log(&Poco::Logger::get("LogIterator"))
-    {
-        patterns.reserve(_patterns.size());
-        for (auto p : _patterns)
-        {
-            patterns.emplace_back(std::regex(p));
-        }
-    }
+        : start_time(_start_time),
+          end_time(_end_time),
+          levels(_levels),
+          patterns(_patterns),
+          log_file(_log_file),
+          log(&Poco::Logger::get("LogIterator"))
+    {}
 
 public:
     static constexpr size_t MAX_MESSAGE_SIZE = 4096;
@@ -84,7 +83,7 @@ private:
     int64_t start_time;
     int64_t end_time;
     std::vector<::diagnosticspb::LogLevel> levels;
-    std::vector<std::regex> patterns;
+    std::vector<std::string> patterns;
     std::shared_ptr<std::istream> log_file;
 
     Poco::Logger * log;
