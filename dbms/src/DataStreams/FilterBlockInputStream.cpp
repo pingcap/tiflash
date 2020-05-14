@@ -120,7 +120,7 @@ Block FilterBlockInputStream::readImpl()
         IColumn::Filter column_of_filter_for_bloom;
         if (bfs.size()) {
             auto filter_always_true = false;
-            UInt8 * filter;
+            UInt8 * filter = new UInt8(0);
             if (constant_filter_description.always_true)
             {
                 filter_always_true = true;
