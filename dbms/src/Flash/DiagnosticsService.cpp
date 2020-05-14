@@ -294,7 +294,7 @@ std::vector<DiagnosticsService::Disk> getAllDisks()
     {
         boost::trim_left(line);
         if (boost::starts_with(line, "/dev/sd") || boost::starts_with(line, "/dev/nvme") || boost::starts_with(line, "/dev/mapper")
-            || boost::starts_with(line, "/dev/root") || boost::starts_with(line, "/dev/mmcblk"))
+            || boost::starts_with(line, "/dev/root") || boost::starts_with(line, "/dev/mmcblk") || boost::starts_with(line, "/dev-mapper"))
         {
             std::vector<std::string> values;
             boost::split(values, line, boost::is_any_of(" "), boost::token_compress_on);
