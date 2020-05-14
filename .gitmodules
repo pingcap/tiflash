@@ -56,3 +56,9 @@
 [submodule "contrib/jemalloc"]
 	path = contrib/jemalloc
 	url = https://github.com/jemalloc/jemalloc.git
+[submodule "contrib/jemalloc"]
+	path = contrib/jemalloc
+  url = https://github.com/unicode-org/icu.git
+[submodule "contrib/icu"]
+	path = contrib/icu
+	url = https://github.com/unicode-org/icu.git
