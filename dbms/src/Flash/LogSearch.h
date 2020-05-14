@@ -29,7 +29,13 @@ public:
           patterns(_patterns),
           log_file(_log_file),
           log(&Poco::Logger::get("LogIterator"))
-    {}
+    {
+        // Check empty, if empty then fill with ".*"
+        if (patterns.size() == 0 || (patterns.size() == 1 && patterns[0] == ""))
+        {
+            patterns = {".*"};
+        }
+    }
 
 public:
     static constexpr size_t MAX_MESSAGE_SIZE = 4096;
