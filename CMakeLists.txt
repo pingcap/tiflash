@@ -249,7 +249,7 @@ if (NOT OPENSSL_FOUND)
 endif ()
 
 include (cmake/lib_name.cmake)
-include (cmake/find_icu4c.cmake)
+include (cmake/find_icu.cmake)
 include (cmake/find_boost.cmake)
 # openssl, zlib before poco
 include (cmake/find_zlib.cmake)

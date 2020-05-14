@@ -62,3 +62,6 @@
 [submodule "contrib/icu"]
 	path = contrib/icu
 	url = https://github.com/unicode-org/icu.git
+[submodule "contrib/icudata"]
+	path = contrib/icudata
+	url = https://github.com/ClickHouse-Extras/icudata.git
