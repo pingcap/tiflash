@@ -879,8 +879,7 @@ catch (const Exception & e)
     int64_t end_time = request->end_time();
     if (end_time == 0)
     {
-        // default to now
-        end_time = std::chrono::milliseconds(std::time(NULL)).count();
+        end_time = std::numeric_limits<int64_t>::max();
     }
     std::vector<LogLevel> levels;
     for (auto level : request->levels())
