@@ -1,7 +1,13 @@
 option (ENABLE_ICU "Enable ICU" 1)
 
 if (ENABLE_ICU)
-    option (USE_INTERNAL_ICU_LIBRARY "Set to FALSE to use system ICU library instead of bundled" ${NOT_UNBUNDLED})
+    if (APPLE)
+        # ClickHouse's internal icudata lib is only available on Linux, so Mac can only use system icu.
+        # Run `brew install icu4c`.
+        option (USE_INTERNAL_ICU_LIBRARY "Use system ICU library" 0)
+    else ()
+        option (USE_INTERNAL_ICU_LIBRARY "Set to FALSE to use system ICU library instead of bundled" ${NOT_UNBUNDLED})
+    endif ()
 
     if (NOT EXISTS "${ClickHouse_SOURCE_DIR}/contrib/icu/icu4c/LICENSE")
         if (USE_INTERNAL_ICU_LIBRARY)
