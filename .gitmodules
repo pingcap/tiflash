@@ -56,3 +56,6 @@
 [submodule "contrib/jemalloc"]
 	path = contrib/jemalloc
 	url = https://github.com/jemalloc/jemalloc.git
+[submodule "contrib/CRoaringUnityBuild"]
+	path = contrib/CRoaringUnityBuild
+	url = https://github.com/lemire/CRoaringUnityBuild.git
