@@ -1,12 +1,11 @@
 #pragma once
 
-#include <boost/noncopyable.hpp>
-#include <memory>
+#include <Columns/Collator.h>
 
 namespace TiDB
 {
 
-class ICollator
+class ITiDBCollator : public ICollator
 {
 public:
     enum
@@ -22,7 +21,7 @@ public:
 
     /// Get the collator according to the internal collation ID, which directly comes from tipb and has been properly
     /// de-rewritten - the "New CI Collation" will flip the sign of the collation ID.
-    static std::unique_ptr<ICollator> getCollator(int32_t id);
+    static std::unique_ptr<ITiDBCollator> getCollator(int32_t id);
 
     class IPattern
     {
@@ -36,14 +35,16 @@ public:
         IPattern() = default;
     };
 
-    virtual ~ICollator() = default;
+    ~ITiDBCollator() override = default;
 
-    virtual int compare(const char * s1, size_t length1, const char * s2, size_t length2) const = 0;
+    int compare(const char * s1, size_t length1, const char * s2, size_t length2) const override = 0;
     virtual std::string sortKey(const char * s, size_t length) const = 0;
     virtual std::unique_ptr<IPattern> pattern() const = 0;
+    int32_t getCollatorId() const { return collator_id; }
 
 protected:
-    ICollator() = default;
+    explicit ITiDBCollator(int32_t collator_id_) : collator_id(collator_id_){};
+    int32_t collator_id;
 };
 
 } // namespace TiDB

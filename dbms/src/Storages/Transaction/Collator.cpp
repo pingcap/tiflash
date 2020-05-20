@@ -22,7 +22,7 @@ std::string_view rtrim(const char * s, size_t length)
 int signum(int val) { return (0 < val) - (val < 0); }
 
 template <typename Collator>
-class Pattern : public ICollator::IPattern
+class Pattern : public ITiDBCollator::IPattern
 {
 public:
     void compile(const std::string & pattern, char escape) override
@@ -131,9 +131,10 @@ private:
 };
 
 template <bool padding = false>
-class BinCollator : public ICollator
+class BinCollator : public ITiDBCollator
 {
 public:
+    BinCollator(int32_t id) : ITiDBCollator(id) {}
     int compare(const char * s1, size_t length1, const char * s2, size_t length2) const override
     {
         if constexpr (padding)
@@ -152,7 +153,10 @@ public:
 
     std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<BinCollator<padding>>>(); }
 
+    const std::string & getLocale() const override { return name; }
+
 private:
+    const std::string name = padding ? "BinaryPadding" : "Binary";
     static inline std::string_view decode(const char * s, size_t length) { return std::string_view(s, length); }
 
     using WeightType = char;
@@ -166,9 +170,11 @@ namespace GeneralCI
 extern const uint16_t * weight_lut[];
 }
 
-class GeneralCICollator : public ICollator
+class GeneralCICollator : public ITiDBCollator
 {
 public:
+    GeneralCICollator(int32_t id) : ITiDBCollator(id) {}
+
     int compare(const char * s1, size_t length1, const char * s2, size_t length2) const override
     {
         auto v1 = rtrim(s1, length1);
@@ -216,9 +222,12 @@ public:
 
     std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<GeneralCICollator>>(); }
 
+    const std::string & getLocale() const override { return name; }
+
 private:
     using CharType = UChar32;
     using StringType = std::vector<CharType>;
+    const std::string name = "GeneralCI";
     static inline StringType decode(const char * s, size_t length)
     {
         StringType decoded;
@@ -250,20 +259,20 @@ private:
     friend class Pattern<GeneralCICollator>;
 };
 
-std::unique_ptr<ICollator> ICollator::getCollator(int32_t id)
+std::unique_ptr<ITiDBCollator> ITiDBCollator::getCollator(int32_t id)
 {
-    switch (id)
+    switch (std::abs(id))
     {
-        case ICollator::BINARY:
-            return std::make_unique<BinCollator<false>>();
-        case ICollator::ASCII_BIN:
-        case ICollator::LATIN1_BIN:
-        case ICollator::UTF8MB4_BIN:
-        case ICollator::UTF8_BIN:
-            return std::make_unique<BinCollator<true>>();
-        case ICollator::UTF8_GENERAL_CI:
-        case ICollator::UTF8MB4_GENERAL_CI:
-            return std::make_unique<GeneralCICollator>();
+        case ITiDBCollator::BINARY:
+            return std::make_unique<BinCollator<false>>(id);
+        case ITiDBCollator::ASCII_BIN:
+        case ITiDBCollator::LATIN1_BIN:
+        case ITiDBCollator::UTF8MB4_BIN:
+        case ITiDBCollator::UTF8_BIN:
+            return std::make_unique<BinCollator<true>>(id);
+        case ITiDBCollator::UTF8_GENERAL_CI:
+        case ITiDBCollator::UTF8MB4_GENERAL_CI:
+            return std::make_unique<GeneralCICollator>(id);
         default:
             throw DB::Exception(
                 std::string(__PRETTY_FUNCTION__) + ": invalid collation ID: " + std::to_string(id), DB::ErrorCodes::LOGICAL_ERROR);

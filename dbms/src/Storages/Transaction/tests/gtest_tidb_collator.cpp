@@ -66,7 +66,7 @@ const typename CollatorCases::PatternCase CollatorCases::pattern_cases[] = {
 template <typename Collator>
 void testCollator()
 {
-    const auto collator = ICollator::getCollator(Collator::collation);
+    const auto collator = ITiDBCollator::getCollator(Collator::collation);
     for (const auto & c : CollatorCases::cmp_cases)
     {
         const std::string & s1 = std::get<0>(c);
@@ -100,19 +100,19 @@ void testCollator()
 
 struct BinCollator
 {
-    static constexpr int collation = ICollator::BINARY;
+    static constexpr int collation = ITiDBCollator::BINARY;
     static constexpr auto collation_case = CollatorCases::Bin;
 };
 
 struct BinPaddingCollator
 {
-    static constexpr int collation = ICollator::ASCII_BIN;
+    static constexpr int collation = ITiDBCollator::ASCII_BIN;
     static constexpr auto collation_case = CollatorCases::BinPadding;
 };
 
 struct GeneralCICollator
 {
-    static constexpr int collation = ICollator::UTF8MB4_GENERAL_CI;
+    static constexpr int collation = ITiDBCollator::UTF8MB4_GENERAL_CI;
     static constexpr auto collation_case = CollatorCases::GeneralCI;
 };
 

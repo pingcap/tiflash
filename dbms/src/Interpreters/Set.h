@@ -6,6 +6,7 @@
 #pragma GCC diagnostic pop
 
 #include <shared_mutex>
+#include <Storages/Transaction/Collator.h>
 #include <Core/Block.h>
 #include <DataStreams/SizeLimits.h>
 #include <DataTypes/IDataType.h>
@@ -81,6 +82,8 @@ public:
     void setContainsNullValue(bool contains_null_value_) { contains_null_value = contains_null_value_; }
     bool containsNullValue() const { return contains_null_value; }
 
+    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> collator_) { collator = collator_; }
+
 private:
     size_t keys_size;
     Sizes key_sizes;
@@ -131,6 +134,8 @@ private:
       * Therefore, the rest of the functions for working with set are not protected.
       */
     mutable std::shared_mutex rwlock;
+
+    std::shared_ptr<TiDB::ITiDBCollator> collator;
 
     template <typename Method>
     void insertFromBlockImpl(

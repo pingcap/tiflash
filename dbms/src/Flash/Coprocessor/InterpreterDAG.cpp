@@ -582,9 +582,7 @@ SortDescription InterpreterDAG::getSortDescription(Strings & order_column_names)
         int direction = topn.order_by(i).desc() ? -1 : 1;
         // MySQL/TiDB treats NULL as "minimum".
         int nulls_direction = -1;
-        // todo get this information from DAGRequest
-        // currently use the default value
-        std::shared_ptr<Collator> collator;
+        std::shared_ptr<ICollator> collator = getCollatorFromExpr(topn.order_by(i).expr());
 
         order_descr.emplace_back(name, direction, nulls_direction, collator);
     }

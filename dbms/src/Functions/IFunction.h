@@ -6,6 +6,7 @@
 #include <Core/Field.h>
 #include <Core/Block.h>
 #include <Core/ColumnNumbers.h>
+#include <Storages/Transaction/Collator.h>
 #include <DataTypes/IDataType.h>
 
 
@@ -179,7 +180,7 @@ public:
     virtual void checkNumberOfArguments(size_t number_of_arguments) const = 0;
 
     /// Check arguments and return IFunctionBase.
-    virtual FunctionBasePtr build(const ColumnsWithTypeAndName & arguments) const = 0;
+    virtual FunctionBasePtr build(const ColumnsWithTypeAndName & arguments, std::shared_ptr<TiDB::ITiDBCollator> collator = nullptr) const = 0;
 
     /// For higher-order functions (functions, that have lambda expression as at least one argument).
     /// You pass data types with empty DataTypeFunction for lambda arguments.
@@ -192,9 +193,9 @@ using FunctionBuilderPtr = std::shared_ptr<IFunctionBuilder>;
 class FunctionBuilderImpl : public IFunctionBuilder
 {
 public:
-    FunctionBasePtr build(const ColumnsWithTypeAndName & arguments) const final
+    FunctionBasePtr build(const ColumnsWithTypeAndName & arguments, std::shared_ptr<TiDB::ITiDBCollator> collator) const final
     {
-        return buildImpl(arguments, getReturnType(arguments));
+        return buildImpl(arguments, getReturnType(arguments), collator);
     }
 
     /// Default implementation. Will check only in non-variadic case.
@@ -234,7 +235,7 @@ protected:
       */
     virtual bool useDefaultImplementationForNulls() const { return true; }
 
-    virtual FunctionBasePtr buildImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & return_type) const = 0;
+    virtual FunctionBasePtr buildImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & return_type, std::shared_ptr<TiDB::ITiDBCollator> collator) const = 0;
 
     virtual void getLambdaArgumentTypesImpl(DataTypes & /*arguments*/) const
     {
@@ -277,8 +278,10 @@ public:
         throw Exception("getReturnType is not implemented for IFunction", ErrorCodes::NOT_IMPLEMENTED);
     }
 
+    virtual void setCollator(std::shared_ptr<TiDB::ITiDBCollator>) {};
+
 protected:
-    FunctionBasePtr buildImpl(const ColumnsWithTypeAndName & /*arguments*/, const DataTypePtr & /*return_type*/) const final
+    FunctionBasePtr buildImpl(const ColumnsWithTypeAndName & /*arguments*/, const DataTypePtr & /*return_type*/, std::shared_ptr<TiDB::ITiDBCollator> /*collator*/) const final
     {
         throw Exception("buildImpl is not implemented for IFunction", ErrorCodes::NOT_IMPLEMENTED);
     }
@@ -359,8 +362,9 @@ protected:
 
     bool useDefaultImplementationForNulls() const override { return function->useDefaultImplementationForNulls(); }
 
-    FunctionBasePtr buildImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & return_type) const override
+    FunctionBasePtr buildImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & return_type, std::shared_ptr<TiDB::ITiDBCollator> collator) const override
     {
+        function->setCollator(collator);
         DataTypes data_types(arguments.size());
         for (size_t i = 0; i < arguments.size(); ++i)
             data_types[i] = arguments[i].type;

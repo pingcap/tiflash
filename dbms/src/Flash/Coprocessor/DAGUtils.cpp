@@ -366,6 +366,14 @@ void constructNULLLiteralTiExpr(tipb::Expr & expr)
     field_type->set_tp(TiDB::TypeNull);
 }
 
+std::shared_ptr<TiDB::ITiDBCollator> getCollatorFromExpr(const tipb::Expr & expr)
+{
+    std::shared_ptr<TiDB::ITiDBCollator> ret = nullptr;
+    if (expr.has_field_type() && expr.field_type().collate() < 0)
+        ret = TiDB::ITiDBCollator::getCollator(expr.field_type().collate());
+    return ret;
+}
+
 std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Count, "count"}, {tipb::ExprType::Sum, "sum"}, {tipb::ExprType::Min, "min"}, {tipb::ExprType::Max, "max"},
     {tipb::ExprType::First, "any"},

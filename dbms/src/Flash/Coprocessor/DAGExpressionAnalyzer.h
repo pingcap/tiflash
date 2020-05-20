@@ -63,7 +63,8 @@ public:
     const std::vector<NameAndTypePair> & getCurrentInputColumns();
     void makeExplicitSet(const tipb::Expr & expr, const Block & sample_block, bool create_ordered_set, const String & left_arg_name);
     void makeExplicitSetForIndex(const tipb::Expr & expr, const ManageableStoragePtr & storage);
-    String applyFunction(const String & func_name, const Names & arg_names, ExpressionActionsPtr & actions);
+    String applyFunction(
+        const String & func_name, const Names & arg_names, ExpressionActionsPtr & actions, std::shared_ptr<TiDB::ITiDBCollator> collator);
     Int32 getImplicitCastCount() { return implicit_cast_count; };
     bool appendTimeZoneCastsAfterTS(ExpressionActionsChain & chain, std::vector<bool> is_ts_column);
     String appendTimeZoneCast(const String & tz_col, const String & ts_col, const String & func_name, ExpressionActionsPtr & actions);
