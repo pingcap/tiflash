@@ -174,14 +174,15 @@ inline TiKVValue encodeLockCfValue(UInt8 lock_type, const String & primary, Time
     return internalEncodeLockCfValue(lock_type, primary, ts, ttl, nullptr);
 }
 
-using DecodedLockCFValue = std::tuple<UInt8, String, Timestamp, UInt64>;
+using DecodedLockCFValue = std::tuple<UInt8, String, Timestamp, UInt64, Timestamp>;
 
 inline DecodedLockCFValue decodeLockCfValue(const TiKVValue & value)
 {
     UInt8 lock_type;
     String primary;
-    UInt64 ts;
+    Timestamp ts;
     UInt64 ttl = 0;
+    Timestamp min_commit_ts = 0;
 
     const char * data = value.data();
     size_t len = value.dataSize();
@@ -216,7 +217,7 @@ inline DecodedLockCFValue decodeLockCfValue(const TiKVValue & value)
                 };
                 case MIN_COMMIT_TS_PREFIX:
                 {
-                    readBigEndian<UInt64>(data);
+                    min_commit_ts = readBigEndian<UInt64>(data);
                     data += sizeof(UInt64);
                     len -= sizeof(UInt64);
                     break;
@@ -246,7 +247,7 @@ inline DecodedLockCFValue decodeLockCfValue(const TiKVValue & value)
     if (len != 0)
         throw Exception("invalid lock value " + value.toHex(), ErrorCodes::LOGICAL_ERROR);
 
-    return std::make_tuple(lock_type, primary, ts, ttl);
+    return std::make_tuple(lock_type, primary, ts, ttl, min_commit_ts);
 }
 
 using DecodedWriteCFValue = std::tuple<UInt8, Timestamp, std::shared_ptr<const TiKVValue>>;
