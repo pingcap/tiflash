@@ -1,6 +1,5 @@
 #pragma once
 #include <Core/Types.h>
-#include <Storages/Transaction/ProxyFFIType.h>
 #include <common/logger_useful.h>
 #include <sys/statvfs.h>
 
@@ -12,6 +11,8 @@ namespace DB
 {
 class PathCapacityMetrics;
 using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
+
+struct FsStats;
 
 class PathCapacityMetrics : private boost::noncopyable
 {
