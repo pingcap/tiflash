@@ -109,7 +109,7 @@ struct DTLeaf
 
     const size_t mark = 1; // <-- This mark MUST be declared at first place!
 
-    DT_Index   sids[M * S + 1];
+    DT_Id      sids[M * S + 1];
     DTMutation mutations[M * S + 1];
     size_t     count = 0; // mutations count
 
@@ -523,9 +523,10 @@ public:
     UInt16     getType() const { return leaf->mutations[pos].type; }
     UInt32     getCount() const { return leaf->mutations[pos].count; }
     UInt64     getValue() const { return leaf->mutations[pos].value; }
-    UInt64 &   getValueRef() const { return leaf->mutations[pos].value; }
     UInt64     getSid() const { return leaf->sids[pos]; }
     UInt64     getRid() const { return leaf->sids[pos] + delta; }
+
+    void setValue(UInt64 value) const { leaf->mutations[pos].value = checkId(value); }
 };
 
 template <size_t M, size_t F, size_t S, typename Allocator>
@@ -1176,9 +1177,9 @@ void DT_CLASS::updateTupleId(const TupleRefs & tuple_refs, size_t offset)
     size_t tuple_id_end = offset + tuple_refs.size();
     for (EntryIterator entry_it(this->begin()), entry_end(this->end()); entry_it != entry_end; ++entry_it)
     {
-        auto & id = entry_it.getValueRef();
+        auto id = entry_it.getValue();
         if (entry_it.getType() == DT_INS && id >= offset && id < tuple_id_end)
-            id = tuple_refs[id - offset] + offset;
+            entry_it.setValue(tuple_refs[id - offset] + offset);
     }
 }
 
