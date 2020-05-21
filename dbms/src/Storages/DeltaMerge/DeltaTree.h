@@ -16,15 +16,10 @@ namespace DM
 {
 
 struct DTMutation;
-struct DTModify;
 template <size_t M, size_t F, size_t S>
 struct DTLeaf;
 template <size_t M, size_t F, size_t S>
 struct DTIntern;
-
-using DTModifies    = std::vector<DTModify>;
-using DTModifiesPtr = DTModifies *;
-static_assert(sizeof(UInt64) >= sizeof(DTModifiesPtr));
 
 using TupleRefs = std::vector<size_t>;
 
@@ -44,6 +39,23 @@ inline std::string addrToHex(const void * addr)
 
 /// DTMutation type available values.
 using DT_TYPE = UInt16;
+
+using DT_Id    = UInt32;
+using DT_Delta = Int32;
+
+inline UInt64 checkId(UInt64 id)
+{
+    if (unlikely(id >= std::numeric_limits<DT_Id>::max()))
+        throw Exception("Illegal id: " + DB::toString(id));
+    return id;
+}
+
+inline Int64 checkDelta(Int64 delta)
+{
+    if (unlikely(delta < std::numeric_limits<DT_Delta>::min() || delta >= std::numeric_limits<DT_Delta>::max()))
+        throw Exception("Illegal delta: " + DB::toString(delta));
+    return delta;
+}
 
 static constexpr DT_TYPE DT_INS = 65535;
 static constexpr DT_TYPE DT_DEL = 65534;
@@ -77,21 +89,10 @@ struct DTMutation
     /// For DT_INS and DT_DEL, "count" is the number of values got inserted or delete from "value".
     UInt32 count = 0;
     /// For DT_INS, "value" is the value index (tuple_id) in value space;
-    UInt64 value = 0;
+    DT_Id value = 0;
 
     inline bool isModify() const { return type != DT_INS && type != DT_DEL; }
 };
-
-struct DTModify
-{
-    DTModify() = default;
-
-    DTModify(size_t column_id_, UInt64 value_) : column_id(column_id_), value(value_) {}
-
-    size_t column_id = 0;
-    UInt64 value     = 0;
-};
-
 
 /// Note that we allocate one more slot for entries in DTIntern and DTLeaf, to simplify entry insert operation.
 
@@ -108,7 +109,7 @@ struct DTLeaf
 
     const size_t mark = 1; // <-- This mark MUST be declared at first place!
 
-    UInt64     sids[M * S + 1];
+    DT_Index   sids[M * S + 1];
     DTMutation mutations[M * S + 1];
     size_t     count = 0; // mutations count
 
@@ -298,10 +299,10 @@ struct DTIntern
 
     const size_t mark = 0; // <-- This mark MUST be declared at first place!
 
-    UInt64  sids[F * S + 1];
-    Int64   deltas[F * S + 1];
-    NodePtr children[F * S + 1];
-    size_t  count = 0; // deltas / children count, and the number of sids is "count - 1"
+    DT_Id    sids[F * S + 1];
+    DT_Delta deltas[F * S + 1];
+    NodePtr  children[F * S + 1];
+    size_t   count = 0; // deltas / children count, and the number of sids is "count - 1"
 
     InternPtr parent = nullptr;
 
@@ -1051,6 +1052,8 @@ void DT_CLASS::check(NodePtr node, bool recursive) const
 DT_TEMPLATE
 void DT_CLASS::addDelete(const UInt64 rid)
 {
+    checkId(rid);
+
     EntryIterator leaf_end(this->end());
     auto          it = findRightLeaf<true>(rid);
     searchLeftId<true>(it, rid);
@@ -1102,7 +1105,7 @@ void DT_CLASS::addDelete(const UInt64 rid)
         auto delta = it.getDelta();
 
         leaf->shiftEntries(pos, 1);
-        leaf->sids[pos]      = rid - delta;
+        leaf->sids[pos]      = checkId(rid - delta);
         leaf->mutations[pos] = DTMutation(DT_DEL, /*count*/ 1, /*value*/ 0);
         ++(leaf->count);
     }
@@ -1116,6 +1119,9 @@ void DT_CLASS::addDelete(const UInt64 rid)
 DT_TEMPLATE
 void DT_CLASS::addInsert(const UInt64 rid, const UInt64 tuple_id)
 {
+    checkId(rid);
+    checkId(tuple_id);
+
     EntryIterator leaf_end(this->end());
     auto          it = findRightLeaf<true>(rid);
     searchLeftId<true>(it, rid);
@@ -1132,7 +1138,7 @@ void DT_CLASS::addInsert(const UInt64 rid, const UInt64 tuple_id)
     auto leaf  = it.getLeaf();
     auto pos   = it.getPos();
     auto delta = it.getDelta();
-    auto sid   = rid - delta;
+    auto sid   = checkId(rid - delta);
 
 #ifndef NDEBUG
     if (it != leaf_end && sid > it.getSid())
