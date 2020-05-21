@@ -51,5 +51,5 @@ add_executable (users users.cpp)
 target_link_libraries (users dbms ${Boost_FILESYSTEM_LIBRARY} dbms)
 
 
-add_executable (roaring_test roaring_tes.cpp)
+add_executable (roaring_test roaring_test.cpp)
 target_link_libraries (roaring_test roaring dbms)
