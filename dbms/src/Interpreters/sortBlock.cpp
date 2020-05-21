@@ -1,8 +1,8 @@
 #include <Interpreters/sortBlock.h>
 
+#include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
 #include <Common/typeid_cast.h>
-#include <Columns/ColumnNullable.h>
 
 
 namespace DB

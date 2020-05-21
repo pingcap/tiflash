@@ -6,8 +6,8 @@
 #include <Core/Field.h>
 #include <Core/Block.h>
 #include <Core/ColumnNumbers.h>
-#include <Storages/Transaction/Collator.h>
 #include <DataTypes/IDataType.h>
+#include <Storages/Transaction/Collator.h>
 
 
 namespace DB

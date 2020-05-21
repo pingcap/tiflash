@@ -954,44 +954,44 @@ private:
 
             if (c0_string && c1_string)
                 StringImpl::string_vector_string_vector(
-                        c0_string->getChars(), c0_string->getOffsets(),
-                        c1_string->getChars(), c1_string->getOffsets(),
-                        c_res->getData());
+                    c0_string->getChars(), c0_string->getOffsets(),
+                    c1_string->getChars(), c1_string->getOffsets(),
+                    c_res->getData());
             else if (c0_string && c1_fixed_string)
                 StringImpl::string_vector_fixed_string_vector(
-                        c0_string->getChars(), c0_string->getOffsets(),
-                        c1_fixed_string->getChars(), c1_fixed_string->getN(),
-                        c_res->getData());
+                    c0_string->getChars(), c0_string->getOffsets(),
+                    c1_fixed_string->getChars(), c1_fixed_string->getN(),
+                    c_res->getData());
             else if (c0_string && c1_const)
                 StringImpl::string_vector_constant(
-                        c0_string->getChars(), c0_string->getOffsets(),
-                        c1_const->getValue<String>(),
-                        c_res->getData());
+                    c0_string->getChars(), c0_string->getOffsets(),
+                    c1_const->getValue<String>(),
+                    c_res->getData());
             else if (c0_fixed_string && c1_string)
                 StringImpl::fixed_string_vector_string_vector(
-                        c0_fixed_string->getChars(), c0_fixed_string->getN(),
-                        c1_string->getChars(), c1_string->getOffsets(),
-                        c_res->getData());
+                    c0_fixed_string->getChars(), c0_fixed_string->getN(),
+                    c1_string->getChars(), c1_string->getOffsets(),
+                    c_res->getData());
             else if (c0_fixed_string && c1_fixed_string)
                 StringImpl::fixed_string_vector_fixed_string_vector(
-                        c0_fixed_string->getChars(), c0_fixed_string->getN(),
-                        c1_fixed_string->getChars(), c1_fixed_string->getN(),
-                        c_res->getData());
+                    c0_fixed_string->getChars(), c0_fixed_string->getN(),
+                    c1_fixed_string->getChars(), c1_fixed_string->getN(),
+                    c_res->getData());
             else if (c0_fixed_string && c1_const)
                 StringImpl::fixed_string_vector_constant(
-                        c0_fixed_string->getChars(), c0_fixed_string->getN(),
-                        c1_const->getValue<String>(),
-                        c_res->getData());
+                    c0_fixed_string->getChars(), c0_fixed_string->getN(),
+                    c1_const->getValue<String>(),
+                    c_res->getData());
             else if (c0_const && c1_string)
                 StringImpl::constant_string_vector(
-                        c0_const->getValue<String>(),
-                        c1_string->getChars(), c1_string->getOffsets(),
-                        c_res->getData());
+                    c0_const->getValue<String>(),
+                    c1_string->getChars(), c1_string->getOffsets(),
+                    c_res->getData());
             else if (c0_const && c1_fixed_string)
                 StringImpl::constant_fixed_string_vector(
-                        c0_const->getValue<String>(),
-                        c1_fixed_string->getChars(), c1_fixed_string->getN(),
-                        c_res->getData());
+                    c0_const->getValue<String>(),
+                    c1_fixed_string->getChars(), c1_fixed_string->getN(),
+                    c_res->getData());
             else
                 throw Exception("Illegal columns "
                                 + c0->getName() + " and " + c1->getName()
@@ -1023,44 +1023,44 @@ private:
 
             if (c0_string && c1_string)
                 StringImpl::string_vector_string_vector(
-                        c0_string->getChars(), c0_string->getOffsets(),
-                        c1_string->getChars(), c1_string->getOffsets(),
-                        collator, c_res->getData());
+                    c0_string->getChars(), c0_string->getOffsets(),
+                    c1_string->getChars(), c1_string->getOffsets(),
+                    collator, c_res->getData());
             else if (c0_string && c1_fixed_string)
                 StringImpl::string_vector_fixed_string_vector(
-                        c0_string->getChars(), c0_string->getOffsets(),
-                        c1_fixed_string->getChars(), c1_fixed_string->getN(),
-                        collator, c_res->getData());
+                    c0_string->getChars(), c0_string->getOffsets(),
+                    c1_fixed_string->getChars(), c1_fixed_string->getN(),
+                    collator, c_res->getData());
             else if (c0_string && c1_const)
                 StringImpl::string_vector_constant(
-                        c0_string->getChars(), c0_string->getOffsets(),
-                        c1_const->getValue<String>(),
-                        collator, c_res->getData());
+                    c0_string->getChars(), c0_string->getOffsets(),
+                    c1_const->getValue<String>(),
+                    collator, c_res->getData());
             else if (c0_fixed_string && c1_string)
                 StringImpl::fixed_string_vector_string_vector(
-                        c0_fixed_string->getChars(), c0_fixed_string->getN(),
-                        c1_string->getChars(), c1_string->getOffsets(),
-                        collator, c_res->getData());
+                    c0_fixed_string->getChars(), c0_fixed_string->getN(),
+                    c1_string->getChars(), c1_string->getOffsets(),
+                    collator, c_res->getData());
             else if (c0_fixed_string && c1_fixed_string)
                 StringImpl::fixed_string_vector_fixed_string_vector(
-                        c0_fixed_string->getChars(), c0_fixed_string->getN(),
-                        c1_fixed_string->getChars(), c1_fixed_string->getN(),
-                        collator, c_res->getData());
+                    c0_fixed_string->getChars(), c0_fixed_string->getN(),
+                    c1_fixed_string->getChars(), c1_fixed_string->getN(),
+                    collator, c_res->getData());
             else if (c0_fixed_string && c1_const)
                 StringImpl::fixed_string_vector_constant(
-                        c0_fixed_string->getChars(), c0_fixed_string->getN(),
-                        c1_const->getValue<String>(),
-                        collator, c_res->getData());
+                    c0_fixed_string->getChars(), c0_fixed_string->getN(),
+                    c1_const->getValue<String>(),
+                    collator, c_res->getData());
             else if (c0_const && c1_string)
                 StringImpl::constant_string_vector(
-                        c0_const->getValue<String>(),
-                        c1_string->getChars(), c1_string->getOffsets(),
-                        collator, c_res->getData());
+                    c0_const->getValue<String>(),
+                    c1_string->getChars(), c1_string->getOffsets(),
+                    collator, c_res->getData());
             else if (c0_const && c1_fixed_string)
                 StringImpl::constant_fixed_string_vector(
-                        c0_const->getValue<String>(),
-                        c1_fixed_string->getChars(), c1_fixed_string->getN(),
-                        collator, c_res->getData());
+                    c0_const->getValue<String>(),
+                    c1_fixed_string->getChars(), c1_fixed_string->getN(),
+                    collator, c_res->getData());
             else
                 throw Exception("Illegal columns "
                                 + c0->getName() + " and " + c1->getName()

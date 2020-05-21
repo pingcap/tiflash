@@ -6,7 +6,6 @@
 #pragma GCC diagnostic pop
 
 #include <shared_mutex>
-#include <Storages/Transaction/Collator.h>
 #include <Core/Block.h>
 #include <DataStreams/SizeLimits.h>
 #include <DataTypes/IDataType.h>
@@ -14,6 +13,7 @@
 #include <Interpreters/Context.h>
 #include <Parsers/IAST.h>
 #include <Storages/MergeTree/BoolMask.h>
+#include <Storages/Transaction/Collator.h>
 
 #include <common/logger_useful.h>
 

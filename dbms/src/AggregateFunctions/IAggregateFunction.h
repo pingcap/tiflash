@@ -5,10 +5,10 @@
 #include <vector>
 #include <type_traits>
 
-#include <Storages/Transaction/Collator.h>
 #include <Core/Types.h>
 #include <Core/Field.h>
 #include <Common/Exception.h>
+#include <Storages/Transaction/Collator.h>
 
 
 namespace DB

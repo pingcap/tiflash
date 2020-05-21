@@ -2,8 +2,8 @@
 
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
-#include <Storages/Transaction/Collator.h>
 #include <Interpreters/AggregationCommon.h>
+#include <Storages/Transaction/Collator.h>
 
 #include <Common/Arena.h>
 #include <Common/HashTable/HashSet.h>
