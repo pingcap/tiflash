@@ -1,8 +1,7 @@
-#include <gtest/gtest.h>
-
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/Tuple.h>
+#include <gtest/gtest.h>
 
 namespace DB
 {
@@ -92,6 +91,14 @@ void checkCopy(FakeDeltaTree & tree)
     FakeDeltaTree copy(tree);
     ASSERT_EQ(treeToString(copy), treeToString(tree));
     tree.swap(copy);
+}
+
+TEST_F(DeltaTree_test, PrintSize)
+{
+    std::cout << "=====================\n";
+    std::cout << "DT leaf node size: " << sizeof(DTLeaf<41, 20, 3>) << "\n";
+    std::cout << "DT inter node size: " << sizeof(DTIntern<41, 20, 3>) << "\n";
+    std::cout << "=====================\n";
 }
 
 TEST_F(DeltaTree_test, Insert)
