@@ -81,7 +81,7 @@ struct FsStats
 {
     uint64_t used_size;
     uint64_t avail_size;
-    uint64_t capacity_size;
+    uint64_t capacity_size = 0;
 
     uint8_t ok = 0;
 };
