@@ -7,13 +7,12 @@
 
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
+#include <Flash/Coprocessor/DAGQueryBlock.h>
 #include <Interpreters/IQuerySource.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/Types.h>
 
-#include "DAGDriver.h"
-#include "DAGQueryBlock.h"
 
 namespace DB
 {

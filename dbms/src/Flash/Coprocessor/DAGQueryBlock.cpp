@@ -3,8 +3,8 @@
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 
-#include "DAGQueryBlock.h"
-#include "DAGUtils.h"
+#include <Flash/Coprocessor/DAGQueryBlock.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 
 namespace DB
 {
