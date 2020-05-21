@@ -4,6 +4,7 @@
 #include <type_traits>
 
 #include <AggregateFunctions/UniquesHashSet.h>
+#include <AggregateFunctions/UniquesRoaringBitmap.h>
 
 #include <IO/WriteHelpers.h>
 #include <IO/ReadHelpers.h>
@@ -45,7 +46,6 @@ struct AggregateFunctionUniqUniquesHashSetDataForVariadic
 
     static String getName() { return "uniq"; }
 };
-
 
 /// uniqHLL12
 
@@ -120,6 +120,44 @@ struct AggregateFunctionUniqExactData<String>
     Set set;
 
     static String getName() { return "uniqExact"; }
+};
+
+/// uniqExact with bitmap
+
+template <typename T>
+struct AggregateFunctionUniqExactBitmapData
+{
+    using Key = T;
+
+    /// When creating, the hash table must be small.
+    using MyHashSet = HashSet<
+        Key,
+        HashCRC32<Key>,
+        HashTableGrower<4>,
+        HashTableAllocatorWithStackMemory<sizeof(Key) * (1 << 4)>>;
+
+    using Set = typename std::conditional_t<!std::is_integral_v<Key>, MyHashSet, UniqueRoaringBitmap<Key>>;
+
+    Set set;
+
+    static String getName() { return "uniqExactBitmap"; }
+};
+
+template <>
+struct AggregateFunctionUniqExactBitmapData<String>
+{
+    using Key = UInt128;
+
+    /// When creating, the hash table must be small.
+    using Set = HashSet<
+        Key,
+        UInt128TrivialHash,
+        HashTableGrower<3>,
+        HashTableAllocatorWithStackMemory<sizeof(Key) * (1 << 3)>>;
+
+    Set set;
+
+    static String getName() { return "uniqExactBitmap"; }
 };
 
 template <typename T>
@@ -289,6 +327,23 @@ struct OneAdder
 
                 data.set.insert(key);
             }
+        }else if constexpr (std::is_same_v<Data, AggregateFunctionUniqExactBitmapData<T>>)
+        {
+            if constexpr (!std::is_same_v<T, String>)
+            {
+                data.set.insert(static_cast<const ColumnVector<T> &>(column).getData()[row_num]);
+            }
+            else
+            {
+                StringRef value = column.getDataAt(row_num);
+
+                UInt128 key;
+                SipHash hash;
+                hash.update(value.data, value.size);
+                hash.get128(key.low, key.high);
+
+                data.set.insert(key);
+            }
         }
     }
 };
@@ -345,7 +400,7 @@ template <typename Data, bool argument_is_tuple>
 class AggregateFunctionUniqVariadic final : public IAggregateFunctionDataHelper<Data, AggregateFunctionUniqVariadic<Data, argument_is_tuple>>
 {
 private:
-    static constexpr bool is_exact = std::is_same_v<Data, AggregateFunctionUniqExactData<String>>;
+    static constexpr bool is_exact = std::is_same_v<Data, AggregateFunctionUniqExactData<String>> || std::is_same_v<Data, AggregateFunctionUniqExactBitmapData<String>>;
 
     size_t num_args = 0;
 

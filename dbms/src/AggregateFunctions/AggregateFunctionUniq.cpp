@@ -123,6 +123,9 @@ void registerAggregateFunctionsUniq(AggregateFunctionFactory & factory)
     factory.registerFunction("uniqExact",
         createAggregateFunctionUniq<AggregateFunctionUniqExactData, AggregateFunctionUniqExactData<String>>);
 
+    factory.registerFunction("uniqExactBitmap",
+        createAggregateFunctionUniq<AggregateFunctionUniqExactBitmapData, AggregateFunctionUniqExactBitmapData<String>>);
+
     factory.registerFunction("uniqCombined",
         createAggregateFunctionUniq<AggregateFunctionUniqCombinedData, AggregateFunctionUniqCombinedData<UInt64>>);
 }
