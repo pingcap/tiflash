@@ -1161,6 +1161,8 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     INSERT_RATE(delta_cache_rate)
     INSERT_RATE(delta_cache_wasted_rate)
 
+    INSERT_SIZE(delta_index_size)
+
     INSERT_FLOAT(avg_segment_rows)
     INSERT_SIZE(avg_segment_size)
 

@@ -1,15 +1,14 @@
 #pragma once
 
+#include <Core/Types.h>
+#include <IO/WriteHelpers.h>
+#include <Storages/DeltaMerge/Tuple.h>
+#include <common/logger_useful.h>
+
 #include <algorithm>
 #include <cstddef>
 #include <memory>
 #include <queue>
-
-#include <Core/Types.h>
-#include <IO/WriteHelpers.h>
-#include <Storages/DeltaMerge/Tuple.h>
-
-#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -717,6 +716,7 @@ private:
     size_t num_entries = 0;
 
     Allocator * allocator;
+    size_t      bytes = 0;
 
     Logger * log;
 
@@ -780,6 +780,8 @@ private:
     void freeNode(T * node)
     {
         allocator->free(reinterpret_cast<char *>(node), sizeof(T));
+
+        bytes -= sizeof(T);
     }
 
     template <typename T>
@@ -787,6 +789,9 @@ private:
     {
         T * n = reinterpret_cast<T *>(allocator->alloc(sizeof(T)));
         new (n) T();
+
+        bytes += sizeof(T);
+
         return n;
     }
 
@@ -887,6 +892,8 @@ public:
 
         check(root, true);
     }
+
+    size_t getBytes() { return bytes; }
 
     size_t        getHeight() const { return height; }
     EntryIterator begin() const { return EntryIterator(left_leaf, 0, 0); }
