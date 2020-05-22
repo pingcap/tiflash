@@ -4,7 +4,7 @@ default_profile = "default"
 users_config = "users.toml"
 # specify paths used for store data, multiple path should be seperated by comma
 path = "/tmp/tiflash/data/db"
-capacity = "107374182400" 
+capacity = "10737418240"
 # multi-paths example
 # path = "/tmp/tiflash/data/db,/tmp/tiflash1,/tmp/tiflash2"
 # capacity = "0,0,0"
