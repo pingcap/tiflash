@@ -83,7 +83,9 @@ struct FsStats
     uint64_t avail_size;
     uint64_t capacity_size;
 
-    uint8_t ok = 0;
+    uint8_t ok;
+
+    FsStats() { memset(this, 0, sizeof(*this)); }
 };
 
 struct TiFlashServerHelper
