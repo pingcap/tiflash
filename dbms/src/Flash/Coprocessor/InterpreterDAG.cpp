@@ -397,7 +397,7 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
     if (dag.hasTopN())
     {
         res.has_order_by = true;
-        analyzer->appendOrderBy(chain, dag.getTopN(), res.order_column_names);
+        analyzer->appendOrderBy(chain, dag.getTopN(), res.order_columns);
     }
     // Append final project results if needed.
     analyzer->appendFinalProject(chain, final_project);
@@ -570,7 +570,7 @@ void InterpreterDAG::getAndLockStorageWithSchemaVersion(TableID table_id, Int64 
     }
 }
 
-SortDescription InterpreterDAG::getSortDescription(Strings & order_column_names)
+SortDescription InterpreterDAG::getSortDescription(std::vector<NameAndTypePair> & order_columns)
 {
     // construct SortDescription
     SortDescription order_descr;
@@ -578,11 +578,13 @@ SortDescription InterpreterDAG::getSortDescription(Strings & order_column_names)
     order_descr.reserve(topn.order_by_size());
     for (int i = 0; i < topn.order_by_size(); i++)
     {
-        String name = order_column_names[i];
+        String name = order_columns[i].name;
         int direction = topn.order_by(i).desc() ? -1 : 1;
         // MySQL/TiDB treats NULL as "minimum".
         int nulls_direction = -1;
-        std::shared_ptr<ICollator> collator = getCollatorFromExpr(topn.order_by(i).expr());
+        std::shared_ptr<ICollator> collator = nullptr;
+        if (removeNullable(order_columns[i].type)->isString())
+            collator = getCollatorFromExpr(topn.order_by(i).expr());
 
         order_descr.emplace_back(name, direction, nulls_direction, collator);
     }
@@ -598,9 +600,9 @@ void InterpreterDAG::executeUnion(Pipeline & pipeline)
     }
 }
 
-void InterpreterDAG::executeOrder(Pipeline & pipeline, Strings & order_column_names)
+void InterpreterDAG::executeOrder(Pipeline & pipeline, std::vector<NameAndTypePair> & order_columns)
 {
-    SortDescription order_descr = getSortDescription(order_column_names);
+    SortDescription order_descr = getSortDescription(order_columns);
     const Settings & settings = context.getSettingsRef();
     Int64 limit = dag.getTopN().limit();
 
@@ -659,7 +661,7 @@ void InterpreterDAG::executeImpl(Pipeline & pipeline)
     if (res.has_order_by)
     {
         // execute topN
-        executeOrder(pipeline, res.order_column_names);
+        executeOrder(pipeline, res.order_columns);
         recordProfileStreams(pipeline, dag.getTopNIndex());
     }
 

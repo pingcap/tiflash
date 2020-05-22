@@ -39,7 +39,7 @@ private:
 public:
     DAGExpressionAnalyzer(std::vector<NameAndTypePair> && source_columns_, const Context & context_);
     void appendWhere(ExpressionActionsChain & chain, const std::vector<const tipb::Expr *> & conditions, String & filter_column_name);
-    void appendOrderBy(ExpressionActionsChain & chain, const tipb::TopN & topN, Strings & order_column_names);
+    void appendOrderBy(ExpressionActionsChain & chain, const tipb::TopN & topN, std::vector<NameAndTypePair> & order_columns);
     void appendAggregation(ExpressionActionsChain & chain, const tipb::Aggregation & agg, Names & aggregate_keys,
         AggregateDescriptions & aggregate_descriptions);
     void appendAggSelect(ExpressionActionsChain & chain, const tipb::Aggregation & agg, bool keep_session_timezone_info);

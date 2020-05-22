@@ -354,7 +354,8 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
     throw Exception("Filter on " + org_type->getName() + " is not supported.", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-void DAGExpressionAnalyzer::appendOrderBy(ExpressionActionsChain & chain, const tipb::TopN & topN, Strings & order_column_names)
+void DAGExpressionAnalyzer::appendOrderBy(
+    ExpressionActionsChain & chain, const tipb::TopN & topN, std::vector<NameAndTypePair> & order_columns)
 {
     if (topN.order_by_size() == 0)
     {
@@ -365,8 +366,9 @@ void DAGExpressionAnalyzer::appendOrderBy(ExpressionActionsChain & chain, const 
     for (const tipb::ByItem & byItem : topN.order_by())
     {
         String name = getActions(byItem.expr(), step.actions);
+        auto type = step.actions->getSampleBlock().getByName(name).type;
+        order_columns.emplace_back(name, type);
         step.required_output.push_back(name);
-        order_column_names.push_back(name);
     }
 }
 
