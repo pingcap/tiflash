@@ -90,8 +90,6 @@ struct DTMutation
     UInt32 count = 0;
     /// For DT_INS, "value" is the value index (tuple_id) in value space;
     DT_Id value = 0;
-
-    inline bool isModify() const { return type != DT_INS && type != DT_DEL; }
 };
 
 /// Note that we allocate one more slot for entries in DTIntern and DTLeaf, to simplify entry insert operation.
@@ -130,7 +128,6 @@ struct DTLeaf
     inline UInt16 type(size_t pos) const { return mutations[pos].type; }
     inline UInt32 mut_count(size_t pos) const { return mutations[pos].count; }
     inline UInt64 value(size_t pos) const { return mutations[pos].value; }
-    inline bool   isModify(size_t pos) const { return mutations[pos].isModify(); }
 
     static inline bool overflow(size_t count) { return count > M * S; }
     static inline bool underflow(size_t count) { return count < M; }
@@ -1332,7 +1329,7 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
             parent = createNode<Intern>();
             root   = asNode(parent);
 
-            parent->deltas[0]   = node->getDelta();
+            parent->deltas[0]   = checkDelta(node->getDelta());
             parent->children[0] = asNode(node);
             ++(parent->count);
             parent->refreshChildParent();
@@ -1351,10 +1348,10 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
         // handle parent update
         parent->shiftEntries(pos + 1, 1);
         // for current node
-        parent->deltas[pos] = node->getDelta();
+        parent->deltas[pos] = checkDelta(node->getDelta());
         // for next node
         parent->sids[pos]         = sep_sid;
-        parent->deltas[pos + 1]   = next_n->getDelta();
+        parent->deltas[pos + 1]   = checkDelta(next_n->getDelta());
         parent->children[pos + 1] = asNode(next_n);
 
         ++(parent->count);
@@ -1407,7 +1404,7 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
             freeNode<T>(sibling);
 
             pos                   = std::min(pos, sibling_pos);
-            parent->deltas[pos]   = node->getDelta();
+            parent->deltas[pos]   = checkDelta(node->getDelta());
             parent->children[pos] = asNode(node);
             parent->shiftEntries(pos + 2, -1);
 
@@ -1430,8 +1427,8 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
             auto new_sep_sid = node->adopt(sibling, is_sibling_left, adopt_count, pos);
 
             parent->sids[std::min(pos, sibling_pos)] = new_sep_sid;
-            parent->deltas[pos]                      = node->getDelta();
-            parent->deltas[sibling_pos]              = sibling->getDelta();
+            parent->deltas[pos]                      = checkDelta(node->getDelta());
+            parent->deltas[sibling_pos]              = checkDelta(sibling->getDelta());
 
             // LOG_TRACE(log, nodeName(node) << " adoption");
         }
@@ -1443,7 +1440,7 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
         auto pos            = parent->searchChild(asNode(node));
         auto delta          = node->getDelta();
         parent_updated      = parent->deltas[pos] != delta;
-        parent->deltas[pos] = delta;
+        parent->deltas[pos] = checkDelta(delta);
     }
 
     if (parent_updated)
