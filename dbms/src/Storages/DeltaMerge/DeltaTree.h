@@ -605,7 +605,7 @@ public:
             if (entries->mutations[index].isInsert())
                 delta += 1;
             else
-                delta -= entries->mutations[index].count;
+                delta -= entries->mutations[index].count();
 
             ++index;
 
@@ -619,7 +619,7 @@ public:
             if (entries->mutations[index].isInsert())
                 delta -= 1;
             else
-                delta += entries->mutations[index].count;
+                delta += entries->mutations[index].count();
 
             return *this;
         }
