@@ -57,8 +57,8 @@ void printTree(const FakeDeltaTree & tree)
     print(tree.getHeight());
     for (auto it = tree.begin(), end = tree.end(); it != end; ++it)
     {
-        std::cout << "(" << it.getRid() << "|" << it.getSid() << "|" << DTTypeString(it.getMutation().type) << "|"
-                  << DB::toString(it.getMutation().count) << "|" << DB::toString(it.getMutation().value) << "),";
+        std::cout << "(" << it.getRid() << "|" << it.getSid() << "|" << DTType::DTTypeString(it.getMutation().isInsert()) << "|"
+                  << DB::toString(it.getMutation().count()) << "|" << DB::toString(it.getMutation().value) << "),";
     }
     std::cout << std::endl;
 }
@@ -75,9 +75,9 @@ std::string treeToString(const FakeDeltaTree & tree)
         temp += "|";
         temp += std::to_string(it.getSid());
         temp += "|";
-        temp += DTTypeString(it.getMutation().type);
+        temp += DTType::DTTypeString(it.getMutation().isInsert());
         temp += "|";
-        temp += DB::toString(it.getMutation().count);
+        temp += DB::toString(it.getMutation().count());
         temp += "|";
         temp += DB::toString(it.getMutation().value);
         temp += "),";
@@ -96,8 +96,8 @@ void checkCopy(FakeDeltaTree & tree)
 TEST_F(DeltaTree_test, PrintSize)
 {
     std::cout << "=====================\n";
-    std::cout << "DT leaf node size: " << sizeof(DTLeaf<41, 20, 3>) << "\n";
-    std::cout << "DT inter node size: " << sizeof(DTIntern<41, 20, 3>) << "\n";
+    std::cout << "DT leaf node size: " << sizeof(DTLeaf<55, 20, 3>) << "\n";
+    std::cout << "DT inter node size: " << sizeof(DTIntern<55, 20, 3>) << "\n";
     std::cout << "=====================\n";
 }
 
