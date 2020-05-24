@@ -125,13 +125,14 @@ LockInfoPtr RegionData::getLockInfo(const RegionLockReadQuery & query) const
         std::ignore = handle;
 
         const auto & [tikv_key, tikv_val, decoded_val, decoded_key] = value;
-        const auto & [lock_type, primary, ts, ttl] = decoded_val;
+        const auto & [lock_type, primary, ts, ttl, min_commit_ts] = decoded_val;
         std::ignore = tikv_key;
         std::ignore = tikv_val;
 
         if (ts > query.read_tso || lock_type == Lock || lock_type == Pessimistic)
             continue;
-
+        if (min_commit_ts > query.read_tso)
+            continue;
         if (query.bypass_lock_ts && query.bypass_lock_ts->count(ts))
             continue;
 
