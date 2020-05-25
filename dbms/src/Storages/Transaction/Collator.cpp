@@ -261,7 +261,7 @@ private:
 
 std::unique_ptr<ITiDBCollator> ITiDBCollator::getCollator(int32_t id)
 {
-    switch (std::abs(id))
+    switch (id)
     {
         case ITiDBCollator::BINARY:
             return std::make_unique<BinCollator<false>>(id);

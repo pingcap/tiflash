@@ -370,7 +370,7 @@ std::shared_ptr<TiDB::ITiDBCollator> getCollatorFromExpr(const tipb::Expr & expr
 {
     std::shared_ptr<TiDB::ITiDBCollator> ret = nullptr;
     if (expr.has_field_type() && expr.field_type().collate() < 0)
-        ret = TiDB::ITiDBCollator::getCollator(expr.field_type().collate());
+        ret = TiDB::ITiDBCollator::getCollator(-expr.field_type().collate());
     return ret;
 }
 

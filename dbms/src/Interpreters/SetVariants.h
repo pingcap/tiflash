@@ -120,9 +120,10 @@ struct SetMethodString
             Key key = StringRef(
                        &(*chars)[i == 0 ? 0 : (*offsets)[i - 1]],
                        (i == 0 ? (*offsets)[i] : ((*offsets)[i] - (*offsets)[i - 1])) - 1);
+            std::string sort_key;
             if (collator != nullptr)
             {
-                std::string sort_key = collator->sortKey(key.data, key.size);
+                sort_key = collator->sortKey(key.data, key.size);
                 key = StringRef(sort_key.data(), sort_key.length());
             }
             typename Data::iterator it;
@@ -138,9 +139,10 @@ struct SetMethodString
             Key key = StringRef(
                     &(*chars)[i == 0 ? 0 : (*offsets)[i - 1]],
                     (i == 0 ? (*offsets)[i] : ((*offsets)[i] - (*offsets)[i - 1])) - 1);
+            std::string sort_key;
             if (collator != nullptr)
             {
-                std::string sort_key = collator->sortKey(key.data, key.size);
+                sort_key = collator->sortKey(key.data, key.size);
                 key = StringRef(sort_key.data(), sort_key.length());
             }
             return set_data.has(key);
@@ -194,9 +196,10 @@ struct SetMethodFixedString
         void insertKey(const ColumnRawPtrs &, size_t keys_size, size_t i, const Sizes &, Data & set_data, Arena & pool)
         {
             Key key = StringRef(&(*chars)[i * n], n);
+            std::string sort_key;
             if (collator != nullptr)
             {
-                std::string sort_key = collator->sortKey(key.data, key.size);
+                sort_key = collator->sortKey(key.data, key.size);
                 key = StringRef(sort_key.data(), sort_key.length());
             }
             typename Data::iterator it;
@@ -210,9 +213,10 @@ struct SetMethodFixedString
         bool exists(const ColumnRawPtrs & , size_t , size_t i, const Sizes & , Data & set_data)
         {
             Key key = StringRef(&(*chars)[i * n], n);
+            std::string sort_key;
             if (collator != nullptr)
             {
-                std::string sort_key = collator->sortKey(key.data, key.size);
+                sort_key = collator->sortKey(key.data, key.size);
                 key = StringRef(sort_key.data(), sort_key.length());
             }
             return set_data.has(key);
