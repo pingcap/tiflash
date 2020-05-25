@@ -39,6 +39,8 @@ StorageSystemDTTables::StorageSystemDTTables(const std::string & name_) : name(n
         {"delta_cache_rate", std::make_shared<DataTypeFloat64>()},
         {"delta_cache_wasted_rate", std::make_shared<DataTypeFloat64>()},
 
+        {"delta_index_size", std::make_shared<DataTypeUInt64>()},
+
         {"avg_segment_rows", std::make_shared<DataTypeFloat64>()},
         {"avg_segment_size", std::make_shared<DataTypeFloat64>()},
 
@@ -146,6 +148,8 @@ BlockInputStreams StorageSystemDTTables::read(const Names & column_names,
             res_columns[j++]->insert(stat.delta_cache_size);
             res_columns[j++]->insert(stat.delta_cache_rate);
             res_columns[j++]->insert(stat.delta_cache_wasted_rate);
+
+            res_columns[j++]->insert(stat.delta_index_size);
 
             res_columns[j++]->insert(stat.avg_segment_rows);
             res_columns[j++]->insert(stat.avg_segment_size);

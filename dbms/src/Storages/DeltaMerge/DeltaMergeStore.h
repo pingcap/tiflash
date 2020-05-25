@@ -49,6 +49,8 @@ struct SegmentStat
 
     Float64 delta_rate       = 0;
     UInt64  delta_cache_size = 0;
+
+    UInt64 delta_index_size = 0;
 };
 using SegmentStats = std::vector<SegmentStat>;
 
@@ -67,6 +69,8 @@ struct DeltaMergeStoreStat
     UInt64  delta_cache_size        = 0;
     Float64 delta_cache_rate        = 0;
     Float64 delta_cache_wasted_rate = 0;
+
+    UInt64 delta_index_size = 0;
 
     Float64 avg_segment_rows = 0;
     Float64 avg_segment_size = 0;

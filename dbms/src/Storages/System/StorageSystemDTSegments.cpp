@@ -42,6 +42,7 @@ StorageSystemDTSegments::StorageSystemDTSegments(const std::string & name_) : na
 
         {"delta_rate", std::make_shared<DataTypeFloat64>()},
         {"delta_cache_size", std::make_shared<DataTypeUInt64>()},
+        {"delta_index_size", std::make_shared<DataTypeUInt64>()},
     }));
 }
 
@@ -109,6 +110,8 @@ BlockInputStreams StorageSystemDTSegments::read(const Names & column_names,
 
                 res_columns[j++]->insert(stat.delta_rate);
                 res_columns[j++]->insert(stat.delta_cache_size);
+
+                res_columns[j++]->insert(stat.delta_index_size);
             }
         }
     }
