@@ -1125,10 +1125,7 @@ bool DeltaMergeStore::handleBackgroundTask()
             break;
         }
         case PlaceIndex: {
-            size_t delta_rows  = task.segment->getDelta()->getRows();
-            size_t placed_rows = task.segment->getDelta()->getPlacedDeltaRows();
-            if (std::max((Int64)delta_rows - placed_rows, 0) >= placeDeltaIndexThreshold(task.dm_context))
-                task.segment->placeDeltaIndex(*task.dm_context);
+            task.segment->placeDeltaIndex(*task.dm_context);
             break;
         }
         default:
