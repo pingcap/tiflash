@@ -197,10 +197,11 @@ private:
     /// Note that those things can not be done at the same time.
     std::atomic_bool is_updating = false;
 
-    std::atomic<size_t> last_try_flush_rows       = 0;
-    std::atomic<size_t> last_try_compact_packs    = 0;
-    std::atomic<size_t> last_try_merge_delta_rows = 0;
-    std::atomic<size_t> last_try_split_rows       = 0;
+    std::atomic<size_t> last_try_flush_rows             = 0;
+    std::atomic<size_t> last_try_compact_packs          = 0;
+    std::atomic<size_t> last_try_merge_delta_rows       = 0;
+    std::atomic<size_t> last_try_split_rows             = 0;
+    std::atomic<size_t> last_try_place_delta_index_rows = 0;
 
     DeltaIndexPtr delta_index;
 
@@ -282,6 +283,7 @@ public:
     std::atomic<size_t> & getLastTryCompactPacks() { return last_try_compact_packs; }
     std::atomic<size_t> & getLastTryMergeDeltaRows() { return last_try_merge_delta_rows; }
     std::atomic<size_t> & getLastTrySplitRows() { return last_try_split_rows; }
+    std::atomic<size_t> & getLastTryPlaceDeltaIndexRows() { return last_try_place_delta_index_rows; }
 
     size_t getPlacedDeltaRows() const
     {
