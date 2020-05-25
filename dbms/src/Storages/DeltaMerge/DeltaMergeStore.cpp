@@ -877,10 +877,13 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     size_t segment_rows = segment->getEstimatedRows();
     size_t pack_count   = delta->getPackCount();
 
-    auto & delta_last_try_flush_rows       = delta->getLastTryFlushRows();
-    auto & delta_last_try_compact_packs    = delta->getLastTryCompactPacks();
-    auto & delta_last_try_merge_delta_rows = delta->getLastTryMergeDeltaRows();
-    auto & delta_last_try_split_rows       = delta->getLastTrySplitRows();
+    size_t placed_delta_rows = delta->getPlacedDeltaRows();
+
+    auto & delta_last_try_flush_rows             = delta->getLastTryFlushRows();
+    auto & delta_last_try_compact_packs          = delta->getLastTryCompactPacks();
+    auto & delta_last_try_merge_delta_rows       = delta->getLastTryMergeDeltaRows();
+    auto & delta_last_try_split_rows             = delta->getLastTrySplitRows();
+    auto & delta_last_try_place_delta_index_rows = delta->getLastTryPlaceDeltaIndexRows();
 
     auto segment_limit_rows     = dm_context->segment_limit_rows;
     auto delta_limit_rows       = dm_context->delta_limit_rows;
@@ -901,9 +904,12 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
 
     bool should_compact = std::max((Int64)pack_count - delta_last_try_compact_packs, 0) >= 10;
 
+    bool should_place_delta_index = delta_rows - placed_delta_rows >= delta_cache_limit_rows * 3
+        && delta_rows - delta_last_try_place_delta_index_rows >= delta_cache_limit_rows;
+
     auto try_add_background_task = [&](const BackgroundTask & task) {
         // Prevent too many tasks.
-        if (background_tasks.length() <= std::max(id_to_segment.size() * 2, background_pool.getNumberOfThreads() * 5))
+        if (background_tasks.length() <= std::max(id_to_segment.size() * 2, background_pool.getNumberOfThreads() * 3))
         {
             if (shutdown_called.load(std::memory_order_relaxed))
                 return;
@@ -921,8 +927,6 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
             delta_last_try_flush_rows = delta_rows;
             LOG_DEBUG(log, "Foreground flush cache " << segment->info());
             segment->flushCache(*dm_context);
-
-            try_add_background_task(BackgroundTask{TaskType::PlaceIndex, dm_context, segment, {}});
         }
         else if (should_background_flush)
         {
@@ -1021,6 +1025,15 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         }
         return false;
     };
+    auto try_place_delta_index = [&]() {
+        if (should_place_delta_index)
+        {
+            delta_last_try_place_delta_index_rows = delta_rows;
+            try_add_background_task(BackgroundTask{TaskType::PlaceIndex, dm_context, segment, {}});
+            return true;
+        }
+        return false;
+    };
 
     /// If current thread is write thread, check foreground merge delta.
     /// If current thread is background merge delta thread, then try split first.
@@ -1051,8 +1064,10 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         return;
     else if (try_bg_merge())
         return;
+    else if (try_bg_compact())
+        return;
     else
-        try_bg_compact();
+        try_place_delta_index();
 }
 
 bool DeltaMergeStore::handleBackgroundTask()
@@ -1110,7 +1125,10 @@ bool DeltaMergeStore::handleBackgroundTask()
             break;
         }
         case PlaceIndex: {
-            task.segment->placeDeltaIndex(*task.dm_context);
+            size_t delta_rows  = task.segment->getDelta()->getRows();
+            size_t placed_rows = task.segment->getDelta()->getPlacedDeltaRows();
+            if (std::max((Int64)delta_rows - placed_rows, 0) >= placeDeltaIndexThreshold(task.dm_context))
+                task.segment->placeDeltaIndex(*task.dm_context);
             break;
         }
         default:
