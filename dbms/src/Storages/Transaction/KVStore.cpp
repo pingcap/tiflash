@@ -293,6 +293,54 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt)
 
 void KVStore::setRegionCompactLogPeriod(Seconds period) { REGION_COMPACT_LOG_PERIOD = period; }
 
+void KVStore::persistRegion(const Region & region, const RegionTaskLock & region_task_lock)
+{
+    LOG_INFO(log, "Start to persist " << region.toString(true) << ", cache size: " << region.dataSize() << " bytes");
+    region_persister.persist(region, region_task_lock);
+    LOG_DEBUG(log, "Persist " << region.toString(false) << " done");
+}
+
+TiFlashApplyRes KVStore::handleUselessAdminRaftCmd(
+    raft_cmdpb::AdminCmdType cmd_type, UInt64 curr_region_id, UInt64 index, UInt64 term, TMTContext & tmt)
+{
+    auto region_task_lock = region_manager.genRegionTaskLock(curr_region_id);
+    bool sync_log = true;
+    const RegionPtr curr_region_ptr = getRegion(curr_region_id);
+    if (curr_region_ptr == nullptr)
+    {
+        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": [region " << curr_region_id << "] is not found, might be removed already");
+        return TiFlashApplyRes::NotFound;
+    }
+
+    auto & curr_region = *curr_region_ptr;
+    curr_region.handleWriteRaftCmd({}, index, term, tmt);
+
+    if (cmd_type != raft_cmdpb::AdminCmdType::CompactLog)
+    {
+        sync_log = false;
+    }
+    else
+    {
+        if (curr_region.lastCompactLogTime() + REGION_COMPACT_LOG_PERIOD.load(std::memory_order_relaxed) > Clock::now())
+        {
+            sync_log = false;
+            LOG_DEBUG(log, curr_region.toString(false) << " ignore compact log cmd");
+        }
+        else
+        {
+            curr_region.markCompactLog();
+        }
+    }
+
+    if (sync_log)
+    {
+        tryFlushRegionCacheInStorage(tmt, curr_region, log);
+        persistRegion(curr_region, region_task_lock);
+        return TiFlashApplyRes::Persist;
+    }
+    return TiFlashApplyRes::None;
+}
+
 TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
     raft_cmdpb::AdminResponse && response,
     UInt64 curr_region_id,
@@ -300,6 +348,18 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
     UInt64 term,
     TMTContext & tmt)
 {
+    auto type = request.cmd_type();
+    switch (request.cmd_type())
+    {
+        // CompactLog | VerifyHash | ComputeHash won't change region range, there is no need to occupy task lock of kvstore.
+        case raft_cmdpb::AdminCmdType::CompactLog:
+        case raft_cmdpb::AdminCmdType::VerifyHash:
+        case raft_cmdpb::AdminCmdType::ComputeHash:
+            return handleUselessAdminRaftCmd(type, curr_region_id, index, term, tmt);
+        default:
+            break;
+    }
+
     RegionTable & region_table = tmt.getRegionTable();
 
     auto task_lock = genTaskLock();
@@ -318,37 +378,6 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
         curr_region.makeRaftCommandDelegate(task_lock).handleAdminRaftCmd(
             request, response, index, term, *this, region_table, *raft_cmd_res);
         RaftCommandResult & result = *raft_cmd_res;
-        auto type = request.cmd_type();
-        switch (type)
-        {
-            case raft_cmdpb::AdminCmdType::CompactLog:
-            {
-                if (curr_region.lastCompactLogTime() + REGION_COMPACT_LOG_PERIOD.load(std::memory_order_relaxed) > Clock::now())
-                {
-                    sync_log = false;
-                    LOG_DEBUG(log, curr_region.toString(false) << " ignore compact log cmd");
-                }
-                else
-                {
-                    curr_region.markCompactLog();
-                }
-                break;
-            }
-            case raft_cmdpb::AdminCmdType::VerifyHash:
-            case raft_cmdpb::AdminCmdType::ComputeHash:
-            {
-                sync_log = false;
-                break;
-            }
-            default:
-                break;
-        }
-
-        const auto persist_region = [&](const Region & region) {
-            LOG_INFO(log, "Start to persist " << region.toString(true) << ", cache size: " << region.dataSize() << " bytes");
-            region_persister.persist(region, region_task_lock);
-            LOG_INFO(log, "Persist " << region.toString(false) << " done");
-        };
 
         // After region split / merge, try to flush it
         const auto try_to_flush_region = [&tmt](const RegionPtr & region) {
@@ -363,9 +392,12 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
             }
         };
 
-        const auto persist_and_sync = [&]() {
+        const auto persist_and_sync = [&](const Region & region) {
             if (sync_log)
-                persist_region(curr_region);
+            {
+                tryFlushRegionCacheInStorage(tmt, region, log);
+                persistRegion(region, region_task_lock);
+            }
         };
 
         const auto handle_batch_split = [&](Regions & split_regions) {
@@ -413,10 +445,9 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
                 for (const auto & new_region : split_regions)
                 {
                     // no need to lock those new regions, because they don't have middle state.
-                    tryFlushRegionCacheInStorage(tmt, *new_region, log);
-                    persist_region(*new_region);
+                    persist_and_sync(*new_region);
                 }
-                persist_region(curr_region);
+                persist_and_sync(curr_region);
             }
         };
 
@@ -427,14 +458,13 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
                 removeRegion(curr_region_id, /* remove_data */ true, region_table, task_lock, region_task_lock);
             }
             else
-                persist_and_sync();
+                persist_and_sync(curr_region);
         };
 
         const auto handle_commit_merge = [&](const RegionID source_region_id) {
             region_table.shrinkRegionRange(curr_region);
             try_to_flush_region(curr_region_ptr);
-            tryFlushRegionCacheInStorage(tmt, *curr_region_ptr, log);
-            persist_region(curr_region);
+            persist_and_sync(curr_region);
             {
                 auto source_region = getRegion(source_region_id);
                 // `source_region` is merged, don't remove its data in storage.
@@ -469,7 +499,7 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
                 handle_batch_split(result.split_regions);
                 break;
             case RaftCommandResult::Type::Default:
-                persist_and_sync();
+                persist_and_sync(curr_region);
                 break;
             case RaftCommandResult::Type::ChangePeer:
                 handle_change_peer();
@@ -479,11 +509,6 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
                 break;
             default:
                 throw Exception("Unsupported RaftCommandResult", ErrorCodes::LOGICAL_ERROR);
-        }
-
-        if (sync_log)
-        {
-            tryFlushRegionCacheInStorage(tmt, curr_region, log);
         }
 
         return sync_log ? TiFlashApplyRes::Persist : TiFlashApplyRes::None;

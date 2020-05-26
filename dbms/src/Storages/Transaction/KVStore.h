@@ -95,6 +95,10 @@ private:
 
     RegionMap & regionsMut();
     const RegionMap & regions() const;
+    TiFlashApplyRes handleUselessAdminRaftCmd(
+        raft_cmdpb::AdminCmdType cmd_type, UInt64 curr_region_id, UInt64 index, UInt64 term, TMTContext & tmt);
+
+    void persistRegion(const Region & region, const RegionTaskLock & region_task_lock);
 
 private:
     RegionManager region_manager;
