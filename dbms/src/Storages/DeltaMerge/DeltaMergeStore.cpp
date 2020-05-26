@@ -220,15 +220,15 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
     };
     storage_pool.data().registerExternalPagesCallbacks(dmfile_scanner, dmfile_remover);
 
+    gc_handle              = background_pool.addTask([this] { return storage_pool.gc(); });
+    background_task_handle = background_pool.addTask([this] { return handleBackgroundTask(); });
+
     // Do place delta index.
     for (auto & [end, segment] : segments)
     {
         (void)end;
         checkSegmentUpdate(dm_context, segment, ThreadType::Init);
     }
-
-    gc_handle              = background_pool.addTask([this] { return storage_pool.gc(); });
-    background_task_handle = background_pool.addTask([this] { return handleBackgroundTask(); });
 
     // Wake up to do place delta index tasks.
     background_task_handle->wake();
