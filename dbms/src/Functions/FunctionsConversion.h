@@ -1386,11 +1386,14 @@ public:
                 continue;
             }
 
-            if (timezone_info.timezone_offset != 0) {
+            if (timezone_info.timezone_offset != 0)
+            {
                 integer_part += timezone_info.timezone_offset;
                 if (unlikely(integer_part < 0))
                     throw Exception("Unsupported timestamp value , TiFlash only support timestamp after 1970-01-01 00:00:00)");
-            } else {
+            }
+            else
+            {
                 if (unlikely(integer_part + datelut->getOffsetAtStartEpoch() < 0))
                     throw Exception("Unsupported timestamp value , TiFlash only support timestamp after 1970-01-01 00:00:00)");
             }
