@@ -681,6 +681,11 @@ void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & tim
     MyDateTime from_my_time(from_time);
     time_t epoch = time_zone_from.makeDateTime(
         from_my_time.year, from_my_time.month, from_my_time.day, from_my_time.hour, from_my_time.minute, from_my_time.second);
+    if
+        unlikely(epoch + time_zone_to.getOffsetAtStartEpoch() < 0)
+        {
+            throw Exception("Unsupported timestamp value , TiFlash only support timestamp after 1970-01-01 00:00:00)");
+        }
     MyDateTime to_my_time(time_zone_to.toYear(epoch), time_zone_to.toMonth(epoch), time_zone_to.toDayOfMonth(epoch),
         time_zone_to.toHour(epoch), time_zone_to.toMinute(epoch), time_zone_to.toSecond(epoch), from_my_time.micro_second);
     to_time = to_my_time.toPackedUInt();
@@ -697,6 +702,8 @@ void convertTimeZoneByOffset(UInt64 from_time, UInt64 & to_time, Int64 offset, c
     time_t epoch = time_zone.makeDateTime(
         from_my_time.year, from_my_time.month, from_my_time.day, from_my_time.hour, from_my_time.minute, from_my_time.second);
     epoch += offset;
+    if
+        unlikely(epoch < 0) { throw Exception("Unsupported timestamp value , TiFlash only support timestamp after 1970-01-01 00:00:00)"); }
     MyDateTime to_my_time(time_zone.toYear(epoch), time_zone.toMonth(epoch), time_zone.toDayOfMonth(epoch), time_zone.toHour(epoch),
         time_zone.toMinute(epoch), time_zone.toSecond(epoch), from_my_time.micro_second);
     to_time = to_my_time.toPackedUInt();
