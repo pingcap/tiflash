@@ -351,7 +351,7 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
     auto type = request.cmd_type();
     switch (request.cmd_type())
     {
-        // CompactLog | VerifyHash | ComputeHash won't change region range, there is no need to occupy task lock of kvstore.
+        // CompactLog | VerifyHash | ComputeHash won't change region meta, there is no need to occupy task lock of kvstore.
         case raft_cmdpb::AdminCmdType::CompactLog:
         case raft_cmdpb::AdminCmdType::VerifyHash:
         case raft_cmdpb::AdminCmdType::ComputeHash:
@@ -366,7 +366,6 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
 
     {
         auto region_task_lock = region_manager.genRegionTaskLock(curr_region_id);
-        bool sync_log = true;
         const RegionPtr curr_region_ptr = getRegion(curr_region_id);
         if (curr_region_ptr == nullptr)
         {
@@ -393,11 +392,8 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
         };
 
         const auto persist_and_sync = [&](const Region & region) {
-            if (sync_log)
-            {
-                tryFlushRegionCacheInStorage(tmt, region, log);
-                persistRegion(region, region_task_lock);
-            }
+            tryFlushRegionCacheInStorage(tmt, region, log);
+            persistRegion(region, region_task_lock);
         };
 
         const auto handle_batch_split = [&](Regions & split_regions) {
@@ -479,7 +475,6 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
         {
             case RaftCommandResult::Type::IndexError:
             {
-                sync_log = true;
                 if (type == raft_cmdpb::AdminCmdType::CommitMerge)
                 {
                     if (auto source_region = getRegion(request.commit_merge().source().id()); source_region)
@@ -511,7 +506,7 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
                 throw Exception("Unsupported RaftCommandResult", ErrorCodes::LOGICAL_ERROR);
         }
 
-        return sync_log ? TiFlashApplyRes::Persist : TiFlashApplyRes::None;
+        return TiFlashApplyRes::Persist;
     }
 }
 } // namespace DB
