@@ -31,7 +31,7 @@ namespace DM
 /// For example, the max capacity of leaf node would be: M * S.
 static constexpr size_t DT_S = 3;
 static constexpr size_t DT_M = 55;
-static constexpr size_t DT_F = 13;
+static constexpr size_t DT_F = 20;
 
 using Ids = std::vector<UInt64>;
 

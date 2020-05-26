@@ -343,8 +343,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     const std::string path = all_normal_path[0];
     TiFlashRaftConfig raft_config(path, config(), log);
     // Use pd address to define which default_database we use by defauly.
-    // For mock test, we use "default". For deployed with pd/tidb/tikv use "db_1" , whose name is "test" in TiDB.
-    std::string default_database = config().getString("default_database", raft_config.pd_addrs.empty() ? "default" : "db_1");
+    // For mock test, we use "default". For deployed with pd/tidb/tikv use "system", which is always exist in TiFlash.
+    std::string default_database = config().getString("default_database", raft_config.pd_addrs.empty() ? "default" : "system");
     global_context->setPath(path);
     global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
 
@@ -625,6 +625,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         /// Init and register flash service.
         flash_service = std::make_unique<FlashService>(*this);
         diagnostics_service = std::make_unique<DiagnosticsService>(*this);
+        builder.SetOption(grpc::MakeChannelArgumentOption("grpc.http2.min_ping_interval_without_data_ms", 10 * 1000));
+        builder.SetOption(grpc::MakeChannelArgumentOption("grpc.http2.min_time_between_pings_ms", 10 * 1000));
         builder.RegisterService(flash_service.get());
         LOG_INFO(log, "Flash service registered");
         builder.RegisterService(diagnostics_service.get());

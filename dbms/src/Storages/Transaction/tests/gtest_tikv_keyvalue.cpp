@@ -58,20 +58,22 @@ TEST(TiKVKeyValue_test, DISABLED_PortedTests)
     {
         auto lock_value
             = RecordKVFormat::encodeLockCfValue(Region::PutFlag, "primary key", 421321, std::numeric_limits<UInt64>::max(), "value");
-        auto [lock_type, primary, ts, ttl] = RecordKVFormat::decodeLockCfValue(lock_value);
+        auto [lock_type, primary, ts, ttl, min_commit_ts] = RecordKVFormat::decodeLockCfValue(lock_value);
         ASSERT_TRUE(Region::PutFlag == lock_type);
         ASSERT_TRUE("primary key" == primary);
         ASSERT_TRUE(421321 == ts);
         ASSERT_TRUE(std::numeric_limits<UInt64>::max() == ttl);
+        ASSERT_TRUE(0 == min_commit_ts);
     }
 
     {
         auto lock_value = RecordKVFormat::encodeLockCfValue(Region::PutFlag, "primary key", 421321, std::numeric_limits<UInt64>::max());
-        auto [lock_type, primary, ts, ttl] = RecordKVFormat::decodeLockCfValue(lock_value);
+        auto [lock_type, primary, ts, ttl, min_commit_ts] = RecordKVFormat::decodeLockCfValue(lock_value);
         ASSERT_TRUE(Region::PutFlag == lock_type);
         ASSERT_TRUE("primary key" == primary);
         ASSERT_TRUE(421321 == ts);
         ASSERT_TRUE(std::numeric_limits<UInt64>::max() == ttl);
+        ASSERT_TRUE(0 == min_commit_ts);
     }
 
     {
