@@ -70,7 +70,7 @@ bool LogIterator::match(const LogMessage & log_msg) const
     auto & content = log_msg.message();
     for (auto & regex : patterns)
     {
-        if (!RE2::FullMatch(content, regex))
+        if (!RE2::PartialMatch(content, regex))
             return false;
     }
 
