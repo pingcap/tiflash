@@ -324,20 +324,20 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
             case raft_cmdpb::AdminCmdType::CompactLog:
             {
                 if (curr_region.lastCompactLogTime() + REGION_COMPACT_LOG_PERIOD.load(std::memory_order_relaxed) > Clock::now())
+                {
                     sync_log = false;
+                    LOG_DEBUG(log, curr_region.toString(false) << " ignore compact log cmd");
+                }
                 else
                 {
                     curr_region.markCompactLog();
-                    LOG_INFO(log, curr_region.toString(true) << " make proxy compact log");
                 }
                 break;
             }
             case raft_cmdpb::AdminCmdType::VerifyHash:
             case raft_cmdpb::AdminCmdType::ComputeHash:
             {
-                static const Seconds REGION_MAX_PERSIST_PERIOD(60 * 20);
-                if (curr_region.lastPersistTime() + REGION_MAX_PERSIST_PERIOD > Clock::now())
-                    sync_log = false;
+                sync_log = false;
                 break;
             }
             default:
