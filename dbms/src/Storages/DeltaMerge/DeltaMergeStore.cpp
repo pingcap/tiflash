@@ -224,7 +224,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
     for (auto & [end, segment] : segments)
     {
         (void)end;
-        background_tasks.addTask(BackgroundTask{TaskType::PlaceIndex, dm_context, segment, {}}, ThreadType::Init, log);
+        checkSegmentUpdate(dm_context, segment, ThreadType::Init);
     }
 
     gc_handle              = background_pool.addTask([this] { return storage_pool.gc(); });
