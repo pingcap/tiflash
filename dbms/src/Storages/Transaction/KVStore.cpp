@@ -313,6 +313,11 @@ TiFlashApplyRes KVStore::handleUselessAdminRaftCmd(
     }
 
     auto & curr_region = *curr_region_ptr;
+
+    LOG_INFO(log,
+        curr_region.toString(false) << "handle useless admin command " << raft_cmdpb::AdminCmdType_Name(cmd_type) << " at [term: " << term
+                                    << ", index: " << index << "]");
+
     curr_region.handleWriteRaftCmd({}, index, term, tmt);
 
     if (cmd_type != raft_cmdpb::AdminCmdType::CompactLog)
