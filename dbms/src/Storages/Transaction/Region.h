@@ -122,9 +122,6 @@ public:
     size_t writeCFCount() const;
     std::string dataInfo() const;
 
-    void markPersisted() const;
-    Timepoint lastPersistTime() const;
-
     void markCompactLog() const;
     Timepoint lastCompactLogTime() const;
 
