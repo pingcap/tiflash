@@ -65,7 +65,10 @@ FsStats PathCapacityMetrics::getFsStats() const
     {
         FsStats path_stat = path_infos[i].getStats(log);
         if (!path_stat.ok)
+        {
+            LOG_WARNING(log, "Can not get path_stat for path: " << path_infos[i].path);
             return total_stat;
+        }
 
         // sum of all path's capacity
         total_stat.capacity_size += path_stat.capacity_size;
@@ -78,6 +81,8 @@ FsStats PathCapacityMetrics::getFsStats() const
     // appromix used size, make pd happy
     // all capacity * max used rate
     total_stat.used_size = total_stat.capacity_size * max_used_rate;
+    // PD get weird if used_size == 0, make it 1 byte at least
+    total_stat.used_size = std::max(1, total_stat.used_size);
 
     // appromix avail size
     total_stat.avail_size = total_stat.capacity_size - total_stat.used_size;
