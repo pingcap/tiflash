@@ -13,6 +13,7 @@
 #define DATE_LUT_MIN_YEAR 1970
 #define DATE_LUT_MAX_YEAR 2105 /// Last supported year
 #define DATE_LUT_YEARS (1 + DATE_LUT_MAX_YEAR - DATE_LUT_MIN_YEAR) /// Number of years in lookup table
+#define SECONDS_PER_DAY (3600 * 24)
 
 #if defined(__PPC__)
 #if !__clang__
@@ -81,6 +82,11 @@ private:
     time_t offset_at_start_of_epoch;
     bool offset_is_whole_number_of_hours_everytime;
 
+    /// DateLUT only support local time after 1970-01-01 00:00:00, but MySQL/TiDB support UTC time after
+    /// 1970-01-01 00:00:00. In some timezone(like America/Chicago), UTC time 1970-01-01 may fall into
+    /// 1969-12-31 in local time, so need to support day 1969-12-31
+    Values day_1969_12_31;
+
     /// Time zone name.
     std::string time_zone;
 
@@ -106,6 +112,8 @@ private:
 
     inline const Values & find(time_t t) const
     {
+        if (unlikely(t + offset_at_start_of_epoch < 0))
+            return day_1969_12_31;
         return lut[findIndex(t)];
     }
 
@@ -255,6 +263,11 @@ public:
 
     inline unsigned toHour(time_t t) const
     {
+        if (unlikely(t + offset_at_start_of_epoch < 0))
+        {
+            /// this requires all the timezone does not have DTS in 1969-12-31
+            return (t + offset_at_start_of_epoch + SECONDS_PER_DAY) / 3600;
+        }
         DayNum_t index = findIndex(t);
 
         /// If it is not 1970 year (findIndex found nothing appropriate),
@@ -282,10 +295,18 @@ public:
       *  each minute, with added or subtracted leap second, spans exactly 60 unix timestamps.
       */
 
-    inline unsigned toSecond(time_t t) const { return t % 60; }
+    inline unsigned toSecond(time_t t) const {
+        if (unlikely(t + offset_at_start_of_epoch < 0))
+            return (t + offset_at_start_of_epoch + SECONDS_PER_DAY) % 60;
+        return t % 60;
+    }
 
     inline unsigned toMinute(time_t t) const
     {
+        if (unlikely(t + offset_at_start_of_epoch < 0))
+        {
+            return (t + offset_at_start_of_epoch + SECONDS_PER_DAY) / 60 % 60;
+        }
         if (offset_is_whole_number_of_hours_everytime)
             return (t / 60) % 60;
 
