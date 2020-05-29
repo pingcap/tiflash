@@ -212,7 +212,7 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
                 if (func_name_lowercase == "notin")
                 {
                     // notin is transformed into not(in()) by tidb
-                    expr->set_sig(tipb::ScalarFuncSig::UnaryNotInt);
+                    expr->set_sig(tipb::ScalarFuncSig::UnaryNot);
                     auto * ft = expr->mutable_field_type();
                     ft->set_tp(TiDB::TypeLongLong);
                     ft->set_flag(TiDB::ColumnFlagUnsigned);
