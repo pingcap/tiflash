@@ -145,4 +145,12 @@ DateLUTImpl::DateLUTImpl(const std::string & time_zone_)
             years_months_lut[(values.year - DATE_LUT_MIN_YEAR) * 12 + values.month - 1] = day;
         }
     }
+    day_1969_12_31.year = 1969;
+    day_1969_12_31.month = 12;
+    day_1969_12_31.day_of_month = 31;
+    day_1969_12_31.days_in_month = 31;
+    // day of week starts from 1
+    day_1969_12_31.day_of_week = (lut[0].day_of_week - 1 - 1 + 7) % 7 + 1;
+    day_1969_12_31.time_at_offset_change = 0;
+    day_1969_12_31.amount_of_offset_change = 0;
 }
