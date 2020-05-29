@@ -111,6 +111,9 @@ private:
 
 public:
     const std::string & getTimeZone() const { return time_zone; }
+    time_t getOffsetAtStartEpoch() const {
+        return offset_at_start_of_epoch;
+    }
 
     /// All functions below are thread-safe; arguments are not checked.
 

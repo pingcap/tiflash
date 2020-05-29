@@ -89,7 +89,7 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
     static const std::string & COMPACT_LOG_MIN_PERIOD = "flash.compact_log_min_period";
 
     getRegionTable().setTableCheckerThreshold(config.getDouble(TABLE_OVERLAP_THRESHOLD, 0.6));
-    getKVStore()->setRegionCompactLogPeriod(Seconds{config.getUInt64(COMPACT_LOG_MIN_PERIOD, 200)});
+    getKVStore()->setRegionCompactLogPeriod(Seconds{config.getUInt64(COMPACT_LOG_MIN_PERIOD, 0)});
 }
 
 const std::atomic_bool & TMTContext::getTerminated() const { return terminated; }
