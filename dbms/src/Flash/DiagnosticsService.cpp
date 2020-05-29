@@ -2,14 +2,9 @@
 #include <Flash/DiagnosticsService.h>
 #include <Flash/LogSearch.h>
 
-#include <Poco/File.h>
 #include <Poco/Path.h>
-#include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/predicate.hpp>
 
-#include <fstream>
-#include <regex>
-#include <thread>
+#include <re2/re2.h>
 
 #ifdef __linux__
 // #include <arpa/inet.h>
@@ -73,14 +68,13 @@ void getMemoryInfo(MemoryInfo & memory_info)
     }
     std::ifstream file("/proc/meminfo");
     std::string line;
-    const std::regex pattern("([\\w\\(\\)]+):\\s+([0-9]+).*");
-    std::smatch sub_matches;
     while (std::getline(file, line))
     {
-        if (std::regex_match(line, sub_matches, pattern))
+        std::string name;
+        std::string kb_str;
+        if (RE2::FullMatch(line, "([\\w\\(\\)]+):\\s+([0-9]+).*", &name, &kb_str))
         {
-            std::string name = sub_matches[1].str();
-            uint64_t kb = std::stoul(sub_matches[2].str());
+            uint64_t kb = std::stoul(kb_str);
             memory_info.emplace(name, kb);
         }
     }
@@ -300,7 +294,7 @@ std::vector<DiagnosticsService::Disk> getAllDisks()
     {
         boost::trim_left(line);
         if (boost::starts_with(line, "/dev/sd") || boost::starts_with(line, "/dev/nvme") || boost::starts_with(line, "/dev/mapper")
-            || boost::starts_with(line, "/dev/root") || boost::starts_with(line, "/dev/mmcblk"))
+            || boost::starts_with(line, "/dev/root") || boost::starts_with(line, "/dev/mmcblk") || boost::starts_with(line, "/dev-mapper"))
         {
             std::vector<std::string> values;
             boost::split(values, line, boost::is_any_of(" "), boost::token_compress_on);
@@ -390,7 +384,8 @@ std::vector<DiagnosticsService::Disk> getAllDisks()
 
 } // namespace
 
-void DiagnosticsService::cpuLoadInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items)
+void DiagnosticsService::cpuLoadInfo(
+    std::optional<DiagnosticsService::LinuxCpuTime> prev_cpu_time, std::vector<diagnosticspb::ServerInfoItem> & server_info_items)
 {
     {
         Poco::File stat_file("/proc/stat");
@@ -428,37 +423,58 @@ void DiagnosticsService::cpuLoadInfo(std::vector<diagnosticspb::ServerInfoItem> 
 
     // Get CPU stats
     {
-        std::ifstream file("/proc/stat");
-        std::vector<std::string> names{"user", "nice", "system", "idle", "iowait", "irq", "softirq", "steal", "guest", "guest_nice"};
-
-        std::string line;
-        while (std::getline(file, line))
+        if (!prev_cpu_time)
         {
-            std::vector<std::string> values;
-            boost::split(values, line, boost::is_any_of(" "), boost::token_compress_on);
-            if (!boost::starts_with(values[0], "cpu"))
-            {
-                continue;
-            }
-            std::vector<ServerInfoPair> pairs;
-            for (size_t i = 0; i < names.size(); i++)
-            {
-                ServerInfoPair pair;
-                pair.set_key(names[i]);
-                pair.set_value(values[i]);
-                pairs.emplace_back(std::move(pair));
-            }
-            ServerInfoItem item;
-            item.set_tp("cpu");
-            item.set_name(values[0]);
-            for (auto pair : pairs)
-            {
-                auto added_pair = item.add_pairs();
-                added_pair->set_key(pair.key());
-                added_pair->set_value(pair.value());
-            }
-            server_info_items.emplace_back(std::move(item));
+            return;
         }
+
+        auto cpu_time = LinuxCpuTime::current();
+        if (!cpu_time || cpu_time->total() == 0)
+        {
+            return;
+        }
+
+        LinuxCpuTime delta;
+        delta.user = cpu_time->user - prev_cpu_time->user;
+        delta.nice = cpu_time->nice - prev_cpu_time->nice;
+        delta.system = cpu_time->system - prev_cpu_time->system;
+        delta.idle = cpu_time->idle - prev_cpu_time->idle;
+        delta.iowait = cpu_time->iowait - prev_cpu_time->iowait;
+        delta.irq = cpu_time->irq - prev_cpu_time->irq;
+        delta.softirq = cpu_time->softirq - prev_cpu_time->softirq;
+        delta.steal = cpu_time->steal - prev_cpu_time->steal;
+        delta.guest = cpu_time->guest - prev_cpu_time->guest;
+        delta.guest_nice = cpu_time->guest_nice - prev_cpu_time->guest_nice;
+
+        double delta_total = static_cast<double>(delta.total());
+
+        std::vector<std::pair<std::string, double>> data{{"user", static_cast<double>(delta.user) / delta_total},
+            {"nice", static_cast<double>(delta.nice) / delta_total}, {"system", static_cast<double>(delta.system) / delta_total},
+            {"idle", static_cast<double>(delta.idle) / delta_total}, {"iowait", static_cast<double>(delta.iowait) / delta_total},
+            {"irq", static_cast<double>(delta.irq) / delta_total}, {"softirq", static_cast<double>(delta.softirq) / delta_total},
+            {"steal", static_cast<double>(delta.steal) / delta_total}, {"guest", static_cast<double>(delta.guest) / delta_total},
+            {"guest_nice", static_cast<double>(delta.guest_nice) / delta_total}};
+
+        std::vector<ServerInfoPair> pairs;
+        for (auto p : data)
+        {
+            ServerInfoPair pair;
+            pair.set_key(p.first);
+            char buff[20];
+            std::sprintf(buff, "%.2lf", p.second);
+            pair.set_value(buff);
+            pairs.emplace_back(std::move(pair));
+        }
+        ServerInfoItem item;
+        item.set_tp("cpu");
+        item.set_name("usage");
+        for (auto pair : pairs)
+        {
+            auto added_pair = item.add_pairs();
+            added_pair->set_key(pair.key());
+            added_pair->set_value(pair.value());
+        }
+        server_info_items.emplace_back(std::move(item));
     }
 }
 
@@ -639,10 +655,10 @@ void DiagnosticsService::ioLoadInfo(
     }
 }
 
-void DiagnosticsService::loadInfo(
-    const NICInfo & prev_nic, const IOInfo & prev_io, std::vector<diagnosticspb::ServerInfoItem> & server_info_items)
+void DiagnosticsService::loadInfo(std::optional<DiagnosticsService::LinuxCpuTime> prev_cpu_time, const NICInfo & prev_nic,
+    const IOInfo & prev_io, std::vector<diagnosticspb::ServerInfoItem> & server_info_items)
 {
-    cpuLoadInfo(server_info_items);
+    cpuLoadInfo(prev_cpu_time, server_info_items);
     memLoadInfo(server_info_items);
     (void)prev_nic;
     (void)prev_io;
@@ -776,6 +792,7 @@ void DiagnosticsService::processInfo(std::vector<diagnosticspb::ServerInfoItem> 
     auto tp = request->tp();
     std::vector<ServerInfoItem> items;
 
+    std::optional<LinuxCpuTime> cpu_info;
     IOInfo io_info;
     NICInfo nic_info;
 
@@ -783,15 +800,16 @@ void DiagnosticsService::processInfo(std::vector<diagnosticspb::ServerInfoItem> 
     {
         // io_info = getIOInfo();
         // nic_info = getNICInfo();
+        cpu_info = LinuxCpuTime::current();
         // Sleep 100ms to sample
-        std::this_thread::sleep_for(std::chrono::microseconds(100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
 
     switch (tp)
     {
         case ServerInfoType::LoadInfo:
         {
-            loadInfo(nic_info, io_info, items);
+            loadInfo(cpu_info, nic_info, io_info, items);
             break;
         }
         case ServerInfoType::HardwareInfo:
@@ -806,7 +824,7 @@ void DiagnosticsService::processInfo(std::vector<diagnosticspb::ServerInfoItem> 
         }
         case ServerInfoType::All:
         {
-            loadInfo(nic_info, io_info, items);
+            loadInfo(cpu_info, nic_info, io_info, items);
             hardwareInfo(items);
             systemInfo(items);
             break;
@@ -861,8 +879,7 @@ catch (const Exception & e)
     int64_t end_time = request->end_time();
     if (end_time == 0)
     {
-        // default to now
-        end_time = std::chrono::milliseconds(std::time(NULL)).count();
+        end_time = std::numeric_limits<int64_t>::max();
     }
     std::vector<LogLevel> levels;
     for (auto level : request->levels())
