@@ -90,6 +90,7 @@ struct SetMethodString
         const ColumnString::Offsets * offsets;
         const ColumnString::Chars_t * chars;
         std::shared_ptr<TiDB::ITiDBCollator> collator;
+        String sort_key;
 
         void init(const ColumnRawPtrs & key_columns, std::shared_ptr<TiDB::ITiDBCollator> collator_)
         {
@@ -98,6 +99,7 @@ struct SetMethodString
             const ColumnString & column_string = static_cast<const ColumnString &>(column);
             offsets = &column_string.getOffsets();
             chars = &column_string.getChars();
+            sort_key.reserve(1024);
         }
 
         Key getKey(
@@ -120,11 +122,9 @@ struct SetMethodString
             Key key = StringRef(
                        &(*chars)[i == 0 ? 0 : (*offsets)[i - 1]],
                        (i == 0 ? (*offsets)[i] : ((*offsets)[i] - (*offsets)[i - 1])) - 1);
-            std::string sort_key;
             if (collator != nullptr)
             {
-                sort_key = collator->sortKey(key.data, key.size);
-                key = StringRef(sort_key.data(), sort_key.length());
+                key = collator->sortKey(key.data, key.size, sort_key);
             }
             typename Data::iterator it;
             bool inserted;
@@ -139,11 +139,9 @@ struct SetMethodString
             Key key = StringRef(
                     &(*chars)[i == 0 ? 0 : (*offsets)[i - 1]],
                     (i == 0 ? (*offsets)[i] : ((*offsets)[i] - (*offsets)[i - 1])) - 1);
-            std::string sort_key;
             if (collator != nullptr)
             {
-                sort_key = collator->sortKey(key.data, key.size);
-                key = StringRef(sort_key.data(), sort_key.length());
+                key = collator->sortKey(key.data, key.size, sort_key);
             }
             return set_data.has(key);
         }

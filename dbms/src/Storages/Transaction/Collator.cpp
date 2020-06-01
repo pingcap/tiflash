@@ -151,6 +151,19 @@ public:
             return std::string(s, length);
     }
 
+    StringRef sortKey(const char * s, size_t length, std::string &) const override
+    {
+        if constexpr (padding)
+        {
+            auto v = rtrim(s, length);
+            return StringRef(v.data(), v.length());
+        }
+        else
+        {
+            return StringRef(s, length);
+        }
+    }
+
     std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<BinCollator<padding>>>(); }
 
     const std::string & getLocale() const override { return name; }
@@ -218,6 +231,24 @@ public:
         }
 
         return buf.str();
+    }
+
+    StringRef sortKey(const char * s, size_t length, std::string & container) const override
+    {
+        auto v = rtrim(s, length);
+        UCharIterator iter;
+        uiter_setUTF8(&iter, v.data(), v.length());
+        auto c = uiter_next32(&iter);
+        size_t i = 0;
+        while (c != U_SENTINEL)
+        {
+            auto sk = weight(c);
+            container[i++] = char(sk >> 8);
+            container[i++] = char(sk);
+            c = uiter_next32(&iter);
+        }
+
+        return StringRef(container.data(), i);
     }
 
     std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<GeneralCICollator>>(); }
