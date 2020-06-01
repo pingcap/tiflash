@@ -1,6 +1,5 @@
 #include <Common/Exception.h>
 #include <Storages/Transaction/Collator.h>
-#include <unicode/uiter.h>
 
 #include <sstream>
 
@@ -19,7 +18,8 @@ std::string_view rtrim(const char * s, size_t length)
     return end == std::string_view::npos ? "" : v.substr(0, end + 1);
 }
 
-int signum(int val) { return (0 < val) - (val < 0); }
+template <typename T>
+int signum(T val) { return (0 < val) - (val < 0); }
 
 template <typename Collator>
 class Pattern : public ITiDBCollator::IPattern
@@ -170,6 +170,8 @@ public:
 
 private:
     const std::string name = padding ? "BinaryPadding" : "Binary";
+
+private:
     static inline std::string_view decode(const char * s, size_t length) { return std::string_view(s, length); }
 
     using WeightType = char;
@@ -193,24 +195,19 @@ public:
         auto v1 = rtrim(s1, length1);
         auto v2 = rtrim(s2, length2);
 
-        UCharIterator iter1, iter2;
-        uiter_setUTF8(&iter1, v1.data(), v1.length());
-        uiter_setUTF8(&iter2, v2.data(), v2.length());
-        auto c1 = uiter_next32(&iter1);
-        auto c2 = uiter_next32(&iter2);
-        while (c1 != U_SENTINEL && c2 != U_SENTINEL)
+        size_t offset1 = 0, offset2 = 0;
+        while (offset1 < v1.length() && offset2 < v2.length())
         {
+            auto c1 = decodeChar(s1, offset1);
+            auto c2 = decodeChar(s2, offset2);
             auto sk1 = weight(c1);
             auto sk2 = weight(c2);
             auto cmp = sk1 - sk2;
             if (cmp != 0)
                 return signum(cmp);
-
-            c1 = uiter_next32(&iter1);
-            c2 = uiter_next32(&iter2);
         }
 
-        return signum(c1 - c2);
+        return signum((offset1 - v1.length()) - (offset2 - v2.length()));
     }
 
     std::string sortKey(const char * s, size_t length) const override
@@ -218,16 +215,13 @@ public:
         auto v = rtrim(s, length);
         std::stringbuf buf;
 
-        UCharIterator iter;
-        uiter_setUTF8(&iter, v.data(), v.length());
-        auto c = uiter_next32(&iter);
-        while (c != U_SENTINEL)
+        size_t offset = 0;
+        while (offset < v.length())
         {
+            auto c = decodeChar(s, offset);
             auto sk = weight(c);
             buf.sputc(char(sk >> 8));
             buf.sputc(char(sk));
-
-            c = uiter_next32(&iter);
         }
 
         return buf.str();
@@ -236,16 +230,16 @@ public:
     StringRef sortKey(const char * s, size_t length, std::string & container) const override
     {
         auto v = rtrim(s, length);
-        UCharIterator iter;
-        uiter_setUTF8(&iter, v.data(), v.length());
-        auto c = uiter_next32(&iter);
+        std::stringbuf buf;
+
+        size_t offset = 0;
         size_t i = 0;
-        while (c != U_SENTINEL)
+        while (offset < v.length())
         {
+            auto c = decodeChar(s, offset);
             auto sk = weight(c);
             container[i++] = char(sk >> 8);
             container[i++] = char(sk);
-            c = uiter_next32(&iter);
         }
 
         return StringRef(container.data(), i);
@@ -256,20 +250,21 @@ public:
     const std::string & getLocale() const override { return name; }
 
 private:
-    using CharType = UChar32;
-    using StringType = std::vector<CharType>;
     const std::string name = "GeneralCI";
+
+private:
+    using CharType = int32_t;
+    using StringType = std::vector<CharType>;
     static inline StringType decode(const char * s, size_t length)
     {
         StringType decoded;
         decoded.reserve(length);
-        UCharIterator iter;
-        uiter_setUTF8(&iter, s, length);
-        auto c = uiter_next32(&iter);
-        while (c != U_SENTINEL)
+
+        size_t offset = 0;
+        while (offset < length)
         {
+            auto c = decodeChar(s, offset);
             decoded.push_back(c);
-            c = uiter_next32(&iter);
         }
         return decoded;
     }
@@ -288,6 +283,51 @@ private:
     }
 
     friend class Pattern<GeneralCICollator>;
+
+private:
+    // first byte of a 2-byte encoding starts 110 and carries 5 bits of data
+    static constexpr uint8_t b2_mask = 0x1F; // 0001 1111
+
+    // first byte of a 3-byte encoding starts 1110 and carries 4 bits of data
+    static constexpr uint8_t b3_mask = 0x0F; // 0000 1111
+
+    // first byte of a 4-byte encoding starts 11110 and carries 3 bits of data
+    static constexpr uint8_t b4_mask = 0x07; // 0000 0111
+
+    // non-first bytes start 10 and carry 6 bits of data
+    static constexpr uint8_t mb_mask = 0x3F; // 0011 1111
+
+    static inline CharType decodeChar(const char * s, size_t & offset)
+    {
+        uint8_t b0 = s[offset];
+        if (b0 < 0x80)
+        {
+            auto c = static_cast<CharType>(b0);
+            offset += 1;
+            return c;
+        }
+        if (b0 < 0xE0)
+        {
+            auto c = static_cast<CharType>(b0 & b2_mask) << 6 |
+                    static_cast<CharType>(s[1 + offset] & mb_mask);
+            offset += 2;
+            return c;
+        }
+        if (b0 < 0xF0)
+        {
+            auto c = static_cast<CharType>(b0 & b3_mask) << 12 |
+                   static_cast<CharType>(s[1 + offset] & mb_mask) << 6 |
+                   static_cast<CharType>(s[2 + offset] & mb_mask);
+            offset += 3;
+            return c;
+        }
+        auto c = static_cast<CharType>(b0 & b4_mask) << 18 |
+               static_cast<CharType>(s[1 + offset] & mb_mask) << 12 |
+               static_cast<CharType>(s[2 + offset] & mb_mask) << 6 |
+               static_cast<CharType>(s[3 + offset] & mb_mask);
+        offset += 4;
+        return c;
+    }
 };
 
 std::unique_ptr<ITiDBCollator> ITiDBCollator::getCollator(int32_t id)
