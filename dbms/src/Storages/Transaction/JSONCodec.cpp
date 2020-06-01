@@ -275,4 +275,17 @@ void SkipJson(size_t & cursor, const String & raw_value) { DecodeJson<false>(cur
 
 String DecodeJsonAsBinary(size_t & cursor, const String & raw_value) { return DecodeJson<true>(cursor, raw_value); }
 
+UInt64 GetJsonLength(std::string_view raw_value)
+{
+    switch (raw_value[0]) // JSON Root element type
+    {
+        case TYPE_CODE_OBJECT:
+            return *(reinterpret_cast<const UInt32 *>(&raw_value[1]));
+        case TYPE_CODE_ARRAY:
+            return *(reinterpret_cast<const UInt32 *>(&raw_value[1]));
+        default:
+            return 1;
+    }
+}
+
 } // namespace DB
