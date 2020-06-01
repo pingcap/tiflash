@@ -80,6 +80,9 @@ void testCollator()
         const std::string & ans = std::get<Collator::collation_case>(c.second);
         std::cout << "Sort key case (" << s << ", " << ans << ")" << std::endl;
         ASSERT_EQ(collator->sortKey(s.data(), s.length()), ans);
+        std::string buf;
+        buf.reserve(1024);
+        ASSERT_EQ(collator->sortKey(s.data(), s.length(), buf).toString(), ans);
     }
     auto pattern = collator->pattern();
     for (const auto & c : CollatorCases::pattern_cases)
