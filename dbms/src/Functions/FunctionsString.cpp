@@ -701,6 +701,56 @@ public:
     }
 };
 
+extern UInt64 GetJsonLength(std::string_view sv);
+
+class FunctionJsonLength : public IFunction
+{
+public:
+    static constexpr auto name = "jsonLength";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionJsonLength>(); }
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 1; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!arguments[0]->isStringOrFixedString())
+            throw Exception(
+                "Illegal type " + arguments[0]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        return std::make_shared<DataTypeUInt64>();
+    }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    {
+        const ColumnPtr column = block.getByPosition(arguments[0]).column;
+        if (const ColumnString * col = checkAndGetColumn<ColumnString>(column.get()))
+        {
+            auto col_res = ColumnUInt64::create();
+            typename ColumnUInt64::Container & vec_col_res = col_res->getData();
+            {
+                const auto & data = col->getChars();
+                const auto & offsets = col->getOffsets();
+                const size_t size = offsets.size();
+                vec_col_res.resize(size);
+
+                ColumnString::Offset prev_offset = 0;
+                for (size_t i = 0; i < size; ++i)
+                {
+                    std::string_view sv(reinterpret_cast<const char *>(&data[prev_offset]), offsets[i] - prev_offset - 1);
+                    vec_col_res[i] = GetJsonLength(sv);
+                    prev_offset = offsets[i];
+                }
+            }
+            block.getByPosition(result).column = std::move(col_res);
+        }
+        else
+            throw Exception("Illegal column " + column->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_COLUMN);
+    }
+};
 
 template <typename Name, bool is_injective>
 class ConcatImpl : public IFunction
@@ -2555,5 +2605,6 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionSubstring>();
     factory.registerFunction<FunctionSubstringUTF8>();
     factory.registerFunction<FunctionAppendTrailingCharIfAbsent>();
+    factory.registerFunction<FunctionJsonLength>();
 }
 }
