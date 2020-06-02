@@ -1,5 +1,6 @@
 #include <Common/Exception.h>
 #include <Storages/Transaction/Collator.h>
+#include <Storages/Transaction/CollationLUT.h>
 
 namespace DB::ErrorCodes
 {
@@ -175,11 +176,6 @@ private:
     friend class Pattern<BinCollator>;
 };
 
-namespace GeneralCI
-{
-extern const uint16_t * weight_lut[];
-}
-
 class GeneralCICollator : public ITiDBCollator
 {
 public:
@@ -267,13 +263,10 @@ private:
     }
 
     using WeightType = uint16_t;
-    static inline WeightType weight(CharType c)
-    {
+    static inline WeightType weight(CharType c) {
         if (c > 0xFFFF)
             return 0xFFFD;
-
-        auto cell = GeneralCI::weight_lut[c >> 8][c & 0xFF];
-        return (cell >> 8) == 0xFE ? uint16_t(c) : cell;
+        return GeneralCI::weight_lut[c >> 8][c & 0xFF];
     }
 
     friend class Pattern<GeneralCICollator>;
