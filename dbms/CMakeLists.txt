@@ -185,9 +185,7 @@ if (NOT USE_INTERNAL_RE2_LIBRARY)
     target_include_directories (dbms BEFORE PRIVATE ${RE2_INCLUDE_DIR})
 endif ()
 
-if (NOT USE_INTERNAL_BOOST_LIBRARY)
-    target_include_directories (clickhouse_common_io BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
-endif ()
+target_include_directories (clickhouse_common_io BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
 
 if (Poco_SQLODBC_FOUND)
     target_link_libraries (clickhouse_common_io ${Poco_SQL_LIBRARY})
