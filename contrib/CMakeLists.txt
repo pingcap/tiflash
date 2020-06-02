@@ -167,8 +167,4 @@ if (USE_INTERNAL_POCO_LIBRARY)
     endif ()
 endif ()
 
-if (ENABLE_ICU AND USE_INTERNAL_ICU_LIBRARY)
-    add_subdirectory (icu-cmake)
-endif ()
-
 add_subdirectory (prometheus-cpp)

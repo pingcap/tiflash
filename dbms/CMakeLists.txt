@@ -223,7 +223,7 @@ endif()
 target_link_libraries (dbms ${Poco_Foundation_LIBRARY})
 
 if (USE_ICU)
-    target_link_libraries (dbms ${ICU_LIBRARIES})
+    target_link_libraries (dbms ${ICU_LIBS})
     target_include_directories (dbms PRIVATE ${ICU_INCLUDE_DIR})
 endif ()
 
