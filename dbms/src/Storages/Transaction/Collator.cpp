@@ -1,6 +1,6 @@
 #include <Common/Exception.h>
-#include <Storages/Transaction/Collator.h>
 #include <Storages/Transaction/CollationLUT.h>
+#include <Storages/Transaction/Collator.h>
 
 namespace DB::ErrorCodes
 {
@@ -263,10 +263,9 @@ private:
     }
 
     using WeightType = uint16_t;
-    static inline WeightType weight(CharType c) {
-        if (c > 0xFFFF)
-            return 0xFFFD;
-        return GeneralCI::weight_lut[c >> 8][c & 0xFF];
+    static inline WeightType weight(CharType c)
+    {
+        return !!(c >> 16) * 0xFFFD + (1 - !!(c >> 16)) * GeneralCI::weight_lut[c >> 8][c & 0xFF];
     }
 
     friend class Pattern<GeneralCICollator>;
