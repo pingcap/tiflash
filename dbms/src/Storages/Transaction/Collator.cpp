@@ -1,8 +1,5 @@
 #include <Common/Exception.h>
-#include <IO/Endian.h>
 #include <Storages/Transaction/Collator.h>
-
-#include <sstream>
 
 namespace DB::ErrorCodes
 {
@@ -34,23 +31,25 @@ public:
         weights.clear();
         match_types.clear();
 
-        const auto & decoded = Collator::decode(pattern.data(), pattern.length());
-        weights.reserve(decoded.size());
-        match_types.reserve(decoded.size());
+        weights.reserve(pattern.length() * sizeof(typename Collator::WeightType));
+        match_types.reserve(pattern.length() * sizeof(typename Collator::WeightType));
+
         bool last_any = false;
-        for (size_t i = 0; i < decoded.size(); i++)
+        size_t offset = 0;
+        while (offset < pattern.length())
         {
             MatchType tp;
-            auto c = decoded[i];
+            auto c = Collator::decodeChar(pattern.data(), offset);
             if (c == escape)
             {
                 last_any = false;
                 tp = MatchType::Match;
-                if (i < decoded.size() - 1)
+                if (offset < pattern.length())
                 {
-                    c = decoded[i + 1];
+                    auto old_offset = offset;
+                    c = Collator::decodeChar(pattern.data(), old_offset);
                     if (c == escape || c == '_' || c == '%')
-                        i++;
+                        offset = old_offset;
                     else
                         c = escape;
                 }
@@ -80,41 +79,41 @@ public:
 
     bool match(const char * s, size_t length) const override
     {
-        const auto & decoded = Collator::decode(s, length);
-        size_t s_idx = 0, p_idx = 0, next_s_idx = 0, next_p_idx = 0;
-        while (p_idx < weights.size() || s_idx < decoded.size())
+        size_t s_offset = 0, next_s_offset = 0, tmp_s_offset = 0;
+        size_t p_idx = 0, next_p_idx = 0;
+        while (p_idx < weights.size() || s_offset < length)
         {
             if (p_idx < weights.size())
             {
                 switch (match_types[p_idx])
                 {
                     case Match:
-                        if (s_idx < decoded.size() && Collator::weight(decoded[s_idx]) == weights[p_idx])
+                        if (s_offset < length && Collator::weight(Collator::decodeChar(s, tmp_s_offset = s_offset)) == weights[p_idx])
                         {
                             p_idx++;
-                            s_idx++;
+                            s_offset = tmp_s_offset;
                             continue;
                         }
                         break;
                     case One:
-                        if (s_idx < decoded.size())
+                        if (s_offset < length)
                         {
                             p_idx++;
-                            s_idx++;
+                            Collator::decodeChar(s, s_offset);
                             continue;
                         }
                         break;
                     case Any:
                         next_p_idx = p_idx;
-                        next_s_idx = s_idx + 1;
+                        Collator::decodeChar(s, next_s_offset = s_offset);
                         p_idx++;
                         continue;
                 }
             }
-            if (0 < next_s_idx && next_s_idx <= decoded.size())
+            if (0 < next_s_offset && next_s_offset <= length)
             {
                 p_idx = next_p_idx;
-                s_idx = next_s_idx;
+                s_offset = next_s_offset;
                 continue;
             }
             return false;
@@ -168,7 +167,7 @@ private:
     const std::string name = padding ? "BinaryPadding" : "Binary";
 
 private:
-    static inline std::string_view decode(const char * s, size_t length) { return std::string_view(s, length); }
+    static inline char decodeChar(const char * s, size_t & offset) { return s[offset++]; }
 
     using WeightType = char;
     static inline WeightType weight(char c) { return c; }
@@ -214,43 +213,6 @@ public:
         size_t offset = 0;
         size_t total_size = 0;
 
-#if 0
-        WeightType wv[8];
-        size_t wv_size = 0;
-
-        while (offset < v.length())
-        {
-            wv[wv_size++] = DB::toBigEndian(weight(decodeChar(s, offset)));
-            if (offset >= v.length())
-                break;
-            wv[wv_size++] = DB::toBigEndian(weight(decodeChar(s, offset)));
-            if (offset >= v.length())
-                break;
-            wv[wv_size++] = DB::toBigEndian(weight(decodeChar(s, offset)));
-            if (offset >= v.length())
-                break;
-            wv[wv_size++] = DB::toBigEndian(weight(decodeChar(s, offset)));
-            if (offset >= v.length())
-                break;
-            wv[wv_size++] = DB::toBigEndian(weight(decodeChar(s, offset)));
-            if (offset >= v.length())
-                break;
-            wv[wv_size++] = DB::toBigEndian(weight(decodeChar(s, offset)));
-            if (offset >= v.length())
-                break;
-            wv[wv_size++] = DB::toBigEndian(weight(decodeChar(s, offset)));
-            if (offset >= v.length())
-                break;
-            wv[wv_size++] = DB::toBigEndian(weight(decodeChar(s, offset)));
-
-            memcpy(container.data() + total_size, &wv[0], wv_size * sizeof(WeightType));
-            total_size += wv_size * sizeof(WeightType);
-            wv_size = 0;
-        }
-
-        memcpy(container.data() + total_size, &wv[0], wv_size * sizeof(WeightType));
-        total_size += wv_size * sizeof(WeightType);
-#else
         while (offset < v.length())
         {
             auto c = decodeChar(s, offset);
@@ -258,7 +220,6 @@ public:
             container[total_size++] = char(sk >> 8);
             container[total_size++] = char(sk);
         }
-#endif
 
         return StringRef(container.data(), total_size);
     }
@@ -273,39 +234,10 @@ private:
 private:
     using CharType = int32_t;
     using StringType = std::vector<CharType>;
-    static inline StringType decode(const char * s, size_t length)
-    {
-        StringType decoded;
-        decoded.reserve(length);
-
-        size_t offset = 0;
-        size_t size = 0;
-        while (offset < length)
-        {
-            auto c = decodeChar(s, offset);
-            decoded[size++] = c;
-        }
-        return decoded;
-    }
-
-    using WeightType = uint16_t;
-    static inline WeightType weight(CharType c)
-    {
-        if (c > 0xFFFF)
-            return 0xFFFD;
-
-        auto cell = GeneralCI::weight_lut[c >> 8][c & 0xFF];
-        return (cell >> 8) == 0xFE ? uint16_t(c) : cell;
-    }
-
-    friend class Pattern<GeneralCICollator>;
-
-private:
     static constexpr uint8_t b2_mask = 0x1F;
     static constexpr uint8_t b3_mask = 0x0F;
     static constexpr uint8_t b4_mask = 0x07;
     static constexpr uint8_t mb_mask = 0x3F;
-
     static inline CharType decodeChar(const char * s, size_t & offset)
     {
         uint8_t b0 = s[offset];
@@ -333,6 +265,18 @@ private:
         offset += 4;
         return c;
     }
+
+    using WeightType = uint16_t;
+    static inline WeightType weight(CharType c)
+    {
+        if (c > 0xFFFF)
+            return 0xFFFD;
+
+        auto cell = GeneralCI::weight_lut[c >> 8][c & 0xFF];
+        return (cell >> 8) == 0xFE ? uint16_t(c) : cell;
+    }
+
+    friend class Pattern<GeneralCICollator>;
 };
 
 std::unique_ptr<ITiDBCollator> ITiDBCollator::getCollator(int32_t id)
