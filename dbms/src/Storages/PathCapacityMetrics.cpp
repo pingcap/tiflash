@@ -144,7 +144,7 @@ FsStats PathCapacityMetrics::CapacityInfo::getStats(Poco::Logger * log) const
     // capacity
     uint64_t capacity = 0;
     const uint64_t disk_capacity_size = vfs.f_blocks * vfs.f_frsize;
-    if (capacity_bytes == 0 || disk_capacity_size < capacity)
+    if (capacity_bytes == 0 || disk_capacity_size < capacity_bytes)
         capacity = disk_capacity_size;
     else
         capacity = capacity_bytes;
