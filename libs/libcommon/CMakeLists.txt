@@ -98,9 +98,7 @@ target_include_directories (common BEFORE PRIVATE ${CCTZ_INCLUDE_DIR})
 target_include_directories (common BEFORE PUBLIC ${CITYHASH_INCLUDE_DIR})
 target_include_directories (common PUBLIC ${COMMON_INCLUDE_DIR})
 
-if (NOT USE_INTERNAL_BOOST_LIBRARY)
-    target_include_directories (common BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
-endif ()
+target_include_directories (common BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
 
 target_link_libraries (
     common
