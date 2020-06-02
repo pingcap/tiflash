@@ -168,6 +168,7 @@ struct SetMethodFixedString
         size_t n;
         const ColumnFixedString::Chars_t * chars;
         std::shared_ptr<TiDB::ITiDBCollator> collator;
+        String sort_key;
 
         void init(const ColumnRawPtrs & key_columns, std::shared_ptr<TiDB::ITiDBCollator> collator_)
         {
@@ -176,6 +177,7 @@ struct SetMethodFixedString
             const ColumnFixedString & column_string = static_cast<const ColumnFixedString &>(column);
             n = column_string.getN();
             chars = &column_string.getChars();
+            sort_key.reserve(n * 2);
         }
 
         Key getKey(
@@ -194,11 +196,9 @@ struct SetMethodFixedString
         void insertKey(const ColumnRawPtrs &, size_t keys_size, size_t i, const Sizes &, Data & set_data, Arena & pool)
         {
             Key key = StringRef(&(*chars)[i * n], n);
-            std::string sort_key;
             if (collator != nullptr)
             {
-                sort_key = collator->sortKey(key.data, key.size);
-                key = StringRef(sort_key.data(), sort_key.length());
+                key = collator->sortKey(key.data, key.size, sort_key);
             }
             typename Data::iterator it;
             bool inserted;
@@ -211,11 +211,9 @@ struct SetMethodFixedString
         bool exists(const ColumnRawPtrs & , size_t , size_t i, const Sizes & , Data & set_data)
         {
             Key key = StringRef(&(*chars)[i * n], n);
-            std::string sort_key;
             if (collator != nullptr)
             {
-                sort_key = collator->sortKey(key.data, key.size);
-                key = StringRef(sort_key.data(), sort_key.length());
+                key = collator->sortKey(key.data, key.size, sort_key);
             }
             return set_data.has(key);
         }
