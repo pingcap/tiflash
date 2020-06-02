@@ -39,7 +39,6 @@ public:
     ~ITiDBCollator() override = default;
 
     int compare(const char * s1, size_t length1, const char * s2, size_t length2) const override = 0;
-    virtual std::string sortKey(const char * s, size_t length) const = 0;
     virtual StringRef sortKey(const char * s, size_t length, std::string & container) const = 0;
     virtual std::unique_ptr<IPattern> pattern() const = 0;
     int32_t getCollatorId() const { return collator_id; }

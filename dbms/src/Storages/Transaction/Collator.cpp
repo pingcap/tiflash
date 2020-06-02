@@ -147,14 +147,6 @@ public:
             return signum(std::string_view(s1, length1).compare(std::string_view(s2, length2)));
     }
 
-    std::string sortKey(const char * s, size_t length) const override
-    {
-        if constexpr (padding)
-            return std::string(rtrim(s, length));
-        else
-            return std::string(s, length);
-    }
-
     StringRef sortKey(const char * s, size_t length, std::string &) const override
     {
         if constexpr (padding)
@@ -214,31 +206,15 @@ public:
         return signum((offset1 - v1.length()) - (offset2 - v2.length()));
     }
 
-    std::string sortKey(const char * s, size_t length) const override
-    {
-        auto v = rtrim(s, length);
-        std::stringbuf buf;
-
-        size_t offset = 0;
-        while (offset < v.length())
-        {
-            auto c = decodeChar(s, offset);
-            auto sk = weight(c);
-            buf.sputc(char(sk >> 8));
-            buf.sputc(char(sk));
-        }
-
-        return buf.str();
-    }
-
     StringRef sortKey(const char * s, size_t length, std::string & container) const override
     {
         auto v = rtrim(s, length);
-        container.reserve(length * 2);
+        if (length * sizeof(WeightType) > container.capacity())
+            container.reserve(length * sizeof(WeightType));
         size_t offset = 0;
         size_t total_size = 0;
 
-#if __SSE2__
+#if 0
         WeightType wv[8];
         size_t wv_size = 0;
 
