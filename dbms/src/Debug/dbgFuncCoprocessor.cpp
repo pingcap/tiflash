@@ -265,13 +265,13 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
                         for (const auto & c : tuple_func->arguments->children)
                         {
                             tipb::Expr * child = in_expr->add_children();
-                            compileExpr(input, c, child, referred_columns, col_ref_map);
+                            compileExpr(input, c, child, referred_columns, col_ref_map, collator_id);
                         }
                     }
                     else
                     {
                         tipb::Expr * child = in_expr->add_children();
-                        compileExpr(input, child_ast, child, referred_columns, col_ref_map);
+                        compileExpr(input, child_ast, child, referred_columns, col_ref_map, collator_id);
                     }
                 }
                 return;
@@ -287,7 +287,7 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
                 {
                     const auto & child_ast = func->arguments->children[i];
                     tipb::Expr * child = expr->add_children();
-                    compileExpr(input, child_ast, child, referred_columns, col_ref_map);
+                    compileExpr(input, child_ast, child, referred_columns, col_ref_map, collator_id);
                     // todo should infer the return type based on all input types
                     if ((it_sig->second == tipb::ScalarFuncSig::IfInt && i == 1)
                         || (it_sig->second != tipb::ScalarFuncSig::IfInt && i == 0))
