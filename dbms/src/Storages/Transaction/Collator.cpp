@@ -1,6 +1,7 @@
 #include <Common/Exception.h>
-#include <Storages/Transaction/CollationLUT.h>
 #include <Storages/Transaction/Collator.h>
+
+#include <array>
 
 namespace DB::ErrorCodes
 {
