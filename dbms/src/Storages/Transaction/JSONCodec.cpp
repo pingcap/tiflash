@@ -280,7 +280,6 @@ UInt64 GetJsonLength(std::string_view raw_value)
     switch (raw_value[0]) // JSON Root element type
     {
         case TYPE_CODE_OBJECT:
-            return *(reinterpret_cast<const UInt32 *>(&raw_value[1]));
         case TYPE_CODE_ARRAY:
             return *(reinterpret_cast<const UInt32 *>(&raw_value[1]));
         default:
