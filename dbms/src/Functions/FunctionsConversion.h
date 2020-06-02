@@ -1387,7 +1387,16 @@ public:
             }
 
             if (timezone_info.timezone_offset != 0)
+            {
                 integer_part += timezone_info.timezone_offset;
+                if (unlikely(integer_part + SECONDS_PER_DAY < 0))
+                    throw Exception("Unsupported timestamp value , TiFlash only support timestamp after 1970-01-01 00:00:00 UTC)");
+            }
+            else
+            {
+                if (unlikely(integer_part + datelut->getOffsetAtStartEpoch() + SECONDS_PER_DAY < 0))
+                    throw Exception("Unsupported timestamp value , TiFlash only support timestamp after 1970-01-01 00:00:00 UTC)");
+            }
             MyDateTime result(datelut->toYear(integer_part), datelut->toMonth(integer_part), datelut->toDayOfMonth(integer_part),
                                   datelut->toHour(integer_part), datelut->toMinute(integer_part), datelut->toSecond(integer_part), fsp_part);
             null_res[i] = 0;

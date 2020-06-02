@@ -189,6 +189,26 @@ struct ExecutorCtx
     std::unordered_map<String, std::vector<tipb::Expr *>> col_ref_map;
 };
 
+std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
+    {"equals", tipb::ScalarFuncSig::EQInt},
+    {"and", tipb::ScalarFuncSig::LogicalAnd},
+    {"or", tipb::ScalarFuncSig::LogicalOr},
+    {"greater", tipb::ScalarFuncSig::GTInt},
+    {"greaterorequals", tipb::ScalarFuncSig::GEInt},
+    {"less", tipb::ScalarFuncSig::LTInt},
+    {"lessorequals", tipb::ScalarFuncSig::LEInt},
+    {"in", tipb::ScalarFuncSig::InInt},
+    {"notin", tipb::ScalarFuncSig::InInt},
+    {"date_format", tipb::ScalarFuncSig::DateFormatSig},
+    {"if", tipb::ScalarFuncSig::IfInt},
+    {"from_unixtime", tipb::ScalarFuncSig::FromUnixTime2Arg},
+    {"bit_and", tipb::ScalarFuncSig::BitAndSig},
+    {"bit_or", tipb::ScalarFuncSig::BitOrSig},
+    {"bit_xor", tipb::ScalarFuncSig::BitXorSig},
+    {"bit_not", tipb::ScalarFuncSig::BitNegSig},
+    {"notequals", tipb::ScalarFuncSig::NEInt},
+});
+
 void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::unordered_set<String> & referred_columns,
     std::unordered_map<String, std::vector<tipb::Expr *>> & col_ref_map, Int32 collator_id)
 {
@@ -210,145 +230,99 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
         String func_name_lowercase = Poco::toLower(func->name);
         // TODO: Support more functions.
         // TODO: Support type inference.
-        if (func_name_lowercase == "equals")
-        {
-            expr->set_sig(tipb::ScalarFuncSig::EQInt);
-            auto * ft = expr->mutable_field_type();
-            ft->set_tp(TiDB::TypeLongLong);
-            ft->set_flag(TiDB::ColumnFlagUnsigned);
-            ft->set_collate(collator_id);
-        }
-        else if (func_name_lowercase == "and")
-        {
-            expr->set_sig(tipb::ScalarFuncSig::LogicalAnd);
-            auto * ft = expr->mutable_field_type();
-            ft->set_tp(TiDB::TypeLongLong);
-            ft->set_flag(TiDB::ColumnFlagUnsigned);
-        }
-        else if (func_name_lowercase == "or")
-        {
-            expr->set_sig(tipb::ScalarFuncSig::LogicalOr);
-            auto * ft = expr->mutable_field_type();
-            ft->set_tp(TiDB::TypeLongLong);
-            ft->set_flag(TiDB::ColumnFlagUnsigned);
-        }
-        else if (func_name_lowercase == "greater")
-        {
-            expr->set_sig(tipb::ScalarFuncSig::GTInt);
-            auto * ft = expr->mutable_field_type();
-            ft->set_tp(TiDB::TypeLongLong);
-            ft->set_flag(TiDB::ColumnFlagUnsigned);
-            ft->set_collate(collator_id);
-        }
-        else if (func_name_lowercase == "greaterorequals")
-        {
-            expr->set_sig(tipb::ScalarFuncSig::GEInt);
-            auto * ft = expr->mutable_field_type();
-            ft->set_tp(TiDB::TypeLongLong);
-            ft->set_flag(TiDB::ColumnFlagUnsigned);
-            ft->set_collate(collator_id);
-        }
-        else if (func_name_lowercase == "less")
-        {
-            expr->set_sig(tipb::ScalarFuncSig::LTInt);
-            auto * ft = expr->mutable_field_type();
-            ft->set_tp(TiDB::TypeLongLong);
-            ft->set_flag(TiDB::ColumnFlagUnsigned);
-            ft->set_collate(collator_id);
-        }
-        else if (func_name_lowercase == "lessorequals")
-        {
-            expr->set_sig(tipb::ScalarFuncSig::LEInt);
-            auto * ft = expr->mutable_field_type();
-            ft->set_tp(TiDB::TypeLongLong);
-            ft->set_flag(TiDB::ColumnFlagUnsigned);
-            ft->set_collate(collator_id);
-        }
-        else if (func_name_lowercase == "in" || func_name_lowercase == "notin")
-        {
-            tipb::Expr * in_expr = expr;
-            if (func_name_lowercase == "notin")
-            {
-                // notin is transformed into not(in()) by tidb
-                expr->set_sig(tipb::ScalarFuncSig::UnaryNotInt);
-                auto * ft = expr->mutable_field_type();
-                ft->set_tp(TiDB::TypeLongLong);
-                ft->set_flag(TiDB::ColumnFlagUnsigned);
-                expr->set_tp(tipb::ExprType::ScalarFunc);
-                in_expr = expr->add_children();
-            }
-            in_expr->set_sig(tipb::ScalarFuncSig::InInt);
-            auto * ft = in_expr->mutable_field_type();
-            ft->set_tp(TiDB::TypeLongLong);
-            ft->set_flag(TiDB::ColumnFlagUnsigned);
-            in_expr->set_tp(tipb::ExprType::ScalarFunc);
-            ft->set_collate(collator_id);
-            for (const auto & child_ast : func->arguments->children)
-            {
-                auto * tuple_func = typeid_cast<ASTFunction *>(child_ast.get());
-                if (tuple_func != nullptr && tuple_func->name == "tuple")
-                {
-                    // flatten tuple elements
-                    for (const auto & c : tuple_func->arguments->children)
-                    {
-                        tipb::Expr * child = in_expr->add_children();
-                        compileExpr(input, c, child, referred_columns, col_ref_map, collator_id);
-                    }
-                }
-                else
-                {
-                    tipb::Expr * child = in_expr->add_children();
-                    compileExpr(input, child_ast, child, referred_columns, col_ref_map, collator_id);
-                }
-            }
-            return;
-        }
-        else if (func_name_lowercase == "from_unixtime")
-        {
-            if (func->arguments->children.size() == 1)
-            {
-                expr->set_sig(tipb::ScalarFuncSig::FromUnixTime1Arg);
-                auto * ft = expr->mutable_field_type();
-                ft->set_tp(TiDB::TypeDatetime);
-                ft->set_decimal(6);
-            }
-            else
-            {
-                expr->set_sig(tipb::ScalarFuncSig::FromUnixTime2Arg);
-                auto * ft = expr->mutable_field_type();
-                ft->set_tp(TiDB::TypeString);
-            }
-        }
-        else if (func_name_lowercase == "date_format")
-        {
-            expr->set_sig(tipb::ScalarFuncSig::DateFormatSig);
-            auto * ft = expr->mutable_field_type();
-            ft->set_tp(TiDB::TypeString);
-        }
-        else if (func_name_lowercase == "like")
-        {
-            expr->set_sig(tipb::ScalarFuncSig::LikeSig);
-            auto * ft = expr->mutable_field_type();
-            ft->set_tp(TiDB::TypeLongLong);
-            ft->set_flag(TiDB::ColumnFlagUnsigned);
-            ft->set_collate(collator_id);
-            expr->set_tp(tipb::ExprType::ScalarFunc);
-            for (const auto & child_ast : func->arguments->children)
-            {
-                tipb::Expr * child = expr->add_children();
-                compileExpr(input, child_ast, child, referred_columns, col_ref_map, collator_id);
-            }
-            // for like need to add the third argument
-            tipb::Expr * constant_expr = expr->add_children();
-            constructInt64LiteralTiExpr(*constant_expr, 92);
-            return;
-        }
-        else
+
+        const auto it_sig = func_name_to_sig.find(func_name_lowercase);
+        if (it_sig == func_name_to_sig.end())
         {
             throw Exception("Unsupported function: " + func_name_lowercase, ErrorCodes::LOGICAL_ERROR);
         }
+        switch (it_sig->second)
+        {
+            case tipb::ScalarFuncSig::InInt:
+            {
+                tipb::Expr * in_expr = expr;
+                if (func_name_lowercase == "notin")
+                {
+                    // notin is transformed into not(in()) by tidb
+                    expr->set_sig(tipb::ScalarFuncSig::UnaryNotInt);
+                    auto * ft = expr->mutable_field_type();
+                    ft->set_tp(TiDB::TypeLongLong);
+                    ft->set_flag(TiDB::ColumnFlagUnsigned);
+                    expr->set_tp(tipb::ExprType::ScalarFunc);
+                    in_expr = expr->add_children();
+                }
+                in_expr->set_sig(tipb::ScalarFuncSig::InInt);
+                auto * ft = in_expr->mutable_field_type();
+                ft->set_tp(TiDB::TypeLongLong);
+                ft->set_flag(TiDB::ColumnFlagUnsigned);
+                in_expr->set_tp(tipb::ExprType::ScalarFunc);
+                for (const auto & child_ast : func->arguments->children)
+                {
+                    auto * tuple_func = typeid_cast<ASTFunction *>(child_ast.get());
+                    if (tuple_func != nullptr && tuple_func->name == "tuple")
+                    {
+                        // flatten tuple elements
+                        for (const auto & c : tuple_func->arguments->children)
+                        {
+                            tipb::Expr * child = in_expr->add_children();
+                            compileExpr(input, c, child, referred_columns, col_ref_map);
+                        }
+                    }
+                    else
+                    {
+                        tipb::Expr * child = in_expr->add_children();
+                        compileExpr(input, child_ast, child, referred_columns, col_ref_map);
+                    }
+                }
+                return;
+            }
+            case tipb::ScalarFuncSig::IfInt:
+            case tipb::ScalarFuncSig::BitAndSig:
+            case tipb::ScalarFuncSig::BitOrSig:
+            case tipb::ScalarFuncSig::BitXorSig:
+            case tipb::ScalarFuncSig::BitNegSig:
+                expr->set_sig(it_sig->second);
+                expr->set_tp(tipb::ExprType::ScalarFunc);
+                for (size_t i = 0; i < func->arguments->children.size(); i++)
+                {
+                    const auto & child_ast = func->arguments->children[i];
+                    tipb::Expr * child = expr->add_children();
+                    compileExpr(input, child_ast, child, referred_columns, col_ref_map);
+                    // todo should infer the return type based on all input types
+                    if ((it_sig->second == tipb::ScalarFuncSig::IfInt && i == 1)
+                        || (it_sig->second != tipb::ScalarFuncSig::IfInt && i == 0))
+                        *(expr->mutable_field_type()) = child->field_type();
+                }
+                return;
+            case tipb::ScalarFuncSig::FromUnixTime2Arg:
+                if (func->arguments->children.size() == 1)
+                {
+                    expr->set_sig(tipb::ScalarFuncSig::FromUnixTime1Arg);
+                    auto * ft = expr->mutable_field_type();
+                    ft->set_tp(TiDB::TypeDatetime);
+                    ft->set_decimal(6);
+                }
+                else
+                {
+                    expr->set_sig(tipb::ScalarFuncSig::FromUnixTime2Arg);
+                    auto * ft = expr->mutable_field_type();
+                    ft->set_tp(TiDB::TypeString);
+                }
+                break;
+            case tipb::ScalarFuncSig::DateFormatSig:
+                expr->set_sig(tipb::ScalarFuncSig::DateFormatSig);
+                expr->mutable_field_type()->set_tp(TiDB::TypeString);
+                break;
+            default:
+            {
+                expr->set_sig(it_sig->second);
+                auto * ft = expr->mutable_field_type();
+                ft->set_tp(TiDB::TypeLongLong);
+                ft->set_flag(TiDB::ColumnFlagUnsigned);
+            }
+            break;
+        }
         expr->set_tp(tipb::ExprType::ScalarFunc);
-        // TODO: Support agg functions.
         for (const auto & child_ast : func->arguments->children)
         {
             tipb::Expr * child = expr->add_children();
