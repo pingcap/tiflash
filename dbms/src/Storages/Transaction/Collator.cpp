@@ -234,7 +234,7 @@ public:
     StringRef sortKey(const char * s, size_t length, std::string & container) const override
     {
         auto v = rtrim(s, length);
-        container.clear();
+        container.reserve(length * 2);
         size_t offset = 0;
         size_t total_size = 0;
 
@@ -303,10 +303,11 @@ private:
         decoded.reserve(length);
 
         size_t offset = 0;
+        size_t size = 0;
         while (offset < length)
         {
             auto c = decodeChar(s, offset);
-            decoded.push_back(c);
+            decoded[size++] = c;
         }
         return decoded;
     }
