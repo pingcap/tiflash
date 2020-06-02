@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <ext/singleton.h>
 
 namespace TiDB::GeneralCI
 {
@@ -189,23 +190,42 @@ static uint16_t plane_ff[] = {0xFF00, 0xFF01, 0xFF02, 0xFF03, 0xFF04, 0xFF05, 0x
     0xFFEA, 0xFFEB, 0xFFEC, 0xFFED, 0xFFEE, 0xFFEF, 0xFFF0, 0xFFF1, 0xFFF2, 0xFFF3, 0xFFF4, 0xFFF5, 0xFFF6, 0xFFF7, 0xFFF8, 0xFFF9, 0xFFFA,
     0xFFFB, 0xFFFC, 0xFFFD, 0xFFFE, 0xFFFF};
 
-const uint16_t * weight_lut[] = {plane_00, plane_01, plane_02, plane_03, plane_04, plane_05, nullptr, nullptr, nullptr, nullptr, nullptr,
-    nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-    nullptr, nullptr, nullptr, nullptr, plane_1e, plane_1f, nullptr, plane_21, nullptr, nullptr, plane_24, nullptr, nullptr, nullptr,
-    nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-    nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-    nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-    nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-    nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-    nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-    nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-    nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-    nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-    nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-    nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-    nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-    nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-    nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-    nullptr, nullptr, nullptr, nullptr, nullptr, plane_ff};
+static uint16_t plane_id[] = {0xFE00, 0xFE01, 0xFE02, 0xFE03, 0xFE04, 0xFE05, 0xFE06, 0xFE07, 0xFE08, 0xFE09, 0xFE0A, 0xFE0B, 0xFE0C,
+    0xFE0D, 0xFE0E, 0xFE0F, 0xFE10, 0xFE11, 0xFE12, 0xFE13, 0xFE14, 0xFE15, 0xFE16, 0xFE17, 0xFE18, 0xFE19, 0xFE1A, 0xFE1B, 0xFE1C, 0xFE1D,
+    0xFE1E, 0xFE1F, 0xFE20, 0xFE21, 0xFE22, 0xFE23, 0xFE24, 0xFE25, 0xFE26, 0xFE27, 0xFE28, 0xFE29, 0xFE2A, 0xFE2B, 0xFE2C, 0xFE2D, 0xFE2E,
+    0xFE2F, 0xFE30, 0xFE31, 0xFE32, 0xFE33, 0xFE34, 0xFE35, 0xFE36, 0xFE37, 0xFE38, 0xFE39, 0xFE3A, 0xFE3B, 0xFE3C, 0xFE3D, 0xFE3E, 0xFE3F,
+    0xFE40, 0xFE21, 0xFE22, 0xFE23, 0xFE24, 0xFE25, 0xFE26, 0xFE27, 0xFE28, 0xFE29, 0xFE2A, 0xFE2B, 0xFE2C, 0xFE2D, 0xFE2E, 0xFE2F, 0xFE30,
+    0xFE31, 0xFE32, 0xFE33, 0xFE34, 0xFE35, 0xFE36, 0xFE37, 0xFE38, 0xFE39, 0xFE3A, 0xFE5B, 0xFE5C, 0xFE5D, 0xFE5E, 0xFE5F, 0xFE60, 0xFE61,
+    0xFE62, 0xFE63, 0xFE64, 0xFE65, 0xFE66, 0xFE67, 0xFE68, 0xFE69, 0xFE6A, 0xFE6B, 0xFE6C, 0xFE6D, 0xFE6E, 0xFE6F, 0xFE70, 0xFE71, 0xFE72,
+    0xFE73, 0xFE74, 0xFE75, 0xFE76, 0xFE77, 0xFE78, 0xFE79, 0xFE7A, 0xFE7B, 0xFE7C, 0xFE7D, 0xFE7E, 0xFE7F, 0xFE80, 0xFE81, 0xFE82, 0xFE83,
+    0xFE84, 0xFE85, 0xFE86, 0xFE87, 0xFE88, 0xFE89, 0xFE8A, 0xFE8B, 0xFE8C, 0xFE8D, 0xFE8E, 0xFE8F, 0xFE90, 0xFE91, 0xFE92, 0xFE93, 0xFE94,
+    0xFE95, 0xFE96, 0xFE97, 0xFE98, 0xFE99, 0xFE9A, 0xFE9B, 0xFE9C, 0xFE9D, 0xFE9E, 0xFE9F, 0xFEA0, 0xFEA1, 0xFEA2, 0xFEA3, 0xFEA4, 0xFEA5,
+    0xFEA6, 0xFEA7, 0xFEA8, 0xFEA9, 0xFEAA, 0xFEAB, 0xFEAC, 0xFEAD, 0xFEAE, 0xFEAF, 0xFEB0, 0xFEB1, 0xFEB2, 0xFEB3, 0xFEB4, 0xFEB5, 0xFEB6,
+    0xFEB7, 0xFEB8, 0xFEB9, 0xFEBA, 0xFEBB, 0xFEBC, 0xFEBD, 0xFEBE, 0xFEBF, 0xFEC0, 0xFEC1, 0xFEC2, 0xFEC3, 0xFEC4, 0xFEC5, 0xFEC6, 0xFEC7,
+    0xFEC8, 0xFEC9, 0xFECA, 0xFECB, 0xFECC, 0xFECD, 0xFECE, 0xFECF, 0xFED0, 0xFED1, 0xFED2, 0xFED3, 0xFED4, 0xFED5, 0xFED6, 0xFED7, 0xFED8,
+    0xFED9, 0xFEDA, 0xFEDB, 0xFEDC, 0xFEDD, 0xFEDE, 0xFEDF, 0xFEE0, 0xFEE1, 0xFEE2, 0xFEE3, 0xFEE4, 0xFEE5, 0xFEE6, 0xFEE7, 0xFEE8, 0xFEE9,
+    0xFEEA, 0xFEEB, 0xFEEC, 0xFEED, 0xFEEE, 0xFEEF, 0xFEF0, 0xFEF1, 0xFEF2, 0xFEF3, 0xFEF4, 0xFEF5, 0xFEF6, 0xFEF7, 0xFEF8, 0xFEF9, 0xFEFA,
+    0xFEFB, 0xFEFC, 0xFEFD, 0xFEFE, 0xFEFF};
+
+const uint16_t * weight_lut[] = {plane_00, plane_01, plane_02, plane_03, plane_04, plane_05, plane_id, plane_id, plane_id, plane_id,
+    plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id,
+    plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_1e, plane_1f, plane_id, plane_21, plane_id, plane_id,
+    plane_24, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id,
+    plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id,
+    plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id,
+    plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id,
+    plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id,
+    plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id,
+    plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id,
+    plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id,
+    plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id,
+    plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id,
+    plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id,
+    plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id,
+    plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id,
+    plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id,
+    plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id,
+    plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id,
+    plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_id, plane_ff};
 
 }; // namespace TiDB::GeneralCI

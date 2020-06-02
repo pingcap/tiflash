@@ -1,4 +1,5 @@
 #include <Common/Exception.h>
+#include <IO/Endian.h>
 #include <Storages/Transaction/Collator.h>
 
 #include <sstream>
@@ -19,7 +20,10 @@ std::string_view rtrim(const char * s, size_t length)
 }
 
 template <typename T>
-int signum(T val) { return (0 < val) - (val < 0); }
+int signum(T val)
+{
+    return (0 < val) - (val < 0);
+}
 
 template <typename Collator>
 class Pattern : public ITiDBCollator::IPattern
@@ -231,17 +235,56 @@ public:
     {
         auto v = rtrim(s, length);
         container.clear();
-
         size_t offset = 0;
+        size_t total_size = 0;
+
+#if __SSE2__
+        WeightType wv[8];
+        size_t wv_size = 0;
+
+        while (offset < v.length())
+        {
+            wv[wv_size++] = DB::toBigEndian(weight(decodeChar(s, offset)));
+            if (offset >= v.length())
+                break;
+            wv[wv_size++] = DB::toBigEndian(weight(decodeChar(s, offset)));
+            if (offset >= v.length())
+                break;
+            wv[wv_size++] = DB::toBigEndian(weight(decodeChar(s, offset)));
+            if (offset >= v.length())
+                break;
+            wv[wv_size++] = DB::toBigEndian(weight(decodeChar(s, offset)));
+            if (offset >= v.length())
+                break;
+            wv[wv_size++] = DB::toBigEndian(weight(decodeChar(s, offset)));
+            if (offset >= v.length())
+                break;
+            wv[wv_size++] = DB::toBigEndian(weight(decodeChar(s, offset)));
+            if (offset >= v.length())
+                break;
+            wv[wv_size++] = DB::toBigEndian(weight(decodeChar(s, offset)));
+            if (offset >= v.length())
+                break;
+            wv[wv_size++] = DB::toBigEndian(weight(decodeChar(s, offset)));
+
+            memcpy(container.data() + total_size, &wv[0], wv_size * sizeof(WeightType));
+            total_size += wv_size * sizeof(WeightType);
+            wv_size = 0;
+        }
+
+        memcpy(container.data() + total_size, &wv[0], wv_size * sizeof(WeightType));
+        total_size += wv_size * sizeof(WeightType);
+#else
         while (offset < v.length())
         {
             auto c = decodeChar(s, offset);
             auto sk = weight(c);
-            container.push_back(char(sk >> 8));
-            container.push_back(char(sk));
+            container[total_size++] = char(sk >> 8);
+            container[total_size++] = char(sk);
         }
+#endif
 
-        return StringRef(container.data(), container.length());
+        return StringRef(container.data(), total_size);
     }
 
     std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<GeneralCICollator>>(); }
@@ -274,27 +317,17 @@ private:
         if (c > 0xFFFF)
             return 0xFFFD;
 
-        auto plane = GeneralCI::weight_lut[c >> 8];
-        if (plane == nullptr)
-            return uint16_t(c);
-
-        return plane[c & 0xFF];
+        auto cell = GeneralCI::weight_lut[c >> 8][c & 0xFF];
+        return (cell >> 8) == 0xFE ? uint16_t(c) : cell;
     }
 
     friend class Pattern<GeneralCICollator>;
 
 private:
-    // first byte of a 2-byte encoding starts 110 and carries 5 bits of data
-    static constexpr uint8_t b2_mask = 0x1F; // 0001 1111
-
-    // first byte of a 3-byte encoding starts 1110 and carries 4 bits of data
-    static constexpr uint8_t b3_mask = 0x0F; // 0000 1111
-
-    // first byte of a 4-byte encoding starts 11110 and carries 3 bits of data
-    static constexpr uint8_t b4_mask = 0x07; // 0000 0111
-
-    // non-first bytes start 10 and carry 6 bits of data
-    static constexpr uint8_t mb_mask = 0x3F; // 0011 1111
+    static constexpr uint8_t b2_mask = 0x1F;
+    static constexpr uint8_t b3_mask = 0x0F;
+    static constexpr uint8_t b4_mask = 0x07;
+    static constexpr uint8_t mb_mask = 0x3F;
 
     static inline CharType decodeChar(const char * s, size_t & offset)
     {
@@ -307,23 +340,19 @@ private:
         }
         if (b0 < 0xE0)
         {
-            auto c = static_cast<CharType>(b0 & b2_mask) << 6 |
-                    static_cast<CharType>(s[1 + offset] & mb_mask);
+            auto c = static_cast<CharType>(b0 & b2_mask) << 6 | static_cast<CharType>(s[1 + offset] & mb_mask);
             offset += 2;
             return c;
         }
         if (b0 < 0xF0)
         {
-            auto c = static_cast<CharType>(b0 & b3_mask) << 12 |
-                   static_cast<CharType>(s[1 + offset] & mb_mask) << 6 |
-                   static_cast<CharType>(s[2 + offset] & mb_mask);
+            auto c = static_cast<CharType>(b0 & b3_mask) << 12 | static_cast<CharType>(s[1 + offset] & mb_mask) << 6
+                | static_cast<CharType>(s[2 + offset] & mb_mask);
             offset += 3;
             return c;
         }
-        auto c = static_cast<CharType>(b0 & b4_mask) << 18 |
-               static_cast<CharType>(s[1 + offset] & mb_mask) << 12 |
-               static_cast<CharType>(s[2 + offset] & mb_mask) << 6 |
-               static_cast<CharType>(s[3 + offset] & mb_mask);
+        auto c = static_cast<CharType>(b0 & b4_mask) << 18 | static_cast<CharType>(s[1 + offset] & mb_mask) << 12
+            | static_cast<CharType>(s[2 + offset] & mb_mask) << 6 | static_cast<CharType>(s[3 + offset] & mb_mask);
         offset += 4;
         return c;
     }
