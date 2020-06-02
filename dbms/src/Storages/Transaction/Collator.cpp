@@ -176,6 +176,12 @@ private:
     friend class Pattern<BinCollator>;
 };
 
+namespace GeneralCI
+{
+using WeightType = uint16_t;
+extern const std::array<WeightType, 256 * 256> weight_lut;
+} // namespace GeneralCI
+
 class GeneralCICollator : public ITiDBCollator
 {
 public:
@@ -262,11 +268,8 @@ private:
         return c;
     }
 
-    using WeightType = uint16_t;
-    static inline WeightType weight(CharType c)
-    {
-        return !!(c >> 16) * 0xFFFD + (1 - !!(c >> 16)) * GeneralCI::weight_lut[c >> 8][c & 0xFF];
-    }
+    using WeightType = GeneralCI::WeightType;
+    static inline WeightType weight(CharType c) { return !!(c >> 16) * 0xFFFD + (1 - !!(c >> 16)) * GeneralCI::weight_lut[c & 0xFFFF]; }
 
     friend class Pattern<GeneralCICollator>;
 };
