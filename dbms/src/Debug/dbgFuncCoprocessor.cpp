@@ -207,6 +207,7 @@ std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
     {"bit_xor", tipb::ScalarFuncSig::BitXorSig},
     {"bit_not", tipb::ScalarFuncSig::BitNegSig},
     {"notequals", tipb::ScalarFuncSig::NEInt},
+    {"like", tipb::ScalarFuncSig::LikeSig},
 });
 
 void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::unordered_set<String> & referred_columns,
@@ -255,6 +256,7 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
                 auto * ft = in_expr->mutable_field_type();
                 ft->set_tp(TiDB::TypeLongLong);
                 ft->set_flag(TiDB::ColumnFlagUnsigned);
+                ft->set_collate(collator_id);
                 in_expr->set_tp(tipb::ExprType::ScalarFunc);
                 for (const auto & child_ast : func->arguments->children)
                 {
@@ -313,14 +315,33 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
                 expr->set_sig(tipb::ScalarFuncSig::DateFormatSig);
                 expr->mutable_field_type()->set_tp(TiDB::TypeString);
                 break;
+            case tipb::ScalarFuncSig::LikeSig:
+            {
+                expr->set_sig(tipb::ScalarFuncSig::LikeSig);
+                auto * ft = expr->mutable_field_type();
+                ft->set_tp(TiDB::TypeLongLong);
+                ft->set_flag(TiDB::ColumnFlagUnsigned);
+                ft->set_collate(collator_id);
+                expr->set_tp(tipb::ExprType::ScalarFunc);
+                for (const auto & child_ast : func->arguments->children)
+                {
+                    tipb::Expr * child = expr->add_children();
+                    compileExpr(input, child_ast, child, referred_columns, col_ref_map, collator_id);
+                }
+                // for like need to add the third argument
+                tipb::Expr * constant_expr = expr->add_children();
+                constructInt64LiteralTiExpr(*constant_expr, 92);
+                break;
+            }
             default:
             {
                 expr->set_sig(it_sig->second);
                 auto * ft = expr->mutable_field_type();
                 ft->set_tp(TiDB::TypeLongLong);
                 ft->set_flag(TiDB::ColumnFlagUnsigned);
+                ft->set_collate(collator_id);
+                break;
             }
-            break;
         }
         expr->set_tp(tipb::ExprType::ScalarFunc);
         for (const auto & child_ast : func->arguments->children)
