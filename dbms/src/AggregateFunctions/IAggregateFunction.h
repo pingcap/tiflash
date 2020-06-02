@@ -148,10 +148,14 @@ public:
     }
     void create(AggregateDataPtr place) const override
     {
-        auto data = new (place) Data;
         if constexpr (with_collator)
         {
+            auto data = new (place) Data;
             data->setCollator(collator);
+        }
+        else
+        {
+            new (place) Data;
         }
     }
 

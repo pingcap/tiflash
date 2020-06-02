@@ -230,19 +230,18 @@ public:
     StringRef sortKey(const char * s, size_t length, std::string & container) const override
     {
         auto v = rtrim(s, length);
-        std::stringbuf buf;
+        container.clear();
 
         size_t offset = 0;
-        size_t i = 0;
         while (offset < v.length())
         {
             auto c = decodeChar(s, offset);
             auto sk = weight(c);
-            container[i++] = char(sk >> 8);
-            container[i++] = char(sk);
+            container.push_back(char(sk >> 8));
+            container.push_back(char(sk));
         }
 
-        return StringRef(container.data(), i);
+        return StringRef(container.data(), container.length());
     }
 
     std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<GeneralCICollator>>(); }
@@ -270,7 +269,7 @@ private:
     }
 
     using WeightType = uint16_t;
-    static WeightType weight(CharType c)
+    static inline WeightType weight(CharType c)
     {
         if (c > 0xFFFF)
             return 0xFFFD;
