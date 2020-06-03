@@ -270,7 +270,13 @@ private:
     }
 
     using WeightType = GeneralCI::WeightType;
-    static inline WeightType weight(CharType c) { return !!(c >> 16) * 0xFFFD + (1 - !!(c >> 16)) * GeneralCI::weight_lut[c & 0xFFFF]; }
+    static inline WeightType weight(CharType c)
+    {
+        if (c > 0xFFFF)
+            return 0xFFFD;
+        return GeneralCI::weight_lut[c & 0xFFFF];
+        //return !!(c >> 16) * 0xFFFD + (1 - !!(c >> 16)) * GeneralCI::weight_lut[c & 0xFFFF];
+    }
 
     friend class Pattern<GeneralCICollator>;
 };
