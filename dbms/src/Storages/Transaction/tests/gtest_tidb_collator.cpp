@@ -65,6 +65,8 @@ const typename CollatorCases::PatternCase CollatorCases::pattern_cases[] = {
     {"À%", {{"À", {true, true, true}}, {"ÀÀÀ", {true, true, true}}, {"AÀ", {false, false, true}}, {"", {false, false, false}}}},
     {"", {{"À", {false, false, false}}, {"ÀÀÀ", {false, false, false}}, {"AÀ", {false, false, false}}, {"", {true, true, true}}}},
     {"%", {{"À", {true, true, true}}, {"ÀÀÀ", {true, true, true}}, {"AÀ", {true, true, true}}, {"", {true, true, true}}}},
+    {"a_%À", {{"ÀÀ", {false, false, false}}, {"aÀÀ", {true, true, true}}, {"ÀÀÀÀ", {false, false, true}}, {"ÀÀÀa", {false, false, true}}}},
+    {"À%_a", {{"ÀÀ", {false, false, false}}, {"aÀÀ", {false, false, true}}, {"ÀÀÀa", {true, true, true}}, {"aÀÀÀ", {false, false, true}}}},
 };
 
 template <typename Collator>

@@ -36,7 +36,6 @@ public:
         weights.reserve(pattern.length() * sizeof(typename Collator::WeightType));
         match_types.reserve(pattern.length() * sizeof(typename Collator::WeightType));
 
-        bool last_any = false;
         size_t offset = 0;
         while (offset < pattern.length())
         {
@@ -44,7 +43,6 @@ public:
             auto c = Collator::decodeChar(pattern.data(), offset);
             if (c == escape)
             {
-                last_any = false;
                 tp = MatchType::Match;
                 if (offset < pattern.length())
                 {
@@ -58,20 +56,14 @@ public:
             }
             else if (c == '_')
             {
-                if (last_any)
-                    continue;
                 tp = MatchType::One;
             }
             else if (c == '%')
             {
-                if (last_any)
-                    continue;
-                last_any = true;
                 tp = MatchType::Any;
             }
             else
             {
-                last_any = false;
                 tp = MatchType::Match;
             }
             weights.push_back(Collator::weight(c));
