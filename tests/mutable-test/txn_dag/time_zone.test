@@ -38,8 +38,8 @@
 │ 0000-00-00 │ 0000-00-00 00:00:00.00000 │ 0000-00-00 00:00:00 │
 └────────────┴───────────────────────────┴─────────────────────┘
 
-# test chunk encode
-=> DBGInvoke dag('select * from default.test',4,'chunk',28800) 
+# test chblock encode
+=> DBGInvoke dag('select * from default.test',4,'chblock',28800) 
 ┌──────col_1─┬─────────────────────col_2─┬───────────────col_3─┐
 │ 2019-06-10 │ 2019-06-10 17:00:00.00000 │ 2019-06-10 09:00:00 │
 │ 2019-06-11 │ 2019-06-11 15:00:00.00000 │ 2019-06-11 09:00:00 │
@@ -49,8 +49,8 @@
 │ 0000-00-00 │ 0000-00-00 00:00:00.00000 │ 0000-00-00 00:00:00 │
 └────────────┴───────────────────────────┴─────────────────────┘
 
-# test chunk encode
-=> DBGInvoke dag('select * from default.test',4,'chunk',-28800) 
+# test chblock encode
+=> DBGInvoke dag('select * from default.test',4,'chblock',-28800) 
 ┌──────col_1─┬─────────────────────col_2─┬───────────────col_3─┐
 │ 2019-06-10 │ 2019-06-10 01:00:00.00000 │ 2019-06-10 09:00:00 │
 │ 2019-06-11 │ 2019-06-10 23:00:00.00000 │ 2019-06-11 09:00:00 │
@@ -60,8 +60,8 @@
 │ 0000-00-00 │ 0000-00-00 00:00:00.00000 │ 0000-00-00 00:00:00 │
 └────────────┴───────────────────────────┴─────────────────────┘
 
-# test chunk encode
-=> DBGInvoke dag('select * from default.test',4,'chunk',0,'America/Chicago') 
+# test chblock encode
+=> DBGInvoke dag('select * from default.test',4,'chblock',0,'America/Chicago') 
 ┌──────col_1─┬─────────────────────col_2─┬───────────────col_3─┐
 │ 2019-06-10 │ 2019-06-10 04:00:00.00000 │ 2019-06-10 09:00:00 │
 │ 2019-06-11 │ 2019-06-11 02:00:00.00000 │ 2019-06-11 09:00:00 │
@@ -114,8 +114,8 @@
 │ 2019-06-10 09:00:00 │ 2019-06-10 │
 └─────────────────────┴────────────┘
 
-# ts_col in agg clause for chunk encode
-=> DBGInvoke dag('select max(col_2) from default.test group by col_1',4,'chunk',28800) 
+# ts_col in agg clause for chblock encode
+=> DBGInvoke dag('select max(col_2) from default.test group by col_1',4,'chblock',28800) 
 ┌──────────max(col_2)─┬──────col_1─┐
 │ 0000-00-00 00:00:00 │ 0000-00-00 │
 │ 2019-06-11 16:00:00 │ 2019-06-12 │
