@@ -3,6 +3,8 @@
 #include <Columns/Collator.h>
 #include <common/StringRef.h>
 
+#include <memory>
+
 namespace TiDB
 {
 
