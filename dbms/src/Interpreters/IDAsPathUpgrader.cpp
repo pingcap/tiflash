@@ -429,8 +429,23 @@ std::vector<TiDB::DBInfoPtr> IDAsPathUpgrader::fetchInfosFromTiDB() const
 {
     // Fetch DBs info from TiDB/TiKV
     // Note: Not get table info from TiDB, just rename according to TableID in persisted TableInfo
-    auto schema_syncer = global_context.getTMTContext().getSchemaSyncer();
-    return schema_syncer->fetchAllDBs();
+    for (size_t i = 0; i < 180; i++) // retry for 3 mins
+    {
+        try
+        {
+            auto schema_syncer = global_context.getTMTContext().getSchemaSyncer();
+            return schema_syncer->fetchAllDBs();
+        }
+        catch (Poco::Exception & e)
+        {
+            const int wait_seconds = 1;
+            LOG_ERROR(log,
+                "Upgrade failed because fetch schema error: " << e.displayText() << "\n We will sleep " << wait_seconds
+                                                              << " seconds and try again.");
+            ::sleep(wait_seconds);
+        }
+    }
+    throw Exception("Upgrade failed because fetch schema error.");
 }
 
 static void dropAbsentDatabase(

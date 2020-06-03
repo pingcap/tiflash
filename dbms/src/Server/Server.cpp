@@ -586,9 +586,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
         catch (Poco::Exception & e)
         {
-            LOG_ERROR(
-                log, "Bootstrap failed because sync schema error: " << e.displayText() << "\n We will sleep 3 seconds and try again.");
-            ::sleep(1);
+            const int wait_seconds = 1;
+            LOG_ERROR(log,
+                "Bootstrap failed because sync schema error: " << e.displayText() << "\n We will sleep " << wait_seconds
+                                                               << " seconds and try again.");
+            ::sleep(wait_seconds);
         }
     }
     LOG_DEBUG(log, "Sync schemas done.");
