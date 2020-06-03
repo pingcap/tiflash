@@ -103,8 +103,9 @@ RSResult MinMaxIndex::checkEqual(size_t pack_id, const Field & value, const Data
     if (!(*has_value_marks)[pack_id])
         return RSResult::None;
 
+    auto raw_type = type.get();
 #define DISPATCH(TYPE)                                              \
-    if (typeid_cast<const DataType##TYPE *>(type.get()))            \
+    if (typeid_cast<const DataType##TYPE *>(raw_type))              \
     {                                                               \
         auto & minmaxes_data = toColumnVectorData<TYPE>(minmaxes);  \
         auto   min           = minmaxes_data[pack_id * 2];          \
@@ -113,19 +114,28 @@ RSResult MinMaxIndex::checkEqual(size_t pack_id, const Field & value, const Data
     }
     FOR_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
-    if (typeid_cast<const DataTypeDate *>(type.get()))
+    if (typeid_cast<const DataTypeDate *>(raw_type))
     {
         auto & minmaxes_data = toColumnVectorData<DataTypeDate::FieldType>(minmaxes);
         auto   min           = minmaxes_data[pack_id * 2];
         auto   max           = minmaxes_data[pack_id * 2 + 1];
         return RoughCheck::checkEqual<DataTypeDate::FieldType>(value, type, min, max);
     }
-    if (typeid_cast<const DataTypeDateTime *>(type.get()))
+    if (typeid_cast<const DataTypeDateTime *>(raw_type))
     {
         auto & minmaxes_data = toColumnVectorData<DataTypeDateTime::FieldType>(minmaxes);
         auto   min           = minmaxes_data[pack_id * 2];
         auto   max           = minmaxes_data[pack_id * 2 + 1];
         return RoughCheck::checkEqual<DataTypeDateTime::FieldType>(value, type, min, max);
+    }
+    if (typeid_cast<const DataTypeMyDateTime *>(raw_type) || typeid_cast<const DataTypeMyDate *>(raw_type))
+    {
+        // For DataTypeMyDateTime / DataTypeMyDate, simply compare them as comparing UInt64 is OK.
+        // Check `struct MyTimeBase` for more details.
+        auto & minmaxes_data = toColumnVectorData<DataTypeMyTimeBase::FieldType>(minmaxes);
+        auto min = minmaxes_data[pack_id * 2];
+        auto max = minmaxes_data[pack_id * 2 + 1];
+        return RoughCheck::checkEqual<DataTypeMyTimeBase::FieldType>(value, type, min, max);
     }
     return RSResult::Some;
 }
@@ -136,8 +146,9 @@ RSResult MinMaxIndex::checkGreater(size_t pack_id, const Field & value, const Da
     if (!(*has_value_marks)[pack_id])
         return RSResult::None;
 
+    auto raw_type = type.get();
 #define DISPATCH(TYPE)                                                \
-    if (typeid_cast<const DataType##TYPE *>(type.get()))              \
+    if (typeid_cast<const DataType##TYPE *>(raw_type))                \
     {                                                                 \
         auto & minmaxes_data = toColumnVectorData<TYPE>(minmaxes);    \
         auto   min           = minmaxes_data[pack_id * 2];            \
@@ -146,19 +157,28 @@ RSResult MinMaxIndex::checkGreater(size_t pack_id, const Field & value, const Da
     }
     FOR_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
-    if (typeid_cast<const DataTypeDate *>(type.get()))
+    if (typeid_cast<const DataTypeDate *>(raw_type))
     {
         auto & minmaxes_data = toColumnVectorData<DataTypeDate::FieldType>(minmaxes);
         auto   min           = minmaxes_data[pack_id * 2];
         auto   max           = minmaxes_data[pack_id * 2 + 1];
         return RoughCheck::checkGreater<DataTypeDate::FieldType>(value, type, min, max);
     }
-    if (typeid_cast<const DataTypeDateTime *>(type.get()))
+    if (typeid_cast<const DataTypeDateTime *>(raw_type))
     {
         auto & minmaxes_data = toColumnVectorData<DataTypeDateTime::FieldType>(minmaxes);
         auto   min           = minmaxes_data[pack_id * 2];
         auto   max           = minmaxes_data[pack_id * 2 + 1];
         return RoughCheck::checkGreater<DataTypeDateTime::FieldType>(value, type, min, max);
+    }
+    if (typeid_cast<const DataTypeMyDateTime *>(raw_type) || typeid_cast<const DataTypeMyDate *>(raw_type))
+    {
+        // For DataTypeMyDateTime / DataTypeMyDate, simply compare them as comparing UInt64 is OK.
+        // Check `struct MyTimeBase` for more details.
+        auto & minmaxes_data = toColumnVectorData<DataTypeMyTimeBase::FieldType>(minmaxes);
+        auto min = minmaxes_data[pack_id * 2];
+        auto max = minmaxes_data[pack_id * 2 + 1];
+        return RoughCheck::checkGreater<DataTypeMyTimeBase::FieldType>(value, type, min, max);
     }
     return RSResult::Some;
 }
@@ -169,8 +189,9 @@ RSResult MinMaxIndex::checkGreaterEqual(size_t pack_id, const Field & value, con
     if (!(*has_value_marks)[pack_id])
         return RSResult::None;
 
+    auto raw_type = type.get();
 #define DISPATCH(TYPE)                                                     \
-    if (typeid_cast<const DataType##TYPE *>(type.get()))                   \
+    if (typeid_cast<const DataType##TYPE *>(raw_type))                     \
     {                                                                      \
         auto & minmaxes_data = toColumnVectorData<TYPE>(minmaxes);         \
         auto   min           = minmaxes_data[pack_id * 2];                 \
@@ -179,19 +200,28 @@ RSResult MinMaxIndex::checkGreaterEqual(size_t pack_id, const Field & value, con
     }
     FOR_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
-    if (typeid_cast<const DataTypeDate *>(type.get()))
+    if (typeid_cast<const DataTypeDate *>(raw_type))
     {
         auto & minmaxes_data = toColumnVectorData<DataTypeDate::FieldType>(minmaxes);
         auto   min           = minmaxes_data[pack_id * 2];
         auto   max           = minmaxes_data[pack_id * 2 + 1];
         return RoughCheck::checkGreaterEqual<DataTypeDate::FieldType>(value, type, min, max);
     }
-    if (typeid_cast<const DataTypeDateTime *>(type.get()))
+    if (typeid_cast<const DataTypeDateTime *>(raw_type))
     {
         auto & minmaxes_data = toColumnVectorData<DataTypeDateTime::FieldType>(minmaxes);
         auto   min           = minmaxes_data[pack_id * 2];
         auto   max           = minmaxes_data[pack_id * 2 + 1];
         return RoughCheck::checkGreaterEqual<DataTypeDateTime::FieldType>(value, type, min, max);
+    }
+    if (typeid_cast<const DataTypeMyDateTime *>(raw_type) || typeid_cast<const DataTypeMyDate *>(raw_type))
+    {
+        // For DataTypeMyDateTime / DataTypeMyDate, simply compare them as comparing UInt64 is OK.
+        // Check `struct MyTimeBase` for more details.
+        auto & minmaxes_data = toColumnVectorData<DataTypeMyTimeBase::FieldType>(minmaxes);
+        auto min = minmaxes_data[pack_id * 2];
+        auto max = minmaxes_data[pack_id * 2 + 1];
+        return RoughCheck::checkGreaterEqual<DataTypeMyTimeBase::FieldType>(value, type, min, max);
     }
     return RSResult::Some;
 }
