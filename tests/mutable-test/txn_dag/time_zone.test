@@ -50,7 +50,7 @@
 └────────────┴───────────────────────────┴─────────────────────┘
 
 # test chunk encode
-=> DBGInvoke dag('select * from default.test',4,'chunk',-28800) 
+=> DBGInvoke dag('select * from default.test',4,'encode_type:chunk,tz_offset:-28800') 
 ┌──────col_1─┬─────────────────────col_2─┬───────────────col_3─┐
 │ 2019-06-10 │ 2019-06-10 01:00:00.00000 │ 2019-06-10 09:00:00 │
 │ 2019-06-11 │ 2019-06-10 23:00:00.00000 │ 2019-06-11 09:00:00 │
@@ -61,7 +61,7 @@
 └────────────┴───────────────────────────┴─────────────────────┘
 
 # test chunk encode
-=> DBGInvoke dag('select * from default.test',4,'chunk',0,'America/Chicago') 
+=> DBGInvoke dag('select * from default.test',4,'encode_type:chunk,tz_name:America/Chicago') 
 ┌──────col_1─┬─────────────────────col_2─┬───────────────col_3─┐
 │ 2019-06-10 │ 2019-06-10 04:00:00.00000 │ 2019-06-10 09:00:00 │
 │ 2019-06-11 │ 2019-06-11 02:00:00.00000 │ 2019-06-11 09:00:00 │
