@@ -205,7 +205,7 @@ public:
                 return signum(cmp);
         }
 
-        return signum((offset1 - v1.length()) - (offset2 - v2.length()));
+        return (offset1 < v1.length()) - (offset2 < v2.length());
     }
 
     StringRef sortKey(const char * s, size_t length, std::string & container) const override

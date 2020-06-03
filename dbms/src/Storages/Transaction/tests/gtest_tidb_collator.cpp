@@ -35,6 +35,8 @@ const typename CollatorCases::CompareCase CollatorCases::cmp_cases[] = {
     {"a", "a ", {-1, 0, 0}},
     {"a ", "a  ", {-1, 0, 0}},
     {"a\t", "a", {1, 1, 1}},
+    {"", "a", {-1, -1, -1}},
+    {"a", "", {1, 1, 1}},
 };
 #define PREVENT_TRUNC(s) \
     {                    \
@@ -50,16 +52,19 @@ const typename CollatorCases::SortKeyCase CollatorCases::sk_cases[] = {
             PREVENT_TRUNC("\x00\x46\x00\x4f\x00\x4f\x00\x20\x00\xa9\x00\x20\x00\x42\x00\x41\x00\x52\x00\x20\xff\xfd\x00\x20\x00\x42\x00\x41"
                           "\x00\x5a\x00\x20\x26\x03\x00\x20\x00\x51\x00\x55\x00\x58")}},
     {"a ", {PREVENT_TRUNC("\x61\x20"), PREVENT_TRUNC("\x61"), PREVENT_TRUNC("\x00\x41")}},
+    {"", {PREVENT_TRUNC(""), PREVENT_TRUNC(""), PREVENT_TRUNC("")}},
 };
 const typename CollatorCases::PatternCase CollatorCases::pattern_cases[] = {
-    {"A", {{"a", {false, false, true}}, {"A", {true, true, true}}, {"À", {false, false, true}}}},
-    {"_A", {{"aA", {true, true, true}}, {"ÀA", {false, false, true}}, {"ÀÀ", {false, false, true}}}},
-    {"%A", {{"a", {false, false, true}}, {"ÀA", {true, true, true}}, {"À", {false, false, true}}}},
-    {"À", {{"a", {false, false, true}}, {"A", {false, false, true}}, {"À", {true, true, true}}}},
-    {"_À", {{" À", {true, true, true}}, {"ÀA", {false, false, true}}, {"ÀÀ", {false, false, true}}}},
-    {"%À", {{"À", {true, true, true}}, {"ÀÀÀ", {true, true, true}}, {"ÀA", {false, false, true}}}},
-    {"À_", {{"À ", {true, true, true}}, {"ÀAA", {false, false, false}}, {"À", {false, false, false}}}},
-    {"À%", {{"À", {true, true, true}}, {"ÀÀÀ", {true, true, true}}, {"AÀ", {false, false, true}}}},
+    {"A", {{"a", {false, false, true}}, {"A", {true, true, true}}, {"À", {false, false, true}}, {"", {false, false, false}}}},
+    {"_A", {{"aA", {true, true, true}}, {"ÀA", {false, false, true}}, {"ÀÀ", {false, false, true}}, {"", {false, false, false}}}},
+    {"%A", {{"a", {false, false, true}}, {"ÀA", {true, true, true}}, {"À", {false, false, true}}, {"", {false, false, false}}}},
+    {"À", {{"a", {false, false, true}}, {"A", {false, false, true}}, {"À", {true, true, true}}, {"", {false, false, false}}}},
+    {"_À", {{" À", {true, true, true}}, {"ÀA", {false, false, true}}, {"ÀÀ", {false, false, true}}, {"", {false, false, false}}}},
+    {"%À", {{"À", {true, true, true}}, {"ÀÀÀ", {true, true, true}}, {"ÀA", {false, false, true}}, {"", {false, false, false}}}},
+    {"À_", {{"À ", {true, true, true}}, {"ÀAA", {false, false, false}}, {"À", {false, false, false}}, {"", {false, false, false}}}},
+    {"À%", {{"À", {true, true, true}}, {"ÀÀÀ", {true, true, true}}, {"AÀ", {false, false, true}}, {"", {false, false, false}}}},
+    {"", {{"À", {false, false, false}}, {"ÀÀÀ", {false, false, false}}, {"AÀ", {false, false, false}}, {"", {true, true, true}}}},
+    {"%", {{"À", {true, true, true}}, {"ÀÀÀ", {true, true, true}}, {"AÀ", {true, true, true}}, {"", {true, true, true}}}},
 };
 
 template <typename Collator>
