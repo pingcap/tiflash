@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Columns/Collator.h>
 #include <Core/Field.h>
 #include <Common/COWPtr.h>
 #include <Common/PODArray.h>
@@ -191,6 +192,11 @@ public:
       */
     virtual int compareAt(size_t n, size_t m, const IColumn & rhs, int nan_direction_hint) const = 0;
 
+    virtual int compareAtWithCollation(size_t , size_t , const IColumn & , int , const ICollator &) const
+    {
+        throw Exception("Method compareAtWithCollation is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     /** Returns a permutation that sorts elements of this column,
       *  i.e. perm[i]-th element of source column should be i-th element of sorted column.
       * reverse - reverse ordering (acsending).
@@ -198,6 +204,11 @@ public:
       * nan_direction_hint - see above.
       */
     virtual void getPermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const = 0;
+
+    virtual void getPermutationWithCollation(const ICollator & , bool , size_t , int , Permutation & ) const
+    {
+        throw Exception("Method getPermutationWithCollation is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
 
     /** Copies each element according offsets parameter.
       * (i-th element should be copied offsets[i] - offsets[i - 1] times.)
