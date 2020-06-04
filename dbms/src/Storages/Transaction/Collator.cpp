@@ -203,8 +203,8 @@ public:
     StringRef sortKey(const char * s, size_t length, std::string & container) const override
     {
         auto v = rtrim(s, length);
-        if (length * sizeof(WeightType) > container.capacity())
-            container.reserve(length * sizeof(WeightType));
+        if (length * sizeof(WeightType) > container.size())
+            container.resize(length * sizeof(WeightType));
         size_t offset = 0;
         size_t total_size = 0;
 

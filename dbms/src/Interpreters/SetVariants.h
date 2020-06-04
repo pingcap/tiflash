@@ -76,6 +76,11 @@ struct SetMethodOneNumber
     static void onNewKey(typename Data::value_type & /*value*/, size_t /*keys_size*/, Arena & /*pool*/) {}
 };
 
+namespace GeneralCI
+{
+using WeightType = uint16_t;
+} // namespace GeneralCI
+
 /// For the case where there is one string key.
 template <typename TData>
 struct SetMethodString
@@ -99,7 +104,7 @@ struct SetMethodString
             const ColumnString & column_string = static_cast<const ColumnString &>(column);
             offsets = &column_string.getOffsets();
             chars = &column_string.getChars();
-            sort_key.reserve(1024);
+            sort_key.resize(1024);
         }
 
         Key getKey(
@@ -177,7 +182,7 @@ struct SetMethodFixedString
             const ColumnFixedString & column_string = static_cast<const ColumnFixedString &>(column);
             n = column_string.getN();
             chars = &column_string.getChars();
-            sort_key.reserve(n * 2);
+            sort_key.resize(n * sizeof(GeneralCI::WeightType));
         }
 
         Key getKey(
