@@ -83,6 +83,11 @@ public:
         return nested_function->getName();
     }
 
+    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> collator) override
+    {
+        nested_function->setCollator(collator);
+    }
+
     DataTypePtr getReturnType() const override
     {
         return result_is_nullable

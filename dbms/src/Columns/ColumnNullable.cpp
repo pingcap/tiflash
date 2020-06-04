@@ -166,7 +166,7 @@ ColumnPtr ColumnNullable::permute(const Permutation & perm, size_t limit) const
     return ColumnNullable::create(permuted_data, permuted_null_map);
 }
 
-int ColumnNullable::compareAt(size_t n, size_t m, const IColumn & rhs_, int null_direction_hint) const
+std::tuple<bool, int> ColumnNullable::compareAtCheckNull(size_t n, size_t m, const ColumnNullable & rhs, int null_direction_hint) const
 {
     /// NULL values share the properties of NaN values.
     /// Here the last parameter of compareAt is called null_direction_hint
@@ -174,28 +174,62 @@ int ColumnNullable::compareAt(size_t n, size_t m, const IColumn & rhs_, int null
     /// the ordering specified by either NULLS FIRST or NULLS LAST in the
     /// ORDER BY construction.
 
-    const ColumnNullable & nullable_rhs = static_cast<const ColumnNullable &>(rhs_);
-
     bool lval_is_null = isNullAt(n);
-    bool rval_is_null = nullable_rhs.isNullAt(m);
+    bool rval_is_null = rhs.isNullAt(m);
 
+    int res = 0;
+    bool has_null = false;
     if (unlikely(lval_is_null || rval_is_null))
     {
+        has_null = true;
         if (lval_is_null && rval_is_null)
-            return 0;
+            res = 0;
         else
-            return lval_is_null ? null_direction_hint : -null_direction_hint;
+            res = lval_is_null ? null_direction_hint : -null_direction_hint;
     }
+    else
+        has_null = false;
 
+    return std::make_tuple(has_null, res);
+}
+
+int ColumnNullable::compareAtWithCollation(size_t n, size_t m, const IColumn & rhs_, int null_direction_hint, const ICollator & collator) const
+{
+    const ColumnNullable & nullable_rhs = static_cast<const ColumnNullable &>(rhs_);
+    auto [has_null, res] = compareAtCheckNull(n, m, nullable_rhs, null_direction_hint);
+    if (has_null)
+        return res;
+    const IColumn & nested_rhs = nullable_rhs.getNestedColumn();
+    return getNestedColumn().compareAtWithCollation(n, m, nested_rhs, null_direction_hint, collator);
+}
+
+int ColumnNullable::compareAt(size_t n, size_t m, const IColumn & rhs_, int null_direction_hint) const
+{
+    const ColumnNullable & nullable_rhs = static_cast<const ColumnNullable &>(rhs_);
+    auto [has_null, res] = compareAtCheckNull(n, m, nullable_rhs, null_direction_hint);
+    if (has_null)
+        return res;
     const IColumn & nested_rhs = nullable_rhs.getNestedColumn();
     return getNestedColumn().compareAt(n, m, nested_rhs, null_direction_hint);
+}
+
+void ColumnNullable::getPermutationWithCollation(const ICollator &collator, bool reverse, size_t limit, int null_direction_hint,
+                                                 DB::IColumn::Permutation &res) const
+{
+    /// Cannot pass limit because of unknown amount of NULLs.
+    getNestedColumn().getPermutationWithCollation(collator, reverse, 0, null_direction_hint, res);
+    adjustPermutationWithNullDirection(reverse, limit, null_direction_hint, res);
 }
 
 void ColumnNullable::getPermutation(bool reverse, size_t limit, int null_direction_hint, Permutation & res) const
 {
     /// Cannot pass limit because of unknown amount of NULLs.
     getNestedColumn().getPermutation(reverse, 0, null_direction_hint, res);
+    adjustPermutationWithNullDirection(reverse, limit, null_direction_hint, res);
+}
 
+void ColumnNullable::adjustPermutationWithNullDirection(bool reverse, size_t limit, int null_direction_hint, Permutation & res) const
+{
     if ((null_direction_hint > 0) != reverse)
     {
         /// Shift all NULL values to the end.
