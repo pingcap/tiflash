@@ -292,7 +292,7 @@ void ColumnString::getExtremes(Field & min, Field & max) const
 }
 
 
-int ColumnString::compareAtWithCollation(size_t n, size_t m, const IColumn & rhs_, const Collator & collator) const
+int ColumnString::compareAtWithCollationImpl(size_t n, size_t m, const IColumn & rhs_, const ICollator & collator) const
 {
     const ColumnString & rhs = static_cast<const ColumnString &>(rhs_);
 
@@ -306,9 +306,9 @@ template <bool positive>
 struct ColumnString::lessWithCollation
 {
     const ColumnString & parent;
-    const Collator & collator;
+    const ICollator & collator;
 
-    lessWithCollation(const ColumnString & parent_, const Collator & collator_) : parent(parent_), collator(collator_) {}
+    lessWithCollation(const ColumnString & parent_, const ICollator & collator_) : parent(parent_), collator(collator_) {}
 
     bool operator()(size_t lhs, size_t rhs) const
     {
@@ -320,7 +320,7 @@ struct ColumnString::lessWithCollation
     }
 };
 
-void ColumnString::getPermutationWithCollation(const Collator & collator, bool reverse, size_t limit, Permutation & res) const
+void ColumnString::getPermutationWithCollationImpl(const ICollator & collator, bool reverse, size_t limit, Permutation & res) const
 {
     size_t s = offsets.size();
     res.resize(s);
