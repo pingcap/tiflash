@@ -41,10 +41,11 @@ mysql> alter table test.t add column b7 bit(32) not null default b'0000000100000
 # mysql> alter table test.t modify column b6 bit(64);
 # mysql> alter table test.t modify column b7 bit(32);
 
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
-+------+--------+--------+------------+------------+------------+------------+------------+
-| i    | b1     | b2     | b3         | b4         | b5         | b6         | b7         |
-+------+--------+--------+------------+------------+------------+------------+------------+
-|    1 | 0x00   | 0x00   | 0x00010203 | 0x00010203 | 0x00010203 | 0x00010203 | 0x00010203 |
-|    1 | 0x00   | 0x00   | 0x00010203 | 0x00010203 | 0x00010203 | 0x00010203 | 0x00010203 |
-+------+--------+--------+------------+------------+------------+------------+------------+
+# MySQL client will mess up the raw bit value output so use hex function.
+mysql> set session tidb_isolation_read_engines='tiflash'; select hex(b1), hex(b2), hex(b3), hex(b4), hex(b5), hex(b6), hex(b7) from test.t;
++---------+---------+---------+---------+---------+---------+---------+
+| hex(b1) | hex(b2) | hex(b3) | hex(b4) | hex(b5) | hex(b6) | hex(b7) |
++---------+---------+---------+---------+---------+---------+---------+
+| 0       | 0       | 10203   | 10203   | 10203   | 10203   | 10203   |
+| 0       | 0       | 10203   | 10203   | 10203   | 10203   | 10203   |
++---------+---------+---------+---------+---------+---------+---------+
