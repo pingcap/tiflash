@@ -665,7 +665,7 @@ Segment::SplitInfo Segment::prepareSplit(DMContext & dm_context, const SegmentSn
         bool   bad_split_point = !range.check(split_point) || split_point == range.start;
         if (bad_split_point)
         {
-            LOG_WARNING(log, "Got bad split point [" << split_point << "] for segment " << info() << ", fall back to split physical.");
+            LOG_INFO(log, "Got bad split point [" << split_point << "] for segment " << info() << ", fall back to split physical.");
             return prepareSplitPhysical(dm_context, segment_snap, wbs);
         }
         else
