@@ -429,7 +429,7 @@ std::vector<TiDB::DBInfoPtr> IDAsPathUpgrader::fetchInfosFromTiDB() const
 {
     // Fetch DBs info from TiDB/TiKV
     // Note: Not get table info from TiDB, just rename according to TableID in persisted TableInfo
-    for (size_t i = 0; i < 180; i++) // retry for 3 mins
+    for (size_t i = 0; i < 60; i++) // retry for 3 mins
     {
         try
         {
@@ -438,9 +438,9 @@ std::vector<TiDB::DBInfoPtr> IDAsPathUpgrader::fetchInfosFromTiDB() const
         }
         catch (Poco::Exception & e)
         {
-            const int wait_seconds = 1;
+            const int wait_seconds = 3;
             LOG_ERROR(log,
-                "Upgrade failed because fetch schema error: " << e.displayText() << "\n We will sleep " << wait_seconds
+                "Upgrade failed because fetch schema error: " << e.displayText() << "\nWe will sleep for " << wait_seconds
                                                               << " seconds and try again.");
             ::sleep(wait_seconds);
         }

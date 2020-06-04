@@ -577,7 +577,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     LOG_DEBUG(log, "Load metadata done.");
 
     /// Then, sync schemas with TiDB, and initialize schema sync service.
-    for (int i = 0; i < 180; i++) // retry for 3 mins
+    for (int i = 0; i < 60; i++) // retry for 3 mins
     {
         try
         {
@@ -586,9 +586,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
         catch (Poco::Exception & e)
         {
-            const int wait_seconds = 1;
+            const int wait_seconds = 3;
             LOG_ERROR(log,
-                "Bootstrap failed because sync schema error: " << e.displayText() << "\n We will sleep " << wait_seconds
+                "Bootstrap failed because sync schema error: " << e.displayText() << "\nWe will sleep for " << wait_seconds
                                                                << " seconds and try again.");
             ::sleep(wait_seconds);
         }
