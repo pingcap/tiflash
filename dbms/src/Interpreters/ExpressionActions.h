@@ -4,6 +4,7 @@
 #include <Core/Names.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/Block.h>
+#include <Storages/Transaction/Collator.h>
 
 #include <unordered_set>
 #include <unordered_map>
@@ -74,6 +75,7 @@ public:
     FunctionBuilderPtr function_builder;
     FunctionBasePtr function;
     Names argument_names;
+    std::shared_ptr<TiDB::ITiDBCollator> collator;
 
     /// For ARRAY_JOIN
     NameSet array_joined_columns;
@@ -88,7 +90,7 @@ public:
 
     /// If result_name_ == "", as name "function_name(arguments separated by commas) is used".
     static ExpressionAction applyFunction(
-        const FunctionBuilderPtr & function_, const std::vector<std::string> & argument_names_, std::string result_name_ = "");
+        const FunctionBuilderPtr & function_, const std::vector<std::string> & argument_names_, std::string result_name_ = "", std::shared_ptr<TiDB::ITiDBCollator> collator_ = nullptr);
 
     static ExpressionAction addColumn(const ColumnWithTypeAndName & added_column_);
     static ExpressionAction removeColumn(const std::string & removed_name);

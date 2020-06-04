@@ -39,6 +39,8 @@ public:
         return has_value;
     }
 
+    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> ) {}
+
     void insertResultInto(IColumn & to) const
     {
         if (has())
@@ -181,10 +183,33 @@ private:
     Int32 size = -1;    /// -1 indicates that there is no value.
     Int32 capacity = 0;    /// power of two or zero
     char * large_data;
+    std::shared_ptr<TiDB::ITiDBCollator> collator = nullptr;
+
+    bool less(const StringRef &a, const StringRef &b) const
+    {
+        if (collator == nullptr)
+            return a < b;
+        return collator->compare(a.data, a.size, b.data, b.size) < 0;
+    }
+
+    bool greater(const StringRef &a, const StringRef &b) const
+    {
+        if (collator == nullptr)
+            return a > b;
+        return collator->compare(a.data, a.size, b.data, b.size) > 0;
+    }
+
+    bool equalTo(const StringRef &a, const StringRef &b) const
+    {
+        if (collator == nullptr)
+            return a == b;
+        return collator->compare(a.data, a.size, b.data, b.size) == 0;
+    }
 
 public:
     static constexpr Int32 AUTOMATIC_STORAGE_SIZE = 64;
-    static constexpr Int32 MAX_SMALL_STRING_SIZE = AUTOMATIC_STORAGE_SIZE - sizeof(size) - sizeof(capacity) - sizeof(large_data);
+    static constexpr Int32 MAX_SMALL_STRING_SIZE = AUTOMATIC_STORAGE_SIZE - sizeof(size) - sizeof(capacity) - sizeof(large_data) -
+            sizeof(collator);
 
 private:
     char small_data[MAX_SMALL_STRING_SIZE]; /// Including the terminating zero.
@@ -213,9 +238,15 @@ public:
             static_cast<ColumnString &>(to).insertDefault();
     }
 
+    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> collator_)
+    {
+        collator = collator_;
+    }
+
     void write(WriteBuffer & buf, const IDataType & /*data_type*/) const
     {
         writeBinary(size, buf);
+        writeBinary(collator == nullptr ? 0 : collator->getCollatorId(), buf);
         if (has())
             buf.write(getData(), size);
     }
@@ -224,6 +255,12 @@ public:
     {
         Int32 rhs_size;
         readBinary(rhs_size, buf);
+        Int32 collator_id;
+        readBinary(collator_id, buf);
+        if (collator_id != 0)
+            collator = TiDB::ITiDBCollator::getCollator(collator_id);
+        else
+            collator = nullptr;
 
         if (rhs_size >= 0)
         {
@@ -334,7 +371,7 @@ public:
 
     bool changeIfLess(const IColumn & column, size_t row_num, Arena * arena)
     {
-        if (!has() || static_cast<const ColumnString &>(column).getDataAtWithTerminatingZero(row_num) < getStringRef())
+        if (!has() || less(static_cast<const ColumnString &>(column).getDataAtWithTerminatingZero(row_num), getStringRef()))
         {
             change(column, row_num, arena);
             return true;
@@ -345,7 +382,8 @@ public:
 
     bool changeIfLess(const Self & to, Arena * arena)
     {
-        if (to.has() && (!has() || to.getStringRef() < getStringRef()))
+        // todo should check the collator in `to` and `this`
+        if (to.has() && (!has() || less(to.getStringRef(), getStringRef())))
         {
             change(to, arena);
             return true;
@@ -356,7 +394,7 @@ public:
 
     bool changeIfGreater(const IColumn & column, size_t row_num, Arena * arena)
     {
-        if (!has() || static_cast<const ColumnString &>(column).getDataAtWithTerminatingZero(row_num) > getStringRef())
+        if (!has() || greater(static_cast<const ColumnString &>(column).getDataAtWithTerminatingZero(row_num), getStringRef()))
         {
             change(column, row_num, arena);
             return true;
@@ -367,7 +405,7 @@ public:
 
     bool changeIfGreater(const Self & to, Arena * arena)
     {
-        if (to.has() && (!has() || to.getStringRef() > getStringRef()))
+        if (to.has() && (!has() || greater(to.getStringRef(), getStringRef())))
         {
             change(to, arena);
             return true;
@@ -378,12 +416,12 @@ public:
 
     bool isEqualTo(const Self & to) const
     {
-        return has() && to.getStringRef() == getStringRef();
+        return has() && equalTo(to.getStringRef(), getStringRef());
     }
 
     bool isEqualTo(const IColumn & column, size_t row_num) const
     {
-        return has() && static_cast<const ColumnString &>(column).getDataAtWithTerminatingZero(row_num) == getStringRef();
+        return has() && equalTo(static_cast<const ColumnString &>(column).getDataAtWithTerminatingZero(row_num), getStringRef());
     }
 };
 
@@ -405,6 +443,8 @@ public:
     {
         return !value.isNull();
     }
+
+    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> ) {}
 
     void insertResultInto(IColumn & to) const
     {
@@ -677,7 +717,7 @@ struct AggregateFunctionAnyHeavyData : Data
 
 
 template <typename Data>
-class AggregateFunctionsSingleValue final : public IAggregateFunctionDataHelper<Data, AggregateFunctionsSingleValue<Data>>
+class AggregateFunctionsSingleValue final : public IAggregateFunctionDataHelper<Data, AggregateFunctionsSingleValue<Data>, true>
 {
 private:
     DataTypePtr type;

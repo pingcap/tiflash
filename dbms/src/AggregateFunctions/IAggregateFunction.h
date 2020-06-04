@@ -8,6 +8,7 @@
 #include <Core/Types.h>
 #include <Core/Field.h>
 #include <Common/Exception.h>
+#include <Storages/Transaction/Collator.h>
 
 
 namespace DB
@@ -108,6 +109,8 @@ public:
       * const char * getHeaderFilePath() const override { return __FILE__; }
       */
     virtual const char * getHeaderFilePath() const = 0;
+
+    virtual void setCollator(std::shared_ptr<TiDB::ITiDBCollator> ) {}
 };
 
 
@@ -127,7 +130,7 @@ public:
 
 
 /// Implements several methods for manipulation with data. T - type of structure with data for aggregation.
-template <typename T, typename Derived>
+template <typename T, typename Derived, bool with_collator = false>
 class IAggregateFunctionDataHelper : public IAggregateFunctionHelper<Derived>
 {
 protected:
@@ -135,11 +138,25 @@ protected:
 
     static Data & data(AggregateDataPtr place) { return *reinterpret_cast<Data*>(place); }
     static const Data & data(ConstAggregateDataPtr place) { return *reinterpret_cast<const Data*>(place); }
+    std::shared_ptr<TiDB::ITiDBCollator> collator;
 
 public:
+
+    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> collator_) override
+    {
+        collator = collator_;
+    }
     void create(AggregateDataPtr place) const override
     {
-        new (place) Data;
+        if constexpr (with_collator)
+        {
+            auto data = new (place) Data;
+            data->setCollator(collator);
+        }
+        else
+        {
+            new (place) Data;
+        }
     }
 
     void destroy(AggregateDataPtr place) const noexcept override
