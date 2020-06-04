@@ -65,7 +65,7 @@ void NO_INLINE Set::insertFromBlockImplCase(
     ConstNullMapPtr null_map)
 {
     typename Method::State state;
-    state.init(key_columns);
+    state.init(key_columns, collator);
 
     /// For all rows
     for (size_t i = 0; i < rows; ++i)
@@ -73,15 +73,7 @@ void NO_INLINE Set::insertFromBlockImplCase(
         if (has_null_map && (*null_map)[i])
             continue;
 
-        /// Obtain a key to insert to the set
-        typename Method::Key key = state.getKey(key_columns, keys_size, i, key_sizes);
-
-        typename Method::Data::iterator it;
-        bool inserted;
-        method.data.emplace(key, it, inserted);
-
-        if (inserted)
-            method.onNewKey(*it, keys_size, variants.string_pool);
+        state.insertKey(key_columns, keys_size, i, key_sizes, method.data, variants.string_pool);
     }
 }
 
@@ -398,7 +390,7 @@ void NO_INLINE Set::executeImplCase(
     ConstNullMapPtr null_map) const
 {
     typename Method::State state;
-    state.init(key_columns);
+    state.init(key_columns, collator);
 
     /// NOTE Optimization is not used for consecutive identical values.
 
@@ -410,8 +402,7 @@ void NO_INLINE Set::executeImplCase(
         else
         {
             /// Build the key
-            typename Method::Key key = state.getKey(key_columns, keys_size, i, key_sizes);
-            vec_res[i] = negative ^ method.data.has(key);
+            vec_res[i] = negative ^ state.exists(key_columns, keys_size, i, key_sizes, method.data);
         }
     }
 }

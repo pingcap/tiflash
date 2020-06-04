@@ -50,7 +50,7 @@ Names ExpressionAction::getNeededColumns() const
 
 ExpressionAction ExpressionAction::applyFunction(const FunctionBuilderPtr & function_,
     const std::vector<std::string> & argument_names_,
-    std::string result_name_)
+    std::string result_name_, std::shared_ptr<TiDB::ITiDBCollator> collator_)
 {
     if (result_name_ == "")
     {
@@ -69,6 +69,7 @@ ExpressionAction ExpressionAction::applyFunction(const FunctionBuilderPtr & func
     a.result_name = result_name_;
     a.function_builder = function_;
     a.argument_names = argument_names_;
+    a.collator = collator_;
     return a;
 }
 
@@ -569,7 +570,7 @@ void ExpressionActions::addImpl(ExpressionAction action, Names & new_names)
             arguments[i] = sample_block.getByName(action.argument_names[i]);
         }
 
-        action.function = action.function_builder->build(arguments);
+        action.function = action.function_builder->build(arguments, action.collator);
         action.result_type = action.function->getReturnType();
     }
 

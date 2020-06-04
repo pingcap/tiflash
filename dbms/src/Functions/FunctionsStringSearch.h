@@ -56,6 +56,8 @@ public:
         return name;
     }
 
+    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> collator_) override { collator = collator_; }
+
     size_t getNumberOfArguments() const override
     {
         return num_args;
@@ -75,53 +77,6 @@ public:
                     "Illegal type " + arguments[2]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeNumber<typename Impl::ResultType>>();
-    }
-
-    // replace the escape_char in orig_string with '\\'
-    // this function does not check the validation of the orig_string
-    // for example, for string "abcd" and escape char 'd', it will
-    // return "abc\\"
-    String replaceEscapeChar(String & orig_string, UInt8 escape_char)
-    {
-        std::stringstream ss;
-        for (size_t i = 0; i < orig_string.size(); i++)
-        {
-            auto c = orig_string[i];
-            if (c == escape_char)
-            {
-                if (i+1 != orig_string.size() && orig_string[i+1] == escape_char)
-                {
-                    // two successive escape char, which means it is trying to escape itself, just remove one
-                    i++;
-                    ss << escape_char;
-                }
-                else
-                {
-                    // https://github.com/pingcap/tidb/blob/master/util/stringutil/string_util.go#L154
-                    // if any char following escape char that is not [escape_char,'_','%'], it is invalid escape.
-                    // mysql will treat escape character as the origin value even
-                    // the escape sequence is invalid in Go or C.
-                    // e.g., \m is invalid in Go, but in MySQL we will get "m" for select '\m'.
-                    // Following case is correct just for escape \, not for others like +.
-                    // TODO: Add more checks for other escapes.
-                    if (i+1 != orig_string.size() && orig_string[i+1] == CH_ESCAPE_CHAR)
-                    {
-                        continue;
-                    }
-                    ss << CH_ESCAPE_CHAR;
-                }
-            }
-            else if (c == CH_ESCAPE_CHAR)
-            {
-                // need to escape this '\\'
-                ss << CH_ESCAPE_CHAR << CH_ESCAPE_CHAR;
-            }
-            else
-            {
-                ss << c;
-            }
-        }
-        return ss.str();
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
@@ -167,11 +122,7 @@ public:
         {
             ResultType res{};
             String needle_string = col_needle_const->getValue<String>();
-            if (has_3_args && escape_char != CH_ESCAPE_CHAR)
-            {
-                needle_string = replaceEscapeChar(needle_string, escape_char);
-            }
-            Impl::constant_constant(col_haystack_const->getValue<String>(), needle_string, res);
+            Impl::constant_constant(col_haystack_const->getValue<String>(), needle_string, escape_char, collator, res);
             block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(col_haystack_const->size(), toField(res));
             return;
         }
@@ -189,19 +140,18 @@ public:
                 col_haystack_vector->getOffsets(),
                 col_needle_vector->getChars(),
                 col_needle_vector->getOffsets(),
+                escape_char,
+                collator,
                 vec_res);
         else if (col_haystack_vector && col_needle_const)
         {
             String needle_string = col_needle_const->getValue<String>();
-            if (has_3_args && escape_char != CH_ESCAPE_CHAR)
-            {
-                needle_string = replaceEscapeChar(needle_string, escape_char);
-            }
             Impl::vector_constant(col_haystack_vector->getChars(), col_haystack_vector->getOffsets(),
-                                  needle_string, vec_res);
+                                  needle_string, escape_char, collator, vec_res);
         }
         else if (col_haystack_const && col_needle_vector)
-            Impl::constant_vector(col_haystack_const->getValue<String>(), col_needle_vector->getChars(), col_needle_vector->getOffsets(), vec_res);
+            Impl::constant_vector(col_haystack_const->getValue<String>(), col_needle_vector->getChars(),
+                    col_needle_vector->getOffsets(), escape_char, collator, vec_res);
         else
             throw Exception("Illegal columns " + block.getByPosition(arguments[0]).column->getName() + " and "
                     + block.getByPosition(arguments[1]).column->getName()
@@ -211,6 +161,9 @@ public:
 
         block.getByPosition(result).column = std::move(col_res);
     }
+
+private:
+    std::shared_ptr<TiDB::ITiDBCollator> collator;
 };
 
 
