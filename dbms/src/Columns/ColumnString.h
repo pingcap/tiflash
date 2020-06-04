@@ -9,7 +9,7 @@
 #include <Common/memcpySmall.h>
 
 
-class Collator;
+class ICollator;
 
 
 namespace DB
@@ -241,13 +241,22 @@ public:
             return size > rhs_size ? 1 : (size < rhs_size ? -1 : 0);
     }
 
+    int compareAtWithCollation(size_t n, size_t m, const IColumn & rhs_, int , const ICollator & collator) const override
+    {
+        return compareAtWithCollationImpl(n, m, rhs_, collator);
+    }
     /// Variant of compareAt for string comparison with respect of collation.
-    int compareAtWithCollation(size_t n, size_t m, const IColumn & rhs_, const Collator & collator) const;
+    int compareAtWithCollationImpl(size_t n, size_t m, const IColumn & rhs_, const ICollator & collator) const;
 
     void getPermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const override;
 
+    void getPermutationWithCollation(const ICollator & collator, bool reverse, size_t limit, int , Permutation & res) const override
+    {
+        getPermutationWithCollationImpl(collator, reverse, limit, res);
+    }
+
     /// Sorting with respect of collation.
-    void getPermutationWithCollation(const Collator & collator, bool reverse, size_t limit, Permutation & res) const;
+    void getPermutationWithCollationImpl(const ICollator & collator, bool reverse, size_t limit, Permutation & res) const;
 
     ColumnPtr replicate(const Offsets & replicate_offsets) const override;
 
