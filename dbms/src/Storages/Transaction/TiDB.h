@@ -169,6 +169,7 @@ struct ColumnInfo
     Int32 offset = -1;
     Poco::Dynamic::Var origin_default_value;
     Poco::Dynamic::Var default_value;
+    Poco::Dynamic::Var default_bit_value;
     TP tp = TypeDecimal; // TypeDecimal is not used by TiDB.
     UInt32 flag = 0;
     Int32 flen = 0;
@@ -197,6 +198,7 @@ struct ColumnInfo
     UInt64 getSetValue(const String &) const;
     Int64 getTimeValue(const String &) const;
     Int64 getYearValue(const String &) const;
+    UInt64 getBitValue(const String &) const;
 };
 
 enum PartitionType
