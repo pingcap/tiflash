@@ -50,25 +50,6 @@ struct SetMethodOneNumber
         {
             return unionCastToUInt64(vec[i]);
         }
-
-        void insertKey(const ColumnRawPtrs & key_columns, size_t keys_size, size_t i, const Sizes & key_sizes, Data & set_data, Arena & pool)
-        {
-            /// Obtain a key to insert to the set
-            Key key = getKey(key_columns, keys_size, i, key_sizes);
-
-            typename Data::iterator it;
-            bool inserted;
-            set_data.emplace(key, it, inserted);
-
-            if (inserted)
-                onNewKey(*it, keys_size, pool);
-        }
-
-        bool exists(const ColumnRawPtrs & key_columns, size_t keys_size, size_t i, const Sizes & key_sizes, Data & set_data)
-        {
-            Key key = getKey(key_columns, keys_size, i, key_sizes);
-            return set_data.has(key);
-        }
     };
 
     /** Place additional data, if necessary, in case a new key was inserted into the hash table.
@@ -113,44 +94,15 @@ struct SetMethodString
             size_t i,
             const Sizes &) const
         {
-            if unlikely(collator != nullptr)
-            {
-                throw Exception("getKey of SetMethodString with collator should not be called", ErrorCodes::LOGICAL_ERROR);
-            }
-            return StringRef(
+            Key key = StringRef(
                 &(*chars)[i == 0 ? 0 : (*offsets)[i - 1]],
                 (i == 0 ? (*offsets)[i] : ((*offsets)[i] - (*offsets)[i - 1])) - 1);
-        }
-
-        void insertKey(const ColumnRawPtrs &, size_t keys_size, size_t i, const Sizes &, Data & set_data, Arena & pool)
-        {
-            Key key = StringRef(
-                       &(*chars)[i == 0 ? 0 : (*offsets)[i - 1]],
-                       (i == 0 ? (*offsets)[i] : ((*offsets)[i] - (*offsets)[i - 1])) - 1);
             if (collator != nullptr)
             {
                 key = collator->sortKey(key.data, key.size, sort_key);
             }
-            typename Data::iterator it;
-            bool inserted;
-            set_data.emplace(key, it, inserted);
-
-            if (inserted)
-                onNewKey(*it, keys_size, pool);
+            return key;
         }
-
-        bool exists(const ColumnRawPtrs & , size_t , size_t i, const Sizes & , Data & set_data)
-        {
-            Key key = StringRef(
-                    &(*chars)[i == 0 ? 0 : (*offsets)[i - 1]],
-                    (i == 0 ? (*offsets)[i] : ((*offsets)[i] - (*offsets)[i - 1])) - 1);
-            if (collator != nullptr)
-            {
-                key = collator->sortKey(key.data, key.size, sort_key);
-            }
-            return set_data.has(key);
-        }
-
     };
 
     static void onNewKey(typename Data::value_type & value, size_t, Arena & pool)
@@ -191,38 +143,13 @@ struct SetMethodFixedString
             size_t i,
             const Sizes &) const
         {
-            if unlikely(collator != nullptr)
-            {
-                throw Exception("getKey of SetMethodFixedString with collator should not be called", ErrorCodes::LOGICAL_ERROR);
-            }
-            return StringRef(&(*chars)[i * n], n);
-        }
-
-        void insertKey(const ColumnRawPtrs &, size_t keys_size, size_t i, const Sizes &, Data & set_data, Arena & pool)
-        {
             Key key = StringRef(&(*chars)[i * n], n);
             if (collator != nullptr)
             {
                 key = collator->sortKey(key.data, key.size, sort_key);
             }
-            typename Data::iterator it;
-            bool inserted;
-            set_data.emplace(key, it, inserted);
-
-            if (inserted)
-                onNewKey(*it, keys_size, pool);
+            return key;
         }
-
-        bool exists(const ColumnRawPtrs & , size_t , size_t i, const Sizes & , Data & set_data)
-        {
-            Key key = StringRef(&(*chars)[i * n], n);
-            if (collator != nullptr)
-            {
-                key = collator->sortKey(key.data, key.size, sort_key);
-            }
-            return set_data.has(key);
-        }
-
     };
 
     static void onNewKey(typename Data::value_type & value, size_t, Arena & pool)
@@ -365,25 +292,6 @@ struct SetMethodKeysFixed
                 return packFixed<Key>(i, keys_size, key_columns, key_sizes);
         }
 
-        void insertKey(const ColumnRawPtrs & key_columns, size_t keys_size, size_t i, const Sizes & key_sizes, Data & set_data, Arena & pool)
-        {
-            /// Obtain a key to insert to the set
-            Key key = getKey(key_columns, keys_size, i, key_sizes);
-
-            typename Data::iterator it;
-            bool inserted;
-            set_data.emplace(key, it, inserted);
-
-            if (inserted)
-                onNewKey(*it, keys_size, pool);
-        }
-
-        bool exists(const ColumnRawPtrs & key_columns, size_t keys_size, size_t i, const Sizes & key_sizes, Data & set_data)
-        {
-            Key key = getKey(key_columns, keys_size, i, key_sizes);
-            return set_data.has(key);
-        }
-
         std::shared_ptr<TiDB::ITiDBCollator> collator;
     };
 
@@ -412,25 +320,6 @@ struct SetMethodHashed
             const Sizes &) const
         {
             return hash128(i, keys_size, key_columns);
-        }
-
-        void insertKey(const ColumnRawPtrs & key_columns, size_t keys_size, size_t i, const Sizes & key_sizes, Data & set_data, Arena & pool)
-        {
-            /// Obtain a key to insert to the set
-            Key key = getKey(key_columns, keys_size, i, key_sizes);
-
-            typename Data::iterator it;
-            bool inserted;
-            set_data.emplace(key, it, inserted);
-
-            if (inserted)
-                onNewKey(*it, keys_size, pool);
-        }
-
-        bool exists(const ColumnRawPtrs & key_columns, size_t keys_size, size_t i, const Sizes & key_sizes, Data & set_data)
-        {
-            Key key = getKey(key_columns, keys_size, i, key_sizes);
-            return set_data.has(key);
         }
     };
 

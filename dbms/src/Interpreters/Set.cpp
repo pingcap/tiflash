@@ -73,7 +73,15 @@ void NO_INLINE Set::insertFromBlockImplCase(
         if (has_null_map && (*null_map)[i])
             continue;
 
-        state.insertKey(key_columns, keys_size, i, key_sizes, method.data, variants.string_pool);
+        /// Obtain a key to insert to the set
+        typename Method::Key key = state.getKey(key_columns, keys_size, i, key_sizes);
+
+        typename Method::Data::iterator it;
+        bool inserted;
+        method.data.emplace(key, it, inserted);
+
+        if (inserted)
+            method.onNewKey(*it, keys_size, variants.string_pool);
     }
 }
 
@@ -402,7 +410,8 @@ void NO_INLINE Set::executeImplCase(
         else
         {
             /// Build the key
-            vec_res[i] = negative ^ state.exists(key_columns, keys_size, i, key_sizes, method.data);
+            typename Method::Key key = state.getKey(key_columns, keys_size, i, key_sizes);
+            vec_res[i] = negative ^ method.data.has(key);
         }
     }
 }
