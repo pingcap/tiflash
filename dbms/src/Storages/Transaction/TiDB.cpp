@@ -121,7 +121,7 @@ DB::Field ColumnInfo::getDecimalValue(const String & decimal_text) const
 // FIXME it still has bug: https://github.com/pingcap/tidb/issues/11435
 Int64 ColumnInfo::getEnumIndex(const String & enum_id_or_text) const
 {
-    auto collator = ITiDBCollator::getCollator(collate.empty() ? "binary" : collate);
+    auto collator = ITiDBCollator::getCollator(collate.isEmpty() ? "binary" : collate.convert<String>());
     for (const auto & elem : elems)
     {
         if (collator->compare(elem.first.data(), elem.first.size(), enum_id_or_text.data(), enum_id_or_text.size()) == 0)
@@ -213,12 +213,8 @@ try
     tp_json->set("Flag", flag);
     tp_json->set("Flen", flen);
     tp_json->set("Decimal", decimal);
-    /// need to do this check for forward compatibility
-    if (!charset.empty())
-        tp_json->set("Charset", charset);
-    /// need to do this check for forward compatibility
-    if (!collate.empty())
-        tp_json->set("Collate", collate);
+    tp_json->set("Charset", charset);
+    tp_json->set("Collate", collate);
     if (!elems.empty())
     {
         Poco::JSON::Array::Ptr elem_arr = new Poco::JSON::Array();
@@ -271,10 +267,10 @@ try
     }
     /// need to do this check for forward compatibility
     if (!type_json->isNull("Charset"))
-        charset = type_json->getValue<String>("Charset");
+        charset = type_json->get("Charset");
     /// need to do this check for forward compatibility
     if (!type_json->isNull("Collate"))
-        collate = type_json->getValue<String>("Collate");
+        collate = type_json->get("Collate");
     state = static_cast<SchemaState>(json->getValue<Int32>("state"));
     comment = json->getValue<String>("comment");
 }
