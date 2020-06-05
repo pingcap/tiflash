@@ -6,6 +6,7 @@
 #include <Poco/StreamCopier.h>
 #include <Poco/StringTokenizer.h>
 #include <Storages/MutableSupport.h>
+#include <Storages/Transaction/Collator.h>
 #include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TiDB.h>
 
@@ -140,9 +141,10 @@ DB::Field ColumnInfo::getDecimalValue(const String & decimal_text) const
 // FIXME it still has bug: https://github.com/pingcap/tidb/issues/11435
 Int64 ColumnInfo::getEnumIndex(const String & enum_id_or_text) const
 {
+    auto collator = ITiDBCollator::getCollator(collate.isEmpty() ? "binary" : collate.convert<String>());
     for (const auto & elem : elems)
     {
-        if (elem.first == enum_id_or_text)
+        if (collator->compare(elem.first.data(), elem.first.size(), enum_id_or_text.data(), enum_id_or_text.size()) == 0)
         {
             return elem.second;
         }
@@ -164,6 +166,7 @@ UInt64 ColumnInfo::getSetValue(const String & set_str) const
         // https://github.com/pingcap/tidb/blob/master/ddl/ddl_api.go#L752
         // TiDB always use the set value as case insensitive value, so need
         // to use toLower to make it case insensitive
+        // todo need to use collation info once https://github.com/pingcap/tidb/issues/14512 is fixed
         String key_lowercase = Poco::toLower(elems.at(i).first);
         auto it = marked.find(key_lowercase);
         if (it != marked.end())
@@ -246,6 +249,8 @@ try
     tp_json->set("Flag", flag);
     tp_json->set("Flen", flen);
     tp_json->set("Decimal", decimal);
+    tp_json->set("Charset", charset);
+    tp_json->set("Collate", collate);
     if (!elems.empty())
     {
         Poco::JSON::Array::Ptr elem_arr = new Poco::JSON::Array();
@@ -298,6 +303,12 @@ try
             elems.push_back(std::make_pair(elems_arr->getElement<String>(i - 1), Int16(i)));
         }
     }
+    /// need to do this check for forward compatibility
+    if (!type_json->isNull("Charset"))
+        charset = type_json->get("Charset");
+    /// need to do this check for forward compatibility
+    if (!type_json->isNull("Collate"))
+        collate = type_json->get("Collate");
     state = static_cast<SchemaState>(json->getValue<Int32>("state"));
     comment = json->getValue<String>("comment");
 }
