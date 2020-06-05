@@ -174,6 +174,8 @@ struct ColumnInfo
     UInt32 flag = 0;
     Int32 flen = 0;
     Int32 decimal = 0;
+    Poco::Dynamic::Var charset;
+    Poco::Dynamic::Var collate;
     // Elems is the element list for enum and set type.
     std::vector<std::pair<std::string, Int16>> elems;
     SchemaState state = StateNone;

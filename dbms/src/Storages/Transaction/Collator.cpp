@@ -1,4 +1,5 @@
 #include <Common/Exception.h>
+#include <Poco/String.h>
 #include <Storages/Transaction/Collator.h>
 
 #include <array>
@@ -291,6 +292,23 @@ std::unique_ptr<ITiDBCollator> ITiDBCollator::getCollator(int32_t id)
             throw DB::Exception(
                 std::string(__PRETTY_FUNCTION__) + ": invalid collation ID: " + std::to_string(id), DB::ErrorCodes::LOGICAL_ERROR);
     }
+}
+
+std::unique_ptr<ITiDBCollator> ITiDBCollator::getCollator(const std::string & name)
+{
+    const static std::unordered_map<std::string, int32_t> collator_name_map({
+        {"binary", ITiDBCollator::BINARY},
+        {"ascii_bin", ITiDBCollator::ASCII_BIN},
+        {"latin1_bin", ITiDBCollator::LATIN1_BIN},
+        {"utf8mb4_bin", ITiDBCollator::UTF8MB4_BIN},
+        {"utf8_bin", ITiDBCollator::UTF8_BIN},
+        {"utf8_general_ci", ITiDBCollator::UTF8_GENERAL_CI},
+        {"utf8mb4_general_ci", ITiDBCollator::UTF8MB4_GENERAL_CI},
+    });
+    auto it = collator_name_map.find(Poco::toLower(name));
+    if (it == collator_name_map.end())
+        throw DB::Exception(std::string(__PRETTY_FUNCTION__) + ": invalid collation name: " + name, DB::ErrorCodes::LOGICAL_ERROR);
+    return ITiDBCollator::getCollator(it->second);
 }
 
 } // namespace TiDB

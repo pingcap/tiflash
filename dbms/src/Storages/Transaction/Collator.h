@@ -4,6 +4,7 @@
 #include <common/StringRef.h>
 
 #include <memory>
+#include <unordered_map>
 
 namespace TiDB
 {
@@ -25,6 +26,9 @@ public:
     /// Get the collator according to the internal collation ID, which directly comes from tipb and has been properly
     /// de-rewritten - the "New CI Collation" will flip the sign of the collation ID.
     static std::unique_ptr<ITiDBCollator> getCollator(int32_t id);
+
+    /// Get the collator according to collator name
+    static std::unique_ptr<ITiDBCollator> getCollator(const std::string & name);
 
     class IPattern
     {
