@@ -1,6 +1,9 @@
 #include <Common/Decimal.h>
 #include <Common/MyTime.h>
 #include <IO/ReadBufferFromString.h>
+#include <Poco/Base64Decoder.h>
+#include <Poco/MemoryStream.h>
+#include <Poco/StreamCopier.h>
 #include <Poco/StringTokenizer.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/SchemaNameMapper.h>
@@ -44,8 +47,25 @@ Field ColumnInfo::defaultValueToField() const
         case TypeLong:
         case TypeLongLong:
         case TypeInt24:
-        case TypeBit:
             return value.convert<Int64>();
+        case TypeBit:
+        {
+            // TODO: We shall use something like `orig_default_bit`, which will never change once created,
+            //  rather than `default_bit`, which could be altered.
+            //  See https://github.com/pingcap/tidb/issues/17641 and https://github.com/pingcap/tidb/issues/17642
+            auto & bit_value = default_bit_value;
+            // TODO: There might be cases that `orig_default` is not null but `default_bit` is null,
+            //  i.e. bit column added with an default value but later modified to another.
+            //  For these cases, neither `orig_default` (may get corrupted) nor `default_bit` (modified) is correct.
+            //  This is a bug anyway, we choose to make it simple, i.e. use `default_bit`.
+            if (bit_value.isEmpty())
+            {
+                if (hasNotNullFlag())
+                    return DB::GenDefaultField(*this);
+                return Field();
+            }
+            return getBitValue(bit_value.convert<String>());
+        }
         // Floating type.
         case TypeFloat:
         case TypeDouble:
@@ -192,6 +212,21 @@ Int64 ColumnInfo::getYearValue(const String & val) const
     return year;
 }
 
+UInt64 ColumnInfo::getBitValue(const String & val) const
+{
+    // The `default_bit` is a base64 encoded, big endian byte array.
+    Poco::MemoryInputStream istr(val.data(), val.size());
+    Poco::Base64Decoder decoder(istr);
+    std::string decoded;
+    Poco::StreamCopier::copyToString(decoder, decoded);
+    UInt64 result = 0;
+    for (auto c : decoded)
+    {
+        result = result << 8 | c;
+    }
+    return result;
+}
+
 Poco::JSON::Object::Ptr ColumnInfo::getJSONObject() const
 try
 {
@@ -205,6 +240,7 @@ try
     json->set("offset", offset);
     json->set("origin_default", origin_default_value);
     json->set("default", default_value);
+    json->set("default_bit", default_bit_value);
     Poco::JSON::Object::Ptr tp_json = new Poco::JSON::Object();
     tp_json->set("Tp", static_cast<Int32>(tp));
     tp_json->set("Flag", flag);
@@ -246,6 +282,8 @@ try
         origin_default_value = json->get("origin_default");
     if (!json->isNull("default"))
         default_value = json->get("default");
+    if (!json->isNull("default_bit"))
+        default_bit_value = json->get("default_bit");
     auto type_json = json->getObject("type");
     tp = static_cast<TP>(type_json->getValue<Int32>("Tp"));
     flag = type_json->getValue<UInt32>("Flag");
