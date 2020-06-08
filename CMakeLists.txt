@@ -256,8 +256,7 @@ include (cmake/find_icu4c.cmake)
 include (cmake/find_boost.cmake)
 # openssl, zlib before poco
 
-# Clickhouse wants to use internal zlib (contrib/zlib-ng) to speed up by default.
-# But it will conflict with `find_package(ZLIB REQUIRED)` from cmake.
+# Clickhouse wants to use internal zlib (contrib/zlib-ng) to speed up by default. But it will conflict with `find_package(ZLIB REQUIRED)` from cmake.
 # If `ENABLE_RDKAFKA` is true, librdkafka will fix the conflict by using the standard one.
 # librdkafka is useless for tiflash, need to set `USE_INTERNAL_ZLIB_LIBRARY` and `ENABLE_RDKAFKA` to OFF.
 set (ENABLE_RDKAFKA OFF CACHE BOOL "" FORCE)
