@@ -13,7 +13,7 @@ if [[ ${CMAKE_PREFIX_PATH} ]]; then
     echo "CMAKE_PREFIX_PATH is ${CMAKE_PREFIX_PATH}"
 fi
 
-set -ueo pipefail
+set -ueox pipefail
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 SRCPATH=$(cd ${SCRIPTPATH}/../..; pwd -P)
