@@ -86,7 +86,7 @@ void DistinctBlockInputStream::buildFilter(
     SetVariants & variants) const
 {
     typename Method::State state;
-    state.init(columns, nullptr);
+    state.init(columns);
 
     for (size_t i = 0; i < rows; ++i)
     {

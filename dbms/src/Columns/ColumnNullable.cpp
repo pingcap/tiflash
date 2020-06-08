@@ -87,7 +87,7 @@ void ColumnNullable::insertData(const char * /*pos*/, size_t /*length*/)
     throw Exception{"Method insertData is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED};
 }
 
-StringRef ColumnNullable::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const
+StringRef ColumnNullable::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator> collator, String & sort_key_container) const
 {
     const auto & arr = getNullMapData();
     static constexpr auto s = sizeof(arr[0]);
@@ -98,12 +98,12 @@ StringRef ColumnNullable::serializeValueIntoArena(size_t n, Arena & arena, char 
     size_t nested_size = 0;
 
     if (arr[n] == 0)
-        nested_size = getNestedColumn().serializeValueIntoArena(n, arena, begin).size;
+        nested_size = getNestedColumn().serializeValueIntoArena(n, arena, begin, collator, sort_key_container).size;
 
     return StringRef{begin, s + nested_size};
 }
 
-const char * ColumnNullable::deserializeAndInsertFromArena(const char * pos)
+const char * ColumnNullable::deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator> collator)
 {
     UInt8 val = *reinterpret_cast<const UInt8 *>(pos);
     pos += sizeof(val);
@@ -111,7 +111,7 @@ const char * ColumnNullable::deserializeAndInsertFromArena(const char * pos)
     getNullMapData().push_back(val);
 
     if (val == 0)
-        pos = getNestedColumn().deserializeAndInsertFromArena(pos);
+        pos = getNestedColumn().deserializeAndInsertFromArena(pos, collator);
     else
         getNestedColumn().insertDefault();
 

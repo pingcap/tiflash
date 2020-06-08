@@ -204,8 +204,8 @@ DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> && sou
     settings = context.getSettings();
 }
 
-void DAGExpressionAnalyzer::appendAggregation(
-    ExpressionActionsChain & chain, const tipb::Aggregation & agg, Names & aggregation_keys, AggregateDescriptions & aggregate_descriptions)
+void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, const tipb::Aggregation & agg, Names & aggregation_keys,
+    TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions)
 {
     if (agg.group_by_size() == 0 && agg.agg_func_size() == 0)
     {
@@ -258,6 +258,15 @@ void DAGExpressionAnalyzer::appendAggregation(
         // this is a temp result since implicit cast maybe added on these aggregated_columns
         aggregated_columns.emplace_back(name, step.actions->getSampleBlock().getByName(name).type);
         aggregation_keys.push_back(name);
+        auto type = step.actions->getSampleBlock().getByName(name).type;
+        // todo need to double check if TiFlash need to enable collator in aggregation, because
+        //  the aggregation in TiFlash is actually the partial stage, TiDB will do final stage of aggregation
+        //  so even if TiFlash do aggregation without collation info, the correctness of the query result is
+        //  guaranteed by TiDB itself
+        if (removeNullable(type)->isString())
+            collators.push_back(getCollatorFromExpr(expr));
+        else
+            collators.push_back(nullptr);
     }
     after_agg = true;
 }
@@ -610,7 +619,9 @@ void DAGExpressionAnalyzer::makeExplicitSet(
 
     // todo if this is a single value in, then convert it to equal expr
     SetPtr set = std::make_shared<Set>(SizeLimits(settings.max_rows_in_set, settings.max_bytes_in_set, settings.set_overflow_mode));
-    set->setCollator(getCollatorFromExpr(expr));
+    TiDB::TiDBCollators collators;
+    collators.push_back(getCollatorFromExpr(expr));
+    set->setCollators(collators);
     auto remaining_exprs = set->createFromDAGExpr(set_element_types, expr, create_ordered_set);
     prepared_sets[&expr] = std::make_shared<DAGSet>(std::move(set), std::move(remaining_exprs));
 }

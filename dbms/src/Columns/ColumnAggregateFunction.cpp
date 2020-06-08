@@ -280,7 +280,7 @@ void ColumnAggregateFunction::insertDefault()
     function->create(getData().back());
 }
 
-StringRef ColumnAggregateFunction::serializeValueIntoArena(size_t n, Arena & dst, const char *& begin) const
+StringRef ColumnAggregateFunction::serializeValueIntoArena(size_t n, Arena & dst, const char *& begin, std::shared_ptr<TiDB::ITiDBCollator>, String &) const
 {
     IAggregateFunction * function = func.get();
     WriteBufferFromArena out(dst, begin);
@@ -288,7 +288,7 @@ StringRef ColumnAggregateFunction::serializeValueIntoArena(size_t n, Arena & dst
     return out.finish();
 }
 
-const char * ColumnAggregateFunction::deserializeAndInsertFromArena(const char * src_arena)
+const char * ColumnAggregateFunction::deserializeAndInsertFromArena(const char * src_arena, std::shared_ptr<TiDB::ITiDBCollator>)
 {
     IAggregateFunction * function = func.get();
 

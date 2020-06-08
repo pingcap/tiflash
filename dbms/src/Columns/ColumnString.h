@@ -176,7 +176,7 @@ public:
         offsets.resize_assume_reserved(offsets.size() - n);
     }
 
-    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const override
+    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override
     {
         size_t string_size = sizeAt(n);
         size_t offset = offsetAt(n);
@@ -191,7 +191,7 @@ public:
         return res;
     }
 
-    const char * deserializeAndInsertFromArena(const char * pos) override
+    const char * deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator>) override
     {
         const size_t string_size = *reinterpret_cast<const size_t *>(pos);
         pos += sizeof(string_size);

@@ -262,12 +262,17 @@ static inline StringRef * ALWAYS_INLINE extractKeysAndPlaceInPool(
 /// Return a StringRef object, referring to the area (1) of the memory
 /// chunk that contains the keys. In other words, we ignore their StringRefs.
 inline StringRef ALWAYS_INLINE extractKeysAndPlaceInPoolContiguous(
-    size_t i, size_t keys_size, const ColumnRawPtrs & key_columns, StringRefs & keys, Arena & pool)
+    size_t i, size_t keys_size, const ColumnRawPtrs & key_columns, StringRefs & keys, const TiDB::TiDBCollators & collators, std::vector<std::string> & sort_key_containers, Arena & pool)
 {
     size_t sum_keys_size = 0;
     for (size_t j = 0; j < keys_size; ++j)
     {
         keys[j] = key_columns[j]->getDataAtWithTerminatingZero(i);
+        if (!collators.empty() && collators[j] != nullptr)
+        {
+            // todo check if need to handle the terminating zero
+            keys[j] = collators[j]->sortKey(keys[j].data, keys[j].size - 1, sort_key_containers[j]);
+        }
         sum_keys_size += keys[j].size;
     }
 
@@ -291,13 +296,23 @@ inline StringRef ALWAYS_INLINE extractKeysAndPlaceInPoolContiguous(
 /** Serialize keys into a continuous chunk of memory.
   */
 static inline StringRef ALWAYS_INLINE serializeKeysToPoolContiguous(
-    size_t i, size_t keys_size, const ColumnRawPtrs & key_columns, Arena & pool)
+    size_t i, size_t keys_size, const ColumnRawPtrs & key_columns, const TiDB::TiDBCollators & collators, std::vector<String> & sort_key_containers, Arena & pool)
 {
     const char * begin = nullptr;
 
     size_t sum_size = 0;
-    for (size_t j = 0; j < keys_size; ++j)
-        sum_size += key_columns[j]->serializeValueIntoArena(i, pool, begin).size;
+    if (!collators.empty())
+    {
+        for (size_t j = 0; j < keys_size; ++j)
+            sum_size += key_columns[j]->serializeValueIntoArena(i, pool, begin, collators[j],
+                                                                sort_key_containers[j]).size;
+    }
+    else
+    {
+        for (size_t j = 0; j < keys_size; ++j)
+            sum_size += key_columns[j]->serializeValueIntoArena(i, pool, begin, nullptr,
+                                                                TiDB::dummy_sort_key_contaner).size;
+    }
 
     return {begin, sum_size};
 }

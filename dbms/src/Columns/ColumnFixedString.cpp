@@ -78,14 +78,14 @@ void ColumnFixedString::insertData(const char * pos, size_t length)
     memcpy(&chars[old_size], pos, length);
 }
 
-StringRef ColumnFixedString::serializeValueIntoArena(size_t index, Arena & arena, char const *& begin) const
+StringRef ColumnFixedString::serializeValueIntoArena(size_t index, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator>, String &) const
 {
     auto pos = arena.allocContinue(n, begin);
     memcpy(pos, &chars[n * index], n);
     return StringRef(pos, n);
 }
 
-const char * ColumnFixedString::deserializeAndInsertFromArena(const char * pos)
+const char * ColumnFixedString::deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator>)
 {
     size_t old_size = chars.size();
     chars.resize(old_size + n);

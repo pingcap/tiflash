@@ -49,12 +49,12 @@ public:
         ++s;
     }
 
-    StringRef serializeValueIntoArena(size_t /*n*/, Arena & arena, char const *& begin) const override
+    StringRef serializeValueIntoArena(size_t /*n*/, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override
     {
         return { arena.allocContinue(0, begin), 0 };
     }
 
-    const char * deserializeAndInsertFromArena(const char * pos) override
+    const char * deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator>) override
     {
         ++s;
         return pos;

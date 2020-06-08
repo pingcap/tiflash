@@ -14,6 +14,7 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/IInterpreter.h>
 #include <Storages/RegionQueryInfo.h>
+#include <Storages/Transaction/Collator.h>
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/TMTStorages.h>
 
@@ -69,6 +70,7 @@ private:
         Names selected_columns;
 
         Names aggregation_keys;
+        TiDB::TiDBCollators aggregation_collators;
         AggregateDescriptions aggregate_descriptions;
     };
 
@@ -80,7 +82,7 @@ private:
     void executeUnion(Pipeline & pipeline);
     void executeLimit(Pipeline & pipeline);
     void executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, Names & aggregation_keys,
-        AggregateDescriptions & aggregate_descriptions);
+        TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions);
     void executeFinalProject(Pipeline & pipeline);
     void getAndLockStorageWithSchemaVersion(TableID table_id, Int64 schema_version);
     SortDescription getSortDescription(std::vector<NameAndTypePair> & order_columns);

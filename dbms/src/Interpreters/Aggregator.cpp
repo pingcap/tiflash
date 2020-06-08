@@ -415,7 +415,7 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
         {
             ++num_contiguous_keys;
 
-            if (types_removed_nullable[j]->isValueUnambiguouslyRepresentedInFixedSizeContiguousMemoryRegion())
+            if (types_removed_nullable[j]->isValueUnambiguouslyRepresentedInFixedSizeContiguousMemoryRegion() && (params.collators.empty() || params.collators[j] == nullptr))
             {
                 ++num_fixed_contiguous_keys;
                 key_sizes[j] = types_removed_nullable[j]->getSizeOfValueInMemory();
@@ -493,8 +493,9 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
       * For example, keys ('a\0b', 'c') and ('a', 'b\0c') will be aggregated as one key.
       * This is documented behaviour. It may be avoided by just switching to 'serialized' method, which is less efficient.
       */
-    if (params.keys_size == num_fixed_contiguous_keys + num_string_keys)
-        return AggregatedDataVariants::Type::concat;
+    /// disable this because it is not compatible with TiDB
+    //if (params.keys_size == num_fixed_contiguous_keys + num_string_keys)
+    //    return AggregatedDataVariants::Type::concat;
 
     return AggregatedDataVariants::Type::serialized;
 
@@ -535,6 +536,7 @@ void NO_INLINE Aggregator::executeImpl(
     Arena * aggregates_pool,
     size_t rows,
     ColumnRawPtrs & key_columns,
+    TiDB::TiDBCollators & collators,
     AggregateFunctionInstruction * aggregate_instructions,
     const Sizes & key_sizes,
     StringRefs & keys,
@@ -542,7 +544,7 @@ void NO_INLINE Aggregator::executeImpl(
     AggregateDataPtr overflow_row) const
 {
     typename Method::State state;
-    state.init(key_columns);
+    state.init(key_columns, collators);
 
     if (!no_more_keys)
         executeImplCase<false>(method, state, aggregates_pool, rows, key_columns, aggregate_instructions, key_sizes, keys, overflow_row);
@@ -572,18 +574,19 @@ void NO_INLINE Aggregator::executeImplCase(
     /// For all rows.
     typename Method::iterator it;
     typename Method::Key prev_key;
+    std::vector<std::string> sort_key_containers;
     for (size_t i = 0; i < rows; ++i)
     {
         bool inserted;          /// Inserted a new key, or was this key already?
         bool overflow = false;  /// The new key did not fit in the hash table because of no_more_keys.
 
         /// Get the key to insert into the hash table.
-        typename Method::Key key = state.getKey(key_columns, params.keys_size, i, key_sizes, keys, *aggregates_pool);
+        typename Method::Key key = state.getKey(key_columns, params.keys_size, i, key_sizes, keys, *aggregates_pool, sort_key_containers);
 
         if (!no_more_keys)  /// Insert.
         {
             /// Optimization for consecutive identical keys.
-            if (!Method::no_consecutive_keys_optimization)
+            if (!Method::no_consecutive_keys_optimization(params.collators))
             {
                 if (i != 0 && key == prev_key)
                 {
@@ -734,6 +737,7 @@ bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & re
         result.init(method);
         result.keys_size = params.keys_size;
         result.key_sizes = key_sizes;
+        result.collators = params.collators;
         LOG_TRACE(log, "Aggregation method: " << result.getMethodName());
 
         if (params.compiler)
@@ -809,7 +813,7 @@ bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & re
         {
         #define M(NAME, IS_TWO_LEVEL) \
             else if (result.type == AggregatedDataVariants::Type::NAME) \
-                executeImpl(*result.NAME, result.aggregates_pool, rows, key_columns, &aggregate_functions_instructions[0], \
+                executeImpl(*result.NAME, result.aggregates_pool, rows, key_columns, result.collators, &aggregate_functions_instructions[0], \
                     result.key_sizes, key, no_more_keys, overflow_row_ptr);
 
             if (false) {}
@@ -1093,7 +1097,7 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
 {
     for (const auto & value : data)
     {
-        method.insertKeyIntoColumns(value, key_columns, params.keys_size, key_sizes);
+        method.insertKeyIntoColumns(value, key_columns, params.keys_size, key_sizes, params.collators);
 
         for (size_t i = 0; i < params.aggregates_size; ++i)
             aggregate_functions[i]->insertResultInto(
@@ -1115,7 +1119,7 @@ void NO_INLINE Aggregator::convertToBlockImplNotFinal(
 
     for (auto & value : data)
     {
-        method.insertKeyIntoColumns(value, key_columns, params.keys_size, key_sizes);
+        method.insertKeyIntoColumns(value, key_columns, params.keys_size, key_sizes, params.collators);
 
         /// reserved, so push_back does not throw exceptions
         for (size_t i = 0; i < params.aggregates_size; ++i)
@@ -1870,7 +1874,9 @@ void NO_INLINE Aggregator::mergeStreamsImplCase(
         aggregate_columns[i] = &typeid_cast<const ColumnAggregateFunction &>(*block.safeGetByPosition(params.keys_size + i).column).getData();
 
     typename Method::State state;
-    state.init(key_columns);
+    state.init(key_columns, params.collators);
+    std::vector<std::string> sort_key_containers;
+    sort_key_containers.resize(key_columns.size(), "");
 
     /// For all rows.
     StringRefs keys(params.keys_size);
@@ -1883,7 +1889,7 @@ void NO_INLINE Aggregator::mergeStreamsImplCase(
         bool overflow = false;  /// The new key did not fit in the hash table because of no_more_keys.
 
         /// Get the key to insert into the hash table.
-        auto key = state.getKey(key_columns, params.keys_size, i, key_sizes, keys, *aggregates_pool);
+        auto key = state.getKey(key_columns, params.keys_size, i, key_sizes, keys, *aggregates_pool, sort_key_containers);
 
         if (!no_more_keys)
         {
@@ -2252,7 +2258,9 @@ void NO_INLINE Aggregator::convertBlockToTwoLevelImpl(
     std::vector<Block> & destinations) const
 {
     typename Method::State state;
-    state.init(key_columns);
+    state.init(key_columns, params.collators);
+    std::vector<std::string> sort_key_containers;
+    sort_key_containers.resize(key_columns.size(), "");
 
     size_t rows = source.rows();
     size_t columns = source.columns();
@@ -2264,7 +2272,7 @@ void NO_INLINE Aggregator::convertBlockToTwoLevelImpl(
     for (size_t i = 0; i < rows; ++i)
     {
         /// Obtain a key. Calculate bucket number from it.
-        typename Method::Key key = state.getKey(key_columns, params.keys_size, i, key_sizes, keys, *pool);
+        typename Method::Key key = state.getKey(key_columns, params.keys_size, i, key_sizes, keys, *pool, sort_key_containers);
 
         auto hash = method.data.hash(key);
         auto bucket = method.data.getBucketFromHash(hash);

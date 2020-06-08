@@ -378,7 +378,8 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
     // There will be either Agg...
     if (dag.hasAggregation())
     {
-        analyzer->appendAggregation(chain, dag.getAggregation(), res.aggregation_keys, res.aggregate_descriptions);
+        analyzer->appendAggregation(
+            chain, dag.getAggregation(), res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions);
         res.need_aggregate = true;
         res.before_aggregation = chain.getLastActions();
 
@@ -413,8 +414,8 @@ void InterpreterDAG::executeWhere(Pipeline & pipeline, const ExpressionActionsPt
     pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, expr, filter_column); });
 }
 
-void InterpreterDAG::executeAggregation(
-    Pipeline & pipeline, const ExpressionActionsPtr & expr, Names & key_names, AggregateDescriptions & aggregates)
+void InterpreterDAG::executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expr, Names & key_names,
+    TiDB::TiDBCollators & collators, AggregateDescriptions & aggregates)
 {
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expr); });
 
@@ -442,12 +443,23 @@ void InterpreterDAG::executeAggregation(
       * 2. An aggregation is done with store of temporary data on the disk, and they need to be merged in a memory efficient way.
       */
     bool allow_to_use_two_level_group_by = pipeline.streams.size() > 1 || settings.max_bytes_before_external_group_by != 0;
+    bool has_collator = false;
+    for (auto & p : collators)
+    {
+        if (p != nullptr)
+        {
+            has_collator = true;
+            break;
+        }
+    }
 
+    // todo check if collator can work with code gen
     Aggregator::Params params(header, keys, aggregates, false, settings.max_rows_to_group_by, settings.group_by_overflow_mode,
-        settings.compile ? &context.getCompiler() : nullptr, settings.min_count_to_compile,
+        settings.compile && !has_collator ? &context.getCompiler() : nullptr, settings.min_count_to_compile,
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0),
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0),
-        settings.max_bytes_before_external_group_by, settings.empty_result_for_aggregation_by_empty_set, context.getTemporaryPath());
+        settings.max_bytes_before_external_group_by, settings.empty_result_for_aggregation_by_empty_set, context.getTemporaryPath(),
+        has_collator ? collators : TiDB::dummy_collators);
 
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.streams.size() > 1)
@@ -650,7 +662,7 @@ void InterpreterDAG::executeImpl(Pipeline & pipeline)
     if (res.need_aggregate)
     {
         // execute aggregation
-        executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregate_descriptions);
+        executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions);
         recordProfileStreams(pipeline, dag.getAggregationIndex());
     }
     if (res.before_order_and_select)

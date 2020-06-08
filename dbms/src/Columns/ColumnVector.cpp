@@ -31,7 +31,7 @@ namespace ErrorCodes
 
 
 template <typename T>
-StringRef ColumnVector<T>::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const
+StringRef ColumnVector<T>::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator>, String &) const
 {
     auto pos = arena.allocContinue(sizeof(T), begin);
     memcpy(pos, &data[n], sizeof(T));
@@ -39,7 +39,7 @@ StringRef ColumnVector<T>::serializeValueIntoArena(size_t n, Arena & arena, char
 }
 
 template <typename T>
-const char * ColumnVector<T>::deserializeAndInsertFromArena(const char * pos)
+const char * ColumnVector<T>::deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator>)
 {
     data.push_back(*reinterpret_cast<const T *>(pos));
     return pos + sizeof(T);
