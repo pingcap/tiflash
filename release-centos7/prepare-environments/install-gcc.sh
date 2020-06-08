@@ -24,6 +24,7 @@ ln -s /usr/local/bin/gcc /usr/local/bin/cc
 yum remove -y gcc
 
 echo "/usr/local/lib64" | tee /etc/ld.so.conf.d/10_local-lib64.conf
+ldconfig
 gcc --version
 
 rm -rf ~/gcc
