@@ -1,11 +1,23 @@
 #!/bin/bash
 
-set -ueo pipefail
+CMAKE_BUILD_TYPE=$1
+CMAKE_PREFIX_PATH=$2
+
+if [[ -z ${CMAKE_BUILD_TYPE} ]]; then
+    CMAKE_BUILD_TYPE="RELWITHDEBINFO"
+fi
+
+DEFINE_CMAKE_PREFIX_PATH=""
+if [[ ${CMAKE_PREFIX_PATH} ]]; then
+    DEFINE_CMAKE_PREFIX_PATH="-DCMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}"
+    echo "CMAKE_PREFIX_PATH is ${CMAKE_PREFIX_PATH}"
+fi
+
+set -ueox pipefail
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-SRCPATH=${1:-$(cd $SCRIPTPATH/../..; pwd -P)}
+SRCPATH=$(cd ${SCRIPTPATH}/../..; pwd -P)
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
-CMAKE_BUILD_TYPE="RELWITHDEBINFO"
 ENABLE_EMBEDDED_COMPILER="FALSE"
 
 install_dir="$SRCPATH/release-centos7/tiflash"
@@ -31,11 +43,13 @@ ln -s ${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.so ${SRCP
 build_dir="$SRCPATH/release-centos7/build-release"
 rm -rf $build_dir && mkdir -p $build_dir && cd $build_dir
 
-cmake "$SRCPATH" \
-      -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE \
-      -DENABLE_EMBEDDED_COMPILER=$ENABLE_EMBEDDED_COMPILER \
+cmake "$SRCPATH" ${DEFINE_CMAKE_PREFIX_PATH} \
+      -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
+      -DENABLE_EMBEDDED_COMPILER=${ENABLE_EMBEDDED_COMPILER} \
       -DENABLE_ICU=OFF \
       -DENABLE_MYSQL=OFF \
+      -DENABLE_TESTING=OFF \
+      -DENABLE_TESTS=OFF \
       -Wno-dev
 
 make -j $NPROC
