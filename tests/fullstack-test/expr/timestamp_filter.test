@@ -51,7 +51,7 @@ func> wait_table test t
 
 ## Force merge data into stable, so that we can test rough set filter
 >> DBGInvoke query_mapped('manage table \$d.\$t merge delta', test, t)
->> select tidb_database, tidb_table, delta_rate_rows, total_stable_rows from dt_tables where tidb_database='test' and tidb_table='t' and is_tombstone = 0
+>> select tidb_database, tidb_table, delta_rate_rows, total_stable_rows from system.dt_tables where tidb_database='test' and tidb_table='t' and is_tombstone = 0
 ┌─tidb_database─┬─tidb_table─┬─delta_rate_rows─┬─total_stable_rows─┐
 │ test          │ t          │               0 │                 1 │
 └───────────────┴────────────┴─────────────────┴───────────────────┘
