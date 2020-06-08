@@ -28,6 +28,7 @@ static bool isPKDiffEachInSortedColumn(const UInt64 * data_start, size_t tol_siz
     const UInt64 * data_pos = data_start;
     const UInt64 * data_end = data_start + tol_size;
     const UInt64 * data_end_sse = data_start + tol_size / STEP * STEP;
+    std::ignore = data_end_sse;
 
 #if __SSE2__
 
