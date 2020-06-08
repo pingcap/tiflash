@@ -66,7 +66,8 @@ std::shared_ptr<ASTFunction> getDatabaseEngine(const String & filename)
     return std::static_pointer_cast<ASTFunction>(storage->engine->clone());
 }
 
-TiDB::TableInfo getTableInfo(const String & table_metadata_file)
+// Get <TableName, TableInfo> from `table_metadata_file`
+std::pair<String, TiDB::TableInfo> getTableInfo(const String & table_metadata_file)
 {
     String definition;
     if (Poco::File(table_metadata_file).exists())
@@ -120,7 +121,7 @@ TiDB::TableInfo getTableInfo(const String & table_metadata_file)
         if (!table_info_json.empty())
         {
             info.deserialize(table_info_json);
-            return info;
+            return {ast_create_query.table, info};
         }
     }
 
@@ -222,7 +223,12 @@ inline bool isSamePath(const String & lhs, const String & rhs) { return Poco::Pa
 //   TableDiskInfo
 // ================================================
 
-String IDAsPathUpgrader::TableDiskInfo::name() const { return tidb_table_info->name; }
+String IDAsPathUpgrader::TableDiskInfo::name() const
+{
+    // Name in table_info may not be updated, use the name in `ATTACH TABLE <name> ...`.
+    // The name in table_info will be updated in later schema sync.
+    return old_name;
+}
 String IDAsPathUpgrader::TableDiskInfo::newName() const { return mapper->mapTableName(*tidb_table_info); }
 const TiDB::TableInfo & IDAsPathUpgrader::TableDiskInfo::getInfo() const { return *tidb_table_info; }
 
@@ -529,9 +535,10 @@ void IDAsPathUpgrader::linkDatabaseTableInfos(const std::vector<TiDB::DBInfoPtr>
         for (const auto & table_filename : file_names)
         {
             String table_meta_file = db_meta_dir + "/" + table_filename;
-            auto table_info = getTableInfo(table_meta_file);
+            // Name in table_info may not be updated, use the name in `ATTACH TABLE <name> ...`.
+            auto [old_name, table_info] = getTableInfo(table_meta_file);
             db_info.tables.emplace_back( //
-                TableDiskInfo{std::make_shared<TiDB::TableInfo>(table_info), mapper});
+                TableDiskInfo{old_name, std::make_shared<TiDB::TableInfo>(table_info), mapper});
         }
         ++iter;
     }

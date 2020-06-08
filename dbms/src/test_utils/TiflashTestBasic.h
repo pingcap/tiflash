@@ -4,6 +4,7 @@
 #include <DataTypes/IDataType.h>
 #include <Interpreters/Context.h>
 #include <Poco/ConsoleChannel.h>
+#include <Poco/DirectoryIterator.h>
 #include <Poco/File.h>
 #include <Poco/FormattingChannel.h>
 #include <Poco/Path.h>
@@ -56,11 +57,16 @@ class TiFlashTestEnv
 public:
     static String getTemporaryPath() { return Poco::Path("./tmp/").absolute().toString(); }
 
-    static std::vector<String> getExtraPaths()
+    static std::vector<String> getExtraPaths(const std::vector<String> & testdata_path = {})
     {
-        std::vector<String> result;
-        result.push_back(getTemporaryPath() + "/data/");
-        return result;
+        if (!testdata_path.empty())
+            return testdata_path;
+        else
+        {
+            std::vector<String> result;
+            result.push_back(getTemporaryPath() + "/data/");
+            return result;
+        }
     }
 
     static void setupLogger(const String & level = "trace")
@@ -73,10 +79,30 @@ public:
         Logger::root().setLevel(level);
     }
 
-    static Context & getContext(const DB::Settings & settings = DB::Settings())
+    static Strings findTestDataPath(const String & name)
+    {
+        const static std::vector<String> SEARCH_PATH = {"../tests/testdata/", "/tests/testdata/"};
+        for (auto & prefix : SEARCH_PATH)
+        {
+            String path = prefix + name;
+            if (auto f = Poco::File(path); f.exists() && f.isDirectory())
+            {
+                Strings paths;
+                Poco::DirectoryIterator dir_end;
+                for (Poco::DirectoryIterator dir_it(f); dir_it != dir_end; ++dir_it)
+                    paths.emplace_back(path + "/" + dir_it.name() + "/");
+                return paths;
+            }
+        }
+        throw Exception("Can not find testdata with name[" + name + "]");
+    }
+
+    static Context & getContext(const DB::Settings & settings = DB::Settings(), const std::vector<String> testdata_path = {})
     {
         static Context context = DB::Context::createGlobal();
-        context.setPath(getTemporaryPath());
+        // Load `testdata_path` as path if it is set.
+        const String root_path = testdata_path.empty() ? getTemporaryPath() : testdata_path[0];
+        context.setPath(root_path);
         context.setGlobalContext(context);
         try
         {
@@ -89,11 +115,12 @@ public:
             context.setApplicationType(DB::Context::ApplicationType::SERVER);
 
             context.initializeTiFlashMetrics();
-            std::vector<String> all_paths{getTemporaryPath()};
             std::vector<size_t> all_capacity{0};
-            context.initializePathCapacityMetric(all_paths, std::move(all_capacity));
 
-            context.createTMTContext({}, "", "", {"default"}, getTemporaryPath() + "/kvstore", TiDB::StorageEngine::TMT, false);
+            // FIXME: These paths are only set at the first time
+            context.initializePathCapacityMetric(testdata_path, std::move(all_capacity));
+            context.createTMTContext({}, "", "", {"default"}, root_path + "/kvstore", TiDB::StorageEngine::TMT, false);
+
             context.getTMTContext().restore();
         }
         context.getSettingsRef() = settings;
