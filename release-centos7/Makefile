@@ -19,3 +19,9 @@ image_tiflash_ci:
 
 image_tiflash_ci_base:
 	docker build -f Dockerfile-tiflash-ci-base -t hub.pingcap.net/tiflash/tiflash-ci-base .
+
+image_builder_release_arm64:
+	docker build -f Dockerfile-builder-arm64 -t hub.pingcap.net/tiflash/tiflash-builder:arm64 .
+
+build_tiflash_release_arm64:
+	docker run --rm -v $(realpath ..):/tics hub.pingcap.net/tiflash/tiflash-builder:arm64 /tics/release-centos7/build/build-release.sh
