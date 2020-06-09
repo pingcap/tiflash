@@ -157,15 +157,19 @@ public:
       */
     virtual StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator> collator = nullptr, String & sort_key_container = TiDB::dummy_sort_key_contaner) const = 0;
 
-    /// Deserializes a value that was serialized using IColumn::serializeValueIntoArena method.
-    /// Returns pointer to the position after the read data.
-    /// Note that for string columns with collation it is actually impossible to restore the value.
-    /// In this case, the column restored by this function is discarded, the compiler will add a
-    /// special aggregate function(any) as the group by column's output
-    /// e.g, for sql:
-    /// select string_column, count(*) from table group by string_column
-    /// if string_column has collation information, the query will be rewrite to
-    /// select any(string_column), count(*) from table group by string_column
+    /** Deserializes a value that was serialized using IColumn::serializeValueIntoArena method.
+      * Returns pointer to the position after the read data.
+      * Note:
+      * 1. For string columns with collation it is actually impossible to restore the value.
+      *     In this case, the column restored by this function is discarded, the compiler will add a
+      *     special aggregate function(any) as the group by column's output. For example:
+      *         select string_column, count(*) from table group by string_column
+      *     if string_column has collation information, the query will be rewrite to
+      *         select any(string_column), count(*) from table group by string_column
+      * 2. The input parameter `collator` does not work well for complex columns(column tuple),
+      *     but it is only used by TiDB , which does not support complex columns, so just ignore
+      *     the complex column will be ok.
+      */
     virtual const char * deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator> collator = nullptr) = 0;
 
     /// Update state of hash function with value of n-th element.
