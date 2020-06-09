@@ -46,7 +46,7 @@ const char * ColumnVector<T>::deserializeAndInsertFromArena(const char * pos, st
 }
 
 template <typename T>
-void ColumnVector<T>::updateHashWithValue(size_t n, SipHash & hash) const
+void ColumnVector<T>::updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator>, String &) const
 {
     hash.update(data[n]);
 }

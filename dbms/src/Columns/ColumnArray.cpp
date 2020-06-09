@@ -197,14 +197,14 @@ const char * ColumnArray::deserializeAndInsertFromArena(const char * pos, std::s
 }
 
 
-void ColumnArray::updateHashWithValue(size_t n, SipHash & hash) const
+void ColumnArray::updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator> collator, String & sort_key_container) const
 {
     size_t array_size = sizeAt(n);
     size_t offset = offsetAt(n);
 
     hash.update(array_size);
     for (size_t i = 0; i < array_size; ++i)
-        getData().updateHashWithValue(offset + i, hash);
+        getData().updateHashWithValue(offset + i, hash, collator, sort_key_container);
 }
 
 

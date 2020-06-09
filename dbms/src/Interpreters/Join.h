@@ -152,7 +152,7 @@ struct JoinKeyGetterHashed
         size_t i,
         const Sizes &) const
     {
-        return hash128(i, keys_size, key_columns);
+        return hash128(i, keys_size, key_columns, TiDB::dummy_collators, TiDB::dummy_sort_key_contaners);
     }
 
     static void onNewKey(Key &, Arena &) {}

@@ -205,13 +205,22 @@ public:
         return pos + string_size;
     }
 
-    void updateHashWithValue(size_t n, SipHash & hash) const override
+    void updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator> collator, String & sort_key_container) const override
     {
         size_t string_size = sizeAt(n);
         size_t offset = offsetAt(n);
-
-        hash.update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
-        hash.update(reinterpret_cast<const char *>(&chars[offset]), string_size);
+        if (collator != nullptr)
+        {
+            auto sort_key = collator->sortKey(reinterpret_cast<const char *>(&chars[offset]), string_size, sort_key_container);
+            string_size = sort_key.size;
+            hash.update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
+            hash.update(sort_key.data, sort_key.size);
+        }
+        else
+        {
+            hash.update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
+            hash.update(reinterpret_cast<const char *>(&chars[offset]), string_size);
+        }
     }
 
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;

@@ -690,8 +690,10 @@ struct AggregationMethodHashed
 
     struct State
     {
-        void init(ColumnRawPtrs &, const TiDB::TiDBCollators &)
+        TiDB::TiDBCollators collators;
+        void init(ColumnRawPtrs &, const TiDB::TiDBCollators & collators_)
         {
+            collators = collators_;
         }
 
         Key getKey(
@@ -701,9 +703,9 @@ struct AggregationMethodHashed
             const Sizes &,
             StringRefs & keys,
             Arena &,
-            std::vector<String> &) const
+            std::vector<String> & sort_key_containers) const
         {
-            return hash128(i, keys_size, key_columns, keys);
+            return hash128(i, keys_size, key_columns, keys, collators, sort_key_containers);
         }
     };
 
@@ -717,7 +719,15 @@ struct AggregationMethodHashed
 
     static void onExistingKey(const Key &, StringRefs &, Arena &) {}
 
-    static bool no_consecutive_keys_optimization(const TiDB::TiDBCollators &) { return false; };
+    static bool no_consecutive_keys_optimization(const TiDB::TiDBCollators & collators)
+    {
+        for (auto & collator : collators)
+        {
+            if (collator != nullptr)
+                return true;
+        }
+        return false;
+    };
 
     static void insertKeyIntoColumns(const typename Data::value_type & value, MutableColumns & key_columns, size_t keys_size, const Sizes &, const TiDB::TiDBCollators &)
     {

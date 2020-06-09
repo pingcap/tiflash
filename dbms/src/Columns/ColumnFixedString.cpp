@@ -93,7 +93,7 @@ const char * ColumnFixedString::deserializeAndInsertFromArena(const char * pos, 
     return pos + n;
 }
 
-void ColumnFixedString::updateHashWithValue(size_t index, SipHash & hash) const
+void ColumnFixedString::updateHashWithValue(size_t index, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator>, String &) const
 {
     hash.update(reinterpret_cast<const char *>(&chars[n * index]), n);
 }

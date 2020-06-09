@@ -60,7 +60,7 @@ public:
         return pos;
     }
 
-    void updateHashWithValue(size_t /*n*/, SipHash & /*hash*/) const override
+    void updateHashWithValue(size_t /*n*/, SipHash & /*hash*/, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override
     {
     }
 

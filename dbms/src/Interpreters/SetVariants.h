@@ -312,8 +312,10 @@ struct SetMethodHashed
 
     struct State
     {
-        void init(const ColumnRawPtrs &, const TiDB::TiDBCollators & = TiDB::dummy_collators)
+        TiDB::TiDBCollators collators;
+        void init(const ColumnRawPtrs &, const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
         {
+            collators = collators_;
         }
 
         Key getKey(
@@ -321,9 +323,9 @@ struct SetMethodHashed
             size_t keys_size,
             size_t i,
             const Sizes &,
-            std::vector<String> & = TiDB::dummy_sort_key_contaners) const
+            std::vector<String> & sort_key_containers = TiDB::dummy_sort_key_contaners) const
         {
-            return hash128(i, keys_size, key_columns);
+            return hash128(i, keys_size, key_columns, collators, sort_key_containers);
         }
 
     };

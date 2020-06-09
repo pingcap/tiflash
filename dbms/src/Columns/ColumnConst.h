@@ -140,9 +140,9 @@ public:
         return res;
     }
 
-    void updateHashWithValue(size_t, SipHash & hash) const override
+    void updateHashWithValue(size_t, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator> collator, String & sort_key_container) const override
     {
-        data->updateHashWithValue(0, hash);
+        data->updateHashWithValue(0, hash, collator, sort_key_container);
     }
 
     ColumnPtr filter(const Filter & filt, ssize_t result_size_hint) const override;

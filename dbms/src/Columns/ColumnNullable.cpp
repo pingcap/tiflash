@@ -33,12 +33,12 @@ ColumnNullable::ColumnNullable(MutableColumnPtr && nested_column_, MutableColumn
 }
 
 
-void ColumnNullable::updateHashWithValue(size_t n, SipHash & hash) const
+void ColumnNullable::updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator> collator, String & sort_key_container) const
 {
     const auto & arr = getNullMapData();
     hash.update(arr[n]);
     if (arr[n] == 0)
-        getNestedColumn().updateHashWithValue(n, hash);
+        getNestedColumn().updateHashWithValue(n, hash, collator, sort_key_container);
 }
 
 

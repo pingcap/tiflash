@@ -57,7 +57,7 @@ UInt64 ColumnDecimal<T>::get64(size_t n) const
 }
 
 template <typename T>
-void ColumnDecimal<T>::updateHashWithValue(size_t n, SipHash & hash) const
+void ColumnDecimal<T>::updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator>, String &) const
 {
     hash.update(data[n]);
 }

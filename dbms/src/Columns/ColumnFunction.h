@@ -84,7 +84,7 @@ public:
         throw Exception("Cannot deserialize to " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void updateHashWithValue(size_t, SipHash &) const override
+    void updateHashWithValue(size_t, SipHash &, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override
     {
         throw Exception("updateHashWithValue is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }

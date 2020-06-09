@@ -142,7 +142,7 @@ public:
 
     const char * deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator>) override;
 
-    void updateHashWithValue(size_t n, SipHash & hash) const override;
+    void updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override;
 
     size_t byteSize() const override;
 

@@ -174,7 +174,7 @@ static inline T ALWAYS_INLINE packFixed(
 
 /// Hash a set of keys into a UInt128 value.
 static inline UInt128 ALWAYS_INLINE hash128(
-    size_t i, size_t keys_size, const ColumnRawPtrs & key_columns, StringRefs & keys)
+    size_t i, size_t keys_size, const ColumnRawPtrs & key_columns, StringRefs & keys, const TiDB::TiDBCollators & collators, std::vector<String> & sort_key_containers)
 {
     UInt128 key;
     SipHash hash;
@@ -183,6 +183,13 @@ static inline UInt128 ALWAYS_INLINE hash128(
     {
         /// Hashes the key.
         keys[j] = key_columns[j]->getDataAtWithTerminatingZero(i);
+        if (!collators.empty() && collators[j] != nullptr)
+        {
+            // todo check if need to handle the terminating zero
+            /// Note if collation is enabled, keys only exists before next call to hash128 since it
+            /// will be overwritten in the next call
+            keys[j] = collators[j]->sortKey(keys[j].data, keys[j].size - 1, sort_key_containers[j]);
+        }
         hash.update(keys[j].data, keys[j].size);
     }
 
@@ -194,14 +201,21 @@ static inline UInt128 ALWAYS_INLINE hash128(
 
 /// Almost the same as above but it doesn't return any reference to key data.
 static inline UInt128 ALWAYS_INLINE hash128(
-    size_t i, size_t keys_size, const ColumnRawPtrs & key_columns)
+    size_t i, size_t keys_size, const ColumnRawPtrs & key_columns, const TiDB::TiDBCollators & collators, std::vector<std::string> & sort_key_containers)
 {
     UInt128 key;
     SipHash hash;
 
-    for (size_t j = 0; j < keys_size; ++j)
-        // todo support collation
-        key_columns[j]->updateHashWithValue(i, hash);
+    if (collators.empty())
+    {
+        for (size_t j = 0; j < keys_size; ++j)
+            key_columns[j]->updateHashWithValue(i, hash, nullptr, TiDB::dummy_sort_key_contaner);
+    }
+    else
+    {
+        for (size_t j = 0; j < keys_size; ++j)
+            key_columns[j]->updateHashWithValue(i, hash, collators[j], sort_key_containers[j]);
+    }
 
     hash.get128(key.low, key.high);
 

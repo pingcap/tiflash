@@ -162,7 +162,7 @@ ColumnPtr ColumnAggregateFunction::permute(const Permutation & perm, size_t limi
 }
 
 /// Is required to support operations with Set
-void ColumnAggregateFunction::updateHashWithValue(size_t n, SipHash & hash) const
+void ColumnAggregateFunction::updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator>, String &) const
 {
     WriteBufferFromOwnString wbuf;
     func->serialize(getData()[n], wbuf);
