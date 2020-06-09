@@ -257,11 +257,11 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
         String name = getActions(expr, step.actions);
         step.required_output.push_back(name);
         aggregation_keys.push_back(name);
-        /// when enable_collation is true, TiFlash will do the aggregation with collation info
-        /// since the aggregation in TiFlash is actually the partial stage, and TiDB always do
-        /// the final stage of the aggregation, even if TiFlash do the aggregation without
-        /// collation info, the correctness of the query result is guaranteed by TiDB itself, so
-        /// add a flag to let TiDB decide whether TiFlash aggregate the data with collation or not
+        /// when group_by_collation_sensitive is true, TiFlash will do the aggregation with collation
+        /// info, since the aggregation in TiFlash is actually the partial stage, and TiDB always do
+        /// the final stage of the aggregation, even if TiFlash do the aggregation without collation
+        /// info, the correctness of the query result is guaranteed by TiDB itself, so add a flag to
+        /// let TiDB/TiFlash to decide whether aggregate the data with collation info or not
         if (group_by_collation_sensitive)
         {
             auto type = step.actions->getSampleBlock().getByName(name).type;
