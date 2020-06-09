@@ -575,6 +575,7 @@ void NO_INLINE Aggregator::executeImplCase(
     typename Method::iterator it;
     typename Method::Key prev_key;
     std::vector<std::string> sort_key_containers;
+    sort_key_containers.resize(key_columns.size(), "");
     for (size_t i = 0; i < rows; ++i)
     {
         bool inserted;          /// Inserted a new key, or was this key already?

@@ -363,16 +363,18 @@ namespace
     template <ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map>
     void NO_INLINE insertFromBlockImplTypeCase(
         Map & map, size_t rows, const ColumnRawPtrs & key_columns,
-        size_t keys_size, const Sizes & key_sizes, Block * stored_block, ConstNullMapPtr null_map, Arena & pool)
+        size_t keys_size, const Sizes & key_sizes, const TiDB::TiDBCollators & collators, Block * stored_block, ConstNullMapPtr null_map, Arena & pool)
     {
-        KeyGetter key_getter(key_columns);
+        KeyGetter key_getter(key_columns, collators);
+        std::vector<std::string> sort_key_containers;
+        sort_key_containers.resize(key_columns.size(), "");
 
         for (size_t i = 0; i < rows; ++i)
         {
             if (has_null_map && (*null_map)[i])
                 continue;
 
-            auto key = key_getter.getKey(key_columns, keys_size, i, key_sizes);
+            auto key = key_getter.getKey(key_columns, keys_size, i, key_sizes, sort_key_containers);
             Inserter<STRICTNESS, Map, KeyGetter>::insert(map, key, stored_block, i, pool);
         }
     }
@@ -381,19 +383,19 @@ namespace
     template <ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map>
     void insertFromBlockImplType(
         Map & map, size_t rows, const ColumnRawPtrs & key_columns,
-        size_t keys_size, const Sizes & key_sizes, Block * stored_block, ConstNullMapPtr null_map, Arena & pool)
+        size_t keys_size, const Sizes & key_sizes, const TiDB::TiDBCollators & collators, Block * stored_block, ConstNullMapPtr null_map, Arena & pool)
     {
         if (null_map)
-            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, true>(map, rows, key_columns, keys_size, key_sizes, stored_block, null_map, pool);
+            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, true>(map, rows, key_columns, keys_size, key_sizes, collators, stored_block, null_map, pool);
         else
-            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, false>(map, rows, key_columns, keys_size, key_sizes, stored_block, null_map, pool);
+            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, false>(map, rows, key_columns, keys_size, key_sizes, collators, stored_block, null_map, pool);
     }
 
 
     template <ASTTableJoin::Strictness STRICTNESS, typename Maps>
     void insertFromBlockImpl(
         Join::Type type, Maps & maps, size_t rows, const ColumnRawPtrs & key_columns,
-        size_t keys_size, const Sizes & key_sizes, Block * stored_block, ConstNullMapPtr null_map, Arena & pool)
+        size_t keys_size, const Sizes & key_sizes, const TiDB::TiDBCollators & collators, Block * stored_block, ConstNullMapPtr null_map, Arena & pool)
     {
         switch (type)
         {
@@ -403,7 +405,7 @@ namespace
         #define M(TYPE) \
             case Join::Type::TYPE: \
                 insertFromBlockImplType<STRICTNESS, typename KeyGetterForType<Join::Type::TYPE>::Type>(\
-                    *maps.TYPE, rows, key_columns, keys_size, key_sizes, stored_block, null_map, pool); \
+                    *maps.TYPE, rows, key_columns, keys_size, key_sizes, collators, stored_block, null_map, pool); \
                     break;
             APPLY_FOR_JOIN_VARIANTS(M)
         #undef M
@@ -497,16 +499,16 @@ bool Join::insertFromBlock(const Block & block)
         if (!getFullness(kind))
         {
             if (strictness == ASTTableJoin::Strictness::Any)
-                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any, rows, key_columns, keys_size, key_sizes, stored_block, null_map, pool);
+                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any, rows, key_columns, keys_size, key_sizes, collators, stored_block, null_map, pool);
             else
-                insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all, rows, key_columns, keys_size, key_sizes, stored_block, null_map, pool);
+                insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all, rows, key_columns, keys_size, key_sizes, collators, stored_block, null_map, pool);
         }
         else
         {
             if (strictness == ASTTableJoin::Strictness::Any)
-                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any_full, rows, key_columns, keys_size, key_sizes, stored_block, null_map, pool);
+                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any_full, rows, key_columns, keys_size, key_sizes, collators, stored_block, null_map, pool);
             else
-                insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all_full, rows, key_columns, keys_size, key_sizes, stored_block, null_map, pool);
+                insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all_full, rows, key_columns, keys_size, key_sizes, collators, stored_block, null_map, pool);
         }
     }
 
@@ -601,12 +603,14 @@ namespace
         const Map & map, size_t rows, const ColumnRawPtrs & key_columns, const Sizes & key_sizes,
         MutableColumns & added_columns, ConstNullMapPtr null_map, std::unique_ptr<IColumn::Filter> & filter,
         IColumn::Offset & current_offset, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate,
-        const std::vector<size_t> & right_indexes)
+        const std::vector<size_t> & right_indexes, const TiDB::TiDBCollators & collators)
     {
         size_t keys_size = key_columns.size();
         size_t num_columns_to_add = right_indexes.size();
 
-        KeyGetter key_getter(key_columns);
+        KeyGetter key_getter(key_columns, collators);
+        std::vector<std::string> sort_key_containers;
+        sort_key_containers.resize(key_columns.size(), "");
 
         for (size_t i = 0; i < rows; ++i)
         {
@@ -617,7 +621,7 @@ namespace
             }
             else
             {
-                auto key = key_getter.getKey(key_columns, keys_size, i, key_sizes);
+                auto key = key_getter.getKey(key_columns, keys_size, i, key_sizes, sort_key_containers);
                 typename Map::const_iterator it = map.find(key);
 
                 if (it != map.end())
@@ -638,16 +642,16 @@ namespace
         const Map & map, size_t rows, const ColumnRawPtrs & key_columns, const Sizes & key_sizes,
         MutableColumns & added_columns, ConstNullMapPtr null_map, std::unique_ptr<IColumn::Filter> & filter,
         IColumn::Offset & current_offset, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate,
-        const std::vector<size_t> & right_indexes)
+        const std::vector<size_t> & right_indexes, const TiDB::TiDBCollators & collators)
     {
         if (null_map)
             joinBlockImplTypeCase<KIND, STRICTNESS, KeyGetter, Map, true>(
                 map, rows, key_columns, key_sizes, added_columns, null_map, filter,
-                current_offset, offsets_to_replicate, right_indexes);
+                current_offset, offsets_to_replicate, right_indexes, collators);
         else
             joinBlockImplTypeCase<KIND, STRICTNESS, KeyGetter, Map, false>(
                 map, rows, key_columns, key_sizes, added_columns, null_map, filter,
-                current_offset, offsets_to_replicate, right_indexes);
+                current_offset, offsets_to_replicate, right_indexes, collators);
     }
 }
 
@@ -752,7 +756,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
         case Join::Type::TYPE: \
             joinBlockImplType<KIND, STRICTNESS, typename KeyGetterForType<Join::Type::TYPE>::Type>(\
                 *maps.TYPE, rows, key_columns, key_sizes, added_columns, null_map, \
-                filter, current_offset, offsets_to_replicate, right_indexes); \
+                filter, current_offset, offsets_to_replicate, right_indexes, collators); \
             break;
         APPLY_FOR_JOIN_VARIANTS(M)
     #undef M
