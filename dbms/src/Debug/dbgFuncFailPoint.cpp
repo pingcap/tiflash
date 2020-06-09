@@ -5,7 +5,7 @@
 namespace DB
 {
 
-void DbgFailPointFunc::dbgInitFailPoint(Context &, const ASTs &, DBGInvoker::Printer) { fiu_init(0); }
+void DbgFailPointFunc::dbgInitFailPoint(Context &, const ASTs &, DBGInvoker::Printer) { (void)fiu_init(0); }
 
 void DbgFailPointFunc::dbgEnableFailPoint(Context &, const ASTs & args, DBGInvoker::Printer)
 {
