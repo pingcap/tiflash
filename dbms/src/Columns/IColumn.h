@@ -164,7 +164,7 @@ public:
     /// special aggregate function(any) as the group by column's output
     /// e.g, for sql:
     /// select string_column, count(*) from table group by string_column
-    /// if string_column as collation information, the query will be rewrite to
+    /// if string_column has collation information, the query will be rewrite to
     /// select any(string_column), count(*) from table group by string_column
     virtual const char * deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator> collator = nullptr) = 0;
 

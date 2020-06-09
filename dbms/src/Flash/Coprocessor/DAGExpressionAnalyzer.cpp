@@ -205,7 +205,7 @@ DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> && sou
 }
 
 void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, const tipb::Aggregation & agg, Names & aggregation_keys,
-    TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions, bool enable_collation)
+    TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions, bool group_by_collation_sensitive)
 {
     if (agg.group_by_size() == 0 && agg.agg_func_size() == 0)
     {
@@ -262,7 +262,7 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
         /// the final stage of the aggregation, even if TiFlash do the aggregation without
         /// collation info, the correctness of the query result is guaranteed by TiDB itself, so
         /// add a flag to let TiDB decide whether TiFlash aggregate the data with collation or not
-        if (enable_collation)
+        if (group_by_collation_sensitive)
         {
             auto type = step.actions->getSampleBlock().getByName(name).type;
             std::shared_ptr<TiDB::ITiDBCollator> collator = nullptr;

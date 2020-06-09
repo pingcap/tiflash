@@ -378,8 +378,10 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
     // There will be either Agg...
     if (dag.hasAggregation())
     {
-        analyzer->appendAggregation(
-            chain, dag.getAggregation(), res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions, false);
+        /// collation sensitive group by is slower then normal group by, use normal group by by default
+        // todo better to let TiDB decide the group by is collation sensitive or not
+        analyzer->appendAggregation(chain, dag.getAggregation(), res.aggregation_keys, res.aggregation_collators,
+            res.aggregate_descriptions, context.getSettingsRef().group_by_collation_sensitive);
         res.need_aggregate = true;
         res.before_aggregation = chain.getLastActions();
 
