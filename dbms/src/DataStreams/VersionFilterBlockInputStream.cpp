@@ -36,6 +36,7 @@ Block VersionFilterBlockInputStream::readImpl()
 
         {
             alignas(SIMD_BYTES) std::array<UInt8, STEP> step_data{};
+            std::ignore = step_data;
             const UInt64 * data_pos = data_start;
 
 #if __SSE2__
