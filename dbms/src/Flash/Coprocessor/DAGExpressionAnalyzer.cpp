@@ -205,7 +205,7 @@ DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> && sou
 }
 
 void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, const tipb::Aggregation & agg, Names & aggregation_keys,
-    TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions)
+    TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions, bool enable_collation)
 {
     if (agg.group_by_size() == 0 && agg.agg_func_size() == 0)
     {
@@ -243,7 +243,8 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
             continue;
         aggregate.column_name = func_string;
         aggregate.parameters = Array();
-        aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, true);
+        /// if there is group by clause, there is no need to consider the empty input case
+        aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, agg.group_by_size() == 0);
         aggregate.function->setCollator(getCollatorFromExpr(expr));
         aggregate_descriptions.push_back(aggregate);
         DataTypePtr result_type = aggregate.function->getReturnType();
@@ -255,18 +256,64 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
     {
         String name = getActions(expr, step.actions);
         step.required_output.push_back(name);
-        // this is a temp result since implicit cast maybe added on these aggregated_columns
-        aggregated_columns.emplace_back(name, step.actions->getSampleBlock().getByName(name).type);
         aggregation_keys.push_back(name);
-        auto type = step.actions->getSampleBlock().getByName(name).type;
-        // todo need to double check if TiFlash need to enable collator in aggregation, because
-        //  the aggregation in TiFlash is actually the partial stage, TiDB will do final stage of aggregation
-        //  so even if TiFlash do aggregation without collation info, the correctness of the query result is
-        //  guaranteed by TiDB itself
-        if (removeNullable(type)->isString())
-            collators.push_back(getCollatorFromExpr(expr));
+        /// when enable_collation is true, TiFlash will do the aggregation with collation info
+        /// since the aggregation in TiFlash is actually the partial stage, and TiDB always do
+        /// the final stage of the aggregation, even if TiFlash do the aggregation without
+        /// collation info, the correctness of the query result is guaranteed by TiDB itself, so
+        /// add a flag to let TiDB decide whether TiFlash aggregate the data with collation or not
+        if (enable_collation)
+        {
+            auto type = step.actions->getSampleBlock().getByName(name).type;
+            std::shared_ptr<TiDB::ITiDBCollator> collator = nullptr;
+            if (removeNullable(type)->isString())
+                collator = getCollatorFromExpr(expr);
+            collators.push_back(collator);
+            if (collator != nullptr)
+            {
+                /// if the column is a string with collation info, the `sort_key` of the column is used during
+                /// aggregation, but we can not reconstruct the origin column by `sort_key`, so add an extra
+                /// extra aggregation function any(group_by_column) here as the output of the group by column
+                const String & agg_func_name = "any";
+                AggregateDescription aggregate;
+
+                DataTypes types(1);
+                aggregate.argument_names.resize(1);
+                types[0] = type;
+                aggregate.argument_names[0] = name;
+
+                String func_string = genFuncString(agg_func_name, aggregate.argument_names);
+                bool duplicate = false;
+                for (const auto & pre_agg : aggregate_descriptions)
+                {
+                    if (pre_agg.column_name == func_string)
+                    {
+                        aggregated_columns.emplace_back(func_string, pre_agg.function->getReturnType());
+                        duplicate = true;
+                        break;
+                    }
+                }
+                if (duplicate)
+                    continue;
+                aggregate.column_name = func_string;
+                aggregate.parameters = Array();
+                aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types, {}, 0, false);
+                aggregate.function->setCollator(getCollatorFromExpr(expr));
+                aggregate_descriptions.push_back(aggregate);
+                DataTypePtr result_type = aggregate.function->getReturnType();
+                // this is a temp result since implicit cast maybe added on these aggregated_columns
+                aggregated_columns.emplace_back(func_string, result_type);
+            }
+            else
+            {
+                aggregated_columns.emplace_back(name, step.actions->getSampleBlock().getByName(name).type);
+            }
+        }
         else
-            collators.push_back(nullptr);
+        {
+            // this is a temp result since implicit cast maybe added on these aggregated_columns
+            aggregated_columns.emplace_back(name, step.actions->getSampleBlock().getByName(name).type);
+        }
     }
     after_agg = true;
 }

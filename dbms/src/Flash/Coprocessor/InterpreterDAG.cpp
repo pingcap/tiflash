@@ -379,7 +379,7 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
     if (dag.hasAggregation())
     {
         analyzer->appendAggregation(
-            chain, dag.getAggregation(), res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions);
+            chain, dag.getAggregation(), res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions, false);
         res.need_aggregate = true;
         res.before_aggregation = chain.getLastActions();
 
