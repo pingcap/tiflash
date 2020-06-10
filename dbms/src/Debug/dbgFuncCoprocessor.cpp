@@ -1,4 +1,5 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <AggregateFunctions/AggregateFunctionUniq.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/BlocksListBlockInputStream.h>
 #include <Debug/MockTiDB.h>
@@ -55,8 +56,63 @@ struct DAGProperties
     Int32 collator = 0;
 };
 
-std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
+using MakeResOutputStream = std::function<BlockInputStreamPtr(BlockInputStreamPtr)>;
+
+std::tuple<TableID, DAGSchema, tipb::DAGRequest, MakeResOutputStream> compileQuery(
     Context & context, const String & query, SchemaFetcher schema_fetcher, const DAGProperties & properties);
+
+class UniqRawResReformatBlockOutputStream : public IProfilingBlockInputStream
+{
+public:
+    UniqRawResReformatBlockOutputStream(const BlockInputStreamPtr & in_) : in(in_) {}
+
+    String getName() const override { return "UniqRawResReformat"; }
+
+    Block getHeader() const override { return in->getHeader(); }
+
+protected:
+    Block readImpl() override
+    {
+        while (true)
+        {
+            Block block = in->read();
+            if (!block)
+                return block;
+
+            size_t num_columns = block.columns();
+            MutableColumns columns(num_columns);
+            for (size_t i = 0; i < num_columns; ++i)
+            {
+                ColumnWithTypeAndName & ori_column = block.getByPosition(i);
+
+                if (std::string::npos != ori_column.name.find_first_of(UniqRawResName))
+                {
+                    MutableColumnPtr mutable_holder = ori_column.column->cloneEmpty();
+
+                    for (size_t j = 0; j < ori_column.column->size(); ++j)
+                    {
+                        Field field;
+                        ori_column.column->get(j, field);
+
+                        auto & str_ref = field.safeGet<String>();
+
+                        ReadBufferFromString in(str_ref);
+                        AggregateFunctionUniqUniquesHashSetDataForVariadicRawRes set;
+                        set.set.read(in);
+
+                        mutable_holder->insert(std::to_string(set.set.size()));
+                    }
+                    ori_column.column = std::move(mutable_holder);
+                }
+            }
+            return block;
+        }
+    }
+
+private:
+    BlockInputStreamPtr in;
+};
+
 tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version,
     UInt64 region_conf_version, Timestamp start_ts, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges);
 BlockInputStreamPtr outputDAGResponse(Context & context, const DAGSchema & schema, const tipb::SelectResponse & dag_response);
@@ -105,7 +161,7 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
     DAGProperties properties = getDAGProperties(prop_string);
     Timestamp start_ts = context.getTMTContext().getPDClient()->getTS();
 
-    auto [table_id, schema, dag_request] = compileQuery(
+    auto [table_id, schema, dag_request, func_wrap_output_stream] = compileQuery(
         context, query,
         [&](const String & database_name, const String & table_name) {
             auto storage = context.getTable(database_name, table_name);
@@ -141,7 +197,7 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
     tipb::SelectResponse dag_response
         = executeDAGRequest(context, dag_request, region->id(), region->version(), region->confVer(), start_ts, key_ranges);
 
-    return outputDAGResponse(context, schema, dag_response);
+    return func_wrap_output_stream(outputDAGResponse(context, schema, dag_response));
 }
 
 BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
@@ -162,7 +218,7 @@ BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
         prop_string = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
     DAGProperties properties = getDAGProperties(prop_string);
 
-    auto [table_id, schema, dag_request] = compileQuery(
+    auto [table_id, schema, dag_request, func_wrap_output_stream] = compileQuery(
         context, query,
         [&](const String & database_name, const String & table_name) {
             return MockTiDB::instance().getTableByName(database_name, table_name)->table_info;
@@ -179,7 +235,7 @@ BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
     tipb::SelectResponse dag_response
         = executeDAGRequest(context, dag_request, region_id, region->version(), region->confVer(), start_ts, key_ranges);
 
-    return outputDAGResponse(context, schema, dag_response);
+    return func_wrap_output_stream(outputDAGResponse(context, schema, dag_response));
 }
 
 struct ExecutorCtx
@@ -412,9 +468,10 @@ void compileFilter(const DAGSchema & input, ASTPtr ast, tipb::Selection * filter
     compileExpr(input, ast, cond, referred_columns, col_ref_map, collator_id);
 }
 
-std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
+std::tuple<TableID, DAGSchema, tipb::DAGRequest, MakeResOutputStream> compileQuery(
     Context & context, const String & query, SchemaFetcher schema_fetcher, const DAGProperties & properties)
 {
+    MakeResOutputStream func_wrap_output_stream = [](BlockInputStreamPtr in) { return in; };
     DAGSchema schema;
     tipb::DAGRequest dag_request;
     dag_request.set_time_zone_name(properties.tz_name);
@@ -653,6 +710,15 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
                     ft->set_tp(agg_func->children(0).field_type().tp());
                     ft->set_collate(properties.collator);
                 }
+                else if (func->name == UniqRawResName)
+                {
+                    agg_func->set_tp(tipb::ApproxCountDistinct);
+                    auto ft = agg_func->mutable_field_type();
+                    ft->set_tp(TiDB::TypeString);
+                    ft->set_flag(1);
+                    func_wrap_output_stream
+                        = [](BlockInputStreamPtr in) { return std::make_shared<UniqRawResReformatBlockOutputStream>(in); };
+                }
                 // TODO: Other agg func.
                 else
                 {
@@ -720,7 +786,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
         }
     }
 
-    return std::make_tuple(table_info.id, std::move(schema), std::move(dag_request));
+    return std::make_tuple(table_info.id, std::move(schema), std::move(dag_request), func_wrap_output_stream);
 }
 
 tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version,
