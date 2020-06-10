@@ -4,7 +4,7 @@ set -xe
 
 # Stop all docker instances if exist.
 # tiflash-dt && tiflash-tmt share the same name "tiflash0", we just need one here
-docker-compose -f gtest.yaml -f cluster.yaml -f tiflash-dt.yaml -f mock-test-dt.yaml down
+docker-compose -f gtest.yaml -f cluster.yaml -f cluster_new_collation.yaml -f tiflash-dt.yaml -f mock-test-dt.yaml down
 
 rm -rf ./data ./log
 # run gtest cases. (only tics-gtest up)
@@ -50,3 +50,12 @@ rm -rf ./data ./log
 docker-compose -f mock-test-tmt.yaml up -d
 docker-compose -f mock-test-tmt.yaml exec -T tics0 bash -c 'cd /tests ; ./run-test.sh mutable-test'
 docker-compose -f mock-test-tmt.yaml down
+
+rm -rf ./data ./log
+# run new_collation_fullstack tests 
+docker-compose -f cluster_new_collation.yaml -f tiflash-dt.yaml up -d
+sleep 60
+docker-compose -f cluster_new_collation.yaml -f tiflash-dt.yaml up -d --build
+sleep 10
+docker-compose -f cluster_new_collation.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh new_collation_fullstack'
+docker-compose -f cluster_new_collation.yaml -f tiflash-dt.yaml down
