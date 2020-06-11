@@ -25,7 +25,7 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
     for (auto & cd : write_columns)
     {
         // TODO: currently we only generate index for Integers, Date, DateTime types, and this should be configurable by user.
-
+        // TODO: If column type is nullable, we won't generate index for it
         bool do_index = !wal_mode && (cd.type->isInteger() || cd.type->isDateOrDateTime());
         addStreams(cd.id, cd.type, do_index);
         dmfile->column_stats.emplace(cd.id, ColumnStat{cd.id, cd.type, /*avg_size=*/0});

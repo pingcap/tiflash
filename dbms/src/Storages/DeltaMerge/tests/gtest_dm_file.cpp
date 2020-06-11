@@ -138,6 +138,367 @@ try
 }
 CATCH
 
+
+TEST_F(DMFile_Test, ReadFilteredByHandle)
+try
+{
+    auto cols = DMTestEnv::getDefaultColumns();
+
+    const Int64 num_rows_write = 1024;
+    const Int64 nparts         = 5;
+    const Int64 span_per_part  = num_rows_write / nparts;
+
+    {
+        // Prepare some packs in DMFile
+        auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
+        stream->writePrefix();
+        size_t pk_beg = 0;
+        for (size_t i = 0; i < nparts; ++i)
+        {
+            auto  pk_end = (i == nparts - 1) ? num_rows_write : (pk_beg + num_rows_write / nparts);
+            Block block  = DMTestEnv::prepareSimpleWriteBlock(pk_beg, pk_end, false);
+            stream->write(block, 0);
+            pk_beg += num_rows_write / nparts;
+        }
+        stream->writeSuffix();
+    }
+
+    HandleRanges ranges;
+    ranges.emplace_back(HandleRange{0, span_per_part}); // only first part
+    ranges.emplace_back(HandleRange{800, num_rows_write});
+    ranges.emplace_back(HandleRange{256, 700});          //
+    ranges.emplace_back(HandleRange::newNone());         // none
+    ranges.emplace_back(HandleRange{0, num_rows_write}); // full range
+    ranges.emplace_back(HandleRange::newAll());          // full range
+    for (const auto & range : ranges)
+    {
+        // Test read
+        auto stream = std::make_shared<DMFileBlockInputStream>( //
+            dbContext(),
+            std::numeric_limits<UInt64>::max(),
+            false,
+            dmContext().hash_salt,
+            dm_file,
+            *cols,
+            range, // Filtered by read_range
+            EMPTY_FILTER,
+            column_cache_,
+            IdSetPtr{});
+
+        Int64 num_rows_read = 0;
+        stream->readPrefix();
+        Int64 expect_first_pk = int(std::floor(std::max(0, range.start) / span_per_part)) * span_per_part;
+        Int64 expect_last_pk  = std::min(num_rows_write, //
+                                        int(std::ceil(std::min(num_rows_write, range.end) / span_per_part)) * span_per_part
+                                            + (range.end % span_per_part ? span_per_part : 0));
+        while (Block in = stream->read())
+        {
+            for (auto itr : in)
+            {
+                auto c = itr.column;
+                if (itr.name == DMTestEnv::pk_name)
+                {
+                    for (size_t i = 0; i < c->size(); i++)
+                    {
+                        EXPECT_EQ(c->getInt(i), expect_first_pk + Int64(i))
+                            << "range: " << range.toString() << ", i: " << i << ", first pk: " << expect_first_pk;
+                        // std::cerr << c->getInt(i) << std::endl;
+                        num_rows_read++;
+                    }
+                }
+            }
+        }
+        stream->readSuffix();
+        ASSERT_EQ(num_rows_read, expect_last_pk - expect_first_pk) //
+            << "range: " << range.toString()                       //
+            << ", first: " << expect_first_pk << ", last: " << expect_last_pk;
+    }
+}
+CATCH
+
+namespace
+{
+RSOperatorPtr toRSFilter(const ColumnDefine & cd, const HandleRange & range)
+{
+    Attr attr  = {cd.name, cd.id, cd.type};
+    auto left  = createGreaterEqual(attr, Field(range.start), -1);
+    auto right = createLess(attr, Field(range.end), -1);
+    return createAnd({left, right});
+}
+} // namespace
+
+TEST_F(DMFile_Test, ReadFilteredByRoughSetFilter)
+try
+{
+    auto cols = DMTestEnv::getDefaultColumns();
+    // Prepare columns
+    ColumnDefine i64_cd(2, "i64", typeFromString("Int64"));
+    cols->push_back(i64_cd);
+
+    reload(cols);
+
+    const Int64 num_rows_write = 1024;
+    const Int64 nparts         = 5;
+    const Int64 span_per_part  = num_rows_write / nparts;
+
+    {
+        // Prepare some packs in DMFile
+        auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
+        stream->writePrefix();
+        size_t pk_beg = 0;
+        for (size_t i = 0; i < nparts; ++i)
+        {
+            auto  pk_end = (i == nparts - 1) ? num_rows_write : (pk_beg + num_rows_write / nparts);
+            Block block  = DMTestEnv::prepareSimpleWriteBlock(pk_beg, pk_end, false);
+
+            auto col = i64_cd.type->createColumn();
+            for (size_t i = pk_beg; i < pk_end; i++)
+            {
+                col->insert(toField(Int64(i)));
+            }
+            ColumnWithTypeAndName i64(std::move(col), i64_cd.type, i64_cd.name, i64_cd.id);
+            block.insert(i64);
+
+            stream->write(block, 0);
+            pk_beg += num_rows_write / nparts;
+        }
+        stream->writeSuffix();
+    }
+
+    HandleRanges ranges;
+    ranges.emplace_back(HandleRange{0, span_per_part}); // only first part
+    ranges.emplace_back(HandleRange{800, num_rows_write});
+    ranges.emplace_back(HandleRange{256, 700});          //
+    ranges.emplace_back(HandleRange::newNone());         // none
+    ranges.emplace_back(HandleRange{0, num_rows_write}); // full range
+    ranges.emplace_back(HandleRange::newAll());          // full range
+    for (const auto & range : ranges)
+    {
+        // Test read
+        auto stream = std::make_shared<DMFileBlockInputStream>( //
+            dbContext(),
+            std::numeric_limits<UInt64>::max(),
+            false,
+            dmContext().hash_salt,
+            dm_file,
+            *cols,
+            HandleRange::newAll(),
+            toRSFilter(i64_cd, range), // Filtered by rough set filter
+            column_cache_,
+            IdSetPtr{});
+
+        Int64 num_rows_read = 0;
+        stream->readPrefix();
+        Int64 expect_first_pk = int(std::floor(std::max(0, range.start) / span_per_part)) * span_per_part;
+        Int64 expect_last_pk  = std::min(num_rows_write, //
+                                        int(std::ceil(std::min(num_rows_write, range.end) / span_per_part)) * span_per_part
+                                            + (range.end % span_per_part ? span_per_part : 0));
+        while (Block in = stream->read())
+        {
+            for (auto itr : in)
+            {
+                auto c = itr.column;
+                if (itr.name == i64_cd.name)
+                {
+                    for (size_t i = 0; i < c->size(); i++)
+                    {
+                        EXPECT_EQ(c->getInt(i), expect_first_pk + Int64(i))
+                            << "range: " << range.toString() << ", i: " << i << ", first pk: " << expect_first_pk;
+                        // std::cerr << c->getInt(i) << std::endl;
+                        num_rows_read++;
+                    }
+                }
+            }
+        }
+        stream->readSuffix();
+        ASSERT_EQ(num_rows_read, expect_last_pk - expect_first_pk) //
+            << "range: " << range.toString()                       //
+            << ", first: " << expect_first_pk << ", last: " << expect_last_pk;
+    }
+}
+CATCH
+
+// Test rough filter with some unsupported operations
+TEST_F(DMFile_Test, ReadFilteredByRoughSetFilterWithUnsupportedOperation)
+try
+{
+    auto cols = DMTestEnv::getDefaultColumns();
+    // Prepare columns
+    ColumnDefine i64_cd(2, "i64", typeFromString("Int64"));
+    cols->push_back(i64_cd);
+
+    reload(cols);
+
+    const Int64 num_rows_write = 1024;
+    const Int64 nparts         = 5;
+    const Int64 span_per_part  = num_rows_write / nparts;
+
+    {
+        // Prepare some packs in DMFile
+        auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
+        stream->writePrefix();
+        size_t pk_beg = 0;
+        for (size_t i = 0; i < nparts; ++i)
+        {
+            auto  pk_end = (i == nparts - 1) ? num_rows_write : (pk_beg + num_rows_write / nparts);
+            Block block  = DMTestEnv::prepareSimpleWriteBlock(pk_beg, pk_end, false);
+
+            auto col = i64_cd.type->createColumn();
+            for (size_t i = pk_beg; i < pk_end; i++)
+            {
+                col->insert(toField(Int64(i)));
+            }
+            ColumnWithTypeAndName i64(std::move(col), i64_cd.type, i64_cd.name, i64_cd.id);
+            block.insert(i64);
+
+            stream->write(block, 0);
+            pk_beg += num_rows_write / nparts;
+        }
+        stream->writeSuffix();
+    }
+
+    std::vector<std::pair<DM::RSOperatorPtr, size_t>> filters;
+    DM::RSOperatorPtr              one_part_filter = toRSFilter(i64_cd, HandleRange{0, span_per_part});
+    // <filter, num_rows_should_read>
+    filters.emplace_back(one_part_filter, span_per_part); // only first part
+    // <filter, num_rows_should_read>
+    // (first range) And (Unsuppported) -> should filter some chunks by range
+    filters.emplace_back(createAnd({one_part_filter, createUnsupported("test", "test", false)}), span_per_part);
+    // <filter, num_rows_should_read>
+    // (first range) Or (Unsupported) -> should NOT filter any chunk
+    filters.emplace_back(createOr({one_part_filter, createUnsupported("test", "test", false)}), num_rows_write);
+    for (size_t i = 0; i < filters.size(); i++)
+    {
+        const auto & filter = filters[i].first;
+        const auto num_rows_should_read = filters[i].second;
+        // Test read
+        auto stream = std::make_shared<DMFileBlockInputStream>( //
+            dbContext(),
+            std::numeric_limits<UInt64>::max(),
+            false,
+            dmContext().hash_salt,
+            dm_file,
+            *cols,
+            HandleRange::newAll(),
+            filter, // Filtered by rough set filter
+            column_cache_,
+            IdSetPtr{});
+
+        Int64 num_rows_read = 0;
+        stream->readPrefix();
+        Int64 expect_first_pk = 0;
+        Int64 expect_last_pk  = num_rows_should_read;
+        while (Block in = stream->read())
+        {
+            for (auto itr : in)
+            {
+                auto c = itr.column;
+                if (itr.name == i64_cd.name)
+                {
+                    for (size_t i = 0; i < c->size(); i++)
+                    {
+                        EXPECT_EQ(c->getInt(i), expect_first_pk + Int64(i)) << "i: " << i << ", first pk: " << expect_first_pk;
+                        // std::cerr << c->getInt(i) << std::endl;
+                        num_rows_read++;
+                    }
+                }
+            }
+        }
+        stream->readSuffix();
+        ASSERT_EQ(num_rows_read, expect_last_pk - expect_first_pk) //
+            << "i: " << i << ", first: " << expect_first_pk << ", last: " << expect_last_pk;
+    }
+}
+CATCH
+
+TEST_F(DMFile_Test, ReadFilteredByPackIndices)
+try
+{
+    auto cols = DMTestEnv::getDefaultColumns();
+
+    const Int64 num_rows_write = 1024;
+    const Int64 nparts         = 5;
+    const Int64 span_per_part  = num_rows_write / nparts;
+
+    {
+        // Prepare some packs in DMFile
+        auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
+        stream->writePrefix();
+        size_t pk_beg = 0;
+        for (size_t i = 0; i < nparts; ++i)
+        {
+            auto  pk_end = (i == nparts - 1) ? num_rows_write : (pk_beg + num_rows_write / nparts);
+            Block block  = DMTestEnv::prepareSimpleWriteBlock(pk_beg, pk_end, false);
+            stream->write(block, 0);
+            pk_beg += num_rows_write / nparts;
+        }
+        stream->writeSuffix();
+    }
+
+    std::vector<IdSet> test_sets;
+    test_sets.emplace_back(IdSet{0});
+    test_sets.emplace_back(IdSet{nparts - 1});
+    test_sets.emplace_back(IdSet{nparts - 2, nparts - 1});
+    test_sets.emplace_back(IdSet{1, 2});
+    test_sets.emplace_back(IdSet{}); // filter all packs
+    for (size_t test_index = 0; test_index <= test_sets.size(); test_index++)
+    {
+        IdSetPtr id_set_ptr = nullptr; // Keep for not filter test
+        if (test_index < test_sets.size())
+            id_set_ptr = std::make_shared<IdSet>(test_sets[test_index]);
+
+        // Test read
+        auto stream = std::make_shared<DMFileBlockInputStream>( //
+            dbContext(),
+            std::numeric_limits<UInt64>::max(),
+            false,
+            dmContext().hash_salt,
+            dm_file,
+            *cols,
+            HandleRange::newAll(),
+            EMPTY_FILTER,
+            column_cache_,
+            id_set_ptr);
+
+        Int64 num_rows_read = 0;
+        stream->readPrefix();
+        Int64 expect_first_pk = 0, expect_last_pk = 0;
+        if (id_set_ptr && !id_set_ptr->empty())
+        {
+            expect_first_pk = *(id_set_ptr->begin()) * span_per_part;
+            auto last_id    = *(id_set_ptr->rbegin());
+            expect_last_pk  = (last_id == nparts - 1) ? num_rows_write : (last_id + 1) * span_per_part;
+        }
+        else if (!id_set_ptr)
+        {
+            // not filter if it is nullptr
+            expect_last_pk = num_rows_write;
+        }
+
+        while (Block in = stream->read())
+        {
+            for (auto itr : in)
+            {
+                auto c = itr.column;
+                if (itr.name == DMTestEnv::pk_name)
+                {
+                    for (size_t i = 0; i < c->size(); i++)
+                    {
+                        EXPECT_EQ(c->getInt(i), expect_first_pk + Int64(i)) << "test index: " << test_index //
+                                                                            << ", i: " << i << ", first pk: " << expect_first_pk;
+                        // std::cerr << c->getInt(i) << std::endl;
+                        num_rows_read++;
+                    }
+                }
+            }
+        }
+        stream->readSuffix();
+        ASSERT_EQ(num_rows_read, expect_last_pk - expect_first_pk) //
+            << "test index: " << test_index << ", first: " << expect_first_pk << ", last: " << expect_last_pk;
+    }
+}
+CATCH
+
 TEST_F(DMFile_Test, NumberTypes)
 try
 {
