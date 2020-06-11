@@ -585,7 +585,15 @@ void IDAsPathUpgrader::fixNotEscapedDirectories()
             // database name is escaped but table name not.
             auto not_escaped_path = table.getDataDirectory(root_path, db_info, /*escape_db*/ true, /*escape_tbl*/ false);
             auto escaped_path = table.getDataDirectory(root_path, db_info, /*escape_db*/ true, /*escape_tbl*/ true);
-            renamePath(not_escaped_path, escaped_path, log, true);
+            if (auto file = Poco::File{not_escaped_path}; file.exists())
+            {
+                if (auto escaped_dir = Poco::File{escaped_path}; !escaped_dir.exists())
+                    escaped_dir.createDirectory();
+                renamePath(not_escaped_path + "/meta", escaped_path + "/meta", log, true);
+                renamePath(not_escaped_path + "/data", escaped_path + "/data", log, true);
+                renamePath(not_escaped_path + "/log", escaped_path + "/log", log, true);
+                tryRemoveDirectory(not_escaped_path, log);
+            }
             auto db_tbl_not_escaped_path = not_escaped_path;
             if (db_name != db_name_escaped)
             {
@@ -593,7 +601,8 @@ void IDAsPathUpgrader::fixNotEscapedDirectories()
                 db_tbl_not_escaped_path = table.getDataDirectory(root_path, db_info, false, false);
                 auto not_escaped_stable = db_tbl_not_escaped_path + "/stable";
                 auto escaped_stable = table.getDataDirectory(root_path, db_info, true, true) + "/stable";
-                renamePath(not_escaped_stable, escaped_stable, log, true);
+                if (auto file = Poco::File{not_escaped_stable}; file.exists())
+                    renamePath(not_escaped_stable, escaped_stable, log, true);
             }
 
             // Fix extra path.
