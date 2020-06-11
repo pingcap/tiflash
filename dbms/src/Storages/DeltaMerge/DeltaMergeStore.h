@@ -13,6 +13,8 @@
 
 #include <queue>
 
+#include "PKRange.h"
+
 namespace DB
 {
 
@@ -128,7 +130,7 @@ public:
         NotCompress not_compress_columns{};
     };
 
-    using SegmentSortedMap = std::map<Handle, SegmentPtr>;
+    using SegmentSortedMap = std::map<PKRange::End, SegmentPtr, std::less<>>;
     using SegmentMap       = std::unordered_map<PageId, SegmentPtr>;
 
     enum ThreadType
@@ -250,6 +252,7 @@ public:
 
     void write(const Context & db_context, const DB::Settings & db_settings, const Block & block);
 
+    // Deprated
     void deleteRange(const Context & db_context, const DB::Settings & db_settings, const HandleRange & delete_range);
 
     BlockInputStreams readRaw(const Context &       db_context,
@@ -330,6 +333,8 @@ private:
 
     String db_name;
     String table_name;
+
+    PrimaryKeyPtr pk;
 
     ColumnDefines      original_table_columns;
     BlockPtr           original_table_header; // Used to speed up getHeader()

@@ -112,6 +112,7 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
       storage_pool(db_name_ + "." + table_name_, path, global_context, db_context.getSettingsRef()),
       db_name(db_name_),
       table_name(table_name_),
+      pk(std::make_shared<PrimaryKey>(ColumnDefines{handle})),
       original_table_handle_define(handle),
       background_pool(db_context.getBackgroundPool()),
       hash_salt(++DELTA_MERGE_STORE_HASH_SALT),
@@ -148,7 +149,7 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
             if (segment_id != DELTA_MERGE_FIRST_SEGMENT_ID)
                 throw Exception("The first segment id should be " + DB::toString(DELTA_MERGE_FIRST_SEGMENT_ID), ErrorCodes::LOGICAL_ERROR);
             auto first_segment = Segment::newSegment(*dm_context, HandleRange::newAll(), segment_id, 0);
-            segments.emplace(first_segment->getRange().end, first_segment);
+            segments.emplace(first_segment->getPKRange()->getEnd(), first_segment);
             id_to_segment.emplace(segment_id, first_segment);
         }
         else
@@ -157,7 +158,7 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
             while (segment_id)
             {
                 auto segment = Segment::restoreSegment(*dm_context, segment_id);
-                segments.emplace(segment->getRange().end, segment);
+                segments.emplace(segment->getPKRange()->getEnd(), segment);
                 id_to_segment.emplace(segment_id, segment);
 
                 segment_id = segment->nextSegmentId();
@@ -391,16 +392,18 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
 
     Segments updated_segments;
 
-    size_t       offset = 0;
-    size_t       limit;
-    const auto & handle_data = getColumnVectorData<Handle>(block, block.getPositionByName(EXTRA_HANDLE_COLUMN_NAME));
+    size_t offset = 0;
+    size_t limit;
+    //    const auto & handle_data = getColumnVectorData<Handle>(block, block.getPositionByName(EXTRA_HANDLE_COLUMN_NAME));
+
     while (offset != rows)
     {
-        auto start_handle = handle_data[offset];
+        //        auto start_handle = handle_data[offset];
+        PKValue start_pk{&block, offset};
 
         WriteBatches wbs(storage_pool);
         PackPtr      write_pack;
-        HandleRange  write_range;
+        PKRangePtr   write_range;
 
         // Keep trying until succeeded.
         while (true)
@@ -409,24 +412,21 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             {
                 std::shared_lock lock(read_write_mutex);
 
-                auto segment_it = segments.upper_bound(start_handle);
+                auto segment_it = segments.upper_bound(start_pk);
                 if (segment_it == segments.end())
                 {
-                    if (start_handle == P_INF_HANDLE)
-                        --segment_it;
-                    else
-                        throw Exception("Failed to locate segment begin with start: " + DB::toString(start_handle),
-                                        ErrorCodes::LOGICAL_ERROR);
+                    throw Exception("Failed to locate segment begin with start: " + start_pk.toString(*pk), ErrorCodes::LOGICAL_ERROR);
                 }
                 segment = segment_it->second;
             }
 
             waitForWrite(dm_context, segment);
 
-            auto range   = segment->getRange();
-            auto end_pos = range.end == P_INF_HANDLE ? handle_data.cend()
-                                                     : std::lower_bound(handle_data.cbegin() + offset, handle_data.cend(), range.end);
-            limit = end_pos - (handle_data.cbegin() + offset);
+            auto pk_range = segment->getPKRange();
+
+            size_t end_pos = pk_range->isEndInfinite() ? rows : pk_range->getPosRange(block, offset, rows - offset).second;
+
+            limit = end_pos - offset;
 
             bool should_cache = limit < dm_context->delta_cache_limit_rows / 4;
             if (should_cache)
@@ -439,14 +439,16 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             }
             else
             {
-                if (!write_pack || (write_pack && write_range != range))
+                // If pack haven't been written, or the pk range has changed since last write, then write it and
+                // delete former written pack.
+                if (!write_pack || (write_pack && (*write_range) != (*pk_range)))
                 {
                     wbs.rollbackWrittenLogAndData();
                     wbs.clear();
 
                     write_pack = DeltaValueSpace::writePack(*dm_context, block, offset, limit, wbs);
                     wbs.writeLogAndData();
-                    write_range = range;
+                    write_range = pk_range;
                 }
 
                 // Write could fail, because other threads could already updated the instance. Like split/merge, merge delta.
@@ -473,14 +475,14 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         checkSegmentUpdate(dm_context, segment, ThreadType::Write);
 }
 
-
-void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings & db_settings, const HandleRange & delete_range)
+void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings & db_settings, const HandleRange & delete_handle_range)
 {
-    LOG_INFO(log, "Write into " << db_name << "." << table_name << " delte range " << delete_range.toString());
+    PKRange delete_range = PKRange::fromHandleRange(delete_handle_range);
+    LOG_INFO(log, "Write into " << db_name << "." << table_name << " delete range " << delete_range.toString());
 
     EventRecorder write_block_recorder(ProfileEvents::DMDeleteRange, ProfileEvents::DMDeleteRangeNS);
 
-    if (delete_range.start >= delete_range.end)
+    if (delete_range.isEmpty())
         return;
 
     auto dm_context = newDMContext(db_context, db_settings);
@@ -489,7 +491,7 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
     {
         std::shared_lock lock(read_write_mutex);
 
-        String msg = "Before delete range" + rangeToString(delete_range) + ". All segments:{";
+        String msg = "Before delete range" + delete_range.toString() + ". All segments:{";
         for (auto & [end, segment] : segments)
         {
             (void)end;
@@ -502,10 +504,15 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
 
     Segments updated_segments;
 
-    auto start_handle = delete_range.start;
-    while (start_handle < delete_range.end)
+    PKRange cur_range = delete_range;
+
+    //    auto start_handle = delete_range.start;
+    //    while (start_handle < delete_range.end)
+    while (!cur_range.isEmpty())
     {
-        Handle end_handle;
+        //        Handle end_handle;
+        PKRangePtr segment_range;
+
         // Keep trying until succeeded.
         while (true)
         {
@@ -513,44 +520,59 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
             {
                 std::shared_lock lock(read_write_mutex);
 
-                auto segment_it = segments.upper_bound(start_handle);
+                //                auto segment_it = segments.upper_bound(start_handle);
+                auto segment_it = segments.upper_bound(cur_range.getStart());
                 if (segment_it == segments.end())
                 {
-                    if (start_handle == P_INF_HANDLE)
-                        --segment_it;
-                    else
-                        throw Exception("Failed to locate segment begin with start: " + DB::toString(start_handle),
-                                        ErrorCodes::LOGICAL_ERROR);
+                    throw Exception("Failed to locate segment begin with start in range: " + cur_range.toString(),
+                                    ErrorCodes::LOGICAL_ERROR);
                 }
                 segment = segment_it->second;
             }
 
             waitForDeleteRange(dm_context, segment);
 
-            auto range = segment->getRange();
-            end_handle = range.end;
+
+            segment_range = segment->getPKRange();
+
+            //            auto range = segment->getRange();
+            //            end_handle = range.end;
 
             // Write could fail, because other threads could already updated the instance. Like split/merge, merge delta.
-            if (segment->write(*dm_context, delete_range.shrink(range)))
+
+            //            if (segment->write(*dm_context, delete_range.shrink(range)))
+            if (segment->write(*dm_context, PKRange::intersect(delete_range, *segment_range)))
             {
                 updated_segments.push_back(segment);
                 break;
             }
         }
 
-        start_handle = end_handle;
+        if (segment_range->isEndInfinite())
+            break;
+
+        PKRange::Creator pk_creator(pk);
+        pk_creator.setStart(segment_range->getEnd());
+        pk_creator.setEnd(delete_range.getEnd());
+
+        cur_range = pk_creator.getRange();
+
+        //        start_handle = end_handle;
     }
 
     for (auto & segment : updated_segments)
         checkSegmentUpdate(dm_context, segment, ThreadType::Write);
 }
 
-void DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const HandleRange & range)
+void DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const HandleRange & handle_range)
 {
-    auto start_handle = range.start;
-    while (start_handle < range.end)
+    //    auto start_handle = range.start;
+    PKRange cur_range = PKRange::fromHandleRange(handle_range);
+    while (!cur_range.isEmpty())
     {
-        Handle end_handle;
+        //        Handle end_handle;
+        PKRangePtr segment_range;
+
         // Keep trying until succeeded.
         while (true)
         {
@@ -558,19 +580,17 @@ void DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const HandleRa
             {
                 std::shared_lock lock(read_write_mutex);
 
-                auto segment_it = segments.upper_bound(start_handle);
+                auto segment_it = segments.upper_bound(cur_range.getStart());
                 if (segment_it == segments.end())
                 {
-                    if (start_handle == P_INF_HANDLE)
-                        --segment_it;
-                    else
-                        throw Exception("Failed to locate segment begin with start: " + DB::toString(start_handle),
-                                        ErrorCodes::LOGICAL_ERROR);
+                    throw Exception("Failed to locate segment begin with start in range: " + cur_range.toString(),
+                                    ErrorCodes::LOGICAL_ERROR);
                 }
                 segment = segment_it->second;
             }
-            auto seg_range = segment->getRange();
-            end_handle     = seg_range.end;
+            //            auto seg_range = segment->getPKRange();
+            //            end_handle     = seg_range.end;
+            segment_range = segment->getPKRange();
 
             // Flush could fail.
             if (segment->flushCache(*dm_context))
@@ -579,7 +599,14 @@ void DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const HandleRa
             }
         }
 
-        start_handle = end_handle;
+        if (segment_range->isEndInfinite())
+            break;
+
+        PKRange::Creator pk_creator(pk);
+        pk_creator.setStart(segment_range->getEnd());
+        pk_creator.setEnd(cur_range.getEnd());
+
+        cur_range = pk_creator.getRange();
     }
 }
 
@@ -603,14 +630,16 @@ void DeltaMergeStore::mergeDeltaAll(const Context & context)
     }
 }
 
-void DeltaMergeStore::compact(const Context & db_context, const HandleRange & range)
+void DeltaMergeStore::compact(const Context & db_context, const HandleRange & handle_range)
 {
     auto dm_context = newDMContext(db_context, db_context.getSettingsRef());
 
-    auto start_handle = range.start;
-    while (start_handle < range.end)
+    //    auto start_handle = range.start;
+    PKRange cur_range = PKRange::fromHandleRange(handle_range);
+    while (!cur_range.isEmpty())
     {
-        Handle end_handle;
+        //        Handle end_handle;
+        PKRangePtr segment_range;
         // Keep trying until succeeded.
         while (true)
         {
@@ -618,19 +647,17 @@ void DeltaMergeStore::compact(const Context & db_context, const HandleRange & ra
             {
                 std::shared_lock lock(read_write_mutex);
 
-                auto segment_it = segments.upper_bound(start_handle);
+                auto segment_it = segments.upper_bound(cur_range.getStart());
                 if (segment_it == segments.end())
                 {
-                    if (start_handle == P_INF_HANDLE)
-                        --segment_it;
-                    else
-                        throw Exception("Failed to locate segment begin with start: " + DB::toString(start_handle),
-                                        ErrorCodes::LOGICAL_ERROR);
+                    throw Exception("Failed to locate segment begin with start in range: " + cur_range.toString(),
+                                    ErrorCodes::LOGICAL_ERROR);
                 }
                 segment = segment_it->second;
             }
-            auto seg_range = segment->getRange();
-            end_handle     = seg_range.end;
+            //            auto seg_range = segment->getRange();
+            //            end_handle     = seg_range.end;
+            segment_range = segment->getPKRange();
 
             // compact could fail.
             if (segment->compactDelta(*dm_context))
@@ -639,7 +666,15 @@ void DeltaMergeStore::compact(const Context & db_context, const HandleRange & ra
             }
         }
 
-        start_handle = end_handle;
+        //        start_handle = end_handle;
+        if (segment_range->isEndInfinite())
+            break;
+
+        PKRange::Creator pk_creator(pk);
+        pk_creator.setStart(segment_range->getEnd());
+        pk_creator.setEnd(cur_range.getEnd());
+
+        cur_range = pk_creator.getRange();
     }
 }
 
@@ -696,14 +731,19 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
 BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
                                         const DB::Settings &  db_settings,
                                         const ColumnDefines & columns_to_read,
-                                        const HandleRanges &  sorted_ranges,
+                                        const HandleRanges &  sorted_handle_ranges,
                                         size_t                num_streams,
                                         UInt64                max_version,
                                         const RSOperatorPtr & filter,
                                         size_t                expected_block_size,
                                         const SegmentIdSet &  read_segments)
 {
-    LOG_DEBUG(log, "Read with " << sorted_ranges.size() << " ranges");
+    LOG_DEBUG(log, "Read with " << sorted_handle_ranges.size() << " ranges");
+
+    PKRanges ranges;
+    ranges.reserve(sorted_handle_ranges.size());
+    for (auto & r : sorted_handle_ranges)
+        ranges.push_back(PKRange::fromHandleRange(r));
 
     SegmentReadTasks tasks;
 
@@ -711,22 +751,19 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
     {
         std::shared_lock lock(read_write_mutex);
 
-        auto range_it = sorted_ranges.begin();
-        auto seg_it   = segments.upper_bound(range_it->start);
+        auto range_it = ranges.begin();
+        auto seg_it   = segments.upper_bound(range_it->getStart());
 
         if (seg_it == segments.end())
         {
-            if (range_it->start == P_INF_HANDLE)
-                --seg_it;
-            else
-                throw Exception("Failed to locate segment begin with start: " + DB::toString(range_it->start), ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Failed to locate segment begin with start in range: " + range_it->toString(), ErrorCodes::LOGICAL_ERROR);
         }
 
-        while (range_it != sorted_ranges.end() && seg_it != segments.end())
+        while (range_it != ranges.end() && seg_it != segments.end())
         {
             auto & req_range = *range_it;
-            auto & seg_range = seg_it->second->getRange();
-            if (req_range.intersect(seg_range) && (read_segments.empty() || read_segments.count(seg_it->second->segmentId())))
+            auto & seg_range = *(seg_it->second->getPKRange());
+            if (req_range.isIntersect(seg_range) && (read_segments.empty() || read_segments.count(seg_it->second->segmentId())))
             {
                 if (tasks.empty() || tasks.back()->segment != seg_it->second)
                 {
@@ -737,13 +774,13 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
                     tasks.push(std::make_shared<SegmentReadTask>(segment, segment_snap));
                 }
 
-                tasks.back()->addRange(req_range);
+                tasks.back()->addRange(req_range.toHandleRange());
 
-                if (req_range.end < seg_range.end)
+                if (req_range.getEnd() < seg_range.getEnd())
                 {
                     ++range_it;
                 }
-                else if (req_range.end > seg_range.end)
+                else if (seg_range.getEnd() < req_range.getEnd())
                 {
                     ++seg_it;
                 }
@@ -755,7 +792,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
             }
             else
             {
-                if (req_range.end < seg_range.start)
+                if (req_range.getEnd() < seg_range.getStart())
                     ++range_it;
                 else
                     ++seg_it;
@@ -950,7 +987,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         {
             std::shared_lock read_write_lock(read_write_mutex);
 
-            auto it = segments.find(segment->getRange().end);
+            auto it = segments.find(segment->getPKRange()->getEnd());
             // check legality
             if (it == segments.end())
                 return {};
@@ -1180,7 +1217,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     });
 
     WriteBatches wbs(storage_pool);
-    auto         range      = segment->getRange();
+    auto         range      = segment->getPKRange();
     auto         split_info = segment->prepareSplit(dm_context, segment_snap, wbs);
 
     wbs.writeLogAndData();
@@ -1207,11 +1244,12 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
         wbs.writeMeta();
 
         segment->abandon();
-        segments.erase(range.end);
+        segments.erase(range->getEnd());
+        //        segments.erase(range.end);
         id_to_segment.erase(segment->segmentId());
 
-        segments[new_left->getRange().end]  = new_left;
-        segments[new_right->getRange().end] = new_right;
+        segments[new_left->getPKRange()->getEnd()]  = new_left;
+        segments[new_right->getPKRange()->getEnd()] = new_right;
 
         id_to_segment.emplace(new_left->segmentId(), new_left);
         id_to_segment.emplace(new_right->segmentId(), new_right);
@@ -1271,8 +1309,8 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
         GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_seg_merge).Observe(watch_seg_merge.elapsedSeconds());
     });
 
-    auto left_range  = left->getRange();
-    auto right_range = right->getRange();
+    auto left_range  = left->getPKRange();
+    auto right_range = right->getPKRange();
 
     WriteBatches wbs(storage_pool);
     auto         merged_stable = Segment::prepareMerge(dm_context, left, left_snap, right, right_snap, wbs);
@@ -1300,12 +1338,12 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
 
         left->abandon();
         right->abandon();
-        segments.erase(left_range.end);
-        segments.erase(right_range.end);
+        segments.erase(left_range->getEnd());
+        segments.erase(right_range->getEnd());
         id_to_segment.erase(left->segmentId());
         id_to_segment.erase(right->segmentId());
 
-        segments.emplace(merged->getRange().end, merged);
+        segments.emplace(merged->getPKRange()->getEnd(), merged);
         id_to_segment.emplace(merged->segmentId(), merged);
 
         if constexpr (DM_RUN_CHECK)
@@ -1380,8 +1418,8 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
 
         wbs.writeMeta();
 
-        segments[segment->getRange().end]   = new_segment;
-        id_to_segment[segment->segmentId()] = new_segment;
+        segments[new_segment->getPKRange()->getEnd()] = new_segment;
+        id_to_segment[segment->segmentId()]           = new_segment;
 
         segment->abandon();
 
@@ -1406,7 +1444,7 @@ bool DeltaMergeStore::isSegmentValid(const SegmentPtr & segment)
     if (segment->hasAbandoned())
         return false;
     // Segment instance could have been removed or replaced.
-    auto it = segments.find(segment->getRange().end);
+    auto it = segments.find(segment->getPKRange()->getEnd());
     if (it == segments.end())
         return false;
     auto & cur_segment = it->second;
@@ -1417,12 +1455,14 @@ void DeltaMergeStore::check(const Context & /*db_context*/)
 {
     std::shared_lock lock(read_write_mutex);
 
-    UInt64 next_segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
-    Handle last_end        = N_INF_HANDLE;
+    UInt64     next_segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
+    PKRangePtr last_range{};
     for (const auto & [end, segment] : segments)
     {
+        (void)end;
+
         auto segment_id = segment->segmentId();
-        auto range      = segment->getRange();
+        auto range      = segment->getPKRange();
 
         if (next_segment_id != segment_id)
         {
@@ -1430,7 +1470,7 @@ void DeltaMergeStore::check(const Context & /*db_context*/)
             for (auto & [end, segment] : segments)
             {
                 (void)end;
-                msg += DB::toString(end) + "->" + segment->info() + ",";
+                msg += segment->info() + ",";
             }
             msg.pop_back();
             msg += "}";
@@ -1438,21 +1478,24 @@ void DeltaMergeStore::check(const Context & /*db_context*/)
 
             throw Exception("Segment [" + DB::toString(segment_id) + "] is expected to have id [" + DB::toString(next_segment_id) + "]");
         }
-        if (last_end != range.start)
-            throw Exception("Segment [" + DB::toString(segment_id) + "] range start[" + DB::toString(range.start)
-                            + "] is not equal to last_end[" + DB::toString(last_end) + "]");
+        if (!last_range && !range->isStartInfinite())
+            throw Exception("First segment [" + DB::toString(segment_id) + ":" + range->toString()
+                            + "] is expected to have the min infinit start edge");
+        if (last_range && last_range->endCompareWith(range->getStart()) != 0)
+            throw Exception("Segment [" + DB::toString(segment_id) + ":" + range->toString()
+                            + "] is expected to have the same start edge value like the end edge value in " + last_range->toString());
 
-        last_end        = end;
+        last_range      = range;
         next_segment_id = segment->nextSegmentId();
     }
-    if (last_end != P_INF_HANDLE)
-        throw Exception("Last segment range end[" + DB::toString(last_end) + "] is not equal to P_INF_HANDLE");
+    if (!last_range->isEndInfinite())
+        throw Exception("Last range " + last_range->toString() + " is expected to have infinite end edge");
 }
 
 BlockPtr DeltaMergeStore::getHeader() const
 {
     return std::atomic_load<Block>(&original_table_header);
-};
+}
 
 void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
                                   const OptionTableInfoConstRef table_info,
