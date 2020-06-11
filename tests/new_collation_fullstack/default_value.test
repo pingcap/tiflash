@@ -43,12 +43,11 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select b3 from test.t;
 | a,b  |
 +------+
 
-# can be enabled once https://github.com/pingcap/tidb/issues/17891 is fixed
-# mysql> alter table test.t add column b4 set('a','b','c') charset utf8mb4 collate utf8mb4_bin default 'a,b ';
-# mysql> set session tidb_isolation_read_engines='tiflash'; select b4 from test.t;
-# +------+
-# | b4   |
-# +------+
-# | a,b  |
-# | a,b  |
-# +------+
+mysql> alter table test.t add column b4 set('a','b','c') charset utf8mb4 collate utf8mb4_bin default 'a,b ';
+mysql> set session tidb_isolation_read_engines='tiflash'; select b4 from test.t;
++------+
+| b4   |
++------+
+| a,b  |
+| a,b  |
++------+
