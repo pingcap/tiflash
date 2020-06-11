@@ -1,8 +1,12 @@
 #include <Common/Decimal.h>
 #include <Common/MyTime.h>
 #include <IO/ReadBufferFromString.h>
+#include <Poco/Base64Decoder.h>
+#include <Poco/MemoryStream.h>
+#include <Poco/StreamCopier.h>
 #include <Poco/StringTokenizer.h>
 #include <Storages/MutableSupport.h>
+#include <Storages/Transaction/Collator.h>
 #include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TiDB.h>
 
@@ -44,8 +48,25 @@ Field ColumnInfo::defaultValueToField() const
         case TypeLong:
         case TypeLongLong:
         case TypeInt24:
-        case TypeBit:
             return value.convert<Int64>();
+        case TypeBit:
+        {
+            // TODO: We shall use something like `orig_default_bit`, which will never change once created,
+            //  rather than `default_bit`, which could be altered.
+            //  See https://github.com/pingcap/tidb/issues/17641 and https://github.com/pingcap/tidb/issues/17642
+            auto & bit_value = default_bit_value;
+            // TODO: There might be cases that `orig_default` is not null but `default_bit` is null,
+            //  i.e. bit column added with an default value but later modified to another.
+            //  For these cases, neither `orig_default` (may get corrupted) nor `default_bit` (modified) is correct.
+            //  This is a bug anyway, we choose to make it simple, i.e. use `default_bit`.
+            if (bit_value.isEmpty())
+            {
+                if (hasNotNullFlag())
+                    return DB::GenDefaultField(*this);
+                return Field();
+            }
+            return getBitValue(bit_value.convert<String>());
+        }
         // Floating type.
         case TypeFloat:
         case TypeDouble:
@@ -120,9 +141,10 @@ DB::Field ColumnInfo::getDecimalValue(const String & decimal_text) const
 // FIXME it still has bug: https://github.com/pingcap/tidb/issues/11435
 Int64 ColumnInfo::getEnumIndex(const String & enum_id_or_text) const
 {
+    auto collator = ITiDBCollator::getCollator(collate.isEmpty() ? "binary" : collate.convert<String>());
     for (const auto & elem : elems)
     {
-        if (elem.first == enum_id_or_text)
+        if (collator->compare(elem.first.data(), elem.first.size(), enum_id_or_text.data(), enum_id_or_text.size()) == 0)
         {
             return elem.second;
         }
@@ -144,6 +166,7 @@ UInt64 ColumnInfo::getSetValue(const String & set_str) const
         // https://github.com/pingcap/tidb/blob/master/ddl/ddl_api.go#L752
         // TiDB always use the set value as case insensitive value, so need
         // to use toLower to make it case insensitive
+        // todo need to use collation info once https://github.com/pingcap/tidb/issues/14512 is fixed
         String key_lowercase = Poco::toLower(elems.at(i).first);
         auto it = marked.find(key_lowercase);
         if (it != marked.end())
@@ -192,6 +215,21 @@ Int64 ColumnInfo::getYearValue(const String & val) const
     return year;
 }
 
+UInt64 ColumnInfo::getBitValue(const String & val) const
+{
+    // The `default_bit` is a base64 encoded, big endian byte array.
+    Poco::MemoryInputStream istr(val.data(), val.size());
+    Poco::Base64Decoder decoder(istr);
+    std::string decoded;
+    Poco::StreamCopier::copyToString(decoder, decoded);
+    UInt64 result = 0;
+    for (auto c : decoded)
+    {
+        result = result << 8 | c;
+    }
+    return result;
+}
+
 Poco::JSON::Object::Ptr ColumnInfo::getJSONObject() const
 try
 {
@@ -205,11 +243,14 @@ try
     json->set("offset", offset);
     json->set("origin_default", origin_default_value);
     json->set("default", default_value);
+    json->set("default_bit", default_bit_value);
     Poco::JSON::Object::Ptr tp_json = new Poco::JSON::Object();
     tp_json->set("Tp", static_cast<Int32>(tp));
     tp_json->set("Flag", flag);
     tp_json->set("Flen", flen);
     tp_json->set("Decimal", decimal);
+    tp_json->set("Charset", charset);
+    tp_json->set("Collate", collate);
     if (!elems.empty())
     {
         Poco::JSON::Array::Ptr elem_arr = new Poco::JSON::Array();
@@ -246,6 +287,8 @@ try
         origin_default_value = json->get("origin_default");
     if (!json->isNull("default"))
         default_value = json->get("default");
+    if (!json->isNull("default_bit"))
+        default_bit_value = json->get("default_bit");
     auto type_json = json->getObject("type");
     tp = static_cast<TP>(type_json->getValue<Int32>("Tp"));
     flag = type_json->getValue<UInt32>("Flag");
@@ -260,6 +303,12 @@ try
             elems.push_back(std::make_pair(elems_arr->getElement<String>(i - 1), Int16(i)));
         }
     }
+    /// need to do this check for forward compatibility
+    if (!type_json->isNull("Charset"))
+        charset = type_json->get("Charset");
+    /// need to do this check for forward compatibility
+    if (!type_json->isNull("Collate"))
+        collate = type_json->get("Collate");
     state = static_cast<SchemaState>(json->getValue<Int32>("state"));
     comment = json->getValue<String>("comment");
 }

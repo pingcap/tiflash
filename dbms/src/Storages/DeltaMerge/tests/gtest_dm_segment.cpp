@@ -408,6 +408,7 @@ try
 CATCH
 
 INSTANTIATE_TEST_CASE_P(WhetherReadOrMergeDeltaBeforeDeleteRange, SegmentDeletion_test, testing::Combine(testing::Bool(), testing::Bool()));
+
 TEST_F(Segment_test, DeleteRead)
 try
 {

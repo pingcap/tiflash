@@ -200,6 +200,7 @@ static inline UInt128 ALWAYS_INLINE hash128(
     SipHash hash;
 
     for (size_t j = 0; j < keys_size; ++j)
+        // todo support collation
         key_columns[j]->updateHashWithValue(i, hash);
 
     hash.get128(key.low, key.high);

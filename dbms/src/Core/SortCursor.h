@@ -197,10 +197,7 @@ struct SortCursorWithCollation
             int nulls_direction = impl->desc[i].nulls_direction;
             int res;
             if (impl->need_collation[i])
-            {
-                const ColumnString & column_string = static_cast<const ColumnString &>(*impl->sort_columns[i]);
-                res = column_string.compareAtWithCollation(lhs_pos, rhs_pos, *(rhs.impl->sort_columns[i]), *impl->desc[i].collator);
-            }
+                res = impl->sort_columns[i]->compareAtWithCollation(lhs_pos, rhs_pos, *(rhs.impl->sort_columns[i]), nulls_direction, *impl->desc[i].collator);
             else
                 res = impl->sort_columns[i]->compareAt(lhs_pos, rhs_pos, *(rhs.impl->sort_columns[i]), nulls_direction);
 
@@ -222,8 +219,7 @@ struct SortCursorWithCollation
             int res;
             if (impl->need_collation[i])
             {
-                const ColumnString & column_string = static_cast<const ColumnString &>(*impl->sort_columns[i]);
-                res = column_string.compareAtWithCollation(lhs_pos, rhs_pos, *(rhs.impl->sort_columns[i]), *impl->desc[i].collator);
+                res = impl->sort_columns[i]->compareAtWithCollation(lhs_pos, rhs_pos, *(rhs.impl->sort_columns[i]), nulls_direction, *impl->desc[i].collator);
             }
             else
                 res = impl->sort_columns[i]->compareAt(lhs_pos, rhs_pos, *(rhs.impl->sort_columns[i]), nulls_direction);
