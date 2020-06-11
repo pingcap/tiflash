@@ -27,4 +27,4 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from db_test.
 
 mysql> drop table if exists db_test.t
 mysql> drop database db_test
->> DBGInvoke __disable_fail_point(*)
+>> DBGInvoke __disable_fail_point(exception_between_create_database_meta_and_directory)
