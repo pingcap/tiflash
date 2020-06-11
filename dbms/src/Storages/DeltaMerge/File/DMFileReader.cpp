@@ -94,35 +94,37 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
     buf = std::make_unique<CompressedReadBufferFromFile>(data_path, estimated_size, aio_threshold, buffer_size);
 }
 
-DMFileReader::DMFileReader(bool                  enable_clean_read_,
-                           UInt64                max_data_version_,
-                           const DMFilePtr &     dmfile_,
+DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
                            const ColumnDefines & read_columns_,
+                           // clean read
+                           bool   enable_clean_read_,
+                           UInt64 max_read_version_,
+                           // filters
                            const HandleRange &   handle_range_,
                            const RSOperatorPtr & filter_,
-                           ColumnCachePtr &      column_cache_,
-                           bool                  enable_column_cache_,
                            const IdSetPtr &      read_packs_,
-                           MarkCache *           mark_cache_,
-                           MinMaxIndexCache *    index_cache_,
-                           UInt64                hash_salt_,
-                           size_t                aio_threshold,
-                           size_t                max_read_buffer_size,
-                           size_t                rows_threshold_per_read_)
-    : enable_clean_read(enable_clean_read_),
-      max_data_version(max_data_version_),
-      dmfile(dmfile_),
+                           // caches
+                           UInt64             hash_salt_,
+                           MarkCache *        mark_cache_,
+                           MinMaxIndexCache * index_cache_,
+                           bool               enable_column_cache_,
+                           ColumnCachePtr &   column_cache_,
+                           size_t             aio_threshold,
+                           size_t             max_read_buffer_size,
+                           size_t             rows_threshold_per_read_)
+    : dmfile(dmfile_),
       read_columns(read_columns_),
-      handle_range(handle_range_),
-      mark_cache(mark_cache_),
-      hash_salt(hash_salt_),
-      rows_threshold_per_read(rows_threshold_per_read_),
+      enable_clean_read(enable_clean_read_),
+      max_read_version(max_read_version_),
       pack_filter(dmfile_, index_cache_, hash_salt_, handle_range_, filter_, read_packs_),
-      column_cache(column_cache_),
-      enable_column_cache(enable_column_cache_),
       handle_res(pack_filter.getHandleRes()),
       use_packs(pack_filter.getUsePacks()),
       skip_packs_by_column(read_columns.size(), 0),
+      hash_salt(hash_salt_),
+      mark_cache(mark_cache_),
+      enable_column_cache(enable_column_cache_),
+      column_cache(column_cache_),
+      rows_threshold_per_read(rows_threshold_per_read_),
       log(&Logger::get("DMFileReader"))
 {
     if (dmfile->getStatus() != DMFile::Status::READABLE)
@@ -169,12 +171,12 @@ bool DMFileReader::getSkippedRows(size_t & skip_rows)
     return next_pack_id < use_packs.size();
 }
 
-bool isExtraColumn(const ColumnDefine & cd)
+inline bool isExtraColumn(const ColumnDefine & cd)
 {
     return cd.id == EXTRA_HANDLE_COLUMN_ID || cd.id == VERSION_COLUMN_ID || cd.id == TAG_COLUMN_ID;
 }
 
-bool isCacheableColumn(const ColumnDefine & cd)
+inline bool isCacheableColumn(const ColumnDefine & cd)
 {
     return cd.id == EXTRA_HANDLE_COLUMN_ID || cd.id == VERSION_COLUMN_ID;
 }
@@ -213,17 +215,18 @@ Block DMFileReader::read()
     size_t read_packs = next_pack_id - start_pack_id;
 
     // TODO: this will need better algorithm: we should separate those packs which can and can not do clean read.
-    bool do_clean_read = enable_clean_read && expected_handle_res == All && !not_clean_rows;
+    bool do_clean_read = enable_clean_read && expected_handle_res == All && not_clean_rows == 0;
     if (do_clean_read)
     {
         UInt64 max_version = 0;
         for (size_t pack_id = start_pack_id; pack_id < next_pack_id; ++pack_id)
             max_version = std::max(pack_filter.getMaxVersion(pack_id), max_version);
-        do_clean_read = max_version <= max_data_version;
+        do_clean_read = max_version <= max_read_version;
     }
 
     for (size_t i = 0; i < read_columns.size(); ++i)
     {
+        // For clean read of column pk, version, tag, instead of loading data from disk, just create placeholder column is OK.
         auto & cd = read_columns[i];
         if (do_clean_read && isExtraColumn(cd))
         {

@@ -1,10 +1,9 @@
 #pragma once
 
-#include <Common/FieldVisitors.h>
-
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnVector.h>
 #include <Columns/IColumn.h>
+#include <Common/FieldVisitors.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
 #include <Storages/DeltaMerge/Index/RoughCheck.h>
 
@@ -28,6 +27,8 @@ struct MAX
 
 static constexpr size_t NONE_EXIST = std::numeric_limits<size_t>::max();
 
+namespace details
+{
 inline std::pair<size_t, size_t> minmax(const IColumn & column, const ColumnVector<UInt8> * del_mark, size_t offset, size_t limit)
 {
     const auto * del_mark_data = (!del_mark) ? nullptr : &(del_mark->getData());
@@ -71,12 +72,12 @@ inline std::pair<size_t, size_t> minmaxVec(const IColumn & column, const ColumnV
 
     return {batch_min_idx, batch_max_idx};
 }
+} // namespace details
 
 struct MinMaxValue;
 using MinMaxValuePtr = std::shared_ptr<MinMaxValue>;
-using MinMaxValues   = std::vector<MinMaxValuePtr>;
 
-struct MinMaxValue
+struct MinMaxValue : private boost::noncopyable
 {
     bool has_value = false;
 
@@ -113,7 +114,7 @@ struct MinMaxValueFixed : public MinMaxValue
 
     void set(const IColumn & column, const ColumnVector<UInt8> * del_mark, size_t offset, size_t limit)
     {
-        auto [min_idx, max_idx] = minmaxVec<T>(column, del_mark, offset, limit);
+        auto [min_idx, max_idx] = details::minmaxVec<T>(column, del_mark, offset, limit);
         if (min_idx != NONE_EXIST)
         {
             auto & col_data = static_cast<const ColumnVector<T> &>(column).getData();
@@ -126,7 +127,7 @@ struct MinMaxValueFixed : public MinMaxValue
 
     void merge(const MinMaxValue & other) override
     {
-        auto o = static_cast<const MinMaxValueFixed<T> &>(other);
+        auto & o = static_cast<const MinMaxValueFixed<T> &>(other);
         if (!o.has_value)
             return;
         else if (!has_value)
@@ -196,7 +197,7 @@ struct MinMaxValueString : public MinMaxValue
 
     void set(const IColumn & column, const ColumnVector<UInt8> * del_mark, size_t offset, size_t limit)
     {
-        auto [min_idx, max_idx] = minmax(column, del_mark, offset, limit);
+        auto [min_idx, max_idx] = details::minmax(column, del_mark, offset, limit);
         if (min_idx != NONE_EXIST)
         {
             auto & cast_column = static_cast<const ColumnString &>(column);
@@ -209,7 +210,7 @@ struct MinMaxValueString : public MinMaxValue
 
     void merge(const MinMaxValue & other) override
     {
-        auto o = static_cast<const MinMaxValueString &>(other);
+        auto & o = static_cast<const MinMaxValueString &>(other);
         if (!o.has_value)
             return;
         else if (!has_value)
@@ -277,7 +278,7 @@ struct MinMaxValueDataGeneric : public MinMaxValue
 
     void set(const IColumn & column, const ColumnVector<UInt8> * del_mark, size_t offset, size_t limit)
     {
-        auto [min_idx, max_idx] = minmax(column, del_mark, offset, limit);
+        auto [min_idx, max_idx] = details::minmax(column, del_mark, offset, limit);
         if (min_idx != NONE_EXIST)
         {
             has_value = true;
@@ -288,7 +289,7 @@ struct MinMaxValueDataGeneric : public MinMaxValue
 
     void merge(const MinMaxValue & other) override
     {
-        auto o = static_cast<const MinMaxValueDataGeneric &>(other);
+        auto & o = static_cast<const MinMaxValueDataGeneric &>(other);
         if (!o.has_value)
             return;
         else if (!has_value)
