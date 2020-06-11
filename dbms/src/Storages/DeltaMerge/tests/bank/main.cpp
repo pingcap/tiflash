@@ -2,7 +2,6 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <test_utils/TiflashTestBasic.h>
 
 #include <Storages/DeltaMerge/tests/bank/DeltaMergeStoreProxy.h>
