@@ -51,6 +51,17 @@ inline DataTypePtr typeFromString(const String & str)
     return data_type_factory.get(str);
 }
 
+inline DataTypes typesFromString(const String & str)
+{
+    DataTypes data_types;
+    std::istringstream data_types_stream(str);
+    std::string data_type;
+    while (data_types_stream >> data_type)
+        data_types.push_back(typeFromString(data_type));
+
+    return data_types;
+}
+
 class TiFlashTestEnv
 {
 public:

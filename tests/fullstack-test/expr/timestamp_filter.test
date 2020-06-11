@@ -1,0 +1,69 @@
+mysql> drop table if exists test.t;
+
+# Test filter not-null timestamp filter
+mysql> create table test.t (pk int(11) primary key, ts timestamp NOT NULL);
+mysql> SET time_zone = '+0:00'; insert into test.t values(1, '2000-01-01 10:00:00');
+mysql> alter table test.t set tiflash replica 1;
+
+func> wait_table test t
+
+## Tests using time_zone '+0:00'
+mysql> SET time_zone = '+0:00'; set session tidb_isolation_read_engines='tiflash'; select * from test.t;
++----+---------------------+
+| pk | ts                  |
++----+---------------------+
+|  1 | 2000-01-01 10:00:00 |
++----+---------------------+
+
+mysql> SET time_zone = '+0:00'; set session tidb_isolation_read_engines='tiflash'; select * from test.t where ts = '2000-01-01 10:00:00';
++----+---------------------+
+| pk | ts                  |
++----+---------------------+
+|  1 | 2000-01-01 10:00:00 |
++----+---------------------+
+
+## Tests using time_zone '+8:00'
+mysql> SET time_zone = '+8:00'; set session tidb_isolation_read_engines='tiflash'; select * from test.t where ts = '2000-01-01 18:00:00';
++----+---------------------+
+| pk | ts                  |
++----+---------------------+
+|  1 | 2000-01-01 18:00:00 |
++----+---------------------+
+
+
+mysql> drop table if exists test.t;
+
+
+##################
+# Test filter nullable timestamp filter
+mysql> create table test.t (pk int(11) primary key, ts timestamp NULL);
+mysql> SET time_zone = '+0:00'; insert into test.t values(1, '2000-01-01 10:00:00');
+mysql> alter table test.t set tiflash replica 1;
+
+func> wait_table test t
+
+## Tests using time_zone '+0:00'
+mysql> SET time_zone = '+0:00'; set session tidb_isolation_read_engines='tiflash'; select * from test.t;
++----+---------------------+
+| pk | ts                  |
++----+---------------------+
+|  1 | 2000-01-01 10:00:00 |
++----+---------------------+
+
+mysql> SET time_zone = '+0:00'; set session tidb_isolation_read_engines='tiflash'; select * from test.t where ts = '2000-01-01 10:00:00';
++----+---------------------+
+| pk | ts                  |
++----+---------------------+
+|  1 | 2000-01-01 10:00:00 |
++----+---------------------+
+
+## Tests using time_zone '+8:00'
+mysql> SET time_zone = '+8:00'; set session tidb_isolation_read_engines='tiflash'; select * from test.t where ts = '2000-01-01 18:00:00';
++----+---------------------+
+| pk | ts                  |
++----+---------------------+
+|  1 | 2000-01-01 18:00:00 |
++----+---------------------+
+
+
+mysql> drop table if exists test.t;
