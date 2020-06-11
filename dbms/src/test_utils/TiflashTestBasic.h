@@ -4,11 +4,11 @@
 #include <DataTypes/IDataType.h>
 #include <Interpreters/Context.h>
 #include <Poco/ConsoleChannel.h>
-#include <Poco/DirectoryIterator.h>
 #include <Poco/File.h>
 #include <Poco/FormattingChannel.h>
 #include <Poco/Path.h>
 #include <Poco/PatternFormatter.h>
+#include <Poco/SortedDirectoryIterator.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <gtest/gtest.h>
 
@@ -88,8 +88,8 @@ public:
             if (auto f = Poco::File(path); f.exists() && f.isDirectory())
             {
                 Strings paths;
-                Poco::DirectoryIterator dir_end;
-                for (Poco::DirectoryIterator dir_it(f); dir_it != dir_end; ++dir_it)
+                Poco::SortedDirectoryIterator dir_end;
+                for (Poco::SortedDirectoryIterator dir_it(f); dir_it != dir_end; ++dir_it)
                     paths.emplace_back(path + "/" + dir_it.name() + "/");
                 return paths;
             }
