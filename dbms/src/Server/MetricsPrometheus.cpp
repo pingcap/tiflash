@@ -37,7 +37,7 @@ MetricsPrometheus::MetricsPrometheus(Context & context, const AsynchronousMetric
 
     if (!conf.hasOption(status_metrics_addr))
     {
-        LOG_INFO(log, "Disable sending metrics to prometheus, cause " << status_metrics_addr << " is not set!");
+        LOG_INFO(log, "Disable prometheus push mode, cause " << status_metrics_addr << " is not set!");
     }
     else
     {
@@ -65,7 +65,7 @@ MetricsPrometheus::MetricsPrometheus(Context & context, const AsynchronousMetric
             gateway = std::make_shared<prometheus::Gateway>(host, port, job_name, prometheus::Gateway::GetInstanceLabel(hostname));
             gateway->RegisterCollectable(tiflash_metrics->registry);
 
-            LOG_INFO(log, "Enable sending metrics to prometheus; interval =" << metrics_interval << "; addr = " << metrics_addr);
+            LOG_INFO(log, "Enable prometheus push mode; interval =" << metrics_interval << "; addr = " << metrics_addr);
         }
     }
 
@@ -74,7 +74,11 @@ MetricsPrometheus::MetricsPrometheus(Context & context, const AsynchronousMetric
         auto metrics_port = conf.getString(status_metrics_port);
         exposer = std::make_shared<prometheus::Exposer>(metrics_port);
         exposer->RegisterCollectable(tiflash_metrics->registry);
-        LOG_INFO(log, "Metrics Port = " << metrics_port);
+        LOG_INFO(log, "Enable prometheus pull mode; Metrics Port = " << metrics_port);
+    }
+    else
+    {
+        LOG_INFO(log, "Disable prometheus pull mode");
     }
 
     timer.scheduleAtFixedRate(
