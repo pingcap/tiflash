@@ -60,5 +60,26 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 +---+---+
 
 mysql> drop table if exists test.t
+
+## Drop database will actually drop table data physically.
+mysql> drop table if exists test_new.t2;
+mysql> drop database if exists test_new;
+
+mysql> create database if not exists test_new;
+mysql> create table test_new.t2(a int, b int)
+mysql> alter table test_new.t2 set tiflash replica 1
+func> wait_table test_new t2
+mysql> insert into test_new.t2 values (1, 1),(1, 2);
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test_new.t2;
++------+------+
+| a    | b    |
++------+------+
+|    1 |    1 |
+|    1 |    2 |
++------+------+
+
+mysql> drop table if exists test_new.t2;
+mysql> drop database if exists test_new;
+
 >> DBGInvoke __disable_fail_point(exception_between_drop_meta_and_data)
 >> DBGInvoke __disable_fail_point(exception_drop_table_during_remove_meta)
