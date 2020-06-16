@@ -24,6 +24,9 @@ tests=(
 	#"gtests_tmt" # included in gtests_dbms
 )
 
+# Set env variable to run some special test cases.
+export ALSO_RUN_WITH_TEST_DATA=1
+
 for test in ${tests[@]}; do
 	run_test "$test"
 done
