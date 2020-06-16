@@ -341,15 +341,19 @@ public:
     virtual bool isInteger() const { return false; };
     virtual bool isUnsignedInteger() const { return false; };
 
+    /** Date, DateTime, MyDate, MyDateTime. Not Nullable.
+      */
     virtual bool isDateOrDateTime() const { return false; };
 
+    /** Decimal. Not Nullable.
+      */
     virtual bool isDecimal() const { return false; };
 
-    /** Numbers, Enums, Date, DateTime. Not nullable.
+    /** Numbers, Enums, Date, DateTime, MyDate, MyDateTime. Not nullable.
       */
     virtual bool isValueRepresentedByNumber() const { return false; };
 
-    /** Integers, Enums, Date, DateTime. Not nullable.
+    /** Integers, Enums, Date, DateTime, MyDate, MyDateTime. Not nullable.
       */
     virtual bool isValueRepresentedByInteger() const { return false; };
 

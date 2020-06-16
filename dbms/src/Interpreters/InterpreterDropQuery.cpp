@@ -10,6 +10,8 @@
 #include <Storages/IStorage.h>
 #include <Storages/StorageMergeTree.h>
 
+#include <ext/scope_guard.h>
+
 
 namespace DB
 {
@@ -137,6 +139,12 @@ BlockIO InterpreterDropQuery::execute()
             /// Delete table metdata and table itself from memory
             database->removeTable(context, current_table_name);
 
+            SCOPE_EXIT({
+                // Once the storage's metadata removed from disk, we should ensure that it is removed from TMTStorages
+                if (auto storage = std::dynamic_pointer_cast<IManageableStorage>(table.first); storage)
+                    storage->removeFromTMTContext();
+            });
+
             FAIL_POINT_TRIGGER_EXCEPTION(exception_between_drop_meta_and_data);
 
             /// Delete table data
@@ -153,10 +161,6 @@ BlockIO InterpreterDropQuery::execute()
                 if (Poco::File(table_data_path).exists())
                     Poco::File(table_data_path).remove(true);
             }
-
-            // drop is complete, then clean tmt context
-            if (auto storage = std::dynamic_pointer_cast<IManageableStorage>(table.first); storage)
-                storage->removeFromTMTContext();
         }
     }
 
