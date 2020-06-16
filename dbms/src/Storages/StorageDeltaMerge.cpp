@@ -697,27 +697,25 @@ BlockInputStreams StorageDeltaMerge::read( //
 
         if (log->trace())
         {
+            std::stringstream ss;
+            for (const auto & region : mvcc_query_info.regions_query_info)
             {
-                std::stringstream ss;
-                for (const auto & region : mvcc_query_info.regions_query_info)
+                if (!region.required_handle_ranges.empty())
                 {
-                    if (!region.required_handle_ranges.empty())
-                    {
-                        for (const auto & range : region.required_handle_ranges)
-                            ss << region.region_id << "[" << range.first.toString() << "," << range.second.toString() << "),";
-                    }
-                    else
-                    {
-                        /// only used for test cases
-                        const auto & range = region.range_in_table;
+                    for (const auto & range : region.required_handle_ranges)
                         ss << region.region_id << "[" << range.first.toString() << "," << range.second.toString() << "),";
-                    }
                 }
-                std::stringstream ss_merged_range;
-                for (const auto & range : ranges)
-                    ss_merged_range << range.toString() << ",";
-                LOG_TRACE(log, "reading ranges: orig, " << ss.str() << " merged, " << ss_merged_range.str());
+                else
+                {
+                    /// only used for test cases
+                    const auto & range = region.range_in_table;
+                    ss << region.region_id << "[" << range.first.toString() << "," << range.second.toString() << "),";
+                }
             }
+            std::stringstream ss_merged_range;
+            for (const auto & range : ranges)
+                ss_merged_range << range.toString() << ",";
+            LOG_TRACE(log, "reading ranges: orig, " << ss.str() << " merged, " << ss_merged_range.str());
         }
 
         /// Get Rough set filter from query

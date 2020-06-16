@@ -1,6 +1,6 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
-#include <Storages/DeltaMerge/FilterHelper.h>
+#include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
@@ -102,6 +102,8 @@ size_t StableValueSpace::getBytes() const
 
 size_t StableValueSpace::getBytesOnDisk() const
 {
+    // If this stable value space is logical splited, some file may not used,
+    // and this will return more bytes than actual used.
     size_t bytes = 0;
     for (const auto & file : files)
         bytes += file->getBytesOnDisk();
