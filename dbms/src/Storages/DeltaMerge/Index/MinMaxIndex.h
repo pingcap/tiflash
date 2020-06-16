@@ -18,7 +18,6 @@ namespace DM
 
 class MinMaxIndex;
 using MinMaxIndexPtr = std::shared_ptr<MinMaxIndex>;
-using MinMaxIndexes  = std::vector<MinMaxIndexPtr>;
 
 class MinMaxIndex
 {

@@ -22,6 +22,9 @@ class StableValueSpace : public std::enable_shared_from_this<StableValueSpace>
 public:
     StableValueSpace(PageId id_) : id(id_), log(&Logger::get("StableValueSpace")) {}
 
+    // Set DMFiles for this value space.
+    // If this value space is logical splited, specify `range` and `dm_context` so that we can get more precise
+    // bytes and rows.
     void setFiles(const DMFiles & files_, DMContext * dm_context = nullptr, HandleRange range = HandleRange::newAll());
 
     PageId          getId() { return id; }

@@ -52,5 +52,7 @@ public:
         FAIL_POINT_ENABLE(fail_point_name, exception_after_step_3_in_exchange_partition)
         else throw Exception("Cannot find fail point " + fail_point_name, ErrorCodes::FAIL_POINT_ERROR);
     }
+
+    static void disableFailPoint(const String & fail_point_name) { fiu_disable(fail_point_name.c_str()); }
 };
 } // namespace DB
