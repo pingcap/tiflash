@@ -19,7 +19,7 @@ docker-compose -f cluster.yaml -f tiflash-dt.yaml up -d
 sleep 60
 docker-compose -f cluster.yaml -f tiflash-dt.yaml up -d --build
 sleep 10
-docker-compose -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test true'
+docker-compose -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test true && ./run-test.sh fullstack-test-dt'
 docker-compose -f cluster.yaml -f tiflash-dt.yaml down
 
 

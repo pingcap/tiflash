@@ -2,6 +2,7 @@
 #include <DataTypes/getLeastSupertype.h>
 #include <DataTypes/getMostSubtype.h>
 #include <DataTypes/isSupportedDataTypeCast.h>
+#include <test_utils/TiflashTestBasic.h>
 
 #include <sstream>
 
@@ -14,26 +15,6 @@ namespace DB
 {
 namespace tests
 {
-
-namespace
-{
-DataTypePtr typeFromString(const String & str)
-{
-    auto & data_type_factory = DataTypeFactory::instance();
-    return data_type_factory.get(str);
-}
-
-DataTypes typesFromString(const String & str)
-{
-    DataTypes data_types;
-    std::istringstream data_types_stream(str);
-    std::string data_type;
-    while (data_types_stream >> data_type)
-        data_types.push_back(typeFromString(data_type));
-
-    return data_types;
-}
-} // namespace
 
 TEST(DataType_test, getLeastSuperType)
 {
@@ -317,6 +298,33 @@ TEST(DataType_test, isSupportedDataTypeCast)
         throw;
     }
 }
+
+TEST(DataType_test, NullableProperty)
+try
+{
+    std::vector<String> date_cases = {
+        "Date",
+        "DateTime",
+        "MyDate",
+        "MyDateTime",
+    };
+    for (const auto & c : date_cases)
+    {
+        auto type = typeFromString(c);
+        // date-like type
+        ASSERT_TRUE(type->isDateOrDateTime()) << "type: " + type->getName();
+        // these are false for date-like type
+        ASSERT_FALSE(type->isInteger()) << "type: " + type->getName();
+        ASSERT_FALSE(type->isUnsignedInteger()) << "type: " + type->getName();
+        ASSERT_FALSE(type->isNumber()) << "type: " + type->getName();
+
+        auto ntype = typeFromString("Nullable(" + c + ")");
+        ASSERT_TRUE(ntype->isNullable()) << "type: " + type->getName();
+        // not true for nullable
+        ASSERT_FALSE(ntype->isDateOrDateTime()) << "type: " + type->getName();
+    }
+}
+CATCH
 
 } // namespace tests
 } // namespace DB
