@@ -10,6 +10,11 @@
 
 #include <ext/scope_guard.h>
 
+namespace ProfileEvents
+{
+extern const Event DMWriteBytes;
+}
+
 namespace DB
 {
 namespace DM
@@ -263,6 +268,8 @@ bool DeltaValueSpace::appendToDisk(DMContext & /*context*/, const PackPtr & pack
     rows += pack->rows;
     bytes += pack->bytes;
     unsaved_rows += pack->rows;
+
+    ProfileEvents::increment(ProfileEvents::DMWriteBytes, pack->bytes);
 
     return true;
 }
