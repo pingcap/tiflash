@@ -43,7 +43,8 @@ namespace DB
         F(type_create_table, {"type", "create_table"}), F(type_create_db, {"type", "create_db"}),                                         \
         F(type_drop_table, {"type", "drop_table"}), F(type_drop_db, {"type", "drop_db"}), F(type_rename_table, {"type", "rename_table"}), \
         F(type_add_column, {"type", "add_column"}), F(type_drop_column, {"type", "drop_column"}),                                         \
-        F(type_alter_column_tp, {"type", "alter_column_type"}), F(type_rename_column, {"type", "rename_column"}))                         \
+        F(type_alter_column_tp, {"type", "alter_column_type"}), F(type_rename_column, {"type", "rename_column"}),                         \
+        F(type_exchange_partition, {"type", "exchange_partition"}))                                                                       \
     M(tiflash_schema_apply_duration_seconds, "Bucketed histogram of ddl apply duration", Histogram,                                       \
         F(type_ddl_apply_duration, {{"req", "ddl_apply_duration"}}, ExpBuckets{0.0005, 2, 20}))                                           \
     M(tiflash_tmt_merge_count, "Total number of TMT engine merge", Counter)                                                               \

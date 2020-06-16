@@ -1,3 +1,4 @@
+#include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Databases/DatabaseTiFlash.h>
 #include <Debug/MockSchemaGetter.h>
@@ -402,6 +403,11 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
             applyPartitionDiff(di, diff.table_id);
             break;
         }
+        case SchemaActionExchangeTablePartition:
+        {
+            applyExchangeTablePartition(diff);
+            break;
+        }
         default:
         {
             LOG_INFO(log, "ignore change type: " << int(diff.type));
@@ -534,7 +540,7 @@ template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyRenameLogicalTable(
     DBInfoPtr new_db_info, TableInfoPtr new_table_info, ManageableStoragePtr storage)
 {
-    applyRenamePhysicalTable(new_db_info, new_table_info, storage);
+    applyRenamePhysicalTable(new_db_info, *new_table_info, storage);
 
     if (new_table_info->isLogicalPartitionTable())
     {
@@ -547,22 +553,22 @@ void SchemaBuilder<Getter, NameMapper>::applyRenameLogicalTable(
                 throw Exception("miss old table id in Flash " + std::to_string(part_def.id));
             }
             auto part_table_info = new_table_info->producePartitionTableInfo(part_def.id, name_mapper);
-            applyRenamePhysicalTable(new_db_info, part_table_info, part_storage);
+            applyRenamePhysicalTable(new_db_info, *part_table_info, part_storage);
         }
     }
 }
 
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
-    DBInfoPtr new_db_info, TableInfoPtr new_table_info, ManageableStoragePtr storage)
+    DBInfoPtr new_db_info, TableInfo & new_table_info, ManageableStoragePtr storage)
 {
     const auto old_mapped_db_name = storage->getDatabaseName();
     const auto new_mapped_db_name = name_mapper.mapDatabaseName(*new_db_info);
     const auto old_display_table_name = name_mapper.displayTableName(storage->getTableInfo());
-    const auto new_display_table_name = name_mapper.displayTableName(*new_table_info);
+    const auto new_display_table_name = name_mapper.displayTableName(new_table_info);
     if (old_mapped_db_name == new_mapped_db_name && old_display_table_name == new_display_table_name)
     {
-        LOG_DEBUG(log, "Table " << name_mapper.debugCanonicalName(*new_db_info, *new_table_info) << " name identical, not renaming.");
+        LOG_DEBUG(log, "Table " << name_mapper.debugCanonicalName(*new_db_info, new_table_info) << " name identical, not renaming.");
         return;
     }
 
@@ -570,14 +576,14 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
     GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_rename_column).Increment();
     LOG_INFO(log,
         "Renaming table " << old_mapped_db_name << "." << old_mapped_tbl_name << " (display name:" << old_display_table_name << ") to "
-                          << name_mapper.debugCanonicalName(*new_db_info, *new_table_info));
+                          << name_mapper.debugCanonicalName(*new_db_info, new_table_info));
 
     // Note that rename will update table info in table create statement by modifying original table info
     // with "tidb_display.table" instead of using new_table_info directly, so that other changes
     // (ALTER commands) won't be saved. Besides, no need to update schema_version as table name is not structural.
     auto rename = std::make_shared<ASTRenameQuery>();
     ASTRenameQuery::Table from{old_mapped_db_name, old_mapped_tbl_name};
-    ASTRenameQuery::Table to{new_mapped_db_name, name_mapper.mapTableName(*new_table_info)};
+    ASTRenameQuery::Table to{new_mapped_db_name, name_mapper.mapTableName(new_table_info)};
     ASTRenameQuery::Table display{name_mapper.displayDatabaseName(*new_db_info), new_display_table_name};
     ASTRenameQuery::Element elem{.from = std::move(from), .to = std::move(to), .tidb_display = std::move(display)};
     rename->elements.emplace_back(std::move(elem));
@@ -586,7 +592,80 @@ void SchemaBuilder<Getter, NameMapper>::applyRenamePhysicalTable(
 
     LOG_INFO(log,
         "Renamed table " << old_mapped_db_name << "." << old_mapped_tbl_name << " (display name:" << old_display_table_name << ") to "
-                         << name_mapper.debugCanonicalName(*new_db_info, *new_table_info));
+                         << name_mapper.debugCanonicalName(*new_db_info, new_table_info));
+}
+
+template <typename Getter, typename NameMapper>
+void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const SchemaDiff & diff)
+{
+    /// Exchange table partition is used for ddl:
+    /// alter table partition_table exchange partition partition_name with table non_partition_table
+    /// It involves three table/partition: partition_table, partition_name and non_partition_table
+    /// The table id/schema id for the 3 table/partition are stored in SchemaDiff as follows:
+    /// Table_id in diff is the partition id of which will be exchanged,
+    /// Schema_id in diff is the non-partition table's schema id
+    /// Old_table_id in diff is the non-partition table's table id
+    /// Table_id in diff.affected_opts[0] is the table id of the partition table
+    /// Schema_id in diff.affected_opts[0] is the schema id of the partition table
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_exchange_partition).Increment();
+    if (diff.affected_opts.empty())
+        throw Exception("Incorrect schema diff, no affected_opts for alter table exchange partition schema diff", ErrorCodes::DDL_ERROR);
+    auto npt_db_info = getter.getDatabase(diff.schema_id);
+    if (npt_db_info == nullptr)
+        throw Exception("miss database: " + std::to_string(diff.schema_id), ErrorCodes::DDL_ERROR);
+    auto pt_db_info = getter.getDatabase(diff.affected_opts[0].schema_id);
+    if (pt_db_info == nullptr)
+        throw Exception("miss database: " + std::to_string(diff.affected_opts[0].schema_id), ErrorCodes::DDL_ERROR);
+    auto npt_table_id = diff.old_table_id;
+    auto pt_partition_id = diff.table_id;
+    auto pt_table_info = diff.affected_opts[0].table_id;
+    /// step 1 change the mete data of partition table
+    auto table_info = getter.getTableInfo(pt_db_info->id, pt_table_info);
+    if (table_info == nullptr)
+        throw Exception("miss table in TiKV : " + std::to_string(pt_table_info), ErrorCodes::DDL_ERROR);
+    auto & tmt_context = context.getTMTContext();
+    auto storage = tmt_context.getStorages().get(table_info->id);
+    if (storage == nullptr)
+        throw Exception("miss table in TiFlash :" + name_mapper.debugCanonicalName(*pt_db_info, *table_info), ErrorCodes::DDL_ERROR);
+    LOG_INFO(log, "Exchange partition for table " << pt_db_info->name << "." << name_mapper.debugTableName(storage->getTableInfo()));
+    auto orig_table_info = storage->getTableInfo();
+    orig_table_info.partition = table_info->partition;
+    storage->alterFromTiDB(AlterCommands{}, name_mapper.mapDatabaseName(*pt_db_info), orig_table_info, name_mapper, context);
+    FAIL_POINT_TRIGGER_EXCEPTION(exception_after_step_1_in_exchange_partition);
+
+    /// step 2 change non partition table to a partition of the partition table
+    storage = tmt_context.getStorages().get(npt_table_id);
+    if (storage == nullptr)
+        throw Exception("miss table in TiFlash :" + name_mapper.debugCanonicalName(*npt_db_info, *table_info), ErrorCodes::DDL_ERROR);
+    orig_table_info = storage->getTableInfo();
+    orig_table_info.belonging_table_id = pt_table_info;
+    orig_table_info.is_partition_table = true;
+    /// partition does not have explicit name, so use default name here
+    orig_table_info.name = name_mapper.mapTableName(orig_table_info);
+    storage->alterFromTiDB(AlterCommands{}, name_mapper.mapDatabaseName(*npt_db_info), orig_table_info, name_mapper, context);
+    FAIL_POINT_TRIGGER_EXCEPTION(exception_before_step_2_rename_in_exchange_partition);
+
+    if (npt_db_info->id != pt_db_info->id)
+        applyRenamePhysicalTable(pt_db_info, orig_table_info, storage);
+    FAIL_POINT_TRIGGER_EXCEPTION(exception_after_step_2_in_exchange_partition);
+
+    /// step 3 change partition of the partition table to non partition table
+    table_info = getter.getTableInfo(npt_db_info->id, pt_partition_id);
+    if (table_info == nullptr)
+        throw Exception("miss table in TiKV : " + std::to_string(pt_partition_id), ErrorCodes::DDL_ERROR);
+    storage = tmt_context.getStorages().get(table_info->id);
+    if (storage == nullptr)
+        throw Exception("miss table in TiFlash :" + name_mapper.debugCanonicalName(*pt_db_info, *table_info), ErrorCodes::DDL_ERROR);
+    orig_table_info = storage->getTableInfo();
+    orig_table_info.belonging_table_id = DB::InvalidTableID;
+    orig_table_info.is_partition_table = false;
+    orig_table_info.name = table_info->name;
+    storage->alterFromTiDB(AlterCommands{}, name_mapper.mapDatabaseName(*pt_db_info), orig_table_info, name_mapper, context);
+    FAIL_POINT_TRIGGER_EXCEPTION(exception_before_step_3_rename_in_exchange_partition);
+
+    if (npt_db_info->id != pt_db_info->id)
+        applyRenamePhysicalTable(npt_db_info, orig_table_info, storage);
+    FAIL_POINT_TRIGGER_EXCEPTION(exception_after_step_3_in_exchange_partition);
 }
 
 template <typename Getter, typename NameMapper>
