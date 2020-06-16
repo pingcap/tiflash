@@ -130,6 +130,7 @@ public:
                 continue;
 
             auto handle_column = block.getByPosition(handle_col_pos).column;
+            /// If clean read optimized, only first row's (the smallest) handle is returned as a ColumnConst.
             if (handle_column->isColumnConst())
             {
                 if (handle_range.check(handle_column->getInt(0)))
