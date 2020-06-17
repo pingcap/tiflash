@@ -1,13 +1,11 @@
 #pragma once
 
 #include <Common/Exception.h>
-
+#include <DataStreams/IBlockInputStream.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
-
-#include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/HandleFilter.h>
@@ -251,13 +249,14 @@ private:
             }
             else
             {
-                switch (delta_index_it.getType())
+                if (delta_index_it.isDelete())
                 {
-                case DT_DEL:
+                    // Delete.
                     writeDeleteFromDelta(delta_index_it.getCount());
-                    break;
-                case DT_INS:
+                }
+                else
                 {
+                    // Insert.
                     bool do_write = true;
                     if constexpr (skippable_place)
                     {
@@ -274,14 +273,6 @@ private:
                         use_delta_rows   = delta_index_it.getCount();
                         writeInsertFromDelta(output_columns, output_write_limit);
                     }
-                    break;
-                }
-                default:
-                    throw Exception("Entry type " + DTTypeString(delta_index_it.getType())
-                                    + " is not supported, is end: " + DB::toString(delta_index_it == delta_index_end)
-                                    + ", use_stable_rows: " + DB::toString(use_stable_rows)
-                                    + ", stable_ignore: " + DB::toString(stable_ignore) + ", stable_done: " + DB::toString(stable_done)
-                                    + ", delta_done: " + DB::toString(delta_done) + ", delta_done: " + DB::toString(delta_done));
                 }
             }
 
@@ -490,8 +481,8 @@ private:
     {
         UInt64 prev_sid;
         {
-            prev_sid       = delta_index_it.getSid();
-            if (delta_index_it.getType() == DT_DEL)
+            prev_sid = delta_index_it.getSid();
+            if (delta_index_it.isDelete())
                 prev_sid += delta_index_it.getCount();
         }
 
