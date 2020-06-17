@@ -155,20 +155,18 @@ Int64 ColumnInfo::getEnumIndex(const String & enum_id_or_text) const
 
 UInt64 ColumnInfo::getSetValue(const String & set_str) const
 {
+    auto collator = ITiDBCollator::getCollator(collate.isEmpty() ? "binary" : collate.convert<String>());
+    std::string sort_key_container;
     Poco::StringTokenizer string_tokens(set_str, ",");
     std::set<String> marked;
     for (const auto & s : string_tokens)
-        marked.insert(Poco::toLower(s));
+        marked.insert(collator->sortKey(s.data(), s.length(), sort_key_container).toString());
 
     UInt64 value = 0;
     for (size_t i = 0; i < elems.size(); i++)
     {
-        // https://github.com/pingcap/tidb/blob/master/ddl/ddl_api.go#L752
-        // TiDB always use the set value as case insensitive value, so need
-        // to use toLower to make it case insensitive
-        // todo need to use collation info once https://github.com/pingcap/tidb/issues/14512 is fixed
-        String key_lowercase = Poco::toLower(elems.at(i).first);
-        auto it = marked.find(key_lowercase);
+        String key = collator->sortKey(elems.at(i).first.data(), elems.at(i).first.length(), sort_key_container).toString();
+        auto it = marked.find(key);
         if (it != marked.end())
         {
             value |= 1ULL << i;

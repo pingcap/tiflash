@@ -1,15 +1,14 @@
 #pragma once
 
+#include <Core/Types.h>
+#include <IO/WriteHelpers.h>
+#include <Storages/DeltaMerge/Tuple.h>
+#include <common/logger_useful.h>
+
 #include <algorithm>
 #include <cstddef>
 #include <memory>
 #include <queue>
-
-#include <Core/Types.h>
-#include <IO/WriteHelpers.h>
-#include <Storages/DeltaMerge/Tuple.h>
-
-#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -17,15 +16,10 @@ namespace DM
 {
 
 struct DTMutation;
-struct DTModify;
 template <size_t M, size_t F, size_t S>
 struct DTLeaf;
 template <size_t M, size_t F, size_t S>
 struct DTIntern;
-
-using DTModifies    = std::vector<DTModify>;
-using DTModifiesPtr = DTModifies *;
-static_assert(sizeof(UInt64) >= sizeof(DTModifiesPtr));
 
 using TupleRefs = std::vector<size_t>;
 
@@ -43,56 +37,79 @@ inline std::string addrToHex(const void * addr)
     return ss.str();
 }
 
-/// DTMutation type available values.
-using DT_TYPE = UInt16;
 
-static constexpr DT_TYPE DT_INS = 65535;
-static constexpr DT_TYPE DT_DEL = 65534;
+using DT_TypeCount = UInt32;
+using DT_Id        = UInt32;
+using DT_Delta     = Int32;
 
-inline std::string DTTypeString(UInt16 type)
+inline UInt64 checkId(UInt64 id)
 {
-    String type_s;
-    switch (type)
-    {
-    case DT_INS:
-        type_s = "INS";
-        break;
-    case DT_DEL:
-        type_s = "DEL";
-        break;
-    default:
-        type_s = DB::toString(type);
-        break;
-    }
-    return type_s;
+    if (unlikely(id >= std::numeric_limits<DT_Id>::max()))
+        throw Exception("Illegal id: " + DB::toString(id));
+    return id;
 }
+
+inline Int64 checkDelta(Int64 delta)
+{
+    if (unlikely(delta < std::numeric_limits<DT_Delta>::min() || delta >= std::numeric_limits<DT_Delta>::max()))
+        throw Exception("Illegal delta: " + DB::toString(delta));
+    return delta;
+}
+
+namespace DTType
+{
+
+static constexpr DT_TypeCount TYPE_MASK = 1;
+
+inline std::string DTTypeString(bool is_insert)
+{
+    return is_insert ? "INS" : "DEL";
+}
+
+inline DT_TypeCount getTypeCount(bool is_insert, UInt32 count)
+{
+    return (count << 1) | (DT_TypeCount)is_insert;
+}
+
+inline UInt32 getCount(DT_TypeCount type_count)
+{
+    return type_count >> 1;
+}
+
+inline bool isInsert(DT_TypeCount type_count)
+{
+    return type_count & TYPE_MASK;
+}
+
+inline bool isDelete(DT_TypeCount type_count)
+{
+    return !(type_count & TYPE_MASK);
+}
+
+inline DT_TypeCount updateCount(DT_TypeCount type_count, UInt32 count)
+{
+    return (count << 1) | (DT_TypeCount)isInsert(type_count);
+}
+
+} // namespace DTType
+
 
 struct DTMutation
 {
     DTMutation() = default;
-    DTMutation(UInt16 type_, UInt32 count_, UInt64 value_) : type(type_), count(count_), value(value_) {}
+    DTMutation(bool is_insert, UInt32 count, UInt64 value_) : type_count(DTType::getTypeCount(is_insert, count)), value(value_) {}
 
-    /// DT_INS : Insert
-    /// DT_DEL : Delete
-    UInt16 type = 0;
-    /// For DT_INS and DT_DEL, "count" is the number of values got inserted or delete from "value".
-    UInt32 count = 0;
+    /// The lowest bit of type_count indicates whether this is a insert or not (delete).
+    /// And the rest bits represent the inserted or deleted rows.
+    DT_TypeCount type_count = 0;
     /// For DT_INS, "value" is the value index (tuple_id) in value space;
-    UInt64 value = 0;
+    DT_Id value = 0;
 
-    inline bool isModify() const { return type != DT_INS && type != DT_DEL; }
+    bool   isInsert() const { return DTType::isInsert(type_count); }
+    bool   isDelete() const { return DTType::isDelete(type_count); }
+    UInt32 count() const { return DTType::getCount(type_count); }
+    void   setCount(UInt32 v) { type_count = DTType::updateCount(type_count, v); }
 };
-
-struct DTModify
-{
-    DTModify() = default;
-
-    DTModify(size_t column_id_, UInt64 value_) : column_id(column_id_), value(value_) {}
-
-    size_t column_id = 0;
-    UInt64 value     = 0;
-};
-
 
 /// Note that we allocate one more slot for entries in DTIntern and DTLeaf, to simplify entry insert operation.
 
@@ -109,7 +126,7 @@ struct DTLeaf
 
     const size_t mark = 1; // <-- This mark MUST be declared at first place!
 
-    UInt64     sids[M * S + 1];
+    DT_Id      sids[M * S + 1];
     DTMutation mutations[M * S + 1];
     size_t     count = 0; // mutations count
 
@@ -127,10 +144,9 @@ struct DTLeaf
 
     inline UInt64 sid(size_t pos) const { return sids[pos]; }
     inline UInt64 rid(size_t pos, Int64 delta) const { return sids[pos] + delta; }
-    inline UInt16 type(size_t pos) const { return mutations[pos].type; }
-    inline UInt32 mut_count(size_t pos) const { return mutations[pos].count; }
+    inline UInt16 isInsert(size_t pos) const { return mutations[pos].isInsert(); }
+    inline UInt32 mut_count(size_t pos) const { return mutations[pos].count(); }
     inline UInt64 value(size_t pos) const { return mutations[pos].value; }
-    inline bool   isModify(size_t pos) const { return mutations[pos].isModify(); }
 
     static inline bool overflow(size_t count) { return count > M * S; }
     static inline bool underflow(size_t count) { return count < M; }
@@ -163,10 +179,10 @@ struct DTLeaf
         for (size_t i = 0; i < count; ++i)
         {
             const auto & m = mutations[i];
-            if (m.type == DT_INS)
+            if (m.isInsert())
                 delta += 1;
-            else if (m.type == DT_DEL)
-                delta -= m.count;
+            else
+                delta -= m.count();
         }
         return delta;
     }
@@ -189,9 +205,9 @@ struct DTLeaf
                 if (id <= sid(i))
                     return {i, delta};
             }
-            if (type(i) == DT_INS)
+            if (isInsert(i))
                 delta += 1;
-            else if (type(i) == DT_DEL)
+            else
                 delta -= mut_count(i);
         }
         return {i, delta};
@@ -299,10 +315,10 @@ struct DTIntern
 
     const size_t mark = 0; // <-- This mark MUST be declared at first place!
 
-    UInt64  sids[F * S + 1];
-    Int64   deltas[F * S + 1];
-    NodePtr children[F * S + 1];
-    size_t  count = 0; // deltas / children count, and the number of sids is "count - 1"
+    DT_Id    sids[F * S + 1];
+    DT_Delta deltas[F * S + 1];
+    NodePtr  children[F * S + 1];
+    size_t   count = 0; // deltas / children count, and the number of sids is "count - 1"
 
     InternPtr parent = nullptr;
 
@@ -482,9 +498,9 @@ public:
         if (unlikely(pos >= leaf->count))
             throw Exception("Illegal ++ operation on " + toString());
 
-        if (leaf->type(pos) == DT_INS)
+        if (leaf->isInsert(pos))
             delta += 1;
-        else if (leaf->type(pos) == DT_DEL)
+        else
             delta -= leaf->mut_count(pos);
 
         if (++pos >= leaf->count && leaf->next)
@@ -508,9 +524,9 @@ public:
             pos  = leaf->count - 1;
         }
 
-        if (leaf->type(pos) == DT_INS)
+        if (leaf->isInsert(pos))
             delta -= 1;
-        else if (leaf->type(pos) == DT_DEL)
+        else
             delta += leaf->mut_count(pos);
 
         return *this;
@@ -520,12 +536,14 @@ public:
     LeafPtr    getLeaf() const { return leaf; }
     size_t     getPos() const { return pos; }
     Int64      getDelta() const { return delta; }
-    UInt16     getType() const { return leaf->mutations[pos].type; }
-    UInt32     getCount() const { return leaf->mutations[pos].count; }
+    bool       isInsert() const { return leaf->mutations[pos].isInsert(); }
+    bool       isDelete() const { return leaf->mutations[pos].isDelete(); }
+    UInt32     getCount() const { return leaf->mutations[pos].count(); }
     UInt64     getValue() const { return leaf->mutations[pos].value; }
-    UInt64 &   getValueRef() const { return leaf->mutations[pos].value; }
     UInt64     getSid() const { return leaf->sids[pos]; }
     UInt64     getRid() const { return leaf->sids[pos] + delta; }
+
+    void setValue(UInt64 value) { leaf->mutations[pos].value = checkId(value); }
 };
 
 template <size_t M, size_t F, size_t S, typename Allocator>
@@ -584,10 +602,10 @@ public:
 
         Iterator & operator++()
         {
-            if (entries->mutations[index].type == DT_INS)
+            if (entries->mutations[index].isInsert())
                 delta += 1;
-            else if (entries->mutations[index].type == DT_DEL)
-                delta -= entries->mutations[index].count;
+            else
+                delta -= entries->mutations[index].count();
 
             ++index;
 
@@ -598,17 +616,18 @@ public:
         {
             --index;
 
-            if (entries->mutations[index].type == DT_INS)
+            if (entries->mutations[index].isInsert())
                 delta -= 1;
-            else if (entries->mutations[index].type == DT_DEL)
-                delta += entries->mutations[index].count;
+            else
+                delta += entries->mutations[index].count();
 
             return *this;
         }
 
         Int64  getDelta() const { return delta; }
-        UInt16 getType() const { return entries->mutations[index].type; }
-        UInt32 getCount() const { return entries->mutations[index].count; }
+        bool   isInsert() const { return entries->mutations[index].isInsert(); }
+        bool   isDelete() const { return entries->mutations[index].isDelete(); }
+        UInt32 getCount() const { return entries->mutations[index].count(); }
         UInt64 getValue() const { return entries->mutations[index].value; }
         UInt64 getSid() const { return entries->sids[index]; }
         UInt64 getRid() const { return entries->sids[index] + delta; }
@@ -628,7 +647,7 @@ public:
     struct Entry
     {
         UInt64 sid;
-        UInt16 type;
+        bool   is_insert;
         UInt32 count;
         UInt64 value;
     };
@@ -648,7 +667,8 @@ public:
         }
 
         UInt64 getSid() const { return it->sid; }
-        UInt16 getType() const { return it->type; }
+        bool   isInsert() const { return it->is_insert; }
+        bool   isDelete() const { return !it->is_insert; }
         UInt32 getCount() const { return it->count; }
         UInt64 getValue() const { return it->value; }
     };
@@ -663,10 +683,10 @@ public:
 
         for (auto it = begin; it != end; ++it)
         {
-            if (!entries.empty() && it.getType() == DT_INS)
+            if (!entries.empty() && it.isInsert())
             {
                 auto & prev_index = entries.back();
-                if (prev_index.type == DT_INS        //
+                if (prev_index.is_insert             //
                     && prev_index.sid == it.getSid() //
                     && prev_index.value + prev_index.count == it.getValue())
                 {
@@ -675,7 +695,7 @@ public:
                     continue;
                 }
             }
-            Entry entry = {it.getSid(), it.getType(), it.getCount(), it.getValue()};
+            Entry entry = {.sid = it.getSid(), .is_insert = it.isInsert(), .count = it.getCount(), .value = it.getValue()};
             entries.emplace_back(entry);
         }
     }
@@ -717,6 +737,7 @@ private:
     size_t num_entries = 0;
 
     Allocator * allocator;
+    size_t      bytes = 0;
 
     Logger * log;
 
@@ -780,6 +801,8 @@ private:
     void freeNode(T * node)
     {
         allocator->free(reinterpret_cast<char *>(node), sizeof(T));
+
+        bytes -= sizeof(T);
     }
 
     template <typename T>
@@ -787,6 +810,9 @@ private:
     {
         T * n = reinterpret_cast<T *>(allocator->alloc(sizeof(T)));
         new (n) T();
+
+        bytes += sizeof(T);
+
         return n;
     }
 
@@ -887,6 +913,8 @@ public:
 
         check(root, true);
     }
+
+    size_t getBytes() { return bytes; }
 
     size_t        getHeight() const { return height; }
     EntryIterator begin() const { return EntryIterator(left_leaf, 0, 0); }
@@ -1044,18 +1072,20 @@ void DT_CLASS::check(NodePtr node, bool recursive) const
 DT_TEMPLATE
 void DT_CLASS::addDelete(const UInt64 rid)
 {
+    checkId(rid);
+
     EntryIterator leaf_end(this->end());
     auto          it = findRightLeaf<true>(rid);
     searchLeftId<true>(it, rid);
 
     bool has_delete = false;
-    while (it != leaf_end && it.getRid() == rid && it.getType() == DT_DEL)
+    while (it != leaf_end && it.getRid() == rid && it.isDelete())
     {
         has_delete = true;
         ++it;
     }
 
-    bool has_insert = it != leaf_end && it.getRid() == rid && it.getType() == DT_INS;
+    bool has_insert = it != leaf_end && it.getRid() == rid && it.isInsert();
     if (has_insert)
     {
         /// Remove existing insert entry.
@@ -1082,7 +1112,7 @@ void DT_CLASS::addDelete(const UInt64 rid)
         auto leaf = it.getLeaf();
         auto pos  = it.getPos();
 
-        ++leaf->mutations[pos].count;
+        leaf->mutations[pos].setCount(leaf->mutations[pos].count() + 1);
     }
     else
     {
@@ -1095,8 +1125,8 @@ void DT_CLASS::addDelete(const UInt64 rid)
         auto delta = it.getDelta();
 
         leaf->shiftEntries(pos, 1);
-        leaf->sids[pos]      = rid - delta;
-        leaf->mutations[pos] = DTMutation(DT_DEL, /*count*/ 1, /*value*/ 0);
+        leaf->sids[pos]      = checkId(rid - delta);
+        leaf->mutations[pos] = DTMutation(/* is_insert */ false, /*count*/ 1, /*value*/ 0);
         ++(leaf->count);
     }
 
@@ -1109,12 +1139,15 @@ void DT_CLASS::addDelete(const UInt64 rid)
 DT_TEMPLATE
 void DT_CLASS::addInsert(const UInt64 rid, const UInt64 tuple_id)
 {
+    checkId(rid);
+    checkId(tuple_id);
+
     EntryIterator leaf_end(this->end());
     auto          it = findRightLeaf<true>(rid);
     searchLeftId<true>(it, rid);
 
     /// Skip DT_DEL entries.
-    while (it != leaf_end && it.getRid() == rid && it.getType() == DT_DEL)
+    while (it != leaf_end && it.getRid() == rid && it.isDelete())
     {
         ++it;
     }
@@ -1125,7 +1158,7 @@ void DT_CLASS::addInsert(const UInt64 rid, const UInt64 tuple_id)
     auto leaf  = it.getLeaf();
     auto pos   = it.getPos();
     auto delta = it.getDelta();
-    auto sid   = rid - delta;
+    auto sid   = checkId(rid - delta);
 
 #ifndef NDEBUG
     if (it != leaf_end && sid > it.getSid())
@@ -1134,7 +1167,7 @@ void DT_CLASS::addInsert(const UInt64 rid, const UInt64 tuple_id)
 
     leaf->shiftEntries(pos, 1);
     leaf->sids[pos]      = sid;
-    leaf->mutations[pos] = DTMutation(DT_INS, /*count*/ 1, tuple_id);
+    leaf->mutations[pos] = DTMutation(/* is_insert */ true, /*count*/ 1, tuple_id);
     ++(leaf->count);
 
     afterLeafUpdated(leaf);
@@ -1149,7 +1182,7 @@ void DT_CLASS::removeInsertsStartFrom(UInt64 tuple_id_start)
     std::vector<UInt64> rids;
     for (EntryIterator entry_it(this->begin()), entry_end(this->end()); entry_it != entry_end; ++entry_it)
     {
-        if (entry_it.getType() == DT_INS && entry_it.getValue() >= tuple_id_start)
+        if (entry_it.isInsert() && entry_it.getValue() >= tuple_id_start)
             rids.push_back(entry_it.getRid());
     }
     // Must remove the bigger rids first. Because after a rid got removed, the later value of rids changed.
@@ -1163,9 +1196,9 @@ void DT_CLASS::updateTupleId(const TupleRefs & tuple_refs, size_t offset)
     size_t tuple_id_end = offset + tuple_refs.size();
     for (EntryIterator entry_it(this->begin()), entry_end(this->end()); entry_it != entry_end; ++entry_it)
     {
-        auto & id = entry_it.getValueRef();
-        if (entry_it.getType() == DT_INS && id >= offset && id < tuple_id_end)
-            id = tuple_refs[id - offset] + offset;
+        auto id = entry_it.getValue();
+        if (entry_it.isInsert() && id >= offset && id < tuple_id_end)
+            entry_it.setValue(tuple_refs[id - offset] + offset);
     }
 }
 
@@ -1318,7 +1351,7 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
             parent = createNode<Intern>();
             root   = asNode(parent);
 
-            parent->deltas[0]   = node->getDelta();
+            parent->deltas[0]   = checkDelta(node->getDelta());
             parent->children[0] = asNode(node);
             ++(parent->count);
             parent->refreshChildParent();
@@ -1337,10 +1370,10 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
         // handle parent update
         parent->shiftEntries(pos + 1, 1);
         // for current node
-        parent->deltas[pos] = node->getDelta();
+        parent->deltas[pos] = checkDelta(node->getDelta());
         // for next node
         parent->sids[pos]         = sep_sid;
-        parent->deltas[pos + 1]   = next_n->getDelta();
+        parent->deltas[pos + 1]   = checkDelta(next_n->getDelta());
         parent->children[pos + 1] = asNode(next_n);
 
         ++(parent->count);
@@ -1393,7 +1426,7 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
             freeNode<T>(sibling);
 
             pos                   = std::min(pos, sibling_pos);
-            parent->deltas[pos]   = node->getDelta();
+            parent->deltas[pos]   = checkDelta(node->getDelta());
             parent->children[pos] = asNode(node);
             parent->shiftEntries(pos + 2, -1);
 
@@ -1416,8 +1449,8 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
             auto new_sep_sid = node->adopt(sibling, is_sibling_left, adopt_count, pos);
 
             parent->sids[std::min(pos, sibling_pos)] = new_sep_sid;
-            parent->deltas[pos]                      = node->getDelta();
-            parent->deltas[sibling_pos]              = sibling->getDelta();
+            parent->deltas[pos]                      = checkDelta(node->getDelta());
+            parent->deltas[sibling_pos]              = checkDelta(sibling->getDelta());
 
             // LOG_TRACE(log, nodeName(node) << " adoption");
         }
@@ -1429,7 +1462,7 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
         auto pos            = parent->searchChild(asNode(node));
         auto delta          = node->getDelta();
         parent_updated      = parent->deltas[pos] != delta;
-        parent->deltas[pos] = delta;
+        parent->deltas[pos] = checkDelta(delta);
     }
 
     if (parent_updated)

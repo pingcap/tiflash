@@ -285,6 +285,11 @@ public:
     std::atomic<size_t> & getLastTrySplitRows() { return last_try_split_rows; }
     std::atomic<size_t> & getLastTryPlaceDeltaIndexRows() { return last_try_place_delta_index_rows; }
 
+    size_t getDeltaIndexBytes()
+    {
+        std::scoped_lock lock(mutex);
+        return delta_index->getDeltaTree()->getBytes();
+    }
     size_t getPlacedDeltaRows() const
     {
         std::scoped_lock lock(mutex);

@@ -1531,6 +1531,8 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
             stat.total_delta_rows += delta->getRows();
             stat.total_delta_size += delta->getBytes();
 
+            stat.delta_index_size += delta->getDeltaIndexBytes();
+
             total_delta_cache_rows += delta->getTotalCacheRows();
             total_delta_cache_size += delta->getTotalCacheBytes();
             total_delta_valid_cache_rows += delta->getValidCacheRows();
@@ -1633,6 +1635,8 @@ SegmentStats DeltaMergeStore::getSegmentStats()
 
         stat.delta_rate       = (Float64)delta->getRows() / stat.rows;
         stat.delta_cache_size = delta->getTotalCacheBytes();
+
+        stat.delta_index_size = delta->getDeltaIndexBytes();
 
         stats.push_back(stat);
     }
