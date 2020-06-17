@@ -252,6 +252,7 @@ public:
     MetaMergingReaderPtr createMetaMergingReader() { return std::make_unique<MetaMergingReader>(*this); }
     /// Return a writer bound with this PageFile object.
     /// Note that the user MUST keep the PageFile object around before this writer being freed.
+    /// And the meta_file_pos, data_file_pos should be properly set before creating writer.
     std::unique_ptr<Writer> createWriter(bool sync_on_write) { return std::make_unique<Writer>(*this, sync_on_write); }
     /// Return a reader for this file.
     /// The PageFile object can be released any time.
