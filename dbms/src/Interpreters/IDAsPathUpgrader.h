@@ -37,11 +37,12 @@ public:
         String name() const;
         String newName() const;
 
-        TableDiskInfo(TiDB::TableInfoPtr info_, std::shared_ptr<SchemaNameMapper> mapper_)
-            : tidb_table_info(std::move(info_)), mapper(std::move(mapper_))
+        TableDiskInfo(String old_name_, TiDB::TableInfoPtr info_, std::shared_ptr<SchemaNameMapper> mapper_)
+            : old_name(old_name_), tidb_table_info(std::move(info_)), mapper(std::move(mapper_))
         {}
 
     private:
+        String old_name;
         TiDB::TableInfoPtr tidb_table_info;
         std::shared_ptr<SchemaNameMapper> mapper;
 
