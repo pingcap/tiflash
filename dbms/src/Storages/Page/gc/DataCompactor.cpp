@@ -1,10 +1,15 @@
 #include <IO/ReadBufferFromMemory.h>
 #include <Storages/Page/gc/DataCompactor.h>
 
+#ifndef NDEBUG
+#include <Storages/Page/mock/MockUtils.h>
+#endif
+
 namespace DB
 {
 
-DataCompactor::DataCompactor(const PageStorage & storage)
+template <typename SnapshotPtr>
+DataCompactor<SnapshotPtr>::DataCompactor(const PageStorage & storage)
     : storage_name(storage.storage_name),
       storage_path(storage.storage_path),
       config(storage.config),
@@ -13,8 +18,11 @@ DataCompactor::DataCompactor(const PageStorage & storage)
 {
 }
 
-std::tuple<DataCompactor::Result, PageEntriesEdit>
-DataCompactor::tryMigrate(const PageFileSet & page_files, SnapshotPtr && snapshot, const std::set<PageFileIdAndLevel> & writing_file_ids)
+template <typename SnapshotPtr>
+std::tuple<typename DataCompactor<SnapshotPtr>::Result, PageEntriesEdit> //
+DataCompactor<SnapshotPtr>::tryMigrate(const PageFileSet &                  page_files,
+                                       SnapshotPtr &&                       snapshot,
+                                       const std::set<PageFileIdAndLevel> & writing_file_ids)
 {
     ValidPages valid_pages = collectValidPagesInPageFile(snapshot);
 
@@ -45,7 +53,9 @@ DataCompactor::tryMigrate(const PageFileSet & page_files, SnapshotPtr && snapsho
     return {result, std::move(migrate_entries_edit)};
 }
 
-DataCompactor::ValidPages DataCompactor::collectValidPagesInPageFile(const PageStorage::SnapshotPtr & snapshot)
+template <typename SnapshotPtr>
+typename DataCompactor<SnapshotPtr>::ValidPages //
+DataCompactor<SnapshotPtr>::collectValidPagesInPageFile(const SnapshotPtr & snapshot)
 {
     ValidPages valid_pages;
     // Only scan over normal Pages, excluding RefPages
@@ -64,7 +74,9 @@ DataCompactor::ValidPages DataCompactor::collectValidPagesInPageFile(const PageS
     return valid_pages;
 }
 
-std::tuple<PageFileSet, size_t, size_t> DataCompactor::selectCandidateFiles( // keep readable indent
+template <typename SnapshotPtr>
+std::tuple<PageFileSet, size_t, size_t>           //
+DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
     const PageFileSet &                  page_files,
     const ValidPages &                   file_valid_pages,
     const std::set<PageFileIdAndLevel> & writing_file_ids) const
@@ -112,10 +124,12 @@ std::tuple<PageFileSet, size_t, size_t> DataCompactor::selectCandidateFiles( // 
     return {candidates, candidate_total_size, num_migrate_pages};
 }
 
-std::tuple<PageEntriesEdit, size_t> DataCompactor::migratePages(const SnapshotPtr & snapshot,
-                                                                const ValidPages &  file_valid_pages,
-                                                                const PageFileSet & candidates,
-                                                                const size_t        migrate_page_count) const
+template <typename SnapshotPtr>
+std::tuple<PageEntriesEdit, size_t> //
+DataCompactor<SnapshotPtr>::migratePages(const SnapshotPtr & snapshot,
+                                         const ValidPages &  file_valid_pages,
+                                         const PageFileSet & candidates,
+                                         const size_t        migrate_page_count) const
 {
     if (candidates.empty())
         return {PageEntriesEdit{}, 0};
@@ -164,11 +178,12 @@ std::tuple<PageEntriesEdit, size_t> DataCompactor::migratePages(const SnapshotPt
             }
 
             {
-                // Set offsets of PageFile, so that we can create a reader to read migrate data
-                PageEntriesEdit        edit;
-                WriteBatch::SequenceID seq_in_migrate_file = 0;
-                const_cast<PageFile &>(page_file).readAndSetPageMetas(edit, seq_in_migrate_file);
-                compact_seq = std::max(compact_seq, seq_in_migrate_file);
+                auto merging_reader = const_cast<PageFile &>(page_file).createMetaMergingReader();
+                while (merging_reader->hasNext())
+                {
+                    merging_reader->moveNext();
+                    compact_seq = std::max(compact_seq, merging_reader->writeBatchSequence());
+                }
 
                 auto data_reader = const_cast<PageFile &>(page_file).createReader();
                 data_readers.emplace(page_file.fileIdLevel(), std::move(data_reader));
@@ -207,14 +222,15 @@ std::tuple<PageEntriesEdit, size_t> DataCompactor::migratePages(const SnapshotPt
     return {std::move(gc_file_edit), bytes_written};
 }
 
+template <typename SnapshotPtr>
 std::tuple<PageEntriesEdit, size_t> //
-DataCompactor::mergeValidPages(PageStorage::MetaMergingQueue && merging_queue,
-                               PageStorage::OpenReadFiles &&    data_readers,
-                               const ValidPages &               file_valid_pages,
-                               const SnapshotPtr &              snapshot,
-                               const WriteBatch::SequenceID     compact_sequence,
-                               PageFile &                       gc_file,
-                               MigrateInfos &                   migrate_infos) const
+DataCompactor<SnapshotPtr>::mergeValidPages(PageStorage::MetaMergingQueue && merging_queue,
+                                            PageStorage::OpenReadFiles &&    data_readers,
+                                            const ValidPages &               file_valid_pages,
+                                            const SnapshotPtr &              snapshot,
+                                            const WriteBatch::SequenceID     compact_sequence,
+                                            PageFile &                       gc_file,
+                                            MigrateInfos &                   migrate_infos) const
 {
     PageEntriesEdit gc_file_edit;
     const auto      gc_file_id = gc_file.fileIdLevel();
@@ -278,8 +294,9 @@ DataCompactor::mergeValidPages(PageStorage::MetaMergingQueue && merging_queue,
     return {std::move(gc_file_edit), bytes_written};
 }
 
+template <typename SnapshotPtr>
 PageIdAndEntries
-DataCompactor::collectValidEntries(PageEntriesEdit && edits, const PageIdSet & valid_pages, const SnapshotPtr & snapshot) const
+DataCompactor<SnapshotPtr>::collectValidEntries(PageEntriesEdit && edits, const PageIdSet & valid_pages, const SnapshotPtr & snapshot) const
 {
     PageIdAndEntries page_id_and_entries; // The valid pages that we need to migrate to `gc_file`
     for (auto & edit : edits.getRecords())
@@ -297,7 +314,8 @@ DataCompactor::collectValidEntries(PageEntriesEdit && edits, const PageIdSet & v
     return page_id_and_entries;
 }
 
-void DataCompactor::logMigrationDetails(const MigrateInfos & infos, const PageFileIdAndLevel & migrate_file_id) const
+template <typename SnapshotPtr>
+void DataCompactor<SnapshotPtr>::logMigrationDetails(const MigrateInfos & infos, const PageFileIdAndLevel & migrate_file_id) const
 {
     std::stringstream migrate_stream, remove_stream;
     migrate_stream << "[";
@@ -317,5 +335,10 @@ void DataCompactor::logMigrationDetails(const MigrateInfos & infos, const PageFi
                            << ", mirgrate: " << migrate_stream.str() << ", remove: " << remove_stream.str());
 }
 
+
+template class DataCompactor<PageStorage::SnapshotPtr>;
+#ifndef NDEBUG
+template class DataCompactor<DB::tests::MockSnapshotPtr>;
+#endif
 
 } // namespace DB

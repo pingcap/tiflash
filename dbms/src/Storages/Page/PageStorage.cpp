@@ -641,7 +641,7 @@ struct GCDebugInfo
     size_t num_files_archive_in_compact_legacy = 0;
     size_t num_bytes_written_in_compact_legacy = 0;
 
-    DataCompactor::Result compact_result;
+    DataCompactor<PageStorage::SnapshotPtr>::Result compact_result;
 
     // bytes written during gc
     size_t bytesWritten() const { return num_bytes_written_in_compact_legacy + compact_result.bytes_written; }
@@ -788,7 +788,7 @@ bool PageStorage::gc()
         /// Acquire a snapshot version of page map, new edit on page map store in `gc_file_entries_edit`
         Stopwatch watch_migrate;
 
-        DataCompactor compactor(*this);
+        DataCompactor<PageStorage::SnapshotPtr> compactor(*this);
         std::tie(debugging_info.compact_result, gc_file_entries_edit)
             = compactor.tryMigrate(page_files, getSnapshot(), writing_file_id_levels);
 
