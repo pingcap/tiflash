@@ -1,4 +1,3 @@
-#include <DataStreams/BlockIO.h>
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>

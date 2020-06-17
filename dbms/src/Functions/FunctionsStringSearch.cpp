@@ -157,8 +157,12 @@ struct PositionImpl
     static void vector_constant(const ColumnString::Chars_t & data,
         const ColumnString::Offsets & offsets,
         const std::string & needle,
+        const UInt8 escape_char,
+        std::shared_ptr<TiDB::ITiDBCollator> collator,
         PaddedPODArray<UInt64> & res)
     {
+        if (escape_char != CH_ESCAPE_CHAR || collator != nullptr)
+            throw Exception("PositionImpl don't support customized escape char and tidb collator", ErrorCodes::NOT_IMPLEMENTED);
         const UInt8 * begin = &data[0];
         const UInt8 * pos = begin;
         const UInt8 * end = pos + data.size();
@@ -195,8 +199,13 @@ struct PositionImpl
     }
 
     /// Search for substring in string.
-    static void constant_constant(std::string data, std::string needle, UInt64 & res)
+    static void constant_constant(std::string data, std::string needle,
+            const UInt8 escape_char,
+            std::shared_ptr<TiDB::ITiDBCollator> collator,
+            UInt64 & res)
     {
+        if (escape_char != CH_ESCAPE_CHAR || collator != nullptr)
+            throw Exception("PositionImpl don't support customized escape char and tidb collator", ErrorCodes::NOT_IMPLEMENTED);
         Impl::toLowerIfNeed(data);
         Impl::toLowerIfNeed(needle);
 
@@ -212,8 +221,12 @@ struct PositionImpl
         const ColumnString::Offsets & haystack_offsets,
         const ColumnString::Chars_t & needle_data,
         const ColumnString::Offsets & needle_offsets,
+        const UInt8 escape_char,
+        std::shared_ptr<TiDB::ITiDBCollator> collator,
         PaddedPODArray<UInt64> & res)
     {
+        if (escape_char != CH_ESCAPE_CHAR || collator != nullptr)
+            throw Exception("PositionImpl don't support customized escape char and tidb collator", ErrorCodes::NOT_IMPLEMENTED);
         ColumnString::Offset prev_haystack_offset = 0;
         ColumnString::Offset prev_needle_offset = 0;
 
@@ -258,8 +271,12 @@ struct PositionImpl
     static void constant_vector(const String & haystack,
         const ColumnString::Chars_t & needle_data,
         const ColumnString::Offsets & needle_offsets,
+        const UInt8 escape_char,
+        std::shared_ptr<TiDB::ITiDBCollator> collator,
         PaddedPODArray<UInt64> & res)
     {
+        if (escape_char != CH_ESCAPE_CHAR || collator != nullptr)
+            throw Exception("PositionImpl don't support customized escape char and tidb collator", ErrorCodes::NOT_IMPLEMENTED);
         // NOTE You could use haystack indexing. But this is a rare case.
 
         ColumnString::Offset prev_needle_offset = 0;
@@ -337,6 +354,53 @@ inline bool likePatternIsStrstr(const String & pattern, String & res)
     return true;
 }
 
+// replace the escape_char in orig_string with '\'
+// this function does not check the validation of the orig_string
+// for example, for string "abcd" and escape char 'd', it will
+// return "abc\"
+String replaceEscapeChar(String & orig_string, UInt8 escape_char)
+{
+    std::stringstream ss;
+    for (size_t i = 0; i < orig_string.size(); i++)
+    {
+        auto c = orig_string[i];
+        if (c == escape_char)
+        {
+            if (i+1 != orig_string.size() && orig_string[i+1] == escape_char)
+            {
+                // two successive escape char, which means it is trying to escape itself, just remove one
+                i++;
+                ss << escape_char;
+            }
+            else
+            {
+                // https://github.com/pingcap/tidb/blob/master/util/stringutil/string_util.go#L154
+                // if any char following escape char that is not [escape_char,'_','%'], it is invalid escape.
+                // mysql will treat escape character as the origin value even
+                // the escape sequence is invalid in Go or C.
+                // e.g., \m is invalid in Go, but in MySQL we will get "m" for select '\m'.
+                // Following case is correct just for escape \, not for others like +.
+                // TODO: Add more checks for other escapes.
+                if (i+1 != orig_string.size() && orig_string[i+1] == CH_ESCAPE_CHAR)
+                {
+                    continue;
+                }
+                ss << CH_ESCAPE_CHAR;
+            }
+        }
+        else if (c == CH_ESCAPE_CHAR)
+        {
+            // need to escape this '\\'
+            ss << CH_ESCAPE_CHAR << CH_ESCAPE_CHAR;
+        }
+        else
+        {
+            ss << c;
+        }
+    }
+    return ss.str();
+}
+
 /** 'like' - if true, treat pattern as SQL LIKE; if false - treat pattern as re2 regexp.
   * NOTE: We want to run regexp search for whole block by one call (as implemented in function 'position')
   *  but for that, regexp engine must support \0 bytes and their interpretation as string boundaries.
@@ -348,9 +412,27 @@ struct MatchImpl
 
     static void vector_constant(const ColumnString::Chars_t & data,
         const ColumnString::Offsets & offsets,
-        const std::string & pattern,
+        const std::string & orig_pattern,
+        const UInt8 escape_char,
+        std::shared_ptr<TiDB::ITiDBCollator> collator,
         PaddedPODArray<UInt8> & res)
     {
+        if (collator != nullptr)
+        {
+            auto matcher = collator->pattern();
+            matcher->compile(orig_pattern, escape_char);
+            size_t size = offsets.size();
+            size_t prev_offset = 0;
+            for (size_t i = 0; i < size; ++i)
+            {
+                res[i] = revert ^ matcher->match(reinterpret_cast<const char *>(&data[prev_offset]), offsets[i] - prev_offset - 1);
+                prev_offset = offsets[i];
+            }
+            return;
+        }
+        String pattern = orig_pattern;
+        if (escape_char != CH_ESCAPE_CHAR)
+            pattern = replaceEscapeChar(pattern, escape_char);
         String strstr_pattern;
         /// A simple case where the LIKE expression reduces to finding a substring in a string
         if (like && likePatternIsStrstr(pattern, strstr_pattern))
@@ -490,10 +572,23 @@ struct MatchImpl
         }
     }
 
-    static void constant_constant(const std::string & data, const std::string & pattern, UInt8 & res)
+    static void constant_constant(const std::string & data, const std::string & orig_pattern, const UInt8 escape_char,
+                                  std::shared_ptr<TiDB::ITiDBCollator> collator, UInt8 & res)
     {
-        const auto & regexp = Regexps::get<like, true>(pattern);
-        res = revert ^ regexp->match(data);
+        if (collator != nullptr)
+        {
+            auto matcher = collator->pattern();
+            matcher->compile(orig_pattern, escape_char);
+            res = revert ^ matcher->match(data.data(), data.length());
+        }
+        else
+        {
+            String pattern = orig_pattern;
+            if (escape_char != CH_ESCAPE_CHAR)
+                pattern = replaceEscapeChar(pattern, escape_char);
+            const auto & regexp = Regexps::get<like, true>(pattern);
+            res = revert ^ regexp->match(data);
+        }
     }
 
     template <typename... Args> static void vector_vector(Args &&...)

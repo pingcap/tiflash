@@ -366,6 +366,14 @@ void constructNULLLiteralTiExpr(tipb::Expr & expr)
     field_type->set_tp(TiDB::TypeNull);
 }
 
+std::shared_ptr<TiDB::ITiDBCollator> getCollatorFromExpr(const tipb::Expr & expr)
+{
+    std::shared_ptr<TiDB::ITiDBCollator> ret = nullptr;
+    if (expr.has_field_type() && expr.field_type().collate() < 0)
+        ret = TiDB::ITiDBCollator::getCollator(-expr.field_type().collate());
+    return ret;
+}
+
 std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Count, "count"}, {tipb::ExprType::Sum, "sum"}, {tipb::ExprType::Min, "min"}, {tipb::ExprType::Max, "max"},
     {tipb::ExprType::First, "any"},
@@ -553,10 +561,8 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::StringIsNull, "isNull"}, {tipb::ScalarFuncSig::TimeIsNull, "isNull"}, {tipb::ScalarFuncSig::IntIsNull, "isNull"},
     {tipb::ScalarFuncSig::JsonIsNull, "isNull"},
 
-    //{tipb::ScalarFuncSig::BitAndSig, "cast"},
-    //{tipb::ScalarFuncSig::BitOrSig, "cast"},
-    //{tipb::ScalarFuncSig::BitXorSig, "cast"},
-    //{tipb::ScalarFuncSig::BitNegSig, "cast"},
+    {tipb::ScalarFuncSig::BitAndSig, "bitAnd"}, {tipb::ScalarFuncSig::BitOrSig, "bitOr"}, {tipb::ScalarFuncSig::BitXorSig, "bitXor"},
+    {tipb::ScalarFuncSig::BitNegSig, "bitNot"},
     //{tipb::ScalarFuncSig::IntIsTrue, "cast"},
     //{tipb::ScalarFuncSig::RealIsTrue, "cast"},
     //{tipb::ScalarFuncSig::DecimalIsTrue, "cast"},
@@ -588,9 +594,12 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::IfNullDecimal, "ifNull"}, {tipb::ScalarFuncSig::IfNullTime, "ifNull"},
     {tipb::ScalarFuncSig::IfNullDuration, "ifNull"}, {tipb::ScalarFuncSig::IfNullJson, "ifNull"},
 
-    {tipb::ScalarFuncSig::IfInt, "if"}, {tipb::ScalarFuncSig::IfReal, "if"}, {tipb::ScalarFuncSig::IfString, "if"},
-    {tipb::ScalarFuncSig::IfDecimal, "if"}, {tipb::ScalarFuncSig::IfTime, "if"}, {tipb::ScalarFuncSig::IfDuration, "if"},
-    {tipb::ScalarFuncSig::IfJson, "if"},
+    /// Do not use If because ClickHouse's implementation is not compatible with TiDB
+    /// ClickHouse: If(null, a, b) returns null
+    /// TiDB: If(null, a, b) returns b
+    {tipb::ScalarFuncSig::IfInt, "multiIf"}, {tipb::ScalarFuncSig::IfReal, "multiIf"}, {tipb::ScalarFuncSig::IfString, "multiIf"},
+    {tipb::ScalarFuncSig::IfDecimal, "multiIf"}, {tipb::ScalarFuncSig::IfTime, "multiIf"}, {tipb::ScalarFuncSig::IfDuration, "multiIf"},
+    {tipb::ScalarFuncSig::IfJson, "multiIf"},
 
     {tipb::ScalarFuncSig::CaseWhenInt, "multiIf"}, {tipb::ScalarFuncSig::CaseWhenReal, "multiIf"},
     {tipb::ScalarFuncSig::CaseWhenString, "multiIf"}, {tipb::ScalarFuncSig::CaseWhenDecimal, "multiIf"},
@@ -670,7 +679,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::JsonStorageSizeSig, "cast"},
     //{tipb::ScalarFuncSig::JsonDepthSig, "cast"},
     //{tipb::ScalarFuncSig::JsonKeysSig, "cast"},
-    //{tipb::ScalarFuncSig::JsonLengthSig, "cast"},
+    {tipb::ScalarFuncSig::JsonLengthSig, "jsonLength"},
     //{tipb::ScalarFuncSig::JsonKeys2ArgsSig, "cast"},
     //{tipb::ScalarFuncSig::JsonValidStringSig, "cast"},
 

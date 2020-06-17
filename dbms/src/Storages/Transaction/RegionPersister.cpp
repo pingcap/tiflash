@@ -47,8 +47,6 @@ void RegionPersister::doPersist(const Region & region, const RegionTaskLock * lo
         doPersist(region_buffer, *lock, region);
     else
         doPersist(region_buffer, region_manager.genRegionTaskLock(region.id()), region);
-
-    region.markPersisted();
 }
 
 void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, const RegionTaskLock &, const Region & region)

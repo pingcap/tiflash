@@ -9,6 +9,7 @@
 
 #include <Core/Field.h>
 #include <Core/NamesAndTypes.h>
+#include <Storages/Transaction/Collator.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
 
@@ -38,5 +39,6 @@ tipb::FieldType columnInfoToFieldType(const TiDB::ColumnInfo & ci);
 TiDB::ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type);
 UInt8 getFieldLengthForArrowEncode(Int32 tp);
 bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::EncodeType encode_type);
+std::shared_ptr<TiDB::ITiDBCollator> getCollatorFromExpr(const tipb::Expr & expr);
 
 } // namespace DB

@@ -55,7 +55,7 @@ struct AnalysisResult
     ExpressionActionsPtr final_projection;
 
     String filter_column_name;
-    Strings order_column_names;
+    std::vector<NameAndTypePair> order_columns;
     /// Columns from the SELECT list, before renaming them to aliases.
     Names selected_columns;
 
@@ -83,14 +83,14 @@ private:
     void prepareJoinKeys(const tipb::Join & join, const DataTypes & key_types, Pipeline & pipeline, Names & key_names, bool tiflash_left);
     void executeWhere(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column);
     void executeExpression(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr);
-    void executeOrder(Pipeline & pipeline, Strings & order_column_names);
+    void executeOrder(Pipeline & pipeline, std::vector<NameAndTypePair> & order_columns);
     void executeUnion(Pipeline & pipeline);
     void executeLimit(Pipeline & pipeline);
     void executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, Names & aggregation_keys,
         AggregateDescriptions & aggregate_descriptions);
     void executeFinalProject(Pipeline & pipeline);
     void getAndLockStorageWithSchemaVersion(TableID table_id, Int64 schema_version);
-    SortDescription getSortDescription(Strings & order_column_names);
+    SortDescription getSortDescription(std::vector<NameAndTypePair> & order_columns);
     AnalysisResult analyzeExpressions();
     void recordProfileStreams(Pipeline & pipeline, const String & key);
     bool addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, Pipeline & pipeline);

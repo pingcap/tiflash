@@ -17,6 +17,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ParserSelectQuery.h>
 #include <Parsers/parseQuery.h>
+#include <Poco/StringTokenizer.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/Datum.h>
@@ -41,30 +42,67 @@ using TiDB::TableInfo;
 using DAGColumnInfo = std::pair<String, ColumnInfo>;
 using DAGSchema = std::vector<DAGColumnInfo>;
 using SchemaFetcher = std::function<TableInfo(const String &, const String &)>;
-std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context, const String & query, SchemaFetcher schema_fetcher,
-    Int64 tz_offset, const String & tz_name, const String & encode_type);
+static const String ENCODE_TYPE_NAME = "encode_type";
+static const String TZ_OFFSET_NAME = "tz_offset";
+static const String TZ_NAME_NAME = "tz_name";
+static const String COLLATOR_NAME = "collator";
+
+struct DAGProperties
+{
+    String encode_type = "";
+    Int64 tz_offset = 0;
+    String tz_name = "";
+    Int32 collator = 0;
+};
+
+std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
+    Context & context, const String & query, SchemaFetcher schema_fetcher, const DAGProperties & properties);
 tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version,
     UInt64 region_conf_version, Timestamp start_ts, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges);
 BlockInputStreamPtr outputDAGResponse(Context & context, const DAGSchema & schema, const tipb::SelectResponse & dag_response);
 
+
+DAGProperties getDAGProperties(String prop_string)
+{
+    DAGProperties ret;
+    if (prop_string.empty())
+        return ret;
+    std::unordered_map<String, String> properties;
+    Poco::StringTokenizer string_tokens(prop_string, ",");
+    for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
+    {
+        Poco::StringTokenizer tokens(*it, ":");
+        if (tokens.count() != 2)
+            continue;
+        properties[Poco::toLower(tokens[0])] = tokens[1];
+    }
+
+    if (properties.find(ENCODE_TYPE_NAME) != properties.end())
+        ret.encode_type = properties[ENCODE_TYPE_NAME];
+    if (properties.find(TZ_OFFSET_NAME) != properties.end())
+        ret.tz_offset = std::stol(properties[TZ_OFFSET_NAME]);
+    if (properties.find(TZ_NAME_NAME) != properties.end())
+        ret.tz_name = properties[TZ_NAME_NAME];
+    if (properties.find(COLLATOR_NAME) != properties.end())
+        ret.collator = std::stoi(properties[COLLATOR_NAME]);
+
+    return ret;
+}
+
 BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
 {
-    if (args.size() < 1 || args.size() > 5)
-        throw Exception("Args not matched, should be: query[, region-id, encode_type, tz_offset, tz_name]", ErrorCodes::BAD_ARGUMENTS);
+    if (args.size() < 1 || args.size() > 3)
+        throw Exception("Args not matched, should be: query[, region-id, dag_prop_string]", ErrorCodes::BAD_ARGUMENTS);
 
     String query = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     RegionID region_id = InvalidRegionID;
     if (args.size() >= 2)
         region_id = safeGet<RegionID>(typeid_cast<const ASTLiteral &>(*args[1]).value);
-    String encode_type = "";
-    if (args.size() >= 3)
-        encode_type = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[2]).value);
-    Int64 tz_offset = 0;
-    String tz_name = "";
-    if (args.size() >= 4)
-        tz_offset = get<Int64>(typeid_cast<const ASTLiteral &>(*args[3]).value);
-    if (args.size() >= 5)
-        tz_name = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[4]).value);
+
+    String prop_string = "";
+    if (args.size() == 3)
+        prop_string = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[2]).value);
+    DAGProperties properties = getDAGProperties(prop_string);
     Timestamp start_ts = context.getTMTContext().getPDClient()->getTS();
 
     auto [table_id, schema, dag_request] = compileQuery(
@@ -78,7 +116,7 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
                 throw Exception(database_name + "." + table_name + " is not ManageableStorage", ErrorCodes::BAD_ARGUMENTS);
             return managed_storage->getTableInfo();
         },
-        tz_offset, tz_name, encode_type);
+        properties);
 
     RegionPtr region;
     if (region_id == InvalidRegionID)
@@ -108,9 +146,8 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
 
 BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
 {
-    if (args.size() < 2 || args.size() > 6)
-        throw Exception(
-            "Args not matched, should be: query, region-id[, start-ts, encode_type, tz_offset, tz_name]", ErrorCodes::BAD_ARGUMENTS);
+    if (args.size() < 2 || args.size() > 4)
+        throw Exception("Args not matched, should be: query, region-id[, start-ts, dag_prop_string]", ErrorCodes::BAD_ARGUMENTS);
 
     String query = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     RegionID region_id = safeGet<RegionID>(typeid_cast<const ASTLiteral &>(*args[1]).value);
@@ -119,22 +156,18 @@ BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
         start_ts = safeGet<Timestamp>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     if (start_ts == 0)
         start_ts = context.getTMTContext().getPDClient()->getTS();
-    String encode_type = "";
-    if (args.size() >= 4)
-        encode_type = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
-    Int64 tz_offset = 0;
-    String tz_name = "";
-    if (args.size() >= 5)
-        tz_offset = safeGet<Int64>(typeid_cast<const ASTLiteral &>(*args[4]).value);
-    if (args.size() >= 6)
-        tz_name = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[5]).value);
+
+    String prop_string = "";
+    if (args.size() == 4)
+        prop_string = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
+    DAGProperties properties = getDAGProperties(prop_string);
 
     auto [table_id, schema, dag_request] = compileQuery(
         context, query,
         [&](const String & database_name, const String & table_name) {
             return MockTiDB::instance().getTableByName(database_name, table_name)->table_info;
         },
-        tz_offset, tz_name, encode_type);
+        properties);
     std::ignore = table_id;
 
     RegionPtr region = context.getTMTContext().getKVStore()->getRegion(region_id);
@@ -156,8 +189,29 @@ struct ExecutorCtx
     std::unordered_map<String, std::vector<tipb::Expr *>> col_ref_map;
 };
 
+std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
+    {"equals", tipb::ScalarFuncSig::EQInt},
+    {"and", tipb::ScalarFuncSig::LogicalAnd},
+    {"or", tipb::ScalarFuncSig::LogicalOr},
+    {"greater", tipb::ScalarFuncSig::GTInt},
+    {"greaterorequals", tipb::ScalarFuncSig::GEInt},
+    {"less", tipb::ScalarFuncSig::LTInt},
+    {"lessorequals", tipb::ScalarFuncSig::LEInt},
+    {"in", tipb::ScalarFuncSig::InInt},
+    {"notin", tipb::ScalarFuncSig::InInt},
+    {"date_format", tipb::ScalarFuncSig::DateFormatSig},
+    {"if", tipb::ScalarFuncSig::IfInt},
+    {"from_unixtime", tipb::ScalarFuncSig::FromUnixTime2Arg},
+    {"bit_and", tipb::ScalarFuncSig::BitAndSig},
+    {"bit_or", tipb::ScalarFuncSig::BitOrSig},
+    {"bit_xor", tipb::ScalarFuncSig::BitXorSig},
+    {"bit_not", tipb::ScalarFuncSig::BitNegSig},
+    {"notequals", tipb::ScalarFuncSig::NEInt},
+    {"like", tipb::ScalarFuncSig::LikeSig},
+});
+
 void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::unordered_set<String> & referred_columns,
-    std::unordered_map<String, std::vector<tipb::Expr *>> & col_ref_map)
+    std::unordered_map<String, std::vector<tipb::Expr *>> & col_ref_map, Int32 collator_id)
 {
     if (ASTIdentifier * id = typeid_cast<ASTIdentifier *>(ast.get()))
     {
@@ -177,125 +231,123 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
         String func_name_lowercase = Poco::toLower(func->name);
         // TODO: Support more functions.
         // TODO: Support type inference.
-        if (func_name_lowercase == "equals")
-        {
-            expr->set_sig(tipb::ScalarFuncSig::EQInt);
-            auto * ft = expr->mutable_field_type();
-            ft->set_tp(TiDB::TypeLongLong);
-            ft->set_flag(TiDB::ColumnFlagUnsigned);
-        }
-        else if (func_name_lowercase == "and")
-        {
-            expr->set_sig(tipb::ScalarFuncSig::LogicalAnd);
-            auto * ft = expr->mutable_field_type();
-            ft->set_tp(TiDB::TypeLongLong);
-            ft->set_flag(TiDB::ColumnFlagUnsigned);
-        }
-        else if (func_name_lowercase == "or")
-        {
-            expr->set_sig(tipb::ScalarFuncSig::LogicalOr);
-            auto * ft = expr->mutable_field_type();
-            ft->set_tp(TiDB::TypeLongLong);
-            ft->set_flag(TiDB::ColumnFlagUnsigned);
-        }
-        else if (func_name_lowercase == "greater")
-        {
-            expr->set_sig(tipb::ScalarFuncSig::GTInt);
-            auto * ft = expr->mutable_field_type();
-            ft->set_tp(TiDB::TypeLongLong);
-            ft->set_flag(TiDB::ColumnFlagUnsigned);
-        }
-        else if (func_name_lowercase == "greaterorequals")
-        {
-            expr->set_sig(tipb::ScalarFuncSig::GEInt);
-            auto * ft = expr->mutable_field_type();
-            ft->set_tp(TiDB::TypeLongLong);
-            ft->set_flag(TiDB::ColumnFlagUnsigned);
-        }
-        else if (func_name_lowercase == "less")
-        {
-            expr->set_sig(tipb::ScalarFuncSig::LTInt);
-            auto * ft = expr->mutable_field_type();
-            ft->set_tp(TiDB::TypeLongLong);
-            ft->set_flag(TiDB::ColumnFlagUnsigned);
-        }
-        else if (func_name_lowercase == "lessorequals")
-        {
-            expr->set_sig(tipb::ScalarFuncSig::LEInt);
-            auto * ft = expr->mutable_field_type();
-            ft->set_tp(TiDB::TypeLongLong);
-            ft->set_flag(TiDB::ColumnFlagUnsigned);
-        }
-        else if (func_name_lowercase == "in" || func_name_lowercase == "notin")
-        {
-            tipb::Expr * in_expr = expr;
-            if (func_name_lowercase == "notin")
-            {
-                // notin is transformed into not(in()) by tidb
-                expr->set_sig(tipb::ScalarFuncSig::UnaryNotInt);
-                auto * ft = expr->mutable_field_type();
-                ft->set_tp(TiDB::TypeLongLong);
-                ft->set_flag(TiDB::ColumnFlagUnsigned);
-                expr->set_tp(tipb::ExprType::ScalarFunc);
-                in_expr = expr->add_children();
-            }
-            in_expr->set_sig(tipb::ScalarFuncSig::InInt);
-            auto * ft = in_expr->mutable_field_type();
-            ft->set_tp(TiDB::TypeLongLong);
-            ft->set_flag(TiDB::ColumnFlagUnsigned);
-            in_expr->set_tp(tipb::ExprType::ScalarFunc);
-            for (const auto & child_ast : func->arguments->children)
-            {
-                auto * tuple_func = typeid_cast<ASTFunction *>(child_ast.get());
-                if (tuple_func != nullptr && tuple_func->name == "tuple")
-                {
-                    // flatten tuple elements
-                    for (const auto & c : tuple_func->arguments->children)
-                    {
-                        tipb::Expr * child = in_expr->add_children();
-                        compileExpr(input, c, child, referred_columns, col_ref_map);
-                    }
-                }
-                else
-                {
-                    tipb::Expr * child = in_expr->add_children();
-                    compileExpr(input, child_ast, child, referred_columns, col_ref_map);
-                }
-            }
-            return;
-        }
-        else if (func_name_lowercase == "from_unixtime")
-        {
-            if (func->arguments->children.size() == 1)
-            {
-                expr->set_sig(tipb::ScalarFuncSig::FromUnixTime1Arg);
-                auto * ft = expr->mutable_field_type();
-                ft->set_tp(TiDB::TypeDatetime);
-                ft->set_decimal(6);
-            }
-            else
-            {
-                expr->set_sig(tipb::ScalarFuncSig::FromUnixTime2Arg);
-                auto * ft = expr->mutable_field_type();
-                ft->set_tp(TiDB::TypeString);
-            }
-        }
-        else if (func_name_lowercase == "date_format")
-        {
-            expr->set_sig(tipb::ScalarFuncSig::DateFormatSig);
-            auto * ft = expr->mutable_field_type();
-            ft->set_tp(TiDB::TypeString);
-        }
-        else
+
+        const auto it_sig = func_name_to_sig.find(func_name_lowercase);
+        if (it_sig == func_name_to_sig.end())
         {
             throw Exception("Unsupported function: " + func_name_lowercase, ErrorCodes::LOGICAL_ERROR);
         }
+        switch (it_sig->second)
+        {
+            case tipb::ScalarFuncSig::InInt:
+            {
+                tipb::Expr * in_expr = expr;
+                if (func_name_lowercase == "notin")
+                {
+                    // notin is transformed into not(in()) by tidb
+                    expr->set_sig(tipb::ScalarFuncSig::UnaryNotInt);
+                    auto * ft = expr->mutable_field_type();
+                    ft->set_tp(TiDB::TypeLongLong);
+                    ft->set_flag(TiDB::ColumnFlagUnsigned);
+                    expr->set_tp(tipb::ExprType::ScalarFunc);
+                    in_expr = expr->add_children();
+                }
+                in_expr->set_sig(tipb::ScalarFuncSig::InInt);
+                auto * ft = in_expr->mutable_field_type();
+                ft->set_tp(TiDB::TypeLongLong);
+                ft->set_flag(TiDB::ColumnFlagUnsigned);
+                ft->set_collate(collator_id);
+                in_expr->set_tp(tipb::ExprType::ScalarFunc);
+                for (const auto & child_ast : func->arguments->children)
+                {
+                    auto * tuple_func = typeid_cast<ASTFunction *>(child_ast.get());
+                    if (tuple_func != nullptr && tuple_func->name == "tuple")
+                    {
+                        // flatten tuple elements
+                        for (const auto & c : tuple_func->arguments->children)
+                        {
+                            tipb::Expr * child = in_expr->add_children();
+                            compileExpr(input, c, child, referred_columns, col_ref_map, collator_id);
+                        }
+                    }
+                    else
+                    {
+                        tipb::Expr * child = in_expr->add_children();
+                        compileExpr(input, child_ast, child, referred_columns, col_ref_map, collator_id);
+                    }
+                }
+                return;
+            }
+            case tipb::ScalarFuncSig::IfInt:
+            case tipb::ScalarFuncSig::BitAndSig:
+            case tipb::ScalarFuncSig::BitOrSig:
+            case tipb::ScalarFuncSig::BitXorSig:
+            case tipb::ScalarFuncSig::BitNegSig:
+                expr->set_sig(it_sig->second);
+                expr->set_tp(tipb::ExprType::ScalarFunc);
+                for (size_t i = 0; i < func->arguments->children.size(); i++)
+                {
+                    const auto & child_ast = func->arguments->children[i];
+                    tipb::Expr * child = expr->add_children();
+                    compileExpr(input, child_ast, child, referred_columns, col_ref_map, collator_id);
+                    // todo should infer the return type based on all input types
+                    if ((it_sig->second == tipb::ScalarFuncSig::IfInt && i == 1)
+                        || (it_sig->second != tipb::ScalarFuncSig::IfInt && i == 0))
+                        *(expr->mutable_field_type()) = child->field_type();
+                }
+                return;
+            case tipb::ScalarFuncSig::LikeSig:
+            {
+                expr->set_sig(tipb::ScalarFuncSig::LikeSig);
+                auto * ft = expr->mutable_field_type();
+                ft->set_tp(TiDB::TypeLongLong);
+                ft->set_flag(TiDB::ColumnFlagUnsigned);
+                ft->set_collate(collator_id);
+                expr->set_tp(tipb::ExprType::ScalarFunc);
+                for (const auto & child_ast : func->arguments->children)
+                {
+                    tipb::Expr * child = expr->add_children();
+                    compileExpr(input, child_ast, child, referred_columns, col_ref_map, collator_id);
+                }
+                // for like need to add the third argument
+                tipb::Expr * constant_expr = expr->add_children();
+                constructInt64LiteralTiExpr(*constant_expr, 92);
+                return;
+            }
+            case tipb::ScalarFuncSig::FromUnixTime2Arg:
+                if (func->arguments->children.size() == 1)
+                {
+                    expr->set_sig(tipb::ScalarFuncSig::FromUnixTime1Arg);
+                    auto * ft = expr->mutable_field_type();
+                    ft->set_tp(TiDB::TypeDatetime);
+                    ft->set_decimal(6);
+                }
+                else
+                {
+                    expr->set_sig(tipb::ScalarFuncSig::FromUnixTime2Arg);
+                    auto * ft = expr->mutable_field_type();
+                    ft->set_tp(TiDB::TypeString);
+                }
+                break;
+            case tipb::ScalarFuncSig::DateFormatSig:
+                expr->set_sig(tipb::ScalarFuncSig::DateFormatSig);
+                expr->mutable_field_type()->set_tp(TiDB::TypeString);
+                break;
+            default:
+            {
+                expr->set_sig(it_sig->second);
+                auto * ft = expr->mutable_field_type();
+                ft->set_tp(TiDB::TypeLongLong);
+                ft->set_flag(TiDB::ColumnFlagUnsigned);
+                ft->set_collate(collator_id);
+                break;
+            }
+        }
         expr->set_tp(tipb::ExprType::ScalarFunc);
-        // TODO: Support agg functions.
         for (const auto & child_ast : func->arguments->children)
         {
             tipb::Expr * child = expr->add_children();
-            compileExpr(input, child_ast, child, referred_columns, col_ref_map);
+            compileExpr(input, child_ast, child, referred_columns, col_ref_map, collator_id);
         }
     }
     else if (ASTLiteral * lit = typeid_cast<ASTLiteral *>(ast.get()))
@@ -343,7 +395,7 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
 }
 
 void compileFilter(const DAGSchema & input, ASTPtr ast, tipb::Selection * filter, std::unordered_set<String> & referred_columns,
-    std::unordered_map<String, std::vector<tipb::Expr *>> & col_ref_map)
+    std::unordered_map<String, std::vector<tipb::Expr *>> & col_ref_map, Int32 collator_id)
 {
     if (auto * func = typeid_cast<ASTFunction *>(ast.get()))
     {
@@ -351,26 +403,26 @@ void compileFilter(const DAGSchema & input, ASTPtr ast, tipb::Selection * filter
         {
             for (auto & child : func->arguments->children)
             {
-                compileFilter(input, child, filter, referred_columns, col_ref_map);
+                compileFilter(input, child, filter, referred_columns, col_ref_map, collator_id);
             }
             return;
         }
     }
     tipb::Expr * cond = filter->add_conditions();
-    compileExpr(input, ast, cond, referred_columns, col_ref_map);
+    compileExpr(input, ast, cond, referred_columns, col_ref_map, collator_id);
 }
 
-std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context, const String & query, SchemaFetcher schema_fetcher,
-    Int64 tz_offset, const String & tz_name, const String & encode_type)
+std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
+    Context & context, const String & query, SchemaFetcher schema_fetcher, const DAGProperties & properties)
 {
     DAGSchema schema;
     tipb::DAGRequest dag_request;
-    dag_request.set_time_zone_name(tz_name);
-    dag_request.set_time_zone_offset(tz_offset);
+    dag_request.set_time_zone_name(properties.tz_name);
+    dag_request.set_time_zone_offset(properties.tz_offset);
 
-    if (encode_type == "chunk")
+    if (properties.encode_type == "chunk")
         dag_request.set_encode_type(tipb::EncodeType::TypeChunk);
-    else if (encode_type == "chblock")
+    else if (properties.encode_type == "chblock")
         dag_request.set_encode_type(tipb::EncodeType::TypeCHBlock);
     else
         dag_request.set_encode_type(tipb::EncodeType::TypeDefault);
@@ -452,7 +504,8 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context,
         filter_exec->set_tp(tipb::ExecType::TypeSelection);
         tipb::Selection * filter = filter_exec->mutable_selection();
         std::unordered_map<String, std::vector<tipb::Expr *>> col_ref_map;
-        compileFilter(executor_ctx_map[last_executor].output, ast_query.where_expression, filter, referred_columns, col_ref_map);
+        compileFilter(
+            executor_ctx_map[last_executor].output, ast_query.where_expression, filter, referred_columns, col_ref_map, properties.collator);
         executor_ctx_map.emplace(filter_exec, ExecutorCtx{last_executor, executor_ctx_map[last_executor].output, std::move(col_ref_map)});
         last_executor = filter_exec;
     }
@@ -472,7 +525,8 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context,
             tipb::ByItem * by = topn->add_order_by();
             by->set_desc(elem->direction < 0);
             tipb::Expr * expr = by->mutable_expr();
-            compileExpr(executor_ctx_map[last_executor].output, elem->children[0], expr, referred_columns, col_ref_map);
+            compileExpr(
+                executor_ctx_map[last_executor].output, elem->children[0], expr, referred_columns, col_ref_map, properties.collator);
         }
         auto limit = safeGet<UInt64>(typeid_cast<ASTLiteral &>(*ast_query.limit_length).value);
         topn->set_limit(limit);
@@ -571,7 +625,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context,
                 for (const auto & arg : func->arguments->children)
                 {
                     tipb::Expr * arg_expr = agg_func->add_children();
-                    compileExpr(executor_ctx_map[last_executor].output, arg, arg_expr, referred_columns, col_ref_map);
+                    compileExpr(executor_ctx_map[last_executor].output, arg, arg_expr, referred_columns, col_ref_map, properties.collator);
                 }
 
                 if (func->name == "count")
@@ -588,6 +642,16 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context,
                         throw Exception("udaf max only accept 1 argument");
                     auto ft = agg_func->mutable_field_type();
                     ft->set_tp(agg_func->children(0).field_type().tp());
+                    ft->set_collate(properties.collator);
+                }
+                else if (func->name == "min")
+                {
+                    agg_func->set_tp(tipb::Min);
+                    if (agg_func->children_size() != 1)
+                        throw Exception("udaf min only accept 1 argument");
+                    auto ft = agg_func->mutable_field_type();
+                    ft->set_tp(agg_func->children(0).field_type().tp());
+                    ft->set_collate(properties.collator);
                 }
                 // TODO: Other agg func.
                 else
@@ -603,7 +667,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context,
                 for (const auto & child : ast_query.group_expression_list->children)
                 {
                     tipb::Expr * gby = agg->add_group_by();
-                    compileExpr(executor_ctx_map[last_executor].output, child, gby, referred_columns, col_ref_map);
+                    compileExpr(executor_ctx_map[last_executor].output, child, gby, referred_columns, col_ref_map, properties.collator);
                     schema.emplace_back(std::make_pair(child->getColumnName(), fieldTypeToColumnInfo(gby->field_type())));
                 }
             }

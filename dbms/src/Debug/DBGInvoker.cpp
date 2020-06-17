@@ -87,6 +87,7 @@ DBGInvoker::DBGInvoker()
 
     regSchemalessFunc("init_fail_point", DbgFailPointFunc::dbgInitFailPoint);
     regSchemalessFunc("enable_fail_point", DbgFailPointFunc::dbgEnableFailPoint);
+    regSchemalessFunc("disable_fail_point", DbgFailPointFunc::dbgDisableFailPoint);
 
     regSchemafulFunc("dag", dbgFuncDAG);
     regSchemafulFunc("mock_dag", dbgFuncMockDAG);

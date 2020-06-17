@@ -282,10 +282,6 @@ void RegionRaftCommandDelegate::handleAdminRaftCmd(const raft_cmdpb::AdminReques
     {
         case raft_cmdpb::AdminCmdType::ComputeHash:
         case raft_cmdpb::AdminCmdType::VerifyHash:
-        case raft_cmdpb::AdminCmdType::CompactLog:
-            LOG_INFO(log,
-                toString(false) << " useless admin command " << raft_cmdpb::AdminCmdType_Name(type) << " at [term: " << term
-                                << ", index: " << index << "]");
             break;
         default:
             LOG_INFO(log,
@@ -449,10 +445,6 @@ std::string Region::dataInfo() const
     ss << "]";
     return ss.str();
 }
-
-void Region::markPersisted() const { last_persist_time = Clock::now(); }
-
-Timepoint Region::lastPersistTime() const { return last_persist_time; }
 
 void Region::markCompactLog() const { last_compact_log_time = Clock::now(); }
 

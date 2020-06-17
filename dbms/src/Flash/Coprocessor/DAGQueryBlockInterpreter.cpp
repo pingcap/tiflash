@@ -816,7 +816,7 @@ AnalysisResult DAGQueryBlockInterpreter::analyzeExpressions()
     if (query_block.limitOrTopN && query_block.limitOrTopN->tp() == tipb::ExecType::TypeTopN)
     {
         res.has_order_by = true;
-        analyzer->appendOrderBy(chain, query_block.limitOrTopN->topn(), res.order_column_names);
+        analyzer->appendOrderBy(chain, query_block.limitOrTopN->topn(), res.order_columns);
     }
     // Append final project results if needed.
     analyzer->appendFinalProject(chain, final_project);
@@ -989,7 +989,7 @@ void DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVersion(TableID table_
     }
 }
 
-SortDescription DAGQueryBlockInterpreter::getSortDescription(Strings & order_column_names)
+SortDescription DAGQueryBlockInterpreter::getSortDescription(std::vector<NameAndTypePair> & order_columns)
 {
     // construct SortDescription
     SortDescription order_descr;
@@ -997,13 +997,13 @@ SortDescription DAGQueryBlockInterpreter::getSortDescription(Strings & order_col
     order_descr.reserve(topn.order_by_size());
     for (int i = 0; i < topn.order_by_size(); i++)
     {
-        String name = order_column_names[i];
+	String name = order_columns[i].name;
         int direction = topn.order_by(i).desc() ? -1 : 1;
         // MySQL/TiDB treats NULL as "minimum".
         int nulls_direction = -1;
-        // todo get this information from DAGRequest
-        // currently use the default value
-        std::shared_ptr<Collator> collator;
+	std::shared_ptr<ICollator> collator = nullptr;
+	if (removeNullable(order_columns[i].type)->isString())
+	    collator = getCollatorFromExpr(topn.order_by(i).expr());
 
         order_descr.emplace_back(name, direction, nulls_direction, collator);
     }
@@ -1019,9 +1019,9 @@ void DAGQueryBlockInterpreter::executeUnion(Pipeline & pipeline)
     }
 }
 
-void DAGQueryBlockInterpreter::executeOrder(Pipeline & pipeline, Strings & order_column_names)
+void DAGQueryBlockInterpreter::executeOrder(Pipeline & pipeline, std::vector<NameAndTypePair> & order_columns)
 {
-    SortDescription order_descr = getSortDescription(order_column_names);
+    SortDescription order_descr = getSortDescription(order_columns);
     const Settings & settings = context.getSettingsRef();
     Int64 limit = query_block.limitOrTopN->topn().limit();
 
@@ -1296,7 +1296,7 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     if (res.has_order_by)
     {
         // execute topN
-        executeOrder(pipeline, res.order_column_names);
+        executeOrder(pipeline, res.order_columns);
         recordProfileStreams(pipeline, query_block.limitOrTopN_name);
     }
 

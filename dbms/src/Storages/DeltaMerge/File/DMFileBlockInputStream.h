@@ -13,7 +13,7 @@ class DMFileBlockInputStream : public SkippableBlockInputStream
 {
 public:
     DMFileBlockInputStream(const Context &       context,
-                           UInt64                max_data_version,
+                           UInt64                max_read_version,
                            bool                  enable_clean_read,
                            UInt64                hash_salt,
                            const DMFilePtr &     dmfile,
@@ -23,18 +23,21 @@ public:
                            ColumnCachePtr &      column_cache_,
                            const IdSetPtr &      read_packs,
                            size_t                expected_size = DMFILE_READ_ROWS_THRESHOLD)
-        : reader(enable_clean_read,
-                 max_data_version,
-                 dmfile,
+        : reader(dmfile,
                  read_columns,
+                 // clean read
+                 enable_clean_read,
+                 max_read_version,
+                 // filters
                  handle_range,
                  filter,
-                 column_cache_,
-                 context.getGlobalContext().getSettingsRef().dt_enable_stable_column_cache,
                  read_packs,
+                 // caches
+                 hash_salt,
                  context.getGlobalContext().getMarkCache().get(),
                  context.getGlobalContext().getMinMaxIndexCache().get(),
-                 hash_salt,
+                 context.getSettingsRef().dt_enable_stable_column_cache,
+                 column_cache_,
                  context.getSettingsRef().min_bytes_to_use_direct_io,
                  context.getSettingsRef().max_read_buffer_size,
                  expected_size)
