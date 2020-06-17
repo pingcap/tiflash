@@ -7,11 +7,11 @@
 namespace DB
 {
 
+template <typename SnapshotPtr>
 class DataCompactor : private boost::noncopyable
 {
 public:
-    using ValidPages  = std::map<PageFileIdAndLevel, std::pair<size_t, PageIdSet>>;
-    using SnapshotPtr = PageStorage::SnapshotPtr;
+    using ValidPages = std::map<PageFileIdAndLevel, std::pair<size_t, PageIdSet>>;
 
     // <Migrate PageFileId, num_pages>
     using MigrateInfos = std::map<PageFileIdAndLevel, size_t>;
@@ -28,12 +28,31 @@ public:
 public:
     DataCompactor(const PageStorage & storage);
 
+    /**
+     * Take a snapshot from PageStorage and try to migrate data if some PageFiles used rate is low.
+     * The (id, level) of PageFile migrated: take the largest (id, level) of all migrate candidates,
+     * use its (id, level+1) as the id and level of target PageFile.
+     * All migrated data will be written as one WriteBatch. The sequence of WriteBatch is maximun of
+     * the WriteBatch of all migrated entries.
+     * 
+     * Note that all types of PageFile in `page_files` should be `Formal`.
+     * Those PageFile whose id in `writing_file_ids`, theirs data will not be migrate.
+     * 
+     * Return DataCompactor::Result and entries edit should be applied to PageStorage's entries.
+     */
     std::tuple<Result, PageEntriesEdit>
     tryMigrate(const PageFileSet & page_files, SnapshotPtr && snapshot, const std::set<PageFileIdAndLevel> & writing_file_ids);
 
 
 private:
-    static ValidPages collectValidPagesInPageFile(const PageStorage::SnapshotPtr & snapshot);
+    /**
+     * Collect valid page of snapshot.
+     * Return {
+     *    (id, level): (valid size of this PageFile, [valid page ids, ...]),
+     *    (id, level): ...,
+     * }
+     */
+    static ValidPages collectValidPagesInPageFile(const SnapshotPtr & snapshot);
 
     std::tuple<PageFileSet, size_t, size_t> selectCandidateFiles( // keep readable indent
         const PageFileSet &                  page_files,
