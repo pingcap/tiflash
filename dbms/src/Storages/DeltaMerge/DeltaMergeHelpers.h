@@ -14,7 +14,6 @@
 #include <Interpreters/sortBlock.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/Transaction/TiDB.h>
 
 namespace DB
