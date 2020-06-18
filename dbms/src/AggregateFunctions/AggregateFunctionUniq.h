@@ -8,7 +8,10 @@
 #include <IO/WriteHelpers.h>
 #include <IO/ReadHelpers.h>
 
+#include <Columns/ColumnString.h>
+
 #include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeTuple.h>
 
 #include <Interpreters/AggregationCommon.h>
@@ -29,6 +32,8 @@ namespace DB
 
 /// uniq
 
+extern const String UniqRawResName;
+
 struct AggregateFunctionUniqUniquesHashSetData
 {
     using Set = UniquesHashSet<DefaultHash<UInt64>>;
@@ -46,6 +51,13 @@ struct AggregateFunctionUniqUniquesHashSetDataForVariadic
     static String getName() { return "uniq"; }
 };
 
+struct AggregateFunctionUniqUniquesHashSetDataForVariadicRawRes
+{
+    using Set = UniquesHashSet<TrivialHash, false>;
+    Set set;
+
+    static String getName() { return UniqRawResName; }
+};
 
 /// uniqHLL12
 
@@ -341,8 +353,9 @@ public:
   * You can pass multiple arguments as is; You can also pass one argument - a tuple.
   * But (for the possibility of efficient implementation), you can not pass several arguments, among which there are tuples.
   */
-template <typename Data, bool argument_is_tuple>
-class AggregateFunctionUniqVariadic final : public IAggregateFunctionDataHelper<Data, AggregateFunctionUniqVariadic<Data, argument_is_tuple>>
+template <typename Data, bool argument_is_tuple, bool raw_result = false>
+class AggregateFunctionUniqVariadic final
+    : public IAggregateFunctionDataHelper<Data, AggregateFunctionUniqVariadic<Data, argument_is_tuple, raw_result>>
 {
 private:
     static constexpr bool is_exact = std::is_same_v<Data, AggregateFunctionUniqExactData<String>>;
@@ -362,7 +375,10 @@ public:
 
     DataTypePtr getReturnType() const override
     {
-        return std::make_shared<DataTypeUInt64>();
+        if constexpr (raw_result)
+            return std::make_shared<DataTypeString>();
+        else
+            return std::make_shared<DataTypeUInt64>();
     }
 
     void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena *) const override
@@ -387,7 +403,14 @@ public:
 
     void insertResultInto(ConstAggregateDataPtr place, IColumn & to) const override
     {
-        static_cast<ColumnUInt64 &>(to).getData().push_back(this->data(place).set.size());
+        if constexpr (raw_result)
+        {
+            WriteBufferFromOwnString buf;
+            serialize(place, buf);
+            static_cast<ColumnString &>(to).insertData(buf.str().data(), buf.count());
+        }
+        else
+            static_cast<ColumnUInt64 &>(to).getData().push_back(this->data(place).set.size());
     }
 
     const char * getHeaderFilePath() const override { return __FILE__; }

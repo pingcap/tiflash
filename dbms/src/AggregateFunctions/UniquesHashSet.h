@@ -70,7 +70,7 @@ struct UniquesHashSetDefaultHash
 };
 
 
-template <typename Hash = UniquesHashSetDefaultHash>
+template <typename Hash = UniquesHashSetDefaultHash, bool use_crc32 = true>
 class UniquesHashSet : private HashTableAllocatorWithStackMemory<(1ULL << UNIQUES_HASH_SET_INITIAL_SIZE_DEGREE) * sizeof(UInt32)>
 {
 private:
@@ -332,7 +332,8 @@ public:
         /** Pseudo-random remainder - in order to be not visible,
           * that the number is divided by the power of two.
           */
-        res += (intHashCRC32(m_size) & ((1ULL << skip_degree) - 1));
+
+        res += (use_crc32 ? intHashCRC32(m_size) : intHash64(m_size)) & ((1ULL << skip_degree) - 1);
 
         /** Correction of a systematic error due to collisions during hashing in UInt32.
           * `fixed_res(res)` formula
