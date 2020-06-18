@@ -203,11 +203,18 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 }
 } // namespace PageMetaFormat
 
+// =========================================================
+// PageFile::MetaMergingReader
+// =========================================================
+
 PageFile::MetaMergingReader::~MetaMergingReader()
 {
     page_file.free(meta_buffer, meta_size);
 }
 
+// Try to initiallize access to meta, read the whole metadata to memory.
+// Status -> Finished if metadata size is zero.
+//        -> Opened if metadata successfully load from disk.
 void PageFile::MetaMergingReader::initialize()
 {
     if (status == Status::Opened)
@@ -235,6 +242,20 @@ void PageFile::MetaMergingReader::initialize()
 
     meta_buffer = (char *)page_file.alloc(meta_size);
     PageUtil::readFile(fd, 0, meta_buffer, meta_size, path);
+    status = Status::Opened;
+}
+
+void PageFile::MetaMergingReader::rewind()
+{
+    if (status != Status::Opened && status != Status::Finished)
+        throw Exception("Can not rewind, reader status is invalid: " + toString(), ErrorCodes::LOGICAL_ERROR);
+
+    meta_file_offset = 0;
+    data_file_offset = 0;
+
+    curr_write_batch_sequence = 0;
+    curr_edit.clear();
+
     status = Status::Opened;
 }
 
