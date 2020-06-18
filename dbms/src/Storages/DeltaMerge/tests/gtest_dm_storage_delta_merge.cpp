@@ -19,6 +19,7 @@
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
+#include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
 #include <gtest/gtest.h>
 
@@ -233,8 +234,27 @@ TEST(StorageDeltaMerge_internal_test, OverlapQueryRanges)
     region.range_in_table = std::make_pair(300, 400);
     regions.emplace_back(region);
     region.range_in_table = std::make_pair(425, 475);
+    regions.emplace_back(region);
 
+    // Overlaped ranges throw exception
     ASSERT_ANY_THROW(auto ranges = ::DB::getQueryRanges(regions));
+}
+
+TEST(StorageDeltaMerge_internal_test, WeirdRange)
+{
+    // [100, 200), [200, MAX), [MAX, MAX)
+    MvccQueryInfo::RegionsQueryInfo regions;
+    RegionQueryInfo                 region;
+    region.range_in_table = DB::HandleRange<DB::HandleID>{100, 200};
+    regions.emplace_back(region);
+    region.range_in_table = DB::HandleRange<DB::HandleID>{DB::TiKVRange::Handle::max, DB::TiKVRange::Handle::max};
+    regions.emplace_back(region);
+    region.range_in_table = DB::HandleRange<DB::HandleID>{200, TiKVRange::Handle::max};
+    regions.emplace_back(region);
+
+    auto ranges = ::DB::getQueryRanges(regions);
+    ASSERT_EQ(ranges.size(), 1UL);
+    ASSERT_RANGE_EQ(ranges[0], DB::DM::HandleRange(100, DB::DM::HandleRange::MAX));
 }
 
 } // namespace tests
