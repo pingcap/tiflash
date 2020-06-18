@@ -1,8 +1,4 @@
-#include <chrono>
-#include <cstring>
-#include <sstream>
-#include <string>
-#include <vector>
+#pragma once
 
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
@@ -10,7 +6,13 @@
 #include <Poco/Ext/ThreadNumber.h>
 #include <Poco/PatternFormatter.h>
 #include <sys/time.h>
+
 #include <boost/algorithm/string.hpp>
+#include <chrono>
+#include <cstring>
+#include <sstream>
+#include <string>
+#include <vector>
 
 namespace DB
 {
