@@ -32,8 +32,9 @@ public:
      * Take a snapshot from PageStorage and try to migrate data if some PageFiles used rate is low.
      * The (id, level) of PageFile migrated: take the largest (id, level) of all migrate candidates,
      * use its (id, level+1) as the id and level of target PageFile.
-     * All migrated data will be written as one WriteBatch. The sequence of WriteBatch is maximun of
-     * the WriteBatch of all migrated entries.
+     * All migrated data will be written as multiple WriteBatches with same sequence. To keep the
+     * order of all PageFiles' meta, the sequence of WriteBatch should be maximum of all candidates.
+     * No matter we merge valid page(s) from it or not.
      * 
      * Note that all types of PageFile in `page_files` should be `Formal`.
      * Those PageFile whose id in `writing_file_ids`, theirs data will not be migrate.
