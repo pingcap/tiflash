@@ -41,7 +41,7 @@ public:
         ~Writer();
 
         [[nodiscard]] size_t write(WriteBatch & wb, PageEntriesEdit & edit);
-        void tryCloseIdleFd(const Seconds & max_idle_time);
+        void                 tryCloseIdleFd(const Seconds & max_idle_time);
 
         PageFileIdAndLevel fileIdLevel() const;
 
@@ -124,6 +124,13 @@ public:
         };
 
     public:
+        /**
+         * `rewind` will reset MergingReader's offsets to 0,
+         * clear `curr_edit`, `curr_write_batch_sequence`,
+         * and set `status` to `Opened`
+         */
+        void rewind();
+
         bool hasNext() const;
 
         void moveNext();
@@ -177,9 +184,11 @@ public:
         WriteBatch::SequenceID curr_write_batch_sequence = 0;
         PageEntriesEdit        curr_edit;
 
+        // The whole buffer and size of metadata, should be initlized in method `initlize()`.
         char * meta_buffer = nullptr;
         size_t meta_size   = 0;
 
+        // Current parsed offsets.
         size_t meta_file_offset = 0;
         size_t data_file_offset = 0;
     };
@@ -277,7 +286,7 @@ public:
     UInt64 getMetaFileAppendPos() const { return meta_file_pos; }
 
     /// Get disk usage
-    // Total size, data && meta. 
+    // Total size, data && meta.
     UInt64 getDiskSize() const;
     UInt64 getDataFileSize() const;
     UInt64 getMetaFileSize() const;
