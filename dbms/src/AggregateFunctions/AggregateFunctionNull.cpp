@@ -1,8 +1,8 @@
-#include <DataTypes/DataTypeNullable.h>
-#include <AggregateFunctions/AggregateFunctionNull.h>
-#include <AggregateFunctions/AggregateFunctionNothing.h>
-#include <AggregateFunctions/AggregateFunctionCount.h>
 #include <AggregateFunctions/AggregateFunctionCombinatorFactory.h>
+#include <AggregateFunctions/AggregateFunctionCount.h>
+#include <AggregateFunctions/AggregateFunctionNothing.h>
+#include <AggregateFunctions/AggregateFunctionNull.h>
+#include <DataTypes/DataTypeNullable.h>
 
 
 namespace DB
@@ -10,8 +10,10 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 }
+
+extern const String UniqRawResName;
 
 class AggregateFunctionCombinatorNull final : public IAggregateFunctionCombinator
 {
@@ -50,7 +52,7 @@ public:
         /// - that means - count number of calls, when all arguments are not NULL.
         if (nested_function && nested_function->getName() == "count")
         {
-            if(has_nullable_types)
+            if (has_nullable_types)
             {
                 if (arguments.size() == 1)
                     return std::make_shared<AggregateFunctionCountNotNullUnary>(arguments[0]);
@@ -63,10 +65,16 @@ public:
             }
         }
 
-        if (has_null_types)
+        bool can_output_be_null = true;
+        if (nested_function && nested_function->getName() == UniqRawResName)
+        {
+            can_output_be_null = false;
+        }
+
+        if (has_null_types && can_output_be_null)
             return std::make_shared<AggregateFunctionNothing>();
 
-        bool return_type_is_nullable = nested_function->getReturnType()->canBeInsideNullable();
+        bool return_type_is_nullable = can_output_be_null && nested_function->getReturnType()->canBeInsideNullable();
 
         if (arguments.size() == 1)
         {
@@ -100,4 +108,4 @@ void registerAggregateFunctionCombinatorNull(AggregateFunctionCombinatorFactory 
     factory.registerCombinator(std::make_shared<AggregateFunctionCombinatorNull>());
 }
 
-}
+} // namespace DB
