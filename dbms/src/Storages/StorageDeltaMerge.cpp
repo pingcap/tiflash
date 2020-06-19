@@ -693,8 +693,7 @@ BlockInputStreams StorageDeltaMerge::read( //
             } // else learner read from ch-client, keep num_streams
         }
 
-        HandleRanges ranges = getQueryRanges(mvcc_query_info.regions_query_info);
-
+        String str_query_ranges;
         if (log->trace())
         {
             std::stringstream ss;
@@ -712,10 +711,18 @@ BlockInputStreams StorageDeltaMerge::read( //
                     ss << region.region_id << "[" << range.first.toString() << "," << range.second.toString() << "),";
                 }
             }
+            str_query_ranges = ss.str();
+            LOG_TRACE(log, "reading ranges: orig, " << str_query_ranges);
+        }
+
+        HandleRanges ranges = getQueryRanges(mvcc_query_info.regions_query_info);
+
+        if (log->trace())
+        {
             std::stringstream ss_merged_range;
             for (const auto & range : ranges)
                 ss_merged_range << range.toString() << ",";
-            LOG_TRACE(log, "reading ranges: orig, " << ss.str() << " merged, " << ss_merged_range.str());
+            LOG_TRACE(log, "reading ranges: orig, " << str_query_ranges << " merged, " << ss_merged_range.str());
         }
 
         /// Get Rough set filter from query
