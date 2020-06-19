@@ -60,10 +60,7 @@ public:
         return ByteBuffer(data.begin() + beg, data.begin() + end);
     }
 
-    size_t fieldSize() const
-    {
-        return field_offsets.size();
-    }
+    size_t fieldSize() const { return field_offsets.size(); }
 };
 using Pages       = std::vector<Page>;
 using PageMap     = std::map<PageId, Page>;
@@ -112,6 +109,23 @@ public:
             return {field_offsets.back().first, size};
         else
             return {field_offsets[index].first, field_offsets[index + 1].first};
+    }
+
+    bool operator==(const PageEntry & rhs) const
+    {
+        bool isOk = file_id == rhs.file_id && size == rhs.size && offset == rhs.offset && tag == rhs.tag && checksum == rhs.checksum
+            && level == rhs.level && ref == rhs.ref && field_offsets.size() == rhs.field_offsets.size();
+        if (!isOk)
+            return isOk;
+        else
+        {
+            for (size_t i = 0; i < field_offsets.size(); ++i)
+            {
+                if (field_offsets[i] != rhs.field_offsets[i])
+                    return false;
+            }
+            return true;
+        }
     }
 };
 
