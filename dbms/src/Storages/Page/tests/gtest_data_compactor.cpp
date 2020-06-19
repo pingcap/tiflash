@@ -19,6 +19,8 @@ try
 {
     TiFlashTestEnv::setupLogger();
 
+    CHECK_TESTS_WITH_DATA_ENABLED;
+
     PageStorage::Config config;
     config.num_write_slots = 2;
 #if 1
