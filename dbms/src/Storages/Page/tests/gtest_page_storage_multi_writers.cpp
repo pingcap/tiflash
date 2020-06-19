@@ -1,11 +1,8 @@
 #include <Common/CurrentMetrics.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <Poco/AutoPtr.h>
-#include <Poco/ConsoleChannel.h>
 #include <Poco/File.h>
-#include <Poco/FormattingChannel.h>
 #include <Poco/Logger.h>
-#include <Poco/PatternFormatter.h>
 #include <Poco/Runnable.h>
 #include <Poco/ThreadPool.h>
 #include <Poco/Timer.h>
@@ -42,15 +39,7 @@ public:
     PageStorageMultiWriters_test() : path(DB::tests::TiFlashTestEnv::getTemporaryPath() + "page_storage_multi_writers_test"), storage() {}
 
 protected:
-    static void SetUpTestCase()
-    {
-        Poco::AutoPtr<Poco::ConsoleChannel>   channel = new Poco::ConsoleChannel(std::cerr);
-        Poco::AutoPtr<Poco::PatternFormatter> formatter(new Poco::PatternFormatter);
-        formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i <%p> %s: %t");
-        Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
-        Logger::root().setChannel(formatting_channel);
-        Logger::root().setLevel("trace");
-    }
+    static void SetUpTestCase() { TiFlashTestEnv::setupLogger(); }
 
     void SetUp() override
     {
