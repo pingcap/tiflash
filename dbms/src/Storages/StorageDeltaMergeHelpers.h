@@ -71,14 +71,14 @@ inline DM::HandleRanges getQueryRanges(const DB::MvccQueryInfo::RegionsQueryInfo
         const auto & region = regions[region_idx];
         const auto & range_in_table = region.range_in_table;
 
-        if (handle_range.first.type == DB::TiKVHandle::HandleIDType::MAX)
+        if (range_in_table.first.type == DB::TiKVHandle::HandleIDType::MAX)
         {
             // Ignore [Max, Max)
-            if (handle_range.second.type == DB::TiKVHandle::HandleIDType::MAX)
+            if (range_in_table.second.type == DB::TiKVHandle::HandleIDType::MAX)
                 continue;
             else
-                throw Exception(
-                    "Can not merge invalid region range: [" + handle_range.first.toString() + "," + handle_range.second.toString() + ")",
+                throw Exception("Can not merge invalid region range: [" + range_in_table.first.toString() + ","
+                        + range_in_table.second.toString() + ")",
                     ErrorCodes::LOGICAL_ERROR);
         }
 
