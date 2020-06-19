@@ -245,20 +245,6 @@ void PageFile::MetaMergingReader::initialize()
     status = Status::Opened;
 }
 
-void PageFile::MetaMergingReader::rewind()
-{
-    if (status != Status::Opened && status != Status::Finished)
-        throw Exception("Can not rewind, reader status is invalid: " + toString(), ErrorCodes::LOGICAL_ERROR);
-
-    meta_file_offset = 0;
-    data_file_offset = 0;
-
-    curr_write_batch_sequence = 0;
-    curr_edit.clear();
-
-    status = Status::Opened;
-}
-
 bool PageFile::MetaMergingReader::hasNext() const
 {
     return (status == Status::Uninitialized) || (status == Status::Opened && meta_file_offset < meta_size);

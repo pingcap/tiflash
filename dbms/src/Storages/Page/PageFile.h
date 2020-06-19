@@ -124,13 +124,6 @@ public:
         };
 
     public:
-        /**
-         * `rewind` will reset MergingReader's offsets to 0,
-         * clear `curr_edit`, `curr_write_batch_sequence`,
-         * and set `status` to `Opened`
-         */
-        void rewind();
-
         bool hasNext() const;
 
         void moveNext();
