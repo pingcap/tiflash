@@ -35,18 +35,12 @@ public:
             ctx.detachDatabase(database.first);
         }
     }
-
-    // If you want to run these tests, you should set this envrionment variablle
-    // For example:
-    //     ALSO_RUN_WITH_TEST_DATA=1 ./dbms/gtests_dbms --gtest_filter='IDAsPath*'
-    bool isEnabled() const { return (Poco::Environment::get("ALSO_RUN_WITH_TEST_DATA", "0") == "1"); }
 };
 
 TEST_F(IDAsPathUpgrader_test, ONCALL_1651)
 try
 {
-    if (!isEnabled())
-        return;
+    CHECK_TESTS_WITH_DATA_ENABLED;
 
     // prepare a "test" database for upgrader
     MockTiDB::instance().newDataBase("test"); // id == 2
@@ -95,8 +89,7 @@ CATCH
 TEST_F(IDAsPathUpgrader_test, FLASH_1136_4_0_0_rc)
 try
 {
-    if (!isEnabled())
-        return;
+    CHECK_TESTS_WITH_DATA_ENABLED;
 
     // prepare a "test" database for upgrader
     MockTiDB::instance().newDataBase("test");    // id == 2
