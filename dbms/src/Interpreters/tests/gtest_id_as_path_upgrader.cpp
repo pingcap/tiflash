@@ -126,8 +126,7 @@ CATCH
 TEST_F(IDAsPathUpgrader_test, FLASH_1136_3_1_0)
 try
 {
-    if (!isEnabled())
-        return;
+    CHECK_TESTS_WITH_DATA_ENABLED;
 
     // prepare a "test" database for upgrader
     MockTiDB::instance().newDataBase("test");    // id == 2
