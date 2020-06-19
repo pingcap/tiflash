@@ -14,7 +14,7 @@ public:
     using ValidPages = std::map<PageFileIdAndLevel, std::pair<size_t, PageIdSet>>;
 
     // <Migrate PageFileId, num_pages>
-    using MigrateInfos = std::map<PageFileIdAndLevel, size_t>;
+    using MigrateInfos = std::vector<std::pair<PageFileIdAndLevel, size_t>>;
 
     struct Result
     {
@@ -57,24 +57,24 @@ private:
 
     std::tuple<PageFileSet, size_t, size_t> selectCandidateFiles( // keep readable indent
         const PageFileSet &                  page_files,
-        const ValidPages &                   file_valid_pages,
+        const ValidPages &                   files_valid_pages,
         const std::set<PageFileIdAndLevel> & writing_file_ids) const;
 
     std::tuple<PageEntriesEdit, size_t> //
     migratePages(const SnapshotPtr & snapshot,
-                 const ValidPages &  file_valid_pages,
+                 const ValidPages &  files_valid_pages,
                  const PageFileSet & candidates,
                  const size_t        migrate_page_count) const;
 
     std::tuple<PageEntriesEdit, size_t> //
     mergeValidPages(PageStorage::OpenReadFiles && data_readers,
-                    const ValidPages &            file_valid_pages,
+                    const ValidPages &            files_valid_pages,
                     const SnapshotPtr &           snapshot,
                     const WriteBatch::SequenceID  compact_sequence,
                     PageFile &                    gc_file,
                     MigrateInfos &                migrate_infos) const;
 
-    PageIdAndEntries collectValidEntries(const PageIdSet & valid_pages, const SnapshotPtr & snap) const;
+    static PageIdAndEntries collectValidEntries(const PageIdSet & valid_pages, const SnapshotPtr & snap);
 
     void logMigrationDetails(const MigrateInfos & infos, const PageFileIdAndLevel & migrate_file_id) const;
 
