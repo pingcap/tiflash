@@ -102,6 +102,7 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
         case tipb::ExprType::Min:
         case tipb::ExprType::Max:
         case tipb::ExprType::First:
+        case tipb::ExprType::ApproxCountDistinct:
             if (agg_func_map.find(expr.tp()) == agg_func_map.end())
             {
                 throw Exception(tipb::ExprType_Name(expr.tp()) + " not supported", ErrorCodes::UNSUPPORTED_METHOD);
@@ -178,6 +179,7 @@ bool isAggFunctionExpr(const tipb::Expr & expr)
         case tipb::ExprType::Variance:
         case tipb::ExprType::JsonArrayAgg:
         case tipb::ExprType::JsonObjectAgg:
+        case tipb::ExprType::ApproxCountDistinct:
             return true;
         default:
             return false;
@@ -374,9 +376,11 @@ std::shared_ptr<TiDB::ITiDBCollator> getCollatorFromExpr(const tipb::Expr & expr
     return ret;
 }
 
+extern const String UniqRawResName;
+
 std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Count, "count"}, {tipb::ExprType::Sum, "sum"}, {tipb::ExprType::Min, "min"}, {tipb::ExprType::Max, "max"},
-    {tipb::ExprType::First, "any"},
+    {tipb::ExprType::First, "any"}, {tipb::ExprType::ApproxCountDistinct, UniqRawResName},
     //{tipb::ExprType::Avg, ""},
     //{tipb::ExprType::GroupConcat, ""},
     //{tipb::ExprType::Agg_BitAnd, ""},
