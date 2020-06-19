@@ -33,8 +33,8 @@ public:
      * The (id, level) of PageFile migrated: take the largest (id, level) of all migrate candidates,
      * use its (id, level+1) as the id and level of target PageFile.
      * All migrated data will be written as multiple WriteBatches with same sequence. To keep the
-     * order of all PageFiles' meta, the sequence of WriteBatch should be maximum of all candidates.
-     * No matter we merge valid page(s) from it or not.
+     * order of all PageFiles' meta, the sequence of WriteBatch should be maximum of all candidates'
+     * WriteBatches. No matter we merge valid page(s) from that WriteBatch or not.
      * 
      * Note that all types of PageFile in `page_files` should be `Formal`.
      * Those PageFile whose id in `writing_file_ids`, theirs data will not be migrate.
@@ -67,15 +67,14 @@ private:
                  const size_t        migrate_page_count) const;
 
     std::tuple<PageEntriesEdit, size_t> //
-    mergeValidPages(PageStorage::MetaMergingQueue && merging_queue,
-                    PageStorage::OpenReadFiles &&    data_readers,
-                    const ValidPages &               file_valid_pages,
-                    const SnapshotPtr &              snapshot,
-                    const WriteBatch::SequenceID     compact_sequence,
-                    PageFile &                       gc_file,
-                    MigrateInfos &                   migrate_infos) const;
+    mergeValidPages(PageStorage::OpenReadFiles && data_readers,
+                    const ValidPages &            file_valid_pages,
+                    const SnapshotPtr &           snapshot,
+                    const WriteBatch::SequenceID  compact_sequence,
+                    PageFile &                    gc_file,
+                    MigrateInfos &                migrate_infos) const;
 
-    PageIdAndEntries collectValidEntries(PageEntriesEdit && edits, const PageIdSet & valid_pages, const SnapshotPtr & snap) const;
+    PageIdAndEntries collectValidEntries(const PageIdSet & valid_pages, const SnapshotPtr & snap) const;
 
     void logMigrationDetails(const MigrateInfos & infos, const PageFileIdAndLevel & migrate_file_id) const;
 
