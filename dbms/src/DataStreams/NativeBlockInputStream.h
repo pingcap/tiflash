@@ -60,6 +60,8 @@ struct IndexForNativeFormat
 class NativeBlockInputStream : public IProfilingBlockInputStream
 {
 public:
+    /// provide output column names explicitly
+    NativeBlockInputStream(ReadBuffer & istr_, UInt64 server_revision_, std::vector<String> && output_names_);
     /// If a non-zero server_revision is specified, additional block information may be expected and read.
     NativeBlockInputStream(ReadBuffer & istr_, UInt64 server_revision_);
 
@@ -95,6 +97,8 @@ private:
     CompressedReadBufferFromFile * istr_concrete;
 
     PODArray<double> avg_value_size_hints;
+
+    std::vector<String> output_names;
 
     void updateAvgValueSizeHints(const Block & block);
 };
