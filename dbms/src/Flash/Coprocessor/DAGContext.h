@@ -8,11 +8,18 @@ namespace DB
 
 class Context;
 
+struct ProfileStreamsInfo
+{
+    UInt32 qb_id;
+    BlockInputStreams input_streams;
+};
 /// A context used to track the information that needs to be passed around during DAG planning.
 struct DAGContext
 {
-    DAGContext(size_t profile_list_size) { profile_streams_list.resize(profile_list_size); };
-    std::vector<BlockInputStreams> profile_streams_list;
+    DAGContext(){};
+    std::map<String, ProfileStreamsInfo> profile_streams_map;
+    std::unordered_map<String, BlockInputStreams> profile_streams_map_for_join_build_side;
+    std::unordered_map<UInt32, std::vector<String>> qb_id_to_join_alias_map;
 };
 
 } // namespace DB

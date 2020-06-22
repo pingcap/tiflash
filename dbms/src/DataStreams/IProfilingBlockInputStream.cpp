@@ -103,6 +103,7 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
 
 void IProfilingBlockInputStream::readPrefix()
 {
+    auto start_time = info.total_stopwatch.elapsed();
     readPrefixImpl();
 
     forEachChild([&] (IBlockInputStream & child)
@@ -110,11 +111,13 @@ void IProfilingBlockInputStream::readPrefix()
         child.readPrefix();
         return false;
     });
+    info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
 }
 
 
 void IProfilingBlockInputStream::readSuffix()
 {
+    auto start_time = info.total_stopwatch.elapsed();
     forEachChild([&] (IBlockInputStream & child)
     {
         child.readSuffix();
@@ -122,6 +125,7 @@ void IProfilingBlockInputStream::readSuffix()
     });
 
     readSuffixImpl();
+    info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
 }
 
 
