@@ -139,6 +139,7 @@ void DAGStringConverter::buildString(const tipb::Executor & executor, std::strin
     {
         case tipb::ExecType::TypeTableScan:
             return buildTSString(executor.tbl_scan(), ss);
+        case tipb::ExecType::TypeJoin:
         case tipb::ExecType::TypeIndexScan:
             // index scan not supported
             throw Exception("IndexScan is not supported", ErrorCodes::NOT_IMPLEMENTED);

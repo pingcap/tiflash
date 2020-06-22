@@ -412,7 +412,8 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
 // useless casts to all the timestamp columns, in order to avoid redundant cast, when cast the ts
 // column to the columns with session-level timezone info, the original ts columns with UTC timezone
 // are still kept, and the InterpreterDAG will choose the correct column based on encode type
-bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(ExpressionActionsChain & chain, std::vector<bool> is_ts_column)
+bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(
+    ExpressionActionsChain & chain, std::vector<bool> is_ts_column, bool keep_UTC_column)
 {
     if (context.getTimezoneInfo().is_utc_timezone)
         return false;
@@ -431,9 +432,84 @@ bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(ExpressionActionsChain & 
             if (tz_col.length() == 0)
                 tz_col = getActions(tz_expr, actions);
             String casted_name = appendTimeZoneCast(tz_col, source_columns[i].name, func_name, actions);
-            source_columns.emplace_back(source_columns[i].name, source_columns[i].type);
+            if (keep_UTC_column)
+                source_columns.emplace_back(source_columns[i].name, source_columns[i].type);
             source_columns[i].name = casted_name;
             ret = true;
+        }
+    }
+    return ret;
+}
+
+void DAGExpressionAnalyzer::appendJoin(
+    ExpressionActionsChain & chain, SubqueryForSet & join_query, const NamesAndTypesList & columns_added_by_join)
+{
+    initChain(chain, getCurrentInputColumns());
+    ExpressionActionsPtr actions = chain.getLastActions();
+    actions->add(ExpressionAction::ordinaryJoin(join_query.join, columns_added_by_join));
+}
+/// return true if some actions is needed
+bool DAGExpressionAnalyzer::appendJoinKey(
+    ExpressionActionsChain & chain, const tipb::Join & join, const DataTypes & key_types, Names & key_names, bool tiflash_left)
+{
+    bool ret = false;
+    initChain(chain, getCurrentInputColumns());
+    ExpressionActionsPtr actions = chain.getLastActions();
+    const auto & keys = ((tiflash_left && join.inner_idx() == 1) || (!tiflash_left && join.inner_idx() == 0)) ? join.left_join_keys()
+                                                                                                              : join.right_join_keys();
+
+    for (int i = 0; i < keys.size(); i++)
+    {
+        const auto & key = keys.at(i);
+        bool has_actions = key.tp() != tipb::ExprType::ColumnRef;
+
+        String key_name = getActions(key, actions);
+        DataTypePtr current_type = actions->getSampleBlock().getByName(key_name).type;
+        if (!removeNullable(current_type)->equals(*removeNullable(key_types[i])))
+        {
+            /// need to convert to key type
+            key_name = appendCast(key_types[i], actions, key_name);
+            has_actions = true;
+        }
+        if (!tiflash_left && !has_actions)
+        {
+            // for right side table, add a new column
+            String updated_key_name = "_r_k_" + key_name;
+            actions->add(ExpressionAction::copyColumn(key_name, updated_key_name));
+            key_name = updated_key_name;
+            has_actions = true;
+        }
+        key_names.push_back(key_name);
+        ret |= has_actions;
+    }
+    /// remove useless columns to avoid duplicate columns
+    /// as when compiling the key expression, the origin
+    /// streams may be added some columns that have the
+    /// same name on left streams and right streams, for
+    /// example, if the join condition is something like:
+    /// id + 1 = id + 1,
+    /// the left streams and the right streams will have the
+    /// same constant column for `1`
+    /// Note that the origin left streams and right streams
+    /// will never have duplicated columns because in
+    /// DAGQueryBlockInterpreter we add qb_column_prefix in
+    /// final project step, so if the join condition is not
+    /// literal expression, the key names should never be
+    /// duplicated. In the above example, the final key names should be
+    /// something like `add(__qb_2_id, 1)` and `add(__qb_3_id, 1)`
+    if (actions->getSampleBlock().getNames().size() != getCurrentInputColumns().size() + key_names.size())
+    {
+        std::unordered_set<String> needed_columns;
+        for (const auto & c : getCurrentInputColumns())
+            needed_columns.insert(c.name);
+        for (const auto & s : key_names)
+            needed_columns.insert(s);
+
+        const auto & names = actions->getSampleBlock().getNames();
+        for (const auto & name : names)
+        {
+            if (needed_columns.find(name) == needed_columns.end())
+                actions->add(ExpressionAction::removeColumn(name));
         }
     }
     return ret;
@@ -531,6 +607,17 @@ String DAGExpressionAnalyzer::alignReturnType(
     return updated_name;
 }
 
+String DAGExpressionAnalyzer::appendCast(const DataTypePtr & target_type, ExpressionActionsPtr & actions, const String & expr_name)
+{
+    // need to add cast function
+    // first construct the second argument
+    tipb::Expr type_expr;
+    constructStringLiteralTiExpr(type_expr, target_type->getName());
+    auto type_expr_name = getActions(type_expr, actions);
+    String cast_expr_name = applyFunction("CAST", {expr_name, type_expr_name}, actions, nullptr);
+    return cast_expr_name;
+}
+
 String DAGExpressionAnalyzer::appendCastIfNeeded(
     const tipb::Expr & expr, ExpressionActionsPtr & actions, const String & expr_name, bool explicit_cast)
 {
@@ -551,13 +638,7 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(
         {
 
             implicit_cast_count += !explicit_cast;
-            // need to add cast function
-            // first construct the second argument
-            tipb::Expr type_expr;
-            constructStringLiteralTiExpr(type_expr, expected_type->getName());
-            auto type_expr_name = getActions(type_expr, actions);
-            String cast_expr_name = applyFunction("CAST", {expr_name, type_expr_name}, actions, nullptr);
-            return cast_expr_name;
+            return appendCast(expected_type, actions, expr_name);
         }
         else
         {
