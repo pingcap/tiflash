@@ -10,6 +10,7 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Interpreters/ExpressionAnalyzer.h>
 #include <Storages/Transaction/TMTStorages.h>
 
 namespace DB
@@ -44,6 +45,7 @@ public:
         AggregateDescriptions & aggregate_descriptions);
     void appendAggSelect(ExpressionActionsChain & chain, const tipb::Aggregation & agg, bool keep_session_timezone_info);
     String appendCastIfNeeded(const tipb::Expr & expr, ExpressionActionsPtr & actions, const String & expr_name, bool explicit_cast);
+    String appendCast(const DataTypePtr & target_type, ExpressionActionsPtr & actions, const String & expr_name);
     String alignReturnType(const tipb::Expr & expr, ExpressionActionsPtr & actions, const String & expr_name, bool force_uint8);
     void initChain(ExpressionActionsChain & chain, const std::vector<NameAndTypePair> & columns) const
     {
@@ -58,6 +60,7 @@ public:
             chain.steps.emplace_back(std::make_shared<ExpressionActions>(column_list, settings));
         }
     }
+    void appendJoin(ExpressionActionsChain & chain, SubqueryForSet & join_query, const NamesAndTypesList & columns_added_by_join);
     void appendFinalProject(ExpressionActionsChain & chain, const NamesWithAliases & final_project);
     String getActions(const tipb::Expr & expr, ExpressionActionsPtr & actions, bool output_as_uint8_type = false);
     const std::vector<NameAndTypePair> & getCurrentInputColumns();
@@ -66,7 +69,10 @@ public:
     String applyFunction(
         const String & func_name, const Names & arg_names, ExpressionActionsPtr & actions, std::shared_ptr<TiDB::ITiDBCollator> collator);
     Int32 getImplicitCastCount() { return implicit_cast_count; };
-    bool appendTimeZoneCastsAfterTS(ExpressionActionsChain & chain, std::vector<bool> is_ts_column);
+    bool appendTimeZoneCastsAfterTS(
+        ExpressionActionsChain & chain, std::vector<bool> is_ts_column, bool keep_UTC_column);
+    bool appendJoinKey(
+        ExpressionActionsChain & chain, const tipb::Join & join, const DataTypes & key_types, Names & key_names, bool tiflash_left);
     String appendTimeZoneCast(const String & tz_col, const String & ts_col, const String & func_name, ExpressionActionsPtr & actions);
     DAGPreparedSets & getPreparedSets() { return prepared_sets; }
     String convertToUInt8(ExpressionActionsPtr & actions, const String & column_name);

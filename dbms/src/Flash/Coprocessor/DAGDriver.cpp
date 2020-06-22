@@ -1,13 +1,11 @@
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
-#include <DataStreams/CoprocessorBlockInputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/copyData.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
-#include <Flash/Coprocessor/DAGUtils.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/KVStore.h>
@@ -15,7 +13,6 @@
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <pingcap/Exception.h>
-#include <pingcap/kv/Backoff.h>
 #include <pingcap/kv/LockResolver.h>
 
 namespace DB
@@ -34,6 +31,7 @@ DAGDriver<false>::DAGDriver(Context & context_, const tipb::DAGRequest & dag_req
       dag_request(dag_request_),
       regions(regions_),
       dag_response(dag_response_),
+      writer(nullptr),
       internal(internal_),
       log(&Logger::get("DAGDriver"))
 {
@@ -61,28 +59,29 @@ template <bool batch>
 void DAGDriver<batch>::execute()
 try
 {
-    DAGContext dag_context(dag_request.executors_size());
-    DAGQuerySource dag(context, dag_context, regions, dag_request, batch);
+    DAGContext dag_context;
+    DAGQuerySource dag(context, dag_context, regions, dag_request, writer, batch);
 
     BlockIO streams = executeQuery(dag, context, internal, QueryProcessingStage::Complete);
     if (!streams.in || streams.out)
         // Only query is allowed, so streams.in must not be null and streams.out must be null
         throw Exception("DAG is not query.", ErrorCodes::LOGICAL_ERROR);
 
-    BlockOutputStreamPtr dag_output_stream;
-    if constexpr (batch)
+    if constexpr (!batch)
     {
-        dag_output_stream = std::make_shared<DAGBlockOutputStream<true>>(writer, context.getSettings().dag_records_per_chunk,
-            dag.getEncodeType(), dag.getResultFieldTypes(), streams.in->getHeader(), dag_context,
-            dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries());
+        bool collect_exec_summary = dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries();
+        BlockOutputStreamPtr dag_output_stream
+            = std::make_shared<DAGBlockOutputStream>(dag_response, context.getSettings().dag_records_per_chunk, dag.getEncodeType(),
+                dag.getResultFieldTypes(), streams.in->getHeader(), dag_context, collect_exec_summary, dag_request.has_root_executor());
+        copyData(*streams.in, *dag_output_stream);
     }
     else
     {
-        dag_output_stream = std::make_shared<DAGBlockOutputStream<false>>(dag_response, context.getSettings().dag_records_per_chunk,
-            dag.getEncodeType(), dag.getResultFieldTypes(), streams.in->getHeader(), dag_context,
-            dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries());
+        streams.in->readPrefix();
+        while (streams.in->read())
+            ;
+        streams.in->readSuffix();
     }
-    copyData(*streams.in, *dag_output_stream);
 
     if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streams.in.get()))
     {
