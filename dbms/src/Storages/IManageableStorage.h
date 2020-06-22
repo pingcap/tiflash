@@ -7,7 +7,6 @@
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TiKVHandle.h>
 #include <Storages/Transaction/Types.h>
-
 namespace TiDB
 {
 struct TableInfo;
