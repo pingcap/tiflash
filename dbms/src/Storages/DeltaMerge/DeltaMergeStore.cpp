@@ -476,7 +476,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
 
 void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings & db_settings, const HandleRange & delete_range)
 {
-    LOG_TRACE(log, "Write into " << db_name << "." << table_name << " delte range " << delete_range.toString());
+    LOG_INFO(log, "Write into " << db_name << "." << table_name << " delte range " << delete_range.toString());
 
     EventRecorder write_block_recorder(ProfileEvents::DMDeleteRange, ProfileEvents::DMDeleteRangeNS);
 
@@ -485,7 +485,7 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
 
     auto dm_context = newDMContext(db_context, db_settings);
 
-    if (log->trace())
+    if (log->info())
     {
         std::shared_lock lock(read_write_mutex);
 
@@ -497,7 +497,7 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
         }
         msg.pop_back();
         msg += "}";
-        LOG_TRACE(log, msg);
+        LOG_INFO(log, msg);
     }
 
     Segments updated_segments;
