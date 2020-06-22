@@ -66,7 +66,7 @@ class Table:
 
 class TiFlashClusterManager:
     ROLE_INIT = 0
-    ROLE_SLAVE = 1
+    ROLE_SECONDARY = 1
     ROLE_MASTER = 2
 
     @staticmethod
@@ -89,7 +89,7 @@ class TiFlashClusterManager:
             self.state = [TiFlashClusterManager.ROLE_INIT, 0]
             self.try_get_lock()
         elif res == EtcdClient.EtcdValueNotEqual:
-            self.state = [TiFlashClusterManager.ROLE_SLAVE, time.time()]
+            self.state = [TiFlashClusterManager.ROLE_SECONDARY, time.time()]
             self.logger.debug('Refresh ttl fail (key not equal), become slave')
         else:
             assert False
@@ -101,9 +101,9 @@ class TiFlashClusterManager:
                 self.state = [TiFlashClusterManager.ROLE_MASTER, time.time()]
                 self.logger.info('After init, become master')
             else:
-                self.state = [TiFlashClusterManager.ROLE_SLAVE, time.time()]
+                self.state = [TiFlashClusterManager.ROLE_SECONDARY, time.time()]
                 self.logger.info('After init, become slave')
-        elif role == TiFlashClusterManager.ROLE_SLAVE:
+        elif role == TiFlashClusterManager.ROLE_SECONDARY:
             cur = time.time()
             if cur >= ts + conf.flash_conf.cluster_master_ttl:
                 self.state = [TiFlashClusterManager.ROLE_INIT, 0]
