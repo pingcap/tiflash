@@ -627,7 +627,7 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
     auto storage = tmt_context.getStorages().get(table_info->id);
     if (storage == nullptr)
         throw Exception("miss table in TiFlash :" + name_mapper.debugCanonicalName(*pt_db_info, *table_info), ErrorCodes::DDL_ERROR);
-    LOG_INFO(log, "Exchange partition for table " << pt_db_info->name << "." << name_mapper.debugTableName(storage->getTableInfo()));
+    LOG_INFO(log, "Exchange partition for table " << name_mapper.debugCanonicalName(*pt_db_info, *table_info));
     auto orig_table_info = storage->getTableInfo();
     orig_table_info.partition = table_info->partition;
     storage->alterFromTiDB(AlterCommands{}, name_mapper.mapDatabaseName(*pt_db_info), orig_table_info, name_mapper, context);
