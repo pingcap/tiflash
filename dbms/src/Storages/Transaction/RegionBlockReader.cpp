@@ -74,8 +74,8 @@ void ReorderRegionDataReadList(RegionDataReadInfoList & data_list)
     {
         bool need_check = false;
         {
-            const auto h1 = std::get<0>(data_list.front());
-            const auto h2 = std::get<0>(data_list.back());
+            const auto & h1 = std::get<0>(data_list.front());
+            const auto & h2 = std::get<0>(data_list.back());
             if ((h1 ^ h2) & SIGN_MASK)
                 need_check = true;
         }
@@ -85,7 +85,7 @@ void ReorderRegionDataReadList(RegionDataReadInfoList & data_list)
             auto it = data_list.begin();
             for (; it != data_list.end();)
             {
-                const auto handle = std::get<0>(*it);
+                const auto & handle = std::get<0>(*it);
 
                 if (handle & SIGN_MASK)
                     ++it;
@@ -131,7 +131,7 @@ void setPKVersionDel(ColumnUInt8 & delmark_col,
         {
             should_skip = scan_filter != nullptr && scan_filter->filter(static_cast<Int64>(handle));
         }
-        if(should_skip)
+        if (should_skip)
             continue;
 
         delmark_data.emplace_back(write_type == Region::DelFlag);

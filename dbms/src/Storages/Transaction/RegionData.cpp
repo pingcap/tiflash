@@ -6,6 +6,12 @@
 namespace DB
 {
 
+HandleID RawTiDBPK::getHandleID() const
+{
+    auto & pk = *this;
+    return RecordKVFormat::decodeInt64(RecordKVFormat::read<UInt64>(pk->data()));
+}
+
 void RegionData::insert(ColumnFamilyType cf, TiKVKey && key, const DecodedTiKVKey & raw_key, TiKVValue && value)
 {
     switch (cf)
@@ -32,23 +38,23 @@ void RegionData::insert(ColumnFamilyType cf, TiKVKey && key, const DecodedTiKVKe
 
 void RegionData::removeLockCF(const DecodedTiKVKey & raw_key)
 {
-    HandleID handle_id = RecordKVFormat::getHandle(raw_key);
-    lock_cf.remove(handle_id, true);
+    auto pk = RecordKVFormat::getRawTiDBPK(raw_key);
+    lock_cf.remove(pk, true);
 }
 
 void RegionData::removeDefaultCF(const TiKVKey & key, const DecodedTiKVKey & raw_key)
 {
-    HandleID handle_id = RecordKVFormat::getHandle(raw_key);
+    auto pk = RecordKVFormat::getRawTiDBPK(raw_key);
     Timestamp ts = RecordKVFormat::getTs(key);
-    cf_data_size -= default_cf.remove(RegionDefaultCFData::Key{handle_id, ts}, true);
+    cf_data_size -= default_cf.remove(RegionDefaultCFData::Key{pk, ts}, true);
 }
 
 void RegionData::removeWriteCF(const TiKVKey & key, const DecodedTiKVKey & raw_key)
 {
-    HandleID handle_id = RecordKVFormat::getHandle(raw_key);
+    auto pk = RecordKVFormat::getRawTiDBPK(raw_key);
     Timestamp ts = RecordKVFormat::getTs(key);
 
-    cf_data_size -= write_cf.remove(RegionWriteCFData::Key{handle_id, ts}, true);
+    cf_data_size -= write_cf.remove(RegionWriteCFData::Key{pk, ts}, true);
 }
 
 RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & write_it)
@@ -102,7 +108,7 @@ RegionDataReadInfo RegionData::readDataByWriteIt(const ConstWriteCFIter & write_
         if (auto data_it = map.find({handle, prewrite_ts}); data_it != map.end())
             return std::make_tuple(handle, write_type, ts, RegionDefaultCFDataTrait::getTiKVValue(data_it));
         else
-            throw Exception("Handle: " + std::to_string(handle) + ", Prewrite ts: " + std::to_string(prewrite_ts)
+            throw Exception("Raw TiDB PK: " + (handle.toHex()) + ", Prewrite ts: " + std::to_string(prewrite_ts)
                     + " can not found in default cf for key: " + key->toHex(),
                 ErrorCodes::LOGICAL_ERROR);
     }
