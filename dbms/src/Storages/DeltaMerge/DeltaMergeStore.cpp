@@ -484,7 +484,7 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
 
     auto dm_context = newDMContext(db_context, db_settings);
 
-    if (log->information())
+    if (log->trace())
     {
         std::shared_lock lock(read_write_mutex);
 
@@ -496,7 +496,7 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
         }
         msg.pop_back();
         msg += "}";
-        LOG_INFO(log, msg);
+        LOG_TRACE(log, msg);
     }
 
     Segments updated_segments;
