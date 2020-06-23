@@ -110,6 +110,23 @@ AggregateFunctionPtr createAggregateFunctionUniq(const std::string & name, const
     return std::make_shared<AggregateFunctionUniqVariadic<DataForVariadic, false>>(argument_types);
 }
 
+AggregateFunctionPtr createAggregateFunctionUniqRawRes(const std::string & name, const DataTypes & argument_types, const Array & params)
+{
+    assertNoParameters(name, params);
+
+    if (argument_types.empty())
+        throw Exception("Incorrect number of arguments for aggregate function " + name, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+    /// If there are several arguments, then no tuples allowed among them.
+    for (const auto & type : argument_types)
+        if (typeid_cast<const DataTypeTuple *>(type.get()))
+            throw Exception("Tuple argument of function " + name + " must be the only argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+    /// "Variadic" method also works as a fallback generic case for single argument.
+    return std::make_shared<AggregateFunctionUniqVariadic<AggregateFunctionUniqUniquesHashSetDataForVariadicRawRes, false, true>>(
+        argument_types);
+}
+
 }
 
 void registerAggregateFunctionsUniq(AggregateFunctionFactory & factory)
@@ -125,6 +142,8 @@ void registerAggregateFunctionsUniq(AggregateFunctionFactory & factory)
 
     factory.registerFunction("uniqCombined",
         createAggregateFunctionUniq<AggregateFunctionUniqCombinedData, AggregateFunctionUniqCombinedData<UInt64>>);
+
+    factory.registerFunction(UniqRawResName, createAggregateFunctionUniqRawRes);
 }
 
 }

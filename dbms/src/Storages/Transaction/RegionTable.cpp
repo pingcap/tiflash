@@ -285,6 +285,7 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
             table_to_optimize.insert(table_id);
             tables.erase(table_id);
         }
+        LOG_INFO(log, __FUNCTION__ << ": remove [region " << region_id << "] in RegionTable done");
     }
 
     // Sometime we don't need to remove data. e.g. remove region after region merge.
@@ -299,6 +300,7 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
         // before `removeObsoleteDataInStorage` is done. (by param `RegionTaskLock`)
         // And this is expected not to block for long time.
         removeObsoleteDataInStorage(context, table_id, handle_range);
+        LOG_INFO(log, __FUNCTION__ << ": remove region [" << region_id << "] in storage done");
     }
 }
 
