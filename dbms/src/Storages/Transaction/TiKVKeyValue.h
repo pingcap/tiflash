@@ -116,6 +116,7 @@ struct RawTiDBPK : std::shared_ptr<const std::string>
         return ToHex(p->data(), p->size());
     }
 
+    // Make this struct can be casted into HandleID implicitly.
     operator HandleID() const { return handle; }
 
 private:
