@@ -438,10 +438,15 @@ try
     if (is_partition_table)
     {
         json->set("belonging_table_id", belonging_table_id);
-        json->set("partition", partition.getJSONObject());
         if (belonging_table_id != DB::InvalidTableID)
         {
             json->set("is_partition_sub_table", true);
+            json->set("partition", Poco::Dynamic::Var());
+        }
+        else
+        {
+            // only record partition info in LogicalPartitionTable
+            json->set("partition", partition.getJSONObject());
         }
     }
     else
@@ -541,12 +546,13 @@ try
     comment = obj->getValue<String>("comment");
     update_timestamp = obj->getValue<Timestamp>("update_timestamp");
     auto partition_obj = obj->getObject("partition");
-    is_partition_table = !partition_obj.isNull();
+    is_partition_table = obj->has("belonging_table_id") || !partition_obj.isNull();
     if (is_partition_table)
     {
         if (obj->has("belonging_table_id"))
             belonging_table_id = obj->getValue<TableID>("belonging_table_id");
-        partition.deserialize(partition_obj);
+        if (!partition_obj.isNull())
+            partition.deserialize(partition_obj);
     }
     if (obj->has("schema_version"))
     {
