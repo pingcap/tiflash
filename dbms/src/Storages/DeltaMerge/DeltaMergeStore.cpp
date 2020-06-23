@@ -484,7 +484,7 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
 
     auto dm_context = newDMContext(db_context, db_settings);
 
-    if (log->info())
+    if (log->information())
     {
         std::shared_lock lock(read_write_mutex);
 
