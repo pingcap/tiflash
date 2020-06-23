@@ -49,9 +49,26 @@ enum SchemaActionType : Int8
     SchemaActionDropPrimaryKey = 33,
     SchemaActionCreateSequence = 34,
     SchemaActionAlterSequence = 35,
-    SchemaActionDropSequence = 36
+    SchemaActionDropSequence = 36,
+    SchemaActionAddColumns = 37,
+    SchemaActionDropColumns = 38,
+    SchemaActionModifyTableAutoIdCache = 39,
+    SchemaActionRebaseAutoRandomBase = 40,
+    SchemaActionAlterIndexVisibility = 41,
+    SchemaActionExchangeTablePartition = 42,
 };
 
+struct AffectedOption
+{
+    AffectedOption() = default;
+    explicit AffectedOption(Poco::JSON::Object::Ptr json);
+    DatabaseID schema_id;
+    TableID table_id;
+    TableID old_table_id;
+    DatabaseID old_schema_id;
+
+    void deserialize(Poco::JSON::Object::Ptr json);
+};
 struct SchemaDiff
 {
     Int64 version;
@@ -59,8 +76,10 @@ struct SchemaDiff
     DatabaseID schema_id;
     TableID table_id;
 
-    DatabaseID old_table_id;
-    TableID old_schema_id;
+    TableID old_table_id;
+    DatabaseID old_schema_id;
+
+    std::vector<AffectedOption> affected_opts;
 
     void deserialize(const String & data);
 };
