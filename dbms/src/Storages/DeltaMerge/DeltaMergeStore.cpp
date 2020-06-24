@@ -1418,8 +1418,14 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
 
         wbs.writeMeta();
 
+
+        // The instance of PKRange::End is closely linked to instance of PKRange. So we cannot reuse it.
+        // Replace must be done by erase + insert.
+        segments.erase(segment->getPKRange()->getEnd());
+        id_to_segment.erase(segment->segmentId());
+
         segments[new_segment->getPKRange()->getEnd()] = new_segment;
-        id_to_segment[segment->segmentId()]           = new_segment;
+        id_to_segment[new_segment->segmentId()]       = new_segment;
 
         segment->abandon();
 
