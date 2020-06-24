@@ -1442,13 +1442,24 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
 bool DeltaMergeStore::isSegmentValid(const SegmentPtr & segment)
 {
     if (segment->hasAbandoned())
+    {
+        LOG_DEBUG(log, "Segment [" << segment->segmentId() << "] instance has abandoned");
         return false;
+    }
     // Segment instance could have been removed or replaced.
     auto it = segments.find(segment->getPKRange()->getEnd());
     if (it == segments.end())
+    {
+        LOG_DEBUG(log, "Segment [" << segment->segmentId() << "] not found in segment map");
         return false;
+    }
     auto & cur_segment = it->second;
-    return cur_segment.get() == segment.get();
+    if (cur_segment.get() != segment.get())
+    {
+        LOG_DEBUG(log, "Segment [" << segment->segmentId() << "] instance has been replaced in segment map");
+        return false;
+    }
+    return true;
 }
 
 void DeltaMergeStore::check(const Context & /*db_context*/)
