@@ -76,15 +76,13 @@ RegionRangeKeys::RegionRangeKeys(TiKVKey && start_key, TiKVKey && end_key)
       raw(ori.first.key.empty() ? DecodedTiKVKey() : RecordKVFormat::decodeTiKVKey(ori.first.key),
           ori.second.key.empty() ? DecodedTiKVKey() : RecordKVFormat::decodeTiKVKey(ori.second.key))
 {
-    if (!computeMappedTableID(raw.first, mapped_table_id))
+    if (!computeMappedTableID(raw.first, mapped_table_id) || ori.first.compare(ori.second) >= 0)
     {
         throw Exception(
-            "Can't tell table id for region, should not happen, start key: " + ori.first.key.toHex(), ErrorCodes::LOGICAL_ERROR);
+            "Illegal region range, should not happen, start key: " + ori.first.key.toHex() + ", end key: " + ori.second.key.toHex(),
+            ErrorCodes::LOGICAL_ERROR);
     }
     mapped_handle_range = TiKVRange::getHandleRangeByTable(rawKeys().first, rawKeys().second, mapped_table_id);
-
-    if (mapped_handle_range.first == mapped_handle_range.second)
-        throw Exception(std::string(__PRETTY_FUNCTION__) + " got empty handle range", ErrorCodes::LOGICAL_ERROR);
 }
 
 TableID RegionRangeKeys::getMappedTableID() const { return mapped_table_id; }

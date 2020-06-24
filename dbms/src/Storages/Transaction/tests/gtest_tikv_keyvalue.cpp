@@ -31,8 +31,7 @@ inline TiKVKey genIndex(const TableID tableId, const Int64 id)
     return RecordKVFormat::encodeAsTiKVKey(key);
 }
 
-// FIXME: Throw exception: Can't tell table id for region, should not happen
-TEST(TiKVKeyValue_test, DISABLED_PortedTests)
+TEST(TiKVKeyValue_test, PortedTests)
 {
     bool res = true;
     {
@@ -283,16 +282,36 @@ TEST(TiKVKeyValue_test, DISABLED_PortedTests)
         ASSERT_TRUE(range.comparableKeys().first.state == TiKVRangeKey::NORMAL);
         ASSERT_TRUE(range.comparableKeys().second.state == TiKVRangeKey::NORMAL);
 
-        RegionRangeKeys range2(TiKVKey{}, TiKVKey{});
-        ASSERT_TRUE(range2.comparableKeys().first.state == TiKVRangeKey::MIN);
-        ASSERT_TRUE(range2.comparableKeys().second.state == TiKVRangeKey::MAX);
+        auto range2 = RegionRangeKeys::makeComparableKeys(TiKVKey{}, TiKVKey{});
+        ASSERT_TRUE(range2.first.state == TiKVRangeKey::MIN);
+        ASSERT_TRUE(range2.second.state == TiKVRangeKey::MAX);
 
-        ASSERT_TRUE(range2.comparableKeys().first.compare(range2.comparableKeys().second) < 0);
-        ASSERT_TRUE(range2.comparableKeys().first.compare(range.comparableKeys().second) < 0);
+        ASSERT_TRUE(range2.first.compare(range2.second) < 0);
+        ASSERT_TRUE(range2.first.compare(range.comparableKeys().second) < 0);
         ASSERT_TRUE(range.comparableKeys().first.compare(range.comparableKeys().second) < 0);
-        ASSERT_TRUE(range.comparableKeys().second.compare(range2.comparableKeys().second) < 0);
+        ASSERT_TRUE(range.comparableKeys().second.compare(range2.second) < 0);
 
         ASSERT_TRUE(range.comparableKeys().first.compare(RecordKVFormat::genKey(1, 2, 3)) == 0);
+    }
+
+    {
+        const Int64 tableId = 2333;
+        const Timestamp ts = 66666;
+        std::string key(RecordKVFormat::RAW_KEY_NO_HANDLE_SIZE, 0);
+        memcpy(key.data(), &RecordKVFormat::TABLE_PREFIX, 1);
+        auto big_endian_table_id = RecordKVFormat::encodeInt64(tableId);
+        memcpy(key.data() + 1, reinterpret_cast<const char *>(&big_endian_table_id), 8);
+        memcpy(key.data() + 1 + 8, RecordKVFormat::RECORD_PREFIX_SEP, 2);
+        std::string pk = "12345678...";
+        key += pk;
+        auto tikv_key = RecordKVFormat::encodeAsTiKVKey(key);
+        RecordKVFormat::appendTs(tikv_key, ts);
+        {
+            auto decoded_key = RecordKVFormat::decodeTiKVKey(tikv_key);
+            ASSERT_EQ(RecordKVFormat::getTableId(decoded_key), tableId);
+            auto tidb_pk = RecordKVFormat::getRawTiDBPK(decoded_key);
+            ASSERT_EQ(*tidb_pk, pk);
+        }
     }
 
     ASSERT_TRUE(res);

@@ -77,8 +77,6 @@ void KVStore::tryApplySnapshot(RegionPtr new_region, Context & context)
     {
         Timestamp safe_point = PDClientHelper::getGCSafePointWithRetry(tmt.getPDClient(), /* ignore_cache= */ true);
 
-        HandleMap handle_map;
-
         // Traverse all table in ch and update handle_maps.
         auto table_id = new_region->getMappedTableID();
         if (auto storage = tmt.getStorages().get(table_id); storage)
@@ -88,6 +86,8 @@ void KVStore::tryApplySnapshot(RegionPtr new_region, Context & context)
             {
                 case TiDB::StorageEngine::TMT:
                 {
+                    HandleMap handle_map;
+
                     auto table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
 
                     auto tmt_storage = std::dynamic_pointer_cast<StorageMergeTree>(storage);
@@ -102,6 +102,8 @@ void KVStore::tryApplySnapshot(RegionPtr new_region, Context & context)
                     }
                     else
                         getHandleMapByRange<Int64>(context, *tmt_storage, handle_range, handle_map);
+
+                    new_region->compareAndCompleteSnapshot(handle_map, safe_point);
                     break;
                 }
                 case TiDB::StorageEngine::DT:
@@ -119,8 +121,6 @@ void KVStore::tryApplySnapshot(RegionPtr new_region, Context & context)
                         "Unknown StorageEngine: " + toString(static_cast<Int32>(storage->engineType())), ErrorCodes::LOGICAL_ERROR);
             }
         }
-
-        new_region->compareAndCompleteSnapshot(handle_map, safe_point);
     }
 
     onSnapshot(new_region, old_region, old_applied_index, tmt);
