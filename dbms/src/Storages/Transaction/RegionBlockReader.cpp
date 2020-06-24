@@ -74,8 +74,8 @@ void ReorderRegionDataReadList(RegionDataReadInfoList & data_list)
     {
         bool need_check = false;
         {
-            const auto h1 = std::get<0>(data_list.front());
-            const auto h2 = std::get<0>(data_list.back());
+            const auto & h1 = std::get<0>(data_list.front());
+            const auto & h2 = std::get<0>(data_list.back());
             if ((h1 ^ h2) & SIGN_MASK)
                 need_check = true;
         }
@@ -85,9 +85,9 @@ void ReorderRegionDataReadList(RegionDataReadInfoList & data_list)
             auto it = data_list.begin();
             for (; it != data_list.end();)
             {
-                const auto handle = std::get<0>(*it);
+                const auto & pk = std::get<0>(*it);
 
-                if (handle & SIGN_MASK)
+                if (pk & SIGN_MASK)
                     ++it;
                 else
                     break;
@@ -114,7 +114,7 @@ void setPKVersionDel(ColumnUInt8 & delmark_col,
     delmark_data.reserve(data_list.size());
     version_data.reserve(data_list.size());
 
-    for (const auto & [handle, write_type, commit_ts, value] : data_list)
+    for (const auto & [pk, write_type, commit_ts, value] : data_list)
     {
         std::ignore = value;
 
@@ -125,24 +125,24 @@ void setPKVersionDel(ColumnUInt8 & delmark_col,
         bool should_skip;
         if constexpr (pk_type == TMTPKType::UINT64)
         {
-            should_skip = scan_filter != nullptr && scan_filter->filter(static_cast<UInt64>(handle));
+            should_skip = scan_filter != nullptr && scan_filter->filter(static_cast<UInt64>(pk));
         }
         else
         {
-            should_skip = scan_filter != nullptr && scan_filter->filter(static_cast<Int64>(handle));
+            should_skip = scan_filter != nullptr && scan_filter->filter(static_cast<Int64>(pk));
         }
-        if(should_skip)
+        if (should_skip)
             continue;
 
         delmark_data.emplace_back(write_type == Region::DelFlag);
         version_data.emplace_back(commit_ts);
 
         if constexpr (pk_type == TMTPKType::INT64)
-            typeid_cast<ColumnVector<Int64> &>(*pk_column).insert(static_cast<Int64>(handle));
+            typeid_cast<ColumnVector<Int64> &>(*pk_column).insert(static_cast<Int64>(pk));
         else if constexpr (pk_type == TMTPKType::UINT64)
-            typeid_cast<ColumnVector<UInt64> &>(*pk_column).insert(static_cast<UInt64>(handle));
+            typeid_cast<ColumnVector<UInt64> &>(*pk_column).insert(static_cast<UInt64>(pk));
         else
-            pk_column->insert(Field(static_cast<Int64>(handle)));
+            pk_column->insert(Field(static_cast<Int64>(pk)));
     }
 }
 
@@ -256,9 +256,9 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
 
         // TODO: optimize columns' insertion, use better implementation rather than Field, it's terrible.
 
-        for (const auto & [handle, write_type, commit_ts, value_ptr] : data_list)
+        for (const auto & [pk, write_type, commit_ts, value_ptr] : data_list)
         {
-            std::ignore = handle;
+            std::ignore = pk;
 
             // Ignore data after the start_ts.
             if (commit_ts > start_ts)
