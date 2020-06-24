@@ -65,7 +65,9 @@ private:
 
     void applyRenameLogicalTable(TiDB::DBInfoPtr new_db_info, TiDB::TableInfoPtr new_table_info, ManageableStoragePtr storage);
 
-    void applyRenamePhysicalTable(TiDB::DBInfoPtr new_db_info, TiDB::TableInfoPtr new_table_info, ManageableStoragePtr storage);
+    void applyRenamePhysicalTable(TiDB::DBInfoPtr new_db_info, TiDB::TableInfo & new_table_info, ManageableStoragePtr storage);
+
+    void applyExchangeTablePartition(const SchemaDiff & diff);
 };
 
 } // namespace DB

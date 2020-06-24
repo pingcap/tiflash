@@ -139,6 +139,16 @@ public:
     }
 };
 
+AffectedOption::AffectedOption(Poco::JSON::Object::Ptr json) { deserialize(json); }
+
+void AffectedOption::deserialize(Poco::JSON::Object::Ptr json)
+{
+    schema_id = json->getValue<Int64>("schema_id");
+    table_id = json->getValue<Int64>("table_id");
+    old_table_id = json->getValue<Int64>("old_table_id");
+    old_schema_id = json->getValue<Int64>("old_schema_id");
+}
+
 void SchemaDiff::deserialize(const String & data)
 {
     Poco::JSON::Parser parser;
@@ -151,6 +161,18 @@ void SchemaDiff::deserialize(const String & data)
 
     old_table_id = obj->getValue<Int64>("old_table_id");
     old_schema_id = obj->getValue<Int64>("old_schema_id");
+
+    affected_opts.clear();
+    auto affected_arr = obj->getArray("affected_options");
+    if (!affected_arr.isNull())
+    {
+        for (size_t i = 0; i < affected_arr->size(); i++)
+        {
+            auto affected_opt_json = affected_arr->getObject(i);
+            AffectedOption affected_option(affected_opt_json);
+            affected_opts.emplace_back(affected_option);
+        }
+    }
 }
 
 Int64 SchemaGetter::getVersion()
