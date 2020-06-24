@@ -1451,6 +1451,13 @@ bool DeltaMergeStore::isSegmentValid(const SegmentPtr & segment)
     if (it == segments.end())
     {
         LOG_DEBUG(log, "Segment [" << segment->segmentId() << "] not found in segment map");
+
+        auto it2 = id_to_segment.find(segment->segmentId());
+        if (it2 != id_to_segment.end())
+        {
+            LOG_DEBUG(log,
+                      "Found segment with same id in id_to_segment: " << it2->second->info() << ", while my segment: " << segment->info());
+        }
         return false;
     }
     auto & cur_segment = it->second;

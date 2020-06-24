@@ -1037,8 +1037,8 @@ String Segment::info() const
 {
     std::stringstream s;
     s << "{[id:" << segment_id << "], [next:" << next_segment_id << "], [epoch:" << epoch << "], [range:" << range.toString()
-      << "], [delta rows:" << delta->getRows() << "], [delete ranges:" << delta->getDeletes() << "], [stable(" << stable->getDMFilesString()
-      << "):" << stable->getRows() << "]}";
+      << "], [pk_range:" << pk_range->toString() << "], [delta rows:" << delta->getRows() << "], [delete ranges:" << delta->getDeletes()
+      << "], [stable(" << stable->getDMFilesString() << "):" << stable->getRows() << "]}";
     return s.str();
 }
 
