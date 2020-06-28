@@ -49,4 +49,4 @@ echo "Cluster Manager Version Info"
 cat $version_file
 echo ""
 
-pyinstaller flash_cluster_manager.py -y
+pyinstaller flash_cluster_manager.py -y --hidden-import pkg_resources.py2_warn
