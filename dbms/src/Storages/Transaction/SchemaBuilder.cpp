@@ -382,7 +382,9 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
             break;
         }
         case SchemaActionAddColumn:
+        case SchemaActionAddColumns:
         case SchemaActionDropColumn:
+        case SchemaActionDropColumns:
         case SchemaActionModifyColumn:
         case SchemaActionSetDefaultValue:
         // Add primary key change primary keys to not null, so it's equal to alter table for tiflash.
