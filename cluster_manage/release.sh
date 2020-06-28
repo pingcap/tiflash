@@ -25,7 +25,7 @@ else
 fi
 
 git_hash=`git log -1 --format="%H"`
-git_branch=`git symbolic-ref --short HEAD`
+git_branch=`git symbolic-ref -q --short HEAD || git describe --tags --exact-match`
 version_file='version.py'
 git_hash_info="git_hash = '$git_hash'"
 overwrite="true"
@@ -49,4 +49,4 @@ echo "Cluster Manager Version Info"
 cat $version_file
 echo ""
 
-pyinstaller flash_cluster_manager.py -y
+pyinstaller flash_cluster_manager.py -y --hidden-import pkg_resources.py2_warn
