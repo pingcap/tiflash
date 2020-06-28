@@ -394,12 +394,9 @@ std::string Region::getDebugString(std::stringstream & ss) const
     {
         UInt64 index = meta.appliedIndex();
         const auto & [ver, conf_ver, range] = meta.dumpVersionRange();
-        ss << ", index " << index << ", table " << mapped_table_id << ", ver " << ver << " conf_ver " << conf_ver << ", range [";
-        const auto handle_range = range->getHandleRangeByTable(mapped_table_id);
-        handle_range.first.toString(ss);
-        ss << ',';
-        handle_range.second.toString(ss);
-        ss << "), state " << raft_serverpb::PeerState_Name(peerState());
+        std::ignore = range;
+        ss << ", index " << index << ", table " << mapped_table_id << ", ver " << ver << " conf_ver " << conf_ver << ", state "
+           << raft_serverpb::PeerState_Name(peerState());
     }
     ss << "}";
     return ss.str();
@@ -520,9 +517,9 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const Timestamp 
     // first check, remove duplicate data in current region.
     for (auto write_map_it = write_map.begin(); write_map_it != write_map.end(); ++write_map_it)
     {
-        const auto & [handle, ts] = write_map_it->first;
+        const auto & [pk, ts] = write_map_it->first;
 
-        if (auto it = handle_map.find(handle); it != handle_map.end())
+        if (auto it = handle_map.find(pk); it != handle_map.end())
         {
             const auto & [ori_ts, ori_del] = it->second;
 
@@ -534,7 +531,7 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const Timestamp 
                 if (is_deleted != ori_del)
                 {
                     LOG_ERROR(log,
-                        __FUNCTION__ << ": WriteType is not equal, handle: " << handle << ", tso: " << ts << ", original: " << ori_del
+                        __FUNCTION__ << ": WriteType is not equal, handle: " << it->first << ", tso: " << ts << ", original: " << ori_del
                                      << " , current: " << is_deleted);
                     throw Exception(std::string(__PRETTY_FUNCTION__) + ": original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
                 }

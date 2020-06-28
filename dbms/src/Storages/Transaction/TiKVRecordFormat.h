@@ -120,6 +120,11 @@ inline TableID getTableId(const DecodedTiKVKey & key) { return decodeInt64(read<
 
 inline HandleID getHandle(const DecodedTiKVKey & key) { return decodeInt64(read<UInt64>(key.data() + RAW_KEY_NO_HANDLE_SIZE)); }
 
+inline RawTiDBPK getRawTiDBPK(const DecodedTiKVKey & key)
+{
+    return std::make_shared<const std::string>(key.begin() + RAW_KEY_NO_HANDLE_SIZE, key.end());
+}
+
 inline TableID getTableId(const TiKVKey & key) { return getTableId(decodeTiKVKey(key)); }
 
 inline HandleID getHandle(const TiKVKey & key) { return getHandle(decodeTiKVKey(key)); }
