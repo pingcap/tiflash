@@ -1,7 +1,3 @@
-//
-// Created by linkmyth on 2020-06-28.
-//
-
 #include <IO/EncryptedFileProvider.h>
 #include <IO/EncryptedRandomAccessFile.h>
 #include <IO/EncryptedWritableFile.h>

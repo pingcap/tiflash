@@ -1,7 +1,3 @@
-//
-// Created by linkmyth on 2020-06-28.
-//
-
 #include <IO/PosixFileProvider.h>
 #include <IO/PosixRandomAccessFile.h>
 #include <IO/PosixWritableFile.h>

@@ -12,7 +12,7 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
                            size_t                      min_compress_block_size_,
                            size_t                      max_compress_block_size_,
                            const CompressionSettings & compression_settings_,
-                           FileProviderPtr             file_provider_,
+                           FileProviderPtr &           file_provider_,
                            bool                        wal_mode_)
     : dmfile(dmfile_),
       write_columns(write_columns_),
@@ -21,7 +21,7 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
       compression_settings(compression_settings_),
       wal_mode(wal_mode_),
       pack_stat_file(dmfile->packStatPath()),
-      file_provider(std::move(file_provider_))
+      file_provider(file_provider_)
 {
     dmfile->setStatus(DMFile::Status::WRITING);
     for (auto & cd : write_columns)

@@ -3,7 +3,6 @@
 #include <IO/RandomAccessFile.h>
 #include <string>
 
-
 namespace DB
 {
 class PosixRandomAccessFile : public RandomAccessFile

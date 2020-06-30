@@ -111,7 +111,7 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
                            ColumnCachePtr &   column_cache_,
                            size_t             aio_threshold,
                            size_t             max_read_buffer_size,
-                           FileProviderPtr    file_provider_,
+                           FileProviderPtr &  file_provider_,
                            size_t             rows_threshold_per_read_)
     : dmfile(dmfile_),
       read_columns(read_columns_),
@@ -126,7 +126,7 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
       enable_column_cache(enable_column_cache_),
       column_cache(column_cache_),
       rows_threshold_per_read(rows_threshold_per_read_),
-      file_provider(std::move(file_provider_)),
+      file_provider(file_provider_),
       log(&Logger::get("DMFileReader"))
 {
     if (dmfile->getStatus() != DMFile::Status::READABLE)

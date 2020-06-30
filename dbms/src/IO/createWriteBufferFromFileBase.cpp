@@ -43,8 +43,8 @@ WriteBufferFromFileBase * createWriteBufferFromFileBase(const std::string & file
     }
 }
 
-WriteBufferFromFileBase * createWriteBufferFromFileBase(FileProviderPtr & file_provider, const std::string & filename_, size_t estimated_size,
-        size_t aio_threshold, size_t buffer_size_, int flags_, mode_t mode, char * existing_memory_,
+WriteBufferFromFileBase * createWriteBufferFromFileBase(FileProviderPtr & file_provider, const std::string & filename_,
+        size_t estimated_size, size_t aio_threshold, size_t buffer_size_, int flags_, mode_t mode, char * existing_memory_,
         size_t alignment)
 {
     if ((aio_threshold == 0) || (estimated_size < aio_threshold))

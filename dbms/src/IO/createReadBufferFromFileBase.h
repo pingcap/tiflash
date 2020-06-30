@@ -24,8 +24,7 @@ std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBase(const std::
         char * existing_memory_ = nullptr,
         size_t alignment = 0);
 
-std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBase(
-        FileProviderPtr &file_provider,
+std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBase(FileProviderPtr &file_provider,
         const std::string & filename_,
         size_t estimated_size,
         size_t aio_threshold,
