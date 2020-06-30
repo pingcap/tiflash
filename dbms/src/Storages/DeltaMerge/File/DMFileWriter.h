@@ -27,7 +27,7 @@ public:
                const DataTypePtr & type,
                CompressionSettings compression_settings,
                size_t              max_compress_block_size,
-               FileProviderPtr    file_provider,
+               FileProviderPtr     file_provider,
                bool                do_index)
             : plain_file(createWriteBufferFromFileBase(file_provider, dmfile->colDataPath(file_base_name), 0, 0, max_compress_block_size)),
               plain_hashing(*plain_file),
@@ -73,7 +73,7 @@ public:
                  size_t                      min_compress_block_size_,
                  size_t                      max_compress_block_size_,
                  const CompressionSettings & compression_settings_,
-                 FileProviderPtr file_provider_,
+                 FileProviderPtr             file_provider_,
                  bool                        wal_mode_ = false);
 
     void write(const Block & block, size_t not_clean_rows);

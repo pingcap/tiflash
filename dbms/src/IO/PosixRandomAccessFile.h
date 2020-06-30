@@ -1,33 +1,31 @@
 #pragma once
 
-#include <string>
 #include <IO/RandomAccessFile.h>
+#include <string>
 
 
-namespace DB {
-    class PosixRandomAccessFile : public RandomAccessFile {
-    public:
-        PosixRandomAccessFile(const std::string &file_name_, int flags);
+namespace DB
+{
+class PosixRandomAccessFile : public RandomAccessFile
+{
+public:
+    PosixRandomAccessFile(const std::string & file_name_, int flags);
 
-        ~PosixRandomAccessFile() override;
+    ~PosixRandomAccessFile() override;
 
-        ssize_t read(char *buf, size_t size) const override;
+    ssize_t read(char * buf, size_t size) const override;
 
-        ssize_t pread(char *buf, size_t size, off_t offset) const override;
+    ssize_t pread(char * buf, size_t size, off_t offset) const override;
 
-        std::string getFileName() const override {
-            return file_name;
-        }
+    std::string getFileName() const override { return file_name; }
 
-        int getFd() const override {
-            return fd;
-        }
+    int getFd() const override { return fd; }
 
-        void close() override;
+    void close() override;
 
-    private:
-        std::string file_name;
-        int fd;
-    };
+private:
+    std::string file_name;
+    int fd;
+};
 
-}
+} // namespace DB

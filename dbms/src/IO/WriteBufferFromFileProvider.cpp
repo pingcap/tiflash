@@ -4,35 +4,33 @@
 
 #include "WriteBufferFromFileProvider.h"
 
-namespace DB {
+namespace DB
+{
 namespace ErrorCodes
 {
-    extern const int CANNOT_WRITE_TO_FILE_DESCRIPTOR;
-    extern const int CANNOT_FSYNC;
-    extern const int CANNOT_SEEK_THROUGH_FILE;
-    extern const int CANNOT_TRUNCATE_FILE;
-}
+extern const int CANNOT_WRITE_TO_FILE_DESCRIPTOR;
+extern const int CANNOT_FSYNC;
+extern const int CANNOT_SEEK_THROUGH_FILE;
+extern const int CANNOT_TRUNCATE_FILE;
+} // namespace ErrorCodes
 
-void WriteBufferFromFileProvider::close()
-{
-    file->close();
-}
+void WriteBufferFromFileProvider::close() { file->close(); }
 
-WriteBufferFromFileProvider::WriteBufferFromFileProvider(
-    FileProviderPtr &file_provider_,
-    const std::string &file_name_,
+WriteBufferFromFileProvider::WriteBufferFromFileProvider(FileProviderPtr & file_provider_,
+    const std::string & file_name_,
     size_t buf_size,
     int flags,
     mode_t mode,
-    char *existing_memory,
+    char * existing_memory,
     size_t alignment)
     : WriteBufferFromFileDescriptor(-1, buf_size, existing_memory, alignment),
-    file(file_provider_->NewWritableFile(file_name_, flags, mode))
+      file(file_provider_->NewWritableFile(file_name_, flags, mode))
 {
     fd = file->getFd();
 }
 
-void WriteBufferFromFileProvider::nextImpl() {
+void WriteBufferFromFileProvider::nextImpl()
+{
     if (!offset())
         return;
 
@@ -53,8 +51,6 @@ void WriteBufferFromFileProvider::nextImpl() {
         if (res > 0)
             bytes_written += res;
     }
-
 }
 
-}
-
+} // namespace DB

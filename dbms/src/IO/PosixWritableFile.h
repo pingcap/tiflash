@@ -1,37 +1,32 @@
 #pragma once
 
-#include <string>
 #include <IO/WritableFile.h>
+#include <string>
 
 #ifndef O_DIRECT
 #define O_DIRECT 00040000
 #endif
 
-namespace DB {
-    class PosixWritableFile : public WritableFile {
-    public:
-        PosixWritableFile(
-            const std::string & file_name_,
-            int flags,
-            mode_t mode);
+namespace DB
+{
+class PosixWritableFile : public WritableFile
+{
+public:
+    PosixWritableFile(const std::string & file_name_, int flags, mode_t mode);
 
-        ~PosixWritableFile() override;
+    ~PosixWritableFile() override;
 
-        ssize_t write(const char *buf, size_t size) const override;
+    ssize_t write(const char * buf, size_t size) const override;
 
-        std::string getFileName() const override {
-            return file_name;
-        }
+    std::string getFileName() const override { return file_name; }
 
-        int getFd() const override {
-            return fd;
-        }
+    int getFd() const override { return fd; }
 
-        void close() override;
+    void close() override;
 
-    private:
-        std::string file_name;
-        int fd;
-    };
+private:
+    std::string file_name;
+    int fd;
+};
 
-}
+} // namespace DB

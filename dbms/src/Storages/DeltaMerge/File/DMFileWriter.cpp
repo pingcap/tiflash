@@ -12,7 +12,7 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
                            size_t                      min_compress_block_size_,
                            size_t                      max_compress_block_size_,
                            const CompressionSettings & compression_settings_,
-                           FileProviderPtr file_provider_,
+                           FileProviderPtr             file_provider_,
                            bool                        wal_mode_)
     : dmfile(dmfile_),
       write_columns(write_columns_),

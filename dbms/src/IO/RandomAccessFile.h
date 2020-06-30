@@ -6,22 +6,24 @@
 #define O_DIRECT 00040000
 #endif
 
-namespace DB {
+namespace DB
+{
 
-    class RandomAccessFile {
-    public:
-        virtual ~RandomAccessFile() = 0;
+class RandomAccessFile
+{
+public:
+    virtual ~RandomAccessFile() = 0;
 
-        virtual ssize_t read(char *buf, size_t size) const = 0;
+    virtual ssize_t read(char * buf, size_t size) const = 0;
 
-        virtual ssize_t pread(char *buf, size_t size, off_t offset) const = 0;
+    virtual ssize_t pread(char * buf, size_t size, off_t offset) const = 0;
 
-        virtual std::string getFileName() const = 0;
+    virtual std::string getFileName() const = 0;
 
-        virtual int getFd() const = 0;
+    virtual int getFd() const = 0;
 
-        virtual void close() = 0;
-    };
+    virtual void close() = 0;
+};
 
-    using RandomAccessFilePtr = std::shared_ptr<RandomAccessFile>;
-}
+using RandomAccessFilePtr = std::shared_ptr<RandomAccessFile>;
+} // namespace DB

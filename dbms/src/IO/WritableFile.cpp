@@ -1,5 +1,6 @@
 #include <IO/WritableFile.h>
 
-namespace DB {
-    WritableFile::~WritableFile() = default;
+namespace DB
+{
+WritableFile::~WritableFile() = default;
 }
