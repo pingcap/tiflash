@@ -376,6 +376,8 @@ std::shared_ptr<TiDB::ITiDBCollator> getCollatorFromExpr(const tipb::Expr & expr
     return ret;
 }
 
+bool hasUnsignedFlag(const tipb::FieldType & tp) { return tp.flag() & TiDB::ColumnFlagUnsigned; }
+
 extern const String UniqRawResName;
 
 std::unordered_map<tipb::ExprType, String> agg_func_map({
@@ -401,7 +403,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::CastIntAsInt, "cast"},
     //{tipb::ScalarFuncSig::CastIntAsReal, "cast"},
     //{tipb::ScalarFuncSig::CastIntAsString, "cast"},
-    {tipb::ScalarFuncSig::CastIntAsDecimal, "CAST"},
+    {tipb::ScalarFuncSig::CastIntAsDecimal, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastIntAsTime, "cast"},
     //{tipb::ScalarFuncSig::CastIntAsDuration, "cast"},
     //{tipb::ScalarFuncSig::CastIntAsJson, "cast"},
@@ -409,7 +411,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::CastRealAsInt, "cast"},
     //{tipb::ScalarFuncSig::CastRealAsReal, "cast"},
     //{tipb::ScalarFuncSig::CastRealAsString, "cast"},
-    {tipb::ScalarFuncSig::CastRealAsDecimal, "CAST"},
+    {tipb::ScalarFuncSig::CastRealAsDecimal, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastRealAsTime, "cast"},
     //{tipb::ScalarFuncSig::CastRealAsDuration, "cast"},
     //{tipb::ScalarFuncSig::CastRealAsJson, "cast"},
@@ -417,7 +419,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::CastDecimalAsInt, "cast"},
     //{tipb::ScalarFuncSig::CastDecimalAsReal, "cast"},
     //{tipb::ScalarFuncSig::CastDecimalAsString, "cast"},
-    {tipb::ScalarFuncSig::CastDecimalAsDecimal, "CAST"},
+    {tipb::ScalarFuncSig::CastDecimalAsDecimal, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastDecimalAsTime, "cast"},
     //{tipb::ScalarFuncSig::CastDecimalAsDuration, "cast"},
     //{tipb::ScalarFuncSig::CastDecimalAsJson, "cast"},
@@ -434,7 +436,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::CastTimeAsReal, "cast"},
     //{tipb::ScalarFuncSig::CastTimeAsString, "cast"},
     //{tipb::ScalarFuncSig::CastTimeAsDecimal, "cast"},
-    {tipb::ScalarFuncSig::CastTimeAsTime, "CAST"},
+    {tipb::ScalarFuncSig::CastTimeAsTime, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastTimeAsDuration, "cast"},
     //{tipb::ScalarFuncSig::CastTimeAsJson, "cast"},
 

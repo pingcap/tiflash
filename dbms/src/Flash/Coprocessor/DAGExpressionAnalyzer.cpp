@@ -10,6 +10,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsConditional.h>
+#include <Functions/FunctionsTiDBConversion.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Set.h>
 #include <Interpreters/convertFieldToType.h>
@@ -121,15 +122,37 @@ static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr
     return analyzer->applyFunction(is_not_in ? "and" : "or", argument_names, actions, nullptr);
 }
 
+/// buildCastFunction build tidb_cast function
 static String buildCastFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
 {
+    static const String function_name = "tidb_cast";
+
     if (expr.children_size() != 1)
-    {
         throw Exception("Cast function only support one argument", ErrorCodes::COP_BAD_DAG_REQUEST);
-    }
+    if (!exprHasValidFieldType(expr))
+        throw Exception("CAST function without valid field type", ErrorCodes::COP_BAD_DAG_REQUEST);
+
     String name = analyzer->getActions(expr.children(0), actions);
-    name = analyzer->appendCastIfNeeded(expr, actions, name, true);
-    return name;
+    DataTypePtr expected_type = getDataTypeByFieldType(expr.field_type());
+
+    tipb::Expr type_expr;
+    constructStringLiteralTiExpr(type_expr, expected_type->getName());
+    auto type_expr_name = analyzer->getActions(type_expr, actions);
+
+    String result_name = genFuncString(function_name, {name, type_expr_name});
+    if (actions->getSampleBlock().has(result_name))
+        return result_name;
+
+    FunctionBuilderPtr function_builder = FunctionFactory::instance().get(function_name, analyzer->getContext());
+    FunctionBuilderTiDBCast * function_builder_tidb_cast = dynamic_cast<FunctionBuilderTiDBCast *>(function_builder.get());
+    // todo extract in_union from tipb::Expr
+    function_builder_tidb_cast->setInUnion(false);
+    function_builder_tidb_cast->setTiDBFieldType(&expr.field_type());
+
+    const ExpressionAction & apply_function
+        = ExpressionAction::applyFunction(function_builder, {name, type_expr_name}, result_name, nullptr);
+    actions->add(apply_function);
+    return result_name;
 }
 
 static String buildDateAddFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
@@ -194,7 +217,7 @@ static std::unordered_map<String, std::function<String(DAGExpressionAnalyzer *, 
         {"tidbIn", buildInFunction},
         {"tidbNotIn", buildInFunction},
         {"multiIf", buildMultiIfFunction},
-        {"CAST", buildCastFunction},
+        {"tidb_cast", buildCastFunction},
         {"date_add", buildDateAddFunction},
     });
 
@@ -412,8 +435,7 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
 // useless casts to all the timestamp columns, in order to avoid redundant cast, when cast the ts
 // column to the columns with session-level timezone info, the original ts columns with UTC timezone
 // are still kept, and the InterpreterDAG will choose the correct column based on encode type
-bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(
-    ExpressionActionsChain & chain, std::vector<bool> is_ts_column, bool keep_UTC_column)
+bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(ExpressionActionsChain & chain, std::vector<bool> is_ts_column, bool keep_UTC_column)
 {
     if (context.getTimezoneInfo().is_utc_timezone)
         return false;

@@ -40,5 +40,6 @@ TiDB::ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type);
 UInt8 getFieldLengthForArrowEncode(Int32 tp);
 bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::EncodeType encode_type);
 std::shared_ptr<TiDB::ITiDBCollator> getCollatorFromExpr(const tipb::Expr & expr);
+bool hasUnsignedFlag(const tipb::FieldType & tp);
 
 } // namespace DB
