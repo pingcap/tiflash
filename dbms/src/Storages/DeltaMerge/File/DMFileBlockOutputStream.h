@@ -17,7 +17,8 @@ public:
                  context.getSettingsRef().min_compress_block_size,
                  context.getSettingsRef().max_compress_block_size,
                  // context.chooseCompressionSettings(0, 0), TODO: should enable this, and make unit testes work.
-                 CompressionSettings(CompressionMethod::LZ4))
+                 CompressionSettings(CompressionMethod::LZ4),
+                 context.getFileProvider())
     {
     }
 

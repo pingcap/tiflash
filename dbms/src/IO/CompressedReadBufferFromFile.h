@@ -2,6 +2,7 @@
 
 #include <IO/CompressedReadBufferBase.h>
 #include <IO/ReadBufferFromFileBase.h>
+#include <IO/FileProvider.h>
 
 #include <time.h>
 #include <memory>
@@ -30,6 +31,10 @@ private:
 
 public:
     CompressedReadBufferFromFile(
+        const std::string & path, size_t estimated_size, size_t aio_threshold, size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE);
+
+    CompressedReadBufferFromFile(
+        FileProviderPtr& file_provider,
         const std::string & path, size_t estimated_size, size_t aio_threshold, size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE);
 
     void seek(size_t offset_in_compressed_file, size_t offset_in_decompressed_block);
