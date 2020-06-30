@@ -73,7 +73,7 @@ public:
                  size_t                      min_compress_block_size_,
                  size_t                      max_compress_block_size_,
                  const CompressionSettings & compression_settings_,
-                 FileProviderPtr &           file_provider_,
+                 const FileProviderPtr &           file_provider_,
                  bool                        wal_mode_ = false);
 
     void write(const Block & block, size_t not_clean_rows);

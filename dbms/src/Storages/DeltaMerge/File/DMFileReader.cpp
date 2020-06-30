@@ -111,7 +111,7 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
                            ColumnCachePtr &   column_cache_,
                            size_t             aio_threshold,
                            size_t             max_read_buffer_size,
-                           FileProviderPtr &  file_provider_,
+                           const FileProviderPtr &  file_provider_,
                            size_t             rows_threshold_per_read_)
     : dmfile(dmfile_),
       read_columns(read_columns_),
