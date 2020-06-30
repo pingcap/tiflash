@@ -1,8 +1,4 @@
-//
-// Created by linkmyth on 2020-06-30.
-//
-
-#include "WriteBufferFromFileProvider.h"
+#include <IO/WriteBufferFromFileProvider.h>
 
 namespace DB
 {
