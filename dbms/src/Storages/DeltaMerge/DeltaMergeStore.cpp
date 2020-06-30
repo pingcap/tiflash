@@ -394,11 +394,9 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
 
     size_t offset = 0;
     size_t limit;
-    //    const auto & handle_data = getColumnVectorData<Handle>(block, block.getPositionByName(EXTRA_HANDLE_COLUMN_NAME));
 
     while (offset != rows)
     {
-        //        auto start_handle = handle_data[offset];
         PKValue start_pk{&block, offset};
 
         WriteBatches wbs(storage_pool);
@@ -506,11 +504,8 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
 
     PKRange cur_range = delete_range;
 
-    //    auto start_handle = delete_range.start;
-    //    while (start_handle < delete_range.end)
     while (!cur_range.isEmpty())
     {
-        //        Handle end_handle;
         PKRangePtr segment_range;
 
         // Keep trying until succeeded.
@@ -520,7 +515,6 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
             {
                 std::shared_lock lock(read_write_mutex);
 
-                //                auto segment_it = segments.upper_bound(start_handle);
                 auto segment_it = segments.upper_bound(cur_range.getStart());
                 if (segment_it == segments.end())
                 {
@@ -535,12 +529,8 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
 
             segment_range = segment->getPKRange();
 
-            //            auto range = segment->getRange();
-            //            end_handle = range.end;
-
             // Write could fail, because other threads could already updated the instance. Like split/merge, merge delta.
 
-            //            if (segment->write(*dm_context, delete_range.shrink(range)))
             if (segment->write(*dm_context, PKRange::intersect(delete_range, *segment_range)))
             {
                 updated_segments.push_back(segment);
@@ -556,8 +546,6 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
         pk_creator.setEnd(delete_range.getEnd());
 
         cur_range = pk_creator.getRange();
-
-        //        start_handle = end_handle;
     }
 
     for (auto & segment : updated_segments)
@@ -566,11 +554,9 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
 
 void DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const HandleRange & handle_range)
 {
-    //    auto start_handle = range.start;
     PKRange cur_range = PKRange::fromHandleRange(handle_range);
     while (!cur_range.isEmpty())
     {
-        //        Handle end_handle;
         PKRangePtr segment_range;
 
         // Keep trying until succeeded.
@@ -588,8 +574,6 @@ void DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const HandleRa
                 }
                 segment = segment_it->second;
             }
-            //            auto seg_range = segment->getPKRange();
-            //            end_handle     = seg_range.end;
             segment_range = segment->getPKRange();
 
             // Flush could fail.
@@ -634,11 +618,9 @@ void DeltaMergeStore::compact(const Context & db_context, const HandleRange & ha
 {
     auto dm_context = newDMContext(db_context, db_context.getSettingsRef());
 
-    //    auto start_handle = range.start;
     PKRange cur_range = PKRange::fromHandleRange(handle_range);
     while (!cur_range.isEmpty())
     {
-        //        Handle end_handle;
         PKRangePtr segment_range;
         // Keep trying until succeeded.
         while (true)
@@ -655,8 +637,6 @@ void DeltaMergeStore::compact(const Context & db_context, const HandleRange & ha
                 }
                 segment = segment_it->second;
             }
-            //            auto seg_range = segment->getRange();
-            //            end_handle     = seg_range.end;
             segment_range = segment->getPKRange();
 
             // compact could fail.
@@ -666,7 +646,6 @@ void DeltaMergeStore::compact(const Context & db_context, const HandleRange & ha
             }
         }
 
-        //        start_handle = end_handle;
         if (segment_range->isEndInfinite())
             break;
 

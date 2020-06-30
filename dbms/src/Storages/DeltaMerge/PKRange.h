@@ -100,7 +100,7 @@ size_t lowerBound(const PrimaryKey & pk, const Block & block, size_t first, size
 
 } // namespace
 
-/// PKRange is a range of primary values, which consisted by [start, end). Start is Includesive and end is exclusive.
+/// PKRange is a range of primary values, which consisted by [start, end). Start is inclusive and end is exclusive.
 class PKRange
 {
 private:
