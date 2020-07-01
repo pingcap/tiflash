@@ -12,6 +12,8 @@ public:
 
     ~PosixRandomAccessFile() override;
 
+    off_t seek(off_t offset, int whence) const override;
+
     ssize_t read(char * buf, size_t size) const override;
 
     ssize_t pread(char * buf, size_t size, off_t offset) const override;

@@ -22,7 +22,26 @@ void ReadBufferFromFileProvider::close() { file->close(); }
 
 bool ReadBufferFromFileProvider::nextImpl()
 {
-    size_t bytes_read = file->read(internal_buffer.begin(), internal_buffer.size());
+    size_t bytes_read = 0;
+    while (!bytes_read)
+    {
+        ssize_t res = 0;
+        {
+            res = file->read(internal_buffer.begin(), internal_buffer.size());
+        }
+        if (!res)
+            break;
+
+        if (-1 == res && errno != EINTR)
+        {
+            throwFromErrno("Cannot read from file " + getFileName(), ErrorCodes::CANNOT_READ_FROM_FILE_DESCRIPTOR);
+        }
+
+        if (res > 0)
+            bytes_read += res;
+    }
+
+    pos_in_file += bytes_read;
 
     if (bytes_read)
     {
@@ -33,5 +52,7 @@ bool ReadBufferFromFileProvider::nextImpl()
 
     return true;
 }
+
+off_t ReadBufferFromFileProvider::doSeekInFile(off_t offset, int whence) { return file->seek(offset, whence); }
 
 } // namespace DB

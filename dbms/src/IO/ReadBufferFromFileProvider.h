@@ -31,6 +31,9 @@ public:
     int getFD() const override { return file->getFd(); }
 
 private:
+    off_t doSeekInFile(off_t offset, int whence) override;
+
+private:
     RandomAccessFilePtr file;
 };
 } // namespace DB

@@ -57,29 +57,9 @@ void PosixRandomAccessFile::close()
     fd = -1;
 }
 
-ssize_t PosixRandomAccessFile::read(char * buf, size_t size) const
-{
-    size_t bytes_read = 0;
-    size_t bytes_left = size;
-    while (bytes_left > 0)
-    {
-        ssize_t res = 0;
-        {
-            res = ::read(fd, buf, bytes_left);
-        }
-        if (!res)
-            break;
+off_t PosixRandomAccessFile::seek(off_t offset, int whence) const { return ::lseek(fd, offset, whence); }
 
-        if (-1 == res && errno != EINTR)
-        {
-            throwFromErrno("Cannot read from file " + getFileName(), ErrorCodes::CANNOT_READ_FROM_FILE_DESCRIPTOR);
-        }
-
-        bytes_read += res;
-        bytes_left -= res;
-    }
-    return bytes_read;
-}
+ssize_t PosixRandomAccessFile::read(char * buf, size_t size) const { return ::read(fd, buf, size); }
 
 ssize_t PosixRandomAccessFile::pread(char * buf, size_t size, off_t offset) const { return ::pread(fd, buf, size, offset); }
 

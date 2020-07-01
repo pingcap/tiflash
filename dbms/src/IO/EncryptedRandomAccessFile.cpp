@@ -8,6 +8,8 @@ namespace DB
 
 void EncryptedRandomAccessFile::close() { file->close(); }
 
+off_t EncryptedRandomAccessFile::seek(off_t offset, int whence) const { return file->seek(offset, whence); }
+
 ssize_t EncryptedRandomAccessFile::read(char * buf, size_t size) const
 {
     ssize_t bytes_read = file->read(buf, size);
