@@ -161,7 +161,7 @@ struct ContextShared
     PartPathSelectorPtr part_path_selector_ptr;             /// PartPathSelector service instance.
     PathCapacityMetricsPtr path_capacity_ptr;               /// Path capacity metrics
     TiFlashMetricsPtr tiflash_metrics;                      /// TiFlash metrics registry.
-    FileProviderPtr file_provider;                      /// TiFlash metrics registry.
+    FileProviderPtr file_provider;                          /// TiFlash metrics registry.
 
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
