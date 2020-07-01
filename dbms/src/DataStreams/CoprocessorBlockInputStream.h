@@ -29,10 +29,9 @@ class CoprocessorBlockInputStream : public IProfilingBlockInputStream
     }
 
 public:
-    CoprocessorBlockInputStream(pingcap::kv::Cluster * cluster_, const pingcap::coprocessor::Request & req_, const DAGSchema & schema_,
-        int concurrency, pingcap::kv::StoreType store_type)
-        : req(req_),
-          resp_iter(pingcap::coprocessor::Client::send(cluster_, &req, concurrency, store_type)),
+    CoprocessorBlockInputStream(
+        pingcap::kv::Cluster * cluster_, std::vector<pingcap::coprocessor::copTask> tasks, const DAGSchema & schema_, int concurrency)
+        : resp_iter(std::move(tasks), cluster_, concurrency, &Logger::get("pingcap/coprocessor")),
           schema(schema_),
           sample_block(getSampleBlock()),
           log(&Logger::get("pingcap/coprocessor"))
@@ -52,8 +51,7 @@ public:
             if (!has_next)
                 return {};
         }
-
-        auto chunk = std::move(chunk_queue.front());
+        auto chunk = chunk_queue.front();
         chunk_queue.pop();
         switch (resp->encode_type())
         {
@@ -101,7 +99,6 @@ private:
         return true;
     }
 
-    pingcap::coprocessor::Request req;
     pingcap::coprocessor::ResponseIter resp_iter;
     DAGSchema schema;
 
