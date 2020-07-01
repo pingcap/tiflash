@@ -11,6 +11,11 @@
 namespace DB
 {
 
+namespace ErrorCodes
+{
+extern const int LOGICAL_ERROR;
+}
+
 namespace
 {
 inline DB::HandleID getRangeEndID(const DB::TiKVHandle::Handle<HandleID> & end)
@@ -65,6 +70,17 @@ inline DM::HandleRanges getQueryRanges(const DB::MvccQueryInfo::RegionsQueryInfo
         const size_t region_idx = sort_index[i];
         const auto & region = regions[region_idx];
         const auto & range_in_table = region.range_in_table;
+
+        if (range_in_table.first.type == DB::TiKVHandle::HandleIDType::MAX)
+        {
+            // Ignore [Max, Max)
+            if (range_in_table.second.type == DB::TiKVHandle::HandleIDType::MAX)
+                continue;
+            else
+                throw Exception("Can not merge invalid region range: [" + range_in_table.first.toString() + ","
+                        + range_in_table.second.toString() + ")",
+                    ErrorCodes::LOGICAL_ERROR);
+        }
 
         if (i == 0)
         {
