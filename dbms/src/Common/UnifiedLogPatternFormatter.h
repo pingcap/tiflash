@@ -51,7 +51,12 @@ void UnifiedLogPatternFormatter::format(const Poco::Message & msg, std::string &
     if (msg.getSourceFile())
         source_str = "<" + std::string(msg.getSourceFile()) + ":" + std::to_string(msg.getSourceLine()) + ">";
 
-    std::string message = msg.getText();
+    std::string message;
+    std::string source = msg.getSource();
+    if (!source.empty())
+        message = source + ": " + msg.getText();
+    else
+        message = msg.getText();
 
     std::string thread_id_str = "thread_id=" + std::to_string(Poco::ThreadNumber::get());
 
