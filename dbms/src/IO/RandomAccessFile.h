@@ -12,7 +12,7 @@ namespace DB
 class RandomAccessFile
 {
 public:
-    virtual ~RandomAccessFile() = 0;
+    virtual ~RandomAccessFile() = default;
 
     virtual off_t seek(off_t offset, int whence) const = 0;
 

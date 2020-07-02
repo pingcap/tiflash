@@ -54,12 +54,7 @@ WriteBufferFromFileBase * createWriteBufferFromFileBase(FileProviderPtr & file_p
     }
     else
     {
-#if !defined(__APPLE__) && !defined(__FreeBSD__) && !defined(_MSC_VER)
-        ProfileEvents::increment(ProfileEvents::CreatedWriteBufferAIO);
-        return new WriteBufferAIO(filename_, buffer_size_, flags_, mode, existing_memory_);
-#else
-        throw Exception("AIO is not implemented yet on MacOS X", ErrorCodes::NOT_IMPLEMENTED);
-#endif
+        throw Exception("AIO is not implemented when create file using FileProvider", ErrorCodes::NOT_IMPLEMENTED);
     }
 }
 

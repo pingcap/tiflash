@@ -52,12 +52,7 @@ std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBase(FileProvide
     }
     else
     {
-#if !defined(__APPLE__) && !defined(__FreeBSD__) && !defined(_MSC_VER)
-        ProfileEvents::increment(ProfileEvents::CreatedReadBufferAIO);
-        return std::make_unique<ReadBufferAIO>(filename_, buffer_size_, flags_, existing_memory_);
-#else
-        throw Exception("AIO is not implemented yet on MacOS X", ErrorCodes::NOT_IMPLEMENTED);
-#endif
+        throw Exception("AIO is not implemented when create file using FileProvider", ErrorCodes::NOT_IMPLEMENTED);
     }
 }
 

@@ -9,7 +9,7 @@ class WritableFile
 public:
     WritableFile() = default;
 
-    virtual ~WritableFile() = 0;
+    virtual ~WritableFile() = default;
 
     virtual ssize_t write(const char * buf, size_t size) const = 0;
 

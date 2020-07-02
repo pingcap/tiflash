@@ -21,7 +21,7 @@ public:
     WritableFilePtr newWritableFile(const std::string & file_name_, int flags = -1, mode_t mode = 0666)
     {
         return newWritableFileImpl(file_name_, flags, mode);
-    };
+    }
 
     virtual ~FileProvider() = 0;
 };

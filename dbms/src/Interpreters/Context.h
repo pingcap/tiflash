@@ -16,8 +16,6 @@
 #include <Interpreters/TimezoneInfo.h>
 #include <IO/CompressionSettings.h>
 #include <IO/FileProvider.h>
-#include <IO/PosixFileProvider.h>
-#include <IO/EncryptedFileProvider.h>
 #include <Storages/PartPathSelector.h>
 #include <Storages/Transaction/StorageEngineType.h>
 
