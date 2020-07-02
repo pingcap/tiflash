@@ -314,6 +314,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     auto mvcc_query_info = std::make_unique<MvccQueryInfo>();
     mvcc_query_info->resolve_locks = true;
     mvcc_query_info->read_tso = settings.read_tso;
+    // We need to validate regions snapshot after getting streams from storage.
     LearnerReadSnapshot learner_read_snapshot;
     std::unordered_map<RegionID, const RegionInfo &> region_retry;
     if (!dag.isBatchCop())
@@ -474,7 +475,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         {
             pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
             // After getting streams from storage, we need to validate if regions have changed after learner read.
-            validateQueryInfo(query_info.mvcc_query_info->regions_query_info, learner_read_snapshot, tmt, log);
+            validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
         }
         catch (DB::Exception & e)
         {
@@ -485,13 +486,15 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     }
     else
     {
+        // TODO: Note that if storage is (Txn)MergeTree, and any region exception thrown, we won't do retry here.
+        // Now we only support DeltaTree and don't do any extra check for storage type here.
         try
         {
             pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
             // After getting streams from storage, we need to validate if regions have changed after learner read.
             // If the version of region is changed, the `streams` may has less data because of compaction. For these reason, we
             // will throw RegionException directly.
-            validateQueryInfo(query_info.mvcc_query_info->regions_query_info, learner_read_snapshot, tmt, log);
+            validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
         }
         catch (DB::Exception & e)
         {

@@ -27,7 +27,7 @@ doLearnerRead(const TiDB::TableID table_id, //
 
 // After getting stream from storage, we should validate if regions have changed after learner read.
 // If some region(s) changed, it will throw RegionException
-void validateQueryInfo(const MvccQueryInfo::RegionsQueryInfo & regions_query_info, //
-    const LearnerReadSnapshot & regions_snapshot, TMTContext & tmt, Poco::Logger * log);
+void validateQueryInfo(
+    const MvccQueryInfo & mvcc_query_info, const LearnerReadSnapshot & regions_snapshot, TMTContext & tmt, Poco::Logger * log);
 
 } // namespace DB

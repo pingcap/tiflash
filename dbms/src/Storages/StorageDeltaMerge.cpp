@@ -443,20 +443,10 @@ BlockInputStreams StorageDeltaMerge::read( //
         /// Else a request comes from CH-client, we set `concurrent_num` by num_streams.
         size_t concurrent_num = std::max<size_t>(num_streams * mvcc_query_info.concurrent, 1);
 
-        // With `no_kvstore` is true, we do not do learner read
-        // LearnerReadSnapshot regions_in_learner_read;
-        if (likely(!select_query.no_kvstore))
-        {
-            /// Learner read.
-            // regions_in_learner_read = doLearnerRead(tidb_table_info.id, mvcc_query_info.regions_query_info, mvcc_query_info.resolve_locks,
-            //     mvcc_query_info.read_tso, concurrent_num, tmt, log);
-
-            if (likely(!mvcc_query_info.regions_query_info.empty()))
-            {
-                /// For learner read from TiDB/TiSpark, we set num_streams by `concurrent_num`
-                num_streams = concurrent_num;
-            } // else learner read from ch-client, keep num_streams
-        }
+        /// For learner read from TiDB/TiSpark, we set num_streams by `concurrent_num`
+        if (likely(!select_query.no_kvstore && !mvcc_query_info.regions_query_info.empty()))
+            num_streams = concurrent_num;
+        // else learner read from ch-client, keep num_streams
 
         String str_query_ranges;
         if (log->trace())

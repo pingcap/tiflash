@@ -6,6 +6,7 @@
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/ThreadPool.h>
+#include <common/likely.h>
 
 namespace DB
 {
@@ -42,7 +43,7 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
     const bool resolve_locks = mvcc_query_info.resolve_locks;
     const Timestamp start_ts = mvcc_query_info.read_tso;
     MvccQueryInfo::RegionsQueryInfo regions_info;
-    if (!mvcc_query_info.regions_query_info.empty())
+    if (likely(!mvcc_query_info.regions_query_info.empty()))
     {
         regions_info = mvcc_query_info.regions_query_info;
     }
@@ -186,9 +187,10 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
     return regions_snapshot;
 }
 
-void validateQueryInfo(const MvccQueryInfo::RegionsQueryInfo & regions_query_info, //
-    const LearnerReadSnapshot & regions_snapshot, TMTContext & tmt, Poco::Logger * log)
+void validateQueryInfo(
+    const MvccQueryInfo & mvcc_query_info, const LearnerReadSnapshot & regions_snapshot, TMTContext & tmt, Poco::Logger * log)
 {
+    const auto & regions_query_info = mvcc_query_info.regions_query_info;
     /// Ensure regions' info after read.
     for (const auto & region_query_info : regions_query_info)
     {
