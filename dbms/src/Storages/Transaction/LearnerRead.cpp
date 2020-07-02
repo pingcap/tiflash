@@ -20,7 +20,7 @@ void throwRetryRegion(const MvccQueryInfo::RegionsQueryInfo & regions_info, Regi
     throw RegionException(std::move(region_ids), status);
 }
 
-/// Check if region is invalid.
+/// Check whether region is invalid or not.
 RegionException::RegionReadStatus isValidRegion(const RegionQueryInfo & region_to_query, const RegionPtr & region_in_mem)
 {
     if (region_in_mem->peerState() != raft_serverpb::PeerState::Normal)
