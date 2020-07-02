@@ -45,6 +45,11 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE
   )
 
+set (TIFLASH_EDITION $ENV{TIFLASH_EDITION})
+if (NOT TIFLASH_EDITION)
+    set (TIFLASH_EDITION Community)
+endif ()
+
 execute_process(
   COMMAND git rev-parse HEAD
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
