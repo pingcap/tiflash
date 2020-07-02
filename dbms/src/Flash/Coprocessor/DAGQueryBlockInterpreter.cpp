@@ -487,7 +487,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     else
     {
         // TODO: Note that if storage is (Txn)MergeTree, and any region exception thrown, we won't do retry here.
-        // Now we only support DeltaTree and don't do any extra check for storage type here.
+        // Now we only support DeltaTree in production environment and don't do any extra check for storage type here.
         try
         {
             pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);

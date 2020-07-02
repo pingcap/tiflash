@@ -851,7 +851,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
             LearnerReadSnapshot learner_read_snapshot;
             // TODO: Note that we should do learner read without holding table's structure lock,
             // or there will be deadlocks between learner read and raft threads (#815).
-            // Here we do not follow the rule beacause this is not use in production environment 
+            // Here we do not follow the rule because this is not use in production environment 
             // and it is hard to move learner read before acuqiring table's lock.
 
             // Do learner read only For DeltaTree.
