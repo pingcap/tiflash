@@ -13,7 +13,7 @@ extern const int CANNOT_SELECT;
 
 ReadBufferFromFileProvider::ReadBufferFromFileProvider(
     FileProviderPtr & file_provider_, const std::string & file_name_, size_t buf_size, int flags, char * existing_memory, size_t alignment)
-    : ReadBufferFromFileDescriptor(-1, buf_size, existing_memory, alignment), file(file_provider_->NewRandomAccessFile(file_name_, flags))
+    : ReadBufferFromFileDescriptor(-1, buf_size, existing_memory, alignment), file(file_provider_->newRandomAccessFile(file_name_, flags))
 {
     fd = file->getFd();
 }

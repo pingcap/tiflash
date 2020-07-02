@@ -6,13 +6,13 @@
 
 namespace DB
 {
-RandomAccessFilePtr EncryptedFileProvider::NewRandomAccessFileImpl(const std::string & file_name_, int flags)
+RandomAccessFilePtr EncryptedFileProvider::newRandomAccessFileImpl(const std::string & file_name_, int flags)
 {
     RandomAccessFilePtr underlying = std::make_shared<PosixRandomAccessFile>(file_name_, flags);
     return std::make_shared<EncryptedRandomAccessFile>(underlying);
 }
 
-WritableFilePtr EncryptedFileProvider::NewWritableFileImpl(const std::string & file_name_, int flags, mode_t mode)
+WritableFilePtr EncryptedFileProvider::newWritableFileImpl(const std::string & file_name_, int flags, mode_t mode)
 {
     WritableFilePtr underlying = std::make_shared<PosixWritableFile>(file_name_, flags, mode);
     return std::make_shared<EncryptedWritableFile>(underlying);

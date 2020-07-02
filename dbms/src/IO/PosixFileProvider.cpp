@@ -4,12 +4,12 @@
 
 namespace DB
 {
-RandomAccessFilePtr PosixFileProvider::NewRandomAccessFileImpl(const std::string & file_name_, int flags)
+RandomAccessFilePtr PosixFileProvider::newRandomAccessFileImpl(const std::string & file_name_, int flags)
 {
     return std::make_shared<PosixRandomAccessFile>(file_name_, flags);
 }
 
-WritableFilePtr PosixFileProvider::NewWritableFileImpl(const std::string & file_name_, int flags, mode_t mode)
+WritableFilePtr PosixFileProvider::newWritableFileImpl(const std::string & file_name_, int flags, mode_t mode)
 {
     return std::make_shared<PosixWritableFile>(file_name_, flags, mode);
 }

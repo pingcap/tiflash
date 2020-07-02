@@ -20,7 +20,7 @@ WriteBufferFromFileProvider::WriteBufferFromFileProvider(FileProviderPtr & file_
     char * existing_memory,
     size_t alignment)
     : WriteBufferFromFileDescriptor(-1, buf_size, existing_memory, alignment),
-      file(file_provider_->NewWritableFile(file_name_, flags, mode))
+      file(file_provider_->newWritableFile(file_name_, flags, mode))
 {
     fd = file->getFd();
 }

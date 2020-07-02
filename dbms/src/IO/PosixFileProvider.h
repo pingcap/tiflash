@@ -7,9 +7,9 @@ namespace DB
 class PosixFileProvider : public FileProvider
 {
 protected:
-    RandomAccessFilePtr NewRandomAccessFileImpl(const std::string & file_name_, int flags) override;
+    RandomAccessFilePtr newRandomAccessFileImpl(const std::string & file_name_, int flags) override;
 
-    WritableFilePtr NewWritableFileImpl(const std::string & file_name_, int flags, mode_t mode) override;
+    WritableFilePtr newWritableFileImpl(const std::string & file_name_, int flags, mode_t mode) override;
 
 public:
     PosixFileProvider() = default;
