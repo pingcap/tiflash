@@ -491,9 +491,10 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         try
         {
             pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
-            // After getting streams from storage, we need to validate if regions have changed after learner read.
-            // If the version of region is changed, the `streams` may has less data because of compaction. For these reason, we
-            // will throw RegionException directly.
+            // After getting streams from storage, we need to validate whether regions have changed or not after learner read.
+            // In case the versions of regions have changed, those `streams` may contain different data other than expected.
+            // Like after region merge/split.
+            // For these reason, we throw RegionException directly here.
             validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
         }
         catch (DB::Exception & e)
@@ -503,7 +504,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
             throw;
         }
 
-        // For those regions are not presented in this tiflash node, we will try to fetch streams from other tiflash nodes.
+        // For those regions which are not presented in this tiflash node, we will try to fetch streams from other tiflash nodes.
         if (!region_retry.empty())
         {
             LOG_DEBUG(log, ({
@@ -1031,7 +1032,7 @@ SortDescription DAGQueryBlockInterpreter::getSortDescription(std::vector<NameAnd
     order_descr.reserve(topn.order_by_size());
     for (int i = 0; i < topn.order_by_size(); i++)
     {
-        String name = order_columns[i].name;
+        const auto & name = order_columns[i].name;
         int direction = topn.order_by(i).desc() ? -1 : 1;
         // MySQL/TiDB treats NULL as "minimum".
         int nulls_direction = -1;

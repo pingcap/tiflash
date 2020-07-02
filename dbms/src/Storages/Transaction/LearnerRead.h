@@ -25,8 +25,8 @@ doLearnerRead(const TiDB::TableID table_id, //
     const MvccQueryInfo & mvcc_query_info,  //
     TMTContext & tmt, Poco::Logger * log);
 
-// After getting stream from storage, we should validate if regions have changed after learner read.
-// If some region(s) changed, it will throw RegionException
+// After getting stream from storage, we must make sure regions' version haven't changed after learner read.
+// If some regions' version changed, this function will throw `RegionException`.
 void validateQueryInfo(
     const MvccQueryInfo & mvcc_query_info, const LearnerReadSnapshot & regions_snapshot, TMTContext & tmt, Poco::Logger * log);
 
