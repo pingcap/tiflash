@@ -494,7 +494,6 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
             // After getting streams from storage, we need to validate whether regions have changed or not after learner read.
             // In case the versions of regions have changed, those `streams` may contain different data other than expected.
             // Like after region merge/split.
-            // For these reason, we throw RegionException directly here.
             validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
         }
         catch (DB::Exception & e)
