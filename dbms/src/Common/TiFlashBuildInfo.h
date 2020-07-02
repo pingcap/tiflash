@@ -10,6 +10,7 @@ std::string getName();
 std::string getVersion();
 /// Release version that follows PD/TiKV/TiDB convention.
 std::string getReleaseVersion();
+std::string getEdition();
 std::string getGitHash();
 std::string getGitBranch();
 std::string getUTCBuildTime();
