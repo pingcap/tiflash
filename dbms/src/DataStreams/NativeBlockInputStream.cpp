@@ -22,6 +22,10 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
 }
 
+NativeBlockInputStream::NativeBlockInputStream(ReadBuffer & istr_, UInt64 server_revision_, std::vector<String> && output_names_)
+    : istr(istr_), server_revision(server_revision_), output_names(std::move(output_names_))
+{
+}
 
 NativeBlockInputStream::NativeBlockInputStream(ReadBuffer & istr_, UInt64 server_revision_)
     : istr(istr_), server_revision(server_revision_)
@@ -109,6 +113,11 @@ Block NativeBlockInputStream::readImpl()
         rows = index_block_it->num_rows;
     }
 
+    if (output_names.size() > 0 && output_names.size() != columns)
+        throw Exception("NativeBlockInputStream with explicity output name, but the block column size "
+                        "is not equal to the size of output names", ErrorCodes::LOGICAL_ERROR);
+    bool explicit_output_name = output_names.size() > 0;
+
     for (size_t i = 0; i < columns; ++i)
     {
         if (use_index)
@@ -121,6 +130,8 @@ Block NativeBlockInputStream::readImpl()
 
         /// Name
         readBinary(column.name, istr);
+        if (explicit_output_name)
+            column.name = output_names[i];
 
         /// Type
         String type_name;

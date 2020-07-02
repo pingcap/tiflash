@@ -476,7 +476,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
 
 void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings & db_settings, const HandleRange & delete_range)
 {
-    LOG_TRACE(log, "Write into " << db_name << "." << table_name << " delte range " << delete_range.toString());
+    LOG_INFO(log, "Write into " << db_name << "." << table_name << " delte range " << delete_range.toString());
 
     EventRecorder write_block_recorder(ProfileEvents::DMDeleteRange, ProfileEvents::DMDeleteRangeNS);
 
