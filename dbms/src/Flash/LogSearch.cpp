@@ -141,7 +141,15 @@ LogIterator::Result<LogIterator::LogEntry> LogIterator::readLog()
             return Error{Error::Type::INVALID_LOG_LEVEL, "level: " + level_str};
     }
 
-    entry.message = line;
+    std::stringstream ss;
+    {
+        ss << line;
+        std::string temp;
+        // Trim timestamp and level sections
+        ss >> temp >> temp >> temp >> temp;
+    }
+
+    std::getline(ss, entry.message);
 
     return entry;
 }
