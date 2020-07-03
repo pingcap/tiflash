@@ -23,7 +23,7 @@ public:
         return newWritableFileImpl(file_name_, flags, mode);
     }
 
-    virtual ~FileProvider() = 0;
+    virtual ~FileProvider() = default;
 };
 
 using FileProviderPtr = std::shared_ptr<FileProvider>;
