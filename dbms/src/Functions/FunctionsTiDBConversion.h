@@ -47,10 +47,29 @@ namespace DB
 {
 
 /// cast int/real/decimal/time as string
-template <typename FromDataType, bool return_nullable, bool to_unsigned>
+template <typename FromDataType, bool return_nullable>
 struct TiDBConvertToString
 {
     using FromFieldType = typename FromDataType::FieldType;
+
+    static size_t charLengthToByteLengthFromUTF8(const char * data, size_t length, size_t char_length)
+    {
+        size_t ret = 0;
+        for (size_t char_index = 0; char_index < char_length && ret < length; char_index++)
+        {
+            uint8_t c = data[ret];
+            if (c < 0x80)
+                ret += 1;
+            else if (c < 0xE0)
+                ret += 2;
+            else if (c < 0xF0)
+                ret += 3;
+            else
+                ret += 4;
+        }
+        return ret;
+    }
+
     static void execute(Block & block, const ColumnNumbers & arguments, size_t result, bool, const tipb::FieldType & tp, const Context &)
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
@@ -65,12 +84,63 @@ struct TiDBConvertToString
         const auto & col_with_type_and_name = block.getByPosition(arguments[0]);
         const auto & type = static_cast<const FromDataType &>(*col_with_type_and_name.type);
 
-        if (const auto col_from = checkAndGetColumn<ColumnVector<FromFieldType>>(col_with_type_and_name.column.get()))
+        auto col_to = ColumnString::create();
+        ColumnString::Chars_t & data_to = col_to->getChars();
+        ColumnString::Offsets & offsets_to = col_to->getOffsets();
+
+        if constexpr (std::is_same_v<FromDataType, DataTypeString>)
         {
-            auto col_to = ColumnString::create();
+            /// cast string as string
+            const IColumn * col_from = block.getByPosition(arguments[0]).column.get();
+            const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(col_from);
+            const ColumnString::Chars_t * data_from = &col_from_string->getChars();
+            const IColumn::Offsets * offsets_from = &col_from_string->getOffsets();
+
+            WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
+            size_t current_offset = 0;
+            for (size_t i = 0; i < size; i++)
+            {
+                size_t next_offset = (*offsets_from)[i];
+                size_t org_length = next_offset - current_offset - 1;
+                size_t byte_length = org_length;
+                if (tp.flen() > 0)
+                {
+                    byte_length = tp.flen();
+                    if (tp.charset() == "utf8" || tp.charset() == "utf8mb4")
+                        byte_length = charLengthToByteLengthFromUTF8(
+                            reinterpret_cast<const char *>(&(*data_from)[current_offset]), org_length, byte_length);
+                }
+                // todo handle overflow check
+                write_buffer.write(reinterpret_cast<const char *>(&(*data_from)[current_offset]), std::min(byte_length, org_length));
+                writeChar(0, write_buffer);
+                offsets_to[i] = write_buffer.count();
+            }
+        }
+        else if constexpr (IsDecimal<FromFieldType>)
+        {
+            /// cast decimal as string
+            const auto * col_from = checkAndGetColumn<ColumnDecimal<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
+            const typename ColumnDecimal<FromFieldType>::Container & vec_from = col_from->getData();
+            ColumnString::Chars_t container_per_element;
+
+            data_to.resize(size * decimal_max_prec + size);
+            container_per_element.resize(decimal_max_prec);
+            offsets_to.resize(size);
+
+            WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
+            for (size_t i = 0; i < size; ++i)
+            {
+                WriteBufferFromVector<ColumnString::Chars_t> element_write_buffer(container_per_element);
+                FormatImpl<FromDataType>::execute(vec_from[i], element_write_buffer, &type, nullptr);
+                write_buffer.write(reinterpret_cast<char *>(container_per_element.data()), element_write_buffer.count());
+                writeChar(0, write_buffer);
+                offsets_to[i] = write_buffer.count();
+            }
+        }
+        else if (const auto col_from = checkAndGetColumn<ColumnVector<FromFieldType>>(col_with_type_and_name.column.get()))
+        {
+            /// cast int/real/time as string
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
-            ColumnString::Chars_t & data_to = col_to->getChars();
-            ColumnString::Offsets & offsets_to = col_to->getOffsets();
             ColumnString::Chars_t container_per_element;
 
             if constexpr (std::is_same_v<FromDataType, DataTypeMyDate>)
@@ -97,39 +167,20 @@ struct TiDBConvertToString
             {
                 WriteBufferFromVector<ColumnString::Chars_t> element_write_buffer(container_per_element);
                 FormatImpl<FromDataType>::execute(vec_from[i], element_write_buffer, &type, nullptr);
-                // todo check max length
-                if (tp.flen() < 0)
-                {
-                    write_buffer.write(reinterpret_cast<char *>(container_per_element.data()), element_write_buffer.count());
-                }
-                else
-                {
-                    if constexpr (std::is_same_v<DataTypeString, FromDataType> || std::is_same_v<DataTypeFixedString, FromDataType>)
-                    {
-                        if (tp.charset() == "utf8" || tp.charset() == "utf8mb4") {}
-                        else
-                        {
-                            write_buffer.write(reinterpret_cast<char *>(container_per_element.data()), tp.flen());
-                        }
-                    }
-                    else
-                    {
-                        // todo check overflow
-                        write_buffer.write(reinterpret_cast<char *>(container_per_element.data()), tp.flen());
-                    }
-                }
+                write_buffer.write(reinterpret_cast<char *>(container_per_element.data()), element_write_buffer.count());
                 writeChar(0, write_buffer);
                 offsets_to[i] = write_buffer.count();
             }
-            if constexpr (return_nullable)
-                block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map_to));
-            else
-                block.getByPosition(result).column = std::move(col_to);
         }
         else
             throw Exception(
                 "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of first argument of function TiDB_cast",
                 ErrorCodes::ILLEGAL_COLUMN);
+
+        if constexpr (return_nullable)
+            block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map_to));
+        else
+            block.getByPosition(result).column = std::move(col_to);
     }
 };
 
@@ -254,7 +305,7 @@ struct TiDBConvertToInteger
     //}
 
     static void execute(
-        Block & block, const ColumnNumbers & arguments, size_t result, bool in_union, const tipb::FieldType &, const Context & context)
+        Block & block, const ColumnNumbers & arguments, size_t result, bool, const tipb::FieldType &, const Context & context)
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
 
@@ -292,7 +343,6 @@ struct TiDBConvertToInteger
         {
             /// cast time as int
             const auto & col_with_type_and_name = block.getByPosition(arguments[0]);
-            const auto & type = static_cast<const FromDataType &>(*col_with_type_and_name.type);
 
             const ColumnVector<FromFieldType> * col_from
                 = checkAndGetColumn<ColumnVector<FromFieldType>>(col_with_type_and_name.column.get());
@@ -316,17 +366,17 @@ struct TiDBConvertToInteger
         {
             // todo support cast string as int
             /// cast string as int
-            const IColumn * col_from = block.getByPosition(arguments[0]).column.get();
-            const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(col_from);
-            const ColumnString::Chars_t * chars = &col_from_string->getChars();
-            const IColumn::Offsets * offsets = &col_from_string->getOffsets();
-            size_t current_offset = 0;
-            for (size_t i = 0; i < size; i++)
-            {
-                size_t next_offset = (*offsets)[i];
-                size_t string_size = next_offset - current_offset - 1;
-                ReadBufferFromMemory read_buffer(&(*chars)[current_offset], string_size);
-            }
+            //const IColumn * col_from = block.getByPosition(arguments[0]).column.get();
+            //const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(col_from);
+            //const ColumnString::Chars_t * chars = &col_from_string->getChars();
+            //const IColumn::Offsets * offsets = &col_from_string->getOffsets();
+            //size_t current_offset = 0;
+            //for (size_t i = 0; i < size; i++)
+            //{
+            //    size_t next_offset = (*offsets)[i];
+            //    size_t string_size = next_offset - current_offset - 1;
+            //    ReadBufferFromMemory read_buffer(&(*chars)[current_offset], string_size);
+            //}
         }
         else if constexpr (std::is_integral_v<FromFieldType>)
         {
@@ -334,23 +384,8 @@ struct TiDBConvertToInteger
             const ColumnVector<FromFieldType> * col_from
                 = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
-            constexpr bool from_unsigned = std::is_unsigned_v<FromFieldType>;
-            if ((from_unsigned && to_unsigned) || from_unsigned || !in_union)
-            {
-                for (size_t i = 0; i < size; i++)
-                    vec_to[i] = static_cast<ToFieldType>(vec_from[i]);
-            }
-            else
-            {
-                /// cast signed to unsigned in union context
-                for (size_t i = 0; i < size; ++i)
-                {
-                    if (vec_from[i] < 0)
-                        vec_to[i] = 0;
-                    else
-                        vec_to[i] = static_cast<ToFieldType>(vec_from[i]);
-                }
-            }
+            for (size_t i = 0; i < size; i++)
+                vec_to[i] = static_cast<ToFieldType>(vec_from[i]);
         }
         else if constexpr (std::is_floating_point_v<FromFieldType>)
         {
@@ -547,17 +582,17 @@ struct TiDBConvertToFloat
         {
             // todo support cast string as real
             /// cast string as real
-            const IColumn * col_from = block.getByPosition(arguments[0]).column.get();
-            const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(col_from);
-            const ColumnString::Chars_t * chars = &col_from_string->getChars();
-            const IColumn::Offsets * offsets = &col_from_string->getOffsets();
-            size_t current_offset = 0;
-            for (size_t i = 0; i < size; i++)
-            {
-                size_t next_offset = (*offsets)[i];
-                size_t string_size = next_offset - current_offset - 1;
-                ReadBufferFromMemory read_buffer(&(*chars)[current_offset], string_size);
-            }
+            //const IColumn * col_from = block.getByPosition(arguments[0]).column.get();
+            //const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(col_from);
+            //const ColumnString::Chars_t * chars = &col_from_string->getChars();
+            //const IColumn::Offsets * offsets = &col_from_string->getOffsets();
+            //size_t current_offset = 0;
+            //for (size_t i = 0; i < size; i++)
+            //{
+            //    size_t next_offset = (*offsets)[i];
+            //    size_t string_size = next_offset - current_offset - 1;
+            //    ReadBufferFromMemory read_buffer(&(*chars)[current_offset], string_size);
+            //}
         }
         else if constexpr (std::is_integral_v<FromFieldType> || std::is_floating_point_v<FromFieldType>)
         {
@@ -583,7 +618,7 @@ struct TiDBConvertToFloat
 };
 
 /// cast int/real/decimal/time/string as decimal
-template <typename FromDataType, typename ToFieldType, bool return_nullable>
+template <typename FromDataType, typename ToFieldType, bool return_nullable, bool to_unsigned>
 struct TiDBConvertToDecimal
 {
     using FromFieldType = typename FromDataType::FieldType;
@@ -631,63 +666,50 @@ struct TiDBConvertToDecimal
     }
 
     template <typename T, typename U>
-    static std::enable_if_t<std::is_integral_v<T>, U> ToTiDBDecimal(
-        T value, PrecType prec, ScaleType scale, bool in_union, const tipb::FieldType & tp)
+    static std::enable_if_t<std::is_integral_v<T>, U> ToTiDBDecimal(T value, PrecType prec, ScaleType scale, bool, const tipb::FieldType &)
     {
-        using UType = typename U::NativeType;
-        constexpr bool from_unsigned = std::is_unsigned_v<T>;
-        if (!from_unsigned && !hasUnsignedFlag(tp))
+        if constexpr (std::is_signed_v<T>)
             return ToTiDBDecimalInternal<T, U>(value, prec, scale);
-        else if (unlikely(in_union && !from_unsigned && value < 0))
-            /// return zero
-            return static_cast<UType>(0);
         else
             return ToTiDBDecimalInternal<UInt64, U>(static_cast<UInt64>(value), prec, scale);
     }
 
     template <typename T, typename U>
     static std::enable_if_t<std::is_floating_point_v<T>, U> ToTiDBDecimal(
-        T value, PrecType prec, ScaleType scale, bool in_union, const tipb::FieldType & tp)
+        T value, PrecType prec, ScaleType scale, bool, const tipb::FieldType &)
     {
         using UType = typename U::NativeType;
         /// copied from TiDB code, might be some bugs here
-        if (!in_union || value >= 0)
+        bool neg = false;
+        if (value < 0)
         {
-            bool neg = false;
-            if (value < 0)
-            {
-                if (unlikely(hasUnsignedFlag(tp)))
-                    return static_cast<UType>(0);
-                neg = true;
-                value = -value;
-            }
-            for (ScaleType i = 0; i < scale; i++)
-            {
-                value *= 10;
-            }
-            auto max_value = DecimalMaxValue::Get(prec);
-            if (value > static_cast<Float64>(max_value))
-            {
-                if (!neg)
-                    return static_cast<UType>(max_value);
-                else
-                    return static_cast<UType>(-max_value);
-            }
-            // rounding
-            T tenTimesValue = value * 10;
-            UType v(value);
-            if (Int256(tenTimesValue) % 10 >= 5)
-            {
-                v++;
-            }
-            if (neg)
-            {
-                v = -v;
-            }
-            return v;
+            neg = true;
+            value = -value;
         }
-        else
-            return static_cast<UType>(0);
+        for (ScaleType i = 0; i < scale; i++)
+        {
+            value *= 10;
+        }
+        auto max_value = DecimalMaxValue::Get(prec);
+        if (value > static_cast<Float64>(max_value))
+        {
+            if (!neg)
+                return static_cast<UType>(max_value);
+            else
+                return static_cast<UType>(-max_value);
+        }
+        // rounding
+        T tenTimesValue = value * 10;
+        UType v(value);
+        if (Int256(tenTimesValue) % 10 >= 5)
+        {
+            v++;
+        }
+        if (neg)
+        {
+            v = -v;
+        }
+        return v;
     }
 
     template <typename T, typename U>
@@ -706,6 +728,7 @@ struct TiDBConvertToDecimal
         }
         else
         {
+            // todo handle truncate
             bool need2Round = false;
             for (ScaleType i = scale; i < v_scale; i++)
             {
@@ -720,8 +743,6 @@ struct TiDBConvertToDecimal
                     value++;
             }
         }
-        if (unlikely(hasUnsignedFlag(tp) && value < 0))
-            return static_cast<UType>(0);
 
         auto max_value = DecimalMaxValue::Get(prec);
         if (value > max_value || value < -max_value)
@@ -733,12 +754,6 @@ struct TiDBConvertToDecimal
                 return static_cast<UType>(-max_value);
         }
         return static_cast<UType>(value);
-    }
-
-    template <typename T, typename U>
-    static std::enable_if_t<!IsDecimal<T>, U> ToTiDBDecimal(const T & /*v*/, ScaleType /*v_scale*/, ScaleType /*scale*/)
-    {
-        throw Exception("Should not call here", ErrorCodes::LOGICAL_ERROR);
     }
 
     /// cast int/real/time/decimal as decimal
@@ -936,30 +951,48 @@ private:
                 TiDBConvertToInteger<FromDataType, DataTypeInt64, return_nullable, false>::execute(
                     block, arguments, result, in_union_, tidb_tp_, context_);
             };
+        /// cast as decimal
         if (const auto decimal_type = checkAndGetDataType<DataTypeDecimal32>(to_type.get()))
             return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_,
                        const tipb::FieldType & tidb_tp_, const Context & context_) {
-                TiDBConvertToDecimal<FromDataType, DataTypeDecimal32::FieldType, return_nullable>::execute(
-                    block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
+                if (hasUnsignedFlag(tidb_tp_))
+                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal32::FieldType, return_nullable, true>::execute(
+                        block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
+                else
+                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal32::FieldType, return_nullable, false>::execute(
+                        block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
             };
         if (const auto decimal_type = checkAndGetDataType<DataTypeDecimal64>(to_type.get()))
             return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_,
                        const tipb::FieldType & tidb_tp_, const Context & context_) {
-                TiDBConvertToDecimal<FromDataType, DataTypeDecimal64::FieldType, return_nullable>::execute(
-                    block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
+                if (hasUnsignedFlag(tidb_tp_))
+                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal64::FieldType, return_nullable, true>::execute(
+                        block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
+                else
+                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal64::FieldType, return_nullable, false>::execute(
+                        block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
             };
         if (const auto decimal_type = checkAndGetDataType<DataTypeDecimal128>(to_type.get()))
             return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_,
                        const tipb::FieldType & tidb_tp_, const Context & context_) {
-                TiDBConvertToDecimal<FromDataType, DataTypeDecimal128::FieldType, return_nullable>::execute(
-                    block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
+                if (hasUnsignedFlag(tidb_tp_))
+                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal128::FieldType, return_nullable, true>::execute(
+                        block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
+                else
+                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal128::FieldType, return_nullable, false>::execute(
+                        block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
             };
         if (const auto decimal_type = checkAndGetDataType<DataTypeDecimal256>(to_type.get()))
             return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_,
                        const tipb::FieldType & tidb_tp_, const Context & context_) {
-                TiDBConvertToDecimal<FromDataType, DataTypeDecimal256::FieldType, return_nullable>::execute(
-                    block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
+                if (hasUnsignedFlag(tidb_tp_))
+                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal256::FieldType, return_nullable, true>::execute(
+                        block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
+                else
+                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal256::FieldType, return_nullable, false>::execute(
+                        block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
             };
+        /// cast as real
         if (checkDataType<DataTypeFloat64>(to_type.get()))
             return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_,
                        const Context & context_) {
@@ -974,12 +1007,13 @@ private:
                         block, arguments, result, in_union_, tidb_tp_, context_);
                 }
             };
-        /*
+        /// cast as string
         if (checkDataType<DataTypeString>(to_type.get()))
-            return [] (Block & block, const ColumnNumbers & arguments, const size_t result, const Context & context1)
-            {
-                TiDBConvertImpl<FromDataType, DataTypeString, return_nullable>::execute(block, arguments, result, context1);
+            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_,
+                       const Context & context_) {
+                TiDBConvertToString<FromDataType, return_nullable>::execute(block, arguments, result, in_union_, tidb_tp_, context_);
             };
+        /*
         if (checkDataType<DataTypeMyDate>(to_type.get()))
             return [] (Block & block, const ColumnNumbers & arguments, const size_t result, const Context & context1)
             {
@@ -1036,14 +1070,12 @@ private:
             return createWrapper<DataTypeDecimal128, return_nullable>(to_type);
         if (const auto from_actual_type = checkAndGetDataType<DataTypeDecimal256>(from_type.get()))
             return createWrapper<DataTypeDecimal256, return_nullable>(to_type);
-        /*
         if (const auto from_actual_type = checkAndGetDataType<DataTypeMyDate>(from_type.get()))
-            return createWrapperForToType<DataTypeMyDate, return_nullable>(to_type);
+            return createWrapper<DataTypeMyDate, return_nullable>(to_type);
         if (const auto from_actual_type = checkAndGetDataType<DataTypeMyDateTime>(from_type.get()))
-            return createWrapperForToType<DataTypeMyDateTime, return_nullable>(to_type);
+            return createWrapper<DataTypeMyDateTime, return_nullable>(to_type);
         if (const auto from_actual_type = checkAndGetDataType<DataTypeString>(from_type.get()))
-            return createWrapperFromCommonType<DataTypeString, return_nullable>(to_type);
-            */
+            return createWrapper<DataTypeString, return_nullable>(to_type);
 
         // todo support convert to duration/json type
         throw Exception{
