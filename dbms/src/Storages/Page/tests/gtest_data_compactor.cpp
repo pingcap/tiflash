@@ -72,9 +72,16 @@ try
     // snapshot contains {1, 2, 6}
     // Not contains 4 since it's deleted.
     auto snapshot = std::make_shared<MockSnapshot>();
-    snapshot->version()->put(1, PageEntry{.file_id = 1, .tag = 2});
-    snapshot->version()->put(2, PageEntry{.file_id = 2});
-    snapshot->version()->put(6, PageEntry{.file_id = 1});
+    PageEntry entry;
+    entry.file_id = 1;
+    entry.tag = 2;
+    snapshot->version()->put(1, entry);
+    entry.file_id = 2;
+    entry.tag = 0;
+    snapshot->version()->put(2, entry);
+    entry.file_id = 1;
+    entry.tag = 0;
+    snapshot->version()->put(6, entry);
 
     // valid_pages
     DataCompactor<MockSnapshotPtr> compactor(storage);
