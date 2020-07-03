@@ -618,7 +618,8 @@ struct TiDBConvertToFloat
 };
 
 /// cast int/real/decimal/time/string as decimal
-template <typename FromDataType, typename ToFieldType, bool return_nullable, bool to_unsigned>
+// todo TiKV does not check unsigned flag but TiDB checks, currently follow TiKV's code, maybe changed latter
+template <typename FromDataType, typename ToFieldType, bool return_nullable>
 struct TiDBConvertToDecimal
 {
     using FromFieldType = typename FromDataType::FieldType;
@@ -761,6 +762,7 @@ struct TiDBConvertToDecimal
         bool in_union, const tipb::FieldType & tp, const Context &)
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
+        auto col_to = ColumnDecimal<ToFieldType>::create(0, scale);
         ColumnUInt8::MutablePtr col_null_map_to;
         ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
         if constexpr (return_nullable)
@@ -773,7 +775,6 @@ struct TiDBConvertToDecimal
         {
             /// cast decimal as decimal
             const auto * col_from = checkAndGetColumn<ColumnDecimal<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
-            auto col_to = ColumnDecimal<ToFieldType>::create(0, scale);
 
             const typename ColumnDecimal<FromFieldType>::Container & vec_from = col_from->getData();
             typename ColumnDecimal<ToFieldType>::Container & vec_to = col_to->getData();
@@ -797,7 +798,6 @@ struct TiDBConvertToDecimal
 
             const ColumnVector<FromFieldType> * col_from
                 = checkAndGetColumn<ColumnVector<FromFieldType>>(col_with_type_and_name.column.get());
-            auto col_to = ColumnDecimal<ToFieldType>::create(0, scale);
 
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
             typename ColumnDecimal<ToFieldType>::Container & vec_to = col_to->getData();
@@ -825,33 +825,29 @@ struct TiDBConvertToDecimal
         {
             /// cast string as decimal
         }
-        else
+        else if (const ColumnVector<FromFieldType> * col_from
+            = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get()))
         {
             /// cast int/real as decimal
-            if (const ColumnVector<FromFieldType> * col_from
-                = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get()))
+            const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
+            typename ColumnDecimal<ToFieldType>::Container & vec_to = col_to->getData();
+            vec_to.resize(size);
+
+            for (size_t i = 0; i < size; ++i)
             {
-                auto col_to = ColumnDecimal<ToFieldType>::create(0, scale);
-
-                const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
-                typename ColumnDecimal<ToFieldType>::Container & vec_to = col_to->getData();
-                vec_to.resize(size);
-
-                for (size_t i = 0; i < size; ++i)
-                {
-                    vec_to[i] = ToTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], prec, scale, in_union, tp);
-                }
-
-                if constexpr (return_nullable)
-                    block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map_to));
-                else
-                    block.getByPosition(result).column = std::move(col_to);
+                vec_to[i] = ToTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], prec, scale, in_union, tp);
             }
-            else
-                throw Exception(
-                    "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of first argument of function tidb_cast",
-                    ErrorCodes::ILLEGAL_COLUMN);
         }
+        else
+        {
+            throw Exception(
+                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of first argument of function tidb_cast",
+                ErrorCodes::ILLEGAL_COLUMN);
+        }
+        if constexpr (return_nullable)
+            block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map_to));
+        else
+            block.getByPosition(result).column = std::move(col_to);
     }
 };
 
@@ -871,6 +867,7 @@ protected:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
     {
         ColumnNumbers new_arguments{arguments.front()};
+        // todo handle null map
         wrapper_function(block, new_arguments, result, in_union, tidb_tp, context);
     }
 
@@ -955,42 +952,26 @@ private:
         if (const auto decimal_type = checkAndGetDataType<DataTypeDecimal32>(to_type.get()))
             return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_,
                        const tipb::FieldType & tidb_tp_, const Context & context_) {
-                if (hasUnsignedFlag(tidb_tp_))
-                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal32::FieldType, return_nullable, true>::execute(
-                        block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
-                else
-                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal32::FieldType, return_nullable, false>::execute(
-                        block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
+                TiDBConvertToDecimal<FromDataType, DataTypeDecimal32::FieldType, return_nullable>::execute(
+                    block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
             };
         if (const auto decimal_type = checkAndGetDataType<DataTypeDecimal64>(to_type.get()))
             return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_,
                        const tipb::FieldType & tidb_tp_, const Context & context_) {
-                if (hasUnsignedFlag(tidb_tp_))
-                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal64::FieldType, return_nullable, true>::execute(
-                        block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
-                else
-                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal64::FieldType, return_nullable, false>::execute(
-                        block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
+                TiDBConvertToDecimal<FromDataType, DataTypeDecimal64::FieldType, return_nullable>::execute(
+                    block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
             };
         if (const auto decimal_type = checkAndGetDataType<DataTypeDecimal128>(to_type.get()))
             return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_,
                        const tipb::FieldType & tidb_tp_, const Context & context_) {
-                if (hasUnsignedFlag(tidb_tp_))
-                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal128::FieldType, return_nullable, true>::execute(
-                        block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
-                else
-                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal128::FieldType, return_nullable, false>::execute(
-                        block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
+                TiDBConvertToDecimal<FromDataType, DataTypeDecimal128::FieldType, return_nullable>::execute(
+                    block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
             };
         if (const auto decimal_type = checkAndGetDataType<DataTypeDecimal256>(to_type.get()))
             return [decimal_type](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_,
                        const tipb::FieldType & tidb_tp_, const Context & context_) {
-                if (hasUnsignedFlag(tidb_tp_))
-                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal256::FieldType, return_nullable, true>::execute(
-                        block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
-                else
-                    TiDBConvertToDecimal<FromDataType, DataTypeDecimal256::FieldType, return_nullable, false>::execute(
-                        block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
+                TiDBConvertToDecimal<FromDataType, DataTypeDecimal256::FieldType, return_nullable>::execute(
+                    block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
             };
         /// cast as real
         if (checkDataType<DataTypeFloat64>(to_type.get()))
@@ -1040,7 +1021,7 @@ private:
     template <bool return_nullable>
     WrapperType createWrapper(const DataTypePtr & from_type, const DataTypePtr & to_type) const
     {
-        if (from_type->equals(*to_type) && !from_type->isParametric() && !from_type->isString())
+        if (from_type->equals(*to_type) && !from_type->isParametric() && !from_type->isString() && !return_nullable)
             return createIdentityWrapper(from_type);
         if (const auto from_actual_type = checkAndGetDataType<DataTypeUInt8>(from_type.get()))
             return createWrapper<DataTypeUInt8, return_nullable>(to_type);
@@ -1094,15 +1075,14 @@ private:
 
         DataTypePtr from_inner_type = removeNullable(from_type);
         DataTypePtr to_inner_type = removeNullable(to_type);
+        if (from_type->equals(*to_type) && !from_inner_type->isParametric() && !from_inner_type->isString())
+            return createIdentityWrapper(from_type);
 
-        return prepareImpl(from_inner_type, to_inner_type);
+        return prepareImpl(from_inner_type, to_inner_type, to_type->isNullable());
     }
 
-    WrapperType prepareImpl(const DataTypePtr & from_type, const DataTypePtr & to_type) const
+    WrapperType prepareImpl(const DataTypePtr & from_type, const DataTypePtr & to_type, bool return_nullable) const
     {
-        if (from_type->equals(*to_type))
-            return createIdentityWrapper(from_type);
-        bool return_nullable = to_type->isNullable();
         if (return_nullable)
             return createWrapper<true>(from_type, to_type);
         else
