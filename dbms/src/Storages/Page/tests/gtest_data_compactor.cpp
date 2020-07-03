@@ -1,5 +1,7 @@
 #ifndef NDEBUG
 
+#include <IO/WriteHelpers.h>
+
 #define private public
 #include <Storages/Page/gc/DataCompactor.h>
 #undef private
