@@ -153,6 +153,8 @@ private:
                          const std::set<PageFileIdAndLevel> & live_files);
 
     friend class LegacyCompactor;
+
+    template <typename SnapshotPtr>
     friend class DataCompactor;
 
 private:
