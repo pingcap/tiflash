@@ -397,7 +397,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
 
     while (offset != rows)
     {
-        PKValue start_pk{&block, offset};
+        PKValue start_pk{pk.get(), &block, offset};
 
         WriteBatches wbs(storage_pool);
         PackPtr      write_pack;
@@ -413,7 +413,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
                 auto segment_it = segments.upper_bound(start_pk);
                 if (segment_it == segments.end())
                 {
-                    throw Exception("Failed to locate segment begin with start: " + start_pk.toString(*pk), ErrorCodes::LOGICAL_ERROR);
+                    throw Exception("Failed to locate segment begin with start: " + start_pk.toString(), ErrorCodes::LOGICAL_ERROR);
                 }
                 segment = segment_it->second;
             }
@@ -1224,7 +1224,6 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 
         segment->abandon();
         segments.erase(range->getEnd());
-        //        segments.erase(range.end);
         id_to_segment.erase(segment->segmentId());
 
         segments[new_left->getPKRange()->getEnd()]  = new_left;

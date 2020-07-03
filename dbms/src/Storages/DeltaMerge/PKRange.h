@@ -25,22 +25,24 @@ using PKRanges   = std::vector<PKRange>;
 /// PKValue is a pointer to a specific row of a column group.
 struct PKValue
 {
+    PrimaryKey * pk;
+
     Block * block;
     size_t  row_id;
 
-    String toString(const PrimaryKey & pk)
+    String toString()
     {
         WriteBufferFromOwnString buf;
 
-        if (pk.size() != 1)
+        if (pk->size() != 1)
             buf << "<";
-        for (size_t i = 0; i < pk.size(); ++i)
+        for (size_t i = 0; i < pk->size(); ++i)
         {
-            pk[i].type->serializeTextEscaped(*(block->getByPosition(i).column), row_id, buf);
-            if (i != pk.size() - 1)
+            (*pk)[i].type->serializeTextEscaped(*(block->getByPosition(i).column), row_id, buf);
+            if (i != pk->size() - 1)
                 buf << ",";
         }
-        if (pk.size() != 1)
+        if ((*pk).size() != 1)
             buf << ">";
 
         return buf.str();
@@ -423,8 +425,8 @@ public:
     std::pair<size_t, size_t> getPosRange(const Block & block, const size_t offset, const size_t limit) const
     {
         size_t start_index
-            = is_infinite[START_INDEX] || check(block, offset) ? offset : lowerBound(*pk, block, offset, limit, columns, START_INDEX);
-        size_t end_index = is_infinite[END_INDEX] || check(block, offset + limit)
+            = (is_infinite[START_INDEX] || check(block, offset)) ? offset : lowerBound(*pk, block, offset, limit, columns, START_INDEX);
+        size_t end_index = (is_infinite[END_INDEX] || check(block, offset + limit))
             ? offset + limit
             : lowerBound(*pk, block, offset, limit, columns, END_INDEX);
 
