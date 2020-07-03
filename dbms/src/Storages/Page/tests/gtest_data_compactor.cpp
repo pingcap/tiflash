@@ -71,16 +71,16 @@ try
 
     // snapshot contains {1, 2, 6}
     // Not contains 4 since it's deleted.
-    auto snapshot = std::make_shared<MockSnapshot>();
+    auto      snapshot = std::make_shared<MockSnapshot>();
     PageEntry entry;
     entry.file_id = 1;
-    entry.tag = 2;
+    entry.tag     = 2;
     snapshot->version()->put(1, entry);
     entry.file_id = 2;
-    entry.tag = 0;
+    entry.tag     = 0;
     snapshot->version()->put(2, entry);
     entry.file_id = 1;
-    entry.tag = 0;
+    entry.tag     = 0;
     snapshot->version()->put(6, entry);
 
     // valid_pages
@@ -90,6 +90,7 @@ try
 
     auto candidates             = PageStorage::listAllPageFiles(test_path, storage.page_file_log);
     auto [edits, bytes_written] = compactor.migratePages(snapshot, valid_pages, candidates, 0);
+    std::ignore                 = bytes_written;
     ASSERT_EQ(edits.size(), 3UL); // 1, 2, 6
     const PageFileIdAndLevel target_id_lvl{2, 1};
     auto &                   records = edits.getRecords();
