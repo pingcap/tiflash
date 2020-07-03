@@ -52,6 +52,7 @@ WriteBufferFromFileBase * createWriteBufferFromFileBase(FileProviderPtr & file_p
     }
     else
     {
+        // TODO: support encryption when AIO enabled
         throw Exception("AIO is not implemented when create file using FileProvider", ErrorCodes::NOT_IMPLEMENTED);
     }
 }
