@@ -61,7 +61,7 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
         }
     }
 
-    // adjust concurrency by num of streams and mvcc_query_info.concurrent
+    // adjust concurrency by num of regions or num of streams * mvcc_query_info.concurrent
     size_t concurrent_num = std::max(1, std::min(static_cast<size_t>(num_streams * mvcc_query_info.concurrent), regions_info.size()));
 
     KVStorePtr & kvstore = tmt.getKVStore();
