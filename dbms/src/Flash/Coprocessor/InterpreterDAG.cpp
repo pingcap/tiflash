@@ -322,7 +322,7 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     info.range_in_table = current_region->getHandleRangeByTable(table_id);
     mvcc_query_info->regions_query_info.push_back(info);
     mvcc_query_info->concurrent = 1.0;
-    learner_read_snapshot = doLearnerRead(table_id, *mvcc_query_info, tmt, log);
+    learner_read_snapshot = doLearnerRead(table_id, *mvcc_query_info, max_streams, tmt, log);
 
 
     if (settings.schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION)
