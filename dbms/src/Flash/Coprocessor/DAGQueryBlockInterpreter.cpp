@@ -306,6 +306,11 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         // do not have table id
         throw Exception("Table id not specified in table scan executor", ErrorCodes::COP_BAD_DAG_REQUEST);
     }
+    if (dag.getRegions().empty())
+    {
+        throw Exception("Dag Request does not have region to read. ", ErrorCodes::COP_BAD_DAG_REQUEST);
+    }
+
     TableID table_id = ts.table_id();
 
     const Settings & settings = context.getSettingsRef();
@@ -460,11 +465,6 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     query_info.query = dummy_query;
     query_info.dag_query = std::make_unique<DAGQueryInfo>(conditions, analyzer->getPreparedSets(), analyzer->getCurrentInputColumns());
     query_info.mvcc_query_info = std::move(mvcc_query_info);
-
-    if (dag.getRegions().empty())
-    {
-        throw Exception("Dag Request does not have region to read. ", ErrorCodes::COP_BAD_DAG_REQUEST);
-    }
 
     bool need_local_read = !query_info.mvcc_query_info->regions_query_info.empty();
     if (need_local_read)
