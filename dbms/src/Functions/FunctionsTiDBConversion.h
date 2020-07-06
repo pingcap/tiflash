@@ -195,11 +195,12 @@ struct TiDBConvertToString
 };
 
 /// cast int/real/decimal/time/string as int
-template <typename FromDataType, typename ToDataType, bool return_nullable, bool to_unsigned>
+template <typename FromDataType, typename ToDataType, bool return_nullable>
 struct TiDBConvertToInteger
 {
     using FromFieldType = typename FromDataType::FieldType;
     using ToFieldType = typename ToDataType::FieldType;
+    static constexpr bool to_unsigned = std::is_unsigned_v<ToFieldType>;
 
     template <typename T, typename ToFieldType>
     static std::enable_if_t<std::is_floating_point_v<T>, ToFieldType> toUInt(const T & value, const Context &)
@@ -432,7 +433,6 @@ struct TiDBConvertToInteger
         }
         else if constexpr (std::is_same_v<FromDataType, DataTypeString>)
         {
-            // todo support cast string as int
             /// cast string as int
             const IColumn * col_from = block.getByPosition(arguments[0]).column.get();
             const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(col_from);
@@ -543,45 +543,6 @@ struct TiDBConvertToFloat
         Float64 float_value = static_cast<Float64>(value);
         return produceTargetFloat64(float_value, need_truncate, shift, max_f, context);
     }
-
-    static StringRef trim(const StringRef & value)
-    {
-        StringRef ret;
-        ret.size = 0;
-        size_t start = 0;
-        static std::unordered_set<char> spaces{' ', '\t', '\n', '\v', '\f', '\r', ' '};
-        for (; start < value.size; start++)
-        {
-            if (!spaces.count(value.data[start]))
-                break;
-        }
-        size_t end = ret.size;
-        for (; start < end; end--)
-        {
-            if (!spaces.count(value.data[end - 1]))
-                break;
-        }
-        if (start >= end)
-            return ret;
-        ret.data = value.data + start;
-        ret.size = end - start;
-        return ret;
-    }
-    //template <typename ToFieldType>
-    //static ToFieldType toInt(const StringRef & value, const Context &)
-    //{
-    //    // trim space
-    //    StringRef trim_string = trim(value);
-    //    if (trim_string.size == 0)
-    //        // todo handle truncated error
-    //        return static_cast<ToFieldType>(0);
-    //}
-
-    //template <typename ToFieldType>
-    //static ToFieldType toUInt(const StringRef & value, const Context &)
-    //{
-    //
-    //}
 
     static void execute(
         Block & block, const ColumnNumbers & arguments, size_t result, bool, const tipb::FieldType & tp, const Context & context)
@@ -1011,13 +972,13 @@ private:
         if (checkDataType<DataTypeUInt64>(to_type.get()))
             return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_,
                        const Context & context_) {
-                TiDBConvertToInteger<FromDataType, DataTypeUInt64, return_nullable, true>::execute(
+                TiDBConvertToInteger<FromDataType, DataTypeUInt64, return_nullable>::execute(
                     block, arguments, result, in_union_, tidb_tp_, context_);
             };
         if (checkDataType<DataTypeInt64>(to_type.get()))
             return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_,
                        const Context & context_) {
-                TiDBConvertToInteger<FromDataType, DataTypeInt64, return_nullable, false>::execute(
+                TiDBConvertToInteger<FromDataType, DataTypeInt64, return_nullable>::execute(
                     block, arguments, result, in_union_, tidb_tp_, context_);
             };
         /// cast as decimal
