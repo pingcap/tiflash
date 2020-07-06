@@ -443,10 +443,8 @@ struct TiDBConvertToInteger
             {
                 size_t next_offset = (*offsets)[i];
                 size_t string_size = next_offset - current_offset - 1;
-                ReadBufferFromMemory read_buffer(&(*chars)[current_offset], string_size);
                 StringRef string_value(&(*chars)[current_offset], string_size);
                 vec_to[i] = strToInt<ToFieldType>(string_value, context);
-
                 current_offset = next_offset;
             }
         }
@@ -518,19 +516,7 @@ struct TiDBConvertToFloat
     }
 
     template <typename T>
-    static std::enable_if_t<std::is_integral_v<T>, Float64> toFloat(
-        const T & value, bool need_truncate, Float64 shift, Float64 max_f, const Context & context)
-    {
-        Float64 float_value = static_cast<Float64>(value);
-        if constexpr (to_unsigned)
-        {
-            float_value = static_cast<Float64>(static_cast<UInt64>(value));
-        }
-        return produceTargetFloat64(float_value, need_truncate, shift, max_f, context);
-    }
-
-    template <typename T>
-    static std::enable_if_t<std::is_floating_point_v<T>, Float64> toFloat(
+    static std::enable_if_t<std::is_floating_point_v<T> || std::is_integral_v<T>, Float64> toFloat(
         const T & value, bool need_truncate, Float64 shift, Float64 max_f, const Context & context)
     {
         Float64 float_value = static_cast<Float64>(value);
@@ -544,6 +530,62 @@ struct TiDBConvertToFloat
         return produceTargetFloat64(float_value, need_truncate, shift, max_f, context);
     }
 
+    static StringRef getValidFloatPrefix(const StringRef & value)
+    {
+        StringRef ret;
+        ret.data = value.data;
+        ret.size = 0;
+        bool sawDot = false;
+        bool sawDigit = false;
+        bool validLen = 0;
+        int eIdx = -1;
+        int i = 0;
+        for (; i < static_cast<int>(value.size); i++)
+        {
+            char c = ret.data[i];
+            if (c == '+' || c == '-')
+            {
+                if (i != 0 && i != eIdx + 1)
+                    // "1e+1" is valid.
+                    break;
+            }
+            else if (c == '.')
+            {
+                if (sawDot || eIdx > 0)
+                    // "1.1." or "1e1.1"
+                    break;
+                sawDot = true;
+            }
+            else if (c == 'e' || c == 'E')
+            {
+                if (!sawDigit)
+                    // "+.e"
+                    break;
+                if (eIdx != -1)
+                    // "1e5e"
+                    break;
+                eIdx = i;
+            }
+            else if (c < '0' || c > '9')
+            {
+                break;
+            }
+            else
+            {
+                sawDigit = true;
+            }
+        }
+        ret.size = i;
+        return ret;
+    }
+
+    static Float64 strToFloat(const StringRef & value, bool need_truncate, Float64 shift, Float64 max_f, const Context & context)
+    {
+        StringRef trim_string = trim(value);
+        StringRef float_string = getValidFloatPrefix(trim_string);
+        Float64 f = strtod(float_string.data, nullptr);
+        return produceTargetFloat64(f, need_truncate, shift, max_f, context);
+    }
     static void execute(
         Block & block, const ColumnNumbers & arguments, size_t result, bool, const tipb::FieldType & tp, const Context & context)
     {
@@ -613,19 +655,21 @@ struct TiDBConvertToFloat
         }
         else if constexpr (std::is_same_v<FromDataType, DataTypeString>)
         {
-            // todo support cast string as real
             /// cast string as real
-            //const IColumn * col_from = block.getByPosition(arguments[0]).column.get();
-            //const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(col_from);
-            //const ColumnString::Chars_t * chars = &col_from_string->getChars();
-            //const IColumn::Offsets * offsets = &col_from_string->getOffsets();
-            //size_t current_offset = 0;
-            //for (size_t i = 0; i < size; i++)
-            //{
-            //    size_t next_offset = (*offsets)[i];
-            //    size_t string_size = next_offset - current_offset - 1;
-            //    ReadBufferFromMemory read_buffer(&(*chars)[current_offset], string_size);
-            //}
+            /// the implementation is quiet different from TiDB/TiKV, so cast string as float will not be pushed to TiFlash
+            const IColumn * col_from = block.getByPosition(arguments[0]).column.get();
+            const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(col_from);
+            const ColumnString::Chars_t * chars = &col_from_string->getChars();
+            const IColumn::Offsets * offsets = &col_from_string->getOffsets();
+            size_t current_offset = 0;
+            for (size_t i = 0; i < size; i++)
+            {
+                size_t next_offset = (*offsets)[i];
+                size_t string_size = next_offset - current_offset - 1;
+                StringRef string_value(&(*chars)[current_offset], string_size);
+                vec_to[i] = strToFloat(string_value, need_truncate, shift, max_f, context);
+                current_offset = next_offset;
+            }
         }
         else if constexpr (std::is_integral_v<FromFieldType> || std::is_floating_point_v<FromFieldType>)
         {
@@ -713,7 +757,6 @@ struct TiDBConvertToDecimal
         T value, PrecType prec, ScaleType scale, bool, const tipb::FieldType &)
     {
         using UType = typename U::NativeType;
-        /// copied from TiDB code, might be some bugs here
         bool neg = false;
         if (value < 0)
         {
@@ -790,6 +833,23 @@ struct TiDBConvertToDecimal
         return static_cast<UType>(value);
     }
 
+    template <typename U>
+    static U strToTiDBDecimal(const StringRef & value, PrecType prec, ScaleType scale, bool, const tipb::FieldType &)
+    {
+        using UType = typename U::NativeType;
+        const StringRef trim_string = trim(value);
+        if (trim_string.size == 0)
+            return static_cast<UType>(0);
+        bool is_negative = false;
+        size_t pos = 0;
+        if (value.data[pos] == '-' || value.data[pos] == '+')
+        {
+            if (value.data[pos] == '-')
+                is_negative = true;
+            pos++;
+        }
+    }
+
     /// cast int/real/time/decimal as decimal
     static void execute(Block & block, const ColumnNumbers & arguments, size_t result, PrecType prec [[maybe_unused]], ScaleType scale,
         bool in_union, const tipb::FieldType & tp, const Context &)
@@ -857,6 +917,19 @@ struct TiDBConvertToDecimal
         else if constexpr (std::is_same_v<DataTypeString, FromDataType>)
         {
             /// cast string as decimal
+            const IColumn * col_from = block.getByPosition(arguments[0]).column.get();
+            const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(col_from);
+            const ColumnString::Chars_t * chars = &col_from_string->getChars();
+            const IColumn::Offsets * offsets = &col_from_string->getOffsets();
+            size_t current_offset = 0;
+            for (size_t i = 0; i < size; i++)
+            {
+                size_t next_offset = (*offsets)[i];
+                size_t string_size = next_offset - current_offset - 1;
+                StringRef string_value(&(*chars)[current_offset], string_size);
+                //    vec_to[i] = strToFloat(string_value, need_truncate, shift, max_f, context);
+                current_offset = next_offset;
+            }
         }
         else if (const ColumnVector<FromFieldType> * col_from
             = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get()))
