@@ -23,6 +23,7 @@
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsConversion.h>
@@ -45,6 +46,15 @@
 
 namespace DB
 {
+
+StringRef trim(const StringRef & value);
+
+enum CastError
+{
+    NONE = 0,
+    TRUNCATED_ERR,
+    OVERFLOW_ERR,
+};
 
 /// cast int/real/decimal/time as string
 template <typename FromDataType, bool return_nullable>
@@ -265,44 +275,102 @@ struct TiDBConvertToInteger
         return static_cast<ToFieldType>(v);
     }
 
-    static StringRef trim(const StringRef & value)
+    static StringRef getValidIntPrefix(const StringRef & value)
     {
         StringRef ret;
+        ret.data = value.data;
         ret.size = 0;
-        size_t start = 0;
-        static std::unordered_set<char> spaces{'\t', '\n', '\v', '\f', '\r', ' '};
-        for (; start < value.size; start++)
+        for (; ret.size < value.size; ret.size++)
         {
-            if (!spaces.count(value.data[start]))
-                break;
+            char current = value.data[ret.size];
+            if ((current >= '0' && current <= '9') || current == '+' || current == '-')
+                continue;
         }
-        size_t end = ret.size;
-        for (; start < end; end--)
-        {
-            if (!spaces.count(value.data[end - 1]))
-                break;
-        }
-        if (start >= end)
-            return ret;
-        ret.data = value.data + start;
-        ret.size = end - start;
         return ret;
     }
-    //template <typename ToFieldType>
-    //static ToFieldType toInt(const StringRef & value, const Context &)
-    //{
-    //    // trim space
-    //    StringRef trim_string = trim(value);
-    //    if (trim_string.size == 0)
-    //        // todo handle truncated error
-    //        return static_cast<ToFieldType>(0);
-    //}
 
-    //template <typename ToFieldType>
-    //static ToFieldType toUInt(const StringRef & value, const Context &)
-    //{
-    //
-    //}
+    template <typename T>
+    static std::tuple<T, CastError> toUInt(const StringRef & value)
+    {
+        static const T cut_off = std::numeric_limits<T>::max() / 10;
+        if (value.data[0] == '-')
+            // todo handle overflow error
+            return std::make_tuple(0, OVERFLOW_ERR);
+        size_t pos = value.data[0] == '+' ? 1 : 0;
+        T ret = 0;
+        for (; pos < value.size; pos++)
+        {
+            if (ret > cut_off)
+                /// overflow
+                return std::make_tuple(std::numeric_limits<T>::max(), OVERFLOW_ERR);
+            int next = value.data[pos] - '0';
+            if (static_cast<T>(ret * 10 + next) < ret)
+                /// overflow
+                return std::make_tuple(std::numeric_limits<T>::max(), OVERFLOW_ERR);
+            ret = ret * 10 + next;
+        }
+
+        return std::make_tuple(ret, NONE);
+    }
+
+    template <typename T>
+    static std::tuple<T, CastError> toInt(const StringRef & value)
+    {
+        bool is_negative = false;
+        UInt64 uint_value = 0;
+        CastError err = NONE;
+        if (value.data[0] == '-')
+        {
+            is_negative = true;
+            StringRef uint_string(value.data + 1, value.size - 1);
+            std::tie(uint_value, err) = toUInt<std::make_unsigned_t<T>>(value);
+        }
+        else
+        {
+            std::tie(uint_value, err) = toUInt<std::make_unsigned_t<T>>(value);
+        }
+        if (err == OVERFLOW_ERR)
+            return std::make_tuple(is_negative ? std::numeric_limits<T>::min() : std::numeric_limits<T>::max(), err);
+        // todo handle truncate error
+
+        if (is_negative)
+        {
+            if (uint_value > std::numeric_limits<std::make_unsigned_t<T>>::max() / 2 + 1)
+                return std::make_tuple(std::numeric_limits<T>::min(), OVERFLOW_ERR);
+            return std::make_tuple(static_cast<T>(-uint_value), NONE);
+        }
+        else
+        {
+            if (uint_value > std::numeric_limits<T>::max())
+                return std::make_tuple(std::numeric_limits<T>::max(), OVERFLOW_ERR);
+            return std::make_tuple(static_cast<T>(uint_value), NONE);
+        }
+    }
+
+    template <typename T>
+    static T strToInt(const StringRef & value, const Context &)
+    {
+        // trim space
+        StringRef trim_string = trim(value);
+        if (trim_string.size == 0)
+            // todo handle truncated error
+            return static_cast<T>(0);
+        StringRef int_string = getValidIntPrefix(trim_string);
+        if (int_string.size == 0)
+            // todo handle truncated error
+            return static_cast<T>(0);
+        if constexpr (to_unsigned)
+        {
+            auto [value, err] = toUInt<T>(int_string);
+            // todo check error
+            return value;
+        }
+        else
+        {
+            auto [value, err] = toInt<T>(int_string);
+            return value;
+        }
+    }
 
     static void execute(
         Block & block, const ColumnNumbers & arguments, size_t result, bool, const tipb::FieldType &, const Context & context)
@@ -366,17 +434,21 @@ struct TiDBConvertToInteger
         {
             // todo support cast string as int
             /// cast string as int
-            //const IColumn * col_from = block.getByPosition(arguments[0]).column.get();
-            //const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(col_from);
-            //const ColumnString::Chars_t * chars = &col_from_string->getChars();
-            //const IColumn::Offsets * offsets = &col_from_string->getOffsets();
-            //size_t current_offset = 0;
-            //for (size_t i = 0; i < size; i++)
-            //{
-            //    size_t next_offset = (*offsets)[i];
-            //    size_t string_size = next_offset - current_offset - 1;
-            //    ReadBufferFromMemory read_buffer(&(*chars)[current_offset], string_size);
-            //}
+            const IColumn * col_from = block.getByPosition(arguments[0]).column.get();
+            const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(col_from);
+            const ColumnString::Chars_t * chars = &col_from_string->getChars();
+            const IColumn::Offsets * offsets = &col_from_string->getOffsets();
+            size_t current_offset = 0;
+            for (size_t i = 0; i < size; i++)
+            {
+                size_t next_offset = (*offsets)[i];
+                size_t string_size = next_offset - current_offset - 1;
+                ReadBufferFromMemory read_buffer(&(*chars)[current_offset], string_size);
+                StringRef string_value(&(*chars)[current_offset], string_size);
+                vec_to[i] = strToInt<ToFieldType>(string_value, context);
+
+                current_offset = next_offset;
+            }
         }
         else if constexpr (std::is_integral_v<FromFieldType>)
         {
