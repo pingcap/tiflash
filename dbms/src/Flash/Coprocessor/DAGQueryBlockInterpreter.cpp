@@ -306,6 +306,11 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         // do not have table id
         throw Exception("Table id not specified in table scan executor", ErrorCodes::COP_BAD_DAG_REQUEST);
     }
+    if (dag.getRegions().empty())
+    {
+        throw Exception("Dag Request does not have region to read. ", ErrorCodes::COP_BAD_DAG_REQUEST);
+    }
+
     TableID table_id = ts.table_id();
 
     const Settings & settings = context.getSettingsRef();
@@ -461,30 +466,8 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     query_info.dag_query = std::make_unique<DAGQueryInfo>(conditions, analyzer->getPreparedSets(), analyzer->getCurrentInputColumns());
     query_info.mvcc_query_info = std::move(mvcc_query_info);
 
-    if (dag.getRegions().empty())
-    {
-        throw Exception("Dag Request does not have region to read. ", ErrorCodes::COP_BAD_DAG_REQUEST);
-    }
-
-    if (!dag.isBatchCop())
-    {
-        if (auto [info_retry, status] = MakeRegionQueryInfos(dag.getRegions(), {}, tmt, *query_info.mvcc_query_info, table_id); info_retry)
-            throw RegionException({(*info_retry).begin()->first}, status);
-
-        try
-        {
-            pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
-            // After getting streams from storage, we need to validate if regions have changed after learner read.
-            validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
-        }
-        catch (DB::Exception & e)
-        {
-            e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
-                + "`, table_id: " + DB::toString(table_id) + ")");
-            throw;
-        }
-    }
-    else
+    bool need_local_read = !query_info.mvcc_query_info->regions_query_info.empty();
+    if (need_local_read)
     {
         // TODO: Note that if storage is (Txn)MergeTree, and any region exception thrown, we won't do retry here.
         // Now we only support DeltaTree in production environment and don't do any extra check for storage type here.
@@ -502,60 +485,60 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
                 + "`, table_id: " + DB::toString(table_id) + ")");
             throw;
         }
+    }
 
-        // For those regions which are not presented in this tiflash node, we will try to fetch streams from other tiflash nodes.
-        if (!region_retry.empty())
+    // For those regions which are not presented in this tiflash node, we will try to fetch streams from other tiflash nodes, only happens in batch cop mode.
+    if (!region_retry.empty())
+    {
+        LOG_DEBUG(log, ({
+            std::stringstream ss;
+            ss << "Start to retry " << region_retry.size() << " regions (";
+            for (auto & r : region_retry)
+                ss << r.first << ",";
+            ss << ")";
+            ss.str();
+        }));
+
+        DAGSchema schema;
+        ::tipb::DAGRequest dag_req;
+
         {
-            LOG_DEBUG(log, ({
-                std::stringstream ss;
-                ss << "Start to retry " << region_retry.size() << " regions (";
-                for (auto & r : region_retry)
-                    ss << r.first << ",";
-                ss << ")";
-                ss.str();
-            }));
+            const auto & table_info = storage->getTableInfo();
+            tipb::Executor * ts_exec = dag_req.add_executors();
+            ts_exec->set_tp(tipb::ExecType::TypeTableScan);
+            *(ts_exec->mutable_tbl_scan()) = ts;
 
-            DAGSchema schema;
-            ::tipb::DAGRequest dag_req;
-
+            for (int i = 0; i < ts.columns().size(); ++i)
             {
-                const auto & table_info = storage->getTableInfo();
-                tipb::Executor * ts_exec = dag_req.add_executors();
-                ts_exec->set_tp(tipb::ExecType::TypeTableScan);
-                *(ts_exec->mutable_tbl_scan()) = ts;
+                const auto & col = ts.columns(i);
+                auto col_id = col.column_id();
 
-                for (int i = 0; i < ts.columns().size(); ++i)
+                if (col_id == DB::TiDBPkColumnID)
                 {
-                    const auto & col = ts.columns(i);
-                    auto col_id = col.column_id();
-
-                    if (col_id == DB::TiDBPkColumnID)
-                    {
-                        ColumnInfo ci;
-                        ci.tp = TiDB::TypeLongLong;
-                        ci.setPriKeyFlag();
-                        ci.setNotNullFlag();
-                        schema.emplace_back(std::make_pair(handle_column_name, std::move(ci)));
-                    }
-                    else
-                    {
-                        auto & col_info = table_info.getColumnInfo(col_id);
-                        schema.emplace_back(std::make_pair(col_info.name, col_info));
-                    }
-                    dag_req.add_output_offsets(i);
+                    ColumnInfo ci;
+                    ci.tp = TiDB::TypeLongLong;
+                    ci.setPriKeyFlag();
+                    ci.setNotNullFlag();
+                    schema.emplace_back(std::make_pair(handle_column_name, std::move(ci)));
                 }
-                dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
+                else
+                {
+                    auto & col_info = table_info.getColumnInfo(col_id);
+                    schema.emplace_back(std::make_pair(col_info.name, col_info));
+                }
+                dag_req.add_output_offsets(i);
             }
-
-            std::vector<pingcap::coprocessor::KeyRange> ranges;
-            for (auto & info : region_retry)
-            {
-                for (auto & range : info.second.key_ranges)
-                    ranges.emplace_back(range.first, range.second);
-            }
-            sort(ranges.begin(), ranges.end());
-            executeRemoteQueryImpl(pipeline, ranges, dag_req, schema);
+            dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
         }
+
+        std::vector<pingcap::coprocessor::KeyRange> ranges;
+        for (auto & info : region_retry)
+        {
+            for (auto & range : info.second.key_ranges)
+                ranges.emplace_back(range.first, range.second);
+        }
+        sort(ranges.begin(), ranges.end());
+        executeRemoteQueryImpl(pipeline, ranges, dag_req, schema);
     }
 
     if (pipeline.streams.empty())
