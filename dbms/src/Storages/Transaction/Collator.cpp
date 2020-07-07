@@ -12,6 +12,10 @@ extern const int LOGICAL_ERROR;
 namespace TiDB
 {
 
+TiDBCollators dummy_collators;
+std::vector<std::string> dummy_sort_key_contaners;
+std::string dummy_sort_key_contaner;
+
 std::string_view rtrim(const char * s, size_t length)
 {
     auto v = std::string_view(s, length);

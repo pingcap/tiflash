@@ -168,7 +168,7 @@ void ColumnArray::insertData(const char * pos, size_t length)
 }
 
 
-StringRef ColumnArray::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const
+StringRef ColumnArray::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator> collator, String & sort_key_container) const
 {
     size_t array_size = sizeAt(n);
     size_t offset = offsetAt(n);
@@ -178,33 +178,33 @@ StringRef ColumnArray::serializeValueIntoArena(size_t n, Arena & arena, char con
 
     size_t values_size = 0;
     for (size_t i = 0; i < array_size; ++i)
-        values_size += getData().serializeValueIntoArena(offset + i, arena, begin).size;
+        values_size += getData().serializeValueIntoArena(offset + i, arena, begin, collator, sort_key_container).size;
 
     return StringRef(begin, sizeof(array_size) + values_size);
 }
 
 
-const char * ColumnArray::deserializeAndInsertFromArena(const char * pos)
+const char * ColumnArray::deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator> collator)
 {
     size_t array_size = *reinterpret_cast<const size_t *>(pos);
     pos += sizeof(array_size);
 
     for (size_t i = 0; i < array_size; ++i)
-        pos = getData().deserializeAndInsertFromArena(pos);
+        pos = getData().deserializeAndInsertFromArena(pos, collator);
 
     getOffsets().push_back((getOffsets().size() == 0 ? 0 : getOffsets().back()) + array_size);
     return pos;
 }
 
 
-void ColumnArray::updateHashWithValue(size_t n, SipHash & hash) const
+void ColumnArray::updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator> collator, String & sort_key_container) const
 {
     size_t array_size = sizeAt(n);
     size_t offset = offsetAt(n);
 
     hash.update(array_size);
     for (size_t i = 0; i < array_size; ++i)
-        getData().updateHashWithValue(offset + i, hash);
+        getData().updateHashWithValue(offset + i, hash, collator, sort_key_container);
 }
 
 

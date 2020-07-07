@@ -42,7 +42,7 @@ public:
     void appendWhere(ExpressionActionsChain & chain, const std::vector<const tipb::Expr *> & conditions, String & filter_column_name);
     void appendOrderBy(ExpressionActionsChain & chain, const tipb::TopN & topN, std::vector<NameAndTypePair> & order_columns);
     void appendAggregation(ExpressionActionsChain & chain, const tipb::Aggregation & agg, Names & aggregate_keys,
-        AggregateDescriptions & aggregate_descriptions);
+        TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions, bool group_by_collation_sensitive);
     void appendAggSelect(ExpressionActionsChain & chain, const tipb::Aggregation & agg, bool keep_session_timezone_info);
     String appendCastIfNeeded(const tipb::Expr & expr, ExpressionActionsPtr & actions, const String & expr_name, bool explicit_cast);
     String appendCast(const DataTypePtr & target_type, ExpressionActionsPtr & actions, const String & expr_name);

@@ -54,4 +54,12 @@ protected:
     int32_t collator_id;
 };
 
+using TiDBCollators = std::vector<std::shared_ptr<ITiDBCollator>>;
+
+/// these dummy_xxx are used as the default value to avoid too many meaningless
+/// modification on the legacy ClickHouse code
+extern TiDBCollators dummy_collators;
+extern std::vector<std::string> dummy_sort_key_contaners;
+extern std::string dummy_sort_key_contaner;
+
 } // namespace TiDB

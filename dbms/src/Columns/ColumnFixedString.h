@@ -88,11 +88,11 @@ public:
         chars.resize_assume_reserved(chars.size() - n * elems);
     }
 
-    StringRef serializeValueIntoArena(size_t index, Arena & arena, char const *& begin) const override;
+    StringRef serializeValueIntoArena(size_t index, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override;
 
-    const char * deserializeAndInsertFromArena(const char * pos) override;
+    const char * deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator>) override;
 
-    void updateHashWithValue(size_t index, SipHash & hash) const override;
+    void updateHashWithValue(size_t index, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override;
 
     int compareAt(size_t p1, size_t p2, const IColumn & rhs_, int /*nan_direction_hint*/) const override
     {
