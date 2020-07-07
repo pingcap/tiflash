@@ -87,7 +87,7 @@ struct TiDBConvertToString
         ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
         if constexpr (return_nullable)
         {
-            col_null_map_to = ColumnUInt8::create(size);
+            col_null_map_to = ColumnUInt8::create(size, 0);
             vec_null_map_to = &col_null_map_to->getData();
         }
 
@@ -386,7 +386,7 @@ struct TiDBConvertToInteger
         ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
         if constexpr (return_nullable)
         {
-            col_null_map_to = ColumnUInt8::create(size);
+            col_null_map_to = ColumnUInt8::create(size, 0);
             vec_null_map_to = &col_null_map_to->getData();
         }
 
@@ -537,7 +537,6 @@ struct TiDBConvertToFloat
         ret.size = 0;
         bool sawDot = false;
         bool sawDigit = false;
-        bool validLen = 0;
         int eIdx = -1;
         int i = 0;
         for (; i < static_cast<int>(value.size); i++)
@@ -599,7 +598,7 @@ struct TiDBConvertToFloat
         ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
         if constexpr (return_nullable)
         {
-            col_null_map_to = ColumnUInt8::create(size);
+            col_null_map_to = ColumnUInt8::create(size, 0);
             vec_null_map_to = &col_null_map_to->getData();
         }
 
@@ -833,6 +832,59 @@ struct TiDBConvertToDecimal
         return static_cast<UType>(value);
     }
 
+    struct DecimalParts
+    {
+        StringRef int_part;
+        StringRef frac_part;
+        StringRef exp_part;
+    };
+
+    static DecimalParts splitDecimalString(const StringRef & value)
+    {
+        DecimalParts ret;
+        ret.int_part.size = ret.frac_part.size = ret.exp_part.size = 0;
+        size_t start = 0;
+        size_t end = 0;
+        if (value.data[end] == '+' || value.data[end] == '-')
+            end++;
+        for (; end < value.size; end++)
+        {
+            if (value.data[end] > '9' || value.data[end] < '0')
+                break;
+        }
+        ret.int_part.data = &value.data[start];
+        ret.int_part.size = end - start;
+        if (end < value.size && value.data[end] == '.')
+        {
+            /// frac part
+            start = end + 1;
+            end = start;
+            for (; end < value.size; end++)
+            {
+                if (value.data[end] > '9' || value.data[end] < '0')
+                    break;
+            }
+            ret.frac_part.data = &value.data[start];
+            ret.frac_part.size = end - start;
+        }
+        if (end < value.size && (value.data[end] == 'e' || value.data[end] == 'E'))
+        {
+            /// exponent part
+            start = end + 1;
+            end = start;
+            if (value.data[end] == '+' || value.data[end] == '-')
+                end++;
+            for (; end < value.size; end++)
+            {
+                if (value.data[end] > '9' || value.data[end] < '0')
+                    break;
+            }
+            ret.exp_part.data = &value.data[start];
+            ret.exp_part.size = end - start;
+        }
+        return ret;
+    }
+
     template <typename U>
     static U strToTiDBDecimal(const StringRef & value, PrecType prec, ScaleType scale, bool, const tipb::FieldType &)
     {
@@ -840,14 +892,101 @@ struct TiDBConvertToDecimal
         const StringRef trim_string = trim(value);
         if (trim_string.size == 0)
             return static_cast<UType>(0);
+        DecimalParts decimal_parts = splitDecimalString(value);
+        Int64 frac_offset_by_exponent = 0;
+        CastError err = NONE;
+        if (decimal_parts.exp_part.size != 0)
+        {
+            std::tie(frac_offset_by_exponent, err)
+                = TiDBConvertToInteger<DataTypeUInt8, DataTypeUInt64, false>::toInt<Int64>(decimal_parts.exp_part);
+            /// follow TiDB's code
+            if (err == OVERFLOW_ERR || frac_offset_by_exponent > std::numeric_limits<Int32>::max() / 2
+                || frac_offset_by_exponent < std::numeric_limits<Int32>::min() / 2)
+            {
+                if (decimal_parts.exp_part.data[0] == '-')
+                    // todo handle truncate error
+                    return static_cast<UType>(0);
+                else
+                    // todo handle overflow error
+                    return static_cast<UType>(DecimalMaxValue::Get(prec));
+            }
+        }
+        Int256 v = 0;
         bool is_negative = false;
         size_t pos = 0;
-        if (value.data[pos] == '-' || value.data[pos] == '+')
+        if (decimal_parts.int_part.data[pos] == '+' || decimal_parts.int_part.data[pos] == '-')
         {
-            if (value.data[pos] == '-')
-                is_negative = true;
             pos++;
+            if (decimal_parts.int_part.data[pos] == '-')
+                is_negative = true;
         }
+        Int256 max_value = DecimalMaxValue::Get(prec);
+
+        Int64 current_scale = frac_offset_by_exponent >= 0
+            ? -(decimal_parts.int_part.size - pos + frac_offset_by_exponent)
+            : -frac_offset_by_exponent - (decimal_parts.int_part.size - pos + decimal_parts.frac_part.size);
+
+        /// handle original int part
+        for (; pos < decimal_parts.int_part.size; pos++)
+        {
+            if (current_scale == scale)
+                break;
+            v = v * 10 + decimal_parts.int_part.data[pos] - '0';
+            if (v > max_value)
+                // todo handle overflow error
+                return static_cast<UType>(is_negative ? -max_value : max_value);
+            current_scale++;
+        }
+
+        if (current_scale == scale)
+        {
+            /// do not need to handle original frac part, just do rounding
+            if (pos < decimal_parts.int_part.size)
+            {
+                if (decimal_parts.int_part.data[pos] >= '5')
+                    v++;
+            }
+            else if (decimal_parts.frac_part.size > 0 && decimal_parts.frac_part.data[0] >= '5')
+            {
+                v++;
+            }
+        }
+        else
+        {
+            /// handle original frac part
+            pos = 0;
+            for (; pos < decimal_parts.frac_part.size; pos++)
+            {
+                if (current_scale == scale)
+                    break;
+                v = v * 10 + decimal_parts.frac_part.data[pos] - '0';
+                if (v > max_value)
+                    // todo handle overflow error
+                    return static_cast<UType>(is_negative ? -max_value : max_value);
+                current_scale++;
+            }
+            if (current_scale == scale)
+            {
+                if (pos < decimal_parts.frac_part.size && decimal_parts.frac_part.data[pos] >= '5')
+                    v++;
+            }
+            else
+            {
+                while (current_scale < scale)
+                {
+                    v *= 10;
+                    if (v > max_value)
+                        // todo handle overflow error
+                        return static_cast<UType>(is_negative ? -max_value : max_value);
+                    current_scale++;
+                }
+            }
+        }
+
+        if (v > max_value)
+            // todo handle overflow error
+            return static_cast<UType>(is_negative ? -max_value : max_value);
+        return static_cast<UType>(is_negative ? -v : v);
     }
 
     /// cast int/real/time/decimal as decimal
@@ -856,11 +995,14 @@ struct TiDBConvertToDecimal
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
         auto col_to = ColumnDecimal<ToFieldType>::create(0, scale);
+        typename ColumnDecimal<ToFieldType>::Container & vec_to = col_to->getData();
+        vec_to.resize(size);
+
         ColumnUInt8::MutablePtr col_null_map_to;
         ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
         if constexpr (return_nullable)
         {
-            col_null_map_to = ColumnUInt8::create(size);
+            col_null_map_to = ColumnUInt8::create(size, 0);
             vec_null_map_to = &col_null_map_to->getData();
         }
 
@@ -868,20 +1010,12 @@ struct TiDBConvertToDecimal
         {
             /// cast decimal as decimal
             const auto * col_from = checkAndGetColumn<ColumnDecimal<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
-
             const typename ColumnDecimal<FromFieldType>::Container & vec_from = col_from->getData();
-            typename ColumnDecimal<ToFieldType>::Container & vec_to = col_to->getData();
-            vec_to.resize(size);
 
             for (size_t i = 0; i < size; ++i)
             {
                 vec_to[i] = ToTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], vec_from.getScale(), prec, scale, in_union, tp);
             }
-
-            if constexpr (return_nullable)
-                block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map_to));
-            else
-                block.getByPosition(result).column = std::move(col_to);
         }
         else if constexpr (std::is_same_v<DataTypeMyDateTime, FromDataType> || std::is_same_v<DataTypeMyDate, FromDataType>)
         {
@@ -891,10 +1025,7 @@ struct TiDBConvertToDecimal
 
             const ColumnVector<FromFieldType> * col_from
                 = checkAndGetColumn<ColumnVector<FromFieldType>>(col_with_type_and_name.column.get());
-
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
-            typename ColumnDecimal<ToFieldType>::Container & vec_to = col_to->getData();
-            vec_to.resize(size);
 
             for (size_t i = 0; i < size; ++i)
             {
@@ -909,10 +1040,6 @@ struct TiDBConvertToDecimal
                     vec_to[i] = ToTiDBDecimal<ToFieldType>(date_time, prec, scale, in_union, tp, type.getFraction());
                 }
             }
-            if constexpr (return_nullable)
-                block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map_to));
-            else
-                block.getByPosition(result).column = std::move(col_to);
         }
         else if constexpr (std::is_same_v<DataTypeString, FromDataType>)
         {
@@ -927,7 +1054,7 @@ struct TiDBConvertToDecimal
                 size_t next_offset = (*offsets)[i];
                 size_t string_size = next_offset - current_offset - 1;
                 StringRef string_value(&(*chars)[current_offset], string_size);
-                //    vec_to[i] = strToFloat(string_value, need_truncate, shift, max_f, context);
+                vec_to[i] = strToTiDBDecimal<ToFieldType>(string_value, prec, scale, in_union, tp);
                 current_offset = next_offset;
             }
         }
@@ -936,8 +1063,6 @@ struct TiDBConvertToDecimal
         {
             /// cast int/real as decimal
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
-            typename ColumnDecimal<ToFieldType>::Container & vec_to = col_to->getData();
-            vec_to.resize(size);
 
             for (size_t i = 0; i < size; ++i)
             {

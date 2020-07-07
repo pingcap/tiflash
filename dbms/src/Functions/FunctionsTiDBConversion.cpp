@@ -15,7 +15,7 @@ StringRef trim(const StringRef & value)
         if (!spaces.count(value.data[start]))
             break;
     }
-    size_t end = ret.size;
+    size_t end = value.size;
     for (; start < end; end--)
     {
         if (!spaces.count(value.data[end - 1]))
@@ -28,6 +28,6 @@ StringRef trim(const StringRef & value)
     return ret;
 }
 
-void registerFunctionsConversion(FunctionFactory & factory) { factory.registerFunction<FunctionBuilderTiDBCast>(); }
+void registerFunctionsTiDBConversion(FunctionFactory & factory) { factory.registerFunction<FunctionBuilderTiDBCast>(); }
 
 } // namespace DB
