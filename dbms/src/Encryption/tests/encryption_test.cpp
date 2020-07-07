@@ -29,6 +29,7 @@ std::string random_string(size_t length)
 } // namespace test
 
 constexpr size_t MAX_SIZE = 16 * 10;
+
 // Test to make sure the output of AESCTRCipherStream is the same as output from
 // OpenSSL EVP API.
 class EncryptionTest : public testing::TestWithParam<std::tuple<bool, EncryptionMethod>>
