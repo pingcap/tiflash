@@ -1,8 +1,8 @@
 #pragma once
 
+#include <Encryption/AESCTRCipherStream.h>
 #include <IO/RandomAccessFile.h>
 #include <string>
-#include <Encryption/AESCTRCipherStream.h>
 
 namespace DB
 {
@@ -10,7 +10,8 @@ class EncryptedRandomAccessFile : public RandomAccessFile
 {
 public:
     EncryptedRandomAccessFile(RandomAccessFilePtr & file_, BlockAccessCipherStreamPtr stream_)
-    : file{file_}, file_offset{0}, stream{std::move(stream_)} {}
+        : file{file_}, file_offset{0}, stream{std::move(stream_)}
+    {}
 
     ~EncryptedRandomAccessFile() override = default;
 

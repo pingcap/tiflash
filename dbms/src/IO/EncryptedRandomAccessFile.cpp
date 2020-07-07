@@ -8,7 +8,8 @@ namespace DB
 
 void EncryptedRandomAccessFile::close() { file->close(); }
 
-off_t EncryptedRandomAccessFile::seek(off_t offset, int whence) {
+off_t EncryptedRandomAccessFile::seek(off_t offset, int whence)
+{
     file_offset = file->seek(offset, whence);
     return file_offset;
 }
