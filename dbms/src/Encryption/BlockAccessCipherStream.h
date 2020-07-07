@@ -27,5 +27,4 @@ public:
 };
 
 using BlockAccessCipherStreamPtr = std::shared_ptr<BlockAccessCipherStream>;
-
 } // namespace DB
