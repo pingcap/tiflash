@@ -6,15 +6,16 @@
 
 namespace DB
 {
-    class AESEncryptionProvider : public EncryptionProvider {
-    public:
-        explicit AESEncryptionProvider(KeyManagerPtr & key_manager_) : key_manager(key_manager_) {}
+class AESEncryptionProvider : public EncryptionProvider
+{
+public:
+    explicit AESEncryptionProvider(KeyManagerPtr & key_manager_) : key_manager(key_manager_) {}
 
-        ~AESEncryptionProvider() override = default;
+    ~AESEncryptionProvider() override = default;
 
-        BlockAccessCipherStreamPtr createCipherStream(const std::string& fname) override;
+    BlockAccessCipherStreamPtr createCipherStream(const std::string & fname) override;
 
-    private:
-        KeyManagerPtr key_manager;
-    };
-}
+private:
+    KeyManagerPtr key_manager;
+};
+} // namespace DB

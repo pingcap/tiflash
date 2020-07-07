@@ -1,8 +1,8 @@
 #pragma once
 
-#include <IO/FileProvider.h>
-#include <Encryption/KeyManager.h>
 #include <Encryption/AESEncryptionProvider.h>
+#include <Encryption/KeyManager.h>
+#include <IO/FileProvider.h>
 
 namespace DB
 {
@@ -15,7 +15,7 @@ protected:
 
 public:
     EncryptedFileProvider(FileProviderPtr & file_provider_, KeyManagerPtr key_manager_)
-    : file_provider{file_provider_}, key_manager{std::move(key_manager_)}
+        : file_provider{file_provider_}, key_manager{std::move(key_manager_)}
     {
         encryption_provider = std::make_shared<AESEncryptionProvider>(key_manager);
     }
