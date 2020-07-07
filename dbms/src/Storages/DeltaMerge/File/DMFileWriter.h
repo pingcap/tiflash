@@ -27,8 +27,9 @@ public:
                const DataTypePtr & type,
                CompressionSettings compression_settings,
                size_t              max_compress_block_size,
+               FileProviderPtr &   file_provider,
                bool                do_index)
-            : plain_file(createWriteBufferFromFileBase(dmfile->colDataPath(file_base_name), 0, 0, max_compress_block_size)),
+            : plain_file(createWriteBufferFromFileBase(file_provider, dmfile->colDataPath(file_base_name), 0, 0, max_compress_block_size)),
               plain_hashing(*plain_file),
               compressed_buf(plain_hashing, compression_settings),
               original_hashing(compressed_buf),
@@ -72,6 +73,7 @@ public:
                  size_t                      min_compress_block_size_,
                  size_t                      max_compress_block_size_,
                  const CompressionSettings & compression_settings_,
+                 const FileProviderPtr &           file_provider_,
                  bool                        wal_mode_ = false);
 
     void write(const Block & block, size_t not_clean_rows);
@@ -96,6 +98,8 @@ private:
 
     ColumnStreams       column_streams;
     WriteBufferFromFile pack_stat_file;
+
+    FileProviderPtr file_provider;
 };
 
 } // namespace DM

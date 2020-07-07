@@ -17,6 +17,7 @@
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
 #include <IO/ReadHelpers.h>
+#include <IO/FileProvider.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/DDLWorker.h>
 #include <Interpreters/IDAsPathUpgrader.h>
@@ -576,6 +577,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();
+
+    /// Init File Provider
+    global_context->initializeFileProvider();
 
     /// Set path for format schema files
     auto format_schema_path = Poco::File(config().getString("format_schema_path", path + "format_schemas/"));
