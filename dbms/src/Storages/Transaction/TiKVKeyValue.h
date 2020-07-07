@@ -7,6 +7,20 @@
 namespace DB
 {
 
+inline std::string ToHex(const char * data, const size_t size)
+{
+    std::stringstream ss;
+    ss << "[" << std::hex;
+    for (size_t i = 0; i < size; ++i)
+    {
+        ss << Int32(UInt8(data[i]));
+        if (i + 1 != size)
+            ss << ' ';
+    }
+    ss << "]";
+    return ss.str();
+}
+
 template <bool is_key>
 struct StringObject : std::string
 {
@@ -40,19 +54,7 @@ public:
     std::string toString() const { return *this; }
 
     // For debug
-    std::string toHex() const
-    {
-        std::stringstream ss;
-        ss << "[" << std::hex;
-        for (size_t i = 0; i < dataSize(); ++i)
-        {
-            ss << Int32(UInt8(at(i)));
-            if (i + 1 != dataSize())
-                ss << ' ';
-        }
-        ss << "]";
-        return ss.str();
-    }
+    std::string toHex() const { return ToHex(data(), dataSize()); }
 
     explicit operator bool() const { return !empty(); }
 
@@ -92,5 +94,36 @@ struct DecodedTiKVKey : std::string, private boost::noncopyable
 };
 
 static_assert(sizeof(DecodedTiKVKey) == sizeof(std::string));
+
+struct RawTiDBPK : std::shared_ptr<const std::string>
+{
+    using Base = std::shared_ptr<const std::string>;
+
+    struct Hash
+    {
+        size_t operator()(const RawTiDBPK & x) const { return std::hash<std::string>()(*x); }
+    };
+
+    bool operator==(const RawTiDBPK & y) const { return (**this) == (*y); }
+    bool operator!=(const RawTiDBPK & y) const { return !((*this) == y); }
+    bool operator<(const RawTiDBPK & y) const { return (**this) < (*y); }
+
+    RawTiDBPK(const Base & o) : Base(o), handle(getHandleID()) {}
+
+    std::string toHex() const
+    {
+        auto & p = *this;
+        return ToHex(p->data(), p->size());
+    }
+
+    // Make this struct can be casted into HandleID implicitly.
+    operator HandleID() const { return handle; }
+
+private:
+    HandleID getHandleID() const;
+
+private:
+    const HandleID handle;
+};
 
 } // namespace DB

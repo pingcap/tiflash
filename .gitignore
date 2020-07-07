@@ -245,6 +245,8 @@ build_docker
 docker/builder/tics
 release-centos7/tiflash
 release-centos7/build-release
+release-darwin/tiflash
+release-darwin/build-release
 tests/docker/data
 tests/docker/log
 tests/fullstack-test/dml/dml_gen/*

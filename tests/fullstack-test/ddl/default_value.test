@@ -49,13 +49,3 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select hex(b1), hex(b2
 | 0       | 0       | 10203   | 10203   | 10203   | 10203   | 10203   |
 | 0       | 0       | 10203   | 10203   | 10203   | 10203   | 10203   |
 +---------+---------+---------+---------+---------+---------+---------+
-
-# new collation is disabled in TiDB by default, need to enable new collation to run this test
-# mysql> alter table test.t add column b8 enum('ab','cd','ef') charset utf8mb4 collate utf8mb4_general_ci default 'EF';
-# mysql> set session tidb_isolation_read_engines='tiflash'; select b8 from test.t;
-# +----+
-# | b8 |
-# +----+
-# | ef |
-# | ef |
-# +----+

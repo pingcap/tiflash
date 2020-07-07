@@ -24,6 +24,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
+extern const String UniqRawResName = "uniqRawRes";
 
 void AggregateFunctionFactory::registerFunction(const String & name, Creator creator, CaseSensitiveness case_sensitiveness)
 {
@@ -64,10 +65,12 @@ AggregateFunctionPtr AggregateFunctionFactory::get(
 
         AggregateFunctionPtr nested_function;
 
+        const static std::unordered_set<String> check_names = {"count", UniqRawResName};
+
         /// A little hack - if we have NULL arguments, don't even create nested function.
         /// Combinator will check if nested_function was created.
-        if (name == "count" || std::none_of(argument_types.begin(), argument_types.end(),
-            [](const auto & type) { return type->onlyNull(); }))
+        if (check_names.count(name)
+            || std::none_of(argument_types.begin(), argument_types.end(), [](const auto & type) { return type->onlyNull(); }))
             nested_function = getImpl(name, nested_types, parameters, recursion_level);
 
         return combinator->transformAggregateFunction(nested_function, argument_types, parameters);

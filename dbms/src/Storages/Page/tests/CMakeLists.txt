@@ -3,8 +3,11 @@ add_headers_and_sources(page_storage ../mvcc)
 add_headers_and_sources(page_storage ../VersionSet)
 add_headers_and_sources(page_storage ../gc)
 add_library(page_storage
-        ${page_storage_headers} ${page_storage_sources})
-target_link_libraries(page_storage clickhouse_common_io kv_client)
+        ${page_storage_headers} ${page_storage_sources}
+        ${ClickHouse_SOURCE_DIR}/dbms/src/Storages/PathCapacityMetrics.h
+        ${ClickHouse_SOURCE_DIR}/dbms/src/Storages/PathCapacityMetrics.cpp
+        )
+target_link_libraries(page_storage clickhouse_common_io kv_client tipb)
 
 # glob all unit tests of PageStorage into gtests_page_storage
 macro(grep_gtest_sources BASE_DIR DST_VAR)
