@@ -2,37 +2,34 @@
 #include <Encryption/AESEncryptionProvider.h>
 #include <Encryption/MockKeyManager.h>
 #include <gtest/gtest.h>
+#include <random>
 
 namespace DB
 {
-
-const unsigned char TEST_KEY[33] = "\xe4\x3e\x8e\xca\x2a\x83\xe1\x88\xfb\xd8\x02\xdc\xf3\x62\x65\x3e"
-                                   "\x00\xee\x31\x39\xe7\xfd\x1d\x92\x20\xb1\x62\xae\xb2\xaf\x0f\x1a";
-const unsigned char TEST_IV_RANDOM[17] = "\x77\x9b\x82\x72\x26\xb5\x76\x50\xf7\x05\xd2\xd6\xb8\xaa\xa9\x2c";
-const unsigned char TEST_IV_OVERFLOW_LOW[17] = "\x77\x9b\x82\x72\x26\xb5\x76\x50\xff\xff\xff\xff\xff\xff\xff\xff";
-const unsigned char TEST_IV_OVERFLOW_FULL[17] = "\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff";
-
-constexpr size_t MAX_SIZE = 16 * 10;
-
 namespace test
 {
+const unsigned char KEY[33] = "\xe4\x3e\x8e\xca\x2a\x83\xe1\x88\xfb\xd8\x02\xdc\xf3\x62\x65\x3e"
+                                   "\x00\xee\x31\x39\xe7\xfd\x1d\x92\x20\xb1\x62\xae\xb2\xaf\x0f\x1a";
+const unsigned char IV_RANDOM[17] = "\x77\x9b\x82\x72\x26\xb5\x76\x50\xf7\x05\xd2\xd6\xb8\xaa\xa9\x2c";
+const unsigned char IV_OVERFLOW_LOW[17] = "\x77\x9b\x82\x72\x26\xb5\x76\x50\xff\xff\xff\xff\xff\xff\xff\xff";
+const unsigned char IV_OVERFLOW_FULL[17] = "\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff";
+
 std::string random_string(size_t length)
 {
-    auto randchar = []() -> char {
-        const char charset[] = "0123456789"
-                               "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-                               "abcdefghijklmnopqrstuvwxyz";
-        const size_t max_index = (sizeof(charset) - 1);
-        return charset[rand() % max_index];
-    };
-    std::string str(length, 0);
-    std::generate_n(str.begin(), length, randchar);
-    return str;
+    std::string str("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
+    while (str.length() < length)
+    {
+        str += str;
+    }
+    std::random_device rd;
+    std::mt19937 generator(rd());
+    std::shuffle(str.begin(), str.end(), generator);
+    return str.substr(0, length);
 }
 } // namespace test
 
-
-// Test to make sure output of AESCTRCipherStream is the same as output from
+constexpr size_t MAX_SIZE = 16 * 10;
+// Test to make sure the output of AESCTRCipherStream is the same as output from
 // OpenSSL EVP API.
 class EncryptionTest : public testing::TestWithParam<std::tuple<bool, EncryptionMethod>>
 {
@@ -69,7 +66,7 @@ public:
         }
         assert(cipher != nullptr);
 
-        ret = EVP_EncryptInit(ctx, cipher, TEST_KEY, iv);
+        ret = EVP_EncryptInit(ctx, cipher, test::KEY, iv);
         assert(ret == 1);
         int output_size = 0;
         ret = EVP_EncryptUpdate(ctx, ciphertext, &output_size, plaintext, static_cast<int>(MAX_SIZE));
@@ -87,7 +84,7 @@ public:
         generateCiphertext(iv);
 
         EncryptionMethod method = std::get<1>(GetParam());
-        std::string key_str(reinterpret_cast<const char *>(TEST_KEY), KeySize(method));
+        std::string key_str(reinterpret_cast<const char *>(test::KEY), KeySize(method));
         std::string iv_str(reinterpret_cast<const char *>(iv), 16);
         KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(method, key_str, iv_str);
         EncryptionProviderPtr encryption_provider = std::make_shared<AESEncryptionProvider>(key_manager);
@@ -97,7 +94,6 @@ public:
         // Allocate exact size. AESCTRCipherStream should make sure there will be
         // no memory corruption.
         std::unique_ptr<char[]> data(new char[data_size]);
-
         if (std::get<0>(GetParam()))
         {
             // Encrypt
@@ -112,11 +108,10 @@ public:
             cipher_stream->decrypt(start, data.get(), data_size);
             ASSERT_EQ(0, memcmp(plaintext + start, data.get(), data_size));
         }
-
         *success = true;
     }
 
-    bool TestEncryption(size_t start, size_t end, const unsigned char * iv = TEST_IV_RANDOM)
+    bool TestEncryption(size_t start, size_t end, const unsigned char * iv = test::IV_RANDOM)
     {
         // Workaround failure of ASSERT_* result in return immediately.
         bool success = false;
@@ -153,9 +148,9 @@ TEST_P(EncryptionTest, EncryptionTest)
     EXPECT_TRUE(TestEncryption(16 * 5 + 1, 16 * 8 + 15));
 
     // Lower bits of IV overflow.
-    EXPECT_TRUE(TestEncryption(16, 16 * 2, TEST_IV_OVERFLOW_LOW));
+    EXPECT_TRUE(TestEncryption(16, 16 * 2, test::IV_OVERFLOW_LOW));
     // Full IV overflow.
-    EXPECT_TRUE(TestEncryption(16, 16 * 2, TEST_IV_OVERFLOW_FULL));
+    EXPECT_TRUE(TestEncryption(16, 16 * 2, test::IV_OVERFLOW_FULL));
 }
 
 INSTANTIATE_TEST_CASE_P(EncryptionTestInstance, EncryptionTest,
