@@ -327,7 +327,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         if (auto [info_retry, status] = MakeRegionQueryInfos(dag.getRegions(), {}, tmt, *mvcc_query_info, table_id); info_retry)
             throw RegionException({(*info_retry).begin()->first}, status);
 
-        learner_read_snapshot = doLearnerRead(table_id, *mvcc_query_info, tmt, log);
+        learner_read_snapshot = doLearnerRead(table_id, *mvcc_query_info, max_streams, tmt, log);
     }
     else
     {
@@ -347,7 +347,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
                 }
                 if (mvcc_query_info->regions_query_info.empty())
                     break;
-                learner_read_snapshot = doLearnerRead(table_id, *mvcc_query_info, tmt, log);
+                learner_read_snapshot = doLearnerRead(table_id, *mvcc_query_info, max_streams, tmt, log);
                 break;
             }
             catch (const LockException & e)
