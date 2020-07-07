@@ -54,9 +54,9 @@ public:
     void insertFrom(const IColumn & src_, size_t n) override;
     void insertDefault() override;
     void popBack(size_t n) override;
-    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const override;
-    const char * deserializeAndInsertFromArena(const char * pos) override;
-    void updateHashWithValue(size_t n, SipHash & hash) const override;
+    StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override;
+    const char * deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator>) override;
+    void updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override;
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
     ColumnPtr filter(const Filter & filt, ssize_t result_size_hint) const override;
     ColumnPtr permute(const Permutation & perm, size_t limit) const override;

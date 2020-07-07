@@ -728,6 +728,20 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
 
     DataTypes join_key_types;
     getJoinKeyTypes(join, join_key_types);
+    TiDB::TiDBCollators collators;
+    size_t join_key_size = join_key_types.size();
+    if (join.probe_types_size() == static_cast<int>(join_key_size) && join.build_types_size() == join.probe_types_size())
+        for (size_t i = 0; i < join_key_size; i++)
+        {
+            if (removeNullable(join_key_types[i])->isString())
+            {
+                if (join.probe_types(i).collate() != join.build_types(i).collate())
+                    throw Exception("Join with different collators on the join key", ErrorCodes::COP_BAD_DAG_REQUEST);
+                collators.push_back(getCollatorFromFieldType(join.probe_types(i)));
+            }
+            else
+                collators.push_back(nullptr);
+        }
 
     /// add necessary transformation if the join key is an expression
     Pipeline left_pipeline;
@@ -742,8 +756,8 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
 
     const Settings & settings = context.getSettingsRef();
     JoinPtr joinPtr = std::make_shared<Join>(left_key_names, right_key_names, true,
-        SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode), kind,
-        ASTTableJoin::Strictness::All);
+        SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode), kind, ASTTableJoin::Strictness::All,
+        collators);
     executeUnion(right_pipeline);
     right_query.source = right_pipeline.firstStream();
     right_query.join = joinPtr;
@@ -803,7 +817,10 @@ AnalysisResult DAGQueryBlockInterpreter::analyzeExpressions()
     // There will be either Agg...
     if (query_block.aggregation)
     {
-        analyzer->appendAggregation(chain, query_block.aggregation->aggregation(), res.aggregation_keys, res.aggregate_descriptions);
+        /// collation sensitive group by is slower then normal group by, use normal group by by default
+        // todo better to let TiDB decide whether group by is collation sensitive or not
+        analyzer->appendAggregation(chain, query_block.aggregation->aggregation(), res.aggregation_keys, res.aggregation_collators,
+            res.aggregate_descriptions, context.getSettingsRef().group_by_collation_sensitive);
         res.need_aggregate = true;
         res.before_aggregation = chain.getLastActions();
 
@@ -849,8 +866,8 @@ void DAGQueryBlockInterpreter::executeWhere(Pipeline & pipeline, const Expressio
     pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, expr, filter_column); });
 }
 
-void DAGQueryBlockInterpreter::executeAggregation(
-    Pipeline & pipeline, const ExpressionActionsPtr & expr, Names & key_names, AggregateDescriptions & aggregates)
+void DAGQueryBlockInterpreter::executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expr, Names & key_names,
+    TiDB::TiDBCollators & collators, AggregateDescriptions & aggregates)
 {
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expr); });
 
@@ -878,12 +895,22 @@ void DAGQueryBlockInterpreter::executeAggregation(
       * 2. An aggregation is done with store of temporary data on the disk, and they need to be merged in a memory efficient way.
       */
     bool allow_to_use_two_level_group_by = pipeline.streams.size() > 1 || settings.max_bytes_before_external_group_by != 0;
+    bool has_collator = false;
+    for (auto & p : collators)
+    {
+        if (p != nullptr)
+        {
+            has_collator = true;
+            break;
+        }
+    }
 
     Aggregator::Params params(header, keys, aggregates, false, settings.max_rows_to_group_by, settings.group_by_overflow_mode,
-        settings.compile ? &context.getCompiler() : nullptr, settings.min_count_to_compile,
+        settings.compile && !has_collator ? &context.getCompiler() : nullptr, settings.min_count_to_compile,
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0),
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0),
-        settings.max_bytes_before_external_group_by, settings.empty_result_for_aggregation_by_empty_set, context.getTemporaryPath());
+        settings.max_bytes_before_external_group_by, settings.empty_result_for_aggregation_by_empty_set, context.getTemporaryPath(),
+        has_collator ? collators : TiDB::dummy_collators);
 
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.streams.size() > 1)
@@ -1302,7 +1329,7 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     if (res.need_aggregate)
     {
         // execute aggregation
-        executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregate_descriptions);
+        executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions);
         recordProfileStreams(pipeline, query_block.aggregation_name);
     }
     if (res.before_order_and_select)
