@@ -23,7 +23,7 @@ using LearnerReadSnapshot = std::unordered_map<RegionID, RegionLearnerReadSnapsh
 [[nodiscard]] LearnerReadSnapshot           //
 doLearnerRead(const TiDB::TableID table_id, //
     const MvccQueryInfo & mvcc_query_info,  //
-    TMTContext & tmt, Poco::Logger * log);
+    size_t num_streams, TMTContext & tmt, Poco::Logger * log);
 
 // After getting stream from storage, we must make sure regions' version haven't changed after learner read.
 // If some regions' version changed, this function will throw `RegionException`.

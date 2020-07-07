@@ -438,16 +438,6 @@ BlockInputStreams StorageDeltaMerge::read( //
         };
         check_read_tso(mvcc_query_info.read_tso);
 
-        /// If request comes from TiDB/TiSpark, mvcc_query_info.concurrent is 0,
-        /// and `concurrent_num` should be 1. Concurrency handled by TiDB/TiSpark.
-        /// Else a request comes from CH-client, we set `concurrent_num` by num_streams.
-        size_t concurrent_num = std::max<size_t>(num_streams * mvcc_query_info.concurrent, 1);
-
-        /// For learner read from TiDB/TiSpark, we set num_streams by `concurrent_num`
-        if (likely(!select_query.no_kvstore && !mvcc_query_info.regions_query_info.empty()))
-            num_streams = concurrent_num;
-        // else learner read from ch-client, keep num_streams
-
         String str_query_ranges;
         if (log->trace())
         {
