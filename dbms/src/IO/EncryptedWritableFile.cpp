@@ -5,9 +5,10 @@ namespace DB
 
 void EncryptedWritableFile::close() { file->close(); }
 
-ssize_t EncryptedWritableFile::write(const char * buf, size_t size) const
+ssize_t EncryptedWritableFile::write(char * buf, size_t size)
 {
-    // TODO: encrypt data in buf
+    stream->encrypt(file_offset, buf, size);
+    file_offset += size;
     return file->write(buf, size);
 }
 
