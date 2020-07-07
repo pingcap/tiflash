@@ -6,7 +6,7 @@
 
 namespace DB
 {
-enum class EncryptionMethod : int
+enum class EncryptionMethod
 {
     kUnknown = 0,
     kPlaintext = 1,
@@ -27,7 +27,7 @@ inline size_t KeySize(EncryptionMethod method)
             return 32;
         default:
             return 0;
-    };
+    }
 }
 
 struct FileEncryptionInfo
@@ -38,7 +38,6 @@ struct FileEncryptionInfo
 };
 
 using FileEncryptionInfoPtr = std::shared_ptr<FileEncryptionInfo>;
-
 
 class KeyManager
 {
@@ -57,5 +56,4 @@ public:
 };
 
 using KeyManagerPtr = std::shared_ptr<KeyManager>;
-
 } // namespace DB

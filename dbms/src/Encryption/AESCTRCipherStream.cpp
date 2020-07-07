@@ -1,8 +1,6 @@
 #include <Common/Exception.h>
 #include <Encryption/AESCTRCipherStream.h>
-
 #include <cstddef>
-
 
 namespace DB
 {
@@ -32,12 +30,8 @@ void AESCTRCipherStream::cipher(uint64_t file_offset, char * data, size_t data_s
     uint64_t block_index = file_offset / AES_BLOCK_SIZE;
     uint64_t block_offset = file_offset % AES_BLOCK_SIZE;
 
-    // In CTR mode, OpenSSL EVP API treat the IV as a 128-bit big-endien, and
+    // In CTR mode, OpenSSL EVP API treat the IV as a 128-bit big-endian, and
     // increase it by 1 for each block.
-    //
-    // In case of unsigned integer overflow in c++, the result is moduloed by
-    // range, means only the lowest bits of the result will be kept.
-    // http://www.cplusplus.com/articles/DE18T05o/
     uint64_t iv_high = initial_iv_high_;
     uint64_t iv_low = initial_iv_low_ + block_index;
     if (std::numeric_limits<uint64_t>::max() - block_index < initial_iv_low_)
@@ -72,7 +66,7 @@ void AESCTRCipherStream::cipher(uint64_t file_offset, char * data, size_t data_s
     // In the following we assume EVP_CipherUpdate allow in and out buffer are
     // the same, to save one memcpy. This is not specified in official man page.
 
-    // Handle partial block at the beginning. The parital block is copied to
+    // Handle partial block at the beginning. The partial block is copied to
     // buffer to fake a full block.
     if (block_offset > 0)
     {
@@ -114,7 +108,7 @@ void AESCTRCipherStream::cipher(uint64_t file_offset, char * data, size_t data_s
         remaining_data_size -= actual_data_size;
     }
 
-    // Handle partial block at the end. The parital block is copied to buffer to
+    // Handle partial block at the end. The partial block is copied to buffer to
     // fake a full block.
     if (remaining_data_size > 0)
     {
@@ -137,5 +131,4 @@ void AESCTRCipherStream::cipher(uint64_t file_offset, char * data, size_t data_s
     FreeCipherContext(ctx);
 #endif
 }
-
 } // namespace DB
