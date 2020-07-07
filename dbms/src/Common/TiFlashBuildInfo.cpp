@@ -17,7 +17,7 @@ void outputDetail(std::ostream & os)
 {
     os << getName() << " " << getVersion() << std::endl
        << "Release Version: " << getReleaseVersion() << std::endl
-       << "Edition: " << getEdition() << std::endl
+       << "Edition:         " << getEdition() << std::endl
        << "Git Commit Hash: " << getGitHash() << std::endl
        << "Git Branch:      " << getGitBranch() << std::endl
        << "UTC Build Time:  " << getUTCBuildTime() << std::endl;
