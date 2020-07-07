@@ -2,7 +2,6 @@
 
 #include <openssl/aes.h>
 #include <openssl/evp.h>
-
 #include <Encryption/BlockAccessCipherStream.h>
 #include <IO/Endian.h>
 
@@ -41,7 +40,7 @@ public:
         : cipher_(cipher), key_(key), initial_iv_high_(iv_high), initial_iv_low_(iv_low)
     {}
 
-    ~AESCTRCipherStream() = default;
+    ~AESCTRCipherStream() override = default;
 
     size_t blockSize() override
     {
@@ -66,5 +65,4 @@ private:
     const uint64_t initial_iv_high_;
     const uint64_t initial_iv_low_;
 };
-
 } // namespace DB
