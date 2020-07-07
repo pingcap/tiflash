@@ -1,7 +1,7 @@
 #pragma once
 
-#include <cstddef>
 #include <Encryption/BlockAccessCipherStream.h>
+#include <cstddef>
 
 namespace DB
 {
