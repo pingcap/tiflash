@@ -141,6 +141,7 @@ public:
         }
         context.getSettingsRef() = settings;
         context.setExtraPaths(getExtraPaths(), context.getPathCapacity());
+        context.initializeFileProvider();
         return context;
     }
 };
