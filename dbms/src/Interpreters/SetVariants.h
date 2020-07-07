@@ -36,7 +36,7 @@ struct SetMethodOneNumber
         /** Called at the start of each block processing.
           * Sets the variables required for the other methods called in inner loops.
           */
-        void init(const ColumnRawPtrs & key_columns, std::shared_ptr<TiDB::ITiDBCollator>)
+        void init(const ColumnRawPtrs & key_columns, const TiDB::TiDBCollators & = TiDB::dummy_collators)
         {
             vec = &static_cast<const ColumnVector<FieldType> *>(key_columns[0])->getData()[0];
         }
@@ -46,29 +46,12 @@ struct SetMethodOneNumber
             const ColumnRawPtrs & /*key_columns*/,
             size_t /*keys_size*/,                 /// Number of key columns.
             size_t i,                             /// From what row of the block I get the key.
-            const Sizes & /*key_sizes*/) const    /// If keys of a fixed length - their lengths. Not used in methods for variable length keys.
+            const Sizes & /*key_sizes*/,          /// If keys of a fixed length - their lengths. Not used in methods for variable length keys.
+            std::vector<String> & /*sort_key_containers*/ = TiDB::dummy_sort_key_contaners) const    /// If key is string type with collation, should generate sort key instead of the origin key, sort_key_containers is used to generate sort_key
         {
             return unionCastToUInt64(vec[i]);
         }
 
-        void insertKey(const ColumnRawPtrs & key_columns, size_t keys_size, size_t i, const Sizes & key_sizes, Data & set_data, Arena & pool)
-        {
-            /// Obtain a key to insert to the set
-            Key key = getKey(key_columns, keys_size, i, key_sizes);
-
-            typename Data::iterator it;
-            bool inserted;
-            set_data.emplace(key, it, inserted);
-
-            if (inserted)
-                onNewKey(*it, keys_size, pool);
-        }
-
-        bool exists(const ColumnRawPtrs & key_columns, size_t keys_size, size_t i, const Sizes & key_sizes, Data & set_data)
-        {
-            Key key = getKey(key_columns, keys_size, i, key_sizes);
-            return set_data.has(key);
-        }
     };
 
     /** Place additional data, if necessary, in case a new key was inserted into the hash table.
@@ -95,60 +78,32 @@ struct SetMethodString
         const ColumnString::Offsets * offsets;
         const ColumnString::Chars_t * chars;
         std::shared_ptr<TiDB::ITiDBCollator> collator;
-        String sort_key;
 
-        void init(const ColumnRawPtrs & key_columns, std::shared_ptr<TiDB::ITiDBCollator> collator_)
+        void init(const ColumnRawPtrs & key_columns, const TiDB::TiDBCollators & collators = TiDB::dummy_collators)
         {
-            collator = collator_;
+            if (!collators.empty())
+                collator = collators[0];
             const IColumn & column = *key_columns[0];
             const ColumnString & column_string = static_cast<const ColumnString &>(column);
             offsets = &column_string.getOffsets();
             chars = &column_string.getChars();
-            sort_key.resize(1024);
         }
 
         Key getKey(
             const ColumnRawPtrs &,
             size_t,
             size_t i,
-            const Sizes &) const
-        {
-            if unlikely(collator != nullptr)
-            {
-                throw Exception("getKey of SetMethodString with collator should not be called", ErrorCodes::LOGICAL_ERROR);
-            }
-            return StringRef(
-                &(*chars)[i == 0 ? 0 : (*offsets)[i - 1]],
-                (i == 0 ? (*offsets)[i] : ((*offsets)[i] - (*offsets)[i - 1])) - 1);
-        }
-
-        void insertKey(const ColumnRawPtrs &, size_t keys_size, size_t i, const Sizes &, Data & set_data, Arena & pool)
-        {
-            Key key = StringRef(
-                       &(*chars)[i == 0 ? 0 : (*offsets)[i - 1]],
-                       (i == 0 ? (*offsets)[i] : ((*offsets)[i] - (*offsets)[i - 1])) - 1);
-            if (collator != nullptr)
-            {
-                key = collator->sortKey(key.data, key.size, sort_key);
-            }
-            typename Data::iterator it;
-            bool inserted;
-            set_data.emplace(key, it, inserted);
-
-            if (inserted)
-                onNewKey(*it, keys_size, pool);
-        }
-
-        bool exists(const ColumnRawPtrs & , size_t , size_t i, const Sizes & , Data & set_data)
+            const Sizes &,
+            std::vector<String> & sort_key_containers = TiDB::dummy_sort_key_contaners) const
         {
             Key key = StringRef(
                     &(*chars)[i == 0 ? 0 : (*offsets)[i - 1]],
                     (i == 0 ? (*offsets)[i] : ((*offsets)[i] - (*offsets)[i - 1])) - 1);
             if (collator != nullptr)
             {
-                key = collator->sortKey(key.data, key.size, sort_key);
+                key = collator->sortKey(key.data, key.size, sort_key_containers[0]);
             }
-            return set_data.has(key);
+            return key;
         }
 
     };
@@ -173,54 +128,30 @@ struct SetMethodFixedString
         size_t n;
         const ColumnFixedString::Chars_t * chars;
         std::shared_ptr<TiDB::ITiDBCollator> collator;
-        String sort_key;
 
-        void init(const ColumnRawPtrs & key_columns, std::shared_ptr<TiDB::ITiDBCollator> collator_)
+        void init(const ColumnRawPtrs & key_columns, const TiDB::TiDBCollators & collators = TiDB::dummy_collators)
         {
-            collator = collator_;
+            if (!collators.empty())
+                collator = collators[0];
             const IColumn & column = *key_columns[0];
             const ColumnFixedString & column_string = static_cast<const ColumnFixedString &>(column);
             n = column_string.getN();
             chars = &column_string.getChars();
-            sort_key.resize(n * sizeof(GeneralCI::WeightType));
         }
 
         Key getKey(
             const ColumnRawPtrs &,
             size_t,
             size_t i,
-            const Sizes &) const
-        {
-            if unlikely(collator != nullptr)
-            {
-                throw Exception("getKey of SetMethodFixedString with collator should not be called", ErrorCodes::LOGICAL_ERROR);
-            }
-            return StringRef(&(*chars)[i * n], n);
-        }
-
-        void insertKey(const ColumnRawPtrs &, size_t keys_size, size_t i, const Sizes &, Data & set_data, Arena & pool)
+            const Sizes &,
+            std::vector<String> & sort_key_containers = TiDB::dummy_sort_key_contaners) const
         {
             Key key = StringRef(&(*chars)[i * n], n);
             if (collator != nullptr)
             {
-                key = collator->sortKey(key.data, key.size, sort_key);
+                key = collator->sortKey(key.data, key.size, sort_key_containers[0]);
             }
-            typename Data::iterator it;
-            bool inserted;
-            set_data.emplace(key, it, inserted);
-
-            if (inserted)
-                onNewKey(*it, keys_size, pool);
-        }
-
-        bool exists(const ColumnRawPtrs & , size_t , size_t i, const Sizes & , Data & set_data)
-        {
-            Key key = StringRef(&(*chars)[i * n], n);
-            if (collator != nullptr)
-            {
-                key = collator->sortKey(key.data, key.size, sort_key);
-            }
-            return set_data.has(key);
+            return key;
         }
 
     };
@@ -343,9 +274,8 @@ struct SetMethodKeysFixed
     public:
         using Base = set_impl::BaseStateKeysFixed<Key, has_nullable_keys>;
 
-        void init(const ColumnRawPtrs & key_columns, std::shared_ptr<TiDB::ITiDBCollator> collator_)
+        void init(const ColumnRawPtrs & key_columns, const TiDB::TiDBCollators & = TiDB::dummy_collators)
         {
-            collator = collator_;
             if (has_nullable_keys)
                 Base::init(key_columns);
         }
@@ -354,7 +284,8 @@ struct SetMethodKeysFixed
             const ColumnRawPtrs & key_columns,
             size_t keys_size,
             size_t i,
-            const Sizes & key_sizes) const
+            const Sizes & key_sizes,
+            std::vector<String> & = TiDB::dummy_sort_key_contaners) const
         {
             if (has_nullable_keys)
             {
@@ -365,26 +296,6 @@ struct SetMethodKeysFixed
                 return packFixed<Key>(i, keys_size, key_columns, key_sizes);
         }
 
-        void insertKey(const ColumnRawPtrs & key_columns, size_t keys_size, size_t i, const Sizes & key_sizes, Data & set_data, Arena & pool)
-        {
-            /// Obtain a key to insert to the set
-            Key key = getKey(key_columns, keys_size, i, key_sizes);
-
-            typename Data::iterator it;
-            bool inserted;
-            set_data.emplace(key, it, inserted);
-
-            if (inserted)
-                onNewKey(*it, keys_size, pool);
-        }
-
-        bool exists(const ColumnRawPtrs & key_columns, size_t keys_size, size_t i, const Sizes & key_sizes, Data & set_data)
-        {
-            Key key = getKey(key_columns, keys_size, i, key_sizes);
-            return set_data.has(key);
-        }
-
-        std::shared_ptr<TiDB::ITiDBCollator> collator;
     };
 
     static void onNewKey(typename Data::value_type &, size_t, Arena &) {}
@@ -401,37 +312,22 @@ struct SetMethodHashed
 
     struct State
     {
-        void init(const ColumnRawPtrs &, std::shared_ptr<TiDB::ITiDBCollator>)
+        TiDB::TiDBCollators collators;
+        void init(const ColumnRawPtrs &, const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
         {
+            collators = collators_;
         }
 
         Key getKey(
             const ColumnRawPtrs & key_columns,
             size_t keys_size,
             size_t i,
-            const Sizes &) const
+            const Sizes &,
+            std::vector<String> & sort_key_containers = TiDB::dummy_sort_key_contaners) const
         {
-            return hash128(i, keys_size, key_columns);
+            return hash128(i, keys_size, key_columns, collators, sort_key_containers);
         }
 
-        void insertKey(const ColumnRawPtrs & key_columns, size_t keys_size, size_t i, const Sizes & key_sizes, Data & set_data, Arena & pool)
-        {
-            /// Obtain a key to insert to the set
-            Key key = getKey(key_columns, keys_size, i, key_sizes);
-
-            typename Data::iterator it;
-            bool inserted;
-            set_data.emplace(key, it, inserted);
-
-            if (inserted)
-                onNewKey(*it, keys_size, pool);
-        }
-
-        bool exists(const ColumnRawPtrs & key_columns, size_t keys_size, size_t i, const Sizes & key_sizes, Data & set_data)
-        {
-            Key key = getKey(key_columns, keys_size, i, key_sizes);
-            return set_data.has(key);
-        }
     };
 
     static void onNewKey(typename Data::value_type &, size_t, Arena &) {}
