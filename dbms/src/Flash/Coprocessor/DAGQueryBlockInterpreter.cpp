@@ -728,6 +728,20 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
 
     DataTypes join_key_types;
     getJoinKeyTypes(join, join_key_types);
+    TiDB::TiDBCollators collators;
+    size_t join_key_size = join_key_types.size();
+    if (join.probe_types_size() == static_cast<int>(join_key_size) && join.build_types_size() == join.probe_types_size())
+        for (size_t i = 0; i < join_key_size; i++)
+        {
+            if (removeNullable(join_key_types[i])->isString())
+            {
+                if (join.probe_types(i).collate() != join.build_types(i).collate())
+                    throw Exception("Join with different collators on the join key", ErrorCodes::COP_BAD_DAG_REQUEST);
+                collators.push_back(getCollatorFromFieldType(join.probe_types(i)));
+            }
+            else
+                collators.push_back(nullptr);
+        }
 
     /// add necessary transformation if the join key is an expression
     Pipeline left_pipeline;
@@ -742,8 +756,8 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
 
     const Settings & settings = context.getSettingsRef();
     JoinPtr joinPtr = std::make_shared<Join>(left_key_names, right_key_names, true,
-        SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode), kind,
-        ASTTableJoin::Strictness::All);
+        SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode), kind, ASTTableJoin::Strictness::All,
+        collators);
     executeUnion(right_pipeline);
     right_query.source = right_pipeline.firstStream();
     right_query.join = joinPtr;

@@ -235,7 +235,8 @@ class Join
 {
 public:
     Join(const Names & key_names_left_, const Names & key_names_right_, bool use_nulls_,
-         const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_);
+         const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_,
+         const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators);
 
     bool empty() { return type == Type::EMPTY; }
 
@@ -377,11 +378,11 @@ private:
     /// Names of key columns (columns for equi-JOIN) in "right" table (in the order they appear in USING clause).
     const Names key_names_right;
 
-    /// collators for the join key
-    const TiDB::TiDBCollators collators;
-
     /// Substitute NULLs for non-JOINed rows.
     bool use_nulls;
+
+    /// collators for the join key
+    const TiDB::TiDBCollators collators;
 
     /** Blocks of "right" table.
       */

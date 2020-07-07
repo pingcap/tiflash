@@ -31,11 +31,13 @@ namespace ErrorCodes
 
 
 Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool use_nulls_,
-    const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_)
+    const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_,
+    const TiDB::TiDBCollators & collators_)
     : kind(kind_), strictness(strictness_),
     key_names_left(key_names_left_),
     key_names_right(key_names_right_),
     use_nulls(use_nulls_),
+    collators(collators_),
     log(&Logger::get("Join")),
     limits(limits)
 {
