@@ -5,7 +5,7 @@
 
 namespace DB
 {
-// The encryption provider is used to create a cipher stream for a specific
+// EncryptionProvider is used to create a cipher stream for a specific
 // file. The returned cipher stream will be used for actual
 // encryption/decryption actions.
 class EncryptionProvider
