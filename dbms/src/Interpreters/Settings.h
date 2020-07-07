@@ -28,6 +28,7 @@ struct Settings
 #define APPLY_FOR_SETTINGS(M) \
     M(SettingString, regions, "", "the region need to be read.") \
     M(SettingBool, resolve_locks, false, "tmt resolve locks.") \
+    M(SettingBool, group_by_collation_sensitive, false, "do group by with collation info.") \
     M(SettingUInt64, read_tso, DEFAULT_MAX_READ_TSO, "tmt read tso.") \
     M(SettingInt64, dag_records_per_chunk, DEFAULT_DAG_RECORDS_PER_CHUNK, "default chunk size of a DAG response.") \
     M(SettingInt64, schema_version, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, "tmt schema version.") \

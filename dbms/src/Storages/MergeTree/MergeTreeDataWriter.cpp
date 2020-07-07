@@ -40,7 +40,7 @@ void buildScatterSelector(
     size_t partitions_count = 0;
     for (size_t i = 0; i < num_rows; ++i)
     {
-        Data::key_type key = hash128(i, columns.size(), columns);
+        Data::key_type key = hash128(i, columns.size(), columns, TiDB::dummy_collators, TiDB::dummy_sort_key_contaners);
         // TODO: Better mod calculating.
         key = UInt128(key.low % partition_mod);
 

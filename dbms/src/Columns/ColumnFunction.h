@@ -74,17 +74,17 @@ public:
         throw Exception("Cannot insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    StringRef serializeValueIntoArena(size_t, Arena &, char const *&) const override
+    StringRef serializeValueIntoArena(size_t, Arena &, char const *&, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override
     {
         throw Exception("Cannot serialize from " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    const char * deserializeAndInsertFromArena(const char *) override
+    const char * deserializeAndInsertFromArena(const char *, std::shared_ptr<TiDB::ITiDBCollator>) override
     {
         throw Exception("Cannot deserialize to " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void updateHashWithValue(size_t, SipHash &) const override
+    void updateHashWithValue(size_t, SipHash &, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override
     {
         throw Exception("updateHashWithValue is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
