@@ -55,4 +55,13 @@ ca-path = ""
 cert-path = ""
 key-path = ""
 
-[import]
+[security.encryption]
+data-encryption-method = "aes256-ctr"
+data-key-rotation-period = "14d"
+
+[security.encryption.master-key]
+type = "file"
+path = "/cipher-file-256"
+
+[security.encryption.previous-master-key]
+type = "plaintext"
