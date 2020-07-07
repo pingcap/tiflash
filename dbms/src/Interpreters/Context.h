@@ -15,6 +15,7 @@
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/TimezoneInfo.h>
 #include <IO/CompressionSettings.h>
+#include <IO/FileProvider.h>
 #include <Storages/PartPathSelector.h>
 #include <Storages/Transaction/StorageEngineType.h>
 
@@ -396,6 +397,9 @@ public:
 
     void initializeTiFlashMetrics();
     TiFlashMetricsPtr getTiFlashMetrics() const;
+
+    void initializeFileProvider();
+    FileProviderPtr getFileProvider() const;
 
     Clusters & getClusters() const;
     std::shared_ptr<Cluster> getCluster(const std::string & cluster_name) const;

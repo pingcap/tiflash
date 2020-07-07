@@ -116,12 +116,16 @@ off_t ReadBufferFromFileDescriptor::doSeek(off_t offset, int whence)
         ProfileEvents::increment(ProfileEvents::Seek);
 
         pos = working_buffer.end();
-        off_t res = lseek(fd, new_pos, SEEK_SET);
+        off_t res = doSeekInFile(new_pos, SEEK_SET);
         if (-1 == res)
             throwFromErrno("Cannot seek through file " + getFileName(), ErrorCodes::CANNOT_SEEK_THROUGH_FILE);
         pos_in_file = new_pos;
         return res;
     }
+}
+
+off_t ReadBufferFromFileDescriptor::doSeekInFile(off_t offset, int whence) {
+    return ::lseek(fd, offset, whence);
 }
 
 

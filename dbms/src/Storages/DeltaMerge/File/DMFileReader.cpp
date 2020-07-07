@@ -91,7 +91,7 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
         }
     }
 
-    buf = std::make_unique<CompressedReadBufferFromFile>(data_path, estimated_size, aio_threshold, buffer_size);
+    buf = std::make_unique<CompressedReadBufferFromFile>(reader.file_provider, data_path, estimated_size, aio_threshold, buffer_size);
 }
 
 DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
@@ -111,6 +111,7 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
                            ColumnCachePtr &   column_cache_,
                            size_t             aio_threshold,
                            size_t             max_read_buffer_size,
+                           const FileProviderPtr &  file_provider_,
                            size_t             rows_threshold_per_read_)
     : dmfile(dmfile_),
       read_columns(read_columns_),
@@ -125,6 +126,7 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
       enable_column_cache(enable_column_cache_),
       column_cache(column_cache_),
       rows_threshold_per_read(rows_threshold_per_read_),
+      file_provider(file_provider_),
       log(&Logger::get("DMFileReader"))
 {
     if (dmfile->getStatus() != DMFile::Status::READABLE)

@@ -41,6 +41,8 @@ private:
     /// If 'offset' is small enough to stay in buffer after seek, then true seek in file does not happen.
     off_t doSeek(off_t offset, int whence) override;
 
+    virtual off_t doSeekInFile(off_t offset, int whence);
+
     /// Assuming file descriptor supports 'select', check that we have data to read or wait until timeout.
     bool poll(size_t timeout_microseconds);
 };

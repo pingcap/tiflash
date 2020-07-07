@@ -39,6 +39,17 @@ CompressedReadBufferFromFile::CompressedReadBufferFromFile(
 }
 
 
+CompressedReadBufferFromFile::CompressedReadBufferFromFile(
+    FileProviderPtr & file_provider, const std::string & path,
+    size_t estimated_size, size_t aio_threshold, size_t buf_size)
+    : BufferWithOwnMemory<ReadBuffer>(0),
+        p_file_in(createReadBufferFromFileBase(file_provider, path, estimated_size, aio_threshold, buf_size)),
+        file_in(*p_file_in)
+{
+    compressed_in = &file_in;
+}
+
+
 void CompressedReadBufferFromFile::seek(size_t offset_in_compressed_file, size_t offset_in_decompressed_block)
 {
     if (size_compressed &&
