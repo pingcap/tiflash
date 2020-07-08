@@ -40,8 +40,6 @@ protected:
 
         context = std::make_unique<Context>(DMTestEnv::getContext());
         store   = reload();
-
-        Logger::get("DeltaMergeStore").setLevel("trace");
     }
 
     DeltaMergeStorePtr reload(const ColumnDefinesPtr & pre_define_columns = {})
@@ -126,8 +124,6 @@ try
         table_column_defines->emplace_back(col_str_define);
         table_column_defines->emplace_back(col_i8_define);
 
-        // TODO: remove this cleanUp() after we support DDL for DMFile.
-        cleanUp();
         store = reload(table_column_defines);
     }
 
@@ -1295,7 +1291,7 @@ try
     }
 
     {
-        // DDL change col from i8 -> i32
+        // DDL change col name from col_name_before_ddl -> col_name_after_ddl
         AlterCommands commands;
         {
             AlterCommand com;
@@ -1364,6 +1360,180 @@ try
 }
 CATCH
 
+// Test rename pk column when pk_is_handle = true.
+TEST_F(DeltaMergeStore_test, DDLRenamePKColumn)
+try
+{
+    const String      col_name_before_ddl = "pk1";
+    const String      col_name_after_ddl  = "pk2";
+    const ColId       col_id_ddl          = 1;
+    const DataTypePtr col_type            = DataTypeFactory::instance().get("Int32");
+    {
+        auto         table_column_defines = DMTestEnv::getDefaultColumns();
+        ColumnDefine cd(col_id_ddl, col_name_before_ddl, col_type);
+        // Use this column as pk
+        (*table_column_defines)[0] = cd;
+        store                      = reload(table_column_defines);
+    }
+
+    {
+        // check column structure
+        const auto & cols = store->getTableColumns();
+        ASSERT_EQ(cols.size(), 3UL);
+        const auto & str_col = cols[0];
+        ASSERT_EQ(str_col.name, col_name_before_ddl);
+        ASSERT_EQ(str_col.id, col_id_ddl);
+        ASSERT_TRUE(str_col.type->equals(*col_type));
+    }
+    {
+        // check pk name
+        auto pks_desc = store->getPrimarySortDescription();
+        ASSERT_EQ(pks_desc.size(), 1UL);
+        auto pk = pks_desc[0];
+        ASSERT_EQ(pk.column_name, col_name_before_ddl);
+    }
+
+    const size_t num_rows_write = 128;
+    {
+        // write to store
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false, /*tso=*/2, col_name_before_ddl, col_id_ddl, col_type);
+        store->write(*context, context->getSettingsRef(), block);
+    }
+
+    {
+        // DDL change pk col name from col_name_before_ddl -> col_name_after_ddl
+        AlterCommands commands;
+        {
+            AlterCommand com;
+            com.type            = AlterCommand::RENAME_COLUMN;
+            com.data_type       = col_type;
+            com.column_name     = col_name_before_ddl;
+            com.new_column_name = col_name_after_ddl;
+            com.column_id       = col_id_ddl;
+            commands.emplace_back(std::move(com));
+        }
+        ColumnID        _ignored = 0;
+        TiDB::TableInfo table_info;
+        {
+            static const String json_table_info = R"(
+{"cols":[{"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"pk2","O":"pk2"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":4099,"Flen":11,"Tp":3}}],"comment":"","id":45,"name":{"L":"t","O":"t"},"partition":null,"pk_is_handle":true,"schema_version":23,"state":5,"update_timestamp":417906423650844680}
+        )";
+            table_info.deserialize(json_table_info);
+            ASSERT_TRUE(table_info.pk_is_handle);
+        }
+        store->applyAlters(commands, table_info, _ignored, *context);
+    }
+
+    {
+        // check pk name after ddl
+        auto pks_desc = store->getPrimarySortDescription();
+        ASSERT_EQ(pks_desc.size(), 1UL);
+        auto pk = pks_desc[0];
+        ASSERT_EQ(pk.column_name, col_name_after_ddl);
+    }
+
+    {
+        // read all columns from store
+        const auto &      columns = store->getTableColumns();
+        BlockInputStreams ins     = store->read(*context,
+                                            context->getSettingsRef(),
+                                            columns,
+                                            {HandleRange::newAll()},
+                                            /* num_streams= */ 1,
+                                            /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                            EMPTY_FILTER,
+                                            /* expected_block_size= */ 1024);
+        ASSERT_EQ(ins.size(), 1UL);
+        BlockInputStreamPtr & in = ins[0];
+        {
+            // check col rename is success
+            const Block  head = in->getHeader();
+            const auto & col  = head.getByName(col_name_after_ddl);
+            ASSERT_EQ(col.name, col_name_after_ddl);
+            ASSERT_EQ(col.column_id, col_id_ddl);
+            ASSERT_TRUE(col.type->equals(*col_type));
+            // check old col name is not exist
+            ASSERT_THROW(head.getByName(col_name_before_ddl), ::DB::Exception);
+        }
+
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                {
+                    if (iter.name == col_name_after_ddl)
+                    {
+                        //printf("col2:%s\n", c->getDataAt(i).data);
+                        EXPECT_EQ(c->getInt(i), Int64(i));
+                    }
+                }
+            }
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+
+    {
+        // write and read with new pk name after ddl
+        {
+            // Then write new block with new pk name
+            Block block = DMTestEnv::prepareSimpleWriteBlock(
+                num_rows_write, num_rows_write * 2, false, /*tso=*/2, col_name_after_ddl, col_id_ddl, col_type);
+            store->write(*context, context->getSettingsRef(), block);
+        }
+        {
+            // read all columns from store
+            const auto &      columns = store->getTableColumns();
+            BlockInputStreams ins     = store->read(*context,
+                                                context->getSettingsRef(),
+                                                columns,
+                                                {HandleRange::newAll()},
+                                                /* num_streams= */ 1,
+                                                /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                                EMPTY_FILTER,
+                                                /* expected_block_size= */ 1024);
+            ASSERT_EQ(ins.size(), 1UL);
+            BlockInputStreamPtr & in = ins[0];
+            {
+                // check col rename is success
+                const Block  head = in->getHeader();
+                const auto & col  = head.getByName(col_name_after_ddl);
+                ASSERT_EQ(col.name, col_name_after_ddl);
+                ASSERT_EQ(col.column_id, col_id_ddl);
+                ASSERT_TRUE(col.type->equals(*col_type));
+                // check old col name is not exist
+                ASSERT_THROW(head.getByName(col_name_before_ddl), ::DB::Exception);
+            }
+
+            size_t num_rows_read = 0;
+            in->readPrefix();
+            while (Block block = in->read())
+            {
+                num_rows_read += block.rows();
+                for (auto && iter : block)
+                {
+                    auto c = iter.column;
+                    for (Int64 i = 0; i < Int64(c->size()); ++i)
+                    {
+                        if (iter.name == col_name_after_ddl)
+                        {
+                            //printf("col2:%s\n", c->getDataAt(i).data);
+                            EXPECT_EQ(c->getInt(i), Int64(i));
+                        }
+                    }
+                }
+            }
+            in->readSuffix();
+            ASSERT_EQ(num_rows_read, num_rows_write * 2);
+        }
+    }
+}
+CATCH
 
 } // namespace tests
 } // namespace DM
