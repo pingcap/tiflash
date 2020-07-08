@@ -126,23 +126,23 @@ public:
         s -= n;
     }
 
-    StringRef serializeValueIntoArena(size_t, Arena & arena, char const *& begin) const override
+    StringRef serializeValueIntoArena(size_t, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator> collator, String & sort_key_container) const override
     {
-        return data->serializeValueIntoArena(0, arena, begin);
+        return data->serializeValueIntoArena(0, arena, begin, collator, sort_key_container);
     }
 
-    const char * deserializeAndInsertFromArena(const char * pos) override
+    const char * deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator> collator) override
     {
         auto & mutable_data = data->assumeMutableRef();
-        auto res = mutable_data.deserializeAndInsertFromArena(pos);
+        auto res = mutable_data.deserializeAndInsertFromArena(pos, collator);
         mutable_data.popBack(1);
         ++s;
         return res;
     }
 
-    void updateHashWithValue(size_t, SipHash & hash) const override
+    void updateHashWithValue(size_t, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator> collator, String & sort_key_container) const override
     {
-        data->updateHashWithValue(0, hash);
+        data->updateHashWithValue(0, hash, collator, sort_key_container);
     }
 
     ColumnPtr filter(const Filter & filt, ssize_t result_size_hint) const override;

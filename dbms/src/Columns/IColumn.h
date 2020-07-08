@@ -6,6 +6,7 @@
 #include <Common/PODArray.h>
 #include <Common/Exception.h>
 #include <common/StringRef.h>
+#include <Storages/Transaction/Collator.h>
 
 
 class SipHash;
@@ -154,16 +155,27 @@ public:
       *  For example, to obtain unambiguous representation of Array of strings, strings data should be interleaved with their sizes.
       * Parameter begin should be used with Arena::allocContinue.
       */
-    virtual StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const = 0;
+    virtual StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator> collator = nullptr, String & sort_key_container = TiDB::dummy_sort_key_contaner) const = 0;
 
-    /// Deserializes a value that was serialized using IColumn::serializeValueIntoArena method.
-    /// Returns pointer to the position after the read data.
-    virtual const char * deserializeAndInsertFromArena(const char * pos) = 0;
+    /** Deserializes a value that was serialized using IColumn::serializeValueIntoArena method.
+      * Returns pointer to the position after the read data.
+      * Note:
+      * 1. For string columns with collation it is actually impossible to restore the value.
+      *     In this case, the column restored by this function is discarded, the compiler will add a
+      *     special aggregate function(any) as the group by column's output. For example:
+      *         select string_column, count(*) from table group by string_column
+      *     if string_column has collation information, the query will be rewrite to
+      *         select any(string_column), count(*) from table group by string_column
+      * 2. The input parameter `collator` does not work well for complex columns(column tuple),
+      *     but it is only used by TiDB , which does not support complex columns, so just ignore
+      *     the complex column will be ok.
+      */
+    virtual const char * deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator> collator = nullptr) = 0;
 
     /// Update state of hash function with value of n-th element.
     /// On subsequent calls of this method for sequence of column values of arbitary types,
     ///  passed bytes to hash must identify sequence of values unambiguously.
-    virtual void updateHashWithValue(size_t n, SipHash & hash) const = 0;
+    virtual void updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator> collator = nullptr, String & sort_key_container = TiDB::dummy_sort_key_contaner) const = 0;
 
     /** Removes elements that don't match the filter.
       * Is used in WHERE and HAVING operations.

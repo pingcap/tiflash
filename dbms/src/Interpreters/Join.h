@@ -33,7 +33,7 @@ struct JoinKeyGetterOneNumber
     /** Created before processing of each block.
       * Initialize some members, used in another methods, called in inner loops.
       */
-    JoinKeyGetterOneNumber(const ColumnRawPtrs & key_columns)
+    JoinKeyGetterOneNumber(const ColumnRawPtrs & key_columns, const TiDB::TiDBCollators &)
     {
         vec = &static_cast<const ColumnVector<FieldType> *>(key_columns[0])->getData()[0];
     }
@@ -42,7 +42,8 @@ struct JoinKeyGetterOneNumber
         const ColumnRawPtrs & /*key_columns*/,
         size_t /*keys_size*/,                 /// number of key columns.
         size_t i,                             /// row number to get key from.
-        const Sizes & /*key_sizes*/) const    /// If keys are of fixed size - their sizes. Not used for methods with variable-length keys.
+        const Sizes & /*key_sizes*/,
+        std::vector<String> & /*sort_key_containers*/) const    /// If keys are of fixed size - their sizes. Not used for methods with variable-length keys.
     {
         return unionCastToUInt64(vec[i]);
     }
@@ -58,24 +59,33 @@ struct JoinKeyGetterString
 
     const ColumnString::Offsets * offsets;
     const ColumnString::Chars_t * chars;
+    std::shared_ptr<TiDB::ITiDBCollator> collator;
 
-    JoinKeyGetterString(const ColumnRawPtrs & key_columns)
+    JoinKeyGetterString(const ColumnRawPtrs & key_columns, const TiDB::TiDBCollators & collators)
     {
         const IColumn & column = *key_columns[0];
         const ColumnString & column_string = static_cast<const ColumnString &>(column);
         offsets = &column_string.getOffsets();
         chars = &column_string.getChars();
+        if (!collators.empty())
+            collator = collators[0];
     }
 
     Key getKey(
         const ColumnRawPtrs &,
         size_t,
         size_t i,
-        const Sizes &) const
+        const Sizes &,
+        std::vector<String> & sort_key_containers) const
     {
-        return StringRef(
+        Key key = StringRef(
             &(*chars)[i == 0 ? 0 : (*offsets)[i - 1]],
             (i == 0 ? (*offsets)[i] : ((*offsets)[i] - (*offsets)[i - 1])) - 1);
+        if (collator != nullptr)
+        {
+            key = collator->sortKey(key.data, key.size, sort_key_containers[0]);
+        }
+        return key;
     }
 
     static void onNewKey(Key & key, Arena & pool)
@@ -92,7 +102,7 @@ struct JoinKeyGetterFixedString
     size_t n;
     const ColumnFixedString::Chars_t * chars;
 
-    JoinKeyGetterFixedString(const ColumnRawPtrs & key_columns)
+    JoinKeyGetterFixedString(const ColumnRawPtrs & key_columns, const TiDB::TiDBCollators &)
     {
         const IColumn & column = *key_columns[0];
         const ColumnFixedString & column_string = static_cast<const ColumnFixedString &>(column);
@@ -104,7 +114,8 @@ struct JoinKeyGetterFixedString
         const ColumnRawPtrs &,
         size_t,
         size_t i,
-        const Sizes &) const
+        const Sizes &,
+        std::vector<String> &) const
     {
         return StringRef(&(*chars)[i * n], n);
     }
@@ -121,7 +132,7 @@ struct JoinKeyGetterFixed
 {
     using Key = TKey;
 
-    JoinKeyGetterFixed(const ColumnRawPtrs &)
+    JoinKeyGetterFixed(const ColumnRawPtrs &, const TiDB::TiDBCollators &)
     {
     }
 
@@ -129,7 +140,8 @@ struct JoinKeyGetterFixed
         const ColumnRawPtrs & key_columns,
         size_t keys_size,
         size_t i,
-        const Sizes & key_sizes) const
+        const Sizes & key_sizes,
+        std::vector<String> &) const
     {
         return packFixed<Key>(i, keys_size, key_columns, key_sizes);
     }
@@ -141,18 +153,21 @@ struct JoinKeyGetterFixed
 struct JoinKeyGetterHashed
 {
     using Key = UInt128;
+    TiDB::TiDBCollators collators;
 
-    JoinKeyGetterHashed(const ColumnRawPtrs &)
+    JoinKeyGetterHashed(const ColumnRawPtrs &, const TiDB::TiDBCollators & collators_)
     {
+        collators = collators_;
     }
 
     Key getKey(
         const ColumnRawPtrs & key_columns,
         size_t keys_size,
         size_t i,
-        const Sizes &) const
+        const Sizes &,
+        std::vector<String> & sort_key_containers) const
     {
-        return hash128(i, keys_size, key_columns);
+        return hash128(i, keys_size, key_columns, collators, sort_key_containers);
     }
 
     static void onNewKey(Key &, Arena &) {}
@@ -220,7 +235,8 @@ class Join
 {
 public:
     Join(const Names & key_names_left_, const Names & key_names_right_, bool use_nulls_,
-         const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_);
+         const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_,
+         const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators);
 
     bool empty() { return type == Type::EMPTY; }
 
@@ -364,6 +380,9 @@ private:
 
     /// Substitute NULLs for non-JOINed rows.
     bool use_nulls;
+
+    /// collators for the join key
+    const TiDB::TiDBCollators collators;
 
     /** Blocks of "right" table.
       */
