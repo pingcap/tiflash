@@ -90,6 +90,9 @@ struct TiDBConvertToString
             col_null_map_to = ColumnUInt8::create(size, 0);
             vec_null_map_to = &col_null_map_to->getData();
         }
+        String padding_string;
+        if (tp.tp() == TiDB::TypeString && tp.flen() > 0)
+            padding_string.resize(tp.flen(), 0);
 
         const auto & col_with_type_and_name = block.getByPosition(arguments[0]);
         const auto & type = static_cast<const FromDataType &>(*col_with_type_and_name.type);
@@ -97,6 +100,7 @@ struct TiDBConvertToString
         auto col_to = ColumnString::create();
         ColumnString::Chars_t & data_to = col_to->getChars();
         ColumnString::Offsets & offsets_to = col_to->getOffsets();
+        WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
 
         if constexpr (std::is_same_v<FromDataType, DataTypeString>)
         {
@@ -106,7 +110,6 @@ struct TiDBConvertToString
             const ColumnString::Chars_t * data_from = &col_from_string->getChars();
             const IColumn::Offsets * offsets_from = &col_from_string->getOffsets();
 
-            WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
             size_t current_offset = 0;
             for (size_t i = 0; i < size; i++)
             {
@@ -119,9 +122,12 @@ struct TiDBConvertToString
                     if (tp.charset() == "utf8" || tp.charset() == "utf8mb4")
                         byte_length = charLengthToByteLengthFromUTF8(
                             reinterpret_cast<const char *>(&(*data_from)[current_offset]), org_length, byte_length);
+                    byte_length = std::min(byte_length, org_length);
                 }
                 // todo handle overflow check
-                write_buffer.write(reinterpret_cast<const char *>(&(*data_from)[current_offset]), std::min(byte_length, org_length));
+                write_buffer.write(reinterpret_cast<const char *>(&(*data_from)[current_offset]), byte_length);
+                if (tp.tp() == TiDB::TypeString && tp.flen() > 0 && byte_length < static_cast<size_t>(tp.flen()))
+                    write_buffer.write(padding_string.data(), tp.flen() - byte_length);
                 writeChar(0, write_buffer);
                 offsets_to[i] = write_buffer.count();
             }
@@ -137,12 +143,16 @@ struct TiDBConvertToString
             container_per_element.resize(decimal_max_prec);
             offsets_to.resize(size);
 
-            WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
             for (size_t i = 0; i < size; ++i)
             {
                 WriteBufferFromVector<ColumnString::Chars_t> element_write_buffer(container_per_element);
                 FormatImpl<FromDataType>::execute(vec_from[i], element_write_buffer, &type, nullptr);
-                write_buffer.write(reinterpret_cast<char *>(container_per_element.data()), element_write_buffer.count());
+                size_t byte_length = element_write_buffer.count();
+                if (tp.flen() > 0)
+                    byte_length = std::min(byte_length, tp.flen());
+                write_buffer.write(reinterpret_cast<char *>(container_per_element.data()), byte_length);
+                if (tp.tp() == TiDB::TypeString && tp.flen() > 0 && byte_length < static_cast<size_t>(tp.flen()))
+                    write_buffer.write(padding_string.data(), tp.flen() - byte_length);
                 writeChar(0, write_buffer);
                 offsets_to[i] = write_buffer.count();
             }
@@ -172,12 +182,16 @@ struct TiDBConvertToString
             }
             offsets_to.resize(size);
 
-            WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
             for (size_t i = 0; i < size; ++i)
             {
                 WriteBufferFromVector<ColumnString::Chars_t> element_write_buffer(container_per_element);
                 FormatImpl<FromDataType>::execute(vec_from[i], element_write_buffer, &type, nullptr);
-                write_buffer.write(reinterpret_cast<char *>(container_per_element.data()), element_write_buffer.count());
+                size_t byte_length = element_write_buffer.count();
+                if (tp.flen() > 0)
+                    byte_length = std::min(byte_length, tp.flen());
+                write_buffer.write(reinterpret_cast<char *>(container_per_element.data()), byte_length);
+                if (tp.tp() == TiDB::TypeString && tp.flen() > 0 && byte_length < static_cast<size_t>(tp.flen()))
+                    write_buffer.write(padding_string.data(), tp.flen() - byte_length);
                 writeChar(0, write_buffer);
                 offsets_to[i] = write_buffer.count();
             }
@@ -898,7 +912,7 @@ struct TiDBConvertToDecimal
         if (decimal_parts.exp_part.size != 0)
         {
             std::tie(frac_offset_by_exponent, err)
-                = TiDBConvertToInteger<DataTypeUInt8, DataTypeUInt64, false>::toInt<Int64>(decimal_parts.exp_part);
+                = TiDBConvertToInteger<DataTypeUInt8, DataTypeInt64, false>::toInt<Int64>(decimal_parts.exp_part);
             /// follow TiDB's code
             if (err == OVERFLOW_ERR || frac_offset_by_exponent > std::numeric_limits<Int32>::max() / 2
                 || frac_offset_by_exponent < std::numeric_limits<Int32>::min() / 2)
