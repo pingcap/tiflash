@@ -1117,6 +1117,7 @@ protected:
     }
 
     bool useDefaultImplementationForConstants() const override { return true; }
+    bool useDefaultImplementationForNulls() const override { return false; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1}; }
 
 private:
@@ -1323,7 +1324,58 @@ private:
         if (from_type->equals(*to_type) && !from_inner_type->isParametric() && !from_inner_type->isString())
             return createIdentityWrapper(from_type);
 
-        return prepareImpl(from_inner_type, to_inner_type, to_type->isNullable());
+        auto wrapper = prepareImpl(from_inner_type, to_inner_type, to_type->isNullable());
+        if (from_type->isNullable())
+        {
+            return [wrapper, to_type](Block & block, const ColumnNumbers & arguments, size_t result, bool in_union_,
+                       const tipb::FieldType & tidb_tp_, const Context & context_) {
+                const auto & from_col = block.getByPosition(arguments[0]).column;
+                const auto & from_nullable_col = static_cast<const ColumnNullable &>(*from_col);
+                const auto & from_null_map = from_nullable_col.getNullMapData();
+                // make sure if to_type is not nullable, then there is no null value in from_column
+                if (!to_type->isNullable())
+                {
+                    if (!memoryIsZero(from_null_map.data(), from_null_map.size()))
+                        throw Exception{
+                            "Cannot convert NULL value to non-Nullable type", ErrorCodes::CANNOT_INSERT_NULL_IN_ORDINARY_COLUMN};
+                }
+                Block tmp_block = createBlockWithNestedColumns(block, arguments, result);
+                wrapper(tmp_block, arguments, result, in_union_, tidb_tp_, context_);
+                if (!to_type->isNullable())
+                {
+                    block.getByPosition(result).column = tmp_block.getByPosition(result).column;
+                }
+                else
+                {
+                    ColumnPtr result_null_map_column
+                        = static_cast<const ColumnNullable &>(*tmp_block.getByPosition(result).column).getNullMapColumnPtr();
+                    ColumnPtr result_not_nullable
+                        = static_cast<const ColumnNullable &>(*tmp_block.getByPosition(result).column).getNestedColumnPtr();
+                    size_t size = result_null_map_column->size();
+                    MutableColumnPtr mutable_result_null_map_column = (*std::move(result_null_map_column)).mutate();
+                    NullMap & result_null_map = static_cast<ColumnUInt8 &>(*mutable_result_null_map_column).getData();
+                    for (size_t i = 0; i < size; i++)
+                    {
+                        if (from_null_map[i])
+                            result_null_map[i] = 1;
+                    }
+                    result_null_map_column = std::move(mutable_result_null_map_column);
+                    if (result_not_nullable->isColumnConst())
+                    {
+                        block.getByPosition(result).column
+                            = ColumnNullable::create(result_not_nullable->convertToFullColumnIfConst(), result_null_map_column);
+                    }
+                    else
+                    {
+                        block.getByPosition(result).column = ColumnNullable::create(result_not_nullable, result_null_map_column);
+                    }
+                }
+            };
+        }
+        else
+        {
+            return wrapper;
+        }
     }
 
     WrapperType prepareImpl(const DataTypePtr & from_type, const DataTypePtr & to_type, bool return_nullable) const
@@ -1350,6 +1402,7 @@ public:
     size_t getNumberOfArguments() const override { return 2; }
     void setInUnion(bool in_union_) { in_union = in_union_; }
     void setTiDBFieldType(const tipb::FieldType * tidb_tp_) { tidb_tp = tidb_tp_; }
+    bool useDefaultImplementationForNulls() const override { return false; }
 
 
 protected:
