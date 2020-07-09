@@ -398,6 +398,10 @@ namespace ErrorCodes
     extern const int COP_BAD_DAG_REQUEST = 10006;
     extern const int FAIL_POINT_ERROR = 10007;
     extern const int TIDB_TABLE_ALREADY_EXISTS = 10008;
+    extern const int TRUNCATE_ERROR = 10009;
+    extern const int OVERFLOW_ERROR = 10010;
+    extern const int DIVIDED_BY_ZERO = 10011;
+    extern const int INVALID_TIME = 10012;
 }
 
 }

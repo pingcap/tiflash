@@ -59,8 +59,9 @@ template <bool batch>
 void DAGDriver<batch>::execute()
 try
 {
-    DAGContext dag_context;
-    DAGQuerySource dag(context, dag_context, regions, dag_request, writer, batch);
+    DAGContext dag_context(dag_request);
+    context.setDAGContext(&dag_context);
+    DAGQuerySource dag(context, regions, dag_request, writer, batch);
 
     BlockIO streams = executeQuery(dag, context, internal, QueryProcessingStage::Complete);
     if (!streams.in || streams.out)

@@ -17,6 +17,7 @@
 #include <IO/CompressionSettings.h>
 #include <Storages/PartPathSelector.h>
 #include <Storages/Transaction/StorageEngineType.h>
+#include <Flash/Coprocessor/DAGContext.h>
 
 
 namespace Poco
@@ -143,6 +144,8 @@ private:
     bool use_l0_opt = true;
 
     TimezoneInfo timezone_info;
+
+    DAGContext * dag_context = nullptr;
 
     using DatabasePtr = std::shared_ptr<IDatabase>;
     using Databases = std::map<String, std::shared_ptr<IDatabase>>;
@@ -325,6 +328,9 @@ public:
     void setProcessListElement(ProcessListElement * elem);
     /// Can return nullptr if the query was not inserted into the ProcessList.
     ProcessListElement * getProcessListElement() const;
+
+    void setDAGContext(DAGContext * dag_context);
+    DAGContext * getDAGContext() const;
 
     /// List all queries.
     ProcessList & getProcessList();

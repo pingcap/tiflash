@@ -80,7 +80,8 @@ struct TiDBConvertToString
         return ret;
     }
 
-    static void execute(Block & block, const ColumnNumbers & arguments, size_t result, bool, const tipb::FieldType & tp, const Context &)
+    static void execute(
+        Block & block, const ColumnNumbers & arguments, size_t result, bool, const tipb::FieldType & tp, const Context & context)
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
         ColumnUInt8::MutablePtr col_null_map_to;
@@ -124,7 +125,8 @@ struct TiDBConvertToString
                             reinterpret_cast<const char *>(&(*data_from)[current_offset]), org_length, byte_length);
                     byte_length = std::min(byte_length, org_length);
                 }
-                // todo handle overflow check
+                if (byte_length < org_length)
+                    context.getDAGContext()->handleTruncateError("Data Too Long");
                 write_buffer.write(reinterpret_cast<const char *>(&(*data_from)[current_offset]), byte_length);
                 if (tp.tp() == TiDB::TypeString && tp.flen() > 0 && byte_length < static_cast<size_t>(tp.flen()))
                     write_buffer.write(padding_string.data(), tp.flen() - byte_length);
@@ -150,6 +152,8 @@ struct TiDBConvertToString
                 size_t byte_length = element_write_buffer.count();
                 if (tp.flen() > 0)
                     byte_length = std::min(byte_length, tp.flen());
+                if (byte_length < element_write_buffer.count())
+                    context.getDAGContext()->handleTruncateError("Data Too Long");
                 write_buffer.write(reinterpret_cast<char *>(container_per_element.data()), byte_length);
                 if (tp.tp() == TiDB::TypeString && tp.flen() > 0 && byte_length < static_cast<size_t>(tp.flen()))
                     write_buffer.write(padding_string.data(), tp.flen() - byte_length);
@@ -189,6 +193,8 @@ struct TiDBConvertToString
                 size_t byte_length = element_write_buffer.count();
                 if (tp.flen() > 0)
                     byte_length = std::min(byte_length, tp.flen());
+                if (byte_length < element_write_buffer.count())
+                    context.getDAGContext()->handleTruncateError("Data Too Long");
                 write_buffer.write(reinterpret_cast<char *>(container_per_element.data()), byte_length);
                 if (tp.tp() == TiDB::TypeString && tp.flen() > 0 && byte_length < static_cast<size_t>(tp.flen()))
                     write_buffer.write(padding_string.data(), tp.flen() - byte_length);
@@ -217,45 +223,56 @@ struct TiDBConvertToInteger
     static constexpr bool to_unsigned = std::is_unsigned_v<ToFieldType>;
 
     template <typename T, typename ToFieldType>
-    static std::enable_if_t<std::is_floating_point_v<T>, ToFieldType> toUInt(const T & value, const Context &)
+    static std::enable_if_t<std::is_floating_point_v<T>, ToFieldType> toUInt(const T & value, const Context & context)
     {
         T rounded_value = std::round(value);
         if (rounded_value < 0)
         {
-            // todo handle overflow error, check if need clip to zero
+            context.getDAGContext()->handleOverflowError("cast real as int");
+            if (context.getDAGContext()->shouldClipToZero())
+                return static_cast<ToFieldType>(0);
             return static_cast<ToFieldType>(rounded_value);
         }
         if (rounded_value > std::numeric_limits<ToFieldType>::max())
-            // todo handle overflow error
+        {
+            context.getDAGContext()->handleOverflowError("cast real as int");
             return std::numeric_limits<ToFieldType>::max();
+        }
         else if (rounded_value == std::numeric_limits<ToFieldType>::max())
+        {
+            context.getDAGContext()->handleOverflowError("cast real as int");
             return std::numeric_limits<ToFieldType>::max();
+        }
         else
             return static_cast<ToFieldType>(rounded_value);
     }
 
     template <typename T, typename ToFieldType>
-    static std::enable_if_t<std::is_floating_point_v<T>, ToFieldType> toInt(const T & value, const Context &)
+    static std::enable_if_t<std::is_floating_point_v<T>, ToFieldType> toInt(const T & value, const Context & context)
     {
         T rounded_value = std::round(value);
         if (rounded_value < std::numeric_limits<ToFieldType>::min())
-            // todo handle overflow check
+        {
+            context.getDAGContext()->handleOverflowError("cast real as int");
             return std::numeric_limits<ToFieldType>::min();
+        }
         if (rounded_value >= std::numeric_limits<ToFieldType>::max())
         {
-            // todo handle overflow check when round_value > max()
+            context.getDAGContext()->handleOverflowError("cast real as int");
             return std::numeric_limits<ToFieldType>::max();
         }
         return static_cast<ToFieldType>(rounded_value);
     }
 
     template <typename T, typename ToFieldType>
-    static ToFieldType decToUInt(const DecimalField<T> & value, const Context &)
+    static ToFieldType decToUInt(const DecimalField<T> & value, const Context & context)
     {
         auto v = value.getValue().value;
         if (v < 0)
-            // todo check overflow
+        {
+            context.getDAGContext()->handleOverflowError("cast decimal as int");
             return static_cast<ToFieldType>(0);
+        }
         ScaleType scale = value.getScale();
         for (ScaleType i = 0; i < scale; i++)
         {
@@ -265,14 +282,14 @@ struct TiDBConvertToInteger
         Int128 max_value = std::numeric_limits<ToFieldType>::max();
         if (v > max_value)
         {
-            // todo check overflow
+            context.getDAGContext()->handleOverflowError("cast decimal as int");
             return max_value;
         }
         return static_cast<ToFieldType>(v);
     }
 
     template <typename T, typename ToFieldType>
-    static ToFieldType decToInt(const DecimalField<T> & value, const Context &)
+    static ToFieldType decToInt(const DecimalField<T> & value, const Context & context)
     {
         auto v = value.getValue().value;
         ScaleType scale = value.getScale();
@@ -282,7 +299,7 @@ struct TiDBConvertToInteger
         }
         if (v > std::numeric_limits<ToFieldType>::max() || v < std::numeric_limits<ToFieldType>::min())
         {
-            // todo overflow check
+            context.getDAGContext()->handleOverflowError("cast decimal as int");
             if (v > 0)
                 return std::numeric_limits<ToFieldType>::max();
             return std::numeric_limits<ToFieldType>::min();
@@ -309,7 +326,6 @@ struct TiDBConvertToInteger
     {
         static const T cut_off = std::numeric_limits<T>::max() / 10;
         if (value.data[0] == '-')
-            // todo handle overflow error
             return std::make_tuple(0, OVERFLOW_ERR);
         size_t pos = value.data[0] == '+' ? 1 : 0;
         T ret = 0;
@@ -363,26 +379,35 @@ struct TiDBConvertToInteger
     }
 
     template <typename T>
-    static T strToInt(const StringRef & value, const Context &)
+    static T strToInt(const StringRef & value, const Context & context)
     {
         // trim space
         StringRef trim_string = trim(value);
         if (trim_string.size == 0)
-            // todo handle truncated error
+        {
+            if (value.size != 0)
+                context.getDAGContext()->handleTruncateError("cast str as int");
             return static_cast<T>(0);
+        }
         StringRef int_string = getValidIntPrefix(trim_string);
         if (int_string.size == 0)
-            // todo handle truncated error
+        {
+            if (value.size != 0)
+                context.getDAGContext()->handleTruncateError("cast str as int");
             return static_cast<T>(0);
+        }
         if constexpr (to_unsigned)
         {
             auto [value, err] = toUInt<T>(int_string);
-            // todo check error
+            if (err == OVERFLOW_ERR)
+                context.getDAGContext()->handleOverflowError("cast str as int");
             return value;
         }
         else
         {
             auto [value, err] = toInt<T>(int_string);
+            if (err == OVERFLOW_ERR)
+                context.getDAGContext()->handleOverflowError("cast str as int");
             return value;
         }
     }
@@ -508,23 +533,30 @@ struct TiDBConvertToFloat
 {
     using FromFieldType = typename FromDataType::FieldType;
 
-    static Float64 produceTargetFloat64(Float64 value, bool need_truncate, Float64 shift, Float64 max_f, const Context &)
+    static Float64 produceTargetFloat64(Float64 value, bool need_truncate, Float64 shift, Float64 max_f, const Context & context)
     {
         if (need_truncate)
         {
             value *= shift;
             value = std::round(value) / shift;
             if (value > max_f)
-                // todo overflow check
+            {
+                context.getDAGContext()->handleOverflowError("cast as real");
                 value = max_f;
+            }
             if (value < -max_f)
+            {
+                context.getDAGContext()->handleOverflowError("cast as real");
                 value = -max_f;
+            }
         }
         if constexpr (to_unsigned)
         {
             if (value < 0)
-                // todo overflow check
+            {
+                context.getDAGContext()->handleOverflowError("cast as real");
                 value = 0;
+            }
         }
         return value;
     }
@@ -596,6 +628,11 @@ struct TiDBConvertToFloat
     {
         StringRef trim_string = trim(value);
         StringRef float_string = getValidFloatPrefix(trim_string);
+        if (trim_string.size == 0 && value.size != 0)
+        {
+            context.getDAGContext()->handleTruncateError("cast str as real");
+            return 0.0;
+        }
         Float64 f = strtod(float_string.data, nullptr);
         return produceTargetFloat64(f, need_truncate, shift, max_f, context);
     }
@@ -715,13 +752,13 @@ struct TiDBConvertToDecimal
     using FromFieldType = typename FromDataType::FieldType;
 
     template <typename T, typename U>
-    static U ToTiDBDecimalInternal(T value, PrecType prec, ScaleType scale)
+    static U toTiDBDecimalInternal(T value, PrecType prec, ScaleType scale, const Context & context)
     {
         using UType = typename U::NativeType;
         auto maxValue = DecimalMaxValue::Get(prec);
         if (value > maxValue || value < -maxValue)
         {
-            // todo should throw exception or log warnings based on the flag in dag request
+            context.getDAGContext()->handleOverflowError("cast to decimal");
             if (value > 0)
                 return static_cast<UType>(maxValue);
             else
@@ -733,7 +770,7 @@ struct TiDBConvertToDecimal
     }
 
     template <typename U>
-    static U ToTiDBDecimal(MyDateTime & date_time, PrecType prec, ScaleType scale, bool in_union, const tipb::FieldType & tp, int fsp)
+    static U toTiDBDecimal(MyDateTime & date_time, PrecType prec, ScaleType scale, int fsp, const Context & context)
     {
         UInt64 value_without_fsp = date_time.year * 10000000000ULL + date_time.month * 100000000ULL + date_time.day * 100000
             + date_time.hour * 1000 + date_time.minute * 100 + date_time.second;
@@ -741,33 +778,32 @@ struct TiDBConvertToDecimal
         {
             Int128 value = value_without_fsp * 1000000 + date_time.micro_second;
             Decimal128 decimal(value);
-            return ToTiDBDecimal<Decimal128, U>(decimal, 6, prec, scale, in_union, tp);
+            return toTiDBDecimal<Decimal128, U>(decimal, 6, prec, scale, context);
         }
         else
         {
-            return ToTiDBDecimalInternal<UInt64, U>(value_without_fsp, prec, scale);
+            return toTiDBDecimalInternal<UInt64, U>(value_without_fsp, prec, scale, context);
         }
     }
 
     template <typename U>
-    static U ToTiDBDecimal(MyDate & date, PrecType prec, ScaleType scale, bool, const tipb::FieldType &)
+    static U toTiDBDecimal(MyDate & date, PrecType prec, ScaleType scale, const Context & context)
     {
         UInt64 value = date.year * 10000 + date.month * 100 + date.day;
-        return ToTiDBDecimalInternal<UInt64, U>(value, prec, scale);
+        return toTiDBDecimalInternal<UInt64, U>(value, prec, scale, context);
     }
 
     template <typename T, typename U>
-    static std::enable_if_t<std::is_integral_v<T>, U> ToTiDBDecimal(T value, PrecType prec, ScaleType scale, bool, const tipb::FieldType &)
+    static std::enable_if_t<std::is_integral_v<T>, U> toTiDBDecimal(T value, PrecType prec, ScaleType scale, const Context & context)
     {
         if constexpr (std::is_signed_v<T>)
-            return ToTiDBDecimalInternal<T, U>(value, prec, scale);
+            return toTiDBDecimalInternal<T, U>(value, prec, scale, context);
         else
-            return ToTiDBDecimalInternal<UInt64, U>(static_cast<UInt64>(value), prec, scale);
+            return toTiDBDecimalInternal<UInt64, U>(static_cast<UInt64>(value), prec, scale, context);
     }
 
     template <typename T, typename U>
-    static std::enable_if_t<std::is_floating_point_v<T>, U> ToTiDBDecimal(
-        T value, PrecType prec, ScaleType scale, bool, const tipb::FieldType &)
+    static std::enable_if_t<std::is_floating_point_v<T>, U> toTiDBDecimal(T value, PrecType prec, ScaleType scale, const Context & context)
     {
         using UType = typename U::NativeType;
         bool neg = false;
@@ -783,6 +819,7 @@ struct TiDBConvertToDecimal
         auto max_value = DecimalMaxValue::Get(prec);
         if (value > static_cast<Float64>(max_value))
         {
+            context.getDAGContext()->handleOverflowError("cast real to decimal");
             if (!neg)
                 return static_cast<UType>(max_value);
             else
@@ -791,7 +828,10 @@ struct TiDBConvertToDecimal
         // rounding
         T tenTimesValue = value * 10;
         UType v(value);
-        if (Int256(tenTimesValue) % 10 >= 5)
+        Int32 remain = static_cast<Int32>(Int256(tenTimesValue) % 10);
+        if (remain != 0)
+            context.getDAGContext()->handleTruncateError("cast real as decimal");
+        if (remain % 10 >= 5)
         {
             v++;
         }
@@ -803,13 +843,11 @@ struct TiDBConvertToDecimal
     }
 
     template <typename T, typename U>
-    static std::enable_if_t<IsDecimal<T>, U> ToTiDBDecimal(
-        const T & v, ScaleType v_scale, PrecType prec, ScaleType scale, bool in_union, const tipb::FieldType & tp)
+    static std::enable_if_t<IsDecimal<T>, U> toTiDBDecimal(
+        const T & v, ScaleType v_scale, PrecType prec, ScaleType scale, const Context & context)
     {
         using UType = typename U::NativeType;
         auto value = Int256(v.value);
-        if (unlikely(in_union && hasUnsignedFlag(tp) && value < 0))
-            return static_cast<UType>(0);
 
         if (v_scale <= scale)
         {
@@ -818,7 +856,7 @@ struct TiDBConvertToDecimal
         }
         else
         {
-            // todo handle truncate
+            context.getDAGContext()->handleTruncateError("cast decimal as decimal");
             bool need2Round = false;
             for (ScaleType i = scale; i < v_scale; i++)
             {
@@ -837,7 +875,7 @@ struct TiDBConvertToDecimal
         auto max_value = DecimalMaxValue::Get(prec);
         if (value > max_value || value < -max_value)
         {
-            // todo should throw exception or log warnings based on the flag in dag request
+            context.getDAGContext()->handleOverflowError("cast decimal as decimal");
             if (value > 0)
                 return static_cast<UType>(max_value);
             else
@@ -900,7 +938,7 @@ struct TiDBConvertToDecimal
     }
 
     template <typename U>
-    static U strToTiDBDecimal(const StringRef & value, PrecType prec, ScaleType scale, bool, const tipb::FieldType &)
+    static U strToTiDBDecimal(const StringRef & value, PrecType prec, ScaleType scale, const Context & context)
     {
         using UType = typename U::NativeType;
         const StringRef trim_string = trim(value);
@@ -917,11 +955,10 @@ struct TiDBConvertToDecimal
             if (err == OVERFLOW_ERR || frac_offset_by_exponent > std::numeric_limits<Int32>::max() / 2
                 || frac_offset_by_exponent < std::numeric_limits<Int32>::min() / 2)
             {
+                context.getDAGContext()->handleOverflowError("cast string as decimal");
                 if (decimal_parts.exp_part.data[0] == '-')
-                    // todo handle truncate error
                     return static_cast<UType>(0);
                 else
-                    // todo handle overflow error
                     return static_cast<UType>(DecimalMaxValue::Get(prec));
             }
         }
@@ -947,13 +984,17 @@ struct TiDBConvertToDecimal
                 break;
             v = v * 10 + decimal_parts.int_part.data[pos] - '0';
             if (v > max_value)
-                // todo handle overflow error
+            {
+                context.getDAGContext()->handleOverflowError("cast string as decimal");
                 return static_cast<UType>(is_negative ? -max_value : max_value);
+            }
             current_scale++;
         }
 
         if (current_scale == scale)
         {
+            if (pos < decimal_parts.int_part.size || decimal_parts.frac_part.size > 0)
+                context.getDAGContext()->handleTruncateError("cast string as decimal");
             /// do not need to handle original frac part, just do rounding
             if (pos < decimal_parts.int_part.size)
             {
@@ -975,12 +1016,16 @@ struct TiDBConvertToDecimal
                     break;
                 v = v * 10 + decimal_parts.frac_part.data[pos] - '0';
                 if (v > max_value)
-                    // todo handle overflow error
+                {
+                    context.getDAGContext()->handleOverflowError("cast string as decimal");
                     return static_cast<UType>(is_negative ? -max_value : max_value);
+                }
                 current_scale++;
             }
             if (current_scale == scale)
             {
+                if (pos < decimal_parts.frac_part.size)
+                    context.getDAGContext()->handleTruncateError("cast string as decimal");
                 if (pos < decimal_parts.frac_part.size && decimal_parts.frac_part.data[pos] >= '5')
                     v++;
             }
@@ -990,22 +1035,26 @@ struct TiDBConvertToDecimal
                 {
                     v *= 10;
                     if (v > max_value)
-                        // todo handle overflow error
+                    {
+                        context.getDAGContext()->handleOverflowError("cast string as decimal");
                         return static_cast<UType>(is_negative ? -max_value : max_value);
+                    }
                     current_scale++;
                 }
             }
         }
 
         if (v > max_value)
-            // todo handle overflow error
+        {
+            context.getDAGContext()->handleOverflowError("cast string as decimal");
             return static_cast<UType>(is_negative ? -max_value : max_value);
+        }
         return static_cast<UType>(is_negative ? -v : v);
     }
 
     /// cast int/real/time/decimal as decimal
     static void execute(Block & block, const ColumnNumbers & arguments, size_t result, PrecType prec [[maybe_unused]], ScaleType scale,
-        bool in_union, const tipb::FieldType & tp, const Context &)
+        bool, const tipb::FieldType &, const Context & context)
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
         auto col_to = ColumnDecimal<ToFieldType>::create(0, scale);
@@ -1027,9 +1076,7 @@ struct TiDBConvertToDecimal
             const typename ColumnDecimal<FromFieldType>::Container & vec_from = col_from->getData();
 
             for (size_t i = 0; i < size; ++i)
-            {
-                vec_to[i] = ToTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], vec_from.getScale(), prec, scale, in_union, tp);
-            }
+                vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], vec_from.getScale(), prec, scale, context);
         }
         else if constexpr (std::is_same_v<DataTypeMyDateTime, FromDataType> || std::is_same_v<DataTypeMyDate, FromDataType>)
         {
@@ -1046,12 +1093,12 @@ struct TiDBConvertToDecimal
                 if constexpr (std::is_same_v<DataTypeMyDate, FromDataType>)
                 {
                     MyDate date(vec_from[i]);
-                    vec_to[i] = ToTiDBDecimal<ToFieldType>(date, prec, scale, in_union, tp);
+                    vec_to[i] = toTiDBDecimal<ToFieldType>(date, prec, scale, context);
                 }
                 else
                 {
                     MyDateTime date_time(vec_from[i]);
-                    vec_to[i] = ToTiDBDecimal<ToFieldType>(date_time, prec, scale, in_union, tp, type.getFraction());
+                    vec_to[i] = toTiDBDecimal<ToFieldType>(date_time, prec, scale, type.getFraction(), context);
                 }
             }
         }
@@ -1068,7 +1115,7 @@ struct TiDBConvertToDecimal
                 size_t next_offset = (*offsets)[i];
                 size_t string_size = next_offset - current_offset - 1;
                 StringRef string_value(&(*chars)[current_offset], string_size);
-                vec_to[i] = strToTiDBDecimal<ToFieldType>(string_value, prec, scale, in_union, tp);
+                vec_to[i] = strToTiDBDecimal<ToFieldType>(string_value, prec, scale, context);
                 current_offset = next_offset;
             }
         }
@@ -1079,9 +1126,7 @@ struct TiDBConvertToDecimal
             const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
 
             for (size_t i = 0; i < size; ++i)
-            {
-                vec_to[i] = ToTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], prec, scale, in_union, tp);
-            }
+                vec_to[i] = toTiDBDecimal<FromFieldType, ToFieldType>(vec_from[i], prec, scale, context);
         }
         else
         {
