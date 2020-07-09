@@ -41,7 +41,7 @@ public:
         ~Writer();
 
         [[nodiscard]] size_t write(WriteBatch & wb, PageEntriesEdit & edit);
-        void tryCloseIdleFd(const Seconds & max_idle_time);
+        void                 tryCloseIdleFd(const Seconds & max_idle_time);
 
         PageFileIdAndLevel fileIdLevel() const;
 
@@ -177,9 +177,11 @@ public:
         WriteBatch::SequenceID curr_write_batch_sequence = 0;
         PageEntriesEdit        curr_edit;
 
+        // The whole buffer and size of metadata, should be initlized in method `initlize()`.
         char * meta_buffer = nullptr;
         size_t meta_size   = 0;
 
+        // Current parsed offsets.
         size_t meta_file_offset = 0;
         size_t data_file_offset = 0;
     };
@@ -235,11 +237,6 @@ public:
     /// If page file is exist.
     static bool isPageFileExist(PageFileIdAndLevel file_id, const String & parent_path, Type type, Poco::Logger * log);
 
-    /// Get pages' metadata by this method. Will also update file pos.
-    /// Call this method after a page file recovered.
-    /// if check_page_map_complete is true, do del or ref on non-exist page will throw exception.
-    void readAndSetPageMetas(PageEntriesEdit & edit, WriteBatch::SequenceID & max_wb_sequence);
-
     /// Rename this page file into formal style.
     void setFormal();
     /// Rename this page file into legacy style and remove data.
@@ -252,6 +249,7 @@ public:
     MetaMergingReaderPtr createMetaMergingReader() { return std::make_unique<MetaMergingReader>(*this); }
     /// Return a writer bound with this PageFile object.
     /// Note that the user MUST keep the PageFile object around before this writer being freed.
+    /// And the meta_file_pos, data_file_pos should be properly set before creating writer.
     std::unique_ptr<Writer> createWriter(bool sync_on_write) { return std::make_unique<Writer>(*this, sync_on_write); }
     /// Return a reader for this file.
     /// The PageFile object can be released any time.
@@ -281,7 +279,7 @@ public:
     UInt64 getMetaFileAppendPos() const { return meta_file_pos; }
 
     /// Get disk usage
-    // Total size, data && meta. 
+    // Total size, data && meta.
     UInt64 getDiskSize() const;
     UInt64 getDataFileSize() const;
     UInt64 getMetaFileSize() const;

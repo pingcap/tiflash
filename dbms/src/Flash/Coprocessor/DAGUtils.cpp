@@ -370,10 +370,16 @@ void constructNULLLiteralTiExpr(tipb::Expr & expr)
 
 std::shared_ptr<TiDB::ITiDBCollator> getCollatorFromExpr(const tipb::Expr & expr)
 {
-    std::shared_ptr<TiDB::ITiDBCollator> ret = nullptr;
-    if (expr.has_field_type() && expr.field_type().collate() < 0)
-        ret = TiDB::ITiDBCollator::getCollator(-expr.field_type().collate());
-    return ret;
+    if (expr.has_field_type())
+        return getCollatorFromFieldType(expr.field_type());
+    return nullptr;
+}
+
+std::shared_ptr<TiDB::ITiDBCollator> getCollatorFromFieldType(const tipb::FieldType & field_type)
+{
+    if (field_type.collate() < 0)
+        return TiDB::ITiDBCollator::getCollator(-field_type.collate());
+    return nullptr;
 }
 
 bool hasUnsignedFlag(const tipb::FieldType & tp) { return tp.flag() & TiDB::ColumnFlagUnsigned; }

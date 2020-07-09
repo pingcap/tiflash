@@ -36,7 +36,7 @@ RegionException::RegionReadStatus isValidRegion(const RegionQueryInfo & region_t
 
 LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
     const MvccQueryInfo & mvcc_query_info,                      //
-    TMTContext & tmt, Poco::Logger * log)
+    size_t num_streams, TMTContext & tmt, Poco::Logger * log)
 {
     assert(log != nullptr);
 
@@ -61,8 +61,8 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
         }
     }
 
-    // adjust concurrency by num of regions
-    size_t concurrent_num = std::max(1, std::min((size_t)mvcc_query_info.concurrent, regions_info.size()));
+    // adjust concurrency by num of regions or num of streams * mvcc_query_info.concurrent
+    size_t concurrent_num = std::max(1, std::min(static_cast<size_t>(num_streams * mvcc_query_info.concurrent), regions_info.size()));
 
     KVStorePtr & kvstore = tmt.getKVStore();
     LearnerReadSnapshot regions_snapshot;

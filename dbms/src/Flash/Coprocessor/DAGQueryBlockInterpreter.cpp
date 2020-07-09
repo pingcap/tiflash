@@ -306,6 +306,11 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         // do not have table id
         throw Exception("Table id not specified in table scan executor", ErrorCodes::COP_BAD_DAG_REQUEST);
     }
+    if (dag.getRegions().empty())
+    {
+        throw Exception("Dag Request does not have region to read. ", ErrorCodes::COP_BAD_DAG_REQUEST);
+    }
+
     TableID table_id = ts.table_id();
 
     const Settings & settings = context.getSettingsRef();
@@ -322,7 +327,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         if (auto [info_retry, status] = MakeRegionQueryInfos(dag.getRegions(), {}, tmt, *mvcc_query_info, table_id); info_retry)
             throw RegionException({(*info_retry).begin()->first}, status);
 
-        learner_read_snapshot = doLearnerRead(table_id, *mvcc_query_info, tmt, log);
+        learner_read_snapshot = doLearnerRead(table_id, *mvcc_query_info, max_streams, tmt, log);
     }
     else
     {
@@ -342,7 +347,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
                 }
                 if (mvcc_query_info->regions_query_info.empty())
                     break;
-                learner_read_snapshot = doLearnerRead(table_id, *mvcc_query_info, tmt, log);
+                learner_read_snapshot = doLearnerRead(table_id, *mvcc_query_info, max_streams, tmt, log);
                 break;
             }
             catch (const LockException & e)
@@ -461,30 +466,8 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     query_info.dag_query = std::make_unique<DAGQueryInfo>(conditions, analyzer->getPreparedSets(), analyzer->getCurrentInputColumns());
     query_info.mvcc_query_info = std::move(mvcc_query_info);
 
-    if (dag.getRegions().empty())
-    {
-        throw Exception("Dag Request does not have region to read. ", ErrorCodes::COP_BAD_DAG_REQUEST);
-    }
-
-    if (!dag.isBatchCop())
-    {
-        if (auto [info_retry, status] = MakeRegionQueryInfos(dag.getRegions(), {}, tmt, *query_info.mvcc_query_info, table_id); info_retry)
-            throw RegionException({(*info_retry).begin()->first}, status);
-
-        try
-        {
-            pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
-            // After getting streams from storage, we need to validate if regions have changed after learner read.
-            validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
-        }
-        catch (DB::Exception & e)
-        {
-            e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
-                + "`, table_id: " + DB::toString(table_id) + ")");
-            throw;
-        }
-    }
-    else
+    bool need_local_read = !query_info.mvcc_query_info->regions_query_info.empty();
+    if (need_local_read)
     {
         // TODO: Note that if storage is (Txn)MergeTree, and any region exception thrown, we won't do retry here.
         // Now we only support DeltaTree in production environment and don't do any extra check for storage type here.
@@ -502,60 +485,60 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
                 + "`, table_id: " + DB::toString(table_id) + ")");
             throw;
         }
+    }
 
-        // For those regions which are not presented in this tiflash node, we will try to fetch streams from other tiflash nodes.
-        if (!region_retry.empty())
+    // For those regions which are not presented in this tiflash node, we will try to fetch streams from other tiflash nodes, only happens in batch cop mode.
+    if (!region_retry.empty())
+    {
+        LOG_DEBUG(log, ({
+            std::stringstream ss;
+            ss << "Start to retry " << region_retry.size() << " regions (";
+            for (auto & r : region_retry)
+                ss << r.first << ",";
+            ss << ")";
+            ss.str();
+        }));
+
+        DAGSchema schema;
+        ::tipb::DAGRequest dag_req;
+
         {
-            LOG_DEBUG(log, ({
-                std::stringstream ss;
-                ss << "Start to retry " << region_retry.size() << " regions (";
-                for (auto & r : region_retry)
-                    ss << r.first << ",";
-                ss << ")";
-                ss.str();
-            }));
+            const auto & table_info = storage->getTableInfo();
+            tipb::Executor * ts_exec = dag_req.add_executors();
+            ts_exec->set_tp(tipb::ExecType::TypeTableScan);
+            *(ts_exec->mutable_tbl_scan()) = ts;
 
-            DAGSchema schema;
-            ::tipb::DAGRequest dag_req;
-
+            for (int i = 0; i < ts.columns().size(); ++i)
             {
-                const auto & table_info = storage->getTableInfo();
-                tipb::Executor * ts_exec = dag_req.add_executors();
-                ts_exec->set_tp(tipb::ExecType::TypeTableScan);
-                *(ts_exec->mutable_tbl_scan()) = ts;
+                const auto & col = ts.columns(i);
+                auto col_id = col.column_id();
 
-                for (int i = 0; i < ts.columns().size(); ++i)
+                if (col_id == DB::TiDBPkColumnID)
                 {
-                    const auto & col = ts.columns(i);
-                    auto col_id = col.column_id();
-
-                    if (col_id == DB::TiDBPkColumnID)
-                    {
-                        ColumnInfo ci;
-                        ci.tp = TiDB::TypeLongLong;
-                        ci.setPriKeyFlag();
-                        ci.setNotNullFlag();
-                        schema.emplace_back(std::make_pair(handle_column_name, std::move(ci)));
-                    }
-                    else
-                    {
-                        auto & col_info = table_info.getColumnInfo(col_id);
-                        schema.emplace_back(std::make_pair(col_info.name, col_info));
-                    }
-                    dag_req.add_output_offsets(i);
+                    ColumnInfo ci;
+                    ci.tp = TiDB::TypeLongLong;
+                    ci.setPriKeyFlag();
+                    ci.setNotNullFlag();
+                    schema.emplace_back(std::make_pair(handle_column_name, std::move(ci)));
                 }
-                dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
+                else
+                {
+                    auto & col_info = table_info.getColumnInfo(col_id);
+                    schema.emplace_back(std::make_pair(col_info.name, col_info));
+                }
+                dag_req.add_output_offsets(i);
             }
-
-            std::vector<pingcap::coprocessor::KeyRange> ranges;
-            for (auto & info : region_retry)
-            {
-                for (auto & range : info.second.key_ranges)
-                    ranges.emplace_back(range.first, range.second);
-            }
-            sort(ranges.begin(), ranges.end());
-            executeRemoteQueryImpl(pipeline, ranges, dag_req, schema);
+            dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
         }
+
+        std::vector<pingcap::coprocessor::KeyRange> ranges;
+        for (auto & info : region_retry)
+        {
+            for (auto & range : info.second.key_ranges)
+                ranges.emplace_back(range.first, range.second);
+        }
+        sort(ranges.begin(), ranges.end());
+        executeRemoteQueryImpl(pipeline, ranges, dag_req, schema);
     }
 
     if (pipeline.streams.empty())
@@ -745,6 +728,20 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
 
     DataTypes join_key_types;
     getJoinKeyTypes(join, join_key_types);
+    TiDB::TiDBCollators collators;
+    size_t join_key_size = join_key_types.size();
+    if (join.probe_types_size() == static_cast<int>(join_key_size) && join.build_types_size() == join.probe_types_size())
+        for (size_t i = 0; i < join_key_size; i++)
+        {
+            if (removeNullable(join_key_types[i])->isString())
+            {
+                if (join.probe_types(i).collate() != join.build_types(i).collate())
+                    throw Exception("Join with different collators on the join key", ErrorCodes::COP_BAD_DAG_REQUEST);
+                collators.push_back(getCollatorFromFieldType(join.probe_types(i)));
+            }
+            else
+                collators.push_back(nullptr);
+        }
 
     /// add necessary transformation if the join key is an expression
     Pipeline left_pipeline;
@@ -759,8 +756,8 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
 
     const Settings & settings = context.getSettingsRef();
     JoinPtr joinPtr = std::make_shared<Join>(left_key_names, right_key_names, true,
-        SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode), kind,
-        ASTTableJoin::Strictness::All);
+        SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode), kind, ASTTableJoin::Strictness::All,
+        collators);
     executeUnion(right_pipeline);
     right_query.source = right_pipeline.firstStream();
     right_query.join = joinPtr;
@@ -820,7 +817,10 @@ AnalysisResult DAGQueryBlockInterpreter::analyzeExpressions()
     // There will be either Agg...
     if (query_block.aggregation)
     {
-        analyzer->appendAggregation(chain, query_block.aggregation->aggregation(), res.aggregation_keys, res.aggregate_descriptions);
+        /// collation sensitive group by is slower then normal group by, use normal group by by default
+        // todo better to let TiDB decide whether group by is collation sensitive or not
+        analyzer->appendAggregation(chain, query_block.aggregation->aggregation(), res.aggregation_keys, res.aggregation_collators,
+            res.aggregate_descriptions, context.getSettingsRef().group_by_collation_sensitive);
         res.need_aggregate = true;
         res.before_aggregation = chain.getLastActions();
 
@@ -866,8 +866,8 @@ void DAGQueryBlockInterpreter::executeWhere(Pipeline & pipeline, const Expressio
     pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, expr, filter_column); });
 }
 
-void DAGQueryBlockInterpreter::executeAggregation(
-    Pipeline & pipeline, const ExpressionActionsPtr & expr, Names & key_names, AggregateDescriptions & aggregates)
+void DAGQueryBlockInterpreter::executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expr, Names & key_names,
+    TiDB::TiDBCollators & collators, AggregateDescriptions & aggregates)
 {
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expr); });
 
@@ -895,12 +895,22 @@ void DAGQueryBlockInterpreter::executeAggregation(
       * 2. An aggregation is done with store of temporary data on the disk, and they need to be merged in a memory efficient way.
       */
     bool allow_to_use_two_level_group_by = pipeline.streams.size() > 1 || settings.max_bytes_before_external_group_by != 0;
+    bool has_collator = false;
+    for (auto & p : collators)
+    {
+        if (p != nullptr)
+        {
+            has_collator = true;
+            break;
+        }
+    }
 
     Aggregator::Params params(header, keys, aggregates, false, settings.max_rows_to_group_by, settings.group_by_overflow_mode,
-        settings.compile ? &context.getCompiler() : nullptr, settings.min_count_to_compile,
+        settings.compile && !has_collator ? &context.getCompiler() : nullptr, settings.min_count_to_compile,
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0),
         allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0),
-        settings.max_bytes_before_external_group_by, settings.empty_result_for_aggregation_by_empty_set, context.getTemporaryPath());
+        settings.max_bytes_before_external_group_by, settings.empty_result_for_aggregation_by_empty_set, context.getTemporaryPath(),
+        has_collator ? collators : TiDB::dummy_collators);
 
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.streams.size() > 1)
@@ -1319,7 +1329,7 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     if (res.need_aggregate)
     {
         // execute aggregation
-        executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregate_descriptions);
+        executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions);
         recordProfileStreams(pipeline, query_block.aggregation_name);
     }
     if (res.before_order_and_select)

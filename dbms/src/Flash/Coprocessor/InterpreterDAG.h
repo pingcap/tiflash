@@ -15,6 +15,7 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/IInterpreter.h>
 #include <Storages/RegionQueryInfo.h>
+#include <Storages/Transaction/Collator.h>
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/TMTStorages.h>
 
@@ -48,12 +49,6 @@ private:
 
     /// How many streams we ask for storage to produce, and in how many threads we will do further processing.
     size_t max_streams = 1;
-
-    /// Table from where to read data, if not subquery.
-    ManageableStoragePtr storage;
-    TableStructureReadLockPtr table_lock;
-
-    std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
     const bool keep_session_timezone_info;
 
