@@ -124,5 +124,7 @@ int calcDayNum(int year, int month, int day);
 
 size_t maxFormattedDateTimeStringLength(const String & format);
 
+MyDateTime numberToDateTime(Int64 number);
+
 
 } // namespace DB

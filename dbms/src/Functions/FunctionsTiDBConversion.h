@@ -706,7 +706,7 @@ struct TiDBConvertToFloat
         else if constexpr (std::is_same_v<FromDataType, DataTypeString>)
         {
             /// cast string as real
-            /// the implementation is quiet different from TiDB/TiKV, so cast string as float will not be pushed to TiFlash
+            /// the implementation is quite different from TiDB/TiKV, so cast string as float will not be pushed to TiFlash
             const IColumn * col_from = block.getByPosition(arguments[0]).column.get();
             const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(col_from);
             const ColumnString::Chars_t * chars = &col_from_string->getChars();
@@ -1141,6 +1141,178 @@ struct TiDBConvertToDecimal
     }
 };
 
+/// cast int/real/decimal/time/string as Date
+template <typename FromDataType, typename ToDataType, bool return_nullable>
+struct TiDBConvertToTime
+{
+    static_assert(std::is_same_v<ToDataType, DataTypeMyDate> || std::is_same_v<ToDataType, DataTypeMyDateTime>);
+
+    using FromFieldType = typename FromDataType::FieldType;
+
+    static void execute(Block & block, const ColumnNumbers & arguments, size_t result, bool, const tipb::FieldType &, const Context &)
+    {
+        size_t size = block.getByPosition(arguments[0]).column->size();
+        auto col_to = ColumnVector<DataTypeMyDate::FieldType>::create();
+        typename ColumnVector<DataTypeMyDate::FieldType>::Container & vec_to = col_to->getData();
+        vec_to.resize(size);
+
+        ColumnUInt8::MutablePtr col_null_map_to;
+        ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
+
+        const auto & col_with_type_and_name = block.getByPosition(arguments[0]);
+        const auto & type = static_cast<const FromDataType &>(*col_with_type_and_name.type);
+
+        if constexpr (return_nullable)
+        {
+            col_null_map_to = ColumnUInt8::create(size, 0);
+            vec_null_map_to = &col_null_map_to->getData();
+        }
+
+        if constexpr (std::is_same_v<FromDataType, DataTypeString>)
+        {
+            // cast string as date
+            const auto & col_with_type_and_name = block.getByPosition(arguments[0]);
+            const auto & type = static_cast<const FromDataType &>(*col_with_type_and_name.type);
+            const ColumnString * col_from = checkAndGetColumn<ColumnString>(col_with_type_and_name.column.get());
+            const ColumnString::Chars_t * chars = &col_from->getChars();
+            const ColumnString::Offsets * offsets = &col_from->getOffsets();
+
+            size_t current_offset = 0;
+            for (size_t i = 0; i < size; i++)
+            {
+                size_t next_offset = (*offsets)[i];
+                size_t string_size = next_offset - current_offset - 1;
+                StringRef string_value(&(*chars)[current_offset], string_size);
+                try
+                {
+                    MyDateTime datetime(parseMyDateTime(string_value.toString()).template safeGet<UInt64>());
+                    if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
+                    {
+                        MyDate date(datetime.year, datetime.month, datetime.day);
+                        vec_to[i] = date.toPackedUInt();
+                    }
+                    else
+                    {
+                        vec_to[i] = datetime.toPackedUInt();
+                    }
+                }
+                catch (const Exception &)
+                {
+                    // Fill NULL if cannot parse
+                    vec_null_map_to[i] = 1;
+                }
+                current_offset = next_offset;
+            }
+        }
+        else if constexpr (std::is_integral_v<FromFieldType>)
+        {
+            const ColumnVector<FromFieldType> * col_from
+                = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
+
+            const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
+
+            for (size_t i = 0; i < size; i++)
+            {
+                try
+                {
+                    MyDateTime datetime = numberToDateTime(vec_from[i]);
+                    if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
+                    {
+                        MyDate date(datetime.year, datetime.month, datetime.day);
+                        vec_to[i] = date.toPackedUInt();
+                    }
+                    else
+                    {
+                        vec_to[i] = datetime.toPackedUInt();
+                    }
+                }
+                catch (const Exception &)
+                {
+                    // Cannot cast, fill with NULL
+                    vec_null_map_to[i] = 1;
+                }
+            }
+        }
+        else if constexpr (std::is_floating_point_v<FromFieldType>)
+        {
+            // cast float as date
+            // MySQL compatibility: 0 should not be converted to null, see TiDB#11203
+            assert(return_nullable);
+            const ColumnVector<FromFieldType> * col_from
+                = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
+
+            const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
+
+            for (size_t i = 0; i < size; i++)
+            {
+                Float64 value = vec_from[i];
+                // Convert to string and then parse to time
+                String value_str = toString(value);
+
+                if (value_str == "0")
+                {
+                    vec_null_map_to[i] = 1;
+                }
+                else
+                {
+                    try
+                    {
+                        MyDateTime datetime(parseMyDateTime(value_str).template safeGet<UInt64>());
+                        if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
+                        {
+                            MyDate date(datetime.year, datetime.month, datetime.day);
+                            vec_to[i] = date.toPackedUInt();
+                        }
+                        else
+                        {
+                            vec_to[i] = datetime.toPackedUInt();
+                        }
+                    }
+                    catch (const Exception &)
+                    {
+                        // Fill NULL if cannot parse
+                        vec_null_map_to[i] = 1;
+                    }
+                }
+            }
+        }
+        else if constexpr (IsDecimal<FromFieldType>)
+        {
+            const auto * col_from = checkAndGetColumn<ColumnDecimal<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
+            const typename ColumnDecimal<FromFieldType>::Container & vec_from = col_from->getData();
+
+            String result_buffer;
+
+            for (size_t i = 0; i < size; i++)
+            {
+                WriteBufferFromString wb(result_buffer);
+                FormatImpl<FromDataType>::execute(vec_from[i], wb, &type, nullptr);
+                MyDateTime datetime(parseMyDateTime(result_buffer).template safeGet<UInt64>());
+                if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
+                {
+                    MyDate date(datetime.year, datetime.month, datetime.day);
+                    vec_to[i] = date.toPackedUInt();
+                }
+                else
+                {
+                    vec_to[i] = datetime.toPackedUInt();
+                }
+            }
+        }
+        else
+        {
+            throw Exception(
+                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of first argument of function tidb_cast",
+                ErrorCodes::ILLEGAL_COLUMN);
+        }
+
+        if constexpr (return_nullable)
+            block.getByPosition(result).column = ColumnNullable::create(std::move(col_to), std::move(col_null_map_to));
+        else
+            block.getByPosition(result).column = std::move(col_to);
+    }
+};
+
 class PreparedFunctionTiDBCast : public PreparedFunctionImpl
 {
 public:
@@ -1285,18 +1457,19 @@ private:
                        const Context & context_) {
                 TiDBConvertToString<FromDataType, return_nullable>::execute(block, arguments, result, in_union_, tidb_tp_, context_);
             };
-        /*
+        /// cast as time
         if (checkDataType<DataTypeMyDate>(to_type.get()))
-            return [] (Block & block, const ColumnNumbers & arguments, const size_t result, const Context & context1)
-            {
-                TiDBConvertImpl<FromDataType, DataTypeMyDate, return_nullable>::execute(block, arguments, result, context1);
+            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_,
+                       const Context & context_) {
+                TiDBConvertToTime<FromDataType, DataTypeMyDate, return_nullable>::execute(
+                    block, arguments, result, in_union_, tidb_tp_, context_);
             };
         if (checkDataType<DataTypeMyDateTime>(to_type.get()))
-            return [] (Block & block, const ColumnNumbers & arguments, const size_t result, const Context & context1)
-            {
-                TiDBConvertImpl<FromDataType, DataTypeMyDateTime, return_nullable>::execute(block, arguments, result, context1);
+            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_,
+                       const Context & context_) {
+                TiDBConvertToTime<FromDataType, DataTypeMyDateTime, return_nullable>::execute(
+                    block, arguments, result, in_union_, tidb_tp_, context_);
             };
-            */
 
         // todo support convert to duration/json type
         throw Exception{"Conversion to " + to_type->getName() + " is not supported", ErrorCodes::CANNOT_CONVERT_TYPE};
