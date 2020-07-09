@@ -25,7 +25,7 @@ enum Flag {
 enum SqlMode {
     STRICT_TRANS_TABLES = 1u << 22u,
     STRICT_ALL_TABLES = 1u << 23u,
-    NO_ZERO_IN_DATA = 1u << 24u,
+    NO_ZERO_IN_DATE = 1u << 24u,
     NO_ZERO_DATE = 1u << 25u,
     INVALID_DATES = 1u << 26u,
     ERROR_FOR_DIVISION_BY_ZERO = 1u << 27u,
