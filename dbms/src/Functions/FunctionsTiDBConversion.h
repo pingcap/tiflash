@@ -1141,7 +1141,7 @@ struct TiDBConvertToDecimal
     }
 };
 
-/// cast int/real/decimal/time/string as Date
+/// cast int/real/decimal/time/string as Date/DateTime
 template <typename FromDataType, typename ToDataType, bool return_nullable>
 struct TiDBConvertToTime
 {
@@ -1172,7 +1172,6 @@ struct TiDBConvertToTime
         {
             // cast string as date
             const auto & col_with_type_and_name = block.getByPosition(arguments[0]);
-            const auto & type = static_cast<const FromDataType &>(*col_with_type_and_name.type);
             const ColumnString * col_from = checkAndGetColumn<ColumnString>(col_with_type_and_name.column.get());
             const ColumnString::Chars_t * chars = &col_from->getChars();
             const ColumnString::Offsets * offsets = &col_from->getOffsets();
