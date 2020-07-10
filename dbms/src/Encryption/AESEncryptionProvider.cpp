@@ -9,9 +9,17 @@ extern const int NOT_IMPLEMENTED;
 extern const int DATA_ENCRYPTION_ERROR;
 } // namespace ErrorCodes
 
-BlockAccessCipherStreamPtr AESEncryptionProvider::createCipherStream(const std::string & fname)
+BlockAccessCipherStreamPtr AESEncryptionProvider::createCipherStream(const std::string & fname, bool new_file)
 {
-    auto file_info = key_manager->getFile(fname);
+    FileEncryptionInfo file_info;
+    if (new_file)
+    {
+        file_info = key_manager->newFile(fname);
+    }
+    else
+    {
+        file_info = key_manager->getFile(fname);
+    }
     auto & method = file_info.method;
     auto & key = file_info.key;
     auto & iv = file_info.iv;

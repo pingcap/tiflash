@@ -13,7 +13,7 @@ class EncryptionProvider
 public:
     virtual ~EncryptionProvider() = default;
 
-    virtual BlockAccessCipherStreamPtr createCipherStream(const std::string & fname) = 0;
+    virtual BlockAccessCipherStreamPtr createCipherStream(const std::string & fname, bool new_file) = 0;
 };
 
 using EncryptionProviderPtr = std::shared_ptr<EncryptionProvider>;
