@@ -16,7 +16,7 @@
 #include <Common/setThreadName.h>
 #include <Common/Stopwatch.h>
 #include <Common/formatReadable.h>
-#include <Encryption/MockKeyManager.h>
+#include <Encryption/DataKeyManager.h>
 #include <Debug/DBGInvoker.h>
 #include <DataStreams/FormatFactory.h>
 #include <Databases/IDatabase.h>
@@ -1511,7 +1511,7 @@ TiFlashMetricsPtr Context::getTiFlashMetrics() const
     return shared->tiflash_metrics;
 }
 
-void Context::initializeFileProvider()
+void Context::initializeFileProvider(TiFlashServer & tiflash_instance_wrap)
 {
     // TODO: initialize FileProvider according to config
     auto lock = getLock();
@@ -1519,7 +1519,7 @@ void Context::initializeFileProvider()
         throw Exception("File provider has already been initialized.", ErrorCodes::LOGICAL_ERROR);
     FileProviderPtr plain_file_provider = std::make_shared<PosixFileProvider>();
     shared->file_provider = std::make_shared<EncryptedFileProvider>(plain_file_provider,
-            std::make_shared<MockKeyManager>());
+            std::make_shared<DataKeyManager>(tiflash_instance_wrap));
 }
 
 FileProviderPtr Context::getFileProvider() const

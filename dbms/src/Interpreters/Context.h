@@ -18,6 +18,7 @@
 #include <IO/FileProvider.h>
 #include <Storages/PartPathSelector.h>
 #include <Storages/Transaction/StorageEngineType.h>
+#include <Storages/Transaction/ProxyFFIType.h>
 
 
 namespace Poco
@@ -398,7 +399,7 @@ public:
     void initializeTiFlashMetrics();
     TiFlashMetricsPtr getTiFlashMetrics() const;
 
-    void initializeFileProvider();
+    void initializeFileProvider(TiFlashServer & tiflash_instance_wrap);
     FileProviderPtr getFileProvider() const;
 
     Clusters & getClusters() const;

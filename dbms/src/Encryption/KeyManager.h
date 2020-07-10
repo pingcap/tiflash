@@ -4,38 +4,40 @@
 #include <memory>
 #include <string>
 
+#include <Storages/Transaction/ProxyFFIType.h>
+
 namespace DB
 {
-enum class EncryptionMethod
-{
-    kUnknown = 0,
-    kPlaintext = 1,
-    kAES128_CTR = 2,
-    kAES192_CTR = 3,
-    kAES256_CTR = 4,
-};
+//enum class EncryptionMethod
+//{
+//    kUnknown = 0,
+//    kPlaintext = 1,
+//    kAES128_CTR = 2,
+//    kAES192_CTR = 3,
+//    kAES256_CTR = 4,
+//};
 
 inline size_t KeySize(EncryptionMethod method)
 {
     switch (method)
     {
-        case EncryptionMethod::kAES128_CTR:
+        case EncryptionMethod::Aes128Ctr:
             return 16;
-        case EncryptionMethod::kAES192_CTR:
+        case EncryptionMethod::Aes192Ctr:
             return 24;
-        case EncryptionMethod::kAES256_CTR:
+        case EncryptionMethod::Aes256Ctr:
             return 32;
         default:
             return 0;
     }
 }
 
-struct FileEncryptionInfo
-{
-    EncryptionMethod method = EncryptionMethod::kUnknown;
-    std::string key;
-    std::string iv;
-};
+//struct FileEncryptionInfo
+//{
+//    EncryptionMethod method = EncryptionMethod::kUnknown;
+//    std::string key;
+//    std::string iv;
+//};
 
 using FileEncryptionInfoPtr = std::shared_ptr<FileEncryptionInfo>;
 
@@ -44,9 +46,9 @@ class KeyManager
 public:
     virtual ~KeyManager() = default;
 
-    virtual FileEncryptionInfoPtr getFile(const std::string & fname) = 0;
+    virtual FileEncryptionInfo getFile(const std::string & fname) = 0;
 
-    virtual FileEncryptionInfoPtr newFile(const std::string & fname) = 0;
+    virtual FileEncryptionInfo newFile(const std::string & fname) = 0;
 
     virtual void deleteFile(const std::string & fname) = 0;
 

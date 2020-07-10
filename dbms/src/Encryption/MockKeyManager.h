@@ -12,23 +12,23 @@ const char IV_RANDOM[17] = "\x77\x9b\x82\x72\x26\xb5\x76\x50\xf7\x05\xd2\xd6\xb8
 class MockKeyManager : public KeyManager
 {
 public:
-    virtual ~MockKeyManager() = default;
+    ~MockKeyManager() = default;
 
-    MockKeyManager() : method{EncryptionMethod::kAES128_CTR}, key{std::string(KEY)}, iv{std::string(IV_RANDOM)} {}
+    MockKeyManager() : method{EncryptionMethod::Aes128Ctr}, key{std::string(KEY)}, iv{std::string(IV_RANDOM)} {}
 
     MockKeyManager(EncryptionMethod method_, const std::string & key_, const std::string & iv) : method{method_}, key{key_}, iv{iv} {}
 
-    FileEncryptionInfoPtr getFile(const std::string & fname) override
+    FileEncryptionInfo getFile(const std::string & fname) override
     {
         std::ignore = fname;
-        auto file_info = std::make_shared<FileEncryptionInfo>();
-        file_info->method = method;
-        file_info->key = key;
-        file_info->iv = iv;
+        FileEncryptionInfo file_info;
+        file_info.method = method;
+        file_info.key = &key;
+        file_info.iv = &iv;
         return file_info;
     }
 
-    FileEncryptionInfoPtr newFile(const std::string & fname) override { return getFile(fname); }
+    FileEncryptionInfo newFile(const std::string & fname) override { return getFile(fname); }
 
     void deleteFile(const std::string & fname) override { std::ignore = fname; }
 
