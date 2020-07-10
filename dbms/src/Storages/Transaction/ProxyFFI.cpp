@@ -39,11 +39,7 @@ const std::string & CFToName(const ColumnFamilyType type)
     }
 }
 
-void GcBuff(BaseBuff * buff)
-{
-    delete buff->inner;
-    buff->inner = nullptr;
-}
+TiFlashRawString GenCppRawString(BaseBuffView view) { return view.len ? new std::string(view.data, view.len) : nullptr; }
 
 static_assert(alignof(TiFlashServerHelper) == alignof(void *));
 
@@ -51,7 +47,7 @@ TiFlashApplyRes HandleWriteRaftCmd(const TiFlashServer * server, WriteCmdsView c
 {
     try
     {
-        return server->tmt.getKVStore()->handleWriteRaftCmd(cmds, header.region_id, header.index, header.term, server->tmt);
+        return server->tmt->getKVStore()->handleWriteRaftCmd(cmds, header.region_id, header.index, header.term, *server->tmt);
     }
     catch (...)
     {
@@ -69,9 +65,9 @@ TiFlashApplyRes HandleAdminRaftCmd(const TiFlashServer * server, BaseBuffView re
         request.ParseFromArray(req_buff.data, (int)req_buff.len);
         response.ParseFromArray(resp_buff.data, (int)resp_buff.len);
 
-        auto & kvstore = server->tmt.getKVStore();
+        auto & kvstore = server->tmt->getKVStore();
         return kvstore->handleAdminRaftCmd(
-            std::move(request), std::move(response), header.region_id, header.index, header.term, server->tmt);
+            std::move(request), std::move(response), header.region_id, header.index, header.term, *server->tmt);
     }
     catch (...)
     {
@@ -87,8 +83,8 @@ void HandleApplySnapshot(
     {
         metapb::Region region;
         region.ParseFromArray(region_buff.data, (int)region_buff.len);
-        auto & kvstore = server->tmt.getKVStore();
-        kvstore->handleApplySnapshot(std::move(region), peer_id, snaps, index, term, server->tmt);
+        auto & kvstore = server->tmt->getKVStore();
+        kvstore->handleApplySnapshot(std::move(region), peer_id, snaps, index, term, *server->tmt);
     }
     catch (...)
     {
@@ -97,27 +93,14 @@ void HandleApplySnapshot(
     }
 }
 
-void AtomicUpdateProxy(DB::TiFlashServer * server, DB::TiFlashRaftProxy * proxy)
-{
-    try
-    {
-        server->proxy = proxy;
-        if (server->proxy.load()->check_sum != 666)
-            throw Exception(std::string(__PRETTY_FUNCTION__) + ": check_sum of proxy is wrong");
-    }
-    catch (...)
-    {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
-        exit(-1);
-    }
-}
+void AtomicUpdateProxy(DB::TiFlashServer * server, DB::TiFlashRaftProxyHelper * proxy) { server->proxy_helper = proxy; }
 
 void HandleDestroy(TiFlashServer * server, RegionId region_id)
 {
     try
     {
-        auto & kvstore = server->tmt.getKVStore();
-        kvstore->handleDestroy(region_id, server->tmt);
+        auto & kvstore = server->tmt->getKVStore();
+        kvstore->handleDestroy(region_id, *server->tmt);
     }
     catch (...)
     {
@@ -130,8 +113,8 @@ void HandleIngestSST(TiFlashServer * server, SnapshotViewArray snaps, RaftCmdHea
 {
     try
     {
-        auto & kvstore = server->tmt.getKVStore();
-        kvstore->handleIngestSST(header.region_id, snaps, header.index, header.term, server->tmt);
+        auto & kvstore = server->tmt->getKVStore();
+        kvstore->handleIngestSST(header.region_id, snaps, header.index, header.term, *server->tmt);
     }
     catch (...)
     {
@@ -140,14 +123,14 @@ void HandleIngestSST(TiFlashServer * server, SnapshotViewArray snaps, RaftCmdHea
     }
 }
 
-uint8_t HandleCheckTerminated(TiFlashServer * server) { return server->tmt.getTerminated().load(std::memory_order_relaxed) ? 1 : 0; }
+uint8_t HandleCheckTerminated(TiFlashServer * server) { return server->tmt->getTerminated().load(std::memory_order_relaxed) ? 1 : 0; }
 
 FsStats HandleComputeFsStats(TiFlashServer * server)
 {
     FsStats res; // res.ok = false by default
     try
     {
-        auto global_capacity = server->tmt.getContext().getPathCapacity();
+        auto global_capacity = server->tmt->getContext().getPathCapacity();
         res = global_capacity->getFsStats();
     }
     catch (...)
@@ -156,5 +139,7 @@ FsStats HandleComputeFsStats(TiFlashServer * server)
     }
     return res;
 }
+
+uint8_t HandleCheckTiFlashAlive(TiFlashServer * server) { return server->tmt != nullptr; }
 
 } // namespace DB

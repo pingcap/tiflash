@@ -265,6 +265,76 @@ int Server::main(const std::vector<std::string> & /*args*/)
     registerTableFunctions();
     registerStorages();
 
+    TiFlashProxyConfig proxy_conf(config());
+    TiFlashServer tiflash_instance_wrap{};
+    TiFlashServerHelper helper{
+        // a special number, also defined in proxy
+        .magic_number = 0x13579BDF,
+        .version = 6,
+        .inner = &tiflash_instance_wrap,
+        .fn_gen_cpp_string = GenCppRawString,
+        .fn_handle_write_raft_cmd = HandleWriteRaftCmd,
+        .fn_handle_admin_raft_cmd = HandleAdminRaftCmd,
+        .fn_handle_apply_snapshot = HandleApplySnapshot,
+        .fn_atomic_update_proxy = AtomicUpdateProxy,
+        .fn_handle_destroy = HandleDestroy,
+        .fn_handle_ingest_sst = HandleIngestSST,
+        .fn_handle_check_terminated = HandleCheckTerminated,
+        .fn_handle_compute_fs_stats = HandleComputeFsStats,
+        .fn_handle_check_tiflash_alive = HandleCheckTiFlashAlive,
+    };
+
+    auto proxy_runner = std::thread([&proxy_conf, &log, &helper]() {
+        if (!proxy_conf.inited)
+            return;
+
+        LOG_INFO(log, "Start tiflash proxy");
+        run_tiflash_proxy_ffi((int)proxy_conf.args.size(), proxy_conf.args.data(), &helper);
+    });
+
+    if (proxy_conf.inited)
+    {
+        LOG_INFO(log, "Wait for tiflash proxy initializing");
+        while (!tiflash_instance_wrap.proxy_helper)
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        LOG_INFO(log, "tiflash proxy is initialized");
+        if (tiflash_instance_wrap.proxy_helper->fn_handle_enable_encryption(tiflash_instance_wrap.proxy_helper->proxy_ptr))
+            LOG_INFO(log, "encryption is enabled");
+        else
+            LOG_INFO(log, "encryption is disabled");
+    }
+
+    SCOPE_EXIT({
+        LOG_INFO(log, "Let tiflash proxy shutdown");
+        tiflash_instance_wrap.tmt = nullptr;
+        LOG_INFO(log, "Wait for tiflash proxy to join");
+        proxy_runner.join();
+        LOG_INFO(log, "TiFlash proxy is terminated");
+    });
+
+    if (false)
+    {
+        // test encryption
+        std::string file = "/tmp/tiflash/test.a";
+        auto r = tiflash_instance_wrap.proxy_helper->fn_handle_get_file(tiflash_instance_wrap.proxy_helper->proxy_ptr, BaseBuffView(file));
+        assert(r.res == FileEncryptionRes::Ok);
+
+        r = tiflash_instance_wrap.proxy_helper->fn_handle_new_file(tiflash_instance_wrap.proxy_helper->proxy_ptr, BaseBuffView(file));
+        assert(r.res == FileEncryptionRes::Ok);
+
+        r = tiflash_instance_wrap.proxy_helper->fn_handle_new_file(tiflash_instance_wrap.proxy_helper->proxy_ptr, BaseBuffView(file));
+        assert(r.res == FileEncryptionRes::Ok);
+
+        r = tiflash_instance_wrap.proxy_helper->fn_handle_get_file(tiflash_instance_wrap.proxy_helper->proxy_ptr, BaseBuffView(file));
+        assert(r.res == FileEncryptionRes::Ok);
+
+        r = tiflash_instance_wrap.proxy_helper->fn_handle_delete_file(tiflash_instance_wrap.proxy_helper->proxy_ptr, BaseBuffView(file));
+        assert(r.res == FileEncryptionRes::Ok);
+
+        r = tiflash_instance_wrap.proxy_helper->fn_handle_get_file(tiflash_instance_wrap.proxy_helper->proxy_ptr, BaseBuffView(file));
+        assert(r.res == FileEncryptionRes::Ok);
+    }
+
     CurrentMetrics::set(CurrentMetrics::Revision, ClickHouseRevision::get());
 
     // print necessary grpc log.
@@ -614,6 +684,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         /// initialize TMTContext
         global_context->getTMTContext().restore();
+        tiflash_instance_wrap.tmt = &global_context->getTMTContext();
     }
 
     /// Then, startup grpc server to serve raft and/or flash services.
@@ -656,39 +727,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_INFO(log, "Begin to shut down flash service");
         flash_service.reset();
         LOG_INFO(log, "Shut down flash service");
-    });
-
-    TiFlashProxyConfig proxy_conf(config());
-    TiFlashServer tiflash_instance_wrap{.tmt = global_context->getTMTContext()};
-    TiFlashServerHelper helper{
-        // a special number, also defined in proxy
-        .magic_number = 0x13579BDF,
-        .version = 5,
-        .inner = &tiflash_instance_wrap,
-        .fn_gc_buff = GcBuff,
-        .fn_handle_write_raft_cmd = HandleWriteRaftCmd,
-        .fn_handle_admin_raft_cmd = HandleAdminRaftCmd,
-        .fn_handle_apply_snapshot = HandleApplySnapshot,
-        .fn_atomic_update_proxy = AtomicUpdateProxy,
-        .fn_handle_destroy = HandleDestroy,
-        .fn_handle_ingest_sst = HandleIngestSST,
-        .fn_handle_check_terminated = HandleCheckTerminated,
-        .fn_handle_compute_fs_stats = HandleComputeFsStats,
-    };
-
-    auto proxy_runner = std::thread([&proxy_conf, &log, &helper]() {
-        if (!proxy_conf.inited)
-            return;
-
-        LOG_INFO(log, "Start tiflash proxy");
-        run_tiflash_proxy_ffi((int)proxy_conf.args.size(), proxy_conf.args.data(), &helper);
-        LOG_INFO(log, "End tiflash proxy");
-    });
-
-    SCOPE_EXIT({
-        LOG_INFO(log, "Wait for tiflash proxy to join");
-        proxy_runner.join();
-        LOG_INFO(log, "TiFlash proxy finish");
     });
 
     if (has_zookeeper && config().has("distributed_ddl"))
@@ -967,6 +1005,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             global_context->getTMTContext().setTerminated();
             LOG_INFO(log, "Set tmt context terminated");
+            // wait proxy to stop services
+            if (proxy_conf.inited)
+            {
+                LOG_INFO(log, "Wait tiflash proxy to stop all services");
+                while (!tiflash_instance_wrap.proxy_helper->fn_handle_check_service_stopped(tiflash_instance_wrap.proxy_helper->proxy_ptr))
+                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                LOG_INFO(log, "Services in tiflash proxy are stopped");
+            }
         }
     }
 
