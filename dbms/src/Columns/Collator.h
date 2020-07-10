@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <string>
 #include <boost/noncopyable.hpp>
 
@@ -32,3 +33,7 @@ private:
     std::string locale;
     UCollator * collator;
 };
+
+
+using ICollatorPtr = std::shared_ptr<ICollator>;
+using CollatorPtr = std::shared_ptr<Collator>;
