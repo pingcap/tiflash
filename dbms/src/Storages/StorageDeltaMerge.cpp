@@ -810,8 +810,7 @@ void updateDeltaMergeTableCreateStatement(                   //
             }
             else
             {
-                // FIXME:
-                throw Exception();
+                throw Exception("Try to update table(" + database_name + "." + table_name + ") statement with no primary key. ");
             }
         }
 
