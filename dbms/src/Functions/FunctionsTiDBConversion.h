@@ -111,6 +111,8 @@ struct TiDBConvertToString
             const ColumnString::Chars_t * data_from = &col_from_string->getChars();
             const IColumn::Offsets * offsets_from = &col_from_string->getOffsets();
 
+            offsets_to.resize(size);
+
             size_t current_offset = 0;
             for (size_t i = 0; i < size; i++)
             {
@@ -132,6 +134,7 @@ struct TiDBConvertToString
                     write_buffer.write(padding_string.data(), tp.flen() - byte_length);
                 writeChar(0, write_buffer);
                 offsets_to[i] = write_buffer.count();
+                current_offset = next_offset;
             }
         }
         else if constexpr (IsDecimal<FromFieldType>)
@@ -317,6 +320,7 @@ struct TiDBConvertToInteger
             char current = value.data[ret.size];
             if ((current >= '0' && current <= '9') || current == '+' || current == '-')
                 continue;
+            break;
         }
         return ret;
     }
@@ -1157,7 +1161,6 @@ protected:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
     {
         ColumnNumbers new_arguments{arguments.front()};
-        // todo handle null map
         wrapper_function(block, new_arguments, result, in_union, tidb_tp, context);
     }
 
@@ -1299,7 +1302,7 @@ private:
             */
 
         // todo support convert to duration/json type
-        throw Exception{"Conversion to " + to_type->getName() + " is not supported", ErrorCodes::CANNOT_CONVERT_TYPE};
+        throw Exception{"tidb_cast to " + to_type->getName() + " is not supported", ErrorCodes::CANNOT_CONVERT_TYPE};
     }
 
     WrapperType createIdentityWrapper(const DataTypePtr &) const
@@ -1351,7 +1354,7 @@ private:
 
         // todo support convert to duration/json type
         throw Exception{
-            "Conversion from " + from_type->getName() + " to " + to_type->getName() + " is not supported", ErrorCodes::CANNOT_CONVERT_TYPE};
+            "tidb_cast from " + from_type->getName() + " to " + to_type->getName() + " is not supported", ErrorCodes::CANNOT_CONVERT_TYPE};
     }
 
     WrapperType prepare(const DataTypePtr & from_type, const DataTypePtr & to_type) const
@@ -1377,7 +1380,7 @@ private:
                 const auto & from_col = block.getByPosition(arguments[0]).column;
                 const auto & from_nullable_col = static_cast<const ColumnNullable &>(*from_col);
                 const auto & from_null_map = from_nullable_col.getNullMapData();
-                // make sure if to_type is not nullable, then there is no null value in from_column
+                /// make sure if to_type is not nullable, then there is no null value in from_column
                 if (!to_type->isNullable())
                 {
                     if (!memoryIsZero(from_null_map.data(), from_null_map.size()))
@@ -1446,7 +1449,7 @@ public:
 
     size_t getNumberOfArguments() const override { return 2; }
     void setInUnion(bool in_union_) { in_union = in_union_; }
-    void setTiDBFieldType(const tipb::FieldType * tidb_tp_) { tidb_tp = tidb_tp_; }
+    void setTiDBFieldType(const tipb::FieldType & tidb_tp_) { tidb_tp = tidb_tp_; }
     bool useDefaultImplementationForNulls() const override { return false; }
 
 
@@ -1460,7 +1463,7 @@ protected:
             data_types[i] = arguments[i].type;
 
         auto monotonicity = getMonotonicityInformation(arguments.front().type, return_type.get());
-        return std::make_shared<FunctionTiDBCast>(context, name, std::move(monotonicity), data_types, return_type, in_union, *tidb_tp);
+        return std::make_shared<FunctionTiDBCast>(context, name, std::move(monotonicity), data_types, return_type, in_union, tidb_tp);
     }
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
@@ -1523,7 +1526,7 @@ private:
 
     const Context & context;
     bool in_union;
-    const tipb::FieldType * tidb_tp;
+    tipb::FieldType tidb_tp;
 };
 
 } // namespace DB
