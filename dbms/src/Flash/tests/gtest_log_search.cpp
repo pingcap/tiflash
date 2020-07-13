@@ -13,7 +13,7 @@ public:
 
 TEST_F(LogSearch_Test, LogSearch)
 {
-    std::string s = "[2020/04/23 13:11:02.329 +08:00] [DEBUG] [\"Application : Load metadata done.\"]\n";
+    std::string s = "[\"Application : Load metadata done.\"]\n";
     auto in = std::shared_ptr<std::istringstream>(new std::istringstream(s));
     s.resize(s.size() - 1); // Trim \n
 
