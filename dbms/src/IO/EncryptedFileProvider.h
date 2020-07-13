@@ -22,6 +22,8 @@ public:
 
     ~EncryptedFileProvider() override = default;
 
+    void renameFile(const std::string & src_fname, const std::string & dst_fname) override;
+
 private:
     FileProviderPtr file_provider;
     KeyManagerPtr key_manager;

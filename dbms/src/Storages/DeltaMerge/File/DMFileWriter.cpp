@@ -83,7 +83,7 @@ void DMFileWriter::finalize()
         finalizeColumn(cd.id, *(cd.type));
     }
 
-    dmfile->finalize();
+    dmfile->finalize(file_provider);
 }
 
 void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColumn & column)

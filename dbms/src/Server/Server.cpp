@@ -312,7 +312,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         proxy_runner.join();
         LOG_INFO(log, "TiFlash proxy is terminated");
     });
-    
+
     CurrentMetrics::set(CurrentMetrics::Revision, ClickHouseRevision::get());
 
     // print necessary grpc log.
