@@ -39,6 +39,7 @@ struct BaseBuffView
 
     BaseBuffView(const std::string & s) : data(s.data()), len(s.size()) {}
     BaseBuffView(const char * data_, const uint64_t len_) : data(data_), len(len_) {}
+    BaseBuffView(std::string_view view) : data(view.data()), len(view.size()) {}
 };
 
 struct SnapshotView
@@ -144,6 +145,14 @@ struct FileEncryptionInfo
 
 struct TiFlashRaftProxyHelper
 {
+public:
+    bool checkServiceStopped() const;
+    bool checkEncryptionEnabled() const;
+    FileEncryptionInfo getFile(std::string_view) const;
+    FileEncryptionInfo newFile(std::string_view) const;
+    FileEncryptionInfo deleteFile(std::string_view) const;
+
+private:
     TiFlashRaftProxyPtr proxy_ptr;
     uint8_t (*fn_handle_check_service_stopped)(TiFlashRaftProxyPtr);
     uint8_t (*fn_handle_enable_encryption)(TiFlashRaftProxyPtr);

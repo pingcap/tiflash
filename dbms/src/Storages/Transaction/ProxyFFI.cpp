@@ -142,4 +142,10 @@ FsStats HandleComputeFsStats(TiFlashServer * server)
 
 uint8_t HandleCheckTiFlashAlive(TiFlashServer * server) { return server->tmt != nullptr; }
 
+bool TiFlashRaftProxyHelper::checkServiceStopped() const { return fn_handle_check_service_stopped(proxy_ptr); }
+bool TiFlashRaftProxyHelper::checkEncryptionEnabled() const { return fn_handle_enable_encryption(proxy_ptr); }
+FileEncryptionInfo TiFlashRaftProxyHelper::getFile(std::string_view view) const { return fn_handle_get_file(proxy_ptr, view); }
+FileEncryptionInfo TiFlashRaftProxyHelper::newFile(std::string_view view) const { return fn_handle_new_file(proxy_ptr, view); }
+FileEncryptionInfo TiFlashRaftProxyHelper::deleteFile(std::string_view view) const { return fn_handle_delete_file(proxy_ptr, view); }
+
 } // namespace DB

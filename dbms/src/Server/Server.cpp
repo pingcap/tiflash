@@ -298,7 +298,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         while (!tiflash_instance_wrap.proxy_helper)
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
         LOG_INFO(log, "tiflash proxy is initialized");
-        if (tiflash_instance_wrap.proxy_helper->fn_handle_enable_encryption(tiflash_instance_wrap.proxy_helper->proxy_ptr))
+        if (tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled())
             LOG_INFO(log, "encryption is enabled");
         else
             LOG_INFO(log, "encryption is disabled");
@@ -316,28 +316,28 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         // test encryption
         std::string file = "/tmp/tiflash/tmp.dmf_1/%2D1.dat";
-        auto r = tiflash_instance_wrap.proxy_helper->fn_handle_get_file(tiflash_instance_wrap.proxy_helper->proxy_ptr, BaseBuffView(file));
+        auto r = tiflash_instance_wrap.proxy_helper->getFile(file);
         assert(r.res == FileEncryptionRes::Ok);
 
-        r = tiflash_instance_wrap.proxy_helper->fn_handle_new_file(tiflash_instance_wrap.proxy_helper->proxy_ptr, BaseBuffView(file));
-        assert(r.res == FileEncryptionRes::Ok);
-        std::cout << r.key->size() << std::endl;
-        std::cout << r.iv->size() << std::endl;
-
-        r = tiflash_instance_wrap.proxy_helper->fn_handle_new_file(tiflash_instance_wrap.proxy_helper->proxy_ptr, BaseBuffView(file));
+        r = tiflash_instance_wrap.proxy_helper->newFile(file);
         assert(r.res == FileEncryptionRes::Ok);
         std::cout << r.key->size() << std::endl;
         std::cout << r.iv->size() << std::endl;
 
-        r = tiflash_instance_wrap.proxy_helper->fn_handle_get_file(tiflash_instance_wrap.proxy_helper->proxy_ptr, BaseBuffView(file));
+        r = tiflash_instance_wrap.proxy_helper->newFile(file);
         assert(r.res == FileEncryptionRes::Ok);
         std::cout << r.key->size() << std::endl;
         std::cout << r.iv->size() << std::endl;
 
-        r = tiflash_instance_wrap.proxy_helper->fn_handle_delete_file(tiflash_instance_wrap.proxy_helper->proxy_ptr, BaseBuffView(file));
+        r = tiflash_instance_wrap.proxy_helper->getFile(file);
+        assert(r.res == FileEncryptionRes::Ok);
+        std::cout << r.key->size() << std::endl;
+        std::cout << r.iv->size() << std::endl;
+
+        r = tiflash_instance_wrap.proxy_helper->deleteFile(file);
         assert(r.res == FileEncryptionRes::Ok);
 
-        r = tiflash_instance_wrap.proxy_helper->fn_handle_get_file(tiflash_instance_wrap.proxy_helper->proxy_ptr, BaseBuffView(file));
+        r = tiflash_instance_wrap.proxy_helper->getFile(file);
         assert(r.res == FileEncryptionRes::Ok);
     }
 
@@ -1015,7 +1015,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             if (proxy_conf.inited)
             {
                 LOG_INFO(log, "Wait tiflash proxy to stop all services");
-                while (!tiflash_instance_wrap.proxy_helper->fn_handle_check_service_stopped(tiflash_instance_wrap.proxy_helper->proxy_ptr))
+                while (!tiflash_instance_wrap.proxy_helper->checkServiceStopped())
                     std::this_thread::sleep_for(std::chrono::milliseconds(200));
                 LOG_INFO(log, "Services in tiflash proxy are stopped");
             }
