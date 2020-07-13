@@ -122,11 +122,28 @@ static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr
     return analyzer->applyFunction(is_not_in ? "and" : "or", argument_names, actions, nullptr);
 }
 
+static const String tidb_cast_name = "tidb_cast";
+
+static String buildCastFunctionInternal(DAGExpressionAnalyzer * analyzer, const Names & argument_names, bool in_union,
+    const tipb::FieldType & field_type, ExpressionActionsPtr & actions)
+{
+    String result_name = genFuncString(tidb_cast_name, argument_names);
+    if (actions->getSampleBlock().has(result_name))
+        return result_name;
+
+    FunctionBuilderPtr function_builder = FunctionFactory::instance().get(tidb_cast_name, analyzer->getContext());
+    FunctionBuilderTiDBCast * function_builder_tidb_cast = dynamic_cast<FunctionBuilderTiDBCast *>(function_builder.get());
+    function_builder_tidb_cast->setInUnion(in_union);
+    function_builder_tidb_cast->setTiDBFieldType(field_type);
+
+    const ExpressionAction & apply_function = ExpressionAction::applyFunction(function_builder, argument_names, result_name, nullptr);
+    actions->add(apply_function);
+    return result_name;
+}
+
 /// buildCastFunction build tidb_cast function
 static String buildCastFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
 {
-    static const String function_name = "tidb_cast";
-
     if (expr.children_size() != 1)
         throw Exception("Cast function only support one argument", ErrorCodes::COP_BAD_DAG_REQUEST);
     if (!exprHasValidFieldType(expr))
@@ -139,20 +156,8 @@ static String buildCastFunction(DAGExpressionAnalyzer * analyzer, const tipb::Ex
     constructStringLiteralTiExpr(type_expr, expected_type->getName());
     auto type_expr_name = analyzer->getActions(type_expr, actions);
 
-    String result_name = genFuncString(function_name, {name, type_expr_name});
-    if (actions->getSampleBlock().has(result_name))
-        return result_name;
-
-    FunctionBuilderPtr function_builder = FunctionFactory::instance().get(function_name, analyzer->getContext());
-    FunctionBuilderTiDBCast * function_builder_tidb_cast = dynamic_cast<FunctionBuilderTiDBCast *>(function_builder.get());
     // todo extract in_union from tipb::Expr
-    function_builder_tidb_cast->setInUnion(false);
-    function_builder_tidb_cast->setTiDBFieldType(&expr.field_type());
-
-    const ExpressionAction & apply_function
-        = ExpressionAction::applyFunction(function_builder, {name, type_expr_name}, result_name, nullptr);
-    actions->add(apply_function);
-    return result_name;
+    return buildCastFunctionInternal(analyzer, {name, type_expr_name}, false, expr.field_type(), actions);
 }
 
 static String buildDateAddFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
@@ -417,7 +422,14 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
     }
     if (org_type->isStringOrFixedString())
     {
-        String num_col_name = applyFunction("toInt64OrNull", {column_name}, actions, nullptr);
+        /// use tidb_cast to make it compatible with TiDB
+        tipb::FieldType field_type;
+        field_type.set_tp(TiDB::TypeLongLong);
+        tipb::Expr type_expr;
+        constructStringLiteralTiExpr(type_expr, "Nullable(Int64)");
+        auto type_expr_name = getActions(type_expr, actions);
+        String num_col_name = buildCastFunctionInternal(this, {column_name, type_expr_name}, false, field_type, actions);
+
         tipb::Expr const_expr;
         constructInt64LiteralTiExpr(const_expr, 0);
         auto const_expr_name = getActions(const_expr, actions);
