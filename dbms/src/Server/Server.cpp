@@ -106,7 +106,7 @@ struct TiFlashProxyConfig
     static const std::string config_prefix;
     std::vector<const char *> args;
     std::unordered_map<std::string, std::string> val_map;
-    bool inited = false;
+    bool is_proxy_runnable = false;
 
     TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
     {
@@ -131,7 +131,7 @@ struct TiFlashProxyConfig
             args.push_back(v.first.data());
             args.push_back(v.second.data());
         }
-        inited = true;
+        is_proxy_runnable = true;
     }
 };
 
@@ -285,14 +285,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
     };
 
     auto proxy_runner = std::thread([&proxy_conf, &log, &helper]() {
-        if (!proxy_conf.inited)
+        if (!proxy_conf.is_proxy_runnable)
             return;
 
         LOG_INFO(log, "Start tiflash proxy");
         run_tiflash_proxy_ffi((int)proxy_conf.args.size(), proxy_conf.args.data(), &helper);
     });
 
-    if (proxy_conf.inited)
+    if (proxy_conf.is_proxy_runnable)
     {
         LOG_INFO(log, "Wait for tiflash proxy initializing");
         while (!tiflash_instance_wrap.proxy_helper)
@@ -1012,7 +1012,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->getTMTContext().setTerminated();
             LOG_INFO(log, "Set tmt context terminated");
             // wait proxy to stop services
-            if (proxy_conf.inited)
+            if (proxy_conf.is_proxy_runnable)
             {
                 LOG_INFO(log, "Wait tiflash proxy to stop all services");
                 while (!tiflash_instance_wrap.proxy_helper->checkServiceStopped())
