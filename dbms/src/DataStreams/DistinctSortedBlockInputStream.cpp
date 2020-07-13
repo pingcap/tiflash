@@ -86,7 +86,7 @@ bool DistinctSortedBlockInputStream::buildFilter(
     ClearableSetVariants & variants) const
 {
     typename Method::State state;
-    state.init(columns, nullptr);
+    state.init(columns);
 
     /// Compare last row of previous block and first row of current block,
     /// If rows not equal, we can clear HashSet,

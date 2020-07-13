@@ -78,6 +78,8 @@ public:
         writes.emplace_back(std::move(w));
     }
 
+    // Upsert a page{page_id} and writer page's data to a new PageFile{file_id}. 
+    // Now it's used in DataCompactor to move page's data to new file.
     void upsertPage(PageId                           page_id,
                     UInt64                           tag,
                     const PageFileIdAndLevel &       file_id,
@@ -89,6 +91,9 @@ public:
         writes.emplace_back(std::move(w));
     }
 
+    // Upsering a page{page_id} to PageFile{file_id}. This type of upsert is a simple mark and
+    // only used for checkpoint. That page will be overwriten by WriteBatch with larger sequence,
+    // so we don't need to write page's data.
     void upsertPage(PageId                           page_id,
                     UInt64                           tag,
                     const PageFileIdAndLevel &       file_id,

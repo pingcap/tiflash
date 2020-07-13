@@ -20,6 +20,7 @@ services:
       - ./_env.sh:/tests/_env.sh
       - ./log/tiflash-cluster-manager:/tmp/tiflash/data/tmp
       - ./config/tikv-learner.toml:/tikv.toml:ro
+      - ./config/cipher-file-256:/cipher-file-256:ro
       - ./data/tikv-learner_dt:/data
       - ./log/tikv-learner_dt:/log
     command:
