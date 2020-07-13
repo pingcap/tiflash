@@ -34,7 +34,7 @@ int ColumnDecimal<T>::compareAt(size_t n, size_t m, const IColumn & rhs_, int) c
 }
 
 template <typename T>
-StringRef ColumnDecimal<T>::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const
+StringRef ColumnDecimal<T>::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin, std::shared_ptr<TiDB::ITiDBCollator>, String &) const
 {
     auto pos = arena.allocContinue(sizeof(T), begin);
     memcpy(pos, &data[n], sizeof(T));
@@ -42,7 +42,7 @@ StringRef ColumnDecimal<T>::serializeValueIntoArena(size_t n, Arena & arena, cha
 }
 
 template <typename T>
-const char * ColumnDecimal<T>::deserializeAndInsertFromArena(const char * pos)
+const char * ColumnDecimal<T>::deserializeAndInsertFromArena(const char * pos, std::shared_ptr<TiDB::ITiDBCollator>)
 {
     data.push_back(unalignedLoad<T>(pos));
     return pos + sizeof(T);
@@ -57,7 +57,7 @@ UInt64 ColumnDecimal<T>::get64(size_t n) const
 }
 
 template <typename T>
-void ColumnDecimal<T>::updateHashWithValue(size_t n, SipHash & hash) const
+void ColumnDecimal<T>::updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator>, String &) const
 {
     hash.update(data[n]);
 }

@@ -162,12 +162,7 @@ CATCH
 TEST(LegacyCompactor_test, DISABLED_CompactAndRestore)
 try
 {
-    Poco::AutoPtr<Poco::ConsoleChannel>   channel = new Poco::ConsoleChannel(std::cerr);
-    Poco::AutoPtr<Poco::PatternFormatter> formatter(new Poco::PatternFormatter);
-    formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i <%p> %s: %t");
-    Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
-    Poco::Logger::root().setChannel(formatting_channel);
-    Poco::Logger::root().setLevel("trace");
+    TiFlashTestEnv::setupLogger();
 
     const String path = TiFlashTestEnv::getTemporaryPath() + "/legacy_compactor_test";
     PageStorage  storage("compact_test", path, {});

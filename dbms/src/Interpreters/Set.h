@@ -82,7 +82,7 @@ public:
     void setContainsNullValue(bool contains_null_value_) { contains_null_value = contains_null_value_; }
     bool containsNullValue() const { return contains_null_value; }
 
-    void setCollator(std::shared_ptr<TiDB::ITiDBCollator> collator_) { collator = collator_; }
+    void setCollators(TiDB::TiDBCollators & collators_) { collators = collators_; }
 
 private:
     size_t keys_size;
@@ -135,7 +135,7 @@ private:
       */
     mutable std::shared_mutex rwlock;
 
-    std::shared_ptr<TiDB::ITiDBCollator> collator;
+    TiDB::TiDBCollators collators;
 
     template <typename Method>
     void insertFromBlockImpl(
