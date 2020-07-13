@@ -307,7 +307,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     SCOPE_EXIT({
         LOG_INFO(log, "Let tiflash proxy shutdown");
         tiflash_instance_wrap.tmt = nullptr;
-        LOG_INFO(log, "Wait for tiflash proxy to join");
+        LOG_INFO(log, "Wait for tiflash proxy thread to join");
         proxy_runner.join();
         LOG_INFO(log, "TiFlash proxy is terminated");
     });
@@ -315,18 +315,24 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (false)
     {
         // test encryption
-        std::string file = "/tmp/tiflash/test.a";
+        std::string file = "/tmp/tiflash/tmp.dmf_1/%2D1.dat";
         auto r = tiflash_instance_wrap.proxy_helper->fn_handle_get_file(tiflash_instance_wrap.proxy_helper->proxy_ptr, BaseBuffView(file));
         assert(r.res == FileEncryptionRes::Ok);
 
         r = tiflash_instance_wrap.proxy_helper->fn_handle_new_file(tiflash_instance_wrap.proxy_helper->proxy_ptr, BaseBuffView(file));
         assert(r.res == FileEncryptionRes::Ok);
+        std::cout << r.key->size() << std::endl;
+        std::cout << r.iv->size() << std::endl;
 
         r = tiflash_instance_wrap.proxy_helper->fn_handle_new_file(tiflash_instance_wrap.proxy_helper->proxy_ptr, BaseBuffView(file));
         assert(r.res == FileEncryptionRes::Ok);
+        std::cout << r.key->size() << std::endl;
+        std::cout << r.iv->size() << std::endl;
 
         r = tiflash_instance_wrap.proxy_helper->fn_handle_get_file(tiflash_instance_wrap.proxy_helper->proxy_ptr, BaseBuffView(file));
         assert(r.res == FileEncryptionRes::Ok);
+        std::cout << r.key->size() << std::endl;
+        std::cout << r.iv->size() << std::endl;
 
         r = tiflash_instance_wrap.proxy_helper->fn_handle_delete_file(tiflash_instance_wrap.proxy_helper->proxy_ptr, BaseBuffView(file));
         assert(r.res == FileEncryptionRes::Ok);
