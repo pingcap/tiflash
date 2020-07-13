@@ -1526,8 +1526,10 @@ void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
                 pk_names.emplace_back(col.name);
             }
         }
-        if (!pk_names.empty())
+        if (table_info->get().pk_is_handle && pk_names.size() == 1)
         {
+            // Only update primary key name if pk is handle and there is only one column with
+            // primary key flag
             original_table_handle_define.name = pk_names[0];
         }
     }
