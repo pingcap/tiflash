@@ -160,9 +160,3 @@ INSTANTIATE_TEST_CASE_P(EncryptionTestInstance, EncryptionTest,
 
 
 } // namespace DB
-
-int main(int argc, char ** argv)
-{
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}
