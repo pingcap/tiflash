@@ -36,8 +36,8 @@ namespace DB
 class AESCTRCipherStream : public BlockAccessCipherStream
 {
 public:
-    AESCTRCipherStream(const EVP_CIPHER * cipher, const std::string & key, uint64_t iv_high, uint64_t iv_low)
-        : cipher_(cipher), key_(key), initial_iv_high_(iv_high), initial_iv_low_(iv_low)
+    AESCTRCipherStream(const EVP_CIPHER * cipher, std::string key, uint64_t iv_high, uint64_t iv_low)
+        : cipher_(cipher), key_(std::move(key)), initial_iv_high_(iv_high), initial_iv_low_(iv_low)
     {}
 
     ~AESCTRCipherStream() override = default;

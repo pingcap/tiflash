@@ -11,18 +11,23 @@ extern const int DATA_ENCRYPTION_ERROR;
 
 BlockAccessCipherStreamPtr AESEncryptionProvider::createCipherStream(const std::string & fname, bool new_file)
 {
-    FileEncryptionInfo file_info;
+    EncryptionMethod method;
+    TiFlashRawString key;
+    TiFlashRawString iv;
     if (new_file)
     {
-        file_info = key_manager->newFile(fname);
+        auto file_info = key_manager->newFile(fname);
+        method = file_info.method;
+        key = file_info.key;
+        iv = file_info.iv;
     }
     else
     {
-        file_info = key_manager->getFile(fname);
+        auto file_info = key_manager->getFile(fname);
+        method = file_info.method;
+        key = file_info.key;
+        iv = file_info.iv;
     }
-    auto & method = file_info.method;
-    auto & key = file_info.key;
-    auto & iv = file_info.iv;
 
     const EVP_CIPHER * cipher = nullptr;
     switch (method)
