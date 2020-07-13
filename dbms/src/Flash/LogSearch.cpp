@@ -147,6 +147,7 @@ LogIterator::Result<LogIterator::LogEntry> LogIterator::readLog()
         std::string temp;
         // Trim timestamp and level sections
         ss >> temp >> temp >> temp >> temp;
+        ss.seekg(1, std::ios::cur);
     }
 
     std::getline(ss, entry.message);
