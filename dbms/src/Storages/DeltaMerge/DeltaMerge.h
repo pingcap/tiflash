@@ -8,7 +8,8 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
-#include <Storages/DeltaMerge/HandleFilter.h>
+#include <Storages/DeltaMerge/PKFilter.h>
+#include <Storages/DeltaMerge/PKRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
 namespace DB
@@ -45,7 +46,7 @@ private:
     IndexIterator      delta_index_it;
     IndexIterator      delta_index_end;
 
-    HandleRange handle_range;
+    PKRange pk_range;
 
     size_t max_block_size;
 
@@ -77,19 +78,19 @@ public:
                                DeltaValueSpacePtr &                 delta_value_space_,
                                const IndexIterator &                delta_index_start_,
                                const IndexIterator &                delta_index_end_,
-                               const HandleRange                    handle_range_,
+                               const PKRange &                      pk_range_,
                                size_t                               max_block_size_)
         : stable_input_stream(stable_input_stream_),
           delta_value_space(delta_value_space_),
           delta_index_it(delta_index_start_),
           delta_index_end(delta_index_end_),
-          handle_range(handle_range_),
+          pk_range(pk_range_),
           max_block_size(max_block_size_)
     {
         if constexpr (skippable_place)
         {
-            if (handle_range.end != HandleRange::MAX)
-                throw Exception("The end of handle range should be MAX in skippable_place mode");
+            if (!pk_range.isEndInfinite())
+                throw Exception("The end of pk range should be infinite in skippable_place mode");
         }
 
         header      = stable_input_stream->getHeader();
@@ -418,7 +419,7 @@ private:
         auto offset      = cur_stable_block_pos;
         auto limit       = copy_rows;
 
-        auto [final_offset, final_limit] = HandleFilter::getPosRangeOfSorted(handle_range, cur_stable_block_columns[0], offset, limit);
+        auto [final_offset, final_limit] = PKFilter::getPosRangeOfSorted(pk_range, cur_stable_block_columns, offset, limit);
 
         if constexpr (skippable_place)
         {
@@ -463,7 +464,7 @@ private:
                 output_columns[column_id]->reserve(max_block_size);
         }
 
-        auto actual_write = delta_value_space->read(handle_range, output_columns, use_delta_offset, write_rows);
+        auto actual_write = delta_value_space->read(pk_range, output_columns, use_delta_offset, write_rows);
 
         if constexpr (skippable_place)
         {

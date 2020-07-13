@@ -1,17 +1,14 @@
 #pragma once
 
-#include <type_traits>
-
 #include <Common/Exception.h>
-
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/IBlockOutputStream.h>
+#include <Interpreters/sortBlock.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
-
-#include <Interpreters/sortBlock.h>
-
 #include <common/logger_useful.h>
+
+#include <type_traits>
 
 
 namespace DB
@@ -208,7 +205,8 @@ bool placeInsert(const SkippableBlockInputStreamPtr & stable, //
                  const SortDescription &              sort)
 {
     auto rows            = delta_block.rows();
-    auto [offset, limit] = HandleFilter::getPosRangeOfSorted(range, delta_block.getByPosition(0).column, 0, rows);
+    auto pk_range        = PKRange::fromHandleRange(range);
+    auto [offset, limit] = pk_range.getPosRange(delta_block, 0, rows);
     if (!limit)
         return rows == limit;
 
@@ -245,7 +243,8 @@ bool placeDelete(const SkippableBlockInputStreamPtr & stable, //
                  const SortDescription &              sort)
 {
     auto rows            = delta_block.rows();
-    auto [offset, limit] = HandleFilter::getPosRangeOfSorted(range, delta_block.getByPosition(0).column, 0, rows);
+    auto pk_range        = PKRange::fromHandleRange(range);
+    auto [offset, limit] = pk_range.getPosRange(delta_block, 0, rows);
     if (!limit)
         return rows == limit;
 

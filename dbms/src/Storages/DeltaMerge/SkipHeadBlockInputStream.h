@@ -1,6 +1,7 @@
 #pragma once
 
-#include <Storages/DeltaMerge/HandleFilter.h>
+#include <Storages/DeltaMerge/PKFilter.h>
+#include <Storages/DeltaMerge/PKRange.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
@@ -11,11 +12,10 @@ namespace DM
 class SkipHeadBlockInputStream : public SkippableBlockInputStream
 {
 public:
-    SkipHeadBlockInputStream(const SkippableBlockInputStreamPtr & input_, HandleRange handle_range_, size_t handle_col_pos_)
-        : input(input_), handle_range(handle_range_), handle_col_pos(handle_col_pos_)
+    SkipHeadBlockInputStream(const SkippableBlockInputStreamPtr & input_, PKRange & pk_range_) : input(input_), pk_range(pk_range_)
     {
-        if (handle_range.end != HandleRange::MAX)
-            throw Exception("The end of handle range should be MAX for SkipHeadBlockInputStream");
+        if (!pk_range.isEndInfinite())
+            throw Exception("The end of pk range should be infinite for SkipHeadBlockInputStream");
 
         children.push_back(input);
     }
@@ -36,14 +36,14 @@ public:
         while ((block = children.back()->read()))
         {
             auto rows            = block.rows();
-            auto [offset, limit] = HandleFilter::getPosRangeOfSorted(handle_range, block.getByPosition(handle_col_pos).column, 0, rows);
+            auto [offset, limit] = pk_range.getPosRange(block, 0, rows);
             if (unlikely(offset + limit != rows))
                 throw Exception("Logical error!");
 
             skip_rows += offset;
             if (limit)
             {
-                sk_first_block = HandleFilter::cutBlock(std::move(block), offset, limit);
+                sk_first_block = PKFilter::cutBlock(std::move(block), offset, limit);
                 break;
             }
         }
@@ -67,8 +67,7 @@ public:
 private:
     SkippableBlockInputStreamPtr input;
 
-    HandleRange handle_range;
-    size_t      handle_col_pos;
+    PKRange pk_range;
 
     size_t sk_call_status = 0; // 0: initial, 1: called once by getSkippedRows
     Block  sk_first_block;

@@ -7,6 +7,7 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
+#include <Storages/DeltaMerge/PKRange.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageDefines.h>
 
@@ -165,7 +166,7 @@ public:
         BlockOrDeletes getMergeBlocks(size_t rows_begin, size_t deletes_begin, size_t rows_end, size_t deletes_end);
 
         Block  read(size_t pack_index);
-        size_t read(const HandleRange & range, MutableColumns & output_columns, size_t offset, size_t limit);
+        size_t read(const PKRange & pk_range, MutableColumns & output_columns, size_t offset, size_t limit);
 
         bool shouldPlace(const DMContext &   context,
                          DeltaIndexPtr       my_delta_index,

@@ -82,7 +82,7 @@ inline int compareValuesAt(const PrimaryKey & pk, const Columns & left, size_t l
 }
 
 // https://en.cppreference.com/w/cpp/algorithm/lower_bound
-size_t lowerBound(const PrimaryKey & pk, const Block & block, size_t first, size_t last, const Columns & columns, size_t edge_id)
+size_t lowerBound(const PrimaryKey & pk, const Columns & columns, size_t first, size_t last, const Block & block, size_t edge_id)
 {
     size_t count = last - first;
     while (count > 0)
@@ -90,6 +90,25 @@ size_t lowerBound(const PrimaryKey & pk, const Block & block, size_t first, size
         size_t step  = count / 2;
         size_t index = first + step;
         if (compareValuesAt(pk, columns, edge_id, block, index) > 0)
+        {
+            first = index + 1;
+            count -= step + 1;
+        }
+        else
+            count = step;
+    }
+    return first;
+}
+
+// https://en.cppreference.com/w/cpp/algorithm/lower_bound
+size_t lowerBound(const PrimaryKey & pk, const Columns & left, size_t first, size_t last, const Columns & right, size_t edge_id)
+{
+    size_t count = last - first;
+    while (count > 0)
+    {
+        size_t step  = count / 2;
+        size_t index = first + step;
+        if (compareValuesAt(pk, left, edge_id, right, index) > 0)
         {
             first = index + 1;
             count -= step + 1;
@@ -161,6 +180,8 @@ public:
         else
             return compareValuesAt(*left.pk, left.columns, index, right.columns, index);
     }
+
+    const PrimaryKey & primaryKey() { return *pk; }
 
     class Creator
     {
@@ -410,9 +431,19 @@ public:
         return is_infinite[START_INDEX] || compareValuesAt(*pk, columns, START_INDEX, block, row_id) <= 0;
     }
 
+    bool checkStart(const Columns & columns_data, size_t row_id) const
+    {
+        return is_infinite[START_INDEX] || compareValuesAt(*pk, columns, START_INDEX, columns_data, row_id) <= 0;
+    }
+
     bool checkEnd(const Block & block, size_t row_id) const
     {
         return is_infinite[END_INDEX] || compareValuesAt(*pk, columns, END_INDEX, block, row_id) > 0;
+    }
+
+    bool checkEnd(const Columns & columns_data, size_t row_id) const
+    {
+        return is_infinite[END_INDEX] || compareValuesAt(*pk, columns, END_INDEX, columns_data, row_id) > 0;
     }
 
     bool endLessThan(const Block & block, size_t row_id) const
@@ -422,13 +453,30 @@ public:
 
     bool check(const Block & block, size_t row_id) const { return checkStart(block, row_id) && checkEnd(block, row_id); }
 
+    bool check(const Columns & columns_data, size_t row_id) const
+    {
+        return checkStart(columns_data, row_id) && checkEnd(columns_data, row_id);
+    }
+
     std::pair<size_t, size_t> getPosRange(const Block & block, const size_t offset, const size_t limit) const
     {
         size_t start_index
-            = (is_infinite[START_INDEX] || check(block, offset)) ? offset : lowerBound(*pk, block, offset, limit, columns, START_INDEX);
+            = (is_infinite[START_INDEX] || check(block, offset)) ? offset : lowerBound(*pk, columns, offset, limit, block, START_INDEX);
         size_t end_index = (is_infinite[END_INDEX] || check(block, offset + limit))
             ? offset + limit
-            : lowerBound(*pk, block, offset, limit, columns, END_INDEX);
+            : lowerBound(*pk, columns, offset, limit, block, END_INDEX);
+
+        return {start_index, end_index - start_index};
+    }
+
+    std::pair<size_t, size_t> getPosRange(const Columns & columns_data, const size_t offset, const size_t limit) const
+    {
+        size_t start_index = (is_infinite[START_INDEX] || check(columns_data, offset))
+            ? offset
+            : lowerBound(*pk, columns, offset, limit, columns_data, START_INDEX);
+        size_t end_index = (is_infinite[END_INDEX] || check(columns_data, offset + limit))
+            ? offset + limit
+            : lowerBound(*pk, columns, offset, limit, columns_data, END_INDEX);
 
         return {start_index, end_index - start_index};
     }

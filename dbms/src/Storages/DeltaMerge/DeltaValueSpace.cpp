@@ -4,7 +4,6 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/Pack.h>
 #include <Storages/DeltaMerge/DeltaValueSpace.h>
-#include <Storages/DeltaMerge/HandleFilter.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/PathPool.h>
 
