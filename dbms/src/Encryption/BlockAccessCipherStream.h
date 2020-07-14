@@ -1,8 +1,8 @@
 #pragma once
 
+#include <stdint.h>
 #include <cstddef>
 #include <memory>
-#include <stdint.h>
 #include <string>
 
 namespace DB

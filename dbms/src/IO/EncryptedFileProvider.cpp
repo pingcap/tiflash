@@ -18,7 +18,8 @@ WritableFilePtr EncryptedFileProvider::newWritableFileImpl(const std::string & f
     return std::make_shared<EncryptedWritableFile>(underlying, encryption_provider->createCipherStream(file_name_, true));
 }
 
-void EncryptedFileProvider::renameFile(const std::string &src_fname, const std::string &dst_fname) {
+void EncryptedFileProvider::renameFile(const std::string & src_fname, const std::string & dst_fname)
+{
     key_manager->renameFile(src_fname, dst_fname);
 }
 } // namespace DB

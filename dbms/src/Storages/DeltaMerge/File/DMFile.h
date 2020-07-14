@@ -1,8 +1,8 @@
 #pragma once
 
 #include <Core/Types.h>
-#include <IO/ReadBufferFromFile.h>
 #include <IO/FileProvider.h>
+#include <IO/ReadBufferFromFile.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/ColumnStat.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>

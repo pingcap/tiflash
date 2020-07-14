@@ -2,14 +2,13 @@
 
 #include <Encryption/KeyManager.h>
 
-namespace DB {
+namespace DB
+{
 
 class DataKeyManager : public KeyManager
 {
 public:
-    DataKeyManager(TiFlashServer &tiflash_instance_wrap_) : tiflash_instance_wrap{tiflash_instance_wrap_} {
-
-    }
+    DataKeyManager(TiFlashServer & tiflash_instance_wrap_) : tiflash_instance_wrap{tiflash_instance_wrap_} {}
 
     ~DataKeyManager() = default;
 
@@ -48,4 +47,4 @@ public:
 private:
     TiFlashServer & tiflash_instance_wrap;
 };
-}
+} // namespace DB
