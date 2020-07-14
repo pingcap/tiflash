@@ -16,7 +16,7 @@ public:
 
     ~PosixWritableFile() override;
 
-    ssize_t write(const char * buf, size_t size) const override;
+    ssize_t write(char * buf, size_t size) override;
 
     std::string getFileName() const override { return file_name; }
 
