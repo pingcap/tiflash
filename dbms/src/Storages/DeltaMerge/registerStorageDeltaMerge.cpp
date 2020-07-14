@@ -18,8 +18,9 @@ extern const int BAD_ARGUMENTS;
 
 static ASTPtr extractKeyExpressionList(IAST & node)
 {
+    // For multiple primary key, this is a ASTFunction with name "tuple".
+    // For single primary key, this is a ASTExpressionList.
     const ASTFunction * expr_func = typeid_cast<const ASTFunction *>(&node);
-
     if (expr_func && expr_func->name == "tuple")
     {
         /// Primary key is specified in tuple.
