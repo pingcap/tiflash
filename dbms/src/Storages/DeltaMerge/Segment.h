@@ -73,7 +73,7 @@ public:
     Segment & operator=(Segment &&) = delete;
 
     Segment(UInt64                      epoch_, //
-            const HandleRange &         range_,
+            const PKRangePtr &          pk_range_,
             PageId                      segment_id_,
             PageId                      next_segment_id_,
             const DeltaValueSpacePtr &  delta_,
@@ -208,7 +208,7 @@ private:
     template <bool skippable_place = false, class IndexIterator = DeltaIndexIterator>
     static SkippableBlockInputStreamPtr getPlacedStream(const DMContext &         dm_context,
                                                         const ColumnDefines &     read_columns,
-                                                        const HandleRange &       handle_range,
+                                                        const PKRange &           pk_range,
                                                         const RSOperatorPtr &     filter,
                                                         const StableSnapshotPtr & stable_snap,
                                                         DeltaSnapshotPtr &        delta_snap,
@@ -247,7 +247,7 @@ private:
                      size_t                    delta_value_space_offset,
                      Block &&                  block,
                      DeltaTree &               delta_tree,
-                     const HandleRange &       relevant_range) const;
+                     const PKRange &           relevant_range) const;
     /// Reference the deletes by delta tree.
     /// Returns fully placed or not. Some rows not match relevant_range are not placed.
     template <bool skippable_place>

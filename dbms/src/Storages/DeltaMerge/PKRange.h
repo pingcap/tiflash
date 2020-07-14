@@ -181,7 +181,7 @@ public:
             return compareValuesAt(*left.pk, left.columns, index, right.columns, index);
     }
 
-    PrimaryKeyPtr primaryKey() { return pk; }
+    PrimaryKeyPtr primaryKey() const { return pk; }
 
     class Creator
     {

@@ -198,15 +198,14 @@ struct RidGenerator
 template <bool use_row_id_ref, class DeltaTree>
 bool placeInsert(const SkippableBlockInputStreamPtr & stable, //
                  const Block &                        delta_block,
-                 const HandleRange &                  range,
+                 const PKRange &                      range,
                  DeltaTree &                          delta_tree,
                  size_t                               delta_value_space_offset,
                  const IColumn::Permutation &         row_id_ref,
                  const SortDescription &              sort)
 {
     auto rows            = delta_block.rows();
-    auto pk_range        = PKRange::fromHandleRange(range);
-    auto [offset, limit] = pk_range.getPosRange(delta_block, 0, rows);
+    auto [offset, limit] = range.getPosRange(delta_block, 0, rows);
     if (!limit)
         return rows == limit;
 

@@ -264,7 +264,7 @@ public:
     ///   Otherwise, throw an exception.
     ///
     /// Note that this method is expected to be called by some one who already have lock on this instance.
-    Packs checkHeadAndCloneTail(DMContext & context, const HandleRange & target_range, const Packs & head_packs, WriteBatches & wbs) const;
+    Packs checkHeadAndCloneTail(DMContext & context, const PKRange & target_range, const Packs & head_packs, WriteBatches & wbs) const;
 
     PageId getId() const { return id; }
 

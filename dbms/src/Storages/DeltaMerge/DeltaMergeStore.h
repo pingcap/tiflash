@@ -6,8 +6,8 @@
 #include <Interpreters/Context.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/PKRange.h>
+#include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TiDB.h>
@@ -35,6 +35,7 @@ struct SegmentStat
 {
     UInt64      segment_id;
     HandleRange range;
+    PKRangePtr  pk_range;
 
     UInt64 rows          = 0;
     UInt64 size          = 0;

@@ -383,7 +383,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         for (auto & [end, segment] : segments)
         {
             (void)end;
-            msg += DB::toString(segment->segmentId()) + ":" + segment->getRange().toString() + ",";
+            msg += DB::toString(segment->segmentId()) + ":" + segment->getPKRange()->toString() + ",";
         }
         msg.pop_back();
         msg += "}";
@@ -493,7 +493,7 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
         for (auto & [end, segment] : segments)
         {
             (void)end;
-            msg += DB::toString(segment->segmentId()) + ":" + segment->getRange().toString() + ",";
+            msg += DB::toString(segment->segmentId()) + ":" + segment->getPKRange()->toString() + ",";
         }
         msg.pop_back();
         msg += "}";
@@ -960,7 +960,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         /// For complexity reason, currently we only try to merge with next segment. Normally it is good enough.
 
         // The last segment cannot be merged.
-        if (segment->getRange().end == P_INF_HANDLE)
+        if (segment->getPKRange()->isEndInfinite())
             return {};
         SegmentPtr next_segment;
         {
@@ -1665,6 +1665,7 @@ SegmentStats DeltaMergeStore::getSegmentStats()
 
         stat.segment_id = segment->segmentId();
         stat.range      = segment->getRange();
+        stat.pk_range   = segment->getPKRange();
 
         stat.rows          = segment->getEstimatedRows();
         stat.size          = delta->getBytes() + stable->getBytes();

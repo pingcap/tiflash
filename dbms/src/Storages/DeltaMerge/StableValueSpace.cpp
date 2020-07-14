@@ -171,7 +171,7 @@ SnapshotPtr StableValueSpace::createSnapshot()
 
 SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DMContext &     context, //
                                                                         const ColumnDefines & read_columns,
-                                                                        const HandleRange &   handle_range,
+                                                                        const PKRange &       pk_range,
                                                                         const RSOperatorPtr & filter,
                                                                         UInt64                max_data_version,
                                                                         bool                  enable_clean_read)
@@ -188,7 +188,7 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DM
             context.hash_salt,
             stable->files[i],
             read_columns,
-            handle_range,
+            pk_range.toHandleRange(),
             filter,
             column_caches[i],
             IdSetPtr{}));
