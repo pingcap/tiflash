@@ -63,13 +63,19 @@ public:
      * @param reversed  increasing/decreasing insert `pk`'s value
      * @return
      */
-    static Block prepareSimpleWriteBlock(size_t beg, size_t end, bool reversed, UInt64 tso = 2)
+    static Block prepareSimpleWriteBlock(size_t         beg,
+                                         size_t         end,
+                                         bool           reversed,
+                                         UInt64         tso       = 2,
+                                         const String & pk_name_  = pk_name,
+                                         ColumnID       pk_col_id = EXTRA_HANDLE_COLUMN_ID,
+                                         DataTypePtr    pk_type   = EXTRA_HANDLE_COLUMN_TYPE)
     {
         Block        block;
         const size_t num_rows = (end - beg);
         {
             {
-                ColumnWithTypeAndName col1({}, std::make_shared<DataTypeInt64>(), pk_name, EXTRA_HANDLE_COLUMN_ID);
+                ColumnWithTypeAndName col1({}, pk_type, pk_name_, pk_col_id);
                 IColumn::MutablePtr   m_col = col1.type->createColumn();
                 // insert form large to small
                 for (size_t i = 0; i < num_rows; i++)
