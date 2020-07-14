@@ -32,12 +32,11 @@ static std::atomic_uint64_t NEXT_PACK_ID{0};
 
 struct BlockOrDelete
 {
-    BlockOrDelete() = default;
-    BlockOrDelete(Block && block_) : block(block_) {}
-    BlockOrDelete(const HandleRange & delete_range_) : delete_range(delete_range_) {}
+    BlockOrDelete(Block && block_, const PKRange & delete_range_) : block(block_), delete_range(delete_range_) {}
+    BlockOrDelete(const PKRange & delete_range_) : delete_range(delete_range_) {}
 
-    Block       block;
-    HandleRange delete_range;
+    Block   block;
+    PKRange delete_range;
 };
 using BlockOrDeletes = std::vector<BlockOrDelete>;
 
@@ -149,6 +148,8 @@ public:
         // The data of packs when reading.
         std::vector<Columns> packs_data;
 
+        PrimaryKeyPtr pk;
+
         ~Snapshot();
 
         size_t getPackCount() const { return packs.size(); }
@@ -168,11 +169,11 @@ public:
         Block  read(size_t pack_index);
         size_t read(const PKRange & pk_range, MutableColumns & output_columns, size_t offset, size_t limit);
 
-        bool shouldPlace(const DMContext &   context,
-                         DeltaIndexPtr       my_delta_index,
-                         const HandleRange & segment_range,
-                         const HandleRange & relevant_range,
-                         UInt64              max_version);
+        bool shouldPlace(const DMContext & context,
+                         DeltaIndexPtr     my_delta_index,
+                         const PKRange &   segment_range,
+                         const PKRange &   relevant_range,
+                         UInt64            max_version);
 
     private:
         Block read(size_t col_num, size_t offset, size_t limit);
@@ -206,6 +207,8 @@ private:
 
     DeltaIndexPtr delta_index;
 
+    PrimaryKeyPtr pk;
+
     // Protects the operations in this instance.
     mutable std::mutex mutex;
 
@@ -219,7 +222,7 @@ private:
     void checkNewPacks(const Packs & new_packs);
 
 public:
-    explicit DeltaValueSpace(PageId id_, const Packs & packs_ = {});
+    DeltaValueSpace(PageId id_, PrimaryKeyPtr pk, const Packs & packs_ = {});
 
     String simpleInfo() const { return "Delta [" + DB::toString(id) + "]"; }
     String info() const

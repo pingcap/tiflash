@@ -109,7 +109,7 @@ public:
                 continue;
 
             bool is_const = true;
-            for (size_t i = 0; i < pk_range.primaryKey().size(); i++)
+            for (size_t i = 0; i < pk_range.primaryKey()->size(); i++)
             {
                 auto col = block.getByPosition(i).column;
                 if (!col->isColumnConst())

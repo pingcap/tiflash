@@ -6,8 +6,8 @@
 #include <Storages/DeltaMerge/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Index/MinMax.h>
-#include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/PKRange.h>
+#include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/Page/PageDefines.h>
@@ -254,9 +254,9 @@ private:
     bool placeDelete(const DMContext &         dm_context,
                      const StableSnapshotPtr & stable_snap,
                      DeltaSnapshotPtr &        delta_snap,
-                     const HandleRange &       delete_range,
+                     const PKRange &           delete_range,
                      DeltaTree &               delta_tree,
-                     const HandleRange &       relevant_range) const;
+                     const PKRange &           relevant_range) const;
 
 private:
     const UInt64      epoch; // After split / merge / merge delta, epoch got increased by 1.

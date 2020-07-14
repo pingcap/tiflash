@@ -5,6 +5,8 @@
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/Page/PageStorage.h>
 
+#include "PKRange.h"
+
 namespace DB
 {
 namespace DM
@@ -21,6 +23,7 @@ class StableValueSpace : public std::enable_shared_from_this<StableValueSpace>
 {
 public:
     StableValueSpace(PageId id_) : id(id_), log(&Logger::get("StableValueSpace")) {}
+    StableValueSpace(PageId id_, PrimaryKeyPtr pk_) : id(id_), pk(pk_), log(&Logger::get("StableValueSpace")) {}
 
     // Set DMFiles for this value space.
     // If this value space is logical splited, specify `range` and `dm_context` so that we can get more precise
@@ -49,8 +52,9 @@ public:
         StableValueSpacePtr stable;
         ColumnCachePtrs     column_caches;
 
-        PageId id;
-        UInt64 valid_rows;
+        PageId        id;
+        UInt64        valid_rows;
+        PrimaryKeyPtr pk;
 
         PageId getId() { return id; }
 
@@ -89,9 +93,10 @@ private:
 
     // Valid rows is not always the sum of rows in file,
     // because after logical split, two segments could reference to a same file.
-    UInt64  valid_rows;
-    UInt64  valid_bytes;
-    DMFiles files;
+    UInt64        valid_rows;
+    UInt64        valid_bytes;
+    DMFiles       files;
+    PrimaryKeyPtr pk;
 
     Logger * log;
 };

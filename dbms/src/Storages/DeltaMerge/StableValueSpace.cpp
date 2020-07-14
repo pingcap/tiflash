@@ -158,6 +158,7 @@ SnapshotPtr StableValueSpace::createSnapshot()
     snap->id         = id;
     snap->valid_rows = valid_rows;
     snap->stable     = this->shared_from_this();
+    snap->pk         = pk;
 
     for (size_t i = 0; i < files.size(); i++)
     {

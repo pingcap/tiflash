@@ -56,6 +56,8 @@ SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool is_u
 
     snap->shared_delta_index = delta_index;
 
+    snap->pk = pk;
+
     if (is_update)
     {
         snap->rows -= unsaved_rows;
@@ -261,7 +263,7 @@ Block DeltaValueSpace::Snapshot::read(size_t col_num, size_t offset, size_t limi
     MutableColumns columns;
     for (size_t i = 0; i < col_num; ++i)
         columns.push_back(column_defines[i].type->createColumn());
-    auto actually_read = read(PKRange::fromHandleRange(HandleRange::newAll()), columns, offset, limit);
+    auto actually_read = read(PKRange::newAll(pk), columns, offset, limit);
     if (unlikely(actually_read != limit))
         throw Exception("Expected read " + DB::toString(limit) + " rows, but got " + DB::toString(actually_read));
     Block block;
@@ -309,12 +311,12 @@ BlockOrDeletes DeltaValueSpace::Snapshot::getMergeBlocks(size_t rows_begin, size
             if (block_rows_end != block_rows_start)
             {
                 /// TODO: Here we hard code the first two columns: handle and version
-                res.emplace_back(read(2, block_rows_start, block_rows_end - block_rows_start));
+                res.emplace_back(read(2, block_rows_start, block_rows_end - block_rows_start), PKRange::newEmpty(pk));
             }
 
             if (pack.isDeleteRange())
             {
-                res.emplace_back(pack.delete_range);
+                res.emplace_back(PKRange::fromHandleRange(pack.delete_range));
             }
             block_rows_start = block_rows_end;
         }
@@ -323,11 +325,11 @@ BlockOrDeletes DeltaValueSpace::Snapshot::getMergeBlocks(size_t rows_begin, size
     return res;
 }
 
-bool DeltaValueSpace::Snapshot::shouldPlace(const DMContext &   context,
-                                            DeltaIndexPtr       my_delta_index,
-                                            const HandleRange & segment_range,
-                                            const HandleRange & relevant_range,
-                                            UInt64              max_version)
+bool DeltaValueSpace::Snapshot::shouldPlace(const DMContext & context,
+                                            DeltaIndexPtr     my_delta_index,
+                                            const PKRange &   segment_range,
+                                            const PKRange &   relevant_range,
+                                            UInt64            max_version)
 {
     auto [placed_rows, placed_delete_ranges] = my_delta_index->getPlacedStatus();
 
@@ -335,8 +337,8 @@ bool DeltaValueSpace::Snapshot::shouldPlace(const DMContext &   context,
     if (placed_rows >= rows && placed_delete_ranges == deletes)
         return false;
 
-    if (relevant_range.all() || relevant_range == segment_range //
-        || rows - placed_rows > context.delta_cache_limit_rows  //
+    if (relevant_range.isAll() || relevant_range == segment_range //
+        || rows - placed_rows > context.delta_cache_limit_rows    //
         || placed_delete_ranges != deletes)
         return true;
 
@@ -347,13 +349,13 @@ bool DeltaValueSpace::Snapshot::shouldPlace(const DMContext &   context,
         size_t rows_start_in_pack = pack_index == start_pack_index ? rows_start_in_start_pack : 0;
         size_t rows_end_in_pack   = pack_rows[pack_index];
 
-        auto & columns          = getColumnsOfPack(pack_index, /* handle and version */ 2);
-        auto & handle_col_data  = toColumnVectorData<Handle>(columns[0]);
+        auto & columns = getColumnsOfPack(pack_index, /* handle and version */ 2);
+        // todo should fix this after clustered index is supported
         auto & version_col_data = toColumnVectorData<UInt64>(columns[1]);
 
         for (auto i = rows_start_in_pack; i < rows_end_in_pack; ++i)
         {
-            if (version_col_data[i] <= max_version && relevant_range.check(handle_col_data[i]))
+            if (version_col_data[i] <= max_version && relevant_range.check(columns, i))
                 return true;
         }
     }

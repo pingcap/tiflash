@@ -181,7 +181,7 @@ public:
             return compareValuesAt(*left.pk, left.columns, index, right.columns, index);
     }
 
-    const PrimaryKey & primaryKey() { return *pk; }
+    PrimaryKeyPtr primaryKey() { return pk; }
 
     class Creator
     {
@@ -224,12 +224,12 @@ public:
         }
 
         template <size_t INDEX>
-        void setEdgeInfinite()
+        void setEdgeWithDefaultValue(bool is_infinite_)
         {
             if (unlikely(columns[0]->size() != INDEX))
                 throw Exception("PKRangeCreator: Cannot set edge when values's size is not " + DB::toString(INDEX));
 
-            is_infinite[INDEX] = true;
+            is_infinite[INDEX] = is_infinite_;
             for (size_t i = 0; i < columns.size(); ++i)
                 columns[i]->insertDefault();
         }
@@ -271,7 +271,13 @@ public:
 
         Creator & setStartInfinite()
         {
-            setEdgeInfinite<START_INDEX>();
+            setEdgeWithDefaultValue<START_INDEX>(true);
+            return *this;
+        }
+
+        Creator & setStartWithDefaultValue()
+        {
+            setEdgeWithDefaultValue<START_INDEX>(false);
             return *this;
         }
 
@@ -303,7 +309,13 @@ public:
 
         Creator & setEndInfinite()
         {
-            setEdgeInfinite<END_INDEX>();
+            setEdgeWithDefaultValue<END_INDEX>(true);
+            return *this;
+        }
+
+        Creator & setEndWithDefaultValue()
+        {
+            setEdgeWithDefaultValue<END_INDEX>(false);
             return *this;
         }
 
@@ -321,6 +333,21 @@ public:
 
 public:
     static PKRange newAll(const PKRange & pk, const ICollatorPtr & collator);
+    static PKRange newAll(const PrimaryKeyPtr & pk)
+    {
+        Creator creator(pk);
+        creator.setStartInfinite();
+        creator.setEndInfinite();
+        return creator.getRange();
+    }
+
+    static PKRange newEmpty(const PrimaryKeyPtr & pk)
+    {
+        Creator creator(pk);
+        creator.setStartWithDefaultValue();
+        creator.setEndWithDefaultValue();
+        return creator.getRange();
+    }
 
     HandleRange toHandleRange() const
     {
@@ -377,6 +404,17 @@ public:
     {
         const PKRange * start_use = compareEdge<START_INDEX>(a, b) <= 0 ? &a : &b;
         const PKRange * end_use   = compareEdge<END_INDEX>(a, b) >= 0 ? &a : &b;
+
+        Creator creator(a.pk);
+        creator.setStart(start_use->getStart());
+        creator.setEnd(end_use->getEnd());
+        return creator.getRange();
+    }
+
+    static PKRange shrink(const PKRange & a, const PKRange & b)
+    {
+        const PKRange * start_use = compareEdge<START_INDEX>(a, b) <= 0 ? &b : &a;
+        const PKRange * end_use   = compareEdge<END_INDEX>(a, b) >= 0 ? &b : &a;
 
         Creator creator(a.pk);
         creator.setStart(start_use->getStart());
