@@ -14,9 +14,9 @@ class RandomAccessFile
 public:
     virtual ~RandomAccessFile() = default;
 
-    virtual off_t seek(off_t offset, int whence) = 0;
+    virtual off_t seek(off_t offset, int whence) const = 0;
 
-    virtual ssize_t read(char * buf, size_t size) = 0;
+    virtual ssize_t read(char * buf, size_t size) const = 0;
 
     virtual ssize_t pread(char * buf, size_t size, off_t offset) const = 0;
 

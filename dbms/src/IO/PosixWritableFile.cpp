@@ -56,6 +56,6 @@ void PosixWritableFile::close()
     fd = -1;
 }
 
-ssize_t PosixWritableFile::write(char * buf, size_t size) { return ::write(fd, buf, size); }
+ssize_t PosixWritableFile::write(const char * buf, size_t size) const { return ::write(fd, buf, size); }
 
 } // namespace DB

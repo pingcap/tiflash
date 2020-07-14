@@ -57,9 +57,9 @@ void PosixRandomAccessFile::close()
     fd = -1;
 }
 
-off_t PosixRandomAccessFile::seek(off_t offset, int whence) { return ::lseek(fd, offset, whence); }
+off_t PosixRandomAccessFile::seek(off_t offset, int whence) const { return ::lseek(fd, offset, whence); }
 
-ssize_t PosixRandomAccessFile::read(char * buf, size_t size) { return ::read(fd, buf, size); }
+ssize_t PosixRandomAccessFile::read(char * buf, size_t size) const { return ::read(fd, buf, size); }
 
 ssize_t PosixRandomAccessFile::pread(char * buf, size_t size, off_t offset) const { return ::pread(fd, buf, size, offset); }
 

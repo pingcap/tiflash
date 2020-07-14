@@ -16,7 +16,6 @@
 #include <Common/setThreadName.h>
 #include <Common/Stopwatch.h>
 #include <Common/formatReadable.h>
-#include <Encryption/MockKeyManager.h>
 #include <Debug/DBGInvoker.h>
 #include <DataStreams/FormatFactory.h>
 #include <Databases/IDatabase.h>
@@ -1518,8 +1517,7 @@ void Context::initializeFileProvider()
     if (shared->file_provider)
         throw Exception("File provider has already been initialized.", ErrorCodes::LOGICAL_ERROR);
     FileProviderPtr plain_file_provider = std::make_shared<PosixFileProvider>();
-    shared->file_provider = std::make_shared<EncryptedFileProvider>(plain_file_provider,
-            std::make_shared<MockKeyManager>());
+    shared->file_provider = std::make_shared<EncryptedFileProvider>(plain_file_provider);
 }
 
 FileProviderPtr Context::getFileProvider() const
