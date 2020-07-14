@@ -8,15 +8,6 @@
 
 namespace DB
 {
-//enum class EncryptionMethod
-//{
-//    kUnknown = 0,
-//    kPlaintext = 1,
-//    kAES128_CTR = 2,
-//    kAES192_CTR = 3,
-//    kAES256_CTR = 4,
-//};
-
 inline size_t KeySize(EncryptionMethod method)
 {
     switch (method)
@@ -31,13 +22,6 @@ inline size_t KeySize(EncryptionMethod method)
             return 0;
     }
 }
-
-//struct FileEncryptionInfo
-//{
-//    EncryptionMethod method = EncryptionMethod::kUnknown;
-//    std::string key;
-//    std::string iv;
-//};
 
 using FileEncryptionInfoPtr = std::shared_ptr<FileEncryptionInfo>;
 
