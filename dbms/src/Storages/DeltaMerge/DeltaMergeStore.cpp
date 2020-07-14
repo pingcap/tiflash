@@ -129,7 +129,7 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
     original_table_columns.emplace_back(getTagColumnDefine());
     for (const auto & col : columns)
     {
-        if (col.name != original_table_handle_define.name && col.name != VERSION_COLUMN_NAME && col.name != TAG_COLUMN_NAME)
+        if (col.id != original_table_handle_define.id && col.id != VERSION_COLUMN_ID && col.id != TAG_COLUMN_ID)
             original_table_columns.emplace_back(col);
     }
 
@@ -354,7 +354,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
     // Add an extra handle column, if handle reused the original column data.
     if (pkIsHandle())
     {
-        auto handle_pos = block.getPositionByName(original_table_handle_define.name);
+        auto handle_pos = getPosByColumnId(block, original_table_handle_define.id);
         addColumnToBlock(block, //
                          EXTRA_HANDLE_COLUMN_ID,
                          EXTRA_HANDLE_COLUMN_NAME,
@@ -1451,6 +1451,28 @@ void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
         applyAlter(new_original_table_columns, command, table_info, max_column_id_used);
     }
 
+    if (table_info)
+    {
+        // Update primary keys from TiDB::TableInfo
+
+        // For TiDB 3.1/4.0, there should be only one column with pri key flag.
+        // FIXME: With feature clustered index in TiDB 5.0, there could be multiple columns with primary key flag
+        std::vector<String> pk_names;
+        for (const auto & col : table_info->get().columns)
+        {
+            if (col.hasPriKeyFlag())
+            {
+                pk_names.emplace_back(col.name);
+            }
+        }
+        if (table_info->get().pk_is_handle && pk_names.size() == 1)
+        {
+            // Only update primary key name if pk is handle and there is only one column with
+            // primary key flag
+            original_table_handle_define.name = pk_names[0];
+        }
+    }
+
     auto new_store_columns = getStoreColumns(new_original_table_columns);
 
     original_table_columns.swap(new_original_table_columns);
@@ -1462,6 +1484,8 @@ void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
 
 SortDescription DeltaMergeStore::getPrimarySortDescription() const
 {
+    std::shared_lock lock(read_write_mutex);
+
     SortDescription desc;
     desc.emplace_back(original_table_handle_define.name, /* direction_= */ 1, /* nulls_direction_= */ 1);
     return desc;
