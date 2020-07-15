@@ -1073,6 +1073,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "Executed DDL apply jobs per minute",
           "fill": 0,
           "gridPos": {
             "h": 7,
@@ -1106,7 +1107,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "avg(tiflash_schema_apply_count{instance=~\"$instance\"}) by (type)",
+              "expr": "avg(rate(tiflash_schema_apply_count{instance=~\"$instance\"}[1m])) by (type)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{type}}",
@@ -1117,7 +1118,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Schema Apply Count",
+          "title": "Schema Apply OPM",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -1161,6 +1162,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "Executed DDL jobs per minute",
           "fill": 0,
           "gridPos": {
             "h": 7,
@@ -1194,18 +1196,41 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "avg(tiflash_schema_internal_ddl_count{instance=~\"$instance\"}) by (type)",
+              "expr": "avg(rate(tiflash_schema_internal_ddl_count{instance=~\"$instance\"}[1m])) by (type)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{type}}",
               "refId": "A"
+            },
+            {
+              "expr": "sum(rate(tiflash_schema_internal_ddl_count{instance=~\"$instance\"}[1m]))",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "total",
+              "refId": "B"
+            },
+            {
+              "expr": "sum(rate(tiflash_schema_internal_ddl_count{instance=~\"$instance\"}[1m])) by (type,instance)",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "{{type}} - {{instance}}",
+              "refId": "C"
+            },
+            {
+              "expr": "sum(rate(tiflash_schema_internal_ddl_count{instance=~\"$instance\"}[1m])) by (instance)",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "total - {{instance}}",
+              "refId": "D"
             }
           ],
           "thresholds": [],
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Schema Internal DDL Count",
+          "title": "Schema Internal DDL OPM",
           "tooltip": {
             "shared": true,
             "sort": 0,
