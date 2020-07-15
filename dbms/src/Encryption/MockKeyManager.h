@@ -21,10 +21,15 @@ public:
     FileEncryptionInfo getFile(const std::string & fname) override
     {
         std::ignore = fname;
-        FileEncryptionInfo file_info;
-        file_info.method = method;
-        file_info.key = &key;
-        file_info.iv = &iv;
+        auto * file_key = new std::string(key);
+        auto * file_iv = new std::string(iv);
+        FileEncryptionInfo file_info {
+            FileEncryptionRes::Ok,
+            method,
+            file_key,
+            file_iv,
+            nullptr,
+        };
         return file_info;
     }
 
