@@ -23,6 +23,8 @@ public:
         return newWritableFileImpl(file_name_, flags, mode);
     }
 
+    virtual void renameFile(const std::string & src_fname, const std::string & dst_fname) = 0;
+
     virtual ~FileProvider() = default;
 };
 

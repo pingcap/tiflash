@@ -131,7 +131,7 @@ public:
             context.setApplicationType(DB::Context::ApplicationType::SERVER);
 
             context.initializeTiFlashMetrics();
-            context.initializeFileProvider();
+            context.initializeFileProvider(nullptr, false);
             std::vector<size_t> all_capacity{0};
 
             // FIXME: These paths are only set at the first time

@@ -9,7 +9,7 @@ namespace DB
 namespace test
 {
 const unsigned char KEY[33] = "\xe4\x3e\x8e\xca\x2a\x83\xe1\x88\xfb\xd8\x02\xdc\xf3\x62\x65\x3e"
-                                   "\x00\xee\x31\x39\xe7\xfd\x1d\x92\x20\xb1\x62\xae\xb2\xaf\x0f\x1a";
+                              "\x00\xee\x31\x39\xe7\xfd\x1d\x92\x20\xb1\x62\xae\xb2\xaf\x0f\x1a";
 const unsigned char IV_RANDOM[17] = "\x77\x9b\x82\x72\x26\xb5\x76\x50\xf7\x05\xd2\xd6\xb8\xaa\xa9\x2c";
 const unsigned char IV_OVERFLOW_LOW[17] = "\x77\x9b\x82\x72\x26\xb5\x76\x50\xff\xff\xff\xff\xff\xff\xff\xff";
 const unsigned char IV_OVERFLOW_FULL[17] = "\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff";
@@ -53,13 +53,13 @@ public:
         EncryptionMethod method = std::get<1>(GetParam());
         switch (method)
         {
-            case EncryptionMethod::kAES128_CTR:
+            case EncryptionMethod::Aes128Ctr:
                 cipher = EVP_aes_128_ctr();
                 break;
-            case EncryptionMethod::kAES192_CTR:
+            case EncryptionMethod::Aes192Ctr:
                 cipher = EVP_aes_192_ctr();
                 break;
-            case EncryptionMethod::kAES256_CTR:
+            case EncryptionMethod::Aes256Ctr:
                 cipher = EVP_aes_256_ctr();
                 break;
             default:
@@ -89,7 +89,7 @@ public:
         std::string iv_str(reinterpret_cast<const char *>(iv), 16);
         KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(method, key_str, iv_str);
         EncryptionProviderPtr encryption_provider = std::make_shared<AESEncryptionProvider>(key_manager);
-        BlockAccessCipherStreamPtr cipher_stream = encryption_provider->createCipherStream("encryption");
+        BlockAccessCipherStreamPtr cipher_stream = encryption_provider->createCipherStream("encryption", true);
 
         size_t data_size = end - start;
         // Allocate exact size. AESCTRCipherStream should make sure there will be
@@ -156,7 +156,7 @@ TEST_P(EncryptionTest, EncryptionTest)
 
 INSTANTIATE_TEST_CASE_P(EncryptionTestInstance, EncryptionTest,
     testing::Combine(
-        testing::Bool(), testing::Values(EncryptionMethod::kAES128_CTR, EncryptionMethod::kAES192_CTR, EncryptionMethod::kAES256_CTR)));
+        testing::Bool(), testing::Values(EncryptionMethod::Aes128Ctr, EncryptionMethod::Aes192Ctr, EncryptionMethod::Aes256Ctr)));
 
 
 } // namespace DB

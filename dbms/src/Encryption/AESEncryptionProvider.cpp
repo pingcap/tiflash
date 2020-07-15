@@ -9,23 +9,36 @@ extern const int NOT_IMPLEMENTED;
 extern const int DATA_ENCRYPTION_ERROR;
 } // namespace ErrorCodes
 
-BlockAccessCipherStreamPtr AESEncryptionProvider::createCipherStream(const std::string & fname)
+BlockAccessCipherStreamPtr AESEncryptionProvider::createCipherStream(const std::string & fname, bool new_file)
 {
-    auto file_info = key_manager->getFile(fname);
-    auto & method = file_info->method;
-    auto & key = file_info->key;
-    auto & iv = file_info->iv;
+    EncryptionMethod method;
+    std::string key;
+    std::string iv;
+    if (new_file)
+    {
+        auto file_info = key_manager->newFile(fname);
+        method = file_info.method;
+        key = *file_info.key;
+        iv = *file_info.iv;
+    }
+    else
+    {
+        auto file_info = key_manager->getFile(fname);
+        method = file_info.method;
+        key = *file_info.key;
+        iv = *file_info.iv;
+    }
 
     const EVP_CIPHER * cipher = nullptr;
     switch (method)
     {
-        case EncryptionMethod::kAES128_CTR:
+        case EncryptionMethod::Aes128Ctr:
             cipher = EVP_aes_128_ctr();
             break;
-        case EncryptionMethod::kAES192_CTR:
+        case EncryptionMethod::Aes192Ctr:
             cipher = EVP_aes_192_ctr();
             break;
-        case EncryptionMethod::kAES256_CTR:
+        case EncryptionMethod::Aes256Ctr:
             cipher = EVP_aes_256_ctr();
             break;
         default:

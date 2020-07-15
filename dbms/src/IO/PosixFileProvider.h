@@ -12,6 +12,9 @@ protected:
     WritableFilePtr newWritableFileImpl(const std::string & file_name_, int flags, mode_t mode) override;
 
 public:
+    void renameFile(const std::string & src_fname, const std::string & dst_fname) override;
+
+public:
     PosixFileProvider() = default;
     ~PosixFileProvider() override = default;
 };

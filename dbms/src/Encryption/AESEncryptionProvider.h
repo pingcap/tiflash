@@ -13,7 +13,7 @@ public:
 
     ~AESEncryptionProvider() override = default;
 
-    BlockAccessCipherStreamPtr createCipherStream(const std::string & fname) override;
+    BlockAccessCipherStreamPtr createCipherStream(const std::string & fname, bool new_file) override;
 
 private:
     KeyManagerPtr key_manager;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Core/Types.h>
+#include <IO/FileProvider.h>
 #include <IO/ReadBufferFromFile.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/ColumnStat.h>
@@ -133,7 +134,7 @@ private:
     void addPack(const PackStat & pack_stat) { pack_stats.push_back(pack_stat); }
     void setStatus(Status status_) { status = status_; }
 
-    void finalize();
+    void finalize(FileProviderPtr &file_provider);
 
 private:
     UInt64 file_id;
