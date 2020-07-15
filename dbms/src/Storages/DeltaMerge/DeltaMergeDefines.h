@@ -6,9 +6,9 @@
 #include <Core/NamesAndTypes.h>
 #include <Core/Types.h>
 #include <DataTypes/DataTypeFactory.h>
-#include <Storages/DeltaMerge/Range.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Types.h>
+#include <Storages/DeltaMerge/Range.h>
 
 #include <limits>
 #include <memory>
@@ -56,8 +56,9 @@ using DefaultDeltaTree = DeltaTree<EmptyValueSpace, DT_M, DT_F, DT_S, ArenaWithF
 using DeltaTreePtr     = std::shared_ptr<DefaultDeltaTree>;
 using BlockPtr         = std::shared_ptr<Block>;
 
-using RowId = UInt64;
-using ColId = DB::ColumnID;
+using RowId  = UInt64;
+using ColId  = DB::ColumnID;
+using Handle = DB::HandleID;
 
 using ColIds     = std::vector<ColId>;
 using HandlePair = std::pair<Handle, Handle>;
@@ -66,10 +67,11 @@ using OptionTableInfoConstRef = std::optional<std::reference_wrapper<const TiDB:
 
 struct ColumnDefine
 {
-    ColId       id;
-    String      name;
-    DataTypePtr type;
-    Field       default_value;
+    ColId        id;
+    String       name;
+    DataTypePtr  type;
+    ICollatorPtr collator;
+    Field        default_value;
 
     explicit ColumnDefine(ColId id_ = 0, String name_ = "", DataTypePtr type_ = nullptr)
         : id(id_), name(std::move(name_)), type(std::move(type_))
