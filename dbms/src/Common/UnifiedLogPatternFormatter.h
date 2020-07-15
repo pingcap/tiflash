@@ -125,7 +125,7 @@ std::string UnifiedLogPatternFormatter::getTimestamp() const
 
     int zone_offset = local_tm->tm_gmtoff;
 
-    char buffer[] = "yyyy/MM/dd HH:mm:ss.SSS";
+    char buffer[100] = "yyyy/MM/dd HH:mm:ss.SSS";
 
     std::sprintf(buffer, "%04d/%02d/%02d %02d:%02d:%02d.%03d", year, month, day, hour, minute, second, milliseconds);
 
