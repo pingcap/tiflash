@@ -61,8 +61,9 @@ public:
 
     struct SplitInfo
     {
-        bool   is_logical;
-        Handle split_point;
+        bool is_logical;
+        //Handle split_point;
+        PKSplitPoint split_point;
 
         StableValueSpacePtr my_stable;
         StableValueSpacePtr other_stable;
@@ -79,16 +80,16 @@ public:
             const DeltaValueSpacePtr &  delta_,
             const StableValueSpacePtr & stable_);
 
-    static SegmentPtr newSegment(DMContext &         context, //
-                                 const HandleRange & range_,
-                                 PageId              segment_id,
-                                 PageId              next_segment_id,
-                                 PageId              delta_id,
-                                 PageId              stable_id);
-    static SegmentPtr newSegment(DMContext &         context, //
-                                 const HandleRange & range,
-                                 PageId              segment_id,
-                                 PageId              next_segment_id);
+    static SegmentPtr newSegment(DMContext &        context, //
+                                 const PKRangePtr & pk_range_,
+                                 PageId             segment_id,
+                                 PageId             next_segment_id,
+                                 PageId             delta_id,
+                                 PageId             stable_id);
+    static SegmentPtr newSegment(DMContext &        context, //
+                                 const PKRangePtr & pk_range,
+                                 PageId             segment_id,
+                                 PageId             next_segment_id);
 
     static SegmentPtr restoreSegment(DMContext & context, PageId segment_id);
 
@@ -97,7 +98,6 @@ public:
     bool writeToDisk(DMContext & dm_context, const PackPtr & pack);
     bool writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit);
     bool write(DMContext & dm_context, const Block & block); // For test only
-    bool write(DMContext & dm_context, const HandleRange & delete_range);
     bool write(DMContext & dm_context, const PKRange & delete_range);
 
     SegmentSnapshotPtr createSnapshot(const DMContext & dm_context, bool is_update = false) const;
@@ -218,13 +218,13 @@ private:
                                                         UInt64                    max_version = MAX_UINT64);
 
     /// Merge delta & stable, and then take the middle one.
-    Handle getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, const SegmentSnapshotPtr & segment_snap) const;
+    PKSplitPoint getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, const SegmentSnapshotPtr & segment_snap) const;
     /// Only look up in the stable vs.
-    Handle getSplitPointFast(DMContext & dm_context, const StableSnapshotPtr & stable_snap) const;
+    PKSplitPoint getSplitPointFast(DMContext & dm_context, const StableSnapshotPtr & stable_snap) const;
 
     SplitInfo prepareSplitLogical(DMContext &                dm_context, //
                                   const SegmentSnapshotPtr & segment_snap,
-                                  Handle                     split_point,
+                                  const PKSplitPoint &       split_point,
                                   WriteBatches &             wbs) const;
     SplitInfo prepareSplitPhysical(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs) const;
 

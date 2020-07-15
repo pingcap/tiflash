@@ -326,7 +326,7 @@ public:
 
     bool appendToCache(DMContext & context, const Block & block, size_t offset, size_t limit);
 
-    bool appendDeleteRange(DMContext & context, const HandleRange & delete_range);
+    bool appendDeleteRange(DMContext & context, const PKRange & delete_range);
 
     /// Flush the data of packs which haven't write to disk yet, and also save the metadata of packs.
     bool flush(DMContext & context);

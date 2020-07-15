@@ -148,7 +148,7 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
             auto segment_id = storage_pool.newMetaPageId();
             if (segment_id != DELTA_MERGE_FIRST_SEGMENT_ID)
                 throw Exception("The first segment id should be " + DB::toString(DELTA_MERGE_FIRST_SEGMENT_ID), ErrorCodes::LOGICAL_ERROR);
-            auto first_segment = Segment::newSegment(*dm_context, HandleRange::newAll(), segment_id, 0);
+            auto first_segment = Segment::newSegment(*dm_context, std::make_shared<PKRange>(PKRange::newAll(pk)), segment_id, 0);
             segments.emplace(first_segment->getPKRange()->getEnd(), first_segment);
             id_to_segment.emplace(segment_id, first_segment);
         }

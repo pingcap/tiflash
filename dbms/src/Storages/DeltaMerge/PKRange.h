@@ -121,6 +121,69 @@ size_t lowerBound(const PrimaryKey & pk, const Columns & left, size_t first, siz
 
 } // namespace
 
+class PKSplitPoint
+{
+public:
+    PrimaryKeyPtr pk;
+    bool          start_infinite;
+    bool          end_infinite;
+    Columns       columns;
+    PKSplitPoint() { start_infinite = end_infinite = true; }
+    PKSplitPoint(Block & block, size_t row_id, bool start_infinite_, bool end_infinite_, PrimaryKeyPtr pk_)
+        : pk(pk_), start_infinite(start_infinite_), end_infinite(end_infinite_)
+    {
+        MutableColumns mutable_columns(pk->size());
+        for (size_t i = 0; i < pk->size(); i++)
+            mutable_columns[i] = (*pk)[i].type->createColumn();
+        if (!start_infinite && !end_infinite)
+        {
+            for (size_t i = 0; i < mutable_columns.size(); i++)
+                mutable_columns[i]->insertFrom(*(block.getByPosition(i).column), row_id);
+        }
+        else
+        {
+            for (size_t i = 0; i < mutable_columns.size(); i++)
+                mutable_columns[i]->insertDefault();
+        }
+        columns.resize(mutable_columns.size());
+        for (size_t i = 0; i < mutable_columns.size(); i++)
+            columns[i] = std::move(mutable_columns[i]);
+    }
+
+    String toString()
+    {
+        WriteBufferFromOwnString buf;
+
+        auto print_value = [&](size_t index) {
+            if (columns.size() != 1)
+                buf << "<";
+            for (size_t i = 0; i < columns.size(); ++i)
+            {
+                (*pk)[i].type->serializeTextEscaped(*(columns[i]), index, buf);
+                if (i != columns.size() - 1)
+                    buf << ",";
+            }
+            if (columns.size() != 1)
+                buf << ">";
+        };
+
+        buf << "[";
+        if (start_infinite)
+            buf << "-Inf";
+        else if (end_infinite)
+        {
+            buf << "+Inf";
+        }
+        else
+        {
+            print_value(0);
+        }
+        buf << "]";
+
+        return buf.str();
+    }
+};
+
 /// PKRange is a range of primary values, which consisted by [start, end). Start is inclusive and end is exclusive.
 class PKRange
 {
@@ -440,6 +503,23 @@ public:
         return creator.getRange();
     }
 
+    std::array<PKRange, 2> split(const PKSplitPoint & split_point)
+    {
+        Creator first_range_creator(pk);
+        first_range_creator.setStart(getStart());
+        if (split_point.end_infinite)
+            first_range_creator.setEndInfinite();
+        else
+            first_range_creator.setEnd(split_point.columns, 0);
+        Creator second_range_creator(pk);
+        if (split_point.start_infinite)
+            second_range_creator.setStartInfinite();
+        else
+            second_range_creator.setStart(split_point.columns, 0);
+        second_range_creator.setEnd(getEnd());
+        return {first_range_creator.getRange(), second_range_creator.getRange()};
+    }
+
     int startCompareWith(const Start & value) const { return compareEdge<START_INDEX>(*this, *(value.range)); }
 
     int startCompareWith(const End & value) const
@@ -472,6 +552,15 @@ public:
     bool checkStart(const Columns & columns_data, size_t row_id) const
     {
         return is_infinite[START_INDEX] || compareValuesAt(*pk, columns, START_INDEX, columns_data, row_id) <= 0;
+    }
+
+    bool isBadSplitPoint(const PKSplitPoint & split_point) const
+    {
+        if (split_point.end_infinite || split_point.start_infinite)
+            return true;
+        if (!check(split_point.columns, 0))
+            return true;
+        return !is_infinite[START_INDEX] && compareValuesAt(*pk, columns, START_INDEX, split_point.columns, 0) == 0;
     }
 
     bool checkEnd(const Block & block, size_t row_id) const

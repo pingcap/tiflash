@@ -87,10 +87,10 @@ inline Block filterUnsorted(const PKRange & pk_range, Block && block)
 } // namespace PKFilter
 
 template <bool is_block_sorted>
-class DMHandleFilterBlockInputStream : public IBlockInputStream
+class DMPKFilterBlockInputStream : public IBlockInputStream
 {
 public:
-    DMHandleFilterBlockInputStream(const BlockInputStreamPtr & input, const PKRange & pk_range_) : pk_range(pk_range_)
+    DMPKFilterBlockInputStream(const BlockInputStreamPtr & input, const PKRange & pk_range_) : pk_range(pk_range_)
     {
         children.push_back(input);
     }

@@ -356,14 +356,14 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
     return true;
 }
 
-bool DeltaValueSpace::appendDeleteRange(DMContext & /*context*/, const HandleRange & delete_range)
+bool DeltaValueSpace::appendDeleteRange(DMContext & /*context*/, const PKRange & delete_range)
 {
     std::scoped_lock lock(mutex);
     if (abandoned.load(std::memory_order_relaxed))
         return false;
 
     auto pack          = std::make_shared<Pack>();
-    pack->delete_range = delete_range;
+    pack->delete_range = delete_range.toHandleRange();
     pack->appendable   = false;
     packs.push_back(pack);
 

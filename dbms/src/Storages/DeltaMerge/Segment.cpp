@@ -139,13 +139,12 @@ Segment::Segment(UInt64                      epoch_, //
 }
 
 SegmentPtr Segment::newSegment(
-    DMContext & context, const HandleRange & range, PageId segment_id, PageId next_segment_id, PageId delta_id, PageId stable_id)
+    DMContext & context, const PKRangePtr & pk_range, PageId segment_id, PageId next_segment_id, PageId delta_id, PageId stable_id)
 {
     WriteBatches wbs(context.storage_pool);
 
-    auto pk_range = std::make_shared<PKRange>(PKRange::fromHandleRange(range));
-    auto delta    = std::make_shared<DeltaValueSpace>(delta_id, pk_range->primaryKey());
-    auto stable   = createNewStable(
+    auto delta  = std::make_shared<DeltaValueSpace>(delta_id, pk_range->primaryKey());
+    auto stable = createNewStable(
         context, std::make_shared<EmptySkippableBlockInputStream>(*context.store_columns), stable_id, wbs, pk_range->primaryKey());
 
     auto segment = std::make_shared<Segment>(INITIAL_EPOCH, pk_range, segment_id, next_segment_id, delta, stable);
@@ -161,10 +160,10 @@ SegmentPtr Segment::newSegment(
     return segment;
 }
 
-SegmentPtr Segment::newSegment(DMContext & context, const HandleRange & range, PageId segment_id, PageId next_segment_id)
+SegmentPtr Segment::newSegment(DMContext & context, const PKRangePtr & pk_range, PageId segment_id, PageId next_segment_id)
 {
     return newSegment(
-        context, range, segment_id, next_segment_id, context.storage_pool.newMetaPageId(), context.storage_pool.newMetaPageId());
+        context, pk_range, segment_id, next_segment_id, context.storage_pool.newMetaPageId(), context.storage_pool.newMetaPageId());
 }
 
 SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
@@ -243,10 +242,10 @@ bool Segment::write(DMContext & dm_context, const Block & block)
     }
 }
 
-bool Segment::write(DMContext & dm_context, const HandleRange & delete_range)
+bool Segment::write(DMContext & dm_context, const PKRange & delete_range)
 {
-    auto new_range = delete_range.shrink(range);
-    if (new_range.none())
+    auto new_range = PKRange::shrink(delete_range, *pk_range);
+    if (new_range.isEmpty())
     {
         LOG_WARNING(log, "Try to write an invalid delete range " << delete_range.toString() << " into " << simpleInfo());
         return true;
@@ -254,11 +253,6 @@ bool Segment::write(DMContext & dm_context, const HandleRange & delete_range)
 
     LOG_TRACE(log, "Segment [" << segment_id << "] write delete range: " << delete_range.toString());
     return delta->appendDeleteRange(dm_context, delete_range);
-}
-
-bool Segment::write(DMContext & dm_context, const PKRange & delete_range)
-{
-    return write(dm_context, delete_range.toHandleRange());
 }
 
 SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool is_update) const
@@ -314,7 +308,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
                                      max_version);
         }
 
-        stream = std::make_shared<DMHandleFilterBlockInputStream<true>>(stream, read_range);
+        stream = std::make_shared<DMPKFilterBlockInputStream<true>>(stream, read_range);
         stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>>(stream, columns_to_read, max_version);
 
         return stream;
@@ -388,10 +382,10 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &          dm_con
 
     if (do_range_filter)
     {
-        delta_stream = std::make_shared<DMHandleFilterBlockInputStream<false>>(delta_stream, *pk_range);
+        delta_stream = std::make_shared<DMPKFilterBlockInputStream<false>>(delta_stream, *pk_range);
         delta_stream = std::make_shared<DMColumnFilterBlockInputStream>(delta_stream, columns_to_read);
 
-        stable_stream = std::make_shared<DMHandleFilterBlockInputStream<true>>(stable_stream, *pk_range);
+        stable_stream = std::make_shared<DMPKFilterBlockInputStream<true>>(stable_stream, *pk_range);
         stable_stream = std::make_shared<DMColumnFilterBlockInputStream>(stable_stream, columns_to_read);
     }
 
@@ -461,7 +455,7 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext & dm_context, const Seg
                                                       read_info.index_end,
                                                       dm_context.stable_pack_rows);
 
-    data_stream = std::make_shared<DMHandleFilterBlockInputStream<true>>(data_stream, *pk_range);
+    data_stream = std::make_shared<DMPKFilterBlockInputStream<true>>(data_stream, *pk_range);
     data_stream = std::make_shared<ReorganizeBlockInputStream>(data_stream, EXTRA_HANDLE_COLUMN_NAME);
     data_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
         data_stream, read_info.read_columns, dm_context.min_version);
@@ -528,7 +522,7 @@ SegmentPair Segment::split(DMContext & dm_context) const
     return segment_pair;
 }
 
-Handle Segment::getSplitPointFast(DMContext & dm_context, const StableSnapshotPtr & stable_snap) const
+PKSplitPoint Segment::getSplitPointFast(DMContext & dm_context, const StableSnapshotPtr & stable_snap) const
 {
     // FIXME: this method does not consider invalid packs in stable dmfiles.
 
@@ -594,10 +588,10 @@ Handle Segment::getSplitPointFast(DMContext & dm_context, const StableSnapshotPt
         throw Exception("Unexpected empty block");
     stream.readSuffix();
 
-    return block.getByPosition(0).column->getInt(read_row_in_pack);
+    return PKSplitPoint(block, read_row_in_pack, false, false, pk_range->primaryKey());
 }
 
-Handle Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, const SegmentSnapshotPtr & segment_snap) const
+PKSplitPoint Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, const SegmentSnapshotPtr & segment_snap) const
 {
     EventRecorder recorder(ProfileEvents::DMSegmentGetSplitPoint, ProfileEvents::DMSegmentGetSplitPointNS);
 
@@ -615,7 +609,7 @@ Handle Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_
                                                      read_info.index_end,
                                                      dm_context.stable_pack_rows);
 
-        stream = std::make_shared<DMHandleFilterBlockInputStream<true>>(stream, *pk_range);
+        stream = std::make_shared<DMPKFilterBlockInputStream<true>>(stream, *pk_range);
 
         stream->readPrefix();
         Block block;
@@ -634,11 +628,11 @@ Handle Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_
                                                  read_info.index_end,
                                                  dm_context.stable_pack_rows);
 
-    stream = std::make_shared<DMHandleFilterBlockInputStream<true>>(stream, *pk_range);
+    stream = std::make_shared<DMPKFilterBlockInputStream<true>>(stream, *pk_range);
 
-    size_t split_row_index = exact_rows / 2;
-    Handle split_handle    = 0;
-    size_t count           = 0;
+    size_t       split_row_index = exact_rows / 2;
+    size_t       count           = 0;
+    PKSplitPoint ret;
 
     stream->readPrefix();
     while (true)
@@ -650,17 +644,19 @@ Handle Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_
         if (count > split_row_index)
         {
             size_t offset_in_block = block.rows() - (count - split_row_index);
-            split_handle           = block.getByName(handle.name).column->getInt(offset_in_block);
+            if (pk_range->check(block, offset_in_block))
+            {
+                PKValue pk_value{pk_range->primaryKey().get(), &block, offset_in_block};
+                throw Exception("getSplitPointSlow unexpected split_pk: " + pk_value.toString() + ", should be in range "
+                                + pk_range->toString());
+            }
+            ret = PKSplitPoint(block, offset_in_block, false, false, pk_range->primaryKey());
             break;
         }
     }
     stream->readSuffix();
 
-    if (!range.check(split_handle))
-        throw Exception("getSplitPointSlow unexpected split_handle: " + DB::toString(split_handle) + ", should be in range "
-                        + range.toString());
-
-    return split_handle;
+    return ret;
 }
 
 Segment::SplitInfo Segment::prepareSplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs) const
@@ -671,11 +667,13 @@ Segment::SplitInfo Segment::prepareSplit(DMContext & dm_context, const SegmentSn
         return prepareSplitPhysical(dm_context, segment_snap, wbs);
     else
     {
-        Handle split_point     = getSplitPointFast(dm_context, segment_snap->stable);
-        bool   bad_split_point = !range.check(split_point) || split_point == range.start;
+        PKSplitPoint split_point = getSplitPointFast(dm_context, segment_snap->stable);
+
+        bool bad_split_point = pk_range->isBadSplitPoint(split_point);
         if (bad_split_point)
         {
-            LOG_INFO(log, "Got bad split point [" << split_point << "] for segment " << info() << ", fall back to split physical.");
+            LOG_INFO(log,
+                     "Got bad split point " << split_point.toString() << " for segment " << info() << ", fall back to split physical.");
             return prepareSplitPhysical(dm_context, segment_snap, wbs);
         }
         else
@@ -683,8 +681,10 @@ Segment::SplitInfo Segment::prepareSplit(DMContext & dm_context, const SegmentSn
     }
 }
 
-Segment::SplitInfo
-Segment::prepareSplitLogical(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, Handle split_point, WriteBatches & wbs) const
+Segment::SplitInfo Segment::prepareSplitLogical(DMContext &                dm_context,
+                                                const SegmentSnapshotPtr & segment_snap,
+                                                const PKSplitPoint &       split_point,
+                                                WriteBatches &             wbs) const
 {
     LOG_DEBUG(log, "Segment [" << segment_id << "] prepare split logical start");
 
@@ -692,12 +692,11 @@ Segment::prepareSplitLogical(DMContext & dm_context, const SegmentSnapshotPtr & 
 
     auto & storage_pool = dm_context.storage_pool;
 
-    HandleRange my_range    = {range.start, split_point};
-    HandleRange other_range = {split_point, range.end};
+    std::array<PKRange, 2> split_result = pk_range->split(split_point);
 
-    if (my_range.none() || other_range.none())
-        throw Exception("prepareSplitLogical: unexpected range! my_range: " + my_range.toString()
-                        + ", other_range: " + other_range.toString());
+    if (split_result[0].isEmpty() || split_result[1].isEmpty())
+        throw Exception("prepareSplitLogical: unexpected range! my_range: " + split_result[0].toString()
+                        + ", other_range: " + split_result[1].toString());
 
     GenPageId log_gen_page_id = std::bind(&StoragePool::newLogPageId, &storage_pool);
 
@@ -729,8 +728,8 @@ Segment::prepareSplitLogical(DMContext & dm_context, const SegmentSnapshotPtr & 
     auto my_stable    = std::make_shared<StableValueSpace>(segment_snap->stable->getId(), pk_range->primaryKey());
     auto other_stable = std::make_shared<StableValueSpace>(other_stable_id, pk_range->primaryKey());
 
-    my_stable->setFiles(my_stable_files, &dm_context, my_range);
-    other_stable->setFiles(other_stable_files, &dm_context, other_range);
+    my_stable->setFiles(my_stable_files, &dm_context, split_result[0].toHandleRange());
+    other_stable->setFiles(other_stable_files, &dm_context, split_result[1].toHandleRange());
 
     LOG_DEBUG(log, "Segment [" << segment_id << "] prepare split logical done");
 
@@ -746,12 +745,11 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, const S
     auto read_info   = getReadInfo(dm_context, *dm_context.store_columns, segment_snap);
     auto split_point = getSplitPointSlow(dm_context, read_info, segment_snap);
 
-    HandleRange my_range    = {range.start, split_point};
-    HandleRange other_range = {split_point, range.end};
+    std::array<PKRange, 2> split_result = pk_range->split(split_point);
 
-    if (my_range.none() || other_range.none())
-        throw Exception("prepareSplitPhysical: unexpected range! my_range: " + my_range.toString()
-                        + ", other_range: " + other_range.toString());
+    if (split_result[0].isEmpty() || split_result[1].isEmpty())
+        throw Exception("prepareSplitPhysical: unexpected range! my_range: " + split_result[0].toString()
+                        + ", other_range: " + split_result[1].toString());
 
     StableValueSpacePtr my_new_stable;
     StableValueSpacePtr other_stable;
@@ -760,7 +758,7 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, const S
         // Write my data
         BlockInputStreamPtr my_data = getPlacedStream(dm_context,
                                                       read_info.read_columns,
-                                                      PKRange::fromHandleRange(my_range),
+                                                      split_result[0],
                                                       EMPTY_FILTER,
                                                       segment_snap->stable,
                                                       segment_snap->delta,
@@ -770,7 +768,7 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, const S
 
         LOG_DEBUG(log, "Created my placed stream");
 
-        my_data = std::make_shared<DMHandleFilterBlockInputStream<true>>(my_data, PKRange::fromHandleRange(my_range));
+        my_data = std::make_shared<DMPKFilterBlockInputStream<true>>(my_data, split_result[0]);
         my_data = std::make_shared<ReorganizeBlockInputStream>(my_data, EXTRA_HANDLE_COLUMN_NAME);
         my_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
             my_data, read_info.read_columns, dm_context.min_version);
@@ -784,7 +782,7 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, const S
         // Write new segment's data
         BlockInputStreamPtr other_data = getPlacedStream(dm_context,
                                                          read_info.read_columns,
-                                                         PKRange::fromHandleRange(other_range),
+                                                         split_result[1],
                                                          EMPTY_FILTER,
                                                          segment_snap->stable,
                                                          segment_snap->delta,
@@ -794,7 +792,7 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, const S
 
         LOG_DEBUG(log, "Created other placed stream");
 
-        other_data = std::make_shared<DMHandleFilterBlockInputStream<true>>(other_data, PKRange::fromHandleRange(other_range));
+        other_data = std::make_shared<DMPKFilterBlockInputStream<true>>(other_data, split_result[1]);
         other_data = std::make_shared<ReorganizeBlockInputStream>(other_data, EXTRA_HANDLE_COLUMN_NAME);
         other_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
             other_data, read_info.read_columns, dm_context.min_version);
@@ -824,14 +822,13 @@ SegmentPair Segment::applySplit(DMContext &                dm_context, //
 {
     LOG_DEBUG(log, "Segment [" << segment_id << "] apply split");
 
-    HandleRange my_range    = {range.start, split_info.split_point};
-    HandleRange other_range = {split_info.split_point, range.end};
+    std::array<PKRange, 2> split_result = pk_range->split(split_info.split_point);
 
     Packs   empty_packs;
     Packs * head_packs = split_info.is_logical ? &empty_packs : &segment_snap->delta->packs;
 
-    auto my_delta_packs    = delta->checkHeadAndCloneTail(dm_context, PKRange::fromHandleRange(my_range), *head_packs, wbs);
-    auto other_delta_packs = delta->checkHeadAndCloneTail(dm_context, PKRange::fromHandleRange(other_range), *head_packs, wbs);
+    auto my_delta_packs    = delta->checkHeadAndCloneTail(dm_context, split_result[0], *head_packs, wbs);
+    auto other_delta_packs = delta->checkHeadAndCloneTail(dm_context, split_result[1], *head_packs, wbs);
 
     // Created references to tail pages' pages in "log" storage, we need to write them down.
     wbs.writeLogAndData();
@@ -842,8 +839,8 @@ SegmentPair Segment::applySplit(DMContext &                dm_context, //
     auto my_delta    = std::make_shared<DeltaValueSpace>(delta->getId(), pk_range->primaryKey(), my_delta_packs);
     auto other_delta = std::make_shared<DeltaValueSpace>(other_delta_id, pk_range->primaryKey(), other_delta_packs);
 
-    PKRangePtr pk_my_range    = std::make_shared<PKRange>(PKRange::fromHandleRange(my_range));
-    PKRangePtr pk_other_range = std::make_shared<PKRange>(PKRange::fromHandleRange(other_range));
+    PKRangePtr pk_my_range    = std::make_shared<PKRange>(split_result[0]);
+    PKRangePtr pk_other_range = std::make_shared<PKRange>(split_result[1]);
     auto       new_me         = std::make_shared<Segment>(this->epoch + 1, //
                                             pk_my_range,
                                             this->segment_id,
@@ -924,7 +921,7 @@ StableValueSpacePtr Segment::prepareMerge(DMContext &                dm_context,
                                                      read_info.index_end,
                                                      dm_context.stable_pack_rows);
 
-        stream = std::make_shared<DMHandleFilterBlockInputStream<true>>(stream, PKRange::fromHandleRange(segment->range));
+        stream = std::make_shared<DMPKFilterBlockInputStream<true>>(stream, PKRange::fromHandleRange(segment->range));
         stream = std::make_shared<ReorganizeBlockInputStream>(stream, EXTRA_HANDLE_COLUMN_NAME);
         stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
             stream, read_info.read_columns, dm_context.min_version);
@@ -1281,8 +1278,7 @@ bool Segment::placeDelete(const DMContext &         dm_context,
             compacted_index->end(),
             dm_context.stable_pack_rows);
 
-        delete_stream
-            = std::make_shared<DMHandleFilterBlockInputStream<true>>(delete_stream, PKRange::shrink(delete_range, relevant_range));
+        delete_stream = std::make_shared<DMPKFilterBlockInputStream<true>>(delete_stream, PKRange::shrink(delete_range, relevant_range));
 
         // Try to merge into big block. 128 MB should be enough.
         SquashingBlockInputStream squashed_delete_stream(delete_stream, 0, 128 * (1UL << 20));

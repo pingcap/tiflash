@@ -52,7 +52,7 @@ protected:
         setColumns(cols);
 
         auto segment_id = storage_pool->newMetaPageId();
-        return Segment::newSegment(*dm_context_, HandleRange::newAll(), segment_id, 0);
+        return Segment::newSegment(*dm_context_, std::make_shared<PKRange>(PKRange::fromHandleRange(HandleRange::newAll())), segment_id, 0);
     }
 
     // setColumns should update dm_context at the same time
