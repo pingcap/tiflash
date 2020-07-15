@@ -3,6 +3,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
+#include <Storages/DeltaMerge/PKRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
 namespace DB
@@ -18,7 +19,7 @@ public:
                            UInt64                hash_salt,
                            const DMFilePtr &     dmfile,
                            const ColumnDefines & read_columns,
-                           const HandleRange &   handle_range,
+                           const PKRange &       pk_range,
                            const RSOperatorPtr & filter,
                            ColumnCachePtr &      column_cache_,
                            const IdSetPtr &      read_packs,
@@ -29,7 +30,7 @@ public:
                  enable_clean_read,
                  max_read_version,
                  // filters
-                 handle_range,
+                 pk_range,
                  filter,
                  read_packs,
                  // caches

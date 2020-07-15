@@ -681,5 +681,18 @@ inline bool operator<(const PKRange::End & a, const PKValue & b)
     return a.range->endLessThan(*(b.block), b.row_id);
 }
 
+inline String toString(const PKRanges & ranges)
+{
+    String s = "{";
+    for (auto & r : ranges)
+    {
+        s += r.toString() + ",";
+    }
+    if (!ranges.empty())
+        s.erase(s.size() - 1);
+    s += "}";
+    return s;
+}
+
 } // namespace DM
 } // namespace DB

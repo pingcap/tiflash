@@ -13,12 +13,12 @@ namespace DM
 
 const Int64 StableValueSpace::CURRENT_VERSION = 1;
 
-void StableValueSpace::setFiles(const DMFiles & files_, DMContext * dm_context, HandleRange range)
+void StableValueSpace::setFiles(const DMFiles & files_, const PKRange & range, DMContext * dm_context)
 {
     UInt64 rows  = 0;
     UInt64 bytes = 0;
 
-    if (range.all())
+    if (range.isAll())
     {
         for (auto & file : files_)
         {
@@ -188,7 +188,7 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DM
             context.hash_salt,
             stable->files[i],
             read_columns,
-            pk_range.toHandleRange(),
+            pk_range,
             filter,
             column_caches[i],
             IdSetPtr{}));

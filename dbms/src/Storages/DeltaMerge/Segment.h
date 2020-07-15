@@ -105,14 +105,14 @@ public:
     BlockInputStreamPtr getInputStream(const DMContext &          dm_context,
                                        const ColumnDefines &      columns_to_read,
                                        const SegmentSnapshotPtr & segment_snap,
-                                       const HandleRanges &       read_ranges,
+                                       const PKRanges &           read_ranges,
                                        const RSOperatorPtr &      filter,
                                        UInt64                     max_version,
                                        size_t                     expected_block_size);
 
     BlockInputStreamPtr getInputStream(const DMContext &     dm_context,
                                        const ColumnDefines & columns_to_read,
-                                       const HandleRanges &  read_ranges         = {HandleRange::newAll()},
+                                       const PKRanges &      read_ranges,
                                        const RSOperatorPtr & filter              = {},
                                        UInt64                max_version         = MAX_UINT64,
                                        size_t                expected_block_size = DEFAULT_BLOCK_SIZE);
@@ -199,7 +199,7 @@ private:
     ReadInfo getReadInfo(const DMContext &          dm_context,
                          const ColumnDefines &      read_columns,
                          const SegmentSnapshotPtr & segment_snap,
-                         const HandleRanges &       read_ranges = {HandleRange::newAll()},
+                         const PKRanges &           read_ranges,
                          UInt64                     max_version = MAX_UINT64) const;
 
     static ColumnDefines arrangeReadColumns(const ColumnDefine & handle, const ColumnDefines & columns_to_read);
@@ -235,7 +235,7 @@ private:
     std::pair<DeltaIndexPtr, bool> ensurePlace(const DMContext &         dm_context,
                                                const StableSnapshotPtr & stable_snap,
                                                DeltaSnapshotPtr &        delta_snap,
-                                               const HandleRanges &      read_ranges,
+                                               const PKRanges &          read_ranges,
                                                UInt64                    max_version) const;
 
     /// Reference the inserts/updates by delta tree.

@@ -110,7 +110,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols,
-            HandleRange::newAll(),
+            PKRange::fromHandleRange(HandleRange::newAll()),
             RSOperatorPtr{},
             column_cache_,
             IdSetPtr{});
@@ -180,7 +180,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols,
-            range, // Filtered by read_range
+            PKRange::fromHandleRange(range), // Filtered by read_range
             EMPTY_FILTER,
             column_cache_,
             IdSetPtr{});
@@ -282,7 +282,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols,
-            HandleRange::newAll(),
+            PKRange::fromHandleRange(HandleRange::newAll()),
             toRSFilter(i64_cd, range), // Filtered by rough set filter
             column_cache_,
             IdSetPtr{});
@@ -358,7 +358,7 @@ try
     }
 
     std::vector<std::pair<DM::RSOperatorPtr, size_t>> filters;
-    DM::RSOperatorPtr              one_part_filter = toRSFilter(i64_cd, HandleRange{0, span_per_part});
+    DM::RSOperatorPtr                                 one_part_filter = toRSFilter(i64_cd, HandleRange{0, span_per_part});
     // <filter, num_rows_should_read>
     filters.emplace_back(one_part_filter, span_per_part); // only first part
     // <filter, num_rows_should_read>
@@ -369,8 +369,8 @@ try
     filters.emplace_back(createOr({one_part_filter, createUnsupported("test", "test", false)}), num_rows_write);
     for (size_t i = 0; i < filters.size(); i++)
     {
-        const auto & filter = filters[i].first;
-        const auto num_rows_should_read = filters[i].second;
+        const auto & filter               = filters[i].first;
+        const auto   num_rows_should_read = filters[i].second;
         // Test read
         auto stream = std::make_shared<DMFileBlockInputStream>( //
             dbContext(),
@@ -379,7 +379,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols,
-            HandleRange::newAll(),
+            PKRange::fromHandleRange(HandleRange::newAll()),
             filter, // Filtered by rough set filter
             column_cache_,
             IdSetPtr{});
@@ -455,7 +455,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols,
-            HandleRange::newAll(),
+            PKRange::fromHandleRange(HandleRange::newAll()),
             EMPTY_FILTER,
             column_cache_,
             id_set_ptr);
@@ -548,7 +548,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols,
-            HandleRange::newAll(),
+            PKRange::fromHandleRange(HandleRange::newAll()),
             RSOperatorPtr{},
             column_cache_,
             IdSetPtr{});
@@ -624,7 +624,7 @@ TEST_F(DMFile_Test, StringType)
             dmContext().hash_salt,
             dm_file,
             *cols,
-            HandleRange::newAll(),
+            PKRange::fromHandleRange(HandleRange::newAll()),
             RSOperatorPtr{},
             column_cache_,
             IdSetPtr{});
@@ -698,7 +698,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols,
-            HandleRange::newAll(),
+            PKRange::fromHandleRange(HandleRange::newAll()),
             RSOperatorPtr{},
             column_cache_,
             IdSetPtr{});
@@ -821,7 +821,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols_after_ddl,
-            HandleRange::newAll(),
+            PKRange::fromHandleRange(HandleRange::newAll()),
             RSOperatorPtr{},
             column_cache_,
             IdSetPtr{});
@@ -914,7 +914,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols_after_ddl,
-            HandleRange::newAll(),
+            PKRange::fromHandleRange(HandleRange::newAll()),
             RSOperatorPtr{},
             column_cache_,
             IdSetPtr{});
@@ -985,7 +985,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols_after_ddl,
-            HandleRange::newAll(),
+            PKRange::fromHandleRange(HandleRange::newAll()),
             RSOperatorPtr{},
             column_cache_,
             IdSetPtr{});
@@ -1057,7 +1057,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols_after_ddl,
-            HandleRange::newAll(),
+            PKRange::fromHandleRange(HandleRange::newAll()),
             RSOperatorPtr{},
             column_cache_,
             IdSetPtr{});

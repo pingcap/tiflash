@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Storages/DeltaMerge/PKRange.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/Transaction/TiKVHandle.h>
@@ -37,7 +38,7 @@ inline DM::HandleRange toDMHandleRange(const HandleRange<HandleID> & range)
     return DM::HandleRange{range.first.handle_id, getRangeEndID(range.second)};
 }
 
-inline DM::HandleRanges getQueryRanges(const DB::MvccQueryInfo::RegionsQueryInfo & regions)
+inline DM::PKRanges getQueryRanges(const DB::MvccQueryInfo::RegionsQueryInfo & regions)
 {
     std::vector<HandleRange<HandleID>> handle_ranges;
     for (const auto & region_info : regions)
@@ -53,18 +54,18 @@ inline DM::HandleRanges getQueryRanges(const DB::MvccQueryInfo::RegionsQueryInfo
             handle_ranges.push_back(region_info.range_in_table);
         }
     }
-    DM::HandleRanges ranges;
+    DM::PKRanges ranges;
     if (handle_ranges.empty())
     {
         // Just for test cases
-        ranges.emplace_back(DB::DM::HandleRange::newAll());
+        ranges.emplace_back(DB::DM::PKRange::fromHandleRange(DB::DM::HandleRange::newAll()));
         return ranges;
     }
     else if (handle_ranges.size() == 1)
     {
         // Shortcut for only one region info
         const auto & range_in_table = handle_ranges[0];
-        ranges.emplace_back(toDMHandleRange(range_in_table));
+        ranges.emplace_back(DB::DM::PKRange::fromHandleRange(toDMHandleRange(range_in_table)));
         return ranges;
     }
 
@@ -107,7 +108,7 @@ inline DM::HandleRanges getQueryRanges(const DB::MvccQueryInfo::RegionsQueryInfo
         }
         else if (current.end < handle_range.first.handle_id)
         {
-            ranges.emplace_back(current);
+            ranges.emplace_back(DB::DM::PKRange::fromHandleRange(current));
 
             // start a new range
             current.start = handle_range.first.handle_id;
@@ -119,7 +120,7 @@ inline DM::HandleRanges getQueryRanges(const DB::MvccQueryInfo::RegionsQueryInfo
                 + handle_range.first.toString() + "," + handle_range.second.toString() + ")");
         }
     }
-    ranges.emplace_back(current);
+    ranges.emplace_back(DB::DM::PKRange::fromHandleRange(current));
 
     return ranges;
 }

@@ -59,7 +59,7 @@ public:
 
     void mergeDelta(const Context & context) override;
 
-    void deleteRange(const DM::HandleRange & range_to_delete, const Settings & settings);
+    void deleteRange(const DM::PKRange & range_to_delete, const Settings & settings);
 
     void rename(const String & new_path_to_db,
         const String & new_database_name,

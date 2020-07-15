@@ -1,8 +1,8 @@
 #pragma once
 
-#include <queue>
-
 #include <Storages/DeltaMerge/Segment.h>
+
+#include <queue>
 
 namespace DB
 {
@@ -13,7 +13,7 @@ struct SegmentReadTask
 {
     SegmentPtr         segment;
     SegmentSnapshotPtr read_snapshot;
-    HandleRanges       ranges;
+    PKRanges           ranges;
 
     explicit SegmentReadTask(const SegmentPtr & segment_, const SegmentSnapshotPtr & read_snapshot_)
         : segment(segment_), read_snapshot(read_snapshot_)
@@ -22,12 +22,12 @@ struct SegmentReadTask
 
     SegmentReadTask(const SegmentPtr &         segment_, //
                     const SegmentSnapshotPtr & read_snapshot_,
-                    const HandleRanges &       ranges_)
+                    const PKRanges &           ranges_)
         : segment(segment_), read_snapshot(read_snapshot_), ranges(ranges_)
     {
     }
 
-    void addRange(const HandleRange & range) { ranges.push_back(range); }
+    void addRange(const PKRange & range) { ranges.push_back(range); }
 };
 
 using SegmentReadTaskPtr = std::shared_ptr<SegmentReadTask>;

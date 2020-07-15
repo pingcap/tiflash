@@ -109,7 +109,7 @@ createNewStable(DMContext & context, const BlockInputStreamPtr & input_stream, P
     PageId dmfile_id = context.storage_pool.newDataPageId();
     auto   dmfile    = writeIntoNewDMFile(context, input_stream, dmfile_id, store_path + "/" + STABLE_FOLDER_NAME);
     auto   stable    = std::make_shared<StableValueSpace>(stable_id, pk);
-    stable->setFiles({dmfile});
+    stable->setFiles({dmfile}, PKRange::newAll(pk));
     stable->saveMeta(wbs.meta);
     wbs.data.putExternal(dmfile_id, 0);
     context.extra_paths.addDMFile(dmfile_id, dmfile->getBytesOnDisk(), store_path);
@@ -267,7 +267,7 @@ SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool is
 BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_context,
                                             const ColumnDefines &      columns_to_read,
                                             const SegmentSnapshotPtr & segment_snap,
-                                            const HandleRanges &       read_ranges,
+                                            const PKRanges &           read_ranges,
                                             const RSOperatorPtr &      filter,
                                             UInt64                     max_version,
                                             size_t                     expected_block_size)
@@ -319,16 +319,16 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
         LOG_TRACE(log,
                   "Segment [" << DB::toString(segment_id) << "] is read by max_version: " << max_version << ", 1"
                               << " range: " << toString(read_ranges));
-        return create_stream(PKRange::fromHandleRange(range.shrink(read_ranges[0])));
+        return create_stream(PKRange::shrink(*pk_range, read_ranges[0]));
     }
     else
     {
         BlockInputStreams streams;
         for (auto & read_range : read_ranges)
         {
-            HandleRange real_range = range.shrink(read_range);
-            if (!real_range.none())
-                streams.push_back(create_stream(PKRange::fromHandleRange(real_range)));
+            PKRange real_range = PKRange::shrink(*pk_range, read_range);
+            if (!real_range.isEmpty())
+                streams.push_back(create_stream(real_range));
         }
 
         LOG_TRACE(log,
@@ -341,7 +341,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
 
 BlockInputStreamPtr Segment::getInputStream(const DMContext &     dm_context,
                                             const ColumnDefines & columns_to_read,
-                                            const HandleRanges &  read_ranges,
+                                            const PKRanges &      read_ranges,
                                             const RSOperatorPtr & filter,
                                             UInt64                max_version,
                                             size_t                expected_block_size)
@@ -443,7 +443,7 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext & dm_context, const Seg
 
     EventRecorder recorder(ProfileEvents::DMDeltaMerge, ProfileEvents::DMDeltaMergeNS);
 
-    auto read_info = getReadInfo(dm_context, *dm_context.store_columns, segment_snap);
+    auto read_info = getReadInfo(dm_context, *dm_context.store_columns, segment_snap, {PKRange::newAll(pk_range->primaryKey())});
 
     BlockInputStreamPtr data_stream = getPlacedStream(dm_context,
                                                       read_info.read_columns,
@@ -577,7 +577,7 @@ PKSplitPoint Segment::getSplitPointFast(DMContext & dm_context, const StableSnap
                                   dm_context.hash_salt,
                                   read_file,
                                   {getExtraHandleColumnDefine()},
-                                  HandleRange::newAll(),
+                                  PKRange::newAll(pk_range->primaryKey()),
                                   EMPTY_FILTER,
                                   stable_snap->getColumnCaches()[file_index],
                                   read_pack);
@@ -728,8 +728,8 @@ Segment::SplitInfo Segment::prepareSplitLogical(DMContext &                dm_co
     auto my_stable    = std::make_shared<StableValueSpace>(segment_snap->stable->getId(), pk_range->primaryKey());
     auto other_stable = std::make_shared<StableValueSpace>(other_stable_id, pk_range->primaryKey());
 
-    my_stable->setFiles(my_stable_files, &dm_context, split_result[0].toHandleRange());
-    other_stable->setFiles(other_stable_files, &dm_context, split_result[1].toHandleRange());
+    my_stable->setFiles(my_stable_files, split_result[0], &dm_context);
+    other_stable->setFiles(other_stable_files, split_result[1], &dm_context);
 
     LOG_DEBUG(log, "Segment [" << segment_id << "] prepare split logical done");
 
@@ -742,7 +742,7 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, const S
 
     EventRecorder recorder(ProfileEvents::DMSegmentSplit, ProfileEvents::DMSegmentSplitNS);
 
-    auto read_info   = getReadInfo(dm_context, *dm_context.store_columns, segment_snap);
+    auto read_info   = getReadInfo(dm_context, *dm_context.store_columns, segment_snap, {PKRange::newAll(pk_range->primaryKey())});
     auto split_point = getSplitPointSlow(dm_context, read_info, segment_snap);
 
     std::array<PKRange, 2> split_result = pk_range->split(split_point);
@@ -910,8 +910,9 @@ StableValueSpacePtr Segment::prepareMerge(DMContext &                dm_context,
                         + ", second start: " + DB::toString(right->range.start));
 
     auto getStream = [&](const SegmentPtr & segment, const SegmentSnapshotPtr & segment_snap) {
-        auto                read_info = segment->getReadInfo(dm_context, *dm_context.store_columns, segment_snap);
-        BlockInputStreamPtr stream    = getPlacedStream(dm_context,
+        auto read_info
+            = segment->getReadInfo(dm_context, *dm_context.store_columns, segment_snap, {PKRange::newAll(left->pk_range->primaryKey())});
+        BlockInputStreamPtr stream = getPlacedStream(dm_context,
                                                      read_info.read_columns,
                                                      *segment->pk_range,
                                                      EMPTY_FILTER,
@@ -921,7 +922,7 @@ StableValueSpacePtr Segment::prepareMerge(DMContext &                dm_context,
                                                      read_info.index_end,
                                                      dm_context.stable_pack_rows);
 
-        stream = std::make_shared<DMPKFilterBlockInputStream<true>>(stream, PKRange::fromHandleRange(segment->range));
+        stream = std::make_shared<DMPKFilterBlockInputStream<true>>(stream, *segment->pk_range);
         stream = std::make_shared<ReorganizeBlockInputStream>(stream, EXTRA_HANDLE_COLUMN_NAME);
         stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
             stream, read_info.read_columns, dm_context.min_version);
@@ -952,11 +953,13 @@ SegmentPtr Segment::applyMerge(DMContext &                 dm_context, //
 {
     LOG_DEBUG(left->log, "Segment [" << left->segmentId() << "] and [" << right->segmentId() << "] apply merge");
 
-    HandleRange merged_range    = {left->range.start, right->range.end};
-    PKRange     pk_merged_range = PKRange::fromHandleRange(merged_range);
+    PKRange::Creator creator(left->pk_range->primaryKey());
+    creator.setStart(left->pk_range->getStart());
+    creator.setEnd(right->pk_range->getEnd());
+    PKRange merged_range = creator.getRange();
 
-    auto left_tail_packs  = left->delta->checkHeadAndCloneTail(dm_context, pk_merged_range, left_snap->delta->packs, wbs);
-    auto right_tail_packs = right->delta->checkHeadAndCloneTail(dm_context, pk_merged_range, right_snap->delta->packs, wbs);
+    auto left_tail_packs  = left->delta->checkHeadAndCloneTail(dm_context, merged_range, left_snap->delta->packs, wbs);
+    auto right_tail_packs = right->delta->checkHeadAndCloneTail(dm_context, merged_range, right_snap->delta->packs, wbs);
 
     // Created references to tail pages' pages in "log" storage, we need to write them down.
     wbs.writeLogAndData();
@@ -973,7 +976,7 @@ SegmentPtr Segment::applyMerge(DMContext &                 dm_context, //
     merged_packs.insert(merged_packs.end(), L_first_unsaved, left_tail_packs.end());
     merged_packs.insert(merged_packs.end(), R_first_unsaved, right_tail_packs.end());
 
-    auto pk_range     = std::make_shared<PKRange>(PKRange::fromHandleRange(merged_range));
+    auto pk_range     = std::make_shared<PKRange>(merged_range);
     auto merged_delta = std::make_shared<DeltaValueSpace>(left->delta->getId(), pk_range->primaryKey(), merged_packs);
 
     auto merged = std::make_shared<Segment>(left->epoch + 1, //
@@ -1030,7 +1033,7 @@ void Segment::placeDeltaIndex(DMContext & dm_context)
     auto segment_snap = createSnapshot(dm_context, true);
     if (!segment_snap)
         return;
-    getReadInfo(dm_context, {getExtraHandleColumnDefine()}, segment_snap);
+    getReadInfo(dm_context, {getExtraHandleColumnDefine()}, segment_snap, {PKRange::newAll(pk_range->primaryKey())});
 }
 
 String Segment::simpleInfo() const
@@ -1050,7 +1053,7 @@ String Segment::info() const
 Segment::ReadInfo Segment::getReadInfo(const DMContext &          dm_context,
                                        const ColumnDefines &      read_columns,
                                        const SegmentSnapshotPtr & segment_snap,
-                                       const HandleRanges &       read_ranges,
+                                       const PKRanges &           read_ranges,
                                        UInt64                     max_version) const
 {
     LOG_DEBUG(log, __FUNCTION__ << " start");
@@ -1125,19 +1128,19 @@ SkippableBlockInputStreamPtr Segment::getPlacedStream(const DMContext &         
 std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(const DMContext &         dm_context,
                                                     const StableSnapshotPtr & stable_snap,
                                                     DeltaSnapshotPtr &        delta_snap,
-                                                    const HandleRanges &      read_ranges,
+                                                    const PKRanges &          read_ranges,
                                                     UInt64                    max_version) const
 {
     // Clone a new delta index.
     auto my_delta_index = delta_snap->shared_delta_index->tryClone(delta_snap->rows, delta_snap->deletes);
     auto my_delta_tree  = my_delta_index->getDeltaTree();
 
-    HandleRange relevant_range = mergeRanges(read_ranges);
+    PKRange relevant_range = PKRange::merge(read_ranges);
 
     auto [my_placed_rows, my_placed_deletes] = my_delta_index->getPlacedStatus();
 
     // Let's do a fast check, determine whether we need to do place or not.
-    if (!delta_snap->shouldPlace(dm_context, my_delta_index, *pk_range, PKRange::fromHandleRange(relevant_range), max_version))
+    if (!delta_snap->shouldPlace(dm_context, my_delta_index, *pk_range, relevant_range, max_version))
         return {my_delta_index, false};
 
     GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_place_index_update).Increment();
@@ -1156,11 +1159,9 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(const DMContext &         dm
         if (!v.delete_range.isEmpty())
         {
             if (dm_context.enable_skippable_place)
-                fully_indexed &= placeDelete<true>(
-                    dm_context, stable_snap, delta_snap, v.delete_range, *my_delta_tree, PKRange::fromHandleRange(relevant_range));
+                fully_indexed &= placeDelete<true>(dm_context, stable_snap, delta_snap, v.delete_range, *my_delta_tree, relevant_range);
             else
-                fully_indexed &= placeDelete<false>(
-                    dm_context, stable_snap, delta_snap, v.delete_range, *my_delta_tree, PKRange::fromHandleRange(relevant_range));
+                fully_indexed &= placeDelete<false>(dm_context, stable_snap, delta_snap, v.delete_range, *my_delta_tree, relevant_range);
 
             ++my_placed_deletes;
         }
@@ -1168,21 +1169,11 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(const DMContext &         dm
         {
             auto rows = v.block.rows();
             if (dm_context.enable_skippable_place)
-                fully_indexed &= placeUpsert<true>(dm_context,
-                                                   stable_snap,
-                                                   delta_snap,
-                                                   my_placed_rows,
-                                                   std::move(v.block),
-                                                   *my_delta_tree,
-                                                   PKRange::fromHandleRange(relevant_range));
+                fully_indexed &= placeUpsert<true>(
+                    dm_context, stable_snap, delta_snap, my_placed_rows, std::move(v.block), *my_delta_tree, relevant_range);
             else
-                fully_indexed &= placeUpsert<false>(dm_context,
-                                                    stable_snap,
-                                                    delta_snap,
-                                                    my_placed_rows,
-                                                    std::move(v.block),
-                                                    *my_delta_tree,
-                                                    PKRange::fromHandleRange(relevant_range));
+                fully_indexed &= placeUpsert<false>(
+                    dm_context, stable_snap, delta_snap, my_placed_rows, std::move(v.block), *my_delta_tree, relevant_range);
 
             my_placed_rows += rows;
         }
@@ -1216,16 +1207,13 @@ bool Segment::placeUpsert(const DMContext &         dm_context,
 
     IColumn::Permutation perm;
 
-    auto &           handle       = getExtraHandleColumnDefine();
-    bool             do_sort      = sortBlockByPk(handle, block, perm);
-    Handle           first_handle = block.getByPosition(0).column->getInt(0);
-    HandleRange      block_range(first_handle, HandleRange::MAX);
-    PKRange          pk_block_range = PKRange::fromHandleRange(block_range);
+    auto &           handle  = getExtraHandleColumnDefine();
+    bool             do_sort = sortBlockByPk(handle, block, perm);
     PKRange::Creator creator(relevant_range.primaryKey());
-    if (PKRange::compareEdge<PKRange::START_INDEX>(pk_block_range, relevant_range) >= 0)
-        creator.setStart(pk_block_range.getStart());
-    else
+    if (relevant_range.checkStart(block, 0))
         creator.setStart(relevant_range.getStart());
+    else
+        creator.setStart(block, 0);
     creator.setEndInfinite();
 
     auto place_handle_range = skippable_place ? creator.getRange() : PKRange::newAll(relevant_range.primaryKey());
@@ -1296,15 +1284,20 @@ bool Segment::placeDelete(const DMContext &         dm_context,
     // Note that we can not do read and place at the same time.
     for (const auto & block : delete_data)
     {
-        Handle first_handle       = block.getByPosition(0).column->getInt(0);
-        auto   place_handle_range = skippable_place ? HandleRange(first_handle, HandleRange::MAX) : HandleRange::newAll();
+        PKRange::Creator creator(relevant_range.primaryKey());
+        if (skippable_place)
+            creator.setStart(block, 0);
+        else
+            creator.setStartInfinite();
+        creator.setEndInfinite();
+        auto place_handle_range = creator.getRange();
 
         auto compacted_index = update_delta_tree.getCompactedEntries();
 
         auto merged_stream = getPlacedStream<skippable_place>( //
             dm_context,
             {handle, getVersionColumnDefine()},
-            PKRange::fromHandleRange(place_handle_range),
+            place_handle_range,
             EMPTY_FILTER,
             stable_snap,
             delta_snap,

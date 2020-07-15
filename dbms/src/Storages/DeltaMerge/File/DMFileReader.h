@@ -7,6 +7,7 @@
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/PKRange.h>
 #include <Storages/MarkCache.h>
 
 namespace DB
@@ -43,7 +44,7 @@ public:
                  bool   enable_clean_read_,
                  UInt64 max_data_version_,
                  // filters
-                 const HandleRange &   handle_range_,
+                 const PKRange &       pk_range_,
                  const RSOperatorPtr & filter_,
                  const IdSetPtr &      read_packs_, // filter by pack index
                  // caches

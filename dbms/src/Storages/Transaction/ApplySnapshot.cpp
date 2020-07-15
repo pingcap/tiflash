@@ -113,7 +113,7 @@ void KVStore::tryApplySnapshot(RegionPtr new_region, Context & context)
                     // In StorageDeltaMerge, we use deleteRange to remove old data
                     auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
                     DM::HandleRange dm_handle_range = toDMHandleRange(handle_range);
-                    dm_storage->deleteRange(dm_handle_range, context.getSettingsRef());
+                    dm_storage->deleteRange(DM::PKRange::fromHandleRange(dm_handle_range), context.getSettingsRef());
                     break;
                 }
                 default:

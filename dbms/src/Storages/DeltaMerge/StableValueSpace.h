@@ -28,7 +28,7 @@ public:
     // Set DMFiles for this value space.
     // If this value space is logical splited, specify `range` and `dm_context` so that we can get more precise
     // bytes and rows.
-    void setFiles(const DMFiles & files_, DMContext * dm_context = nullptr, HandleRange range = HandleRange::newAll());
+    void setFiles(const DMFiles & files_, const PKRange & range, DMContext * dm_context = nullptr);
 
     PageId          getId() { return id; }
     void            saveMeta(WriteBatch & meta_wb);

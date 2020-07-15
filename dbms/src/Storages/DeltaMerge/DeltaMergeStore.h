@@ -253,7 +253,7 @@ public:
     void write(const Context & db_context, const DB::Settings & db_settings, const Block & block);
 
     // Deprated
-    void deleteRange(const Context & db_context, const DB::Settings & db_settings, const HandleRange & delete_range);
+    void deleteRange(const Context & db_context, const DB::Settings & db_settings, const PKRange & delete_range);
 
     BlockInputStreams readRaw(const Context &       db_context,
                               const DB::Settings &  db_settings,
@@ -265,7 +265,7 @@ public:
     BlockInputStreams read(const Context &       db_context,
                            const DB::Settings &  db_settings,
                            const ColumnDefines & columns_to_read,
-                           const HandleRanges &  sorted_ranges,
+                           const PKRanges &      sorted_ranges,
                            size_t                num_streams,
                            UInt64                max_version,
                            const RSOperatorPtr & filter,

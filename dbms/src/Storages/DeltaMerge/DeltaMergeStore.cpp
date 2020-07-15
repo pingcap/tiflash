@@ -473,9 +473,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         checkSegmentUpdate(dm_context, segment, ThreadType::Write);
 }
 
-void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings & db_settings, const HandleRange & delete_handle_range)
+void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings & db_settings, const PKRange & delete_range)
 {
-    PKRange delete_range = PKRange::fromHandleRange(delete_handle_range);
     LOG_INFO(log, "Write into " << db_name << "." << table_name << " delete range " << delete_range.toString());
 
     EventRecorder write_block_recorder(ProfileEvents::DMDeleteRange, ProfileEvents::DMDeleteRangeNS);
@@ -678,7 +677,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
                 auto segment_snap = segment->createSnapshot(*dm_context);
                 if (unlikely(!segment_snap))
                     throw Exception("Failed to get segment snap", ErrorCodes::LOGICAL_ERROR);
-                tasks.push(std::make_shared<SegmentReadTask>(segment, segment_snap, HandleRanges{segment->getRange()}));
+                tasks.push(std::make_shared<SegmentReadTask>(segment, segment_snap, PKRanges{*segment->getPKRange()}));
             }
         }
     }
@@ -710,19 +709,14 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
 BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
                                         const DB::Settings &  db_settings,
                                         const ColumnDefines & columns_to_read,
-                                        const HandleRanges &  sorted_handle_ranges,
+                                        const PKRanges &      sorted_pk_ranges,
                                         size_t                num_streams,
                                         UInt64                max_version,
                                         const RSOperatorPtr & filter,
                                         size_t                expected_block_size,
                                         const SegmentIdSet &  read_segments)
 {
-    LOG_DEBUG(log, "Read with " << sorted_handle_ranges.size() << " ranges");
-
-    PKRanges ranges;
-    ranges.reserve(sorted_handle_ranges.size());
-    for (auto & r : sorted_handle_ranges)
-        ranges.push_back(PKRange::fromHandleRange(r));
+    LOG_DEBUG(log, "Read with " << sorted_pk_ranges.size() << " ranges");
 
     SegmentReadTasks tasks;
 
@@ -730,7 +724,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
     {
         std::shared_lock lock(read_write_mutex);
 
-        auto range_it = ranges.begin();
+        auto range_it = sorted_pk_ranges.begin();
         auto seg_it   = segments.upper_bound(range_it->getStart());
 
         if (seg_it == segments.end())
@@ -738,7 +732,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
             throw Exception("Failed to locate segment begin with start in range: " + range_it->toString(), ErrorCodes::LOGICAL_ERROR);
         }
 
-        while (range_it != ranges.end() && seg_it != segments.end())
+        while (range_it != sorted_pk_ranges.end() && seg_it != segments.end())
         {
             auto & req_range = *range_it;
             auto & seg_range = *(seg_it->second->getPKRange());
@@ -753,7 +747,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
                     tasks.push(std::make_shared<SegmentReadTask>(segment, segment_snap));
                 }
 
-                tasks.back()->addRange(req_range.toHandleRange());
+                tasks.back()->addRange(PKRange::fromHandleRange(req_range.toHandleRange()));
 
                 if (req_range.getEnd() < seg_range.getEnd())
                 {
