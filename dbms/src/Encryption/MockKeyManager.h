@@ -23,7 +23,7 @@ public:
         std::ignore = fname;
         auto * file_key = new std::string(key);
         auto * file_iv = new std::string(iv);
-        FileEncryptionInfo file_info {
+        FileEncryptionInfo file_info{
             FileEncryptionRes::Ok,
             method,
             file_key,
