@@ -273,19 +273,19 @@ public:
                            const SegmentIdSet &  read_segments       = {});
 
     /// Force flush all data to disk.
-    void flushCache(const Context & context, const HandleRange & range = HandleRange::newAll())
+    void flushCache(const Context & context, const PKRange & range)
     {
         auto dm_context = newDMContext(context, context.getSettingsRef());
         flushCache(dm_context, range);
     }
 
-    void flushCache(const DMContextPtr & dm_context, const HandleRange & range);
+    void flushCache(const DMContextPtr & dm_context, const PKRange & range);
 
     /// Do merge delta for all segments. Only used for debug.
     void mergeDeltaAll(const Context & context);
 
     /// Compact fregment packs into bigger one.
-    void compact(const Context & context, const HandleRange & range = HandleRange::newAll());
+    void compact(const Context & context, const PKRange & range);
 
     /// Apply `commands` on `table_columns`
     void applyAlters(const AlterCommands &         commands, //

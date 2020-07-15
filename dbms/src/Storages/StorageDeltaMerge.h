@@ -48,14 +48,14 @@ public:
     /// Write from raft layer.
     void write(Block && block, const Settings & settings);
 
-    void flushCache(const Context & context) override { flushCache(context, DM::HandleRange::newAll()); }
+    void flushCache(const Context & context) override { flushCache(context, DM::PKRange::fromHandleRange(DM::HandleRange::newAll())); }
 
     void flushCache(const Context & context, const DB::HandleRange<HandleID> & range_to_flush) override
     {
-        flushCache(context, toDMHandleRange(range_to_flush));
+        flushCache(context, DM::PKRange::fromHandleRange(toDMHandleRange(range_to_flush)));
     }
 
-    void flushCache(const Context & context, const DM::HandleRange & range_to_flush);
+    void flushCache(const Context & context, const DM::PKRange & range_to_flush);
 
     void mergeDelta(const Context & context) override;
 

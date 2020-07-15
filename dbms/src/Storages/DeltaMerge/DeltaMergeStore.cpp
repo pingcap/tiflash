@@ -463,9 +463,9 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
 
     if (db_settings.dt_flush_after_write)
     {
-        HandleRange merge_range = HandleRange::newNone();
+        PKRange merge_range = PKRange::newEmpty(pk);
         for (auto & segment : updated_segments)
-            merge_range = merge_range.merge(segment->getRange());
+            merge_range = PKRange::merge(merge_range, *segment->getPKRange());
         flushCache(dm_context, merge_range);
     }
 
@@ -551,9 +551,9 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
         checkSegmentUpdate(dm_context, segment, ThreadType::Write);
 }
 
-void DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const HandleRange & handle_range)
+void DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const PKRange & range)
 {
-    PKRange cur_range = PKRange::fromHandleRange(handle_range);
+    PKRange cur_range = range;
     while (!cur_range.isEmpty())
     {
         PKRangePtr segment_range;
@@ -613,11 +613,11 @@ void DeltaMergeStore::mergeDeltaAll(const Context & context)
     }
 }
 
-void DeltaMergeStore::compact(const Context & db_context, const HandleRange & handle_range)
+void DeltaMergeStore::compact(const Context & db_context, const PKRange & range)
 {
     auto dm_context = newDMContext(db_context, db_context.getSettingsRef());
 
-    PKRange cur_range = PKRange::fromHandleRange(handle_range);
+    PKRange cur_range = range;
     while (!cur_range.isEmpty())
     {
         PKRangePtr segment_range;
@@ -747,7 +747,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
                     tasks.push(std::make_shared<SegmentReadTask>(segment, segment_snap));
                 }
 
-                tasks.back()->addRange(PKRange::fromHandleRange(req_range.toHandleRange()));
+                tasks.back()->addRange(req_range);
 
                 if (req_range.getEnd() < seg_range.getEnd())
                 {
