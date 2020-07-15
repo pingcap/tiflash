@@ -399,7 +399,7 @@ public:
     void initializeTiFlashMetrics();
     TiFlashMetricsPtr getTiFlashMetrics() const;
 
-    void initializeFileProvider(TiFlashServer & tiflash_instance_wrap);
+    void initializeFileProvider(TiFlashServer * tiflash_instance_wrap, bool enable_encryption);
     FileProviderPtr getFileProvider() const;
 
     Clusters & getClusters() const;
