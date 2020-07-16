@@ -17014,7 +17014,7 @@
     ]
   },
   "timezone": "browser",
-  "title": "Test-Cluster-TiKV-Details",
+  "title": "Test-Cluster-TiFlash-Proxy-Details",
   "uid": "kWxNAVnGz",
   "version": 1
 }
