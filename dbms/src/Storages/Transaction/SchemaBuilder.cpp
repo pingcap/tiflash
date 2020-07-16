@@ -687,6 +687,7 @@ String createTableStmt(const DBInfo & db_info, const TableInfo & table_info, con
         }
     }
 
+    // FIXME: Fix it after cluster index supported in TiDB 5.0
     if (pks.size() != 1 || !table_info.pk_is_handle)
     {
         columns.emplace_back(NameAndTypePair(MutableSupport::tidb_pk_column_name, std::make_shared<DataTypeInt64>()));

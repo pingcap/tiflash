@@ -609,10 +609,32 @@ void StorageDeltaMerge::alter(
 /// we need to update the create statement in metadata, so that we can restore table structure next time
 static void updateDeltaMergeTableCreateStatement(            //
     const String & database_name, const String & table_name, //
-    const ColumnsDescription & columns,
-    const OrderedNameSet & hidden_columns,                                                         //
-    const OptionTableInfoConstRef table_info_from_tidb, const ColumnDefines & store_table_columns, //
+    const SortDescription & pk_names, const ColumnsDescription & columns,
+    const OrderedNameSet & hidden_columns,    //
+    const OptionTableInfoConstRef table_info, //
     Timestamp tombstone, const Context & context);
+
+inline OptionTableInfoConstRef getTableInfoForCreateStatement( //
+    const OptionTableInfoConstRef table_info_from_tidb,        //
+    TiDB::TableInfo & table_info_from_store, const ColumnDefines & store_table_columns, const OrderedNameSet & hidden_columns)
+{
+    if (likely(table_info_from_tidb))
+        return table_info_from_tidb;
+
+    /// If TableInfo from TiDB is empty, for example, create DM table for test,
+    /// we refine TableInfo from store's table column, so that we can restore column id next time
+    table_info_from_store.schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
+    for (const auto & column_define : store_table_columns)
+    {
+        if (hidden_columns.has(column_define.name))
+            continue;
+        TiDB::ColumnInfo column_info = reverseGetColumnInfo( //
+            NameAndTypePair{column_define.name, column_define.type}, column_define.id, column_define.default_value,
+            /* for_test= */ true);
+        table_info_from_store.columns.emplace_back(std::move(column_info));
+    }
+    return std::optional<std::reference_wrapper<const TiDB::TableInfo>>(table_info_from_store);
+}
 
 void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
     const String & database_name,
@@ -670,7 +692,7 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
             {
                 // check that lossy changes is forbidden
                 // check that changing the UNSIGNED attribute is forbidden
-                throw Exception("Storage engine " + getName() + "doesn't support lossy data type modify from " + col_iter->type->getName()
+                throw Exception("Storage engine " + getName() + " doesn't support lossy data type modify from " + col_iter->type->getName()
                         + " to " + command.data_type->getName(),
                     ErrorCodes::NOT_IMPLEMENTED);
             }
@@ -680,10 +702,14 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
     commands.apply(new_columns); // apply AlterCommands to `new_columns`
     // apply alter to store's table column in DeltaMergeStore
     store->applyAlters(commands, table_info, max_column_id_used, context);
+
+    SortDescription pk_desc = store->getPrimarySortDescription();
+    TiDB::TableInfo table_info_from_store;
+    table_info_from_store.name = table_name_;
     // after update `new_columns` and store's table columns, we need to update create table statement,
     // so that we can restore table next time.
-    updateDeltaMergeTableCreateStatement(
-        database_name, table_name_, new_columns, hidden_columns, table_info, store->getTableColumns(), tombstone, context);
+    updateDeltaMergeTableCreateStatement(database_name, table_name_, pk_desc, new_columns, hidden_columns,
+        getTableInfoForCreateStatement(table_info, table_info_from_store, store->getTableColumns(), hidden_columns), tombstone, context);
     setColumns(std::move(new_columns));
     if (table_info)
         tidb_table_info = table_info.value();
@@ -740,9 +766,9 @@ String StorageDeltaMerge::getDatabaseName() const { return store->getDatabaseNam
 
 void updateDeltaMergeTableCreateStatement(                   //
     const String & database_name, const String & table_name, //
-    const ColumnsDescription & columns,
-    const OrderedNameSet & hidden_columns,                                                         //
-    const OptionTableInfoConstRef table_info_from_tidb, const ColumnDefines & store_table_columns, //
+    const SortDescription & pk_names, const ColumnsDescription & columns,
+    const OrderedNameSet & hidden_columns,    //
+    const OptionTableInfoConstRef table_info, //
     Timestamp tombstone, const Context & context)
 {
     /// Filter out hidden columns in the `create table statement`
@@ -754,35 +780,40 @@ void updateDeltaMergeTableCreateStatement(                   //
     columns_without_hidden.aliases = columns.aliases;
     columns_without_hidden.defaults = columns.defaults;
 
-    /// If TableInfo from TiDB is empty, for example, create DM table for test,
-    /// we refine TableInfo from store's table column, so that we can restore column id next time
-    TiDB::TableInfo table_info_from_store;
-    if (!table_info_from_tidb)
-    {
-        table_info_from_store.schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
-        table_info_from_store.name = table_name;
-        for (const auto & column_define : store_table_columns)
-        {
-            if (hidden_columns.has(column_define.name))
-                continue;
-            TiDB::ColumnInfo column_info = reverseGetColumnInfo( //
-                NameAndTypePair{column_define.name, column_define.type}, column_define.id, column_define.default_value,
-                /* for_test= */ true);
-            table_info_from_store.columns.emplace_back(std::move(column_info));
-        }
-    }
-
     // We need to update the JSON field in table ast
     // engine = DeltaMerge((CounterID, EventDate), '{JSON format table info}')
     IDatabase::ASTModifier storage_modifier = [&](IAST & ast) {
-        std::shared_ptr<ASTLiteral> literal;
-        if (table_info_from_tidb)
-            literal = std::make_shared<ASTLiteral>(Field(table_info_from_tidb->get().serialize()));
-        else
-            literal = std::make_shared<ASTLiteral>(Field(table_info_from_store.serialize()));
+        std::shared_ptr<ASTLiteral> literal = std::make_shared<ASTLiteral>(Field(table_info->get().serialize()));
+        ASTPtr pk_ast;
+        {
+            if (pk_names.size() > 1)
+            {
+                pk_ast = makeASTFunction("tuple");
+                for (const auto & pk : pk_names)
+                {
+                    pk_ast->children.emplace_back(std::make_shared<ASTLiteral>(pk.column_name));
+                }
+            }
+            else if (pk_names.size() == 1)
+            {
+                pk_ast = std::make_shared<ASTExpressionList>();
+                pk_ast->children.emplace_back(std::make_shared<ASTLiteral>(pk_names[0].column_name));
+            }
+            else
+            {
+                throw Exception("Try to update table(" + database_name + "." + table_name + ") statement with no primary key. ");
+            }
+        }
+
         auto tombstone_ast = std::make_shared<ASTLiteral>(Field(tombstone));
+
         auto & storage_ast = typeid_cast<ASTStorage &>(ast);
         auto & args = typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments);
+        if (!args.children.empty())
+        {
+            // Refresh primary keys' name
+            args.children[0] = pk_ast;
+        }
         if (args.children.size() == 1)
         {
             args.children.emplace_back(literal);
@@ -913,6 +944,7 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     INSERT_INT(background_tasks_length);
 
 #undef INSERT_INT
+#undef INSERT_SIZE
 #undef INSERT_RATE
 #undef INSERT_FLOAT
 
