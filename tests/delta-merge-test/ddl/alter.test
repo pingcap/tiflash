@@ -12,11 +12,6 @@
 │ 1 │ 2 │
 └───┴───┘
 
-# drop pk is forbidden
->> alter table dm_test drop column a
-Received exception from server (version {#WORD}):
-Code: 36. DB::Exception: Received from {#WORD} DB::Exception: Storage engine DeltaMerge doesn't support drop primary key / hidden column: a.
-
 >> alter table dm_test drop column b
 >> select * from dm_test
 ┌─a─┐
