@@ -17,6 +17,7 @@
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
 #include <IO/ReadHelpers.h>
+#include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/DDLWorker.h>
 #include <Interpreters/IDAsPathUpgrader.h>
@@ -136,6 +137,71 @@ struct TiFlashProxyConfig
 };
 
 const std::string TiFlashProxyConfig::config_prefix = "flash.proxy";
+
+struct TiFlashSecurityConfig
+{
+    String ca_path;
+    String cert_path;
+    String key_path;
+public:
+    TiFlashSecurityConfig(Poco::Util::LayeredConfiguration & config, Poco::Logger * log)
+    {
+        if (config.has("security"))
+        {
+            bool miss_ca_path = true;
+            bool miss_cert_path = true;
+            bool miss_key_path = true;
+            if (config.has("security.ca_path"))
+            {
+                ca_path = config.getString("security.ca_path");
+                miss_ca_path = false;
+            }
+            if (config.has("security.cert_path"))
+            {
+                cert_path = config.getString("security.cert_path");
+                miss_cert_path = false;
+            }
+            if (config.has("security.key_path"))
+            {
+                key_path = config.getString("security.key_path");
+                miss_key_path = false;
+            }
+            if (miss_ca_path && miss_cert_path && miss_key_path)
+            {
+                LOG_INFO("No security config is set.")
+            }
+            else if (miss_ca_path || miss_cert_path || miss_key_path)
+            {
+                throw Exception("ca_path, cert_path, key_path must be set at the same time.", ErrorCodes::INVALID_CONFIG_PARAMETER)
+            }
+        }
+    }
+
+    grpc::SslCredentialsOptions ReadSecurityInfo() {
+        grpc::SslCredentialsOptions options;
+        options.pem_root_certs = readFile(ca_path);
+        options.pem_cert_chain = readFile(cert_path);
+        options.pem_private_key = readFile(key_path);
+        return options;
+    }
+
+private:
+    String readFile(const String & filename) {
+        if (filename.empty())
+        {
+            return "";
+        }
+        auto buffer = createReadBufferFromFileBase(filename, 1024, 0);
+        String result;
+        while(!buffer->eof())
+        {
+            char buf[1024];
+            size_t len = buffer->read(buf, 1024);
+            result.append(buf, len);
+        }
+        return result;
+    }
+};
 
 struct TiFlashRaftConfig
 {
@@ -394,6 +460,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::string default_database = config().getString("default_database", raft_config.pd_addrs.empty() ? "default" : "system");
     global_context->setPath(path);
     global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
+
+    TiFlashSecurityConfig security_config(path, config(), log);
 
     /// Create directories for 'path' and for default database, if not exist.
     for (const String & candidate_path : global_context->getPartPathSelector().getAllPath())
