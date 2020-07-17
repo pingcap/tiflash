@@ -660,8 +660,6 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
     const Context & context)
 {
     std::unordered_set<String> cols_drop_forbidden;
-    for (const auto & n : pk_column_names)
-        cols_drop_forbidden.insert(n);
     cols_drop_forbidden.insert(EXTRA_HANDLE_COLUMN_NAME);
     cols_drop_forbidden.insert(VERSION_COLUMN_NAME);
     cols_drop_forbidden.insert(TAG_COLUMN_NAME);
@@ -677,10 +675,9 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
         }
         else if (command.type == AlterCommand::DROP_COLUMN)
         {
-            // check that drop primary key is forbidden
             // check that drop hidden columns is forbidden
             if (cols_drop_forbidden.count(command.column_name) > 0)
-                throw Exception("Storage engine " + getName() + " doesn't support drop primary key / hidden column: " + command.column_name,
+                throw Exception("Storage engine " + getName() + " doesn't support drop hidden column: " + command.column_name,
                     ErrorCodes::BAD_ARGUMENTS);
         }
         else if (command.type == AlterCommand::TOMBSTONE)
