@@ -11,15 +11,6 @@
 
 >> insert into table dm_test values(1, 2, 'hello TiFlash', 'hello world')
 
-# drop a part of pk is forbidden
->> alter table dm_test drop column a
-Received exception from server (version {#WORD}):
-Code: 36. DB::Exception: Received from {#WORD} DB::Exception: Storage engine DeltaMerge doesn't support drop primary key / hidden column: a.
-
->> alter table dm_test drop column b
-Received exception from server (version {#WORD}):
-Code: 36. DB::Exception: Received from {#WORD} DB::Exception: Storage engine DeltaMerge doesn't support drop primary key / hidden column: b.
-
 >> select * from dm_test
 ┌─a─┬─b─┬─c─────────────┬─d─────────────────────────────┐
 │ 1 │ 2 │ hello TiFlash │ hello world\0\0\0\0\0\0\0\0\0 │
