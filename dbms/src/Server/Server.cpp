@@ -168,11 +168,11 @@ public:
             }
             if (miss_ca_path && miss_cert_path && miss_key_path)
             {
-                LOG_INFO("No security config is set.")
+                LOG_INFO(log, "No security config is set.");
             }
             else if (miss_ca_path || miss_cert_path || miss_key_path)
             {
-                throw Exception("ca_path, cert_path, key_path must be set at the same time.", ErrorCodes::INVALID_CONFIG_PARAMETER)
+                throw Exception("ca_path, cert_path, key_path must be set at the same time.", ErrorCodes::INVALID_CONFIG_PARAMETER);
             }
         }
     }
@@ -461,7 +461,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setPath(path);
     global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
 
-    TiFlashSecurityConfig security_config(path, config(), log);
+    TiFlashSecurityConfig security_config(config(), log);
 
     /// Create directories for 'path' and for default database, if not exist.
     for (const String & candidate_path : global_context->getPartPathSelector().getAllPath())
@@ -738,7 +738,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::unique_ptr<grpc::Server> flash_grpc_server = nullptr;
     {
         grpc::ServerBuilder builder;
-        builder.AddListeningPort(raft_config.flash_server_addr, grpc::InsecureServerCredentials());
+        grpc::SslServerCredentialsOptions server_cred(GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY);
+        server_cred.pem_root_certs = security_config.ReadSecurityInfo().pem_root_certs;
+        builder.AddListeningPort(raft_config.flash_server_addr, grpc::SslServerCredentials( server_cred));
 
         /// Init and register flash service.
         flash_service = std::make_unique<FlashService>(*this);
