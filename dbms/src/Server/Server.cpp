@@ -143,6 +143,9 @@ struct TiFlashSecurityConfig
     String ca_path;
     String cert_path;
     String key_path;
+
+    bool inited = false;
+    grpc::SslCredentialsOptions options;
 public:
     TiFlashSecurityConfig(Poco::Util::LayeredConfiguration & config, Poco::Logger * log)
     {
@@ -177,11 +180,15 @@ public:
         }
     }
 
-    grpc::SslCredentialsOptions ReadSecurityInfo() {
-        grpc::SslCredentialsOptions options;
+    grpc::SslCredentialsOptions ReadAndCacheSecurityInfo() {
+        if (inited)
+        {
+            return options;
+        }
         options.pem_root_certs = readFile(ca_path);
         options.pem_cert_chain = readFile(cert_path);
         options.pem_private_key = readFile(key_path);
+        inited = true;
         return options;
     }
 
@@ -666,7 +673,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
             raft_config.ignore_databases,
             raft_config.kvstore_path,
             raft_config.engine,
-            raft_config.disable_bg_flush);
+            raft_config.disable_bg_flush,
+            security_config.ReadAndCacheSecurityInfo());
         global_context->getTMTContext().reloadConfig(config());
     }
 
@@ -739,7 +747,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         grpc::ServerBuilder builder;
         grpc::SslServerCredentialsOptions server_cred(GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY);
-        server_cred.pem_root_certs = security_config.ReadSecurityInfo().pem_root_certs;
+        auto options = security_config.ReadAndCacheSecurityInfo();
+        server_cred.pem_root_certs = options.pem_root_certs;
+        server_cred.pem_key_cert_pairs.push_back(grpc::SslServerCredentialsOptions::PemKeyCertPair{options.pem_private_key,options.pem_cert_chain});
         builder.AddListeningPort(raft_config.flash_server_addr, grpc::SslServerCredentials( server_cred));
 
         /// Init and register flash service.
