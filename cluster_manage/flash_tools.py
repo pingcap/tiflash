@@ -27,6 +27,12 @@ class FlashConfig:
         self.update_rule_interval = int(flash_cluster['update_rule_interval'])
         self.log_path = flash_cluster.get('log', '{}/flash_cluster_manager.log'.format(tmp_path))
 
+        security = p['security']
+
+        self.ca_path = security['ca_path']
+        self.key_path = security['key_path']
+        self.cert_path = security['cert_path']
+
 
 def main():
     pass

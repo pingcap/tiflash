@@ -46,7 +46,7 @@ class EtcdClient:
 
     def __init__(self, host, port):
         self.logger = logging.getLogger('etcd.client')
-        self.client = etcd3.client(host=host, port=port, timeout=conf.flash_conf.update_rule_interval)
+        self.client = etcd3.client(host=host, port=port, timeout=conf.flash_conf.update_rule_interval, ca_cert=conf.flash_conf.ca_path, cert_key=conf.flash_conf.key_path, cert_cert=conf.flash_conf.cert_path)
 
 
 class PDClient:

@@ -38,7 +38,7 @@ def curl_http(uri, params=None):
     if params is None:
         params = {}
     import conf
-    r = requests.get('http://{}'.format(uri), params, timeout=conf.flash_conf.update_rule_interval)
+    r = requests.get('http://{}'.format(uri), params, timeout=conf.flash_conf.update_rule_interval, verify=conf.flash_conf.ca_path, cert=(conf.flash_conf.cert_path, conf.flash_conf.key_path))
     return r
 
 
