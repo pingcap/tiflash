@@ -329,17 +329,113 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(tiflash_system_profile_event_FileOpen{instance=~\"$instance\"})",
+              "expr": "sum(rate(tiflash_system_profile_event_FileOpen{instance=~\"$instance\"}[1m]))",
               "format": "time_series",
               "intervalFactor": 1,
-              "legendFormat": "FileOpen",
+              "legendFormat": "Newly FileOpen",
               "refId": "A"
             },
             {
-              "expr": "sum(tiflash_system_profile_event_FileOpenFailed{instance=~\"$instance\"})",
+              "expr": "sum(rate(tiflash_system_profile_event_FileOpenFailed{instance=~\"$instance\"}[1m]))",
               "format": "time_series",
               "intervalFactor": 1,
-              "legendFormat": "FileOpenFailed",
+              "legendFormat": "Newly FileOpenFailed",
+              "refId": "B"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Newly File Open",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "none",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "fill": 1,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 9
+          },
+          "id": 50,
+          "legend": {
+            "alignAsTable": true,
+            "avg": true,
+            "current": false,
+            "hideEmpty": false,
+            "hideZero": false,
+            "max": true,
+            "min": true,
+            "rightSide": true,
+            "show": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "sum(tiflash_system_current_metric_OpenFileForWrite{instance=~\"$instance\"})",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "Write File Opened",
+              "refId": "A"
+            },
+            {
+              "expr": "sum(tiflash_system_current_metric_OpenFileForRead{instance=~\"$instance\"})",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "Read File Opened",
               "refId": "B"
             }
           ],
@@ -410,7 +506,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 2
+            "y": 18
           },
           "id": 9,
           "legend": {
@@ -498,7 +594,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 2
+            "y": 18
           },
           "id": 2,
           "legend": {
@@ -585,7 +681,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 9
+            "y": 25
           },
           "id": 11,
           "legend": {
@@ -693,7 +789,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 9
+            "y": 25
           },
           "id": 12,
           "legend": {
@@ -780,7 +876,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 16
+            "y": 32
           },
           "id": 13,
           "legend": {
@@ -888,7 +984,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 16
+            "y": 32
           },
           "id": 14,
           "legend": {
@@ -990,7 +1086,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 3
+            "y": 40
           },
           "id": 17,
           "legend": {
@@ -1079,7 +1175,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 3
+            "y": 40
           },
           "id": 18,
           "legend": {
@@ -1168,7 +1264,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 10
+            "y": 47
           },
           "id": 19,
           "legend": {
@@ -1279,7 +1375,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 10
+            "y": 47
           },
           "id": 20,
           "legend": {
@@ -1402,7 +1498,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 18
+            "y": 4
           },
           "id": 38,
           "legend": {
@@ -1491,7 +1587,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 55
+            "y": 4
           },
           "id": 40,
           "legend": {
@@ -1581,7 +1677,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 62
+            "y": 11
           },
           "id": 39,
           "legend": {
@@ -1598,7 +1694,7 @@
           "lines": true,
           "linewidth": 1,
           "links": [],
-          "nullPointMode": "connected",
+          "nullPointMode": "null as zero",
           "percentage": false,
           "pointradius": 5,
           "points": false,
@@ -1670,7 +1766,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 62
+            "y": 11
           },
           "id": 42,
           "legend": {
@@ -1687,7 +1783,7 @@
           "lines": true,
           "linewidth": 1,
           "links": [],
-          "nullPointMode": "connected",
+          "nullPointMode": "null as zero",
           "percentage": false,
           "pointradius": 5,
           "points": false,
@@ -1783,7 +1879,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 69
+            "y": 18
           },
           "id": 43,
           "legend": {
@@ -1872,7 +1968,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 69
+            "y": 18
           },
           "id": 44,
           "legend": {
@@ -1977,13 +2073,251 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "",
+          "fill": 0,
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 25
+          },
+          "id": 46,
+          "legend": {
+            "alignAsTable": false,
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "rightSide": false,
+            "show": true,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "connected",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_PSMWriteIOCalls{instance=~\"$instance\"}[1m])) by (type)",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "Page",
+              "refId": "A"
+            },
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_PSMWriteCalls{instance=~\"$instance\"}[1m])) by (type)",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 2,
+              "legendFormat": "Page Calls",
+              "refId": "B"
+            },
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_PSMWritePages{instance=~\"$instance\"}[1m])) by (type)",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 2,
+              "legendFormat": "PageFile",
+              "refId": "C"
+            },
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWrite{instance=~\"$instance\"}[1m])) by (type)",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "File Descriptor",
+              "refId": "D"
+            },
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_PSMWriteIOCalls{instance=~\"$instance\"}[1m])) by (type) + sum(rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWrite{instance=~\"$instance\"}[1m])) by (type)",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "Total",
+              "refId": "E"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Write Operations",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": null,
+              "format": "ops",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "none",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "",
+          "fill": 0,
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 25
+          },
+          "id": 47,
+          "legend": {
+            "alignAsTable": false,
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "rightSide": false,
+            "show": true,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_PSMReadIOCalls{instance=~\"$instance\"}[1m])) by (type)",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "Page",
+              "refId": "A"
+            },
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_PSMReadCalls{instance=~\"$instance\"}[1m])) by (type)",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 2,
+              "legendFormat": "Page Calls",
+              "refId": "B"
+            },
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_PSMReadPages{instance=~\"$instance\"}[1m])) by (type)",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 2,
+              "legendFormat": "PageFile",
+              "refId": "C"
+            },
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_ReadBufferFromFileDescriptorRead{instance=~\"$instance\"}[1m])) by (type)",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "File Descriptor",
+              "refId": "D"
+            },
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_PSMReadIOCalls{instance=~\"$instance\"}[1m])) by (type) + sum(rate(tiflash_system_profile_event_ReadBufferFromFileDescriptorRead{instance=~\"$instance\"}[1m])) by (type)",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "Total",
+              "refId": "E"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Read Operations",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": null,
+              "format": "ops",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "none",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
           "description": "The total count of different kinds of commands received",
           "fill": 0,
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 76
+            "y": 32
           },
           "id": 41,
           "legend": {
@@ -2016,6 +2350,13 @@
               "intervalFactor": 2,
               "legendFormat": "{{type}}",
               "refId": "A"
+            },
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_DMWriteBlock{instance=~\"$instance\"}[1m])) by (type)",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "write block",
+              "refId": "B"
             }
           ],
           "thresholds": [],
@@ -2086,7 +2427,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 5
+            "y": 63
           },
           "id": 35,
           "legend": {
@@ -2174,7 +2515,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 5
+            "y": 63
           },
           "id": 36,
           "legend": {
@@ -2282,7 +2623,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 12
+            "y": 70
           },
           "id": 37,
           "legend": {
