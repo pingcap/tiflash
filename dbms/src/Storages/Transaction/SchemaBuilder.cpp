@@ -295,7 +295,8 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
         }
         catch (const Exception & e)
         {
-            throw Exception("Failed to alter table " + orig_table_info.name + ": " + e.message(), ErrorCodes::DDL_ERROR);
+            throw Exception(
+                "Failed to alter table `" + db_info->name + "`.`" + orig_table_info.name + "`: " + e.message(), ErrorCodes::DDL_ERROR);
         }
     }
 
