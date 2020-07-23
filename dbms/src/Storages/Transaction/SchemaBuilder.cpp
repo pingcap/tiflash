@@ -289,7 +289,14 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
         schema_change.second(orig_table_info.columns);
         /// Update schema version aggressively for the sake of correctness.
         orig_table_info.schema_version = target_version;
-        storage->alterFromTiDB(schema_change.first, name_mapper.mapDatabaseName(*db_info), orig_table_info, name_mapper, context);
+        try
+        {
+            storage->alterFromTiDB(schema_change.first, name_mapper.mapDatabaseName(*db_info), orig_table_info, name_mapper, context);
+        }
+        catch (const Exception & e)
+        {
+            throw Exception("Failed to alter table " + orig_table_info.name + ": " + e.message());
+        }
     }
 
     LOG_INFO(log, "Altered table " << name_mapper.debugCanonicalName(*db_info, *table_info));
