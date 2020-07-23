@@ -44,7 +44,7 @@
   },
   "editable": true,
   "gnetId": null,
-  "graphTooltip": 0,
+  "graphTooltip": 1,
   "id": null,
   "iteration": 1582092661543,
   "links": [],
@@ -202,6 +202,7 @@
             {
               "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_retained{instance=~\"$instance\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "retained",
               "refId": "A"
@@ -209,6 +210,7 @@
             {
               "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_mapped{instance=~\"$instance\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "mapped",
               "refId": "B"
@@ -216,6 +218,7 @@
             {
               "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_resident{instance=~\"$instance\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "resident",
               "refId": "C"
@@ -223,6 +226,7 @@
             {
               "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_allocated{instance=~\"$instance\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "allocated",
               "refId": "D"
@@ -230,6 +234,7 @@
             {
               "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_active{instance=~\"$instance\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "active",
               "refId": "E"
@@ -237,6 +242,7 @@
             {
               "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_metadata_thp{instance=~\"$instance\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "metadata_thp",
               "refId": "F"
@@ -244,16 +250,24 @@
             {
               "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_metadata{instance=~\"$instance\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "metadata",
               "refId": "G"
+            },
+            {
+              "expr": "tiflash_proxy_process_resident_memory_bytes{job=\"tiflash\"}",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "{{instance}}",
+              "refId": "H"
             }
           ],
           "thresholds": [],
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Memory Jemalloc",
+          "title": "Memory",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -515,7 +529,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 18
+            "y": 2
           },
           "id": 9,
           "legend": {
@@ -603,7 +617,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 18
+            "y": 2
           },
           "id": 2,
           "legend": {
@@ -690,7 +704,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 25
+            "y": 9
           },
           "id": 11,
           "legend": {
@@ -798,7 +812,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 25
+            "y": 9
           },
           "id": 12,
           "legend": {
@@ -885,7 +899,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 32
+            "y": 16
           },
           "id": 13,
           "legend": {
@@ -993,7 +1007,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 32
+            "y": 16
           },
           "id": 14,
           "legend": {
@@ -1201,7 +1215,7 @@
           "lines": true,
           "linewidth": 1,
           "links": [],
-          "nullPointMode": "connected",
+          "nullPointMode": "null as zero",
           "percentage": false,
           "pointradius": 5,
           "points": false,
@@ -1212,7 +1226,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "avg(rate(tiflash_schema_apply_count{instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "avg(increase(tiflash_schema_apply_count{instance=~\"$instance\"}[1m])) by (type)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{type}}",
@@ -1240,7 +1254,7 @@
           "yaxes": [
             {
               "decimals": null,
-              "format": "none",
+              "format": "opm",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -1301,21 +1315,21 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "avg(rate(tiflash_schema_internal_ddl_count{instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "avg(increase(tiflash_schema_internal_ddl_count{instance=~\"$instance\"}[1m])) by (type)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{type}}",
               "refId": "A"
             },
             {
-              "expr": "sum(rate(tiflash_schema_internal_ddl_count{instance=~\"$instance\"}[1m]))",
+              "expr": "sum(increase(tiflash_schema_internal_ddl_count{instance=~\"$instance\"}[1m]))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "total",
               "refId": "B"
             },
             {
-              "expr": "sum(rate(tiflash_schema_internal_ddl_count{instance=~\"$instance\"}[1m])) by (type,instance)",
+              "expr": "sum(increase(tiflash_schema_internal_ddl_count{instance=~\"$instance\"}[1m])) by (type,instance)",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
@@ -1323,7 +1337,7 @@
               "refId": "C"
             },
             {
-              "expr": "sum(rate(tiflash_schema_internal_ddl_count{instance=~\"$instance\"}[1m])) by (instance)",
+              "expr": "sum(increase(tiflash_schema_internal_ddl_count{instance=~\"$instance\"}[1m])) by (instance)",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
@@ -1352,7 +1366,7 @@
           "yaxes": [
             {
               "decimals": null,
-              "format": "none",
+              "format": "opm",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -1401,7 +1415,7 @@
           "lines": true,
           "linewidth": 1,
           "links": [],
-          "nullPointMode": "connected",
+          "nullPointMode": "null as zero",
           "percentage": false,
           "pointradius": 5,
           "points": false,
@@ -1744,7 +1758,7 @@
               "decimals": null,
               "format": "ops",
               "label": null,
-              "logBase": 10,
+              "logBase": 1,
               "max": null,
               "min": "0",
               "show": true
@@ -1905,7 +1919,7 @@
           "lines": true,
           "linewidth": 1,
           "links": [],
-          "nullPointMode": "connected",
+          "nullPointMode": "null as zero",
           "percentage": false,
           "pointradius": 5,
           "points": false,
@@ -1916,7 +1930,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_storage_page_gc_count{instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(increase(tiflash_storage_page_gc_count{instance=~\"$instance\"}[1m])) by (type)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{type}}",
@@ -1927,7 +1941,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Storage Page GC Tasks Total",
+          "title": "Storage Page GC Tasks OPM",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -1944,9 +1958,9 @@
           "yaxes": [
             {
               "decimals": null,
-              "format": "ops",
+              "format": "opm",
               "label": null,
-              "logBase": 10,
+              "logBase": 1,
               "max": null,
               "min": "0",
               "show": true
@@ -1994,7 +2008,7 @@
           "lines": true,
           "linewidth": 1,
           "links": [],
-          "nullPointMode": "connected",
+          "nullPointMode": "null as zero",
           "percentage": false,
           "pointradius": 5,
           "points": false,
@@ -2436,7 +2450,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 63
+            "y": 5
           },
           "id": 35,
           "legend": {
@@ -2524,7 +2538,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 63
+            "y": 5
           },
           "id": 36,
           "legend": {
@@ -2632,7 +2646,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 70
+            "y": 12
           },
           "id": 37,
           "legend": {
