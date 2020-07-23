@@ -425,18 +425,27 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(tiflash_system_current_metric_OpenFileForWrite{instance=~\"$instance\"})",
+              "expr": "tiflash_proxy_process_open_fds{job=\"tiflash\"}",
               "format": "time_series",
               "intervalFactor": 1,
-              "legendFormat": "Write File Opened",
+              "legendFormat": "{{instance}}",
               "refId": "A"
+            },
+            {
+              "expr": "sum(tiflash_system_current_metric_OpenFileForWrite{instance=~\"$instance\"})",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "Write File Opened",
+              "refId": "B"
             },
             {
               "expr": "sum(tiflash_system_current_metric_OpenFileForRead{instance=~\"$instance\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "Read File Opened",
-              "refId": "B"
+              "refId": "C"
             }
           ],
           "thresholds": [],
@@ -1086,7 +1095,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 40
+            "y": 3
           },
           "id": 17,
           "legend": {
@@ -1175,7 +1184,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 40
+            "y": 3
           },
           "id": 18,
           "legend": {
@@ -1264,7 +1273,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 47
+            "y": 10
           },
           "id": 19,
           "legend": {
@@ -1375,7 +1384,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 47
+            "y": 10
           },
           "id": 20,
           "legend": {
