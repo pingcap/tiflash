@@ -658,6 +658,7 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
     const String & table_name_,
     const OptionTableInfoConstRef table_info,
     const Context & context)
+try
 {
     std::unordered_set<String> cols_drop_forbidden;
     cols_drop_forbidden.insert(EXTRA_HANDLE_COLUMN_NAME);
@@ -728,6 +729,11 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
     if (table_info)
         tidb_table_info = table_info.value();
     setTombstone(tombstone);
+}
+catch (Exception & e)
+{
+    e.addMessage(" database: " + database_name + ", table: " + table_name_);
+    throw;
 }
 
 String StorageDeltaMerge::getName() const { return MutableSupport::delta_tree_storage_name; }
