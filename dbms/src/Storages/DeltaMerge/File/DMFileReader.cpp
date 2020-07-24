@@ -1,9 +1,15 @@
+#include <Common/CurrentMetrics.h>
 #include <DataTypes/IDataType.h>
 #include <IO/ReadBufferFromFile.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 #include <Storages/Page/PageUtil.h>
+
+namespace CurrentMetrics
+{
+extern const Metric OpenFileForRead;
+}
 
 namespace DB
 {
@@ -27,6 +33,8 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
             return res;
         size_t size = sizeof(MarkInCompressedFile) * reader.dmfile->getPacks();
         auto   fd   = PageUtil::openFile<true>(mark_path);
+
+        CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForRead};
         SCOPE_EXIT({ ::close(fd); });
         PageUtil::readFile(fd, 0, reinterpret_cast<char *>(res->data()), size, mark_path);
 
