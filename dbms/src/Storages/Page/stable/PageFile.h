@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/CurrentMetrics.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/stable/Page.h>
 #include <Storages/Page/stable/PageDefines.h>
@@ -13,6 +14,11 @@ namespace Poco
 {
 class Logger;
 } // namespace Poco
+namespace CurrentMetrics
+{
+extern const Metric OpenFileForWrite;
+extern const Metric OpenFileForRead;
+} // namespace CurrentMetrics
 
 namespace DB
 {
