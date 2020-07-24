@@ -133,7 +133,15 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
 
     setColumns(new_columns);
 
-    assert(!handle_column_define.name.empty());
+    if (unlikely(handle_column_define.name.empty()))
+    {
+        std::stringstream ss;
+        ss << "[";
+        for (const auto & k : pks)
+            ss << k << ",";
+        ss << "]";
+        throw Exception("Can not create table without primary key. pks:" + ss.str());
+    }
     assert(!table_column_defines.empty());
     store = std::make_shared<DeltaMergeStore>(global_context, path, data_path_contains_database_name, db_name_, table_name_,
         std::move(table_column_defines), std::move(handle_column_define), DeltaMergeStore::Settings());
@@ -643,8 +651,6 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
     const Context & context)
 {
     std::unordered_set<String> cols_drop_forbidden;
-    for (const auto & n : pk_column_names)
-        cols_drop_forbidden.insert(n);
     cols_drop_forbidden.insert(EXTRA_HANDLE_COLUMN_NAME);
     cols_drop_forbidden.insert(VERSION_COLUMN_NAME);
     cols_drop_forbidden.insert(TAG_COLUMN_NAME);
@@ -660,10 +666,9 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
         }
         else if (command.type == AlterCommand::DROP_COLUMN)
         {
-            // check that drop primary key is forbidden
             // check that drop hidden columns is forbidden
             if (cols_drop_forbidden.count(command.column_name) > 0)
-                throw Exception("Storage engine " + getName() + " doesn't support drop primary key / hidden column: " + command.column_name,
+                throw Exception("Storage engine " + getName() + " doesn't support drop hidden column: " + command.column_name,
                     ErrorCodes::BAD_ARGUMENTS);
         }
         else if (command.type == AlterCommand::TOMBSTONE)
@@ -783,7 +788,6 @@ void updateDeltaMergeTableCreateStatement(                   //
     // We need to update the JSON field in table ast
     // engine = DeltaMerge((CounterID, EventDate), '{JSON format table info}')
     IDatabase::ASTModifier storage_modifier = [&](IAST & ast) {
-        std::shared_ptr<ASTLiteral> literal = std::make_shared<ASTLiteral>(Field(table_info->get().serialize()));
         ASTPtr pk_ast;
         {
             if (pk_names.size() > 1)
@@ -791,13 +795,13 @@ void updateDeltaMergeTableCreateStatement(                   //
                 pk_ast = makeASTFunction("tuple");
                 for (const auto & pk : pk_names)
                 {
-                    pk_ast->children.emplace_back(std::make_shared<ASTLiteral>(pk.column_name));
+                    pk_ast->children.emplace_back(std::make_shared<ASTIdentifier>(pk.column_name));
                 }
             }
             else if (pk_names.size() == 1)
             {
                 pk_ast = std::make_shared<ASTExpressionList>();
-                pk_ast->children.emplace_back(std::make_shared<ASTLiteral>(pk_names[0].column_name));
+                pk_ast->children.emplace_back(std::make_shared<ASTIdentifier>(pk_names[0].column_name));
             }
             else
             {
@@ -805,6 +809,7 @@ void updateDeltaMergeTableCreateStatement(                   //
             }
         }
 
+        std::shared_ptr<ASTLiteral> tableinfo_literal = std::make_shared<ASTLiteral>(Field(table_info->get().serialize()));
         auto tombstone_ast = std::make_shared<ASTLiteral>(Field(tombstone));
 
         auto & storage_ast = typeid_cast<ASTStorage &>(ast);
@@ -816,17 +821,17 @@ void updateDeltaMergeTableCreateStatement(                   //
         }
         if (args.children.size() == 1)
         {
-            args.children.emplace_back(literal);
+            args.children.emplace_back(tableinfo_literal);
             args.children.emplace_back(tombstone_ast);
         }
         else if (args.children.size() == 2)
         {
-            args.children.back() = literal;
+            args.children.back() = tableinfo_literal;
             args.children.emplace_back(tombstone_ast);
         }
         else if (args.children.size() == 3)
         {
-            args.children.at(1) = literal;
+            args.children.at(1) = tableinfo_literal;
             args.children.back() = tombstone_ast;
         }
         else
