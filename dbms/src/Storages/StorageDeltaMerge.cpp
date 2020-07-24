@@ -732,8 +732,12 @@ try
 }
 catch (Exception & e)
 {
-    e.addMessage(
-        " database name: " + database_name + ", table name: " + table_name_ + ", table id: " + DB::toString(table_info.value().get().id));
+    String table_info_msg;
+    if (table_info)
+        table_info_msg = " table name: " + table_name_ + ", table id: " + toString(table_info.value().get().id);
+    else
+        table_info_msg = " table name: " + table_name_ + ", table id: unknown";
+    e.addMessage(table_info_msg);
     throw;
 }
 
