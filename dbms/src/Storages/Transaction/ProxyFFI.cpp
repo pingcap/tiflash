@@ -156,4 +156,49 @@ FileEncryptionInfo TiFlashRaftProxyHelper::renameFile(std::string_view src, std:
     return fn_handle_rename_file(proxy_ptr, src, dst);
 }
 
+struct PreHandleSnapshotRes
+{
+    RegionPtr region;
+};
+
+void * PreHandleSnapshot(
+    TiFlashServer * server, BaseBuffView region_buff, uint64_t peer_id, SnapshotViewArray snaps, uint64_t index, uint64_t term)
+{
+    try
+    {
+        metapb::Region region;
+        region.ParseFromArray(region_buff.data, (int)region_buff.len);
+        auto & kvstore = server->tmt->getKVStore();
+        auto new_region = kvstore->preHandleSnapshot(std::move(region), peer_id, snaps, index, term, *server->tmt);
+        auto res = new PreHandleSnapshotRes{new_region};
+        return res;
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        exit(-1);
+    }
+}
+
+void ApplyPreHandledSnapshot(TiFlashServer * server, void * res)
+{
+    PreHandleSnapshotRes * snap = reinterpret_cast<PreHandleSnapshotRes *>(res);
+    try
+    {
+        auto & kvstore = server->tmt->getKVStore();
+        kvstore->handleApplySnapshot(snap->region, *server->tmt);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        exit(-1);
+    }
+}
+
+void GcPreHandledSnapshot(TiFlashServer *, void * res)
+{
+    PreHandleSnapshotRes * snap = reinterpret_cast<PreHandleSnapshotRes *>(res);
+    delete snap;
+}
+
 } // namespace DB
