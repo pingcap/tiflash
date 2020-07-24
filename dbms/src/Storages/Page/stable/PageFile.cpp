@@ -521,6 +521,7 @@ void PageFile::readAndSetPageMetas(PageEntriesEdit & edit)
     // File not exists.
     if (unlikely(!file_fd))
         return;
+    CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForRead};
     SCOPE_EXIT({ ::close(file_fd); });
 
     char * meta_data = (char *)alloc(file_size);
