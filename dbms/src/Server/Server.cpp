@@ -883,9 +883,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 if (config().has("https_port"))
                 {
 #if Poco_NetSSL_FOUND
+                    Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE, security_config.key_path, security_config.cert_path, security_config.ca_path);
                     std::call_once(ssl_init_once, SSLInit);
 
-                    Poco::Net::SecureServerSocket socket;
+                    Poco::Net::SecureServerSocket socket(context);
                     auto address = socket_bind_listen(socket, listen_host, config().getInt("https_port"), /* secure = */ true);
                     socket.setReceiveTimeout(settings.http_receive_timeout);
                     socket.setSendTimeout(settings.http_send_timeout);
@@ -917,7 +918,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 if (config().has("tcp_port_secure"))
                 {
 #if Poco_NetSSL_FOUND
-                    Poco::Net::SecureServerSocket socket;
+                    Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE, security_config.key_path, security_config.cert_path, security_config.ca_path);
+                    Poco::Net::SecureServerSocket socket(context);
                     auto address = socket_bind_listen(socket, listen_host, config().getInt("tcp_port_secure"), /* secure = */ true);
                     socket.setReceiveTimeout(settings.receive_timeout);
                     socket.setSendTimeout(settings.send_timeout);
