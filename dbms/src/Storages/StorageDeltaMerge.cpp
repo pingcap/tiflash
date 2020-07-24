@@ -732,7 +732,8 @@ try
 }
 catch (Exception & e)
 {
-    e.addMessage(" database: " + database_name + ", table: " + table_name_);
+    e.addMessage(
+        " database name: " + database_name + ", table name: " + table_name_ + ", table id: " + DB::toString(table_info.value().get().id));
     throw;
 }
 
