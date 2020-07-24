@@ -178,8 +178,8 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
     ColumnDataInfoMap column_map(column_names_to_read.size() - MustHaveColCnt + 1, EmptyColumnID);
 
     // visible_column_to_read_lut contains required columns except pk, del and version.
-    ColumnIdToIndex visible_column_to_read_lut;
-    visible_column_to_read_lut.set_empty_key(EmptyColumnID);
+    std::vector<std::pair<ColumnID, size_t>> visible_column_to_read_lut;
+    visible_column_to_read_lut.reserve(table_info.columns.size());
 
     // column_lut contains all columns in the table except pk, del and version.
     ColumnIdToIndex column_lut;
@@ -207,11 +207,13 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
         if (table_info.pk_is_handle && column_info.hasPriKeyFlag())
             handle_col_id = col_id;
         else
-            visible_column_to_read_lut.insert(std::make_pair(col_id, i));
+            visible_column_to_read_lut.push_back(std::make_pair(col_id, i));
     }
 
     if (column_names_to_read.size() - MustHaveColCnt != visible_column_to_read_lut.size())
         throw Exception("schema doesn't contain needed columns.", ErrorCodes::LOGICAL_ERROR);
+
+    std::sort(visible_column_to_read_lut.begin(), visible_column_to_read_lut.end());
 
     if (!table_info.pk_is_handle)
     {
@@ -293,12 +295,15 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                         return std::make_tuple(Block(), false);
                 }
 
+                auto fields_search_it = decoded_fields.begin();
                 for (const auto & id_to_idx : visible_column_to_read_lut)
                 {
-
-                    if (auto it = findByColumnID(id_to_idx.first, decoded_fields); it != decoded_fields.end())
+                    if (fields_search_it = std::find_if(fields_search_it,
+                            decoded_fields.end(),
+                            [&id_to_idx](const DecodedField & e) { return e.col_id >= id_to_idx.first; });
+                        fields_search_it != decoded_fields.end() && fields_search_it->col_id == id_to_idx.first)
                     {
-                        decoded_data.push_back(it);
+                        decoded_data.push_back(fields_search_it++);
                         continue;
                     }
 
