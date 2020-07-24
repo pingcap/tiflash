@@ -18,6 +18,7 @@ namespace ProfileEvents
 {
 extern const Event FileOpen;
 extern const Event FileOpenFailed;
+extern const Event FileFSync;
 extern const Event Seek;
 extern const Event PSMWritePages;
 extern const Event PSMWriteCalls;
@@ -42,6 +43,7 @@ namespace DB::PageUtil
 
 void syncFile(int fd, const std::string & path)
 {
+    ProfileEvents::increment(ProfileEvents::FileFSync);
     if (-1 == ::fsync(fd))
         DB::throwFromErrno("Cannot fsync " + path, ErrorCodes::CANNOT_FSYNC);
 }
