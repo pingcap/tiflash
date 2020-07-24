@@ -199,6 +199,8 @@
     M(DMFlushDeltaCache) \
     M(DMFlushDeltaCacheNS) \
     M(DMCleanReadRows) \
+    \
+    M(FileFSync)
 
 
 namespace ProfileEvents
