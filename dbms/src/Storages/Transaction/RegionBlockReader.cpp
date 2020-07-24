@@ -300,8 +300,8 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                 {
                     if (fields_search_it = std::find_if(fields_search_it,
                             decoded_fields.end(),
-                            [&id_to_idx](const DecodedField & e) { return e.col_id == id_to_idx.first; });
-                        fields_search_it != decoded_fields.end())
+                            [&id_to_idx](const DecodedField & e) { return e.col_id >= id_to_idx.first; });
+                        fields_search_it != decoded_fields.end() && fields_search_it->col_id == id_to_idx.first)
                     {
                         decoded_data.push_back(fields_search_it++);
                         continue;
