@@ -17,11 +17,15 @@ public:
 
     ssize_t write(char * buf, size_t size) override;
 
+    ssize_t  pwrite(char *buf, size_t size, off_t offset) const override;
+
     std::string getFileName() const override { return file->getFileName(); }
 
     int getFd() const override { return file->getFd(); }
 
     void close() override;
+
+    bool isClosed() override {return file->isClosed(); }
 
 private:
     WritableFilePtr file;

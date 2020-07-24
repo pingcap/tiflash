@@ -6,6 +6,7 @@ namespace DB
 LegacyCompactor::LegacyCompactor(const PageStorage & storage)
     : storage_name(storage.storage_name),
       storage_path(storage.storage_path),
+      file_provider(storage.getFileProvider()),
       config(storage.config),
       log(storage.log),
       page_file_log(storage.page_file_log),
@@ -43,7 +44,7 @@ LegacyCompactor::tryCompact( //
     // Use the largest id-level in page_files_to_compact as Checkpoint's file
     const PageFileIdAndLevel checkpoint_id = page_files_to_compact.rbegin()->fileIdLevel();
 
-    if (PageFile::isPageFileExist(checkpoint_id, storage_path, PageFile::Type::Checkpoint, page_file_log))
+    if (PageFile::isPageFileExist(checkpoint_id, storage_path, file_provider, PageFile::Type::Checkpoint, page_file_log))
     {
         LOG_WARNING(log,
                     storage_name << " LegacyCompactor::tryCompact to checkpoint PageFile_" //
@@ -78,7 +79,7 @@ LegacyCompactor::tryCompact( //
     size_t bytes_written = 0;
     if (!info.empty())
     {
-        bytes_written = writeToCheckpoint(storage_path, checkpoint_id, std::move(wb), page_file_log);
+        bytes_written = writeToCheckpoint(storage_path, checkpoint_id, std::move(wb), file_provider, page_file_log);
     }
 
     // Clean up compacted PageFiles from `page_files`
@@ -222,10 +223,11 @@ WriteBatch LegacyCompactor::prepareCheckpointWriteBatch(const PageStorage::Snaps
 size_t LegacyCompactor::writeToCheckpoint(const String &             storage_path,
                                         const PageFileIdAndLevel & file_id,
                                         WriteBatch &&              wb,
+                                        FileProviderPtr & file_provider,
                                         Poco::Logger *             log)
 {
     size_t bytes_written = 0;
-    auto checkpoint_file = PageFile::newPageFile(file_id.first, file_id.second, storage_path, PageFile::Type::Temp, log);
+    auto checkpoint_file = PageFile::newPageFile(file_id.first, file_id.second, storage_path, file_provider, PageFile::Type::Temp, log);
     {
         auto checkpoint_writer = checkpoint_file.createWriter(false);
 

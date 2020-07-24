@@ -91,7 +91,6 @@ private:
     const bool     enable_column_cache;
     ColumnCachePtr column_cache;
 
-
     const size_t rows_threshold_per_read;
 
     size_t next_pack_id = 0;

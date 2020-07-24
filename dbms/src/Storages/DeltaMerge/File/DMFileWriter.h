@@ -5,6 +5,7 @@
 #include <IO/CompressedWriteBuffer.h>
 #include <IO/HashingWriteBuffer.h>
 #include <IO/WriteBufferFromFile.h>
+#include <IO/WriteBufferFromFileProvider.h>
 #include <IO/WriteBufferFromOStream.h>
 #include <IO/createWriteBufferFromFileBase.h>
 #include <Storages/DeltaMerge/File/DMFile.h>

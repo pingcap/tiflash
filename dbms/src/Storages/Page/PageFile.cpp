@@ -234,14 +234,14 @@ void PageFile::MetaMergingReader::initialize()
         return;
     }
 
-    const int fd = PageUtil::openFile<true, false>(path);
+    auto underlying_file = page_file.file_provider->newRandomAccessFile(path);
     // File not exists.
-    if (unlikely(!fd))
+    if (unlikely(underlying_file->getFd() == -1))
         throw Exception("Try to read meta of " + page_file.toString() + ", but open file error. Path: " + path, ErrorCodes::LOGICAL_ERROR);
-    SCOPE_EXIT({ ::close(fd); });
+    SCOPE_EXIT({ underlying_file->close(); });
 
     meta_buffer = (char *)page_file.alloc(meta_size);
-    PageUtil::readFile(fd, 0, meta_buffer, meta_size, path);
+    PageUtil::readFile(underlying_file, 0, meta_buffer, meta_size, path);
     status = Status::Opened;
 }
 
@@ -389,16 +389,16 @@ void PageFile::MetaMergingReader::moveNext()
 // =========================================================
 
 PageFile::Writer::Writer(PageFile & page_file_, bool sync_on_write_)
-    : page_file(page_file_), sync_on_write(sync_on_write_), data_file_path(page_file.dataPath()), meta_file_path(page_file.metaPath())
+    : page_file(page_file_), sync_on_write(sync_on_write_), data_file_path(page_file.dataPath()), meta_file_path(page_file.metaPath()), data_file{page_file.file_provider->newWritableFile(page_file.dataPath())}, meta_file{page_file.file_provider->newWritableFile(page_file.metaPath())}
 {
     // Create data and meta file, prevent empty page folder from being removed by GC.
-    PageUtil::touchFile(data_file_path);
-    PageUtil::touchFile(meta_file_path);
+//    PageUtil::touchFile(data_file_path);
+//    PageUtil::touchFile(meta_file_path);
 }
 
 PageFile::Writer::~Writer()
 {
-    if (!data_file_fd)
+    if (data_file->getFd() == -1)
         return;
 
     closeFd();
@@ -408,12 +408,6 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
 {
     ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
 
-    if (!data_file_fd)
-    {
-        data_file_fd = PageUtil::openFile<false>(data_file_path);
-        meta_file_fd = PageUtil::openFile<false>(meta_file_path);
-    }
-
     // TODO: investigate if not copy data into heap, write big pages can be faster?
     ByteBuffer meta_buf, data_buf;
     std::tie(meta_buf, data_buf) = PageMetaFormat::genWriteData(wb, page_file, edit);
@@ -421,14 +415,15 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
     SCOPE_EXIT({ page_file.free(meta_buf.begin(), meta_buf.size()); });
     SCOPE_EXIT({ page_file.free(data_buf.begin(), data_buf.size()); });
 
-    auto write_buf = [&](int fd, UInt64 offset, const std::string & path, ByteBuffer buf) {
-        PageUtil::writeFile(fd, offset, buf.begin(), buf.size(), path);
+    auto write_buf = [&](WritableFilePtr &file, UInt64 offset, const std::string & path, ByteBuffer buf) {
+        PageUtil::writeFile(file, offset, buf.begin(), buf.size(), path);
         if (sync_on_write)
-            PageUtil::syncFile(fd, path);
+            PageUtil::syncFile(file, path);
     };
 
-    write_buf(data_file_fd, page_file.data_file_pos, data_file_path, data_buf);
-    write_buf(meta_file_fd, page_file.meta_file_pos, meta_file_path, meta_buf);
+    write_buf(data_file, page_file.data_file_pos, data_file_path, data_buf);
+    write_buf(meta_file, page_file.meta_file_pos, meta_file_path, meta_buf);
+    std::cout << data_file_path << " write size " + std::to_string(data_buf.size()) << std::endl;
 
     page_file.data_file_pos += data_buf.size();
     page_file.meta_file_pos += meta_buf.size();
@@ -441,7 +436,7 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
 
 void PageFile::Writer::tryCloseIdleFd(const Seconds & max_idle_time)
 {
-    if (max_idle_time.count() == 0 || !data_file_fd)
+    if (max_idle_time.count() == 0 || data_file->isClosed())
         return;
     if (Clock::now() - last_write_time >= max_idle_time)
         closeFd();
@@ -454,18 +449,16 @@ PageFileIdAndLevel PageFile::Writer::fileIdLevel() const
 
 void PageFile::Writer::closeFd()
 {
-    if (!data_file_fd)
+    if (data_file->isClosed())
         return;
 
     SCOPE_EXIT({
-        ::close(data_file_fd);
-        ::close(meta_file_fd);
-
-        meta_file_fd = 0;
-        data_file_fd = 0;
+        data_file->close();
+        meta_file->close();
     });
-    PageUtil::syncFile(data_file_fd, data_file_path);
-    PageUtil::syncFile(meta_file_fd, meta_file_path);
+    std::cout << "sync file " << data_file_path << std::endl;
+    PageUtil::syncFile(data_file, data_file_path);
+    PageUtil::syncFile(meta_file, meta_file_path);
 }
 
 // =========================================================
@@ -473,13 +466,13 @@ void PageFile::Writer::closeFd()
 // =========================================================
 
 PageFile::Reader::Reader(PageFile & page_file)
-    : data_file_path(page_file.dataPath()), data_file_fd(PageUtil::openFile<true>(data_file_path))
+    : data_file_path(page_file.dataPath()), file{page_file.file_provider->newRandomAccessFile(page_file.dataPath())}
 {
 }
 
 PageFile::Reader::~Reader()
 {
-    ::close(data_file_fd);
+    file->close();
 }
 
 PageMap PageFile::Reader::read(PageIdAndEntries & to_read)
@@ -509,7 +502,7 @@ PageMap PageFile::Reader::read(PageIdAndEntries & to_read)
     PageMap page_map;
     for (const auto & [page_id, entry] : to_read)
     {
-        PageUtil::readFile(data_file_fd, entry.offset, pos, entry.size, data_file_path);
+        PageUtil::readFile(file, entry.offset, pos, entry.size, data_file_path);
 
         if constexpr (PAGE_CHECKSUM_ON_READ)
         {
@@ -560,7 +553,7 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
     {
         auto && [page_id, entry] = *it;
 
-        PageUtil::readFile(data_file_fd, entry.offset, data_buf, entry.size, data_file_path);
+        PageUtil::readFile(file, entry.offset, data_buf, entry.size, data_file_path);
 
         if constexpr (PAGE_CHECKSUM_ON_READ)
         {
@@ -636,7 +629,7 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read)
             // TODO: Continuously fields can read by one system call.
             const auto [beg_offset, end_offset] = entry.getFieldOffsets(field_index);
             const auto size_to_read             = end_offset - beg_offset;
-            PageUtil::readFile(data_file_fd, entry.offset + beg_offset, write_offset, size_to_read, data_file_path);
+            PageUtil::readFile(file, entry.offset + beg_offset, write_offset, size_to_read, data_file_path);
             fields_offset_in_page.emplace(field_index, read_size_this_entry);
 
             if constexpr (PAGE_CHECKSUM_ON_READ)
@@ -680,8 +673,8 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read)
 // PageFile
 // =========================================================
 
-PageFile::PageFile(PageFileId file_id_, UInt32 level_, const std::string & parent_path, PageFile::Type type_, bool is_create, Logger * log_)
-    : file_id(file_id_), level(level_), type(type_), parent_path(parent_path), data_file_pos(0), meta_file_pos(0), log(log_)
+PageFile::PageFile(PageFileId file_id_, UInt32 level_, const std::string & parent_path, const FileProviderPtr & file_provider_, PageFile::Type type_, bool is_create, Logger * log_)
+    : file_id(file_id_), level(level_), type(type_), parent_path(parent_path), file_provider{file_provider_}, data_file_pos(0), meta_file_pos(0), log(log_)
 {
     if (is_create)
     {
@@ -692,7 +685,7 @@ PageFile::PageFile(PageFileId file_id_, UInt32 level_, const std::string & paren
     }
 }
 
-std::pair<PageFile, PageFile::Type> PageFile::recover(const String & parent_path, const String & page_file_name, Logger * log)
+std::pair<PageFile, PageFile::Type> PageFile::recover(const String & parent_path, const FileProviderPtr & file_provider_, const String & page_file_name, Logger * log)
 {
 
     if (!startsWith(page_file_name, folder_prefix_formal) && !startsWith(page_file_name, folder_prefix_temp)
@@ -711,7 +704,7 @@ std::pair<PageFile, PageFile::Type> PageFile::recover(const String & parent_path
 
     PageFileId file_id = std::stoull(ss[1]);
     UInt32     level   = std::stoi(ss[2]);
-    PageFile   pf(file_id, level, parent_path, Type::Formal, /* is_create */ false, log);
+    PageFile   pf(file_id, level, parent_path, file_provider_, Type::Formal, /* is_create */ false, log);
     if (ss[0] == folder_prefix_temp)
     {
         LOG_INFO(log, "Temporary page file, ignored: " + page_file_name);
@@ -762,19 +755,19 @@ std::pair<PageFile, PageFile::Type> PageFile::recover(const String & parent_path
     return {{}, Type::Invalid};
 }
 
-PageFile PageFile::newPageFile(PageFileId file_id, UInt32 level, const std::string & parent_path, PageFile::Type type, Logger * log)
+PageFile PageFile::newPageFile(PageFileId file_id, UInt32 level, const std::string & parent_path, const FileProviderPtr & file_provider_, PageFile::Type type, Logger * log)
 {
-    return PageFile(file_id, level, parent_path, type, true, log);
+    return PageFile(file_id, level, parent_path, file_provider_, type, true, log);
 }
 
-PageFile PageFile::openPageFileForRead(PageFileId file_id, UInt32 level, const std::string & parent_path, PageFile::Type type, Logger * log)
+PageFile PageFile::openPageFileForRead(PageFileId file_id, UInt32 level, const std::string & parent_path, const FileProviderPtr & file_provider_, PageFile::Type type, Logger * log)
 {
-    return PageFile(file_id, level, parent_path, type, false, log);
+    return PageFile(file_id, level, parent_path, file_provider_, type, false, log);
 }
 
-bool PageFile::isPageFileExist(PageFileIdAndLevel file_id, const String & parent_path, Type type, Poco::Logger * log)
+bool PageFile::isPageFileExist(PageFileIdAndLevel file_id, const String & parent_path, const FileProviderPtr & file_provider_, Type type, Poco::Logger * log)
 {
-    PageFile pf = openPageFileForRead(file_id.first, file_id.second, parent_path, type, log);
+    PageFile pf = openPageFileForRead(file_id.first, file_id.second, parent_path, file_provider_, type, log);
     return pf.isExist();
 }
 

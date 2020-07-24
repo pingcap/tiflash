@@ -3,6 +3,7 @@
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <IO/ReadBufferFromFileProvider.h>
 
 namespace DB
 {
@@ -21,7 +22,8 @@ public:
                      UInt64                hash_salt_,
                      const HandleRange &   handle_range_, // filter by handle range
                      const RSOperatorPtr & filter_,       // filter by push down where clause
-                     const IdSetPtr &      read_packs_    // filter by pack index
+                     const IdSetPtr &      read_packs_,   // filter by pack index
+                     const FileProviderPtr & file_provider_
                      )
         : dmfile(dmfile_),
           index_cache(index_cache_),
@@ -29,6 +31,7 @@ public:
           handle_range(handle_range_),
           filter(filter_),
           read_packs(read_packs_),
+          file_provider(file_provider_),
           handle_res(dmfile->getPacks(), RSResult::All),
           use_packs(dmfile->getPacks())
     {
@@ -123,7 +126,7 @@ private:
 
         auto & type = dmfile->getColumnStat(col_id).type;
         auto   load = [&]() {
-            auto index_buf = openForRead(index_path);
+            auto index_buf = ReadBufferFromFileProvider(file_provider, index_path, std::min(static_cast<Poco::File::FileSize>(DBMS_DEFAULT_BUFFER_SIZE), Poco::File(index_path).getSize()));
             return MinMaxIndex::read(*type, index_buf);
         };
         MinMaxIndexPtr minmax_index;
@@ -147,6 +150,7 @@ private:
     HandleRange        handle_range;
     RSOperatorPtr      filter;
     IdSetPtr           read_packs;
+    FileProviderPtr file_provider;
 
     RSCheckParam param;
 
