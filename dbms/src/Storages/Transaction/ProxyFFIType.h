@@ -167,7 +167,7 @@ private:
 
 enum class TiFlashStatus : uint8_t
 {
-    IDL = 0,
+    IDLE = 0,
     Running,
     Stopped,
 };
@@ -201,7 +201,7 @@ struct TiFlashServer
 {
     TMTContext * tmt{nullptr};
     TiFlashRaftProxyHelper * proxy_helper{nullptr};
-    std::atomic<TiFlashStatus> status{TiFlashStatus::IDL};
+    std::atomic<TiFlashStatus> status{TiFlashStatus::IDLE};
 };
 
 TiFlashRawString GenCppRawString(BaseBuffView);
