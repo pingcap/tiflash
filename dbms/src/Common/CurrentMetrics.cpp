@@ -41,7 +41,10 @@
     M(RWLockWaitingReaders) \
     M(RWLockWaitingWriters) \
     M(RWLockActiveReaders) \
-    M(RWLockActiveWriters)
+    M(RWLockActiveWriters) \
+    M(StoreSizeCapacity) \
+    M(StoreSizeAvailable) \
+    M(StoreSizeUsed) \
 
 
 namespace CurrentMetrics
