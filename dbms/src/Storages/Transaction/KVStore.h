@@ -34,7 +34,7 @@ class TMTContext;
 struct SnapshotViewArray;
 struct WriteCmdsView;
 
-enum TiFlashApplyRes : uint32_t;
+enum class TiFlashApplyRes : uint32_t;
 
 /// TODO: brief design document.
 class KVStore final : private boost::noncopyable
