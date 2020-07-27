@@ -885,6 +885,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 /// HTTP
                 if (config().has("http_port"))
                 {
+                    if (security_config.has_tls_config)
+                    {
+                        throw Exception("tls config is set but https_port is not set ", ErrorCodes::INVALID_CONFIG_PARAMETER);
+                    }
                     Poco::Net::ServerSocket socket;
                     auto address = socket_bind_listen(socket, listen_host, config().getInt("http_port"));
                     socket.setReceiveTimeout(settings.http_receive_timeout);
@@ -899,6 +903,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 if (config().has("https_port"))
                 {
 #if Poco_NetSSL_FOUND
+                    if (!security_config.has_tls_config)
+                    {
+                        LOG_ERROR(log, "https_port is set but tls config is not set");
+                    }
                     Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
                         security_config.key_path,
                         security_config.cert_path,
@@ -922,6 +930,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 /// TCP
                 if (config().has("tcp_port"))
                 {
+                    if (security_config.has_tls_config)
+                    {
+                        LOG_ERROR(log, "tls config is set but tcp_port_secure is not set.");
+                    }
                     std::call_once(ssl_init_once, SSLInit);
                     Poco::Net::ServerSocket socket;
                     auto address = socket_bind_listen(socket, listen_host, config().getInt("tcp_port"));
@@ -937,6 +949,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 if (config().has("tcp_port_secure"))
                 {
 #if Poco_NetSSL_FOUND
+                    if (!security_config.has_tls_config)
+                    {
+                        LOG_ERROR(log, "tcp_port_secure is set but tls config is not set");
+                    }
                     Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
                         security_config.key_path,
                         security_config.cert_path,
