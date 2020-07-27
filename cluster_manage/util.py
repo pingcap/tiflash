@@ -38,7 +38,7 @@ def curl_http(uri, params=None):
     if params is None:
         params = {}
     import conf
-    if conf.flash_conf.ca_path != "":
+    if conf.flash_conf.enable_tls and conf.flash_conf.ca_path != "":
         r = requests.get('https://{}'.format(uri), params, timeout=conf.flash_conf.update_rule_interval, verify=conf.flash_conf.ca_path, cert=(conf.flash_conf.cert_path, conf.flash_conf.key_path))
     else:
         r = requests.get('http://{}'.format(uri), params, timeout=conf.flash_conf.update_rule_interval)
@@ -47,7 +47,7 @@ def curl_http(uri, params=None):
 
 def post_http(uri, params):
     import conf
-    if conf.flash_conf.ca_path != "":
+    if conf.flash_conf.enable_tls and conf.flash_conf.ca_path != "":
         r = requests.post('https://{}'.format(uri), json=params, timeout=conf.flash_conf.update_rule_interval, verify=conf.flash_conf.ca_path, cert=(conf.flash_conf.cert_path, conf.flash_conf.key_path))
     else:
         r = requests.post('http://{}'.format(uri), json=params, timeout=conf.flash_conf.update_rule_interval)
@@ -56,7 +56,7 @@ def post_http(uri, params):
 
 def delete_http(uri):
     import conf
-    if conf.flash_conf.ca_path != "":
+    if conf.flash_conf.enable_tls and conf.flash_conf.ca_path != "":
         r = requests.delete('https://{}'.format(uri), timeout=conf.flash_conf.update_rule_interval, verify=conf.flash_conf.ca_path, cert=(conf.flash_conf.cert_path, conf.flash_conf.key_path))
     else:
         r = requests.delete('http://{}'.format(uri), timeout=conf.flash_conf.update_rule_interval)

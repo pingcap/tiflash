@@ -145,7 +145,9 @@ struct TiFlashSecurityConfig
     String key_path;
 
     bool inited = false;
+    bool has_tls_config = false;
     grpc::SslCredentialsOptions options;
+
 public:
     TiFlashSecurityConfig(Poco::Util::LayeredConfiguration & config, Poco::Logger * log)
     {
@@ -177,10 +179,15 @@ public:
             {
                 throw Exception("ca_path, cert_path, key_path must be set at the same time.", ErrorCodes::INVALID_CONFIG_PARAMETER);
             }
+            else
+            {
+                has_tls_config = true;
+            }
         }
     }
 
-    grpc::SslCredentialsOptions ReadAndCacheSecurityInfo() {
+    grpc::SslCredentialsOptions ReadAndCacheSecurityInfo()
+    {
         if (inited)
         {
             return options;
@@ -193,14 +200,15 @@ public:
     }
 
 private:
-    String readFile(const String & filename) {
+    String readFile(const String & filename)
+    {
         if (filename.empty())
         {
             return "";
         }
         auto buffer = createReadBufferFromFileBase(filename, 1024, 0);
         String result;
-        while(!buffer->eof())
+        while (!buffer->eof())
         {
             char buf[1024];
             size_t len = buffer->read(buf, 1024);
@@ -746,11 +754,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::unique_ptr<grpc::Server> flash_grpc_server = nullptr;
     {
         grpc::ServerBuilder builder;
-        grpc::SslServerCredentialsOptions server_cred(GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY);
-        auto options = security_config.ReadAndCacheSecurityInfo();
-        server_cred.pem_root_certs = options.pem_root_certs;
-        server_cred.pem_key_cert_pairs.push_back(grpc::SslServerCredentialsOptions::PemKeyCertPair{options.pem_private_key,options.pem_cert_chain});
-        builder.AddListeningPort(raft_config.flash_server_addr, grpc::SslServerCredentials( server_cred));
+        if (security_config.has_tls_config)
+        {
+            grpc::SslServerCredentialsOptions server_cred(GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY);
+            auto options = security_config.ReadAndCacheSecurityInfo();
+            server_cred.pem_root_certs = options.pem_root_certs;
+            server_cred.pem_key_cert_pairs.push_back(
+                grpc::SslServerCredentialsOptions::PemKeyCertPair{options.pem_private_key, options.pem_cert_chain});
+            builder.AddListeningPort(raft_config.flash_server_addr, grpc::SslServerCredentials(server_cred));
+        }
+        else
+        {
+            builder.AddListeningPort(raft_config.flash_server_addr, grpc::InsecureServerCredentials());
+        }
 
         /// Init and register flash service.
         flash_service = std::make_unique<FlashService>(*this);
@@ -883,7 +899,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 if (config().has("https_port"))
                 {
 #if Poco_NetSSL_FOUND
-                    Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE, security_config.key_path, security_config.cert_path, security_config.ca_path);
+                    Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
+                        security_config.key_path,
+                        security_config.cert_path,
+                        security_config.ca_path);
                     std::call_once(ssl_init_once, SSLInit);
 
                     Poco::Net::SecureServerSocket socket(context);
@@ -918,7 +937,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 if (config().has("tcp_port_secure"))
                 {
 #if Poco_NetSSL_FOUND
-                    Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE, security_config.key_path, security_config.cert_path, security_config.ca_path);
+                    Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
+                        security_config.key_path,
+                        security_config.cert_path,
+                        security_config.ca_path);
                     Poco::Net::SecureServerSocket socket(context);
                     auto address = socket_bind_listen(socket, listen_host, config().getInt("tcp_port_secure"), /* secure = */ true);
                     socket.setReceiveTimeout(settings.receive_timeout);

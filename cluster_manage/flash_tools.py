@@ -30,12 +30,14 @@ class FlashConfig:
         self.update_rule_interval = int(flash_cluster['update_rule_interval'])
         self.log_path = flash_cluster.get('log', '{}/flash_cluster_manager.log'.format(tmp_path))
 
-        security = self.conf_toml['security']
-
-        self.ca_path = security['ca_path']
-        self.key_path = security['key_path']
-        self.cert_path = security['cert_path']
-
+        self.enable_tls = False
+        if 'security' in self.conf_toml:
+            security = self.conf_toml['security']
+            if 'ca_path' in security:
+                self.ca_path = security['ca_path']
+                self.key_path = security['key_path']
+                self.cert_path = security['cert_path']
+                self.enable_tls = True
 
 def main():
     pass
