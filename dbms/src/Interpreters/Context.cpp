@@ -1440,7 +1440,7 @@ void Context::createTMTContext(const std::vector<std::string> & pd_addrs,
                                const std::string & kvstore_path,
                                ::TiDB::StorageEngine engine,
                                bool disable_bg_flush,
-                               const grpc::SslCredentialsOptions & cred_options)
+                               grpc::SslCredentialsOptions cred_options)
 {
     auto lock = getLock();
     if (shared->tmt_context)

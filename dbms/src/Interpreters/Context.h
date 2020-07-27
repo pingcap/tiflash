@@ -385,7 +385,7 @@ public:
                           const std::string & kvstore_path,
                           ::TiDB::StorageEngine engine,
                           bool disable_bg_tasks,
-                          const grpc::SslCredentialsOptions & cred_options);
+                          grpc::SslCredentialsOptions cred_options = {});
 
     void initializeSchemaSyncService();
     SchemaSyncServicePtr & getSchemaSyncService();
