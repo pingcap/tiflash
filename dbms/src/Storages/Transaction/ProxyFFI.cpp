@@ -140,7 +140,7 @@ FsStats HandleComputeFsStats(TiFlashServer * server)
     return res;
 }
 
-uint8_t HandleCheckTiFlashAlive(TiFlashServer * server) { return server->tmt != nullptr; }
+uint8_t HandleGetTiFlashStatus(TiFlashServer * server) { return static_cast<uint8_t>(server->status.load()); }
 
 bool TiFlashRaftProxyHelper::checkServiceStopped() const { return fn_handle_check_service_stopped(proxy_ptr); }
 bool TiFlashRaftProxyHelper::checkEncryptionEnabled() const { return fn_handle_enable_encryption(proxy_ptr); }
