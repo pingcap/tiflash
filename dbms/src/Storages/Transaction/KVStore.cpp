@@ -117,7 +117,11 @@ void KVStore::onSnapshot(RegionPtr new_region, RegionPtr old_region, UInt64 old_
         // try to flush data into ch first.
         try
         {
-            region_table.tryFlushRegion(new_region, false);
+            auto tmp = region_table.tryFlushRegion(new_region, false);
+            {
+                std::lock_guard<std::mutex> lock(bg_gc_region_data_mutex);
+                bg_gc_region_data.push_back(std::move(tmp));
+            }
             tryFlushRegionCacheInStorage(tmt, *new_region, log);
         }
         catch (...)
@@ -169,6 +173,11 @@ void KVStore::tryPersist(const RegionID region_id)
 
 void KVStore::gcRegionCache(Seconds gc_persist_period)
 {
+    decltype(bg_gc_region_data) tmp;
+    {
+        std::lock_guard<std::mutex> lock(bg_gc_region_data_mutex);
+        tmp.swap(bg_gc_region_data);
+    }
     Timepoint now = Clock::now();
     if (now < (last_gc_time.load() + gc_persist_period))
         return;
