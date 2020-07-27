@@ -181,7 +181,7 @@ struct TiFlashServerHelper
     void (*fn_handle_ingest_sst)(TiFlashServer *, SnapshotViewArray, RaftCmdHeader);
     uint8_t (*fn_handle_check_terminated)(TiFlashServer *);
     FsStats (*fn_handle_compute_fs_stats)(TiFlashServer *);
-    uint8_t (*fn_handle_check_tiflash_alive)(TiFlashServer *);
+    uint8_t (*fn_handle_get_tiflash_status)(TiFlashServer *);
     void * (*fn_pre_handle_snapshot)(TiFlashServer *, BaseBuffView, uint64_t, SnapshotViewArray, uint64_t, uint64_t);
     void (*fn_apply_pre_handled_snapshot)(TiFlashServer *, void *);
     void (*fn_gc_pre_handled_snapshot)(TiFlashServer *, void *);
@@ -190,10 +190,18 @@ struct TiFlashServerHelper
 void run_tiflash_proxy_ffi(int argc, const char ** argv, const TiFlashServerHelper *);
 }
 
+enum class TiFlashStatus : uint8_t
+{
+    IDL = 0,
+    Running,
+    Stopped,
+};
+
 struct TiFlashServer
 {
     TMTContext * tmt{nullptr};
     TiFlashRaftProxyHelper * proxy_helper{nullptr};
+    std::atomic<TiFlashStatus> status{TiFlashStatus::IDL};
 };
 
 TiFlashRawString GenCppRawString(BaseBuffView);
@@ -206,7 +214,7 @@ void HandleDestroy(TiFlashServer * server, RegionId region_id);
 void HandleIngestSST(TiFlashServer * server, SnapshotViewArray snaps, RaftCmdHeader header);
 uint8_t HandleCheckTerminated(TiFlashServer * server);
 FsStats HandleComputeFsStats(TiFlashServer * server);
-uint8_t HandleCheckTiFlashAlive(TiFlashServer * server);
+uint8_t HandleGetTiFlashStatus(TiFlashServer * server);
 void * PreHandleSnapshot(
     TiFlashServer * server, BaseBuffView region_buff, uint64_t peer_id, SnapshotViewArray snaps, uint64_t index, uint64_t term);
 void ApplyPreHandledSnapshot(TiFlashServer * server, void * res);
