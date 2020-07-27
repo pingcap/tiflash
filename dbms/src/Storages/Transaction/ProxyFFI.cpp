@@ -35,7 +35,7 @@ const std::string & CFToName(const ColumnFamilyType type)
         case ColumnFamilyType::Lock:
             return ColumnFamilyName::Lock;
         default:
-            throw Exception("Can not tell cf type " + std::to_string(type), ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Can not tell cf type " + std::to_string(static_cast<uint8_t>(type)), ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -140,7 +140,7 @@ FsStats HandleComputeFsStats(TiFlashServer * server)
     return res;
 }
 
-uint8_t HandleGetTiFlashStatus(TiFlashServer * server) { return static_cast<uint8_t>(server->status.load()); }
+TiFlashStatus HandleGetTiFlashStatus(TiFlashServer * server) { return server->status.load(); }
 
 bool TiFlashRaftProxyHelper::checkServiceStopped() const { return fn_handle_check_service_stopped(proxy_ptr); }
 bool TiFlashRaftProxyHelper::checkEncryptionEnabled() const { return fn_handle_enable_encryption(proxy_ptr); }
