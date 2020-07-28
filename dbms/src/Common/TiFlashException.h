@@ -1,11 +1,11 @@
 #pragma once
 
 #include <Common/Exception.h>
-#include <Core/Types.h>
 
 #include <map>
 #include <memory>
 #include <optional>
+#include <string>
 
 namespace DB
 {
@@ -14,10 +14,10 @@ namespace DB
 /// which contains all information about an error except message.
 struct TiFlashError
 {
-    const String error_class;
-    const String error_code;
-    const String description;
-    const String workaround;
+    const std::string error_class;
+    const std::string error_code;
+    const std::string description;
+    const std::string workaround;
 };
 
 /// TiFlashErrorRegistry will registers and checks all errors when TiFlash startup
@@ -31,22 +31,56 @@ public:
         return registry;
     }
 
-    std::optional<TiFlashError> get(const String & error_class, const String & error_code) const;
+    static TiFlashError simpleGet(const std::string & error_class, const std::string & error_code)
+    {
+        auto instance = getInstance();
+        auto error = instance.get(error_class, error_code);
+        if (error.has_value())
+        {
+            return error.value();
+        }
+        else
+        {
+            throw Exception("Unregistered TiFlashError: FLASH:" + error_class + ":" + error_code);
+        }
+    }
 
-    std::optional<TiFlashError> get(const String & error_class, const Int32 & error_code) const;
+    static TiFlashError simpleGet(const std::string & error_class, int error_code)
+    {
+        return simpleGet(error_class, std::to_string(error_code));
+    }
+
+    std::optional<TiFlashError> get(const std::string & error_class, const std::string & error_code) const
+    {
+        auto error = all_errors.find({error_class, error_code});
+        if (error != all_errors.end())
+        {
+            return error->second;
+        }
+        else
+        {
+            return {};
+        }
+    }
+
+    std::optional<TiFlashError> get(const std::string & error_class, int error_code) const
+    {
+        return get(error_class, std::to_string(error_code));
+    }
 
 private:
-    TiFlashErrorRegistry() {}
+    TiFlashErrorRegistry() { initialize(); }
 
-    void registerError(const String & error_class, const String & error_code, const String & description, const String & workaround);
+    void registerError(
+        const std::string & error_class, const std::string & error_code, const std::string & description, const std::string & workaround);
 
     void registerErrorWithNumericCode(
-        const String & error_class, const Int32 & error_code, const String & description, const String & workaround);
+        const std::string & error_class, int error_code, const std::string & description, const std::string & workaround);
 
     void initialize();
 
 private:
-    std::map<std::pair<String, String>, TiFlashError> all_errors;
+    std::map<std::pair<std::string, std::string>, TiFlashError> all_errors;
 };
 
 /// TiFlashException implements TiDB's standardized error.
@@ -54,10 +88,28 @@ private:
 class TiFlashException : public Exception
 {
 public:
-    TiFlashException(const String & _msg, const TiFlashError & _error) : msg(_msg), error(_error) {}
+    TiFlashException(const std::string & _msg, const TiFlashError & _error) : Exception(_msg), error(_error) {}
+
+    const char * name() const throw() override { return "DB::TiFlashException"; }
+    const char * className() const throw() override { return "DB::TiFlashException"; }
+
+    TiFlashError getError() const { return error; }
+
+    std::string displayText() const
+    {
+        std::string text = name();
+        if (!message().empty())
+        {
+            text.append(": ");
+            text.append("[");
+            text.append("FLASH:" + error.error_class + ":" + error.error_code);
+            text.append("] ");
+            text.append(message());
+        }
+        return text;
+    }
 
 private:
-    String msg;
     TiFlashError error;
 };
 
