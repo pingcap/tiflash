@@ -200,7 +200,11 @@
     M(DMFlushDeltaCacheNS) \
     M(DMCleanReadRows) \
     \
-    M(FileFSync)
+    M(FileFSync) \
+    \
+    M(DMFileFilterNoFilter) \
+    M(DMFileFilterAftPKAndPackSet) \
+    M(DMFileFilterAftRoughSet)
 
 
 namespace ProfileEvents
