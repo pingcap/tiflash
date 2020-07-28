@@ -426,7 +426,7 @@ public:
     std::pair<size_t, size_t> getPosRange(const Block & block, const size_t offset, const size_t limit) const
     {
         size_t start_index
-            = (is_infinite[START_INDEX] || check(block, offset)) ? offset : lowerBound(*pk, block, offset, limit, columns, START_INDEX);
+            = (is_infinite[START_INDEX] || check(block, offset)) ? offset : lowerBound(*pk, block, offset, offset + limit, columns, START_INDEX);
         size_t end_index = (is_infinite[END_INDEX] || check(block, offset + limit))
             ? offset + limit
             : lowerBound(*pk, block, offset, offset + limit, columns, END_INDEX);
