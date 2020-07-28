@@ -46,7 +46,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1582092661543,
+  "iteration": 1595916828338,
   "links": [],
   "panels": [
     {
@@ -2448,12 +2448,12 @@
           },
           "id": 39,
           "legend": {
-            "alignAsTable": false,
+            "alignAsTable": true,
             "avg": false,
             "current": false,
             "max": false,
             "min": false,
-            "rightSide": false,
+            "rightSide": true,
             "show": true,
             "total": false,
             "values": false
