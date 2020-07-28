@@ -22,6 +22,7 @@
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/CHTableHandle.h>
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/LearnerRead.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/SchemaSyncer.h>
@@ -296,6 +297,33 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     TableID table_id = ts.table_id();
 
     const Settings & settings = context.getSettingsRef();
+    auto & tmt = context.getTMTContext();
+
+    // Learner read should be done without table's structure lock
+    auto current_region = tmt.getKVStore()->getRegion(dag.getRegionID());
+    auto region_read_status = getRegionReadStatus(current_region);
+    if (region_read_status != RegionException::OK)
+    {
+        std::vector<RegionID> region_ids;
+        region_ids.push_back(dag.getRegionID());
+        LOG_WARNING(log, __PRETTY_FUNCTION__ << " Meet region exception for region " << dag.getRegionID());
+        throw RegionException(std::move(region_ids), region_read_status);
+    }
+
+    auto mvcc_query_info = std::make_unique<MvccQueryInfo>();
+    mvcc_query_info->resolve_locks = true;
+    mvcc_query_info->read_tso = settings.read_tso;
+    // We need to validate regions snapshot after getting streams from storage.
+    LearnerReadSnapshot learner_read_snapshot;
+    RegionQueryInfo info;
+    info.region_id = dag.getRegionID();
+    info.version = dag.getRegionVersion();
+    info.conf_version = dag.getRegionConfVersion();
+    info.range_in_table = current_region->getHandleRangeByTable(table_id);
+    mvcc_query_info->regions_query_info.push_back(info);
+    mvcc_query_info->concurrent = 1.0;
+    learner_read_snapshot = doLearnerRead(table_id, *mvcc_query_info, max_streams, tmt, log);
+
 
     if (settings.schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION)
     {
@@ -346,15 +374,6 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     if (handle_col_id == -1)
         handle_col_id = required_columns.size();
 
-    auto current_region = context.getTMTContext().getKVStore()->getRegion(dag.getRegionID());
-    auto region_read_status = getRegionReadStatus(current_region);
-    if (region_read_status != RegionException::OK)
-    {
-        std::vector<RegionID> region_ids;
-        region_ids.push_back(dag.getRegionID());
-        LOG_WARNING(log, __PRETTY_FUNCTION__ << " Meet region exception for region " << dag.getRegionID());
-        throw RegionException(std::move(region_ids), region_read_status);
-    }
     const bool pk_is_uint64 = storage->getPKType() == IManageableStorage::PKType::UINT64;
     if (!checkKeyRanges(dag.getKeyRanges(), table_id, pk_is_uint64, current_region->getRange(), handle_col_id, handle_filter_expr))
     {
@@ -422,19 +441,12 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     // set query to avoid unexpected NPE
     query_info.query = dag.getAST();
     query_info.dag_query = std::make_unique<DAGQueryInfo>(conditions, analyzer->getPreparedSets(), analyzer->getCurrentInputColumns());
-    query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>();
-    query_info.mvcc_query_info->resolve_locks = true;
-    query_info.mvcc_query_info->read_tso = settings.read_tso;
-    RegionQueryInfo info;
-    info.region_id = dag.getRegionID();
-    info.version = dag.getRegionVersion();
-    info.conf_version = dag.getRegionConfVersion();
-    info.range_in_table = current_region->getHandleRangeByTable(table_id);
-    query_info.mvcc_query_info->regions_query_info.push_back(info);
-    query_info.mvcc_query_info->concurrent = 0.0;
+    query_info.mvcc_query_info = std::move(mvcc_query_info);
     try
     {
         pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
+        // After getting streams from storage, we need to validate if regions have changed after learner read.
+        validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
     }
     catch (DB::Exception & e)
     {

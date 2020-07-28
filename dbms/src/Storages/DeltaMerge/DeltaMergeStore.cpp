@@ -795,7 +795,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
     };
 
     GET_METRIC(dm_context->metrics, tiflash_storage_read_tasks_count).Increment(tasks.size());
-    size_t final_num_stream = std::min(num_streams, tasks.size());
+    size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
     auto   read_task_pool   = std::make_shared<SegmentReadTaskPool>(std::move(tasks));
 
     BlockInputStreams res;

@@ -38,6 +38,8 @@
 #include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
+#include <Storages/Transaction/LearnerRead.h>
+#include <Storages/Transaction/StorageEngineType.h>
 
 #include <Storages/IStorage.h>
 #include <Storages/StorageMergeTree.h>
@@ -845,7 +847,36 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
         }
 
         if (!dry_run)
+        {
+            LearnerReadSnapshot learner_read_snapshot;
+            // TODO: Note that we should do learner read without holding table's structure lock,
+            // or there will be deadlocks between learner read and raft threads (#815).
+            // Here we do not follow the rule because this is not use in production environment 
+            // and it is hard to move learner read before acuqiring table's lock.
+
+            // Do learner read only For DeltaTree.
+            auto & tmt = context.getTMTContext();
+            if (auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
+                managed_storage && managed_storage->engineType() == TiDB::StorageEngine::DT)
+            {
+                if (const ASTSelectQuery * select_query = typeid_cast<const ASTSelectQuery *>(query_info.query.get()))
+                {
+                    // With `no_kvsotre` is true, we do not do learner read
+                    if (likely(!select_query->no_kvstore))
+                    {
+                        auto table_info = managed_storage->getTableInfo();
+                        learner_read_snapshot = doLearnerRead(table_info.id, *query_info.mvcc_query_info, max_streams, tmt, log);
+                    }
+                }
+            }
+
             pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
+
+            if (!learner_read_snapshot.empty())
+            {
+                validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
+            }
+        }
 
         if (pipeline.streams.empty())
             pipeline.streams.emplace_back(std::make_shared<NullBlockInputStream>(storage->getSampleBlockForColumns(required_columns)));
