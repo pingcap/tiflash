@@ -23,7 +23,7 @@ class KVStoreTaskLock;
 class Context;
 class TMTContext;
 struct WriteCmdsView;
-enum TiFlashApplyRes : uint32_t;
+enum class TiFlashApplyRes : uint32_t;
 struct SnapshotViewArray;
 
 /// Store all kv data of one region. Including 'write', 'data' and 'lock' column families.
