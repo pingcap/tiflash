@@ -9,7 +9,7 @@ struct ColumnFamilyName
     const static std::string Write;
 };
 
-enum ColumnFamilyType : uint8_t
+enum class ColumnFamilyType : uint8_t
 {
     Lock = 0,
     Write,

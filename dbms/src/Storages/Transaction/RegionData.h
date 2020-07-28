@@ -12,7 +12,7 @@ using RegionWriteCFData = RegionCFDataBase<RegionWriteCFDataTrait>;
 using RegionDefaultCFData = RegionCFDataBase<RegionDefaultCFDataTrait>;
 using RegionLockCFData = RegionCFDataBase<RegionLockCFDataTrait>;
 
-enum ColumnFamilyType : uint8_t;
+enum class ColumnFamilyType : uint8_t;
 
 class RegionData
 {
