@@ -4,6 +4,7 @@
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Common/TiFlashException.h>
 
 #include <IO/WriteHelpers.h>
 
@@ -83,7 +84,7 @@ void readFile(int fd, const off_t offset, const char * buf, size_t expected_byte
     ProfileEvents::increment(ProfileEvents::PSMReadBytes, bytes_read);
 
     if (unlikely(bytes_read != expected_bytes))
-        throw DB::Exception("Not enough data in file " + path, ErrorCodes::FILE_SIZE_NOT_MATCH);
+        throw DB::TiFlashException("Not enough data in file " + path, TiFlashErrorRegistry::simpleGet("PageStorage", "FileSizeNotMatch"));
 }
 
 } // namespace DB::PageUtil

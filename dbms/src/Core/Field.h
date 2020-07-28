@@ -7,6 +7,7 @@
 
 #include <Common/Decimal.h>
 #include <Common/Exception.h>
+#include <Common/TiFlashException.h>
 #include <Common/UInt128.h>
 #include <Core/Defines.h>
 #include <Core/Types.h>
@@ -74,7 +75,7 @@ public:
         }
         if (v > std::numeric_limits<U>::max() || v < std::numeric_limits<U>::min())
         {
-            throw Exception("Decimal value overflow", ErrorCodes::DECIMAL_OVERFLOW_ERROR);
+            throw TiFlashException("Decimal value overflow", TiFlashErrorRegistry::simpleGet("Decimal", "Overflow"));
         }
         return static_cast<U>(v);
     }

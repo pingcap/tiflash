@@ -1,3 +1,4 @@
+#include <Common/TiFlashException.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/CoprocessorBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
@@ -973,9 +974,9 @@ void DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVersion(TableID table_
         auto storage_schema_version = storage_->getTableInfo().schema_version;
         // Not allow storage > query in any case, one example is time travel queries.
         if (storage_schema_version > query_schema_version)
-            throw Exception("Table " + std::to_string(table_id) + " schema version " + std::to_string(storage_schema_version)
+            throw TiFlashException("Table " + std::to_string(table_id) + " schema version " + std::to_string(storage_schema_version)
                     + " newer than query schema version " + std::to_string(query_schema_version),
-                ErrorCodes::SCHEMA_VERSION_ERROR);
+                TiFlashErrorRegistry::simpleGet("TableSchema", "SchemaVersionError"));
         // From now on we have storage <= query.
         // If schema was synced, it implies that global >= query, as mentioned above we have storage <= query, we are OK to serve.
         if (schema_synced)
