@@ -70,14 +70,13 @@ public:
 
     static std::vector<String> getExtraPaths(const std::vector<String> & testdata_path = {})
     {
+        std::vector<String> result;
         if (!testdata_path.empty())
-            return testdata_path;
+            for (const auto & p : testdata_path)
+                result.push_back(p + "/data/");
         else
-        {
-            std::vector<String> result;
             result.push_back(getTemporaryPath() + "/data/");
-            return result;
-        }
+        return result;
     }
 
     static void setupLogger(const String & level = "trace")
@@ -135,7 +134,7 @@ public:
             context.getTMTContext().restore();
         }
         context.getSettingsRef() = settings;
-        context.setExtraPaths(getExtraPaths(), context.getPathCapacity());
+        context.setExtraPaths(getExtraPaths(testdata_path), context.getPathCapacity());
         return context;
     }
 };
