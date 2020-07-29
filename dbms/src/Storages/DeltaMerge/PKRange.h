@@ -427,7 +427,7 @@ public:
     {
         size_t start_index
             = (is_infinite[START_INDEX] || check(block, offset)) ? offset : lowerBound(*pk, block, offset, offset + limit, columns, START_INDEX);
-        size_t end_index = (is_infinite[END_INDEX] || check(block, offset + limit))
+        size_t end_index = (is_infinite[END_INDEX] || check(block, offset + limit - 1))
             ? offset + limit
             : lowerBound(*pk, block, offset, offset + limit, columns, END_INDEX);
 
