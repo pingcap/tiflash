@@ -43,7 +43,7 @@ public:
     // TODO: get flusher args from config file
     explicit TMTContext(Context & context, const std::vector<std::string> & addrs, const std::string & learner_key,
         const std::string & learner_value, const std::unordered_set<std::string> & ignore_databases_, const std::string & kv_store_path,
-        TiDB::StorageEngine engine_, bool disable_bg_flush_);
+        TiDB::StorageEngine engine_, bool disable_bg_flush_, const grpc::SslCredentialsOptions & cred_options);
 
     SchemaSyncerPtr getSchemaSyncer() const;
     void setSchemaSyncer(SchemaSyncerPtr);
