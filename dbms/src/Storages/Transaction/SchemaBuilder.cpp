@@ -716,7 +716,8 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(TiDB::DBInfoPtr db_inf
     LOG_INFO(log, "Creating database " << name_mapper.debugDatabaseName(*db_info));
     auto mapped = name_mapper.mapDatabaseName(*db_info);
     if (isReservedDatabase(context, mapped))
-        throw Exception("Database " + name_mapper.debugDatabaseName(*db_info) + " is reserved", ErrorCodes::DDL_ERROR);
+        throw TiFlashException(
+            "Database " + name_mapper.debugDatabaseName(*db_info) + " is reserved", TiFlashErrorRegistry::simpleGet("DDL", "Internal"));
 
     const String statement = "CREATE DATABASE IF NOT EXISTS " + backQuoteIfNeed(mapped) + " ENGINE = TiFlash('" + db_info->serialize()
         + "', " + DB::toString(DatabaseTiFlash::CURRENT_VERSION) + ")";
@@ -836,7 +837,8 @@ String createTableStmt(const DBInfo & db_info, const TableInfo & table_info, con
     }
     else
     {
-        throw Exception("Unknown engine type : " + toString(static_cast<int32_t>(table_info.engine_type)), ErrorCodes::DDL_ERROR);
+        throw TiFlashException("Unknown engine type : " + toString(static_cast<int32_t>(table_info.engine_type)),
+            TiFlashErrorRegistry::simpleGet("DDL", "Internal"));
     }
 
     return stmt;

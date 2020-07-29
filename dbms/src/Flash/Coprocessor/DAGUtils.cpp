@@ -1,3 +1,4 @@
+#include <Common/TiFlashException.h>
 #include <Core/Types.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
@@ -84,12 +85,12 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
             else if (field.getType() == Field::Types::Decimal256)
                 return field.get<DecimalField<Decimal256>>().toString();
             else
-                throw Exception("Not decimal literal" + expr.DebugString(), ErrorCodes::COP_BAD_DAG_REQUEST);
+                throw TiFlashException("Not decimal literal" + expr.DebugString(), TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
         }
         case tipb::ExprType::MysqlTime:
         {
             if (!expr.has_field_type() || (expr.field_type().tp() != TiDB::TypeDate && expr.field_type().tp() != TiDB::TypeDatetime))
-                throw Exception("Invalid MySQL Time literal " + expr.DebugString(), ErrorCodes::COP_BAD_DAG_REQUEST);
+                throw TiFlashException("Invalid MySQL Time literal " + expr.DebugString(), TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
             auto t = decodeDAGUInt64(expr.val());
             // TODO: Use timezone in DAG request.
             return std::to_string(TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field().get<Int64>());
@@ -237,7 +238,7 @@ Field decodeLiteral(const tipb::Expr & expr)
         case tipb::ExprType::MysqlTime:
         {
             if (!expr.has_field_type() || (expr.field_type().tp() != TiDB::TypeDate && expr.field_type().tp() != TiDB::TypeDatetime))
-                throw Exception("Invalid MySQL Time literal " + expr.DebugString(), ErrorCodes::COP_BAD_DAG_REQUEST);
+                throw TiFlashException("Invalid MySQL Time literal " + expr.DebugString(), TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
             auto t = decodeDAGUInt64(expr.val());
             // TODO: Use timezone in DAG request.
             return TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field();
@@ -260,7 +261,7 @@ String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<Nam
     auto column_index = decodeDAGInt64(expr.val());
     if (column_index < 0 || column_index >= (Int64)input_col.size())
     {
-        throw Exception("Column index out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
+        throw TiFlashException("Column index out of bound", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
     }
     return input_col[column_index].name;
 }

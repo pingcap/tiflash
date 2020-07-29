@@ -44,7 +44,7 @@ void TiFlashErrorRegistry::initialize()
         /* Description */ "Some files' size don't match their metadata.",
         /* Workaround */
         "This is a critical error which should rarely occur, please report it to https://asktug.com, "
-        "better with information about your cluster(log, topology information etc.).");
+        "better providing information about your cluster(log, topology information etc.).");
 
     registerError(TableSchema, "SchemaVersionError", //
         /* Description */ "Schema version of target table in TiFlash is different from that in query.",
@@ -57,13 +57,13 @@ void TiFlashErrorRegistry::initialize()
         /* Description */ "Schema synchronize error.",
         /* Workaround */
         "This is a critical error which should rarely occur, please report it to https://asktug.com, "
-        "better with information about your cluster(log, topology information etc.).");
+        "better providing information about your cluster(log, topology information etc.).");
 
     registerError(Decimal, "Overflow", //
         /* Description */ "Decimal value overflow.",
         /* Workaround */
         "This error will occur when TiFlash is trying to convert an value to decimal type that can't fit the value. "
-        "It's usually caused by invalid DDL operation or invalid CAST expression, please check your SQL statement.");
+        "It's usually caused by invalid DDL operation or invalid CAST expression, please check your SQL statement. ");
 
     registerError(DDL, "MissingTable", //
         /* Description */ "Table information is missing in TiFlash or TiKV.",
@@ -72,14 +72,33 @@ void TiFlashErrorRegistry::initialize()
         "for example a table has been dropped in TiKV while hasn't been dropped in TiFlash yet(since DDL operation is asynchronized). "
         "TiFlash will keep retrying to synchronize all schemas, so you don't need to take it too serious. "
         "If there are massive MissingTable errors, please report it to https://asktug.com, "
-        "better with information about your cluster(log, topology information etc.).");
+        "better providing information about your cluster(log, topology information etc.).");
 
     registerError(DDL, "TableTypeNotMatch", //
         /* Description */ "Table type in TiFlash is different from that in TiKV.",
         /* Workaround */
         "This error will occur when there is difference of schema information between TiKV and TiFlash. "
         "Please report it to https://asktug.com, "
-        "better with information about your cluster(log, topology information etc.).");
+        "better providing information about your cluster(log, topology information etc.).");
+
+    registerError(DDL, "ExchangePartitionError", //
+        /* Description */ "EXCHANGE PARTITION error.",
+        /* Workaround */
+        "Please report it to https://asktug.com, "
+        "better providing information about your cluster(log, topology information etc.).");
+
+    registerError(DDL, "Internal", //
+        /* Description */ "TiFlash DDL internal error.",
+        /* Workaround */
+        "Please report it to https://asktug.com, "
+        "better providing information about your cluster(log, topology information etc.).");
+
+    registerError(Coprocessor, "BadRequest", //
+        /* Description */ "Bad TiDB coprocessor request.",
+        /* Workaround */
+        "This error is usually caused by incorrect TiDB DAGRequest. "
+        "Please report it to https://asktug.com, "
+        "better providing information about your cluster(log, topology information etc.).");
 }
 
 void TiFlashErrorRegistry::registerError(

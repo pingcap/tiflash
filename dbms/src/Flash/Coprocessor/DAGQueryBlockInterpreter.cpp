@@ -305,11 +305,11 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     if (!ts.has_table_id())
     {
         // do not have table id
-        throw Exception("Table id not specified in table scan executor", ErrorCodes::COP_BAD_DAG_REQUEST);
+        throw TiFlashException("Table id not specified in table scan executor", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
     }
     if (dag.getRegions().empty())
     {
-        throw Exception("Dag Request does not have region to read. ", ErrorCodes::COP_BAD_DAG_REQUEST);
+        throw TiFlashException("Dag Request does not have region to read. ", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
     }
 
     TableID table_id = ts.table_id();
@@ -427,7 +427,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
                 if ((size_t)i >= required_columns.size())
                 {
                     // array index out of bound
-                    throw Exception("Output offset index is out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
+                    throw TiFlashException("Output offset index is out of bound", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
                 }
                 // do not have alias
                 final_project.emplace_back(required_columns[i], "");
@@ -624,7 +624,7 @@ void getJoinKeyTypes(const tipb::Join & join, DataTypes & key_types)
     for (int i = 0; i < join.left_join_keys().size(); i++)
     {
         if (!exprHasValidFieldType(join.left_join_keys(i)) || !exprHasValidFieldType(join.right_join_keys(i)))
-            throw Exception("Join key without field type", ErrorCodes::COP_BAD_DAG_REQUEST);
+            throw TiFlashException("Join key without field type", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
         DataTypes types;
         types.emplace_back(getDataTypeByFieldType(join.left_join_keys(i).field_type()));
         types.emplace_back(getDataTypeByFieldType(join.right_join_keys(i).field_type()));
@@ -673,7 +673,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
 
     auto join_type_it = join_type_map.find(join.join_type());
     if (join_type_it == join_type_map.end())
-        throw Exception("Unknown join type in dag request", ErrorCodes::COP_BAD_DAG_REQUEST);
+        throw TiFlashException("Unknown join type in dag request", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
     ASTTableJoin::Kind kind = join_type_it->second;
 
     BlockInputStreams left_streams;
@@ -737,7 +737,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
             if (removeNullable(join_key_types[i])->isString())
             {
                 if (join.probe_types(i).collate() != join.build_types(i).collate())
-                    throw Exception("Join with different collators on the join key", ErrorCodes::COP_BAD_DAG_REQUEST);
+                    throw TiFlashException("Join with different collators on the join key", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
                 collators.push_back(getCollatorFromFieldType(join.probe_types(i)));
             }
             else
@@ -1190,7 +1190,7 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
     // in parellel, but current remote query is running in
     // parellel, so just disable this corner case.
     if (query_block.aggregation || query_block.limitOrTopN)
-        throw Exception("Remote query containing agg or limit or topN is not supported", ErrorCodes::COP_BAD_DAG_REQUEST);
+        throw TiFlashException("Remote query containing agg or limit or topN is not supported", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
     const auto & ts = query_block.source->tbl_scan();
     std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
     for (auto & range : ts.ranges())

@@ -46,7 +46,7 @@ void collectOutPutFieldTypesFromAgg(std::vector<tipb::FieldType> & field_type, c
     {
         if (!exprHasValidFieldType(expr))
         {
-            throw Exception("Agg expression without valid field type", ErrorCodes::COP_BAD_DAG_REQUEST);
+            throw TiFlashException("Agg expression without valid field type", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
         }
         field_type.push_back(expr.field_type());
     }
@@ -54,7 +54,7 @@ void collectOutPutFieldTypesFromAgg(std::vector<tipb::FieldType> & field_type, c
     {
         if (!exprHasValidFieldType(expr))
         {
-            throw Exception("Group by expression without valid field type", ErrorCodes::COP_BAD_DAG_REQUEST);
+            throw TiFlashException("Group by expression without valid field type", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
         }
         field_type.push_back(expr.field_type());
     }
@@ -100,14 +100,14 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_)
     }
 
     if (!current->has_executor_id())
-        throw Exception("Tree struct based executor must have executor id", ErrorCodes::COP_BAD_DAG_REQUEST);
+        throw TiFlashException("Tree struct based executor must have executor id", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
 
     assignOrThrowException(&source, current, SOURCE_NAME);
     source_name = current->executor_id();
     if (current->tp() == tipb::ExecType::TypeJoin)
     {
         if (source->join().children_size() != 2)
-            throw Exception("Join executor children size not equal to 2", ErrorCodes::COP_BAD_DAG_REQUEST);
+            throw TiFlashException("Join executor children size not equal to 2", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
         children.push_back(std::make_shared<DAGQueryBlock>(id * 2, source->join().children(0)));
         children.push_back(std::make_shared<DAGQueryBlock>(id * 2 + 1, source->join().children(1)));
     }
