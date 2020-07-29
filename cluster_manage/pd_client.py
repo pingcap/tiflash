@@ -37,6 +37,12 @@ class EtcdClient:
     def get_by_prefix(self, prefix):
         return self.client.get_prefix(prefix)
 
+    def get(self, key):
+        return self.client.get(key)
+
+    def put(self, key, val):
+        return self.client.put(key, val)
+
     def update(self, key, value, ttl=conf.flash_conf.cluster_master_ttl):
         ori_val, meta = self.client.get(key)
         if ori_val is None or value != str(ori_val, encoding="utf8"):
@@ -58,42 +64,42 @@ class PDClient:
 
     def get_all_regions_json(self):
         r = util.curl_http('{}/{}/{}/regions'.format(self.leader, PDClient.PD_API_PREFIX, PDClient.PD_API_VERSION))
-        return r.json()
+        return util.try_get_json(r)
 
     def get_regions_by_key_json(self, key: str, limit=16):
         r = util.curl_http(
             '{}/{}/{}/regions/key'.format(self.leader, PDClient.PD_API_PREFIX, PDClient.PD_API_VERSION),
             {'key': key, 'limit': limit})
-        return r.json()
+        return util.try_get_json(r)
 
     def get_region_by_id_json(self, region_id: int):
         r = util.curl_http(
             '{}/{}/{}/region/id/{}'.format(self.leader, PDClient.PD_API_PREFIX, PDClient.PD_API_VERSION, region_id))
-        return r.json()
+        return util.try_get_json(r)
 
     def get_all_stores_json(self):
         r = util.curl_http(
             '{}/{}/{}/stores'.format(self.leader, PDClient.PD_API_PREFIX, PDClient.PD_API_VERSION))
-        return r.json()
+        return util.try_get_json(r)
 
     def get_members_json(self, *args):
         url = args[0] if args else self.leader
         r = util.curl_http(
             '{}/{}/{}/members'.format(url, PDClient.PD_API_PREFIX, PDClient.PD_API_VERSION))
-        return r.json()
+        return util.try_get_json(r)
 
     def get_stats_region_by_range_json(self, start_key, end_key):
         r = util.curl_http(
             '{}/{}/{}/stats/region'.format(self.leader, PDClient.PD_API_PREFIX, PDClient.PD_API_VERSION),
             {'start_key': start_key, 'end_key': end_key},
         )
-        return r.json()
+        return util.try_get_json(r)
 
     def get_group_rules(self, group):
         r = util.curl_http(
             '{}/{}/{}/config/rules/group/{}'.format(self.leader, PDClient.PD_API_PREFIX, PDClient.PD_API_VERSION,
                                                     group))
-        res = r.json()
+        res = util.try_get_json(r)
         res = res if res is not None else {}
         for e in res:
             if not isinstance(e, dict):
@@ -104,20 +110,27 @@ class PDClient:
     def get_all_rules(self):
         r = util.curl_http(
             '{}/{}/{}/config/rules'.format(self.leader, PDClient.PD_API_PREFIX, PDClient.PD_API_VERSION))
-        res = r.json()
+        res = util.try_get_json(r)
         return res if res is not None else {}
 
     def get_rule(self, group, rule_id):
         r = util.curl_http(
             '{}/{}/{}/config/rule/{}/{}'.format(self.leader, PDClient.PD_API_PREFIX, PDClient.PD_API_VERSION, group,
                                                 rule_id))
-        res = r.json()
-        return res
+        return util.try_get_json(r)
 
     def set_rule(self, rule):
         r = util.post_http(
             '{}/{}/{}/config/rule'.format(self.leader, PDClient.PD_API_PREFIX, PDClient.PD_API_VERSION), rule)
         return r.status_code
+
+    def set_accelerate_schedule(self, start_key, end_key):
+        r = util.post_http(
+            '{}/{}/{}/regions/accelerate-schedule'.format(self.leader, PDClient.PD_API_PREFIX, PDClient.PD_API_VERSION),
+            {'start_key': start_key, 'end_key': end_key}, )
+        if r.status_code != 200:
+            raise Exception(
+                "fail to accelerate schedule range [{},{}), error msg: {}".format(start_key, end_key, r.text))
 
     def remove_rule(self, group, rule_id):
         r = util.delete_http(
