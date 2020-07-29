@@ -2,8 +2,8 @@
 #include <Common/Stopwatch.h>
 #include <Common/escapeForFileName.h>
 #include <Databases/DatabaseTiFlash.h>
-#include <IO/ReadBufferFromFile.h>
-#include <IO/WriteBufferFromFile.h>
+#include <IO/ReadBufferFromFileProvider.h>
+#include <IO/WriteBufferFromFileProvider.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -158,7 +158,7 @@ void DatabaseTiFlash::createTable(const Context & context, const String & table_
         const String statement = getTableDefinitionFromCreateQuery(query);
 
         /// Exclusive flags guarantees, that table is not created right now in another thread. Otherwise, exception will be thrown.
-        WriteBufferFromFile out(table_metadata_tmp_path, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, EncryptionPath(table_metadata_path, ""), statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
         if (settings.fsync_metadata)
@@ -246,7 +246,7 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
         {
             {
                 char in_buf[METADATA_FILE_BUFFER_SIZE];
-                ReadBufferFromFile in(old_tbl_meta_file, METADATA_FILE_BUFFER_SIZE, -1, in_buf);
+                ReadBufferFromFileProvider in(context.getFileProvider(), old_tbl_meta_file, EncryptionPath(old_tbl_meta_file, ""), METADATA_FILE_BUFFER_SIZE, -1, in_buf);
                 readStringUntilEOF(statement, in);
             }
             ParserCreateQuery parser;
@@ -264,7 +264,7 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
         statement = getTableDefinitionFromCreateQuery(ast);
 
         {
-            WriteBufferFromFile out(new_tbl_meta_file_tmp, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+            WriteBufferFromFileProvider out(context.getFileProvider(), new_tbl_meta_file_tmp, EncryptionPath(new_tbl_meta_file, ""), statement.size(), O_WRONLY | O_CREAT | O_EXCL);
             writeString(statement, out);
             out.next();
             if (context.getSettingsRef().fsync_metadata)
@@ -321,7 +321,7 @@ void DatabaseTiFlash::alterTable(
 
     {
         char in_buf[METADATA_FILE_BUFFER_SIZE];
-        ReadBufferFromFile in(table_metadata_path, METADATA_FILE_BUFFER_SIZE, -1, in_buf);
+        ReadBufferFromFileProvider in(context.getFileProvider(), table_metadata_path, EncryptionPath(table_metadata_path, ""), METADATA_FILE_BUFFER_SIZE, -1, in_buf);
         readStringUntilEOF(statement, in);
     }
 
@@ -339,7 +339,7 @@ void DatabaseTiFlash::alterTable(
     statement = getTableDefinitionFromCreateQuery(ast);
 
     {
-        WriteBufferFromFile out(table_metadata_tmp_path, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, EncryptionPath(table_metadata_path, ""), statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
         if (context.getSettingsRef().fsync_metadata)
@@ -373,10 +373,10 @@ time_t DatabaseTiFlash::getTableMetadataModificationTime(const Context & /*conte
     }
 }
 
-ASTPtr DatabaseTiFlash::getCreateTableQueryImpl(const Context & /*context*/, const String & table_name, bool throw_on_error) const
+ASTPtr DatabaseTiFlash::getCreateTableQueryImpl(const Context & context, const String & table_name, bool throw_on_error) const
 {
     const auto table_metadata_path = getTableMetadataPath(table_name);
-    ASTPtr ast = DatabaseLoading::getCreateQueryFromMetadata(table_metadata_path, name, throw_on_error);
+    ASTPtr ast = DatabaseLoading::getCreateQueryFromMetadata(context, table_metadata_path, name, throw_on_error);
     if (!ast && throw_on_error)
     {
         throw Exception("There is no metadata file for table " + table_name, ErrorCodes::CANNOT_GET_CREATE_TABLE_QUERY);
@@ -394,10 +394,10 @@ ASTPtr DatabaseTiFlash::tryGetCreateTableQuery(const Context & context, const St
     return getCreateTableQueryImpl(context, table_name, false);
 }
 
-ASTPtr DatabaseTiFlash::getCreateDatabaseQuery(const Context & /*context*/) const
+ASTPtr DatabaseTiFlash::getCreateDatabaseQuery(const Context & context) const
 {
     const auto database_metadata_path = getDatabaseMetadataPath(metadata_path);
-    ASTPtr ast = DatabaseLoading::getCreateQueryFromMetadata(database_metadata_path, name, true);
+    ASTPtr ast = DatabaseLoading::getCreateQueryFromMetadata(context, database_metadata_path, name, true);
     if (!ast)
     {
         throw Exception("There is no metadata file for database " + name, ErrorCodes::LOGICAL_ERROR);

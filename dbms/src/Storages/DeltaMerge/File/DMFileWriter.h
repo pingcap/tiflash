@@ -30,7 +30,7 @@ public:
                size_t              max_compress_block_size,
                FileProviderPtr &   file_provider,
                bool                do_index)
-            : plain_file(createWriteBufferFromFileBase(file_provider, dmfile->colDataPath(file_base_name), 0, 0, max_compress_block_size)),
+            : plain_file(createWriteBufferFromFileBase(file_provider, dmfile->colDataPath(file_base_name), dmfile->encryptionDataPath(file_base_name), 0, 0, max_compress_block_size)),
               plain_hashing(*plain_file),
               compressed_buf(plain_hashing, compression_settings),
               original_hashing(compressed_buf),

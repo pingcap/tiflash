@@ -1,5 +1,6 @@
 #include <Common/Exception.h>
 #include <Encryption/AESEncryptionProvider.h>
+#include <IO/FileProvider.h>
 
 namespace DB
 {
@@ -9,21 +10,21 @@ extern const int NOT_IMPLEMENTED;
 extern const int DATA_ENCRYPTION_ERROR;
 } // namespace ErrorCodes
 
-BlockAccessCipherStreamPtr AESEncryptionProvider::createCipherStream(const std::string & fname, bool new_file)
+BlockAccessCipherStreamPtr AESEncryptionProvider::createCipherStream(const EncryptionPath & encryption_path_, bool new_file)
 {
     EncryptionMethod method;
     std::string key;
     std::string iv;
     if (new_file)
     {
-        auto file_info = key_manager->newFile(fname);
+        auto file_info = key_manager->newFile(encryption_path_.dir_name);
         method = file_info.method;
         key = *file_info.key;
         iv = *file_info.iv;
     }
     else
     {
-        auto file_info = key_manager->getFile(fname);
+        auto file_info = key_manager->getFile(encryption_path_.dir_name);
         method = file_info.method;
         key = *file_info.key;
         iv = *file_info.iv;
@@ -58,6 +59,11 @@ BlockAccessCipherStreamPtr AESEncryptionProvider::createCipherStream(const std::
     }
     auto iv_high = readBigEndian<uint64_t>(reinterpret_cast<const char *>(iv.data()));
     auto iv_low = readBigEndian<uint64_t>(reinterpret_cast<const char *>(iv.data() + sizeof(uint64_t)));
+    if (!encryption_path_.file_name.empty())
+    {
+        std::size_t file_name_hash = std::hash<std::string>{}(encryption_path_.file_name);
+        iv_high += file_name_hash;
+    }
     return std::make_shared<AESCTRCipherStream>(cipher, key, iv_high, iv_low);
 }
 } // namespace DB

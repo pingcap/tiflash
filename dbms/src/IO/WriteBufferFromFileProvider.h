@@ -6,14 +6,16 @@
 
 namespace DB
 {
+
 class WriteBufferFromFileProvider : public WriteBufferFromFileDescriptor
 {
 protected:
     void nextImpl() override;
 
 public:
-    WriteBufferFromFileProvider(FileProviderPtr & file_provider_,
+    WriteBufferFromFileProvider(const FileProviderPtr & file_provider_,
         const std::string & file_name_,
+        const EncryptionPath & encryption_path,
         size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
         int flags = -1,
         mode_t mode = 0666,

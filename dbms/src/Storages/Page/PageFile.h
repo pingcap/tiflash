@@ -38,7 +38,7 @@ public:
         friend class PageFile;
 
     public:
-        Writer(PageFile &, bool sync_on_write);
+        Writer(PageFile &, bool sync_on_write, bool create_new_file = true);
         ~Writer();
 
         [[nodiscard]] size_t write(WriteBatch & wb, PageEntriesEdit & edit);
@@ -251,7 +251,7 @@ public:
     /// Return a writer bound with this PageFile object.
     /// Note that the user MUST keep the PageFile object around before this writer being freed.
     /// And the meta_file_pos, data_file_pos should be properly set before creating writer.
-    std::unique_ptr<Writer> createWriter(bool sync_on_write) { return std::make_unique<Writer>(*this, sync_on_write); }
+    std::unique_ptr<Writer> createWriter(bool sync_on_write, bool create_new_file) { return std::make_unique<Writer>(*this, sync_on_write, create_new_file); }
     /// Return a reader for this file.
     /// The PageFile object can be released any time.
     std::shared_ptr<Reader> createReader()
@@ -295,11 +295,22 @@ private:
 
     String dataPath() const { return folderPath() + "/page"; }
     String metaPath() const { return folderPath() + "/meta"; }
+    EncryptionPath dataEncryptionPath() const
+    {
+        String encrypt_path = parent_path + "/" + folder_prefix_encrypt + "_" + DB::toString(file_id) + "_" + DB::toString(level) + "/page";
+        return EncryptionPath(encrypt_path, "");
+    }
+    EncryptionPath metaEncryptionPath() const
+    {
+        String encrypt_path = parent_path + "/" + folder_prefix_encrypt + "_" + DB::toString(file_id) + "_" + DB::toString(level) + "/meta";
+        return EncryptionPath(encrypt_path, "");
+    }
 
     constexpr static const char * folder_prefix_formal     = "page";
     constexpr static const char * folder_prefix_temp       = ".temp.page";
     constexpr static const char * folder_prefix_legacy     = "legacy.page";
     constexpr static const char * folder_prefix_checkpoint = "checkpoint.page";
+    constexpr static const char * folder_prefix_encrypt    = "encrypt.page";
 
     size_t removeDataIfExists() const;
 

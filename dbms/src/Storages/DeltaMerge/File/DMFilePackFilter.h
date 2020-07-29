@@ -126,7 +126,7 @@ private:
 
         auto & type = dmfile->getColumnStat(col_id).type;
         auto   load = [&]() {
-            auto index_buf = ReadBufferFromFileProvider(file_provider, index_path, std::min(static_cast<Poco::File::FileSize>(DBMS_DEFAULT_BUFFER_SIZE), Poco::File(index_path).getSize()));
+            auto index_buf = ReadBufferFromFileProvider(file_provider, index_path, dmfile->encryptionIndexPath(DMFile::getFileNameBase(col_id)), std::min(static_cast<Poco::File::FileSize>(DBMS_DEFAULT_BUFFER_SIZE), Poco::File(index_path).getSize()));
             return MinMaxIndex::read(*type, index_buf);
         };
         MinMaxIndexPtr minmax_index;

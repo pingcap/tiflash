@@ -73,6 +73,10 @@ public:
     String colIndexPath(const String & file_name_base) const { return path() + "/" + file_name_base + ".idx"; }
     String colMarkPath(const String & file_name_base) const { return path() + "/" + file_name_base + ".mrk"; }
 
+    String encryptionBasePath() const { return parent_path + "/dmf_" + DB::toString(file_id); }
+    EncryptionPath encryptionDataPath(const String & file_name_base) const { return EncryptionPath(encryptionBasePath() + "/" + file_name_base + ".dat", ""); }
+    EncryptionPath encryptionIndexPath(const String & file_name_base) const { return EncryptionPath(encryptionBasePath() + "/" + file_name_base + ".idx", ""); }
+
     size_t getRows() const
     {
         size_t rows = 0;
@@ -134,7 +138,7 @@ private:
     void addPack(const PackStat & pack_stat) { pack_stats.push_back(pack_stat); }
     void setStatus(Status status_) { status = status_; }
 
-    void finalize(FileProviderPtr &file_provider);
+    void finalize();
 
 private:
     UInt64 file_id;

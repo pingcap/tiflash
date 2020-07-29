@@ -770,7 +770,7 @@ void IDAsPathUpgrader::renameTable(
     // Recreate metadata file
     {
         auto old_tbl_meta_file = table.getMetaFilePath(root_path, db_info);
-        auto ast = DatabaseLoading::getQueryFromMetadata(old_tbl_meta_file, /*throw_on_error=*/true);
+        auto ast = DatabaseLoading::getQueryFromMetadata(global_context, old_tbl_meta_file, /*throw_on_error=*/true);
         if (!ast)
             throw Exception("There is no metadata file for table " + table.name() + ", expected file: " + old_tbl_meta_file,
                 ErrorCodes::FILE_DOESNT_EXIST);

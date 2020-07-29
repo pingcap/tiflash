@@ -119,7 +119,7 @@ void DMFile::readMeta()
     }
 }
 
-void DMFile::finalize(FileProviderPtr &file_provider)
+void DMFile::finalize()
 {
     writeMeta();
     if (status != Status::WRITING)
@@ -137,10 +137,6 @@ void DMFile::finalize(FileProviderPtr &file_provider)
     Poco::File folder(old_file.path());
     std::vector<std::string> file_names;
     folder.list(file_names);
-    for (auto & name : file_names)
-    {
-        file_provider->renameFile(old_file.path() + "/" + name, new_path + "/" + name);
-    }
     old_file.renameTo(new_path);
 }
 

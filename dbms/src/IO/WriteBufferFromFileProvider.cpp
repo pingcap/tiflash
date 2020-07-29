@@ -12,15 +12,16 @@ extern const int CANNOT_TRUNCATE_FILE;
 
 void WriteBufferFromFileProvider::close() { file->close(); }
 
-WriteBufferFromFileProvider::WriteBufferFromFileProvider(FileProviderPtr & file_provider_,
+WriteBufferFromFileProvider::WriteBufferFromFileProvider(const FileProviderPtr & file_provider_,
     const std::string & file_name_,
+    const EncryptionPath & encryption_path_,
     size_t buf_size,
     int flags,
     mode_t mode,
     char * existing_memory,
     size_t alignment)
     : WriteBufferFromFileDescriptor(-1, buf_size, existing_memory, alignment),
-      file(file_provider_->newWritableFile(file_name_, flags, mode))
+      file(file_provider_->newWritableFile(file_name_, encryption_path_, true, flags, mode))
 {
     fd = file->getFd();
 }

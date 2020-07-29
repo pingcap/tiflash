@@ -14,7 +14,7 @@ extern const int CANNOT_OPEN_FILE;
 extern const int CANNOT_CLOSE_FILE;
 } // namespace ErrorCodes
 
-PosixWritableFile::PosixWritableFile(const std::string & file_name_, int flags, mode_t mode) : file_name{file_name_}
+PosixWritableFile::PosixWritableFile(const std::string & file_name_, bool create_new_file_, int flags, mode_t mode) : file_name{file_name_}
 {
 #ifdef __APPLE__
     bool o_direct = (flags != -1) && (flags & O_DIRECT);
@@ -22,7 +22,15 @@ PosixWritableFile::PosixWritableFile(const std::string & file_name_, int flags, 
         flags = flags & ~O_DIRECT;
 #endif
 
-    fd = open(file_name.c_str(), flags == -1 ? O_WRONLY | O_TRUNC | O_CREAT : flags, mode);
+    if (flags == -1)
+    {
+        if (create_new_file_)
+            flags = O_WRONLY | O_TRUNC | O_CREAT;
+        else
+            flags = O_WRONLY | O_CREAT;
+    }
+
+    fd = open(file_name.c_str(), flags, mode);
 
     if (-1 == fd)
     {

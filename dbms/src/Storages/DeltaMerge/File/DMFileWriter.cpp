@@ -83,7 +83,7 @@ void DMFileWriter::finalize()
         finalizeColumn(cd.id, *(cd.type));
     }
 
-    dmfile->finalize(file_provider);
+    dmfile->finalize();
 }
 
 void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColumn & column)
@@ -147,7 +147,7 @@ void DMFileWriter::finalizeColumn(ColId col_id, const IDataType & type)
 
         if (stream->minmaxes)
         {
-            WriteBufferFromFileProvider buf(file_provider, dmfile->colIndexPath(stream_name));
+            WriteBufferFromFileProvider buf(file_provider, dmfile->colIndexPath(stream_name), dmfile->encryptionIndexPath(stream_name));
             stream->minmaxes->write(type, buf);
             buf.sync();
             bytes_written += buf.getPositionInFile();

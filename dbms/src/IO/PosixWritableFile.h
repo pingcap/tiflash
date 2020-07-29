@@ -12,7 +12,7 @@ namespace DB
 class PosixWritableFile : public WritableFile
 {
 public:
-    PosixWritableFile(const std::string & file_name_, int flags, mode_t mode);
+    PosixWritableFile(const std::string & file_name_, bool create_new_file_, int flags, mode_t mode);
 
     ~PosixWritableFile() override;
 
