@@ -95,19 +95,7 @@ public:
 
     TiFlashError getError() const { return error; }
 
-    std::string displayText() const
-    {
-        std::string text = name();
-        if (!message().empty())
-        {
-            text.append(": ");
-            text.append("[");
-            text.append("FLASH:" + error.error_class + ":" + error.error_code);
-            text.append("] ");
-            text.append(message());
-        }
-        return text;
-    }
+    std::string standardText() const;
 
 private:
     TiFlashError error;

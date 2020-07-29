@@ -14,7 +14,7 @@ void TiFlashErrorRegistry::initialize()
     const std::string class_name = #class_name;                                                     \
     do                                                                                              \
     {                                                                                               \
-        if (auto [_, took_place] = all_classes.insert(class_name); took_place)                      \
+        if (auto [_, took_place] = all_classes.insert(class_name); !took_place)                     \
             throw Exception("Error Class " #class_name " is duplicate, please check related code"); \
     } while (0)
 
@@ -120,6 +120,19 @@ void TiFlashErrorRegistry::registerErrorWithNumericCode(
 {
     std::string error_code_str = std::to_string(error_code);
     registerError(error_class, error_code_str, description, workaround);
+}
+
+std::string TiFlashException::standardText() const
+{
+    std::string text{};
+    if (!message().empty())
+    {
+        text.append("[");
+        text.append("FLASH:" + error.error_class + ":" + error.error_code);
+        text.append("] ");
+        text.append(message());
+    }
+    return text;
 }
 
 } // namespace DB
