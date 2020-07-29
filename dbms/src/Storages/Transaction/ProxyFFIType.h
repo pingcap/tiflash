@@ -185,7 +185,7 @@ struct TiFlashServerHelper
     void (*fn_handle_apply_snapshot)(const TiFlashServer *, BaseBuffView, uint64_t, SnapshotViewArray, uint64_t, uint64_t);
     void (*fn_atomic_update_proxy)(TiFlashServer *, TiFlashRaftProxyHelper *);
     void (*fn_handle_destroy)(TiFlashServer *, RegionId);
-    void (*fn_handle_ingest_sst)(TiFlashServer *, SnapshotViewArray, RaftCmdHeader);
+    TiFlashApplyRes (*fn_handle_ingest_sst)(TiFlashServer *, SnapshotViewArray, RaftCmdHeader);
     uint8_t (*fn_handle_check_terminated)(TiFlashServer *);
     FsStats (*fn_handle_compute_fs_stats)(TiFlashServer *);
     TiFlashStatus (*fn_handle_get_tiflash_status)(TiFlashServer *);
@@ -211,7 +211,7 @@ void HandleApplySnapshot(
 TiFlashApplyRes HandleWriteRaftCmd(const TiFlashServer * server, WriteCmdsView req_buff, RaftCmdHeader header);
 void AtomicUpdateProxy(TiFlashServer * server, TiFlashRaftProxyHelper * proxy);
 void HandleDestroy(TiFlashServer * server, RegionId region_id);
-void HandleIngestSST(TiFlashServer * server, SnapshotViewArray snaps, RaftCmdHeader header);
+TiFlashApplyRes HandleIngestSST(TiFlashServer * server, SnapshotViewArray snaps, RaftCmdHeader header);
 uint8_t HandleCheckTerminated(TiFlashServer * server);
 FsStats HandleComputeFsStats(TiFlashServer * server);
 TiFlashStatus HandleGetTiFlashStatus(TiFlashServer * server);
