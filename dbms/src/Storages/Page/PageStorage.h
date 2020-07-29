@@ -95,6 +95,8 @@ public:
         bool   empty() const { return puts == 0 && refs == 0 && deletes == 0 && upserts == 0; }
         String toString() const;
         void   mergeEdits(const PageEntriesEdit & edit);
+
+        bool equals(const StatisticsInfo & rhs);
     };
 
 public:
@@ -184,6 +186,7 @@ private:
     ExternalPagesRemover external_pages_remover = nullptr;
 
     StatisticsInfo statistics;
+    StatisticsInfo last_gc_statistics;
 
     // For reporting metrics to prometheus
     TiFlashMetricsPtr metrics;
