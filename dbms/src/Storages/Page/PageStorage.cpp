@@ -233,15 +233,20 @@ void PageStorage::restore()
         removePageFilesIf(page_files, [&page_files_to_remove](const PageFile & pf) -> bool { return page_files_to_remove.count(pf) > 0; });
     }
 
-    // TODO: reuse some page_files
     // fill write_files
     size_t total_recover_bytes = 0;
-    for (auto & page_file : page_files)
     {
-        total_recover_bytes += page_file.getDiskSize();
-        // We need to keep a PageFile with largest FileID in write_files
-        if (page_file.getLevel() == 0)
-            write_files[0] = page_file;
+        size_t next_write_fill_idx = 0;
+        for (auto & page_file : page_files)
+        {
+            total_recover_bytes += page_file.getDiskSize();
+            // Try best to reuse writable page files
+            if (page_file.getLevel() == 0 && page_file.getType() == PageFile::Type::Formal && isPageFileSizeFitsWritable(page_file, config))
+            {
+                write_files[next_write_fill_idx] = page_file;
+                next_write_fill_idx              = (next_write_fill_idx + 1) % write_files.size();
+            }
+        }
     }
     if (global_capacity)
         global_capacity->addUsedSize(storage_path, total_recover_bytes);
