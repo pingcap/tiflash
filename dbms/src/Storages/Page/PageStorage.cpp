@@ -53,6 +53,11 @@ String PageStorage::StatisticsInfo::toString() const
     return ss.str();
 }
 
+bool PageStorage::StatisticsInfo::equals(const StatisticsInfo & rhs)
+{
+    return puts == rhs.puts && refs == rhs.refs && deletes == rhs.deletes && upserts == rhs.upserts;
+}
+
 PageFileSet PageStorage::listAllPageFiles(const String & storage_path, Poco::Logger * page_file_log, const ListPageFilesOption & option)
 {
     // collect all pages from `storage_path` and recover to `PageFile` objects
@@ -759,7 +764,10 @@ bool PageStorage::gc()
             removed_page_files.emplace(pf);
         }
         page_files.swap(removed_page_files);
-        if (page_files.size() < 3)
+
+        // Shorcut for early exit GC routine.
+        // If only few page files or statistics unchanged since last gc.
+        if (page_files.size() < 3 || last_gc_statistics.equals(statistics))
         {
             // Apply empty edit and cleanup.
             apply_and_cleanup(PageEntriesEdit{});
@@ -814,6 +822,9 @@ bool PageStorage::gc()
     }
 
     apply_and_cleanup(std::move(gc_file_entries_edit));
+
+    // Simply copy without any locks, it should be fine since we only use it to skip useless GC routine when this PageStorage is cold.
+    last_gc_statistics = statistics;
 
     LOG_INFO(log,
              storage_name << " GC exit within " << DB::toString(watch.elapsedSeconds(), 2) << " sec. PageFiles from [" //
