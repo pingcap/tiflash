@@ -336,11 +336,13 @@ private:
 
     PrimaryKeyPtr pk;
 
-    ColumnDefines      original_table_columns;
-    BlockPtr           original_table_header; // Used to speed up getHeader()
-    const ColumnDefine original_table_handle_define;
+    ColumnDefines original_table_columns;
+    BlockPtr      original_table_header; // Used to speed up getHeader()
+    ColumnDefine  original_table_handle_define;
 
     // The columns we actually store.
+    // First three columns are always _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
+    // No matter `tidb_rowid` exist in `table_columns` or not.
     ColumnDefinesPtr store_columns;
 
     std::atomic<bool> shutdown_called{false};

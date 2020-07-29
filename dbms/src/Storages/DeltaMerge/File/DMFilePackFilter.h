@@ -31,47 +31,77 @@ public:
           filter(filter_),
           read_packs(read_packs_),
           handle_res(dmfile->getPacks(), RSResult::All),
-          use_packs(dmfile->getPacks())
+          use_packs(dmfile->getPacks()),
+          log(&Logger::get("DMFilePackFilter"))
     {
 
+        size_t pack_count = dmfile->getPacks();
         if (!pk_range.isAll())
         {
             loadIndex(EXTRA_HANDLE_COLUMN_ID);
             auto pk_filter = toFilter(pk_range);
-            for (size_t i = 0; i < dmfile->getPacks(); ++i)
+            for (size_t i = 0; i < pack_count; ++i)
             {
                 handle_res[i] = pk_filter->roughCheck(i, param);
             }
         }
 
-        if (filter || read_packs)
+        size_t after_pk         = 0;
+        size_t after_read_packs = 0;
+        size_t after_filter     = 0;
+
+        /// Check packs by handle_res
+        for (size_t i = 0; i < pack_count; ++i)
         {
-            if (filter)
+            use_packs[i] = handle_res[i] != None;
+        }
+
+        for (auto u : use_packs)
+            after_pk += u;
+
+        /// Check packs by read_packs
+        if (read_packs)
+        {
+            for (size_t i = 0; i < pack_count; ++i)
             {
-                // Load index based on filter.
-                Attrs attrs = filter->getAttrs();
-                for (auto & attr : attrs)
-                {
-                    loadIndex(attr.col_id);
-                }
+                use_packs[i] = ((bool)use_packs[i]) && ((bool)read_packs->count(i));
+            }
+        }
+
+        for (auto u : use_packs)
+            after_read_packs += u;
+
+        /// Check packs by filter in where clause
+        if (filter)
+        {
+            // Load index based on filter.
+            Attrs attrs = filter->getAttrs();
+            for (auto & attr : attrs)
+            {
+                loadIndex(attr.col_id);
             }
 
-            for (size_t i = 0; i < dmfile->getPacks(); ++i)
+            for (size_t i = 0; i < pack_count; ++i)
             {
-                bool use = handle_res[i] != None;
-                if (filter && use)
-                    use &= filter->roughCheck(i, param) != None;
-                if (read_packs && use)
-                    use &= read_packs->count(i);
-                use_packs[i] = use;
+                use_packs[i] = ((bool)use_packs[i]) && (filter->roughCheck(i, param) != None);
             }
+        }
+
+        for (auto u : use_packs)
+            after_filter += u;
+
+        Float64 filter_rate = (Float64)(after_read_packs - after_filter) * 100 / after_read_packs;
+        if (isnan(filter_rate))
+        {
+            LOG_DEBUG(log,
+                      "RSFilter exclude rate is nan, after_pk: "
+                          << after_pk << ", after_read_packs: " << after_read_packs << ", after_filter: " << after_filter
+                          << ", pk_range: " << pk_range.toString() << ", read_packs: " << ((!read_packs) ? 0 : read_packs->size())
+                          << ", pack_count: " << pack_count);
         }
         else
         {
-            for (size_t i = 0; i < dmfile->getPacks(); ++i)
-            {
-                use_packs[i] = handle_res[i] != None;
-            }
+            LOG_DEBUG(log, "RSFilter exclude rate: " << DB::toString(filter_rate, 2));
         }
     }
 
@@ -153,6 +183,8 @@ private:
 
     std::vector<RSResult> handle_res;
     std::vector<UInt8>    use_packs;
+
+    Logger * log;
 };
 
 } // namespace DM

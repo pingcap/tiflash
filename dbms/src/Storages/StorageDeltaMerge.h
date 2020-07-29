@@ -131,7 +131,7 @@ private:
 
     DM::DeltaMergeStorePtr store;
 
-    Strings pk_column_names;
+    Strings pk_column_names; // TODO: remove it. Only use for debug from ch-client.
     OrderedNameSet hidden_columns;
 
     // The table schema synced from TiDB

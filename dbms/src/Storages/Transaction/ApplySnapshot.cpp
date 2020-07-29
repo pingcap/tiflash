@@ -141,9 +141,11 @@ static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 peer_
     throw Exception(std::string(__PRETTY_FUNCTION__) + ": peer " + DB::toString(peer_id) + " not found", ErrorCodes::LOGICAL_ERROR);
 }
 
-void KVStore::handleApplySnapshot(
+RegionPtr KVStore::preHandleSnapshot(
     metapb::Region && region, UInt64 peer_id, const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt)
 {
+    auto start_time = Clock::now();
+
     auto meta = ({
         auto peer = findPeer(region, peer_id);
         raft_serverpb::RaftApplyState apply_state;
@@ -156,12 +158,11 @@ void KVStore::handleApplySnapshot(
     });
     IndexReaderCreateFunc index_reader_create = [&]() -> IndexReaderPtr { return tmt.createIndexReader(); };
     auto new_region = std::make_shared<Region>(std::move(meta), index_reader_create);
-
-    LOG_INFO(log, "Try to apply snapshot: " << new_region->toString(true));
-
     {
         std::stringstream ss;
-
+        ss << "Generate snapshot " << new_region->toString(false);
+        if (snaps.len)
+            ss << " with data ";
         for (UInt64 i = 0; i < snaps.len; ++i)
         {
             auto & snapshot = snaps.views[i];
@@ -172,18 +173,30 @@ void KVStore::handleApplySnapshot(
                 new_region->insert(snapshot.cf, TiKVKey(k.data, k.len), TiKVValue(v.data, v.len));
             }
 
-            ss << "[cf: " << CFToName(snapshot.cf) << ", kv size: " << snapshot.len << "]; ";
+            ss << "[cf: " << CFToName(snapshot.cf) << ", kv size: " << snapshot.len << "], ";
         }
-
-        if (snaps.len)
-            LOG_INFO(log, "Insert snapshot " << ss.str());
+        new_region->tryPreDecodeTiKVValue(tmt);
+        auto time_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
+        ss << " cost " << time_cost << "ms";
+        LOG_INFO(log, ss.str());
     }
+    return new_region;
+}
 
-    new_region->tryPreDecodeTiKVValue(tmt);
+void KVStore::handleApplySnapshot(RegionPtr new_region, TMTContext & tmt)
+{
+    LOG_INFO(log, "Try to apply snapshot: " << new_region->toString(true));
 
     tryApplySnapshot(new_region, tmt.getContext());
 
     LOG_INFO(log, new_region->toString(false) << " apply snapshot success");
+}
+
+void KVStore::handleApplySnapshot(
+    metapb::Region && region, UInt64 peer_id, const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt)
+{
+    auto new_region = preHandleSnapshot(std::move(region), peer_id, snaps, index, term, tmt);
+    handleApplySnapshot(new_region, tmt);
 }
 
 void KVStore::handleIngestSST(UInt64 region_id, const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt)
