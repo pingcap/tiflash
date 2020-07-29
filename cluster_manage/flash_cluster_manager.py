@@ -140,6 +140,8 @@ class TiFlashClusterManager:
 
         self.state = [TiFlashClusterManager.ROLE_INIT, 0]
         self._try_refresh()
+        self.ddl_global_schema_version = None
+        self.ddl_global_schema_check_tso = None
         self.table_update()
 
     def _update_cluster(self):
@@ -193,36 +195,62 @@ class TiFlashClusterManager:
     def report_to_tidb(self, table, region_count, flash_region_count):
         table_id = table['id']
         self.logger.info(
-            'report_to_tidb: id {}, region_count {}, flash_region_count {}'.format(table_id, region_count,
+            'report to tidb: id {}, region_count {}, flash_region_count {}'.format(table_id, region_count,
                                                                                    flash_region_count))
 
+        error_list = []
         for idx, address in enumerate(self.tidb_status_addr_list):
             try:
                 r = util.post_http(
                     '{}/tiflash/replica'.format(address, PDClient.PD_API_PREFIX, PDClient.PD_API_VERSION),
                     {'id': table_id, define.REGION_COUNT: region_count,
                      define.TIFLASH_REGION_COUNT: flash_region_count})
-                if r.status_code == 200:
-                    if idx != 0:
-                        tmp = self.tidb_status_addr_list[0]
-                        self.tidb_status_addr_list[0] = address
-                        self.tidb_status_addr_list[idx] = tmp
-                    return
-            except Exception:
+                util.check_status_code(r)
+                return
+            except Exception as e:
+                error_list.append((address, e))
                 continue
 
-        self.logger.error(
-            'all tidb status addr {} can not be used'.format(self.tidb_status_addr_list))
+        self.logger.error('can not report replica sync status to tidb: {}'.format(error_list))
 
     @wrap_try_get_lock
     def remove_rule(self, rule_id):
         self.pd_client.remove_rule(placement_rule.TIFLASH_GROUP_ID, rule_id)
         self.logger.info('Remove placement rule {}'.format(rule_id))
 
+    def escape_table_update(self):
+        ddl_global_schema_version, _ = self.pd_client.etcd_client.get(define.DDL_GLOBAL_SCHEMA_VERSION)
+
+        last_handled_schema_version_tso, _ = self.pd_client.etcd_client.get(define.TIFLASH_LAST_HANDLED_SCHEMA_VERSION)
+
+        if ddl_global_schema_version is None:
+            ddl_global_schema_version = b'0'
+
+        if last_handled_schema_version_tso is None:
+            last_handled_schema_version_tso = b'%d%b%d' % (0, define.TIFLASH_LAST_HANDLED_SCHEMA_VERSION_TSO_SPLIT, 0)
+
+        last_handled_schema_version, last_handled_schema_tso = last_handled_schema_version_tso.split(
+            define.TIFLASH_LAST_HANDLED_SCHEMA_VERSION_TSO_SPLIT)
+
+        cur_tso = int(time.time())
+
+        if ddl_global_schema_version == last_handled_schema_version and int(
+            last_handled_schema_tso) + define.TIFLASH_LAST_HANDLED_SCHEMA_TIME_OUT > cur_tso:
+            return True
+
+        self.ddl_global_schema_version = ddl_global_schema_version
+        self.ddl_global_schema_check_tso = cur_tso
+
+        return False
+
     @wrap_try_get_lock
     def table_update(self):
+        if self.escape_table_update():
+            return
+
         self._get_http_port_for_all_store()
 
+        all_replica_available = True
         table_list = tidb_tools.db_flash_replica(self.tidb_status_addr_list)
         all_rules = self.pd_client.get_group_rules(placement_rule.TIFLASH_GROUP_ID)
         for table in table_list:
@@ -231,14 +259,27 @@ class TiFlashClusterManager:
             table_id = table['id']
             st, ed = common.make_table_begin(table_id), common.make_table_end(table_id)
             start_key, end_key = st.to_bytes(), ed.to_bytes()
-            self._check_and_make_rule(table, st.to_pd_key(), ed.to_pd_key(), all_rules)
+            start_key_hex, end_key_hex = st.to_pd_key(), ed.to_pd_key()
+            self._check_and_make_rule(table, start_key_hex, end_key_hex, all_rules)
 
             if not table[define.AVAILABLE]:
+                if table.get(define.PRIORITY, False):
+                    self.pd_client.set_accelerate_schedule(start_key_hex, end_key_hex)
+                    self.logger.info('try to accelerate pd schedule for table {}'.format(table_id))
+
                 region_count, flash_region_count = self.compute_sync_data_process(table_id, start_key, end_key)
                 self.report_to_tidb(table, region_count, flash_region_count)
+                all_replica_available = False
 
         for rule in all_rules.values():
             self.remove_rule(rule.id)
+
+        if all_replica_available:
+            v = b'%b%b%d' % (self.ddl_global_schema_version, define.TIFLASH_LAST_HANDLED_SCHEMA_VERSION_TSO_SPLIT,
+                             self.ddl_global_schema_check_tso)
+            self.pd_client.etcd_client.put(define.TIFLASH_LAST_HANDLED_SCHEMA_VERSION, v)
+            self.logger.info(
+                'all replicas are available at global schema version {}'.format(int(self.ddl_global_schema_version)))
 
 
 def main():
@@ -249,7 +290,7 @@ def main():
 
     # keep at most 10G log files
     logging.basicConfig(
-        handlers=[RotatingFileHandler(flash_conf.log_path, maxBytes=1024 * 1024 * 1024, backupCount=10)],
+        handlers=[RotatingFileHandler(flash_conf.log_path, maxBytes=1024 * 1024 * 500, backupCount=5)],
         level=conf.log_level, format='%(asctime)s <%(levelname)s> %(name)s: %(message)s')
     logging.getLogger("requests").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)

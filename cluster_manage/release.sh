@@ -25,7 +25,7 @@ else
 fi
 
 git_hash=`git log -1 --format="%H"`
-git_branch=`git symbolic-ref -q --short HEAD || git describe --tags --exact-match`
+git_branch=`git symbolic-ref -q --short HEAD || git describe --tags --exact-match || echo "HEAD"`
 version_file='version.py'
 git_hash_info="git_hash = '$git_hash'"
 overwrite="true"
