@@ -120,6 +120,11 @@ PageStorage::PageStorage(
     config.num_write_slots = std::max(1UL, config.num_write_slots);
 }
 
+static inline bool isPageFileSizeFitsWritable(const PageFile & pf, const PageStorage::Config & config)
+{
+    return pf.getDataFileAppendPos() < config.file_roll_size && pf.getMetaFileAppendPos() < config.file_meta_roll_size;
+}
+
 void PageStorage::restore()
 {
     LOG_INFO(log, storage_name << " begin to restore from path: " << storage_path);
@@ -297,8 +302,7 @@ PageStorage::WriterPtr PageStorage::getWriter(PageFile & page_file)
     WriterPtr write_file_writer;
 
     bool is_writable = page_file.isValid() && page_file.getType() == PageFile::Type::Formal //
-        && page_file.getDataFileAppendPos() < config.file_roll_size                         //
-        && page_file.getMetaFileAppendPos() < config.file_meta_roll_size;
+        && isPageFileSizeFitsWritable(page_file, config);
     if (is_writable)
     {
         write_file_writer = page_file.createWriter(config.sync_on_write);
@@ -368,9 +372,7 @@ void PageStorage::write(WriteBatch && wb)
             }
         }
         auto & page_file   = write_files[index];
-        bool   is_writable = page_file.isValid()                        //
-            && page_file.getDataFileAppendPos() < config.file_roll_size //
-            && page_file.getMetaFileAppendPos() < config.file_meta_roll_size;
+        bool   is_writable = page_file.isValid() && isPageFileSizeFitsWritable(page_file, config);
         if (!is_writable)
         {
             file_to_write = nullptr; // reset writer first
@@ -613,9 +615,9 @@ void PageStorage::drop()
 
     ListPageFilesOption opt;
     opt.ignore_checkpoint = false;
-    opt.ignore_legacy = false;
-    opt.remove_tmp_files = false;
-    auto   page_files      = PageStorage::listAllPageFiles(storage_path, page_file_log, opt);
+    opt.ignore_legacy     = false;
+    opt.remove_tmp_files  = false;
+    auto page_files       = PageStorage::listAllPageFiles(storage_path, page_file_log, opt);
 
     // TODO: count how many bytes in "archive" directory.
     size_t bytes_to_remove = 0;
@@ -715,6 +717,18 @@ bool PageStorage::gc()
                 {
                     open_read_files.erase(page_id_and_lvl);
                 }
+            }
+
+            // Close idle reader.
+            // Other read threads may take a shared pointer of reader for reading. We can not prevent other readers
+            // by locking at `open_read_files_mutex`. Instead of closing file descriptor, free the shared pointer
+            // of idle readers here. The file descriptor will be closed after all readers done.
+            for (auto iter = open_read_files.begin(); iter != open_read_files.end(); /*empty*/)
+            {
+                if (iter->second->isIdle(config.open_file_max_idle_time))
+                    iter = open_read_files.erase(iter);
+                else
+                    ++iter;
             }
         }
 
