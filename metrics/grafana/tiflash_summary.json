@@ -23,6 +23,12 @@
       "version": ""
     },
     {
+      "type": "panel",
+      "id": "heatmap",
+      "name": "Heatmap",
+      "version": ""
+    },
+    {
       "type": "datasource",
       "id": "prometheus",
       "name": "Prometheus",
@@ -66,7 +72,7 @@
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
           "decimals": 1,
-          "description": "The storage size per TiFlash instance",
+          "description": "The storage size per TiFlash instance.\n(Not including some disk usage of TiFlash-Proxy by now)",
           "editable": true,
           "error": false,
           "fill": 5,
@@ -702,7 +708,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "",
+          "description": "The number of fsync operations.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)",
           "fill": 0,
           "gridPos": {
             "h": 7,
@@ -791,6 +797,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of open file descriptors action.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)",
           "fill": 1,
           "gridPos": {
             "h": 8,
@@ -887,6 +894,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of currently opened file descriptors.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)",
           "fill": 1,
           "gridPos": {
             "h": 8,
@@ -2630,7 +2638,7 @@
               "label": null,
               "logBase": 1,
               "max": null,
-              "min": null,
+              "min": "0",
               "show": true
             }
           ],
@@ -2729,115 +2737,69 @@
           }
         },
         {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
+          "cards": {
+            "cardPadding": null,
+            "cardRound": null
+          },
+          "color": {
+            "cardColor": "#b4ff00",
+            "colorScale": "sqrt",
+            "colorScheme": "interpolateSpectral",
+            "exponent": 0.5,
+            "mode": "spectrum"
+          },
+          "dataFormat": "tsbuckets",
           "datasource": "${DS_TEST-CLUSTER}",
           "description": "Duration of storage's internal page gc tasks",
-          "fill": 1,
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 12,
             "y": 25
           },
+          "heatmap": {},
+          "hideZeroBuckets": true,
+          "highlightCards": true,
           "id": 44,
           "legend": {
-            "alignAsTable": false,
-            "avg": false,
-            "current": false,
-            "max": false,
-            "min": false,
-            "rightSide": false,
-            "show": true,
-            "total": false,
-            "values": false
+            "show": false
           },
-          "lines": true,
-          "linewidth": 1,
           "links": [],
-          "nullPointMode": "null as zero",
-          "percentage": false,
-          "pointradius": 5,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
+          "reverseYBuckets": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.999, sum(rate(tiflash_storage_page_gc_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
-              "format": "time_series",
-              "hide": true,
-              "intervalFactor": 1,
-              "legendFormat": "999",
-              "refId": "A"
-            },
-            {
-              "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_page_gc_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
-              "format": "time_series",
-              "intervalFactor": 1,
-              "legendFormat": "99",
+              "expr": "sum(delta(tiflash_storage_page_gc_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le)",
+              "format": "heatmap",
+              "intervalFactor": 2,
+              "legendFormat": "{{le}}",
               "refId": "B"
-            },
-            {
-              "expr": "histogram_quantile(0.95, sum(rate(tiflash_storage_page_gc_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
-              "format": "time_series",
-              "intervalFactor": 1,
-              "legendFormat": "95",
-              "refId": "C"
-            },
-            {
-              "expr": "histogram_quantile(0.80, sum(rate(tiflash_storage_page_gc_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
-              "format": "time_series",
-              "hide": true,
-              "intervalFactor": 1,
-              "legendFormat": "80",
-              "refId": "D"
             }
           ],
-          "thresholds": [],
           "timeFrom": null,
-          "timeRegions": [],
           "timeShift": null,
           "title": "Page GC Tasks Duration",
           "tooltip": {
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
             "show": true,
-            "values": []
+            "showHistogram": false
           },
-          "yaxes": [
-            {
-              "format": "s",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": "0",
-              "show": true
-            },
-            {
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
+          "type": "heatmap",
+          "xAxis": {
+            "show": true
+          },
+          "xBucketNumber": null,
+          "xBucketSize": null,
+          "yAxis": {
+            "decimals": 0,
+            "format": "s",
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true,
+            "splitFactor": null
+          },
+          "yBucketBound": "upper",
+          "yBucketNumber": null,
+          "yBucketSize": null
         },
         {
           "aliasColors": {},
@@ -2845,7 +2807,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "",
+          "description": "The number of different kinds of read operations",
           "fill": 0,
           "gridPos": {
             "h": 7,
@@ -2858,8 +2820,8 @@
             "alignAsTable": true,
             "avg": false,
             "current": true,
-            "hideEmpty": true,
-            "hideZero": true,
+            "hideEmpty": false,
+            "hideZero": false,
             "max": true,
             "min": false,
             "rightSide": true,
@@ -2966,7 +2928,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "",
+          "description": "The number of different kinds of read operations",
           "fill": 0,
           "gridPos": {
             "h": 7,
@@ -2979,8 +2941,8 @@
             "alignAsTable": true,
             "avg": false,
             "current": true,
-            "hideEmpty": true,
-            "hideZero": true,
+            "hideEmpty": false,
+            "hideZero": false,
             "max": true,
             "min": false,
             "rightSide": true,
@@ -3102,8 +3064,8 @@
             "alignAsTable": true,
             "avg": false,
             "current": true,
-            "hideEmpty": true,
-            "hideZero": true,
+            "hideEmpty": false,
+            "hideZero": false,
             "max": true,
             "min": false,
             "rightSide": true,
@@ -3215,8 +3177,8 @@
             "alignAsTable": true,
             "avg": false,
             "current": true,
-            "hideEmpty": true,
-            "hideZero": true,
+            "hideEmpty": false,
+            "hideZero": false,
             "max": true,
             "min": false,
             "rightSide": true,
