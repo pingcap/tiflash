@@ -1,4 +1,5 @@
 #include <Common/Stopwatch.h>
+#include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
@@ -83,6 +84,12 @@ grpc::Status CoprocessorHandler::execute()
                     "Coprocessor request type " + std::to_string(cop_request->tp()) + " is not implemented", ErrorCodes::NOT_IMPLEMENTED);
         }
         return grpc::Status::OK;
+    }
+    catch (const TiFlashException & e)
+    {
+        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": TiFlash Exception: " << e.displayText() << "\n" << e.getStackTrace().toString());
+        GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_error, reason_internal_error).Increment();
+        return recordError(grpc::StatusCode::INTERNAL, e.standardText());
     }
     catch (const LockException & e)
     {

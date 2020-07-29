@@ -75,6 +75,12 @@ grpc::Status BatchCoprocessorHandler::execute()
         }
         return grpc::Status::OK;
     }
+    catch (const TiFlashException & e)
+    {
+        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": TiFlash Exception: " << e.displayText() << "\n" << e.getStackTrace().toString());
+        GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_error, reason_internal_error).Increment();
+        return recordError(grpc::StatusCode::INTERNAL, e.standardText());
+    }
     catch (const Exception & e)
     {
         LOG_ERROR(log, __PRETTY_FUNCTION__ << ": DB Exception: " << e.message() << "\n" << e.getStackTrace().toString());

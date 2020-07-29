@@ -59,6 +59,7 @@ template <bool batch>
 void DAGDriver<batch>::execute()
 try
 {
+    throw TiFlashException("Test TiFlash Exception", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
     DAGContext dag_context;
     DAGQuerySource dag(context, dag_context, regions, dag_request, writer, batch);
 
@@ -107,6 +108,11 @@ catch (const RegionException & e)
 catch (const LockException & e)
 {
     throw;
+}
+catch (const TiFlashException & e)
+{
+    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": TiFlash Exception: " << e.displayText() << "\n" << e.getStackTrace().toString());
+    recordError(grpc::StatusCode::INTERNAL, e.standardText());
 }
 catch (const Exception & e)
 {
