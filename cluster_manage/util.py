@@ -42,6 +42,16 @@ def curl_http(uri, params=None):
     return r
 
 
+def check_status_code(r):
+    if r.status_code != 200:
+        raise Exception('unexpected status code {} from {}'.format(r.status_code, r.url))
+
+
+def try_get_json(r):
+    check_status_code(r)
+    return r.json()
+
+
 def post_http(uri, params):
     import conf
     r = requests.post('http://{}'.format(uri), json=params, timeout=conf.flash_conf.update_rule_interval)
