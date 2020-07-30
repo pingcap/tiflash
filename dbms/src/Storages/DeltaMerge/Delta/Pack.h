@@ -19,7 +19,7 @@ static constexpr size_t PACK_SERIALIZE_BUFFER_SIZE = 65536;
 void serializeColumn(MemoryWriteBuffer & buf, const IColumn & column, const DataTypePtr & type, size_t offset, size_t limit, bool compress);
 
 void  serializeSavedPacks(WriteBuffer & buf, const Packs & packs);
-Packs deserializePacks(ReadBuffer & buf);
+Packs deserializePacks(PrimaryKeyPtr pk, ReadBuffer & buf);
 
 // Debugging string
 String packsToString(const Packs & packs);

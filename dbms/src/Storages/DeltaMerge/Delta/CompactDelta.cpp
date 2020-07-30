@@ -133,7 +133,7 @@ bool DeltaValueSpace::compact(DMContext & context)
 
         // Note that after compact, caches are no longer exist.
 
-        auto compact_pack = writePack(context, compact_block, 0, compact_rows, wbs);
+        auto compact_pack = writePack(context, pk, compact_block, 0, compact_rows, wbs);
         compact_pack->setSchema(task.to_compact.front()->schema);
         compact_pack->saved = true;
 

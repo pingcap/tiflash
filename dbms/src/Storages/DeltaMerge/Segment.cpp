@@ -128,7 +128,6 @@ Segment::Segment(UInt64                      epoch_, //
                  const DeltaValueSpacePtr &  delta_,
                  const StableValueSpacePtr & stable_)
     : epoch(epoch_),
-      range(pk_range_->toHandleRange()),
       pk_range(pk_range_),
       segment_id(segment_id_),
       next_segment_id(next_segment_id_),
@@ -180,14 +179,12 @@ SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
     PageId      next_segment_id, delta_id, stable_id;
 
     readIntBinary(epoch, buf);
-    readIntBinary(range.start, buf);
-    readIntBinary(range.end, buf);
+    auto pk_range = std::make_shared<PKRange>(PKRange::deserializePKRange(buf));
     readIntBinary(next_segment_id, buf);
     readIntBinary(delta_id, buf);
     readIntBinary(stable_id, buf);
 
-    auto pk_range = std::make_shared<PKRange>(PKRange::fromHandleRange(range));
-    auto delta    = std::make_shared<DeltaValueSpace>(delta_id, pk_range->primaryKey());
+    auto delta = std::make_shared<DeltaValueSpace>(delta_id, pk_range->primaryKey());
     delta->restore(context);
     auto stable  = StableValueSpace::restore(context, stable_id);
     auto segment = std::make_shared<Segment>(epoch, pk_range, segment_id, next_segment_id, delta, stable);
@@ -200,8 +197,7 @@ void Segment::serialize(WriteBatch & wb)
     MemoryWriteBuffer buf(0, SEGMENT_BUFFER_SIZE);
     writeIntBinary(CURRENT_VERSION, buf);
     writeIntBinary(epoch, buf);
-    writeIntBinary(range.start, buf);
-    writeIntBinary(range.end, buf);
+    pk_range->serialize(buf);
     writeIntBinary(next_segment_id, buf);
     writeIntBinary(delta->getId(), buf);
     writeIntBinary(stable->getId(), buf);
@@ -228,7 +224,7 @@ bool Segment::write(DMContext & dm_context, const Block & block)
 {
     LOG_TRACE(log, "Segment [" << segment_id << "] write to disk rows: " << block.rows());
     WriteBatches wbs(dm_context.storage_pool);
-    PackPtr      pack = DeltaValueSpace::writePack(dm_context, block, 0, block.rows(), wbs);
+    PackPtr      pack = DeltaValueSpace::writePack(dm_context, pk_range->primaryKey(), block, 0, block.rows(), wbs);
     wbs.writeAll();
 
     if (delta->appendToDisk(dm_context, pack))
@@ -905,9 +901,9 @@ StableValueSpacePtr Segment::prepareMerge(DMContext &                dm_context,
 {
     LOG_DEBUG(left->log, "Segment [" << left->segmentId() << "] and [" << right->segmentId() << "] prepare merge start");
 
-    if (unlikely(left->range.end != right->range.start || left->next_segment_id != right->segment_id))
-        throw Exception("The ranges of merge segments are not consecutive: first end: " + DB::toString(left->range.end)
-                        + ", second start: " + DB::toString(right->range.start));
+    if (unlikely(left->pk_range->isNextTo(*(right->pk_range)) || left->next_segment_id != right->segment_id))
+        throw Exception("The ranges of merge segments are not consecutive: first: " + left->pk_range->toString()
+                        + ", second: " + right->pk_range->toString());
 
     auto getStream = [&](const SegmentPtr & segment, const SegmentSnapshotPtr & segment_snap) {
         auto read_info
@@ -1038,13 +1034,13 @@ void Segment::placeDeltaIndex(DMContext & dm_context)
 
 String Segment::simpleInfo() const
 {
-    return "{" + DB::toString(segment_id) + ":" + range.toString() + "}";
+    return "{" + DB::toString(segment_id) + ":" + pk_range->toString() + "}";
 }
 
 String Segment::info() const
 {
     std::stringstream s;
-    s << "{[id:" << segment_id << "], [next:" << next_segment_id << "], [epoch:" << epoch << "], [range:" << range.toString()
+    s << "{[id:" << segment_id << "], [next:" << next_segment_id << "], [epoch:" << epoch << "], [range:" << pk_range->toString()
       << "], [pk_range:" << pk_range->toString() << "], [delta rows:" << delta->getRows() << "], [delete ranges:" << delta->getDeletes()
       << "], [stable(" << stable->getDMFilesString() << "):" << stable->getRows() << "]}";
     return s.str();

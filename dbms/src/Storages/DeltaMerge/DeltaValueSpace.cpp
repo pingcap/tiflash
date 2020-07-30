@@ -95,7 +95,7 @@ void DeltaValueSpace::restore(DMContext & context)
 {
     Page                 page = context.storage_pool.meta().read(id);
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
-    packs = deserializePacks(buf);
+    packs = deserializePacks(pk, buf);
 
     setUp();
 }
@@ -143,8 +143,8 @@ Packs DeltaValueSpace::checkHeadAndCloneTail(DMContext &     context,
         auto   new_pack = std::make_shared<Pack>(*pack);
         if (pack->isDeleteRange())
         {
-            new_pack->delete_range = pack->delete_range.shrink(target_range.toHandleRange());
-            if (!new_pack->delete_range.none())
+            new_pack->delete_range = PKRange::intersect(pack->delete_range, target_range);
+            if (!new_pack->delete_range.isEmpty())
                 tail_clone.push_back(new_pack);
         }
         else
@@ -237,9 +237,10 @@ PageId DeltaValueSpace::writePackData(DMContext & context, const Block & block, 
     return page_id;
 }
 
-PackPtr DeltaValueSpace::writePack(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs)
+PackPtr
+DeltaValueSpace::writePack(DMContext & context, PrimaryKeyPtr pk_, const Block & block, size_t offset, size_t limit, WriteBatches & wbs)
 {
-    auto pack       = std::make_shared<Pack>();
+    auto pack       = std::make_shared<Pack>(pk_);
     pack->rows      = limit;
     pack->bytes     = block.bytes() * ((double)limit / block.rows());
     pack->data_page = writePackData(context, block, offset, limit, wbs);
@@ -333,7 +334,7 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
     else
     {
         // Create a new pack.
-        auto pack   = std::make_shared<Pack>();
+        auto pack   = std::make_shared<Pack>(pk);
         pack->rows  = limit;
         pack->bytes = append_bytes;
         pack->cache = std::make_shared<Cache>(block);
@@ -362,8 +363,8 @@ bool DeltaValueSpace::appendDeleteRange(DMContext & /*context*/, const PKRange &
     if (abandoned.load(std::memory_order_relaxed))
         return false;
 
-    auto pack          = std::make_shared<Pack>();
-    pack->delete_range = delete_range.toHandleRange();
+    auto pack          = std::make_shared<Pack>(pk);
+    pack->delete_range = delete_range;
     pack->appendable   = false;
     packs.push_back(pack);
 

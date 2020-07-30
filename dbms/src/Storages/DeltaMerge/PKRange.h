@@ -119,6 +119,20 @@ size_t lowerBound(const PrimaryKey & pk, const Columns & left, size_t first, siz
     return first;
 }
 
+inline void printValue(PrimaryKeyPtr pk, const Columns & columns, size_t index, WriteBuffer & buf)
+{
+    if (columns.size() != 1)
+        buf << "<";
+    for (size_t i = 0; i < columns.size(); ++i)
+    {
+        (*pk)[i].type->serializeTextEscaped(*(columns[i]), index, buf);
+        if (i != columns.size() - 1)
+            buf << ",";
+    }
+    if (columns.size() != 1)
+        buf << ">";
+}
+
 } // namespace
 
 class PKSplitPoint
@@ -154,30 +168,13 @@ public:
     {
         WriteBufferFromOwnString buf;
 
-        auto print_value = [&](size_t index) {
-            if (columns.size() != 1)
-                buf << "<";
-            for (size_t i = 0; i < columns.size(); ++i)
-            {
-                (*pk)[i].type->serializeTextEscaped(*(columns[i]), index, buf);
-                if (i != columns.size() - 1)
-                    buf << ",";
-            }
-            if (columns.size() != 1)
-                buf << ">";
-        };
-
         buf << "[";
         if (start_infinite)
             buf << "-Inf";
         else if (end_infinite)
-        {
             buf << "+Inf";
-        }
         else
-        {
-            print_value(0);
-        }
+            printValue(pk, columns, 0, buf);
         buf << "]";
 
         return buf.str();
@@ -569,6 +566,13 @@ public:
 
     bool check(const Block & block, size_t row_id) const { return checkStart(block, row_id) && checkEnd(block, row_id); }
 
+    bool isNextTo(const PKRange & right)
+    {
+        if (isEndInfinite() || right.isStartInfinite())
+            return false;
+        return compareValuesAt(*pk, columns, END_INDEX, right.columns, START_INDEX) == 0;
+    }
+
     bool check(const Columns & columns_data, size_t row_id) const
     {
         return checkStart(columns_data, row_id) && checkEnd(columns_data, row_id);
@@ -577,8 +581,9 @@ public:
     /// return <offset, limit>
     std::pair<size_t, size_t> getPosRange(const Block & block, const size_t offset, const size_t limit) const
     {
-        size_t start_index
-            = (is_infinite[START_INDEX] || check(block, offset)) ? offset : lowerBound(*pk, columns, offset, offset + limit, block, START_INDEX);
+        size_t start_index = (is_infinite[START_INDEX] || check(block, offset))
+            ? offset
+            : lowerBound(*pk, columns, offset, offset + limit, block, START_INDEX);
         size_t end_index = (is_infinite[END_INDEX] || check(block, offset + limit - 1))
             ? offset + limit
             : lowerBound(*pk, columns, offset, offset + limit, block, END_INDEX);
@@ -599,7 +604,7 @@ public:
         return {start_index, end_index - start_index};
     }
 
-    void serialize(WriteBuffer & buf)
+    void serialize(WriteBuffer & buf) const
     {
         writeIntBinary(pk->size(), buf);
         for (auto & col_define : *pk)
@@ -665,33 +670,16 @@ public:
     {
         WriteBufferFromOwnString buf;
 
-        auto print_value = [&](size_t index) {
-            if (columns.size() != 1)
-                buf << "<";
-            for (size_t i = 0; i < columns.size(); ++i)
-            {
-                (*pk)[i].type->serializeTextEscaped(*(columns[i]), index, buf);
-                if (i != columns.size() - 1)
-                    buf << ",";
-            }
-            if (columns.size() != 1)
-                buf << ">";
-        };
-
         buf << "[";
         if (is_infinite[START_INDEX])
             buf << "-Inf";
         else
-        {
-            print_value(START_INDEX);
-        }
+            printValue(pk, columns, START_INDEX, buf);
         buf << ",";
         if (is_infinite[END_INDEX])
             buf << "+Inf";
         else
-        {
-            print_value(END_INDEX);
-        }
+            printValue(pk, columns, END_INDEX, buf);
         buf << ")";
 
         return buf.str();

@@ -62,11 +62,11 @@ public:
         // This id is only used to to do equal check in DeltaValueSpace::checkHeadAndCloneTail.
         UInt64 id;
 
-        UInt64      rows  = 0;
-        UInt64      bytes = 0;
-        BlockPtr    schema;
-        HandleRange delete_range;
-        PageId      data_page = 0;
+        UInt64   rows  = 0;
+        UInt64   bytes = 0;
+        BlockPtr schema;
+        PKRange  delete_range;
+        PageId   data_page = 0;
 
         /// The members below are not serialized.
 
@@ -79,10 +79,10 @@ public:
         // Can be appended into new rows or not.
         bool appendable = true;
 
-        Pack() : id(++NEXT_PACK_ID) {}
+        Pack(PrimaryKeyPtr pk) : id(++NEXT_PACK_ID), delete_range(PKRange::newEmpty(pk)) {}
         Pack(const Pack & o) = default;
 
-        bool isDeleteRange() const { return !delete_range.none(); }
+        bool isDeleteRange() const { return !delete_range.isEmpty(); }
         bool isCached() const { return !isDeleteRange() && (bool)cache; }
         /// Whether its column data can be flushed.
         bool dataFlushable() const { return !isDeleteRange() && data_page == 0; }
@@ -316,7 +316,7 @@ public:
 public:
     static PageId writePackData(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs);
 
-    static PackPtr writePack(DMContext & context, const Block & block, size_t offset, size_t limit, WriteBatches & wbs);
+    static PackPtr writePack(DMContext & context, PrimaryKeyPtr pk_, const Block & block, size_t offset, size_t limit, WriteBatches & wbs);
 
     /// The following methods returning false means this operation failed, caused by other threads could have done
     /// some updates on this instance. E.g. this instance have been abandoned.

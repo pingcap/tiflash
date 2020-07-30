@@ -168,8 +168,7 @@ public:
 
     void check(DMContext & dm_context, const String & when) const;
 
-    const HandleRange & getRange() const { return range; }
-    const PKRangePtr &  getPKRange() const { return pk_range; }
+    const PKRangePtr & getPKRange() const { return pk_range; }
 
     const DeltaValueSpacePtr &  getDelta() const { return delta; }
     const StableValueSpacePtr & getStable() const { return stable; }
@@ -259,11 +258,10 @@ private:
                      const PKRange &           relevant_range) const;
 
 private:
-    const UInt64      epoch; // After split / merge / merge delta, epoch got increased by 1.
-    const HandleRange range;
-    const PKRangePtr  pk_range;
-    const PageId      segment_id;
-    const PageId      next_segment_id;
+    const UInt64     epoch; // After split / merge / merge delta, epoch got increased by 1.
+    const PKRangePtr pk_range;
+    const PageId     segment_id;
+    const PageId     next_segment_id;
 
     const DeltaValueSpacePtr  delta;
     const StableValueSpacePtr stable;

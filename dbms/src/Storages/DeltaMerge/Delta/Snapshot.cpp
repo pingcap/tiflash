@@ -316,7 +316,7 @@ BlockOrDeletes DeltaValueSpace::Snapshot::getMergeBlocks(size_t rows_begin, size
 
             if (pack.isDeleteRange())
             {
-                res.emplace_back(PKRange::fromHandleRange(pack.delete_range));
+                res.emplace_back(pack.delete_range);
             }
             block_rows_start = block_rows_end;
         }

@@ -95,7 +95,7 @@ BlockInputStreams StorageSystemDTSegments::read(const Names & column_names,
                 res_columns[j++]->insert(dm_storage->getTombstone());
 
                 res_columns[j++]->insert(stat.segment_id);
-                res_columns[j++]->insert(stat.range.toString());
+                res_columns[j++]->insert(stat.pk_range->toString());
                 res_columns[j++]->insert(stat.rows);
                 res_columns[j++]->insert(stat.size);
                 res_columns[j++]->insert(stat.delete_ranges);

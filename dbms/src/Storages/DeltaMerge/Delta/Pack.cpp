@@ -44,7 +44,7 @@ inline void serializePack(const Pack & pack, const BlockPtr & schema, WriteBuffe
 {
     writeIntBinary(pack.rows, buf);
     writeIntBinary(pack.bytes, buf);
-    writePODBinary(pack.delete_range, buf);
+    pack.delete_range.serialize(buf);
     writeIntBinary(pack.data_page, buf);
     if (schema)
     {
@@ -62,14 +62,14 @@ inline void serializePack(const Pack & pack, const BlockPtr & schema, WriteBuffe
     }
 }
 
-inline PackPtr deserializePack(ReadBuffer & buf)
+inline PackPtr deserializePack(PrimaryKeyPtr pk, ReadBuffer & buf)
 {
-    auto pack        = std::make_shared<Pack>();
+    auto pack        = std::make_shared<Pack>(pk);
     pack->saved      = true;  // Must be true, otherwise it should not be here.
     pack->appendable = false; // Must be false, otherwise it should not be here.
     readIntBinary(pack->rows, buf);
     readIntBinary(pack->bytes, buf);
-    readPODBinary(pack->delete_range, buf);
+    pack->delete_range = PKRange::deserializePKRange(buf);
     readIntBinary(pack->data_page, buf);
     UInt32 column_size;
     readIntBinary(column_size, buf);
@@ -123,7 +123,7 @@ void serializeSavedPacks(WriteBuffer & buf, const Packs & packs)
     }
 }
 
-Packs deserializePacks(ReadBuffer & buf)
+Packs deserializePacks(PrimaryKeyPtr pk, ReadBuffer & buf)
 {
     // Check binary version
     UInt64 version;
@@ -136,7 +136,7 @@ Packs deserializePacks(ReadBuffer & buf)
     BlockPtr last_schema;
     for (size_t i = 0; i < (size_t)size; ++i)
     {
-        auto pack = deserializePack(buf);
+        auto pack = deserializePack(pk, buf);
         if (!pack->isDeleteRange())
         {
             if (!pack->schema)

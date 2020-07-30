@@ -584,7 +584,7 @@ try
         ASSERT_EQ(num_rows_read, num_rows_write);
     }
 
-    const auto old_range = segment->getRange();
+    const auto old_range = segment->getPKRange()->toHandleRange();
 
     SegmentPtr new_segment;
     // test split segment
@@ -592,9 +592,9 @@ try
         std::tie(segment, new_segment) = segment->split(dmContext());
     }
     // check segment range
-    const auto s1_range = segment->getRange();
+    const auto s1_range = segment->getPKRange()->toHandleRange();
     EXPECT_EQ(s1_range.start, old_range.start);
-    const auto s2_range = new_segment->getRange();
+    const auto s2_range = new_segment->getPKRange()->toHandleRange();
     EXPECT_EQ(s2_range.start, s1_range.end);
     EXPECT_EQ(s2_range.end, old_range.end);
     // TODO check segment epoch is increase
@@ -630,7 +630,7 @@ try
         segment = Segment::merge(dmContext(), segment, new_segment);
         {
             // check merged segment range
-            const auto & merged_range = segment->getRange();
+            const auto & merged_range = segment->getPKRange()->toHandleRange();
             EXPECT_EQ(merged_range.start, s1_range.start);
             EXPECT_EQ(merged_range.end, s2_range.end);
             // TODO check segment epoch is increase

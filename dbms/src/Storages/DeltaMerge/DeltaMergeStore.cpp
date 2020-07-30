@@ -443,7 +443,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
                     wbs.rollbackWrittenLogAndData();
                     wbs.clear();
 
-                    write_pack = DeltaValueSpace::writePack(*dm_context, block, offset, limit, wbs);
+                    write_pack = DeltaValueSpace::writePack(*dm_context, pk, block, offset, limit, wbs);
                     wbs.writeLogAndData();
                     write_range = pk_range;
                 }
@@ -1681,7 +1681,6 @@ SegmentStats DeltaMergeStore::getSegmentStats()
         auto &      stable = segment->getStable();
 
         stat.segment_id = segment->segmentId();
-        stat.range      = segment->getRange();
         stat.pk_range   = segment->getPKRange();
 
         stat.rows          = segment->getEstimatedRows();
