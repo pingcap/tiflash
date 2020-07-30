@@ -38,7 +38,7 @@ struct PKValue
             buf << "<";
         for (size_t i = 0; i < pk->size(); ++i)
         {
-            (*pk)[i].type->serializeTextEscaped(*(block->getByPosition(i).column), row_id, buf);
+            (*pk)[i].type->serializeTextEscaped(*(block->getByName((*pk)[i].name).column), row_id, buf);
             if (i != pk->size() - 1)
                 buf << ",";
         }
@@ -72,9 +72,9 @@ inline int compareValuesAt(const PrimaryKey & pk, const Columns & left, size_t l
     {
         int res;
         if (pk[i].collator)
-            res = left[i]->compareAtWithCollation(left_row_id, right_row_id, *(right.getByPosition(i).column), 1, *pk[i].collator);
+            res = left[i]->compareAtWithCollation(left_row_id, right_row_id, *(right.getByName(pk[i].name).column), 1, *pk[i].collator);
         else
-            res = left[i]->compareAt(left_row_id, right_row_id, *(right.getByPosition(i).column), 1);
+            res = left[i]->compareAt(left_row_id, right_row_id, *(right.getByName(pk[i].name).column), 1);
         if (res != 0)
             return res;
     }
@@ -189,7 +189,7 @@ public:
                 throw Exception("PKRangeCreator: Cannot set edge when values's size is not " + DB::toString(INDEX));
             is_infinite[INDEX] = false;
             for (size_t i = 0; i < columns.size(); ++i)
-                columns[i]->insertFrom(*(block.getByPosition(i).column), row_id);
+                columns[i]->insertFrom(*(block.getByName((*pk)[i].name).column), row_id);
         }
 
         template <class ValueType, size_t INDEX>
@@ -422,13 +422,14 @@ public:
 
     bool check(const Block & block, size_t row_id) const { return checkStart(block, row_id) && checkEnd(block, row_id); }
 
+    /// return <offset, limit>
     std::pair<size_t, size_t> getPosRange(const Block & block, const size_t offset, const size_t limit) const
     {
         size_t start_index
-            = (is_infinite[START_INDEX] || check(block, offset)) ? offset : lowerBound(*pk, block, offset, limit, columns, START_INDEX);
-        size_t end_index = (is_infinite[END_INDEX] || check(block, offset + limit))
+            = (is_infinite[START_INDEX] || check(block, offset)) ? offset : lowerBound(*pk, block, offset, offset + limit, columns, START_INDEX);
+        size_t end_index = (is_infinite[END_INDEX] || check(block, offset + limit - 1))
             ? offset + limit
-            : lowerBound(*pk, block, offset, limit, columns, END_INDEX);
+            : lowerBound(*pk, block, offset, offset + limit, columns, END_INDEX);
 
         return {start_index, end_index - start_index};
     }
