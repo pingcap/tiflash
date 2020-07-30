@@ -38,7 +38,7 @@ public:
         friend class PageFile;
 
     public:
-        Writer(PageFile &, bool sync_on_write, bool create_new_file = true);
+        Writer(PageFile &, bool sync_on_write, bool create_new_file = true, bool create_new_encryption_info = true);
         ~Writer();
 
         [[nodiscard]] size_t write(WriteBatch & wb, PageEntriesEdit & edit);
@@ -251,7 +251,7 @@ public:
     /// Return a writer bound with this PageFile object.
     /// Note that the user MUST keep the PageFile object around before this writer being freed.
     /// And the meta_file_pos, data_file_pos should be properly set before creating writer.
-    std::unique_ptr<Writer> createWriter(bool sync_on_write, bool create_new_file) { return std::make_unique<Writer>(*this, sync_on_write, create_new_file); }
+    std::unique_ptr<Writer> createWriter(bool sync_on_write, bool create_new_file, bool create_new_encryption_info) { return std::make_unique<Writer>(*this, sync_on_write, create_new_file, create_new_encryption_info); }
     /// Return a reader for this file.
     /// The PageFile object can be released any time.
     std::shared_ptr<Reader> createReader()

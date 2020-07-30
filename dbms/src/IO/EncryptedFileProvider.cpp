@@ -13,10 +13,10 @@ RandomAccessFilePtr EncryptedFileProvider::newRandomAccessFileImpl(const std::st
     return std::make_shared<EncryptedRandomAccessFile>(underlying, encryption_provider->createCipherStream(encryption_path_, false));
 }
 
-WritableFilePtr EncryptedFileProvider::newWritableFileImpl(const std::string & file_path_, const EncryptionPath & encryption_path_, bool create_new_file_, int flags, mode_t mode) const
+WritableFilePtr EncryptedFileProvider::newWritableFileImpl(const std::string & file_path_, const EncryptionPath & encryption_path_, bool create_new_file_, bool create_new_encryption_info_, int flags, mode_t mode) const
 {
     WritableFilePtr underlying = std::make_shared<PosixWritableFile>(file_path_, create_new_file_, flags, mode);
-    return std::make_shared<EncryptedWritableFile>(underlying, encryption_provider->createCipherStream(encryption_path_, create_new_file_));
+    return std::make_shared<EncryptedWritableFile>(underlying, encryption_provider->createCipherStream(encryption_path_, create_new_encryption_info_));
 }
 
 void EncryptedFileProvider::deleteFile(const std::string &file_path_, const EncryptionPath &encryption_path_) const {
@@ -26,5 +26,9 @@ void EncryptedFileProvider::deleteFile(const std::string &file_path_, const Encr
         data_file.remove();
     }
     key_manager->deleteFile(encryption_path_.dir_name);
+}
+
+void EncryptedFileProvider::createEncryptionInfo(const std::string &file_path_) const {
+    key_manager->newFile(file_path_);
 }
 } // namespace DB

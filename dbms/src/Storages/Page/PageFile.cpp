@@ -388,14 +388,14 @@ void PageFile::MetaMergingReader::moveNext()
 // PageFile::Writer
 // =========================================================
 
-PageFile::Writer::Writer(PageFile & page_file_, bool sync_on_write_, bool create_new_file)
+PageFile::Writer::Writer(PageFile & page_file_, bool sync_on_write_, bool create_new_file, bool create_new_encryption_info)
     : page_file(page_file_), sync_on_write(sync_on_write_), data_file_path(page_file.dataPath()), meta_file_path(page_file.metaPath()), data_file{nullptr}, meta_file{nullptr}
 {
     // Create data and meta file, prevent empty page folder from being removed by GC.
 //    PageUtil::touchFile(data_file_path);
 //    PageUtil::touchFile(meta_file_path);
-    data_file = page_file.file_provider->newWritableFile(page_file.dataPath(), page_file.dataEncryptionPath(), create_new_file);
-    meta_file = page_file.file_provider->newWritableFile(page_file.metaPath(), page_file.metaEncryptionPath(), create_new_file);
+    data_file = page_file.file_provider->newWritableFile(page_file.dataPath(), page_file.dataEncryptionPath(), create_new_file, create_new_encryption_info);
+    meta_file = page_file.file_provider->newWritableFile(page_file.metaPath(), page_file.metaEncryptionPath(), create_new_file, create_new_encryption_info);
 }
 
 PageFile::Writer::~Writer()

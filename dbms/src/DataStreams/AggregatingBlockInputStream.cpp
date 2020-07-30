@@ -79,4 +79,9 @@ AggregatingBlockInputStream::TemporaryFileStream::TemporaryFileStream(const std:
     : file_in(file_provider, path, EncryptionPath(path, "")), compressed_in(file_in),
     block_in(std::make_shared<NativeBlockInputStream>(compressed_in, ClickHouseRevision::get())) {}
 
+AggregatingBlockInputStream::TemporaryFileStream::~TemporaryFileStream()
+{
+    file_provider->deleteFile(file_in.getFileName(), EncryptionPath(file_in.getFileName(), ""));
+}
+
 }

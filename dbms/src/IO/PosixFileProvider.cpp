@@ -11,8 +11,9 @@ RandomAccessFilePtr PosixFileProvider::newRandomAccessFileImpl(const std::string
     return std::make_shared<PosixRandomAccessFile>(file_path_, flags);
 }
 
-WritableFilePtr PosixFileProvider::newWritableFileImpl(const std::string & file_path_, const EncryptionPath & encryption_path_, bool create_new_file_, int flags, mode_t mode) const
+WritableFilePtr PosixFileProvider::newWritableFileImpl(const std::string & file_path_, const EncryptionPath & encryption_path_, bool create_new_file_, bool create_new_encryption_info_, int flags, mode_t mode) const
 {
+    std::ignore = create_new_encryption_info_;
     std::ignore = encryption_path_;
     return std::make_shared<PosixWritableFile>(file_path_, create_new_file_, flags, mode);
 }
@@ -24,6 +25,10 @@ void PosixFileProvider::deleteFile(const std::string & file_path_, const Encrypt
     {
         data_file.remove();
     }
+}
+
+void PosixFileProvider::createEncryptionInfo(const std::string &file_path_) const {
+    std::ignore = file_path_;
 }
 
 } // namespace DB
