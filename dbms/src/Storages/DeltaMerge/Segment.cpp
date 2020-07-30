@@ -244,7 +244,7 @@ bool Segment::write(DMContext & dm_context, const Block & block)
 
 bool Segment::write(DMContext & dm_context, const PKRange & delete_range)
 {
-    auto new_range = PKRange::shrink(delete_range, *pk_range);
+    auto new_range = PKRange::intersect(delete_range, *pk_range);
     if (new_range.isEmpty())
     {
         LOG_WARNING(log, "Try to write an invalid delete range " << delete_range.toString() << " into " << simpleInfo());
@@ -319,14 +319,14 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
         LOG_TRACE(log,
                   "Segment [" << DB::toString(segment_id) << "] is read by max_version: " << max_version << ", 1"
                               << " range: " << toString(read_ranges));
-        return create_stream(PKRange::shrink(*pk_range, read_ranges[0]));
+        return create_stream(PKRange::intersect(*pk_range, read_ranges[0]));
     }
     else
     {
         BlockInputStreams streams;
         for (auto & read_range : read_ranges)
         {
-            PKRange real_range = PKRange::shrink(*pk_range, read_range);
+            PKRange real_range = PKRange::intersect(*pk_range, read_range);
             if (!real_range.isEmpty())
                 streams.push_back(create_stream(real_range));
         }
@@ -1266,7 +1266,7 @@ bool Segment::placeDelete(const DMContext &         dm_context,
             compacted_index->end(),
             dm_context.stable_pack_rows);
 
-        delete_stream = std::make_shared<DMPKFilterBlockInputStream<true>>(delete_stream, PKRange::shrink(delete_range, relevant_range));
+        delete_stream = std::make_shared<DMPKFilterBlockInputStream<true>>(delete_stream, PKRange::intersect(delete_range, relevant_range));
 
         // Try to merge into big block. 128 MB should be enough.
         SquashingBlockInputStream squashed_delete_stream(delete_stream, 0, 128 * (1UL << 20));

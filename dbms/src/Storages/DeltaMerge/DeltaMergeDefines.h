@@ -6,9 +6,10 @@
 #include <Core/NamesAndTypes.h>
 #include <Core/Types.h>
 #include <DataTypes/DataTypeFactory.h>
-#include <Storages/MutableSupport.h>
-#include <Storages/Transaction/Types.h>
 #include <Storages/DeltaMerge/Range.h>
+#include <Storages/MutableSupport.h>
+#include <Storages/Transaction/Collator.h>
+#include <Storages/Transaction/Types.h>
 
 #include <limits>
 #include <memory>
@@ -67,11 +68,11 @@ using OptionTableInfoConstRef = std::optional<std::reference_wrapper<const TiDB:
 
 struct ColumnDefine
 {
-    ColId        id;
-    String       name;
-    DataTypePtr  type;
-    ICollatorPtr collator;
-    Field        default_value;
+    ColId                  id;
+    String                 name;
+    DataTypePtr            type;
+    TiDB::ITiDBCollatorPtr collator;
+    Field                  default_value;
 
     explicit ColumnDefine(ColId id_ = 0, String name_ = "", DataTypePtr type_ = nullptr)
         : id(id_), name(std::move(name_)), type(std::move(type_))

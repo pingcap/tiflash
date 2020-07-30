@@ -474,17 +474,6 @@ public:
         return creator.getRange();
     }
 
-    static PKRange shrink(const PKRange & a, const PKRange & b)
-    {
-        const PKRange * start_use = compareEdge<START_INDEX>(a, b) <= 0 ? &b : &a;
-        const PKRange * end_use   = compareEdge<END_INDEX>(a, b) >= 0 ? &b : &a;
-
-        Creator creator(a.pk);
-        creator.setStart(start_use->getStart());
-        creator.setEnd(end_use->getEnd());
-        return creator.getRange();
-    }
-
     static PKRange merge(const PKRanges & ranges)
     {
         const PKRange * start_use = &(ranges.at(0));
@@ -606,6 +595,68 @@ public:
             : lowerBound(*pk, columns, offset, limit, columns_data, END_INDEX);
 
         return {start_index, end_index - start_index};
+    }
+
+    void serialize(WriteBuffer & buf)
+    {
+        writeIntBinary(pk->size(), buf);
+        for (auto & col_define : *pk)
+        {
+            writeIntBinary(col_define.id, buf);
+            writeStringBinary(col_define.name, buf);
+            writeStringBinary(col_define.type->getName(), buf);
+            writeIntBinary(col_define.collator->getCollatorId(), buf);
+            col_define.type->serializeBinary(col_define.default_value, buf);
+        }
+        writeBoolText(is_infinite[0], buf);
+        writeBoolText(is_infinite[1], buf);
+        for (size_t i = 0; i < pk->size(); i++)
+        {
+            (*pk)[i].type->serializeBinary(*columns[i], 0, buf);
+            (*pk)[i].type->serializeBinary(*columns[i], 1, buf);
+        }
+    }
+    static PKRange deserializePKRange(ReadBuffer & buf)
+    {
+        size_t pk_size;
+        readIntBinary(pk_size, buf);
+        PrimaryKeyPtr           pk                = std::make_shared<ColumnDefines>();
+        const DataTypeFactory & data_type_factory = DataTypeFactory::instance();
+        for (size_t i = 0; i < pk_size; i++)
+        {
+            ColumnDefine col_define;
+            readIntBinary(col_define.id, buf);
+            readStringBinary(col_define.name, buf);
+            String type_name;
+            readStringBinary(type_name, buf);
+            col_define.type = data_type_factory.get(type_name);
+            Int32 collator_id;
+            readIntBinary(collator_id, buf);
+            col_define.collator = TiDB::ITiDBCollator::getCollator(collator_id);
+            col_define.type->deserializeBinary(col_define.default_value, buf);
+            pk->emplace_back(col_define);
+        }
+        Columns columns;
+        columns.resize(pk_size);
+        for (size_t i = 0; i < pk_size; i++)
+        {
+            auto col = (*pk)[i].type->createColumn();
+            (*pk)[i].type->deserializeBinary(*col, buf);
+            columns[i] = std::move(col);
+        }
+        Creator creator(pk);
+        bool    infinite;
+        readBoolText(infinite, buf);
+        if (infinite)
+            creator.setStartInfinite();
+        else
+            creator.setStart(columns, START_INDEX);
+        readBoolText(infinite, buf);
+        if (infinite)
+            creator.setEndInfinite();
+        else
+            creator.setEnd(columns, END_INDEX);
+        return creator.getRange();
     }
 
     String toString() const
