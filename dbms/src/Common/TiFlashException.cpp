@@ -30,8 +30,9 @@ void TiFlashErrorRegistry::initialize()
     REGISTER_ERROR_CLASS(Coprocessor);
 
     // Classify by conception
-    REGISTER_ERROR_CLASS(TableSchema);
+    REGISTER_ERROR_CLASS(Table);
     REGISTER_ERROR_CLASS(Decimal);
+    REGISTER_ERROR_CLASS(BroadcastJoin);
 
 #undef REGISTER_ERROR_CLASS
 
@@ -46,18 +47,24 @@ void TiFlashErrorRegistry::initialize()
         "This is a critical error which should rarely occur, please report it to https://asktug.com, "
         "better providing information about your cluster(log, topology information etc.).");
 
-    registerError(TableSchema, "SchemaVersionError", //
+    registerError(Table, "SchemaVersionError", //
         /* Description */ "Schema version of target table in TiFlash is different from that in query.",
         /* Workaround */
         "TiFlash will sync the newest schema from TiDB before processing every query. "
         "If there is a DDL operation performed as soon as your query was sent, this error may occur. "
         "Please retry your query after a short time(about 30 seconds).");
 
-    registerError(TableSchema, "SyncError", //
+    registerError(Table, "SyncError", //
         /* Description */ "Schema synchronize error.",
         /* Workaround */
         "This is a critical error which should rarely occur, please report it to https://asktug.com, "
         "better providing information about your cluster(log, topology information etc.).");
+
+    registerError(Table, "NotExists", //
+        /* Description */ "Table does not exist.",
+        /* Workaround */
+        "This error may occur when send query to TiFlash as soon as the target table is dropped or truncated. "
+        "Please retry your query after a short time(about 30 seconds)");
 
     registerError(Decimal, "Overflow", //
         /* Description */ "Decimal value overflow.",
@@ -97,6 +104,34 @@ void TiFlashErrorRegistry::initialize()
         /* Description */ "Bad TiDB coprocessor request.",
         /* Workaround */
         "This error is usually caused by incorrect TiDB DAGRequest. "
+        "Please report it to https://asktug.com, "
+        "better providing information about your cluster(log, topology information etc.).");
+
+    registerError(Coprocessor, "Unimplemented", //
+        /* Description */ "Some features are unimplemented.",
+        /* Workaround */
+        "This error may caused by unmatched TiDB and TiFlash versions, "
+        "and should not occur in common case."
+        "Please report it to https://asktug.com, "
+        "better providing information about your cluster(log, topology information etc.).");
+
+    registerError(Coprocessor, "Internal", //
+        /* Description */ "TiFlash Coprocessor internal error.",
+        /* Workaround */
+        "Please report it to https://asktug.com, "
+        "better providing information about your cluster(log, topology information etc.).");
+
+    registerError(BroadcastJoin, "TooManyColumns", //
+        /* Description */ "Number of columns to read exceeds limit.",
+        /* Workaround */
+        "Please try to reduce your joined columns. "
+        "If this error still remains, "
+        "please report it to https://asktug.com, "
+        "better providing information about your cluster(log, topology information etc.).");
+
+    registerError(BroadcastJoin, "Internal", //
+        /* Description */ "Broadcast Join internal error.",
+        /* Workaround */
         "Please report it to https://asktug.com, "
         "better providing information about your cluster(log, topology information etc.).");
 }
