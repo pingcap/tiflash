@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Interpreters/Aggregator.h>
+#include <IO/FileProvider.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Common/ConcurrentBoundedQueue.h>
 #include <common/ThreadPool.h>

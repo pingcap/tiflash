@@ -15,7 +15,7 @@
 #include <DataStreams/NativeBlockOutputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
-#include <IO/WriteBufferFromFile.h>
+#include <IO/WriteBufferFromFileProvider.h>
 #include <IO/CompressedWriteBuffer.h>
 
 #include <Interpreters/Aggregator.h>
@@ -675,7 +675,7 @@ void NO_INLINE Aggregator::executeWithoutKeyImpl(
 }
 
 
-bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & result,
+bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & result, const FileProviderPtr & file_provider,
     ColumnRawPtrs & key_columns, AggregateColumns & aggregate_columns, StringRefs & key,
     bool & no_more_keys)
 {
@@ -852,21 +852,21 @@ bool Aggregator::executeOnBlock(const Block & block, AggregatedDataVariants & re
         && current_memory_usage > static_cast<Int64>(params.max_bytes_before_external_group_by)
         && worth_convert_to_two_level)
     {
-        writeToTemporaryFile(result);
+        writeToTemporaryFile(result, file_provider);
     }
 
     return true;
 }
 
 
-void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants)
+void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, const FileProviderPtr & file_provider)
 {
     Stopwatch watch;
     size_t rows = data_variants.size();
 
     auto file = std::make_unique<Poco::TemporaryFile>(params.tmp_path);
     const std::string & path = file->path();
-    WriteBufferFromFile file_buf(path);
+    WriteBufferFromFileProvider file_buf(file_provider, path, EncryptionPath(path, ""));
     CompressedWriteBuffer compressed_buf(file_buf);
     NativeBlockOutputStream block_out(compressed_buf, ClickHouseRevision::get(), getHeader(false));
 
@@ -1015,7 +1015,7 @@ bool Aggregator::checkLimits(size_t result_size, bool & no_more_keys) const
 }
 
 
-void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result)
+void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, const FileProviderPtr & file_provider)
 {
     if (isCancelled())
         return;
@@ -1047,14 +1047,14 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
         src_rows += block.rows();
         src_bytes += block.bytes();
 
-        if (!executeOnBlock(block, result, key_columns, aggregate_columns, key, no_more_keys))
+        if (!executeOnBlock(block, result, file_provider, key_columns, aggregate_columns, key, no_more_keys))
             break;
     }
 
     /// If there was no data, and we aggregate without keys, and we must return single row with the result of empty aggregation.
     /// To do this, we pass a block with zero rows to aggregate.
     if (result.empty() && params.keys_size == 0 && !params.empty_result_for_aggregation_by_empty_set)
-        executeOnBlock(stream->getHeader(), result, key_columns, aggregate_columns, key, no_more_keys);
+        executeOnBlock(stream->getHeader(), result, file_provider, key_columns, aggregate_columns, key, no_more_keys);
 
     double elapsed_seconds = watch.elapsedSeconds();
     size_t rows = result.sizeWithoutOverflowRow();
