@@ -111,7 +111,7 @@ catch (const LockException & e)
 }
 catch (const TiFlashException & e)
 {
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": TiFlash Exception: " << e.displayText() << "\n" << e.getStackTrace().toString());
+    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": " << e.standardText() << "\n" << e.getStackTrace().toString());
     recordError(grpc::StatusCode::INTERNAL, e.standardText());
 }
 catch (const Exception & e)
