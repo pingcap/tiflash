@@ -305,7 +305,8 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     if (!ts.has_table_id())
     {
         // do not have table id
-        throw TiFlashException("Table id not specified in table scan executor", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
+        throw TiFlashException(
+            "Table id not specified in table scan executor", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
     }
     if (dag.getRegions().empty())
     {
@@ -360,7 +361,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
             catch (const RegionException & e)
             {
                 if (tmt.getTerminated())
-                    throw Exception("TiFlash server is terminating", ErrorCodes::LOGICAL_ERROR);
+                    throw TiFlashException("TiFlash server is terminating", TiFlashErrorRegistry::simpleGet("Coprocessor", "Internal"));
                 // By now, RegionException will contain all region id of MvccQueryInfo, which is needed by CHSpark.
                 // When meeting RegionException, we can let MakeRegionQueryInfos to check in next loop.
             }
@@ -378,7 +379,8 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         storage = context.getTMTContext().getStorages().get(table_id);
         if (storage == nullptr)
         {
-            throw Exception("Table " + std::to_string(table_id) + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
+            throw TiFlashException(
+                "Table " + std::to_string(table_id) + " doesn't exist.", TiFlashErrorRegistry::simpleGet("Table", "NotExists"));
         }
         table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
     }
@@ -427,7 +429,8 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
                 if ((size_t)i >= required_columns.size())
                 {
                     // array index out of bound
-                    throw TiFlashException("Output offset index is out of bound", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
+                    throw TiFlashException(
+                        "Output offset index is out of bound", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
                 }
                 // do not have alias
                 final_project.emplace_back(required_columns[i], "");
@@ -444,10 +447,10 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     // todo handle alias column
     if (settings.max_columns_to_read && required_columns.size() > settings.max_columns_to_read)
     {
-        throw Exception("Limit for number of columns to read exceeded. "
-                        "Requested: "
+        throw TiFlashException("Limit for number of columns to read exceeded. "
+                               "Requested: "
                 + toString(required_columns.size()) + ", maximum: " + settings.max_columns_to_read.toString(),
-            ErrorCodes::TOO_MANY_COLUMNS);
+            TiFlashErrorRegistry::simpleGet("BroadcastJoin", "TooManyColumns"));
     }
 
     size_t max_block_size = settings.max_block_size;
@@ -668,7 +671,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
         {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Right}};
     if (input_streams_vec.size() != 2)
     {
-        throw Exception("Join query block must have 2 input streams", ErrorCodes::LOGICAL_ERROR);
+        throw TiFlashException("Join query block must have 2 input streams", TiFlashErrorRegistry::simpleGet("BroadcastJoin", "Internal"));
     }
 
     auto join_type_it = join_type_map.find(join.join_type());
@@ -700,7 +703,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     if (kind != ASTTableJoin::Kind::Inner)
     {
         // todo support left and right join
-        throw Exception("Only Inner join is supported", ErrorCodes::NOT_IMPLEMENTED);
+        throw TiFlashException("Only Inner join is supported", TiFlashErrorRegistry::simpleGet("Coprocessor", "Unimplemented"));
     }
 
     std::vector<NameAndTypePair> join_output_columns;
@@ -737,7 +740,8 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
             if (removeNullable(join_key_types[i])->isString())
             {
                 if (join.probe_types(i).collate() != join.build_types(i).collate())
-                    throw TiFlashException("Join with different collators on the join key", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
+                    throw TiFlashException(
+                        "Join with different collators on the join key", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
                 collators.push_back(getCollatorFromFieldType(join.probe_types(i)));
             }
             else
@@ -950,16 +954,17 @@ void DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVersion(TableID table_
         if (!storage_)
         {
             if (schema_synced)
-                throw Exception("Table " + std::to_string(table_id) + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
+                throw TiFlashException(
+                    "Table " + std::to_string(table_id) + " doesn't exist.", TiFlashErrorRegistry::simpleGet("Table", "NotExists"));
             else
                 return std::make_tuple(nullptr, nullptr, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, false);
         }
 
         if (storage_->engineType() != ::TiDB::StorageEngine::TMT && storage_->engineType() != ::TiDB::StorageEngine::DT)
         {
-            throw Exception("Specifying schema_version for non-managed storage: " + storage_->getName()
+            throw TiFlashException("Specifying schema_version for non-managed storage: " + storage_->getName()
                     + ", table: " + storage_->getTableName() + ", id: " + DB::toString(table_id) + " is not allowed",
-                ErrorCodes::LOGICAL_ERROR);
+                TiFlashErrorRegistry::simpleGet("Coprocessor", "Internal"));
         }
 
         /// Lock storage.
@@ -976,7 +981,7 @@ void DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVersion(TableID table_
         if (storage_schema_version > query_schema_version)
             throw TiFlashException("Table " + std::to_string(table_id) + " schema version " + std::to_string(storage_schema_version)
                     + " newer than query schema version " + std::to_string(query_schema_version),
-                TiFlashErrorRegistry::simpleGet("TableSchema", "SchemaVersionError"));
+                TiFlashErrorRegistry::simpleGet("Table", "SchemaVersionError"));
         // From now on we have storage <= query.
         // If schema was synced, it implies that global >= query, as mentioned above we have storage <= query, we are OK to serve.
         if (schema_synced)
@@ -1030,7 +1035,7 @@ void DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVersion(TableID table_
             return;
         }
 
-        throw Exception("Shouldn't reach here", ErrorCodes::UNKNOWN_EXCEPTION);
+        throw TiFlashException("Shouldn't reach here", TiFlashErrorRegistry::simpleGet("Coprocessor", "Internal"));
     }
 }
 
@@ -1164,13 +1169,14 @@ void copyExecutorTreeWithLocalTableScan(
         }
         else
         {
-            throw Exception("Not supported yet");
+            throw TiFlashException("Not supported yet", TiFlashErrorRegistry::simpleGet("Coprocessor", "Unimplemented"));
         }
         exec_id++;
     }
 
     if (current->tp() != tipb::ExecType::TypeTableScan)
-        throw Exception("Only support copy from table scan sourced query block");
+        throw TiFlashException(
+            "Only support copy from table scan sourced query block", TiFlashErrorRegistry::simpleGet("Coprocessor", "Internal"));
     exec->set_tp(tipb::ExecType::TypeTableScan);
     exec->set_executor_id("tablescan_" + std::to_string(exec_id));
     auto * new_ts = new tipb::TableScan(current->tbl_scan());
@@ -1190,7 +1196,8 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
     // in parellel, but current remote query is running in
     // parellel, so just disable this corner case.
     if (query_block.aggregation || query_block.limitOrTopN)
-        throw TiFlashException("Remote query containing agg or limit or topN is not supported", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
+        throw TiFlashException(
+            "Remote query containing agg or limit or topN is not supported", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
     const auto & ts = query_block.source->tbl_scan();
     std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
     for (auto & range : ts.ranges())

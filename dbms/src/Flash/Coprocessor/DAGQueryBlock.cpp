@@ -3,6 +3,7 @@
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 
+#include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/DAGQueryBlock.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 
@@ -35,7 +36,7 @@ static void assignOrThrowException(const tipb::Executor ** to, const tipb::Execu
 {
     if (*to != nullptr)
     {
-        throw Exception("Duplicated " + name + " in DAG request");
+        throw TiFlashException("Duplicated " + name + " in DAG request", TiFlashErrorRegistry::simpleGet("Coprocessor", "Internal"));
     }
     *to = from;
 }
@@ -93,9 +94,9 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_)
                 current = &current->topn().child();
                 break;
             case tipb::ExecType::TypeIndexScan:
-                throw Exception("Unsupported executor in DAG request: " + current->DebugString(), ErrorCodes::NOT_IMPLEMENTED);
+                throw TiFlashException("Unsupported executor in DAG request: " + current->DebugString(), TiFlashErrorRegistry::simpleGet("Coprocessor", "Internal"));
             default:
-                throw Exception("Should not reach here", ErrorCodes::LOGICAL_ERROR);
+                throw TiFlashException("Should not reach here", TiFlashErrorRegistry::simpleGet("Coprocessor", "Internal"));
         }
     }
 
@@ -150,7 +151,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
                 limitOrTopN_name = std::to_string(i) + "_limitOrTopN";
                 break;
             default:
-                throw Exception("Unsupported executor in DAG request: " + executors[i].DebugString(), ErrorCodes::NOT_IMPLEMENTED);
+                throw TiFlashException("Unsupported executor in DAG request: " + executors[i].DebugString(), TiFlashErrorRegistry::simpleGet("Coprocessor", "Unimplemented"));
         }
     }
     fillOutputFieldTypes();

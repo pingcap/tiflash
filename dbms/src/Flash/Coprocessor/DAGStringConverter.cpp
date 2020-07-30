@@ -30,25 +30,29 @@ void DAGStringConverter::buildTSString(const tipb::TableScan & ts, std::stringst
     else
     {
         // do not have table id
-        throw TiFlashException("Table id not specified in table scan executor", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
+        throw TiFlashException(
+            "Table id not specified in table scan executor", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
     }
     auto & tmt_ctx = context.getTMTContext();
     auto storage = tmt_ctx.getStorages().get(table_id);
     if (storage == nullptr)
     {
-        throw TiFlashException("Table " + std::to_string(table_id) + " doesn't exist.", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
+        throw TiFlashException(
+            "Table " + std::to_string(table_id) + " doesn't exist.", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
     }
 
     const auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
     if (!managed_storage)
     {
-        throw TiFlashException("Only Manageable table is supported in DAG request", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
+        throw TiFlashException(
+            "Only Manageable table is supported in DAG request", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
     }
 
     if (ts.columns_size() == 0)
     {
         // no column selected, must be something wrong
-        throw TiFlashException("No column is selected in table scan executor", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
+        throw TiFlashException(
+            "No column is selected in table scan executor", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
     }
     for (const tipb::ColumnInfo & ci : ts.columns())
     {
@@ -143,7 +147,7 @@ void DAGStringConverter::buildString(const tipb::Executor & executor, std::strin
         case tipb::ExecType::TypeJoin:
         case tipb::ExecType::TypeIndexScan:
             // index scan not supported
-            throw Exception("IndexScan is not supported", ErrorCodes::NOT_IMPLEMENTED);
+            throw TiFlashException("IndexScan is not supported", TiFlashErrorRegistry::simpleGet("Coprocessor", "Unimplemented"));
         case tipb::ExecType::TypeSelection:
             return buildSelString(executor.selection(), ss);
         case tipb::ExecType::TypeAggregation:
@@ -184,7 +188,7 @@ String DAGStringConverter::buildSqlString()
         auto current_columns = getCurrentColumns();
         std::vector<UInt64> output_index;
         if (afterAgg)
-            for(UInt64 i = 0; i < current_columns.size(); i++)
+            for (UInt64 i = 0; i < current_columns.size(); i++)
                 output_index.push_back(i);
         else
             for (UInt64 index : dag_request.output_offsets())

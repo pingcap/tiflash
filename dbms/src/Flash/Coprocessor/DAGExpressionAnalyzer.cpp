@@ -150,7 +150,7 @@ static String buildDateAddFunction(DAGExpressionAnalyzer * analyzer, const tipb:
     }
     String unit = expr.children(2).val();
     if (unit_to_func_name_map.find(unit) == unit_to_func_name_map.end())
-        throw Exception("date_add does not support unit " + unit + " yet.", ErrorCodes::NOT_IMPLEMENTED);
+        throw TiFlashException("date_add does not support unit " + unit + " yet.", TiFlashErrorRegistry::simpleGet("Coprocessor", "Unimplemented"));
     String func_name = unit_to_func_name_map.find(unit)->second;
     const auto & date_column_type = removeNullable(actions->getSampleBlock().getByName(date_column).type);
     if (!date_column_type->isDateOrDateTime())
@@ -408,7 +408,7 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
         auto const_expr_name = getActions(const_expr, actions);
         return applyFunction("notEquals", {column_name, const_expr_name}, actions, nullptr);
     }
-    throw Exception("Filter on " + org_type->getName() + " is not supported.", ErrorCodes::NOT_IMPLEMENTED);
+    throw TiFlashException("Filter on " + org_type->getName() + " is not supported.", TiFlashErrorRegistry::simpleGet("Coprocessor", "Unimplemented"));
 }
 
 void DAGExpressionAnalyzer::appendOrderBy(
@@ -781,7 +781,7 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
     {
         if (isAggFunctionExpr(expr))
         {
-            throw Exception("agg function is not supported yet", ErrorCodes::UNSUPPORTED_METHOD);
+            throw TiFlashException("agg function is not supported yet", TiFlashErrorRegistry::simpleGet("Coprocessor", "Unimplemented"));
         }
         const String & func_name = getFunctionName(expr);
         if (function_builder_map.find(func_name) != function_builder_map.end())
@@ -795,7 +795,7 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
     }
     else
     {
-        throw Exception("Unsupported expr type: " + getTypeName(expr), ErrorCodes::UNSUPPORTED_METHOD);
+        throw TiFlashException("Unsupported expr type: " + getTypeName(expr), TiFlashErrorRegistry::simpleGet("Coprocessor", "Unimplemented"));
     }
 
     ret = alignReturnType(expr, actions, ret, output_as_uint8_type);

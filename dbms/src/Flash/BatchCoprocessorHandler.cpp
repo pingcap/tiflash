@@ -49,12 +49,12 @@ grpc::Status BatchCoprocessorHandler::execute()
                 for (auto & r : cop_request->regions())
                 {
                     auto res = regions.emplace(r.region_id(),
-                        RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), GenCopKeyRange(r.ranges()),
-                            nullptr));
+                        RegionInfo(
+                            r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), GenCopKeyRange(r.ranges()), nullptr));
                     if (!res.second)
-                        throw Exception(
+                        throw TiFlashException(
                             std::string(__PRETTY_FUNCTION__) + ": contain duplicate region " + std::to_string(r.region_id()),
-                            ErrorCodes::LOGICAL_ERROR);
+                            TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
                 }
                 LOG_DEBUG(log,
                     __PRETTY_FUNCTION__ << ": Handling " << regions.size() << " regions in DAG request: " << dag_request.DebugString());
@@ -70,8 +70,8 @@ grpc::Status BatchCoprocessorHandler::execute()
             case COP_REQ_TYPE_ANALYZE:
             case COP_REQ_TYPE_CHECKSUM:
             default:
-                throw Exception(
-                    "Coprocessor request type " + std::to_string(cop_request->tp()) + " is not implemented", ErrorCodes::NOT_IMPLEMENTED);
+                throw TiFlashException("Coprocessor request type " + std::to_string(cop_request->tp()) + " is not implemented",
+                    TiFlashErrorRegistry::simpleGet("Coprocessor", "Unimplemented"));
         }
         return grpc::Status::OK;
     }
