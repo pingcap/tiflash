@@ -8,6 +8,7 @@
 #include <Storages/Page/gc/DataCompactor.h>
 #include <Storages/Page/gc/LegacyCompactor.h>
 #include <Storages/Page/gc/restoreFromCheckpoints.h>
+#include <Storages/Page/mvcc/utils.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <common/logger_useful.h>
 
@@ -664,6 +665,13 @@ struct GCDebugInfo
     size_t num_bytes_remove_data = 0;
 };
 
+enum class GCType
+{
+    Normal = 0,
+    Skip,
+    LowWrite,
+};
+
 bool PageStorage::gc()
 {
     // If another thread is running gc, just return;
@@ -759,6 +767,7 @@ bool PageStorage::gc()
         }
     };
 
+    GCType gc_type = GCType::Normal;
     // Ignore page files that maybe writing to.
     {
         PageFileSet removed_page_files;
@@ -770,9 +779,24 @@ bool PageStorage::gc()
         }
         page_files.swap(removed_page_files);
 
+        /// Strategies to reduce useless GC actions.
+        if (page_files.size() < 3)
+        {
+            // If only few page files, running gc is useless.
+            gc_type = GCType::Skip;
+        }
+        else if (last_gc_statistics.equals(statistics))
+        {
+            // No write since last gc. Give it a chance for running GC, ensure that we are able to
+            // reclaim disk usage when PageStorage is read-only in extreme cases.
+            if (DB::MVCC::utils::randInt(0, 1000) < 1) // TODO: make it configurable
+                gc_type = GCType::LowWrite;
+            else
+                gc_type = GCType::Skip;
+        }
+
         // Shorcut for early exit GC routine.
-        // If only few page files or statistics unchanged since last gc.
-        if (page_files.size() < 3 || last_gc_statistics.equals(statistics))
+        if (gc_type == GCType::Skip)
         {
             // Apply empty edit and cleanup.
             apply_and_cleanup(PageEntriesEdit{});
@@ -784,7 +808,10 @@ bool PageStorage::gc()
     Stopwatch watch;
     if (metrics)
     {
-        GET_METRIC(metrics, tiflash_storage_page_gc_count, type_exec).Increment();
+        if (gc_type == GCType::LowWrite)
+            GET_METRIC(metrics, tiflash_storage_page_gc_count, type_low_write).Increment();
+        else
+            GET_METRIC(metrics, tiflash_storage_page_gc_count, type_exec).Increment();
     }
     SCOPE_EXIT({
         if (metrics)
