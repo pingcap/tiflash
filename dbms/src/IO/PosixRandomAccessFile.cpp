@@ -1,7 +1,14 @@
 #include <Common/Exception.h>
+#include <Common/ProfileEvents.h>
 #include <IO/PosixRandomAccessFile.h>
 #include <fcntl.h>
 #include <unistd.h>
+
+namespace ProfileEvents
+{
+    extern const Event FileOpen;
+    extern const Event FileOpenFailed;
+}
 
 namespace DB
 {
@@ -19,6 +26,8 @@ extern const int CANNOT_SELECT;
 
 PosixRandomAccessFile::PosixRandomAccessFile(const std::string & file_name_, int flags) : file_name{file_name_}
 {
+    ProfileEvents::increment(ProfileEvents::FileOpen);
+
 #ifdef __APPLE__
     bool o_direct = (flags != -1) && (flags & O_DIRECT);
     if (o_direct)
@@ -28,6 +37,7 @@ PosixRandomAccessFile::PosixRandomAccessFile(const std::string & file_name_, int
 
     if (-1 == fd)
     {
+        ProfileEvents::increment(ProfileEvents::FileOpenFailed);
         throwFromErrno("Cannot open file " + file_name, errno == ENOENT ? ErrorCodes::FILE_DOESNT_EXIST : ErrorCodes::CANNOT_OPEN_FILE);
     }
 #ifdef __APPLE__
@@ -35,6 +45,7 @@ PosixRandomAccessFile::PosixRandomAccessFile(const std::string & file_name_, int
     {
         if (fcntl(fd, F_NOCACHE, 1) == -1)
         {
+            ProfileEvents::increment(ProfileEvents::FileOpenFailed);
             throwFromErrno("Cannot set F_NOCACHE on file " + file_name, ErrorCodes::CANNOT_OPEN_FILE);
         }
     }
@@ -55,6 +66,7 @@ void PosixRandomAccessFile::close()
         throw Exception("Cannot close file", ErrorCodes::CANNOT_CLOSE_FILE);
 
     fd = -1;
+    metric_increment.destroy();
 }
 
 off_t PosixRandomAccessFile::seek(off_t offset, int whence) { return ::lseek(fd, offset, whence); }

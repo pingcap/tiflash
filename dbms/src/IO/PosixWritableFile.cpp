@@ -1,8 +1,15 @@
-#include <Common/Exception.h>
-#include <IO/PosixWritableFile.h>
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <Common/Exception.h>
+#include <Common/ProfileEvents.h>
+#include <IO/PosixWritableFile.h>
+
+namespace ProfileEvents
+{
+    extern const Event FileOpen;
+    extern const Event FileOpenFailed;
+}
 
 namespace DB
 {
@@ -16,6 +23,8 @@ extern const int CANNOT_CLOSE_FILE;
 
 PosixWritableFile::PosixWritableFile(const std::string & file_name_, bool create_new_file_, int flags, mode_t mode) : file_name{file_name_}
 {
+    ProfileEvents::increment(ProfileEvents::FileOpen);
+
 #ifdef __APPLE__
     bool o_direct = (flags != -1) && (flags & O_DIRECT);
     if (o_direct)
@@ -34,6 +43,7 @@ PosixWritableFile::PosixWritableFile(const std::string & file_name_, bool create
 
     if (-1 == fd)
     {
+        ProfileEvents::increment(ProfileEvents::FileOpenFailed);
         throwFromErrno("Cannot open file " + file_name, errno == ENOENT ? ErrorCodes::FILE_DOESNT_EXIST : ErrorCodes::CANNOT_OPEN_FILE);
     }
 
@@ -42,6 +52,7 @@ PosixWritableFile::PosixWritableFile(const std::string & file_name_, bool create
     {
         if (fcntl(fd, F_NOCACHE, 1) == -1)
         {
+            ProfileEvents::increment(ProfileEvents::FileOpenFailed);
             throwFromErrno("Cannot set F_NOCACHE on file " + file_name, ErrorCodes::CANNOT_OPEN_FILE);
         }
     }
@@ -62,6 +73,7 @@ void PosixWritableFile::close()
         throw Exception("Cannot close file", ErrorCodes::CANNOT_CLOSE_FILE);
 
     fd = -1;
+    metric_increment.destroy();
 }
 
 ssize_t PosixWritableFile::write(char * buf, size_t size) { return ::write(fd, buf, size); }

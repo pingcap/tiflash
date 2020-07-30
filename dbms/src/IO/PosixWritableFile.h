@@ -1,7 +1,13 @@
 #pragma once
 
+#include <Common/CurrentMetrics.h>
 #include <IO/WritableFile.h>
 #include <string>
+
+namespace CurrentMetrics
+{
+    extern const Metric OpenFileForWrite;
+}
 
 #ifndef O_DIRECT
 #define O_DIRECT 00040000
@@ -11,6 +17,8 @@ namespace DB
 {
 class PosixWritableFile : public WritableFile
 {
+protected:
+    CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForWrite};
 public:
     PosixWritableFile(const std::string & file_name_, bool create_new_file_, int flags, mode_t mode);
 
