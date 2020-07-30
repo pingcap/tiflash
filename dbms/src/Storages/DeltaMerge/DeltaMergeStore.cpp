@@ -422,9 +422,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
 
             auto pk_range = segment->getPKRange();
 
-            size_t end_pos = pk_range->isEndInfinite() ? rows : pk_range->getPosRange(block, offset, rows - offset).second;
+            limit = pk_range->isEndInfinite() ? rows - offset : pk_range->getPosRange(block, offset, rows - offset).second;
 
-            limit = end_pos - offset;
 
             bool should_cache = limit < dm_context->delta_cache_limit_rows / 4;
             if (should_cache)

@@ -17,6 +17,7 @@
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
 #include <IO/ReadHelpers.h>
+#include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/DDLWorker.h>
 #include <Interpreters/IDAsPathUpgrader.h>
@@ -136,6 +137,86 @@ struct TiFlashProxyConfig
 };
 
 const std::string TiFlashProxyConfig::config_prefix = "flash.proxy";
+
+struct TiFlashSecurityConfig
+{
+    String ca_path;
+    String cert_path;
+    String key_path;
+
+    bool inited = false;
+    bool has_tls_config = false;
+    grpc::SslCredentialsOptions options;
+
+public:
+    TiFlashSecurityConfig(Poco::Util::LayeredConfiguration & config, Poco::Logger * log)
+    {
+        if (config.has("security"))
+        {
+            bool miss_ca_path = true;
+            bool miss_cert_path = true;
+            bool miss_key_path = true;
+            if (config.has("security.ca_path"))
+            {
+                ca_path = config.getString("security.ca_path");
+                miss_ca_path = false;
+            }
+            if (config.has("security.cert_path"))
+            {
+                cert_path = config.getString("security.cert_path");
+                miss_cert_path = false;
+            }
+            if (config.has("security.key_path"))
+            {
+                key_path = config.getString("security.key_path");
+                miss_key_path = false;
+            }
+            if (miss_ca_path && miss_cert_path && miss_key_path)
+            {
+                LOG_INFO(log, "No security config is set.");
+            }
+            else if (miss_ca_path || miss_cert_path || miss_key_path)
+            {
+                throw Exception("ca_path, cert_path, key_path must be set at the same time.", ErrorCodes::INVALID_CONFIG_PARAMETER);
+            }
+            else
+            {
+                has_tls_config = true;
+            }
+        }
+    }
+
+    grpc::SslCredentialsOptions ReadAndCacheSecurityInfo()
+    {
+        if (inited)
+        {
+            return options;
+        }
+        options.pem_root_certs = readFile(ca_path);
+        options.pem_cert_chain = readFile(cert_path);
+        options.pem_private_key = readFile(key_path);
+        inited = true;
+        return options;
+    }
+
+private:
+    String readFile(const String & filename)
+    {
+        if (filename.empty())
+        {
+            return "";
+        }
+        auto buffer = createReadBufferFromFileBase(filename, 1024, 0);
+        String result;
+        while (!buffer->eof())
+        {
+            char buf[1024];
+            size_t len = buffer->read(buf, 1024);
+            result.append(buf, len);
+        }
+        return result;
+    }
+};
 
 struct TiFlashRaftConfig
 {
@@ -270,7 +351,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     TiFlashServerHelper helper{
         // a special number, also defined in proxy
         .magic_number = 0x13579BDF,
-        .version = 8,
+        .version = 9,
         .inner = &tiflash_instance_wrap,
         .fn_gen_cpp_string = GenCppRawString,
         .fn_handle_write_raft_cmd = HandleWriteRaftCmd,
@@ -403,6 +484,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::string default_database = config().getString("default_database", raft_config.pd_addrs.empty() ? "default" : "system");
     global_context->setPath(path);
     global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
+
+    TiFlashSecurityConfig security_config(config(), log);
 
     /// Create directories for 'path' and for default database, if not exist.
     for (const String & candidate_path : global_context->getPartPathSelector().getAllPath())
@@ -607,7 +690,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
             raft_config.ignore_databases,
             raft_config.kvstore_path,
             raft_config.engine,
-            raft_config.disable_bg_flush);
+            raft_config.disable_bg_flush,
+            security_config.ReadAndCacheSecurityInfo());
         global_context->getTMTContext().reloadConfig(config());
     }
 
@@ -684,7 +768,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::unique_ptr<grpc::Server> flash_grpc_server = nullptr;
     {
         grpc::ServerBuilder builder;
-        builder.AddListeningPort(raft_config.flash_server_addr, grpc::InsecureServerCredentials());
+        if (security_config.has_tls_config)
+        {
+            grpc::SslServerCredentialsOptions server_cred(GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY);
+            auto options = security_config.ReadAndCacheSecurityInfo();
+            server_cred.pem_root_certs = options.pem_root_certs;
+            server_cred.pem_key_cert_pairs.push_back(
+                grpc::SslServerCredentialsOptions::PemKeyCertPair{options.pem_private_key, options.pem_cert_chain});
+            builder.AddListeningPort(raft_config.flash_server_addr, grpc::SslServerCredentials(server_cred));
+        }
+        else
+        {
+            builder.AddListeningPort(raft_config.flash_server_addr, grpc::InsecureServerCredentials());
+        }
 
         /// Init and register flash service.
         flash_service = std::make_unique<FlashService>(*this);
@@ -803,6 +899,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 /// HTTP
                 if (config().has("http_port"))
                 {
+                    if (security_config.has_tls_config)
+                    {
+                        throw Exception("tls config is set but https_port is not set ", ErrorCodes::INVALID_CONFIG_PARAMETER);
+                    }
                     Poco::Net::ServerSocket socket;
                     auto address = socket_bind_listen(socket, listen_host, config().getInt("http_port"));
                     socket.setReceiveTimeout(settings.http_receive_timeout);
@@ -817,9 +917,17 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 if (config().has("https_port"))
                 {
 #if Poco_NetSSL_FOUND
+                    if (!security_config.has_tls_config)
+                    {
+                        LOG_ERROR(log, "https_port is set but tls config is not set");
+                    }
+                    Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
+                        security_config.key_path,
+                        security_config.cert_path,
+                        security_config.ca_path);
                     std::call_once(ssl_init_once, SSLInit);
 
-                    Poco::Net::SecureServerSocket socket;
+                    Poco::Net::SecureServerSocket socket(context);
                     auto address = socket_bind_listen(socket, listen_host, config().getInt("https_port"), /* secure = */ true);
                     socket.setReceiveTimeout(settings.http_receive_timeout);
                     socket.setSendTimeout(settings.http_send_timeout);
@@ -836,6 +944,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 /// TCP
                 if (config().has("tcp_port"))
                 {
+                    if (security_config.has_tls_config)
+                    {
+                        LOG_ERROR(log, "tls config is set but tcp_port_secure is not set.");
+                    }
                     std::call_once(ssl_init_once, SSLInit);
                     Poco::Net::ServerSocket socket;
                     auto address = socket_bind_listen(socket, listen_host, config().getInt("tcp_port"));
@@ -851,7 +963,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 if (config().has("tcp_port_secure"))
                 {
 #if Poco_NetSSL_FOUND
-                    Poco::Net::SecureServerSocket socket;
+                    if (!security_config.has_tls_config)
+                    {
+                        LOG_ERROR(log, "tcp_port_secure is set but tls config is not set");
+                    }
+                    Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
+                        security_config.key_path,
+                        security_config.cert_path,
+                        security_config.ca_path);
+                    Poco::Net::SecureServerSocket socket(context);
                     auto address = socket_bind_listen(socket, listen_host, config().getInt("tcp_port_secure"), /* secure = */ true);
                     socket.setReceiveTimeout(settings.receive_timeout);
                     socket.setSendTimeout(settings.send_timeout);

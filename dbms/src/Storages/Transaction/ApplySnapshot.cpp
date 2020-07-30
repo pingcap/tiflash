@@ -173,7 +173,7 @@ RegionPtr KVStore::preHandleSnapshot(
                 new_region->insert(snapshot.cf, TiKVKey(k.data, k.len), TiKVValue(v.data, v.len));
             }
 
-            ss << "[cf: " << CFToName(snapshot.cf) << ", kv size: " << snapshot.len << "], ";
+            ss << "[cf: " << CFToName(snapshot.cf) << ", kv size: " << snapshot.len << "],";
         }
         new_region->tryPreDecodeTiKVValue(tmt);
         auto time_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
@@ -199,14 +199,17 @@ void KVStore::handleApplySnapshot(
     handleApplySnapshot(new_region, tmt);
 }
 
-void KVStore::handleIngestSST(UInt64 region_id, const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt)
+TiFlashApplyRes KVStore::handleIngestSST(UInt64 region_id, const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt)
 {
     auto region_task_lock = region_manager.genRegionTaskLock(region_id);
 
     const RegionPtr region = getRegion(region_id);
 
     if (region == nullptr)
-        throw Exception(std::string(__PRETTY_FUNCTION__) + ": region " + std::to_string(region_id) + " is not found");
+    {
+        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": [region " << region_id << "] is not found, might be removed already");
+        return TiFlashApplyRes::NotFound;
+    }
 
     const auto func_try_flush = [&]() {
         if (!region->writeCFCount())
@@ -220,7 +223,7 @@ void KVStore::handleIngestSST(UInt64 region_id, const SnapshotViewArray snaps, U
         {
             // sst of write cf may be ingested first, exception may be raised because there is no matched data in default cf.
             // ignore it.
-            LOG_DEBUG(log, __FUNCTION__ << ": catch but ignore exception: " << e.message());
+            LOG_DEBUG(log, "catch but ignore exception: " << e.message());
         }
     };
 
@@ -230,7 +233,17 @@ void KVStore::handleIngestSST(UInt64 region_id, const SnapshotViewArray snaps, U
     region->tryPreDecodeTiKVValue(tmt);
     func_try_flush();
 
-    region_persister.persist(*region, region_task_lock);
+    if (region->dataSize())
+    {
+        LOG_INFO(log, __FUNCTION__ << ": " << region->toString(true) << " with data " << region->dataInfo() << " skip persist");
+        return TiFlashApplyRes::None;
+    }
+    else
+    {
+        LOG_INFO(log, __FUNCTION__ << ": try to persist " << region->toString(true));
+        region_persister.persist(*region, region_task_lock);
+        return TiFlashApplyRes::Persist;
+    }
 }
 
 } // namespace DB
