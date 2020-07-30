@@ -157,6 +157,8 @@ void TiFlashErrorRegistry::registerErrorWithNumericCode(
     registerError(error_class, error_code_str, description, workaround);
 }
 
+// Standard error text with format:
+// [{Component}:{ErrorClass}:{ErrorCode}] {message}
 std::string TiFlashException::standardText() const
 {
     std::string text{};
