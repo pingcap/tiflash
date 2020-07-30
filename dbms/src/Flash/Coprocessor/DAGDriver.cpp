@@ -59,14 +59,14 @@ template <bool batch>
 void DAGDriver<batch>::execute()
 try
 {
-    throw TiFlashException("Test TiFlash Exception", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
+    throw TiFlashException("Test TiFlash Exception", TiFlashErrorRegistry::simpleGet(ErrorClass::Coprocessor, "BadRequest"));
     DAGContext dag_context;
     DAGQuerySource dag(context, dag_context, regions, dag_request, writer, batch);
 
     BlockIO streams = executeQuery(dag, context, internal, QueryProcessingStage::Complete);
     if (!streams.in || streams.out)
         // Only query is allowed, so streams.in must not be null and streams.out must be null
-        throw TiFlashException("DAG is not query.", TiFlashErrorRegistry::simpleGet("Coprocessor", "Internal"));
+        throw TiFlashException("DAG is not query.", TiFlashErrorRegistry::simpleGet(ErrorClass::Coprocessor, "Internal"));
 
     if constexpr (!batch)
     {
@@ -97,7 +97,7 @@ try
             // Throw exception to prevent receiver from getting wrong response.
             if (p_stream->getProfileInfo().bytes > std::numeric_limits<int>::max())
                 throw TiFlashException("DAG response is too big, please check config about region size or region merge scheduler",
-                    TiFlashErrorRegistry::simpleGet("Coprocessor", "Internal"));
+                    TiFlashErrorRegistry::simpleGet(ErrorClass::Coprocessor, "Internal"));
         }
     }
 }

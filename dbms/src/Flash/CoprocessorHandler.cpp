@@ -62,7 +62,7 @@ grpc::Status CoprocessorHandler::execute()
                 LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
                 if (dag_request.has_is_rpn_expr() && dag_request.is_rpn_expr())
                     throw TiFlashException("DAG request with rpn expression is not supported in TiFlash",
-                        TiFlashErrorRegistry::simpleGet("Coprocessor", "Unimplemented"));
+                        TiFlashErrorRegistry::simpleGet(ErrorClass::Coprocessor, "Unimplemented"));
                 tipb::SelectResponse dag_response;
                 std::unordered_map<RegionID, RegionInfo> regions;
                 const std::unordered_set<UInt64> bypass_lock_ts(
@@ -82,7 +82,7 @@ grpc::Status CoprocessorHandler::execute()
             case COP_REQ_TYPE_CHECKSUM:
             default:
                 throw TiFlashException("Coprocessor request type " + std::to_string(cop_request->tp()) + " is not implemented",
-                    TiFlashErrorRegistry::simpleGet("Coprocessor", "Unimplemented"));
+                    TiFlashErrorRegistry::simpleGet(ErrorClass::Coprocessor, "Unimplemented"));
         }
         return grpc::Status::OK;
     }

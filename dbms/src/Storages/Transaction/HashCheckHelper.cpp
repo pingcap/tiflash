@@ -54,7 +54,7 @@ void checkObjectHashInFile(const std::string & path, const std::vector<size_t> &
         max_size = std::max(max_size, b);
     }
     if (total_size != file_size)
-            throw DB::TiFlashException("File size not match! Expected: " + DB::toString(total_size) + ", got: " + DB::toString(file_size), TiFlashErrorRegistry::simpleGet("PageStorage", "FileSizeNotMatch"));
+            throw DB::TiFlashException("File size not match! Expected: " + DB::toString(total_size) + ", got: " + DB::toString(file_size), TiFlashErrorRegistry::simpleGet(ErrorClass::PageStorage, "FileSizeNotMatch"));
 
     char * object_data_buf = (char *)malloc(max_size);
     SCOPE_EXIT({ free(object_data_buf); });

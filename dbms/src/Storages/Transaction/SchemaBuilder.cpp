@@ -302,14 +302,14 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterTable(DBInfoPtr db_info, Table
     auto table_info = getter.getTableInfo(db_info->id, table_id);
     if (table_info == nullptr)
     {
-        throw TiFlashException("miss table in TiKV : " + std::to_string(table_id), TiFlashErrorRegistry::simpleGet("DDL", "MissingTable"));
+        throw TiFlashException("miss table in TiKV : " + std::to_string(table_id), TiFlashErrorRegistry::simpleGet(ErrorClass::DDL, "MissingTable"));
     }
     auto & tmt_context = context.getTMTContext();
     auto storage = tmt_context.getStorages().get(table_info->id);
     if (storage == nullptr)
     {
         throw TiFlashException("miss table in TiFlash : " + name_mapper.debugCanonicalName(*db_info, *table_info),
-            TiFlashErrorRegistry::simpleGet("DDL", "MissingTable"));
+            TiFlashErrorRegistry::simpleGet(ErrorClass::DDL, "MissingTable"));
     }
 
     applyAlterLogicalTable(db_info, table_info, storage);
@@ -334,7 +334,7 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterLogicalTable(DBInfoPtr db_info
             {
                 throw TiFlashException("miss table in TiFlash : " + name_mapper.debugCanonicalName(*db_info, *table_info)
                         + " partition: " + std::to_string(part_def.id),
-                    TiFlashErrorRegistry::simpleGet("DDL", "MissingTable"));
+                    TiFlashErrorRegistry::simpleGet(ErrorClass::DDL, "MissingTable"));
             }
             applyAlterPhysicalTable(db_info, part_table_info, part_storage);
         }
@@ -359,7 +359,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     auto di = getter.getDatabase(diff.schema_id);
 
     if (di == nullptr)
-        throw TiFlashException("miss database: " + std::to_string(diff.schema_id), TiFlashErrorRegistry::simpleGet("DDL", "MissingTable"));
+        throw TiFlashException("miss database: " + std::to_string(diff.schema_id), TiFlashErrorRegistry::simpleGet(ErrorClass::DDL, "MissingTable"));
 
     TableID old_table_id = 0, new_table_id = 0;
 
@@ -437,19 +437,19 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(TiDB::DBInfoPtr db_in
     if (table_info == nullptr)
     {
         throw TiFlashException(
-            "miss old table id in TiKV " + std::to_string(table_id), TiFlashErrorRegistry::simpleGet("DDL", "MissingTable"));
+            "miss old table id in TiKV " + std::to_string(table_id), TiFlashErrorRegistry::simpleGet(ErrorClass::DDL, "MissingTable"));
     }
     if (!table_info->isLogicalPartitionTable())
     {
         throw TiFlashException("new table in TiKV not partition table " + name_mapper.debugCanonicalName(*db_info, *table_info),
-            TiFlashErrorRegistry::simpleGet("DDL", "TableTypeNotMatch"));
+            TiFlashErrorRegistry::simpleGet(ErrorClass::DDL, "TableTypeNotMatch"));
     }
 
     auto & tmt_context = context.getTMTContext();
     auto storage = tmt_context.getStorages().get(table_info->id);
     if (storage == nullptr)
     {
-        throw TiFlashException("miss table in TiFlash " + std::to_string(table_id), TiFlashErrorRegistry::simpleGet("DDL", "MissingTable"));
+        throw TiFlashException("miss table in TiFlash " + std::to_string(table_id), TiFlashErrorRegistry::simpleGet(ErrorClass::DDL, "MissingTable"));
     }
 
     applyPartitionDiff(db_info, table_info, storage);
@@ -462,7 +462,7 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(TiDB::DBInfoPtr db_in
     if (!orig_table_info.isLogicalPartitionTable())
     {
         throw TiFlashException("old table in TiFlash not partition table " + name_mapper.debugCanonicalName(*db_info, orig_table_info),
-            TiFlashErrorRegistry::simpleGet("DDL", "TableTypeNotMatch"));
+            TiFlashErrorRegistry::simpleGet(ErrorClass::DDL, "TableTypeNotMatch"));
     }
 
     const auto & orig_defs = orig_table_info.partition.definitions;
@@ -617,11 +617,11 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
         throw Exception("Incorrect schema diff, no affected_opts for alter table exchange partition schema diff", ErrorCodes::DDL_ERROR);
     auto npt_db_info = getter.getDatabase(diff.schema_id);
     if (npt_db_info == nullptr)
-        throw TiFlashException("miss database: " + std::to_string(diff.schema_id), TiFlashErrorRegistry::simpleGet("DDL", "MissingTable"));
+        throw TiFlashException("miss database: " + std::to_string(diff.schema_id), TiFlashErrorRegistry::simpleGet(ErrorClass::DDL, "MissingTable"));
     auto pt_db_info = getter.getDatabase(diff.affected_opts[0].schema_id);
     if (pt_db_info == nullptr)
         throw TiFlashException(
-            "miss database: " + std::to_string(diff.affected_opts[0].schema_id), TiFlashErrorRegistry::simpleGet("DDL", "MissingTable"));
+            "miss database: " + std::to_string(diff.affected_opts[0].schema_id), TiFlashErrorRegistry::simpleGet(ErrorClass::DDL, "MissingTable"));
     auto npt_table_id = diff.old_table_id;
     auto pt_partition_id = diff.table_id;
     auto pt_table_info = diff.affected_opts[0].table_id;
@@ -629,12 +629,12 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
     auto table_info = getter.getTableInfo(pt_db_info->id, pt_table_info);
     if (table_info == nullptr)
         throw TiFlashException(
-            "miss table in TiKV : " + std::to_string(pt_table_info), TiFlashErrorRegistry::simpleGet("DDL", "MissingTable"));
+            "miss table in TiKV : " + std::to_string(pt_table_info), TiFlashErrorRegistry::simpleGet(ErrorClass::DDL, "MissingTable"));
     auto & tmt_context = context.getTMTContext();
     auto storage = tmt_context.getStorages().get(table_info->id);
     if (storage == nullptr)
         throw TiFlashException("miss table in TiFlash :" + name_mapper.debugCanonicalName(*pt_db_info, *table_info),
-            TiFlashErrorRegistry::simpleGet("DDL", "MissingTable"));
+            TiFlashErrorRegistry::simpleGet(ErrorClass::DDL, "MissingTable"));
     LOG_INFO(log, "Exchange partition for table " << name_mapper.debugCanonicalName(*pt_db_info, *table_info));
     auto orig_table_info = storage->getTableInfo();
     orig_table_info.partition = table_info->partition;
@@ -645,7 +645,7 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
     storage = tmt_context.getStorages().get(npt_table_id);
     if (storage == nullptr)
         throw TiFlashException("miss table in TiFlash :" + name_mapper.debugCanonicalName(*npt_db_info, *table_info),
-            TiFlashErrorRegistry::simpleGet("DDL", "MissingTable"));
+            TiFlashErrorRegistry::simpleGet(ErrorClass::DDL, "MissingTable"));
     orig_table_info = storage->getTableInfo();
     orig_table_info.belonging_table_id = pt_table_info;
     orig_table_info.is_partition_table = true;
@@ -662,11 +662,11 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
     table_info = getter.getTableInfo(npt_db_info->id, pt_partition_id);
     if (table_info == nullptr)
         throw TiFlashException(
-            "miss table in TiKV : " + std::to_string(pt_partition_id), TiFlashErrorRegistry::simpleGet("DDL", "MissingTable"));
+            "miss table in TiKV : " + std::to_string(pt_partition_id), TiFlashErrorRegistry::simpleGet(ErrorClass::DDL, "MissingTable"));
     storage = tmt_context.getStorages().get(table_info->id);
     if (storage == nullptr)
         throw TiFlashException("miss table in TiFlash :" + name_mapper.debugCanonicalName(*pt_db_info, *table_info),
-            TiFlashErrorRegistry::simpleGet("DDL", "MissingTable"));
+            TiFlashErrorRegistry::simpleGet(ErrorClass::DDL, "MissingTable"));
     orig_table_info = storage->getTableInfo();
     orig_table_info.belonging_table_id = DB::InvalidTableID;
     orig_table_info.is_partition_table = false;
@@ -717,7 +717,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(TiDB::DBInfoPtr db_inf
     auto mapped = name_mapper.mapDatabaseName(*db_info);
     if (isReservedDatabase(context, mapped))
         throw TiFlashException(
-            "Database " + name_mapper.debugDatabaseName(*db_info) + " is reserved", TiFlashErrorRegistry::simpleGet("DDL", "Internal"));
+            "Database " + name_mapper.debugDatabaseName(*db_info) + " is reserved", TiFlashErrorRegistry::simpleGet(ErrorClass::DDL, "Internal"));
 
     const String statement = "CREATE DATABASE IF NOT EXISTS " + backQuoteIfNeed(mapped) + " ENGINE = TiFlash('" + db_info->serialize()
         + "', " + DB::toString(DatabaseTiFlash::CURRENT_VERSION) + ")";
@@ -838,7 +838,7 @@ String createTableStmt(const DBInfo & db_info, const TableInfo & table_info, con
     else
     {
         throw TiFlashException("Unknown engine type : " + toString(static_cast<int32_t>(table_info.engine_type)),
-            TiFlashErrorRegistry::simpleGet("DDL", "Internal"));
+            TiFlashErrorRegistry::simpleGet(ErrorClass::DDL, "Internal"));
     }
 
     return stmt;

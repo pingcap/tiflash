@@ -36,7 +36,7 @@ static void assignOrThrowException(const tipb::Executor ** to, const tipb::Execu
 {
     if (*to != nullptr)
     {
-        throw TiFlashException("Duplicated " + name + " in DAG request", TiFlashErrorRegistry::simpleGet("Coprocessor", "Internal"));
+        throw TiFlashException("Duplicated " + name + " in DAG request", TiFlashErrorRegistry::simpleGet(ErrorClass::Coprocessor, "Internal"));
     }
     *to = from;
 }
@@ -47,7 +47,7 @@ void collectOutPutFieldTypesFromAgg(std::vector<tipb::FieldType> & field_type, c
     {
         if (!exprHasValidFieldType(expr))
         {
-            throw TiFlashException("Agg expression without valid field type", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
+            throw TiFlashException("Agg expression without valid field type", TiFlashErrorRegistry::simpleGet(ErrorClass::Coprocessor, "BadRequest"));
         }
         field_type.push_back(expr.field_type());
     }
@@ -55,7 +55,7 @@ void collectOutPutFieldTypesFromAgg(std::vector<tipb::FieldType> & field_type, c
     {
         if (!exprHasValidFieldType(expr))
         {
-            throw TiFlashException("Group by expression without valid field type", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
+            throw TiFlashException("Group by expression without valid field type", TiFlashErrorRegistry::simpleGet(ErrorClass::Coprocessor, "BadRequest"));
         }
         field_type.push_back(expr.field_type());
     }
@@ -94,21 +94,21 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_)
                 current = &current->topn().child();
                 break;
             case tipb::ExecType::TypeIndexScan:
-                throw TiFlashException("Unsupported executor in DAG request: " + current->DebugString(), TiFlashErrorRegistry::simpleGet("Coprocessor", "Internal"));
+                throw TiFlashException("Unsupported executor in DAG request: " + current->DebugString(), TiFlashErrorRegistry::simpleGet(ErrorClass::Coprocessor, "Internal"));
             default:
-                throw TiFlashException("Should not reach here", TiFlashErrorRegistry::simpleGet("Coprocessor", "Internal"));
+                throw TiFlashException("Should not reach here", TiFlashErrorRegistry::simpleGet(ErrorClass::Coprocessor, "Internal"));
         }
     }
 
     if (!current->has_executor_id())
-        throw TiFlashException("Tree struct based executor must have executor id", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
+        throw TiFlashException("Tree struct based executor must have executor id", TiFlashErrorRegistry::simpleGet(ErrorClass::Coprocessor, "BadRequest"));
 
     assignOrThrowException(&source, current, SOURCE_NAME);
     source_name = current->executor_id();
     if (current->tp() == tipb::ExecType::TypeJoin)
     {
         if (source->join().children_size() != 2)
-            throw TiFlashException("Join executor children size not equal to 2", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
+            throw TiFlashException("Join executor children size not equal to 2", TiFlashErrorRegistry::simpleGet(ErrorClass::Coprocessor, "BadRequest"));
         children.push_back(std::make_shared<DAGQueryBlock>(id * 2, source->join().children(0)));
         children.push_back(std::make_shared<DAGQueryBlock>(id * 2 + 1, source->join().children(1)));
     }
@@ -151,7 +151,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
                 limitOrTopN_name = std::to_string(i) + "_limitOrTopN";
                 break;
             default:
-                throw TiFlashException("Unsupported executor in DAG request: " + executors[i].DebugString(), TiFlashErrorRegistry::simpleGet("Coprocessor", "Unimplemented"));
+                throw TiFlashException("Unsupported executor in DAG request: " + executors[i].DebugString(), TiFlashErrorRegistry::simpleGet(ErrorClass::Coprocessor, "Unimplemented"));
         }
     }
     fillOutputFieldTypes();

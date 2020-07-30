@@ -10,12 +10,13 @@ void TiFlashErrorRegistry::initialize()
     // Used to check uniqueness of classes
     std::set<std::string> all_classes;
 
-#define REGISTER_ERROR_CLASS(class_name)                                                            \
-    const std::string class_name = #class_name;                                                     \
-    do                                                                                              \
-    {                                                                                               \
-        if (auto [_, took_place] = all_classes.insert(class_name); !took_place)                     \
-            throw Exception("Error Class " #class_name " is duplicate, please check related code"); \
+    using namespace ErrorClass;
+
+#define REGISTER_ERROR_CLASS(class_name)                                                               \
+    do                                                                                                 \
+    {                                                                                                  \
+        if (auto [_, took_place] = all_classes.insert(class_name); !took_place)                        \
+            throw Exception("Error Class " + class_name + " is duplicate, please check related code"); \
     } while (0)
 
     // Register error classes with macro REGISTER_ERROR_CLASS.
@@ -44,7 +45,7 @@ void TiFlashErrorRegistry::initialize()
     registerError(PageStorage, "FileSizeNotMatch", //
         /* Description */ "Some files' size don't match their metadata.",
         /* Workaround */
-        "This is a critical error which should rarely occur, please report it to https://asktug.com, "
+        "This is a critical error which should rarely occur, please contact with developer, "
         "better providing information about your cluster(log, topology information etc.).");
 
     registerError(Table, "SchemaVersionError", //
@@ -57,7 +58,7 @@ void TiFlashErrorRegistry::initialize()
     registerError(Table, "SyncError", //
         /* Description */ "Schema synchronize error.",
         /* Workaround */
-        "This is a critical error which should rarely occur, please report it to https://asktug.com, "
+        "This is a critical error which should rarely occur, please contact with developer, "
         "better providing information about your cluster(log, topology information etc.).");
 
     registerError(Table, "NotExists", //
@@ -78,33 +79,33 @@ void TiFlashErrorRegistry::initialize()
         "This error will occur when there is difference of schema infomation between TiKV and TiFlash, "
         "for example a table has been dropped in TiKV while hasn't been dropped in TiFlash yet(since DDL operation is asynchronized). "
         "TiFlash will keep retrying to synchronize all schemas, so you don't need to take it too serious. "
-        "If there are massive MissingTable errors, please report it to https://asktug.com, "
+        "If there are massive MissingTable errors, please contact with developer, "
         "better providing information about your cluster(log, topology information etc.).");
 
     registerError(DDL, "TableTypeNotMatch", //
         /* Description */ "Table type in TiFlash is different from that in TiKV.",
         /* Workaround */
         "This error will occur when there is difference of schema information between TiKV and TiFlash. "
-        "Please report it to https://asktug.com, "
+        "Please contact with developer, "
         "better providing information about your cluster(log, topology information etc.).");
 
     registerError(DDL, "ExchangePartitionError", //
         /* Description */ "EXCHANGE PARTITION error.",
         /* Workaround */
-        "Please report it to https://asktug.com, "
+        "Please contact with developer, "
         "better providing information about your cluster(log, topology information etc.).");
 
     registerError(DDL, "Internal", //
         /* Description */ "TiFlash DDL internal error.",
         /* Workaround */
-        "Please report it to https://asktug.com, "
+        "Please contact with developer, "
         "better providing information about your cluster(log, topology information etc.).");
 
     registerError(Coprocessor, "BadRequest", //
         /* Description */ "Bad TiDB coprocessor request.",
         /* Workaround */
         "This error is usually caused by incorrect TiDB DAGRequest. "
-        "Please report it to https://asktug.com, "
+        "Please contact with developer, "
         "better providing information about your cluster(log, topology information etc.).");
 
     registerError(Coprocessor, "Unimplemented", //
@@ -112,13 +113,13 @@ void TiFlashErrorRegistry::initialize()
         /* Workaround */
         "This error may caused by unmatched TiDB and TiFlash versions, "
         "and should not occur in common case."
-        "Please report it to https://asktug.com, "
+        "Please contact with developer, "
         "better providing information about your cluster(log, topology information etc.).");
 
     registerError(Coprocessor, "Internal", //
         /* Description */ "TiFlash Coprocessor internal error.",
         /* Workaround */
-        "Please report it to https://asktug.com, "
+        "Please contact with developer, "
         "better providing information about your cluster(log, topology information etc.).");
 
     registerError(BroadcastJoin, "TooManyColumns", //
@@ -126,20 +127,20 @@ void TiFlashErrorRegistry::initialize()
         /* Workaround */
         "Please try to reduce your joined columns. "
         "If this error still remains, "
-        "please report it to https://asktug.com, "
+        "please contact with developer, "
         "better providing information about your cluster(log, topology information etc.).");
 
     registerError(BroadcastJoin, "Internal", //
         /* Description */ "Broadcast Join internal error.",
         /* Workaround */
-        "Please report it to https://asktug.com, "
+        "Please contact with developer, "
         "better providing information about your cluster(log, topology information etc.).");
 }
 
-void TiFlashErrorRegistry::registerError(
-    const std::string & error_class, const std::string & error_code, const std::string & description, const std::string & workaround)
+void TiFlashErrorRegistry::registerError(const std::string & error_class, const std::string & error_code, const std::string & description,
+    const std::string & workaround, const std::string & message_template)
 {
-    TiFlashError error{error_class, error_code, description, workaround};
+    TiFlashError error{error_class, error_code, description, workaround, message_template};
     if (all_errors.find({error_class, error_code}) == all_errors.end())
     {
         all_errors.emplace(std::make_pair(error_class, error_code), std::move(error));
@@ -150,11 +151,11 @@ void TiFlashErrorRegistry::registerError(
     }
 }
 
-void TiFlashErrorRegistry::registerErrorWithNumericCode(
-    const std::string & error_class, int error_code, const std::string & description, const std::string & workaround)
+void TiFlashErrorRegistry::registerErrorWithNumericCode(const std::string & error_class, int error_code, const std::string & description,
+    const std::string & workaround, const std::string & message_template)
 {
     std::string error_code_str = std::to_string(error_code);
-    registerError(error_class, error_code_str, description, workaround);
+    registerError(error_class, error_code_str, description, workaround, message_template);
 }
 
 // Standard error text with format:

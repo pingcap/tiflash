@@ -84,7 +84,7 @@ void readFile(int fd, const off_t offset, const char * buf, size_t expected_byte
     ProfileEvents::increment(ProfileEvents::PSMReadBytes, bytes_read);
 
     if (unlikely(bytes_read != expected_bytes))
-        throw DB::TiFlashException("Not enough data in file " + path, TiFlashErrorRegistry::simpleGet("PageStorage", "FileSizeNotMatch"));
+        throw DB::TiFlashException("Not enough data in file " + path, TiFlashErrorRegistry::simpleGet(ErrorClass::PageStorage, "FileSizeNotMatch"));
 }
 
 } // namespace DB::PageUtil

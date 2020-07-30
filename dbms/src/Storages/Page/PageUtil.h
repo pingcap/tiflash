@@ -158,7 +158,7 @@ std::unique_ptr<C> readValuesFromFile(const std::string & path, Allocator<false>
     }
 
     if (unlikely(pos != data + file_size))
-        throw DB::TiFlashException("pos not match", TiFlashErrorRegistry::simpleGet("PageStorage", "FileSizeNotMatch"));
+        throw DB::TiFlashException("pos not match", TiFlashErrorRegistry::simpleGet(ErrorClass::PageStorage, "FileSizeNotMatch"));
 
     return values;
 }

@@ -234,7 +234,7 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
         // Not allow storage > query in any case, one example is time travel queries.
         if (storage_schema_version > query_schema_version)
             throw TiFlashException("Table " + qualified_name + " schema version " + toString(storage_schema_version) + " newer than query schema version " + toString(query_schema_version),
-                                    TiFlashErrorRegistry::simpleGet("Table", "SchemaVersionError"));
+                                    TiFlashErrorRegistry::simpleGet(ErrorClass::Table, "SchemaVersionError"));
         // From now on we have storage <= query.
         // If schema was synced, it implies that global >= query, as mentioned above we have storage <= query, we are OK to serve.
         if (schema_synced)

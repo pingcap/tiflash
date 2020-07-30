@@ -10,6 +10,18 @@
 namespace DB
 {
 
+namespace ErrorClass
+{
+const std::string PageStorage = "PageStorage";
+const std::string DeltaTree = "DeltaTree";
+const std::string DDL = "DDL";
+const std::string Coprocessor = "Coprocessor";
+
+const std::string Table = "Table";
+const std::string Decimal = "Decimal";
+const std::string BroadcastJoin = "BroadcastJoin";
+} // namespace ErrorClass
+
 /// TiFlashError is core struct of standard error,
 /// which contains all information about an error except message.
 struct TiFlashError
@@ -18,6 +30,7 @@ struct TiFlashError
     const std::string error_code;
     const std::string description;
     const std::string workaround;
+    const std::string message_template;
 };
 
 /// TiFlashErrorRegistry will registers and checks all errors when TiFlash startup
@@ -71,11 +84,11 @@ public:
 private:
     TiFlashErrorRegistry() { initialize(); }
 
-    void registerError(
-        const std::string & error_class, const std::string & error_code, const std::string & description, const std::string & workaround);
+    void registerError(const std::string & error_class, const std::string & error_code, const std::string & description,
+        const std::string & workaround, const std::string & message_template = "");
 
-    void registerErrorWithNumericCode(
-        const std::string & error_class, int error_code, const std::string & description, const std::string & workaround);
+    void registerErrorWithNumericCode(const std::string & error_class, int error_code, const std::string & description,
+        const std::string & workaround, const std::string & message_template = "");
 
     void initialize();
 

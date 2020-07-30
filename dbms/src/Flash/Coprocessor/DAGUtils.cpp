@@ -28,7 +28,7 @@ const String & getAggFunctionName(const tipb::Expr & expr)
     if (agg_func_map.find(expr.tp()) == agg_func_map.end())
     {
         throw TiFlashException(
-            tipb::ExprType_Name(expr.tp()) + " is not supported.", TiFlashErrorRegistry::simpleGet("Coprocessor", "Unimplemented"));
+            tipb::ExprType_Name(expr.tp()) + " is not supported.", TiFlashErrorRegistry::simpleGet(ErrorClass::Coprocessor, "Unimplemented"));
     }
     return agg_func_map[expr.tp()];
 }
@@ -40,7 +40,7 @@ const String & getFunctionName(const tipb::Expr & expr)
         if (agg_func_map.find(expr.tp()) == agg_func_map.end())
         {
             throw TiFlashException(
-                tipb::ExprType_Name(expr.tp()) + " is not supported.", TiFlashErrorRegistry::simpleGet("Coprocessor", "Unimplemented"));
+                tipb::ExprType_Name(expr.tp()) + " is not supported.", TiFlashErrorRegistry::simpleGet(ErrorClass::Coprocessor, "Unimplemented"));
         }
         return agg_func_map[expr.tp()];
     }
@@ -49,7 +49,7 @@ const String & getFunctionName(const tipb::Expr & expr)
         if (scalar_func_map.find(expr.sig()) == scalar_func_map.end())
         {
             throw TiFlashException(tipb::ScalarFuncSig_Name(expr.sig()) + " is not supported.",
-                TiFlashErrorRegistry::simpleGet("Coprocessor", "Unimplemented"));
+                TiFlashErrorRegistry::simpleGet(ErrorClass::Coprocessor, "Unimplemented"));
         }
         return scalar_func_map[expr.sig()];
     }
@@ -89,13 +89,13 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
                 return field.get<DecimalField<Decimal256>>().toString();
             else
                 throw TiFlashException(
-                    "Not decimal literal" + expr.DebugString(), TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
+                    "Not decimal literal" + expr.DebugString(), TiFlashErrorRegistry::simpleGet(ErrorClass::Coprocessor, "BadRequest"));
         }
         case tipb::ExprType::MysqlTime:
         {
             if (!expr.has_field_type() || (expr.field_type().tp() != TiDB::TypeDate && expr.field_type().tp() != TiDB::TypeDatetime))
                 throw TiFlashException(
-                    "Invalid MySQL Time literal " + expr.DebugString(), TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
+                    "Invalid MySQL Time literal " + expr.DebugString(), TiFlashErrorRegistry::simpleGet(ErrorClass::Coprocessor, "BadRequest"));
             auto t = decodeDAGUInt64(expr.val());
             // TODO: Use timezone in DAG request.
             return std::to_string(TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field().get<Int64>());
@@ -112,7 +112,7 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
             if (agg_func_map.find(expr.tp()) == agg_func_map.end())
             {
                 throw TiFlashException(
-                    tipb::ExprType_Name(expr.tp()) + " not supported", TiFlashErrorRegistry::simpleGet("Coprocessor", "Unimplemented"));
+                    tipb::ExprType_Name(expr.tp()) + " not supported", TiFlashErrorRegistry::simpleGet(ErrorClass::Coprocessor, "Unimplemented"));
             }
             func_name = agg_func_map.find(expr.tp())->second;
             break;
@@ -120,13 +120,13 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
             if (scalar_func_map.find(expr.sig()) == scalar_func_map.end())
             {
                 throw TiFlashException(tipb::ScalarFuncSig_Name(expr.sig()) + " not supported",
-                    TiFlashErrorRegistry::simpleGet("Coprocessor", "Unimplemented"));
+                    TiFlashErrorRegistry::simpleGet(ErrorClass::Coprocessor, "Unimplemented"));
             }
             func_name = scalar_func_map.find(expr.sig())->second;
             break;
         default:
             throw TiFlashException(
-                tipb::ExprType_Name(expr.tp()) + " not supported", TiFlashErrorRegistry::simpleGet("Coprocessor", "Unimplemented"));
+                tipb::ExprType_Name(expr.tp()) + " not supported", TiFlashErrorRegistry::simpleGet(ErrorClass::Coprocessor, "Unimplemented"));
     }
     // build function expr
     if (functionIsInOrGlobalInOperator(func_name))
@@ -247,7 +247,7 @@ Field decodeLiteral(const tipb::Expr & expr)
         {
             if (!expr.has_field_type() || (expr.field_type().tp() != TiDB::TypeDate && expr.field_type().tp() != TiDB::TypeDatetime))
                 throw TiFlashException(
-                    "Invalid MySQL Time literal " + expr.DebugString(), TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
+                    "Invalid MySQL Time literal " + expr.DebugString(), TiFlashErrorRegistry::simpleGet(ErrorClass::Coprocessor, "BadRequest"));
             auto t = decodeDAGUInt64(expr.val());
             // TODO: Use timezone in DAG request.
             return TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field();
@@ -260,10 +260,10 @@ Field decodeLiteral(const tipb::Expr & expr)
         case tipb::ExprType::MysqlJson:
         case tipb::ExprType::ValueList:
             throw TiFlashException(
-                tipb::ExprType_Name(expr.tp()) + " is not supported yet", TiFlashErrorRegistry::simpleGet("Coprocessor", "Unimplemented"));
+                tipb::ExprType_Name(expr.tp()) + " is not supported yet", TiFlashErrorRegistry::simpleGet(ErrorClass::Coprocessor, "Unimplemented"));
         default:
             throw TiFlashException(
-                "Should not reach here: not a literal expression", TiFlashErrorRegistry::simpleGet("Coprocessor", "Internal"));
+                "Should not reach here: not a literal expression", TiFlashErrorRegistry::simpleGet(ErrorClass::Coprocessor, "Internal"));
     }
 }
 
@@ -272,7 +272,7 @@ String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<Nam
     auto column_index = decodeDAGInt64(expr.val());
     if (column_index < 0 || column_index >= (Int64)input_col.size())
     {
-        throw TiFlashException("Column index out of bound", TiFlashErrorRegistry::simpleGet("Coprocessor", "BadRequest"));
+        throw TiFlashException("Column index out of bound", TiFlashErrorRegistry::simpleGet(ErrorClass::Coprocessor, "BadRequest"));
     }
     return input_col[column_index].name;
 }
@@ -339,7 +339,7 @@ UInt8 getFieldLengthForArrowEncode(Int32 tp)
             return VAR_SIZE;
         default:
             throw TiFlashException("not supported field type in arrow encode: " + std::to_string(tp),
-                TiFlashErrorRegistry::simpleGet("Coprocessor", "Internal"));
+                TiFlashErrorRegistry::simpleGet(ErrorClass::Coprocessor, "Internal"));
     }
 }
 
