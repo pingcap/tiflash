@@ -51,12 +51,19 @@ public:
         size_t  merge_hint_low_used_file_total_size = PAGE_FILE_ROLL_SIZE;
         size_t  merge_hint_low_used_file_num        = 10;
 
+        // Maximum write concurrency.
         size_t num_write_slots = 1;
 
         // Minimum number of legacy files to be selected for compaction
         size_t gc_compact_legacy_min_num = 3;
 
+        // Maximum seconds of reader / writer idle time.
+        // 0 for never reclaim idle file descriptor.
         Seconds open_file_max_idle_time{15};
+
+        // Probability to do gc when write is low.
+        // The probability is `prob_do_gc_when_write_is_low` out of 1000.
+        size_t prob_do_gc_when_write_is_low = 10;
 
         ::DB::MVCC::VersionSetConfig version_set_config;
     };
@@ -85,7 +92,7 @@ public:
     using ExternalPagesRemover
         = std::function<void(const PathAndIdsVec & pengding_external_pages, const std::set<PageId> & valid_normal_pages)>;
 
-    // Debugging info for restore
+    // Statistics for write
     struct StatisticsInfo
     {
         size_t puts    = 0;

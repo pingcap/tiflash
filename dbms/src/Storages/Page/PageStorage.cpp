@@ -789,7 +789,7 @@ bool PageStorage::gc()
         {
             // No write since last gc. Give it a chance for running GC, ensure that we are able to
             // reclaim disk usage when PageStorage is read-only in extreme cases.
-            if (DB::MVCC::utils::randInt(0, 1000) < 1) // TODO: make it configurable
+            if (DB::MVCC::utils::randInt(0, 1000) < config.prob_do_gc_when_write_is_low) 
                 gc_type = GCType::LowWrite;
             else
                 gc_type = GCType::Skip;
