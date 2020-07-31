@@ -23,6 +23,12 @@
       "version": ""
     },
     {
+      "type": "panel",
+      "id": "heatmap",
+      "name": "Heatmap",
+      "version": ""
+    },
+    {
       "type": "datasource",
       "id": "prometheus",
       "name": "Prometheus",
@@ -44,9 +50,9 @@
   },
   "editable": true,
   "gnetId": null,
-  "graphTooltip": 0,
+  "graphTooltip": 1,
   "id": null,
-  "iteration": 1582092661543,
+  "iteration": 1595916828338,
   "links": [],
   "panels": [
     {
@@ -62,11 +68,302 @@
         {
           "aliasColors": {},
           "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "decimals": 1,
+          "description": "The storage size per TiFlash instance.\n(Not including some disk usage of TiFlash-Proxy by now)",
+          "editable": true,
+          "error": false,
+          "fill": 5,
+          "grid": {},
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 0,
+            "y": 1
+          },
+          "id": 53,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": false,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "sideWidth": null,
+            "sort": "current",
+            "sortDesc": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 0,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": true,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "sum(tiflash_system_current_metric_StoreSizeUsed{instance=~\"$instance\"}) by (instance)",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "{{instance}}",
+              "refId": "A",
+              "step": 10
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Store size",
+          "tooltip": {
+            "msResolution": false,
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "decbytes",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "decimals": 1,
+          "description": "The available capacity size per TiFlash instance",
+          "editable": true,
+          "error": false,
+          "fill": 5,
+          "grid": {},
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 8,
+            "y": 1
+          },
+          "id": 54,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": false,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "sideWidth": null,
+            "sort": "current",
+            "sortDesc": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 0,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": true,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "sum(tiflash_system_current_metric_StoreSizeAvailable{instance=~\"$instance\"}) by (instance)",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "{{instance}}",
+              "refId": "A",
+              "step": 10
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Available size",
+          "tooltip": {
+            "msResolution": false,
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "decbytes",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "decimals": 1,
+          "description": "The capacity size per TiFlash instance",
+          "editable": true,
+          "error": false,
+          "fill": 5,
+          "grid": {},
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 16,
+            "y": 1
+          },
+          "id": 55,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": false,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "sideWidth": null,
+            "sort": "current",
+            "sortDesc": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 0,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": true,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "sum(tiflash_system_current_metric_StoreSizeCapacity{instance=~\"$instance\"}) by (instance)",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "{{instance}}",
+              "refId": "A",
+              "step": 10
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Capacity size",
+          "tooltip": {
+            "msResolution": false,
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "decbytes",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
           "cacheTimeout": null,
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "TiDB uptime since last restart",
+          "description": "TiFlash uptime since last restart",
           "editable": true,
           "error": false,
           "fill": 1,
@@ -75,7 +372,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 1
+            "y": 9
           },
           "id": 21,
           "legend": {
@@ -167,12 +464,13 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The memory usage per TiFlash instance",
           "fill": 1,
           "gridPos": {
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 1
+            "y": 9
           },
           "id": 10,
           "legend": {
@@ -202,6 +500,7 @@
             {
               "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_retained{instance=~\"$instance\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "retained",
               "refId": "A"
@@ -209,6 +508,7 @@
             {
               "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_mapped{instance=~\"$instance\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "mapped",
               "refId": "B"
@@ -216,6 +516,7 @@
             {
               "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_resident{instance=~\"$instance\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "resident",
               "refId": "C"
@@ -223,6 +524,7 @@
             {
               "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_allocated{instance=~\"$instance\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "allocated",
               "refId": "D"
@@ -230,6 +532,7 @@
             {
               "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_active{instance=~\"$instance\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "active",
               "refId": "E"
@@ -237,6 +540,7 @@
             {
               "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_metadata_thp{instance=~\"$instance\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "metadata_thp",
               "refId": "F"
@@ -244,16 +548,24 @@
             {
               "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_metadata{instance=~\"$instance\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "metadata",
               "refId": "G"
+            },
+            {
+              "expr": "tiflash_proxy_process_resident_memory_bytes{job=\"tiflash\"}",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "{{instance}}",
+              "refId": "H"
             }
           ],
           "thresholds": [],
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Memory Jemalloc",
+          "title": "Memory",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -296,18 +608,211 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "TiFlash CPU usage calculated with process CPU running seconds.",
+          "editable": true,
+          "error": false,
+          "fill": 1,
+          "grid": {},
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 17
+          },
+          "id": 51,
+          "legend": {
+            "alignAsTable": false,
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "rightSide": false,
+            "show": true,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [
+            {
+              "alias": "total",
+              "fill": 0,
+              "lines": false
+            }
+          ],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "rate(tiflash_proxy_process_cpu_seconds_total{job=\"tiflash\"}[1m])",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 2,
+              "legendFormat": "{{instance}}",
+              "refId": "A",
+              "step": 40
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "CPU Usage",
+          "tooltip": {
+            "msResolution": false,
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 1,
+              "format": "percentunit",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of fsync operations.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)",
+          "fill": 0,
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 17
+          },
+          "id": 52,
+          "legend": {
+            "alignAsTable": false,
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "rightSide": false,
+            "show": true,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_FileFSync{instance=~\"$instance\"}[1m])) by (instance)",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "{{instance}}",
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "FSync OPS",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": null,
+              "format": "ops",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "none",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of open file descriptors action.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)",
           "fill": 1,
           "gridPos": {
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 9
+            "y": 24
           },
           "id": 22,
           "legend": {
             "alignAsTable": false,
             "avg": false,
             "current": false,
+            "hideEmpty": true,
+            "hideZero": true,
             "max": false,
             "min": false,
             "rightSide": false,
@@ -329,17 +834,17 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(tiflash_system_profile_event_FileOpen{instance=~\"$instance\"})",
+              "expr": "sum(rate(tiflash_system_profile_event_FileOpen{instance=~\"$instance\"}[1m])) by (instance)",
               "format": "time_series",
               "intervalFactor": 1,
-              "legendFormat": "FileOpen",
+              "legendFormat": "Newly Open-{{instance}}",
               "refId": "A"
             },
             {
-              "expr": "sum(tiflash_system_profile_event_FileOpenFailed{instance=~\"$instance\"})",
+              "expr": "sum(rate(tiflash_system_profile_event_FileOpenFailed{instance=~\"$instance\"}[1m])) by (instance)",
               "format": "time_series",
               "intervalFactor": 1,
-              "legendFormat": "FileOpenFailed",
+              "legendFormat": "Newly Open Failed-{{instance}}",
               "refId": "B"
             }
           ],
@@ -347,7 +852,114 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "File Open",
+          "title": "File Open OPS",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "ops",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of currently opened file descriptors.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)",
+          "fill": 1,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 24
+          },
+          "id": 50,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "hideEmpty": false,
+            "hideZero": false,
+            "max": true,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "tiflash_proxy_process_open_fds{job=\"tiflash\"}",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "{{instance}}",
+              "refId": "A"
+            },
+            {
+              "expr": "sum(tiflash_system_current_metric_OpenFileForWrite{instance=~\"$instance\"}) by (instance)",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 1,
+              "legendFormat": "Write File-{{instance}}",
+              "refId": "B"
+            },
+            {
+              "expr": "sum(tiflash_system_current_metric_OpenFileForRead{instance=~\"$instance\"}) by (instance)",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 1,
+              "legendFormat": "Read File-{{instance}}",
+              "refId": "C"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Opened File Count",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -427,7 +1039,7 @@
           "lines": true,
           "linewidth": 1,
           "links": [],
-          "nullPointMode": "connected",
+          "nullPointMode": "null as zero",
           "percentage": false,
           "pointradius": 5,
           "points": false,
@@ -515,7 +1127,7 @@
           "lines": true,
           "linewidth": 1,
           "links": [],
-          "nullPointMode": "connected",
+          "nullPointMode": "null as zero",
           "percentage": false,
           "pointradius": 5,
           "points": false,
@@ -602,7 +1214,7 @@
           "lines": true,
           "linewidth": 1,
           "links": [],
-          "nullPointMode": "connected",
+          "nullPointMode": "null as zero",
           "percentage": false,
           "pointradius": 5,
           "points": false,
@@ -710,7 +1322,7 @@
           "lines": true,
           "linewidth": 1,
           "links": [],
-          "nullPointMode": "connected",
+          "nullPointMode": "null as zero",
           "percentage": false,
           "pointradius": 5,
           "points": false,
@@ -797,7 +1409,7 @@
           "lines": true,
           "linewidth": 1,
           "links": [],
-          "nullPointMode": "connected",
+          "nullPointMode": "null as zero",
           "percentage": false,
           "pointradius": 5,
           "points": false,
@@ -905,7 +1517,7 @@
           "lines": true,
           "linewidth": 1,
           "links": [],
-          "nullPointMode": "connected",
+          "nullPointMode": "null as zero",
           "percentage": false,
           "pointradius": 5,
           "points": false,
@@ -996,13 +1608,13 @@
           "legend": {
             "alignAsTable": false,
             "avg": false,
-            "current": false,
+            "current": true,
             "max": false,
             "min": false,
             "rightSide": false,
             "show": true,
             "total": false,
-            "values": false
+            "values": true
           },
           "lines": true,
           "linewidth": 1,
@@ -1096,7 +1708,7 @@
           "lines": true,
           "linewidth": 1,
           "links": [],
-          "nullPointMode": "connected",
+          "nullPointMode": "null as zero",
           "percentage": false,
           "pointradius": 5,
           "points": false,
@@ -1107,7 +1719,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "avg(rate(tiflash_schema_apply_count{instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "avg(increase(tiflash_schema_apply_count{instance=~\"$instance\"}[1m])) by (type)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{type}}",
@@ -1135,7 +1747,7 @@
           "yaxes": [
             {
               "decimals": null,
-              "format": "none",
+              "format": "opm",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -1185,7 +1797,7 @@
           "lines": true,
           "linewidth": 1,
           "links": [],
-          "nullPointMode": "connected",
+          "nullPointMode": "null as zero",
           "percentage": false,
           "pointradius": 5,
           "points": false,
@@ -1196,21 +1808,21 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "avg(rate(tiflash_schema_internal_ddl_count{instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "avg(increase(tiflash_schema_internal_ddl_count{instance=~\"$instance\"}[1m])) by (type)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{type}}",
               "refId": "A"
             },
             {
-              "expr": "sum(rate(tiflash_schema_internal_ddl_count{instance=~\"$instance\"}[1m]))",
+              "expr": "sum(increase(tiflash_schema_internal_ddl_count{instance=~\"$instance\"}[1m]))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "total",
               "refId": "B"
             },
             {
-              "expr": "sum(rate(tiflash_schema_internal_ddl_count{instance=~\"$instance\"}[1m])) by (type,instance)",
+              "expr": "sum(increase(tiflash_schema_internal_ddl_count{instance=~\"$instance\"}[1m])) by (type,instance)",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
@@ -1218,7 +1830,7 @@
               "refId": "C"
             },
             {
-              "expr": "sum(rate(tiflash_schema_internal_ddl_count{instance=~\"$instance\"}[1m])) by (instance)",
+              "expr": "sum(increase(tiflash_schema_internal_ddl_count{instance=~\"$instance\"}[1m])) by (instance)",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
@@ -1247,7 +1859,7 @@
           "yaxes": [
             {
               "decimals": null,
-              "format": "none",
+              "format": "opm",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -1296,7 +1908,7 @@
           "lines": true,
           "linewidth": 1,
           "links": [],
-          "nullPointMode": "connected",
+          "nullPointMode": "null as zero",
           "percentage": false,
           "pointradius": 5,
           "points": false,
@@ -1397,14 +2009,15 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The total count of different kinds of commands received",
           "fill": 0,
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 18
+            "y": 4
           },
-          "id": 38,
+          "id": 41,
           "legend": {
             "alignAsTable": false,
             "avg": false,
@@ -1430,11 +2043,133 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "max(tiflash_storage_write_amplification{instance=~\"$instance\"}) by (instance)",
+              "expr": "sum(rate(tiflash_storage_command_count{instance=~\"$instance\"}[1m])) by (type)",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "{{type}}",
+              "refId": "A"
+            },
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_DMWriteBlock{instance=~\"$instance\"}[1m])) by (type)",
               "format": "time_series",
               "intervalFactor": 1,
-              "legendFormat": "{{instance}}",
+              "legendFormat": "write block",
+              "refId": "B"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Write Command OPS",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": null,
+              "format": "ops",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "none",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "cacheTimeout": null,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "fill": 0,
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 4
+          },
+          "id": 38,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": false,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "percentage": false,
+          "pluginVersion": "6.1.6",
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "max(tiflash_storage_write_amplification{instance=~\"$instance\"}) by (instance)",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 1,
+              "legendFormat": "total-{{instance}}",
               "refId": "A"
+            },
+            {
+              "expr": "sum((rate(tiflash_system_profile_event_PSMWriteBytes{instance=~\"$instance\"}[5m]) + rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes{instance=~\"$instance\"}[5m]) + rate(tiflash_system_profile_event_WriteBufferAIOWriteBytes{instance=~\"$instance\"}[5m])) / (rate(tiflash_system_profile_event_DMWriteBytes{instance=~\"$instance\"}[5m]))) by (instance)",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 1,
+              "legendFormat": "5min-{{instance}}",
+              "refId": "B"
+            },
+            {
+              "expr": "sum((rate(tiflash_system_profile_event_PSMWriteBytes{instance=~\"$instance\"}[10m]) + rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes{instance=~\"$instance\"}[10m]) + rate(tiflash_system_profile_event_WriteBufferAIOWriteBytes{instance=~\"$instance\"}[10m])) / (rate(tiflash_system_profile_event_DMWriteBytes{instance=~\"$instance\"}[10m]))) by (instance)",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "10min-{{instance}}",
+              "refId": "C"
+            },
+            {
+              "expr": "sum((rate(tiflash_system_profile_event_PSMWriteBytes{instance=~\"$instance\"}[30m]) + rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes{instance=~\"$instance\"}[30m]) + rate(tiflash_system_profile_event_WriteBufferAIOWriteBytes{instance=~\"$instance\"}[30m])) / (rate(tiflash_system_profile_event_DMWriteBytes{instance=~\"$instance\"}[30m]))) by (instance)",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "30min-{{instance}}",
+              "refId": "D"
             }
           ],
           "thresholds": [],
@@ -1458,7 +2193,7 @@
           "yaxes": [
             {
               "decimals": null,
-              "format": "none",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -1490,8 +2225,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 12,
-            "y": 55
+            "x": 0,
+            "y": 11
           },
           "id": 40,
           "legend": {
@@ -1531,7 +2266,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Storage Read Tasks",
+          "title": "Read Tasks OPS",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -1575,22 +2310,159 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "fill": 0,
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 11
+          },
+          "id": 61,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": false,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [
+            {
+              "alias": "/^RS Filter/",
+              "yaxis": 2
+            },
+            {
+              "alias": "/^PK/",
+              "yaxis": 2
+            },
+            {
+              "alias": "/^No Filter/",
+              "yaxis": 2
+            }
+          ],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "avg((rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{instance=~\"$instance\"}[1m]) - rate(tiflash_system_profile_event_DMFileFilterAftRoughSet{instance=~\"$instance\"}[1m])) / (rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{instance=~\"$instance\"}[1m]))) by (instance)",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 1,
+              "legendFormat": "1min-{{instance}}",
+              "refId": "B"
+            },
+            {
+              "expr": "avg((rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{instance=~\"$instance\"}[5m]) - rate(tiflash_system_profile_event_DMFileFilterAftRoughSet{instance=~\"$instance\"}[5m])) / (rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{instance=~\"$instance\"}[5m]))) by (instance)",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "5min-{{instance}}",
+              "refId": "C"
+            },
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_DMFileFilterNoFilter{instance=~\"$instance\"}[1m])) by (instance)",
+              "format": "time_series",
+              "hide": true,
+              "instant": false,
+              "intervalFactor": 1,
+              "legendFormat": "No Filter-{{instance}}",
+              "refId": "A"
+            },
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{instance=~\"$instance\"}[1m])) by (instance)",
+              "format": "time_series",
+              "hide": true,
+              "instant": false,
+              "intervalFactor": 1,
+              "legendFormat": "PK Filter-{{instance}}",
+              "refId": "D"
+            },
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_DMFileFilterAftRoughSet{instance=~\"$instance\"}[1m])) by (instance)",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 1,
+              "legendFormat": "RS Filter-{{instance}}",
+              "refId": "E"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Rough Set Filter Rate",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": null,
+              "format": "percentunit",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "decimals": null,
+              "format": "short",
+              "label": "",
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
           "description": "Total number of storage's internal sub tasks",
           "fill": 0,
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 62
+            "y": 18
           },
           "id": 39,
           "legend": {
-            "alignAsTable": false,
+            "alignAsTable": true,
             "avg": false,
             "current": false,
             "max": false,
             "min": false,
-            "rightSide": false,
+            "rightSide": true,
             "show": true,
             "total": false,
             "values": false
@@ -1598,7 +2470,7 @@
           "lines": true,
           "linewidth": 1,
           "links": [],
-          "nullPointMode": "connected",
+          "nullPointMode": "null as zero",
           "percentage": false,
           "pointradius": 5,
           "points": false,
@@ -1620,7 +2492,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Storage Internal Tasks Total",
+          "title": "Internal Tasks OPS",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -1639,7 +2511,7 @@
               "decimals": null,
               "format": "ops",
               "label": null,
-              "logBase": 10,
+              "logBase": 1,
               "max": null,
               "min": "0",
               "show": true
@@ -1670,29 +2542,34 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 62
+            "y": 18
           },
           "id": 42,
           "legend": {
-            "alignAsTable": false,
+            "alignAsTable": true,
             "avg": false,
-            "current": false,
+            "current": true,
             "max": false,
             "min": false,
-            "rightSide": false,
+            "rightSide": true,
             "show": true,
             "total": false,
-            "values": false
+            "values": true
           },
           "lines": true,
           "linewidth": 1,
           "links": [],
-          "nullPointMode": "connected",
+          "nullPointMode": "null as zero",
           "percentage": false,
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
-          "seriesOverrides": [],
+          "seriesOverrides": [
+            {
+              "alias": "99-delta_merge",
+              "yaxis": 2
+            }
+          ],
           "spaceLength": 10,
           "stack": false,
           "steppedLine": false,
@@ -1734,7 +2611,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Storage Internal Tasks Duration",
+          "title": "Internal Tasks Duration",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -1758,11 +2635,11 @@
               "show": true
             },
             {
-              "format": "short",
+              "format": "s",
               "label": null,
               "logBase": 1,
               "max": null,
-              "min": null,
+              "min": "0",
               "show": true
             }
           ],
@@ -1783,7 +2660,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 69
+            "y": 25
           },
           "id": 43,
           "legend": {
@@ -1800,7 +2677,7 @@
           "lines": true,
           "linewidth": 1,
           "links": [],
-          "nullPointMode": "connected",
+          "nullPointMode": "null as zero",
           "percentage": false,
           "pointradius": 5,
           "points": false,
@@ -1811,7 +2688,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_storage_page_gc_count{instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(increase(tiflash_storage_page_gc_count{instance=~\"$instance\"}[1m])) by (type)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{type}}",
@@ -1822,7 +2699,193 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Storage Page GC Tasks Total",
+          "title": "Page GC Tasks OPM",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": null,
+              "format": "opm",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "none",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "cards": {
+            "cardPadding": null,
+            "cardRound": null
+          },
+          "color": {
+            "cardColor": "#b4ff00",
+            "colorScale": "sqrt",
+            "colorScheme": "interpolateSpectral",
+            "exponent": 0.5,
+            "mode": "spectrum"
+          },
+          "dataFormat": "tsbuckets",
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "Duration of storage's internal page gc tasks",
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 25
+          },
+          "heatmap": {},
+          "hideZeroBuckets": true,
+          "highlightCards": true,
+          "id": 44,
+          "legend": {
+            "show": false
+          },
+          "links": [],
+          "reverseYBuckets": false,
+          "targets": [
+            {
+              "expr": "sum(delta(tiflash_storage_page_gc_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le)",
+              "format": "heatmap",
+              "intervalFactor": 2,
+              "legendFormat": "{{le}}",
+              "refId": "B"
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Page GC Tasks Duration",
+          "tooltip": {
+            "show": true,
+            "showHistogram": false
+          },
+          "type": "heatmap",
+          "xAxis": {
+            "show": true
+          },
+          "xBucketNumber": null,
+          "xBucketSize": null,
+          "yAxis": {
+            "decimals": 0,
+            "format": "s",
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true,
+            "splitFactor": null
+          },
+          "yBucketBound": "upper",
+          "yBucketNumber": null,
+          "yBucketSize": null
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of different kinds of read operations",
+          "fill": 0,
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 32
+          },
+          "id": 46,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "hideEmpty": false,
+            "hideZero": false,
+            "max": true,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": true,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_PSMWriteIOCalls{instance=~\"$instance\"}[1m])) by (type)",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "Page",
+              "refId": "A"
+            },
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_PSMWriteCalls{instance=~\"$instance\"}[1m])) by (type)",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 2,
+              "legendFormat": "Page Calls",
+              "refId": "B"
+            },
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_PSMWritePages{instance=~\"$instance\"}[1m]))",
+              "format": "time_series",
+              "hide": true,
+              "intervalFactor": 2,
+              "legendFormat": "PageFile",
+              "refId": "C"
+            },
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWrite{instance=~\"$instance\"}[1m]))",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "File Descriptor",
+              "refId": "D"
+            },
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_WriteBufferAIOWrite{instance=~\"$instance\"}[1m]))",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "AIO",
+              "refId": "F"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Disk Write OPS",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -1841,7 +2904,7 @@
               "decimals": null,
               "format": "ops",
               "label": null,
-              "logBase": 10,
+              "logBase": 1,
               "max": null,
               "min": "0",
               "show": true
@@ -1866,75 +2929,84 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "Duration of storage's internal page gc tasks",
-          "fill": 1,
+          "description": "The number of different kinds of read operations",
+          "fill": 0,
           "gridPos": {
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 69
+            "y": 32
           },
-          "id": 44,
+          "id": 47,
           "legend": {
-            "alignAsTable": false,
+            "alignAsTable": true,
             "avg": false,
-            "current": false,
-            "max": false,
+            "current": true,
+            "hideEmpty": false,
+            "hideZero": false,
+            "max": true,
             "min": false,
-            "rightSide": false,
+            "rightSide": true,
             "show": true,
             "total": false,
-            "values": false
+            "values": true
           },
           "lines": true,
           "linewidth": 1,
           "links": [],
-          "nullPointMode": "connected",
+          "nullPointMode": "null as zero",
           "percentage": false,
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
           "seriesOverrides": [],
           "spaceLength": 10,
-          "stack": false,
+          "stack": true,
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.999, sum(rate(tiflash_storage_page_gc_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "sum(rate(tiflash_system_profile_event_PSMReadIOCalls{instance=~\"$instance\"}[1m]))",
               "format": "time_series",
-              "hide": true,
-              "intervalFactor": 1,
-              "legendFormat": "999",
+              "intervalFactor": 2,
+              "legendFormat": "Page",
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_page_gc_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "sum(rate(tiflash_system_profile_event_PSMReadCalls{instance=~\"$instance\"}[1m]))",
               "format": "time_series",
-              "intervalFactor": 1,
-              "legendFormat": "99",
+              "hide": true,
+              "intervalFactor": 2,
+              "legendFormat": "Page Calls",
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(tiflash_storage_page_gc_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "sum(rate(tiflash_system_profile_event_PSMReadPages{instance=~\"$instance\"}[1m]))",
               "format": "time_series",
-              "intervalFactor": 1,
-              "legendFormat": "95",
+              "hide": true,
+              "intervalFactor": 2,
+              "legendFormat": "PageFile",
               "refId": "C"
             },
             {
-              "expr": "histogram_quantile(0.80, sum(rate(tiflash_storage_page_gc_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "sum(rate(tiflash_system_profile_event_ReadBufferFromFileDescriptorRead{instance=~\"$instance\"}[1m]))",
               "format": "time_series",
-              "hide": true,
               "intervalFactor": 1,
-              "legendFormat": "80",
+              "legendFormat": "File Descriptor",
               "refId": "D"
+            },
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_ReadBufferAIORead{instance=~\"$instance\"}[1m]))",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "AIO",
+              "refId": "F"
             }
           ],
           "thresholds": [],
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Storage Page GC Tasks Duration",
+          "title": "Disk Read OPS",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -1950,7 +3022,121 @@
           },
           "yaxes": [
             {
-              "format": "s",
+              "decimals": null,
+              "format": "ops",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "none",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "decimals": 1,
+          "description": "The flow of different kinds of write operations",
+          "fill": 1,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 39
+          },
+          "height": "",
+          "id": 60,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "hideEmpty": false,
+            "hideZero": false,
+            "max": true,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "sideWidth": null,
+            "sort": "current",
+            "sortDesc": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "repeatedByRow": true,
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": true,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes{instance=~\"$instance\"}[1m]))",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 2,
+              "legendFormat": "File Descriptor",
+              "refId": "A",
+              "step": 10
+            },
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_PSMWriteBytes{instance=~\"$instance\"}[1m]))",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "Page",
+              "refId": "B"
+            },
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_WriteBufferAIOWriteBytes{instance=~\"$instance\"}[1m]))",
+              "format": "time_series",
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "AIO",
+              "refId": "C"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Write flow",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "Bps",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -1962,7 +3148,7 @@
               "label": null,
               "logBase": 1,
               "max": null,
-              "min": null,
+              "min": "0",
               "show": true
             }
           ],
@@ -1977,52 +3163,76 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The total count of different kinds of commands received",
-          "fill": 0,
+          "decimals": 1,
+          "description": "The flow of different kinds of read operations",
+          "fill": 1,
           "gridPos": {
-            "h": 7,
+            "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 76
+            "x": 12,
+            "y": 39
           },
-          "id": 41,
+          "height": "",
+          "id": 59,
           "legend": {
-            "alignAsTable": false,
+            "alignAsTable": true,
             "avg": false,
-            "current": false,
-            "max": false,
+            "current": true,
+            "hideEmpty": false,
+            "hideZero": false,
+            "max": true,
             "min": false,
-            "rightSide": false,
+            "rightSide": true,
             "show": true,
+            "sideWidth": null,
+            "sort": "current",
+            "sortDesc": true,
             "total": false,
-            "values": false
+            "values": true
           },
           "lines": true,
           "linewidth": 1,
           "links": [],
-          "nullPointMode": "connected",
+          "nullPointMode": "null",
           "percentage": false,
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
+          "repeatedByRow": true,
           "seriesOverrides": [],
           "spaceLength": 10,
-          "stack": false,
+          "stack": true,
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_storage_command_count{instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_system_profile_event_ReadBufferFromFileDescriptorReadBytes{instance=~\"$instance\"}[1m]))",
               "format": "time_series",
+              "hide": false,
               "intervalFactor": 2,
-              "legendFormat": "{{type}}",
-              "refId": "A"
+              "legendFormat": "File Descriptor",
+              "refId": "A",
+              "step": 10
+            },
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_PSMReadBytes{instance=~\"$instance\"}[1m]))",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "Page",
+              "refId": "B"
+            },
+            {
+              "expr": "sum(rate(tiflash_system_profile_event_ReadBufferAIOReadBytes{instance=~\"$instance\"}[1m]))",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "AIO",
+              "refId": "C"
             }
           ],
           "thresholds": [],
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Storage command total",
+          "title": "Read flow",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -2038,8 +3248,7 @@
           },
           "yaxes": [
             {
-              "decimals": null,
-              "format": "ops",
+              "format": "Bps",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -2047,11 +3256,11 @@
               "show": true
             },
             {
-              "format": "none",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
-              "min": null,
+              "min": "0",
               "show": true
             }
           ],
@@ -2103,7 +3312,7 @@
           "lines": true,
           "linewidth": 1,
           "links": [],
-          "nullPointMode": "connected",
+          "nullPointMode": "null as zero",
           "percentage": false,
           "pointradius": 5,
           "points": false,
@@ -2125,7 +3334,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Read Index",
+          "title": "Read Index OPS",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -2191,7 +3400,7 @@
           "lines": true,
           "linewidth": 1,
           "links": [],
-          "nullPointMode": "connected",
+          "nullPointMode": "null as zero",
           "percentage": false,
           "pointradius": 5,
           "points": false,
@@ -2299,7 +3508,7 @@
           "lines": true,
           "linewidth": 1,
           "links": [],
-          "nullPointMode": "connected",
+          "nullPointMode": "null as zero",
           "percentage": false,
           "pointradius": 5,
           "points": false,

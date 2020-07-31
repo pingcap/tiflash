@@ -4,6 +4,13 @@
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 
+namespace ProfileEvents
+{
+extern const Event DMFileFilterNoFilter;
+extern const Event DMFileFilterAftPKAndPackSet;
+extern const Event DMFileFilterAftRoughSet;
+} // namespace ProfileEvents
+
 namespace DB
 {
 namespace DM
@@ -45,6 +52,8 @@ public:
             }
         }
 
+        ProfileEvents::increment(ProfileEvents::DMFileFilterNoFilter, pack_count);
+
         size_t after_pk         = 0;
         size_t after_read_packs = 0;
         size_t after_filter     = 0;
@@ -69,6 +78,8 @@ public:
 
         for (auto u : use_packs)
             after_read_packs += u;
+        ProfileEvents::increment(ProfileEvents::DMFileFilterAftPKAndPackSet, after_read_packs);
+
 
         /// Check packs by filter in where clause
         if (filter)
@@ -88,6 +99,7 @@ public:
 
         for (auto u : use_packs)
             after_filter += u;
+        ProfileEvents::increment(ProfileEvents::DMFileFilterAftRoughSet, after_filter);
 
         Float64 filter_rate = (Float64)(after_read_packs - after_filter) * 100 / after_read_packs;
         if (isnan(filter_rate))
