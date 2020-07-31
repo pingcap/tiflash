@@ -297,12 +297,12 @@ private:
     String metaPath() const { return folderPath() + "/meta"; }
     EncryptionPath dataEncryptionPath() const
     {
-        String encrypt_path = parent_path + "/" + folder_prefix_encrypt + "_" + DB::toString(file_id) + "_" + DB::toString(level) + "/page";
+        String encrypt_path = parent_path + "/" + folder_prefix_formal + "_" + DB::toString(file_id) + "_" + DB::toString(level) + "/page";
         return EncryptionPath(encrypt_path, "");
     }
     EncryptionPath metaEncryptionPath() const
     {
-        String encrypt_path = parent_path + "/" + folder_prefix_encrypt + "_" + DB::toString(file_id) + "_" + DB::toString(level) + "/meta";
+        String encrypt_path = parent_path + "/" + folder_prefix_formal + "_" + DB::toString(file_id) + "_" + DB::toString(level) + "/meta";
         return EncryptionPath(encrypt_path, "");
     }
 
@@ -310,7 +310,6 @@ private:
     constexpr static const char * folder_prefix_temp       = ".temp.page";
     constexpr static const char * folder_prefix_legacy     = "legacy.page";
     constexpr static const char * folder_prefix_checkpoint = "checkpoint.page";
-    constexpr static const char * folder_prefix_encrypt    = "encrypt.page";
 
     size_t removeDataIfExists() const;
 

@@ -212,7 +212,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
                 if (dmfile->canGC())
                 {
                     extra_paths.removeDMFile(dmfile->fileId());
-                    dmfile->remove();
+                    dmfile->remove(global_context.getFileProvider());
                 }
 
                 LOG_DEBUG(log, "GC removed useless dmfile: " << dmfile->path());

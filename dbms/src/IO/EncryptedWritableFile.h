@@ -23,6 +23,8 @@ public:
 
     int getFd() const override { return file->getFd(); }
 
+    void open() override;
+
     void close() override;
 
     bool isClosed() override {return file->isClosed(); }

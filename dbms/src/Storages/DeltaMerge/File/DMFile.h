@@ -60,7 +60,7 @@ public:
 
     bool canGC();
     void enableGC();
-    void remove();
+    void remove(const FileProviderPtr & file_provider);
 
     UInt64 fileId() const { return file_id; }
     UInt64 refId() const { return ref_id; }

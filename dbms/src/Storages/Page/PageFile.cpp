@@ -410,6 +410,12 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
 {
     ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
 
+    if (data_file->isClosed())
+    {
+        data_file->open();
+        meta_file->open();
+    }
+
     // TODO: investigate if not copy data into heap, write big pages can be faster?
     ByteBuffer meta_buf, data_buf;
     std::tie(meta_buf, data_buf) = PageMetaFormat::genWriteData(wb, page_file, edit);

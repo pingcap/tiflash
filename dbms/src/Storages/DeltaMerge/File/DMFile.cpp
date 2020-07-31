@@ -132,11 +132,6 @@ void DMFile::finalize()
     Poco::File file(new_path);
     if (file.exists())
         file.remove(true);
-
-    // TODO: use link + delete instead?
-    Poco::File folder(old_file.path());
-    std::vector<std::string> file_names;
-    folder.list(file_names);
     old_file.renameTo(new_path);
 }
 
@@ -187,11 +182,9 @@ void DMFile::enableGC()
         ngc_file.remove();
 }
 
-void DMFile::remove()
+void DMFile::remove(const FileProviderPtr & file_provider)
 {
-    Poco::File file(path());
-    if (file.exists())
-        file.remove(true);
+    file_provider->deleteFile(path(), EncryptionPath(encryptionBasePath(), ""));
 }
 
 

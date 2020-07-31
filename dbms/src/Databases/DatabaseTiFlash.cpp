@@ -186,7 +186,7 @@ void DatabaseTiFlash::createTable(const Context & context, const String & table_
     }
 }
 
-void DatabaseTiFlash::removeTable(const Context & /*context*/, const String & table_name)
+void DatabaseTiFlash::removeTable(const Context & context, const String & table_name)
 {
     StoragePtr res = detachTable(table_name);
 
@@ -197,7 +197,7 @@ void DatabaseTiFlash::removeTable(const Context & /*context*/, const String & ta
         // will be removed.
         String table_metadata_path = getTableMetadataPath(table_name);
         FAIL_POINT_TRIGGER_EXCEPTION(exception_drop_table_during_remove_meta);
-        Poco::File(table_metadata_path).remove();
+        context.getFileProvider()->deleteFile(table_metadata_path, EncryptionPath(table_metadata_path, ""));
     }
     catch (...)
     {

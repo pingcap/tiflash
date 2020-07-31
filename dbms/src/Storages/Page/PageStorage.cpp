@@ -621,7 +621,10 @@ void PageStorage::drop()
     // TODO: count how many bytes in "archive" directory.
     size_t bytes_to_remove = 0;
     for (const auto & page_file : page_files)
+    {
         bytes_to_remove += page_file.getDiskSize();
+        page_file.destroy();
+    }
 
     if (Poco::File directory(storage_path); directory.exists())
         directory.remove(true);
