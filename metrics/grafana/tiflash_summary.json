@@ -2339,15 +2339,15 @@
           "renderer": "flot",
           "seriesOverrides": [
             {
-              "alias": "RS Filter",
+              "alias": "/^RS Filter/",
               "yaxis": 2
             },
             {
-              "alias": "PK",
+              "alias": "/^PK/",
               "yaxis": 2
             },
             {
-              "alias": "No Filter",
+              "alias": "/^No Filter/",
               "yaxis": 2
             }
           ],
@@ -2356,45 +2356,45 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "avg((rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{instance=~\"$instance\"}[1m]) - rate(tiflash_system_profile_event_DMFileFilterAftRoughSet{instance=~\"$instance\"}[1m])) / (rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{instance=~\"$instance\"}[1m])))",
+              "expr": "avg((rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{instance=~\"$instance\"}[1m]) - rate(tiflash_system_profile_event_DMFileFilterAftRoughSet{instance=~\"$instance\"}[1m])) / (rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{instance=~\"$instance\"}[1m]))) by (instance)",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 1,
-              "legendFormat": "1min",
+              "legendFormat": "1min-{{instance}}",
               "refId": "B"
             },
             {
-              "expr": "avg((rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{instance=~\"$instance\"}[5m]) - rate(tiflash_system_profile_event_DMFileFilterAftRoughSet{instance=~\"$instance\"}[5m])) / (rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{instance=~\"$instance\"}[5m])))",
+              "expr": "avg((rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{instance=~\"$instance\"}[5m]) - rate(tiflash_system_profile_event_DMFileFilterAftRoughSet{instance=~\"$instance\"}[5m])) / (rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{instance=~\"$instance\"}[5m]))) by (instance)",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
-              "legendFormat": "5min",
+              "legendFormat": "5min-{{instance}}",
               "refId": "C"
             },
             {
-              "expr": "sum(rate(tiflash_system_profile_event_DMFileFilterNoFilter{instance=~\"$instance\"}[1m]))",
+              "expr": "sum(rate(tiflash_system_profile_event_DMFileFilterNoFilter{instance=~\"$instance\"}[1m])) by (instance)",
               "format": "time_series",
               "hide": true,
               "instant": false,
               "intervalFactor": 1,
-              "legendFormat": "No Filter",
+              "legendFormat": "No Filter-{{instance}}",
               "refId": "A"
             },
             {
-              "expr": "sum(rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{instance=~\"$instance\"}[1m]))",
+              "expr": "sum(rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{instance=~\"$instance\"}[1m])) by (instance)",
               "format": "time_series",
               "hide": true,
               "instant": false,
               "intervalFactor": 1,
-              "legendFormat": "PK Filter",
+              "legendFormat": "PK Filter-{{instance}}",
               "refId": "D"
             },
             {
-              "expr": "sum(rate(tiflash_system_profile_event_DMFileFilterAftRoughSet{instance=~\"$instance\"}[1m]))",
+              "expr": "sum(rate(tiflash_system_profile_event_DMFileFilterAftRoughSet{instance=~\"$instance\"}[1m])) by (instance)",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
-              "legendFormat": "RS Filter",
+              "legendFormat": "RS Filter-{{instance}}",
               "refId": "E"
             }
           ],
