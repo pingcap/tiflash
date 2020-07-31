@@ -54,7 +54,7 @@ String PageStorage::StatisticsInfo::toString() const
 }
 
 PageFileSet PageStorage::listAllPageFiles(const String &              storage_path,
-                                          FileProviderPtr &           file_provider,
+                                          const FileProviderPtr &           file_provider,
                                           Poco::Logger *              page_file_log,
                                           const ListPageFilesOption & option)
 {

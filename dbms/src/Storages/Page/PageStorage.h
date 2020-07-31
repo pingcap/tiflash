@@ -141,7 +141,7 @@ public:
     FileProviderPtr getFileProvider() const { return file_provider; }
 
     static PageFileSet listAllPageFiles(const String &              storage_path,
-                                        FileProviderPtr &           file_provider,
+                                        const FileProviderPtr &           file_provider,
                                         Poco::Logger *              page_file_log,
                                         const ListPageFilesOption & option = ListPageFilesOption());
 
