@@ -19,6 +19,11 @@
 
 #include <ext/scope_guard.h>
 
+namespace CurrentMetrics
+{
+extern const Metric OpenFileForRead;
+}
+
 namespace DB
 {
 // =========================================================
@@ -238,6 +243,7 @@ void PageFile::MetaMergingReader::initialize()
     // File not exists.
     if (unlikely(!fd))
         throw Exception("Try to read meta of " + page_file.toString() + ", but open file error. Path: " + path, ErrorCodes::LOGICAL_ERROR);
+    CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForRead};
     SCOPE_EXIT({ ::close(fd); });
 
     meta_buffer = (char *)page_file.alloc(meta_size);
@@ -412,6 +418,7 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
     {
         data_file_fd = PageUtil::openFile<false>(data_file_path);
         meta_file_fd = PageUtil::openFile<false>(meta_file_path);
+        fd_increment.changeTo(2);
     }
 
     // TODO: investigate if not copy data into heap, write big pages can be faster?
@@ -460,6 +467,8 @@ void PageFile::Writer::closeFd()
     SCOPE_EXIT({
         ::close(data_file_fd);
         ::close(meta_file_fd);
+
+        fd_increment.changeTo(0);
 
         meta_file_fd = 0;
         data_file_fd = 0;
