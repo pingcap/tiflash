@@ -1,6 +1,5 @@
 #include <Common/Exception.h>
 #include <Encryption/AESEncryptionProvider.h>
-#include <IO/FileProvider.h>
 
 namespace DB
 {

@@ -52,8 +52,9 @@ DMFilePtr DMFile::restore(UInt64 file_id, UInt64 ref_id, const String & parent_p
 
 void DMFile::writeMeta()
 {
-    String              meta_path     = metaPath();
-    String              tmp_meta_path = meta_path + ".tmp";
+    String meta_path     = metaPath();
+    String tmp_meta_path = meta_path + ".tmp";
+
     WriteBufferFromFile buf(tmp_meta_path, 4096);
     writeString("DTFile format: ", buf);
     writeIntText(static_cast<std::underlying_type_t<DMFileVersion>>(DMFileVersion::CURRENT_VERSION), buf);

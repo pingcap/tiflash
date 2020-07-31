@@ -89,7 +89,8 @@ public:
         PageMap read(FieldReadInfos & to_read);
 
     private:
-        String              data_file_path;
+        String data_file_path;
+
         RandomAccessFilePtr file;
     };
 

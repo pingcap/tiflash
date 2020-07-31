@@ -17,7 +17,8 @@ namespace DB
 
 ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     const BlockInputStreams & inputs, const BlockInputStreamPtr & additional_input_at_end,
-    const Aggregator::Params & params_, const FileProviderPtr & file_provider_, bool final_, size_t max_threads_, size_t temporary_data_merge_threads_)
+    const Aggregator::Params & params_, const FileProviderPtr & file_provider_, bool final_, size_t max_threads_,
+    size_t temporary_data_merge_threads_)
     : params(params_), aggregator(params), file_provider(file_provider_),
     final(final_), max_threads(std::min(inputs.size(), max_threads_)), temporary_data_merge_threads(temporary_data_merge_threads_),
     keys_size(params.keys_size), aggregates_size(params.aggregates_size),
@@ -101,7 +102,8 @@ Block ParallelAggregatingBlockInputStream::readImpl()
 }
 
 
-ParallelAggregatingBlockInputStream::TemporaryFileStream::TemporaryFileStream(const std::string & path, const FileProviderPtr & file_provider_)
+ParallelAggregatingBlockInputStream::TemporaryFileStream::TemporaryFileStream(const std::string & path,
+    const FileProviderPtr & file_provider_)
     : file_provider(file_provider_), file_in(file_provider, path, EncryptionPath(path, "")), compressed_in(file_in),
     block_in(std::make_shared<NativeBlockInputStream>(compressed_in, ClickHouseRevision::get())) {}
 

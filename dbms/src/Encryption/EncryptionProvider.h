@@ -1,6 +1,5 @@
 #pragma once
 
-
 #include <Encryption/BlockAccessCipherStream.h>
 #include <cstddef>
 

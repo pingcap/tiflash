@@ -1,6 +1,5 @@
 #include <sstream>
 
-#include <Common/escapeForFileName.h>
 #include <Common/Stopwatch.h>
 #include <common/ThreadPool.h>
 #include <Poco/DirectoryIterator.h>
@@ -29,8 +28,6 @@ namespace ErrorCodes
     extern const int SYNTAX_ERROR;
     extern const int TIDB_TABLE_ALREADY_EXISTS;
 }
-
-
 
 
 String getTableDefinitionFromCreateQuery(const ASTPtr & query)
