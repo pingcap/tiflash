@@ -1,9 +1,9 @@
 #pragma once
 
+#include <IO/ReadBufferFromFileProvider.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
-#include <IO/ReadBufferFromFileProvider.h>
 
 namespace DB
 {
@@ -17,14 +17,13 @@ class DMFilePackFilter
 {
 public:
     ///
-    DMFilePackFilter(const DMFilePtr &     dmfile_,
-                     MinMaxIndexCache *    index_cache_,
-                     UInt64                hash_salt_,
-                     const HandleRange &   handle_range_, // filter by handle range
-                     const RSOperatorPtr & filter_,       // filter by push down where clause
-                     const IdSetPtr &      read_packs_,   // filter by pack index
-                     const FileProviderPtr & file_provider_
-                     )
+    DMFilePackFilter(const DMFilePtr &       dmfile_,
+                     MinMaxIndexCache *      index_cache_,
+                     UInt64                  hash_salt_,
+                     const HandleRange &     handle_range_, // filter by handle range
+                     const RSOperatorPtr &   filter_,       // filter by push down where clause
+                     const IdSetPtr &        read_packs_,   // filter by pack index
+                     const FileProviderPtr & file_provider_)
         : dmfile(dmfile_),
           index_cache(index_cache_),
           hash_salt(hash_salt_),
@@ -126,7 +125,11 @@ private:
 
         auto & type = dmfile->getColumnStat(col_id).type;
         auto   load = [&]() {
-            auto index_buf = ReadBufferFromFileProvider(file_provider, index_path, dmfile->encryptionIndexPath(DMFile::getFileNameBase(col_id)), std::min(static_cast<Poco::File::FileSize>(DBMS_DEFAULT_BUFFER_SIZE), Poco::File(index_path).getSize()));
+            auto index_buf = ReadBufferFromFileProvider(
+                file_provider,
+                index_path,
+                dmfile->encryptionIndexPath(DMFile::getFileNameBase(col_id)),
+                std::min(static_cast<Poco::File::FileSize>(DBMS_DEFAULT_BUFFER_SIZE), Poco::File(index_path).getSize()));
             return MinMaxIndex::read(*type, index_buf);
         };
         MinMaxIndexPtr minmax_index;
@@ -150,7 +153,7 @@ private:
     HandleRange        handle_range;
     RSOperatorPtr      filter;
     IdSetPtr           read_packs;
-    FileProviderPtr file_provider;
+    FileProviderPtr    file_provider;
 
     RSCheckParam param;
 

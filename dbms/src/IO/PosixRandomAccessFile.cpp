@@ -6,9 +6,9 @@
 
 namespace ProfileEvents
 {
-    extern const Event FileOpen;
-    extern const Event FileOpenFailed;
-}
+extern const Event FileOpen;
+extern const Event FileOpenFailed;
+} // namespace ProfileEvents
 
 namespace DB
 {

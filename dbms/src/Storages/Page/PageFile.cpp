@@ -109,7 +109,8 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
         switch (write.type)
         {
         case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::UPSERT: {
+        case WriteBatch::WriteType::UPSERT:
+        {
             PageFlags  flags;
             Checksum   page_checksum = 0;
             PageOffset page_offset   = 0;
@@ -314,7 +315,8 @@ void PageFile::MetaMergingReader::moveNext()
         switch (write_type)
         {
         case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::UPSERT: {
+        case WriteBatch::WriteType::UPSERT:
+        {
             PageMetaFormat::PageFlags flags;
 
             auto      page_id = PageUtil::get<PageId>(pos);
@@ -360,12 +362,14 @@ void PageFile::MetaMergingReader::moveNext()
             }
             break;
         }
-        case WriteBatch::WriteType::DEL: {
+        case WriteBatch::WriteType::DEL:
+        {
             auto page_id = PageUtil::get<PageId>(pos);
             curr_edit.del(page_id);
             break;
         }
-        case WriteBatch::WriteType::REF: {
+        case WriteBatch::WriteType::REF:
+        {
             const auto ref_id  = PageUtil::get<PageId>(pos);
             const auto page_id = PageUtil::get<PageId>(pos);
             curr_edit.ref(ref_id, page_id);
@@ -389,13 +393,20 @@ void PageFile::MetaMergingReader::moveNext()
 // =========================================================
 
 PageFile::Writer::Writer(PageFile & page_file_, bool sync_on_write_, bool create_new_file, bool create_new_encryption_info)
-    : page_file(page_file_), sync_on_write(sync_on_write_), data_file_path(page_file.dataPath()), meta_file_path(page_file.metaPath()), data_file{nullptr}, meta_file{nullptr}
+    : page_file(page_file_),
+      sync_on_write(sync_on_write_),
+      data_file_path(page_file.dataPath()),
+      meta_file_path(page_file.metaPath()),
+      data_file{nullptr},
+      meta_file{nullptr}
 {
     // Create data and meta file, prevent empty page folder from being removed by GC.
-//    PageUtil::touchFile(data_file_path);
-//    PageUtil::touchFile(meta_file_path);
-    data_file = page_file.file_provider->newWritableFile(page_file.dataPath(), page_file.dataEncryptionPath(), create_new_file, create_new_encryption_info);
-    meta_file = page_file.file_provider->newWritableFile(page_file.metaPath(), page_file.metaEncryptionPath(), create_new_file, create_new_encryption_info);
+    //    PageUtil::touchFile(data_file_path);
+    //    PageUtil::touchFile(meta_file_path);
+    data_file = page_file.file_provider->newWritableFile(
+        page_file.dataPath(), page_file.dataEncryptionPath(), create_new_file, create_new_encryption_info);
+    meta_file = page_file.file_provider->newWritableFile(
+        page_file.metaPath(), page_file.metaEncryptionPath(), create_new_file, create_new_encryption_info);
 }
 
 PageFile::Writer::~Writer()
@@ -423,7 +434,7 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
     SCOPE_EXIT({ page_file.free(meta_buf.begin(), meta_buf.size()); });
     SCOPE_EXIT({ page_file.free(data_buf.begin(), data_buf.size()); });
 
-    auto write_buf = [&](WritableFilePtr &file, UInt64 offset, const std::string & path, ByteBuffer buf) {
+    auto write_buf = [&](WritableFilePtr & file, UInt64 offset, const std::string & path, ByteBuffer buf) {
         PageUtil::writeFile(file, offset, buf.begin(), buf.size(), path);
         if (sync_on_write)
             PageUtil::syncFile(file, path);
@@ -474,7 +485,8 @@ void PageFile::Writer::closeFd()
 // =========================================================
 
 PageFile::Reader::Reader(PageFile & page_file)
-    : data_file_path(page_file.dataPath()), file{page_file.file_provider->newRandomAccessFile(page_file.dataPath(), page_file.dataEncryptionPath())}
+    : data_file_path(page_file.dataPath()),
+      file{page_file.file_provider->newRandomAccessFile(page_file.dataPath(), page_file.dataEncryptionPath())}
 {
 }
 
@@ -681,8 +693,21 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read)
 // PageFile
 // =========================================================
 
-PageFile::PageFile(PageFileId file_id_, UInt32 level_, const std::string & parent_path, const FileProviderPtr & file_provider_, PageFile::Type type_, bool is_create, Logger * log_)
-    : file_id(file_id_), level(level_), type(type_), parent_path(parent_path), file_provider{file_provider_}, data_file_pos(0), meta_file_pos(0), log(log_)
+PageFile::PageFile(PageFileId              file_id_,
+                   UInt32                  level_,
+                   const std::string &     parent_path,
+                   const FileProviderPtr & file_provider_,
+                   PageFile::Type          type_,
+                   bool                    is_create,
+                   Logger *                log_)
+    : file_id(file_id_),
+      level(level_),
+      type(type_),
+      parent_path(parent_path),
+      file_provider{file_provider_},
+      data_file_pos(0),
+      meta_file_pos(0),
+      log(log_)
 {
     if (is_create)
     {
@@ -693,7 +718,8 @@ PageFile::PageFile(PageFileId file_id_, UInt32 level_, const std::string & paren
     }
 }
 
-std::pair<PageFile, PageFile::Type> PageFile::recover(const String & parent_path, const FileProviderPtr & file_provider_, const String & page_file_name, Logger * log)
+std::pair<PageFile, PageFile::Type>
+PageFile::recover(const String & parent_path, const FileProviderPtr & file_provider_, const String & page_file_name, Logger * log)
 {
 
     if (!startsWith(page_file_name, folder_prefix_formal) && !startsWith(page_file_name, folder_prefix_temp)
@@ -763,17 +789,28 @@ std::pair<PageFile, PageFile::Type> PageFile::recover(const String & parent_path
     return {{}, Type::Invalid};
 }
 
-PageFile PageFile::newPageFile(PageFileId file_id, UInt32 level, const std::string & parent_path, const FileProviderPtr & file_provider_, PageFile::Type type, Logger * log)
+PageFile PageFile::newPageFile(PageFileId              file_id,
+                               UInt32                  level,
+                               const std::string &     parent_path,
+                               const FileProviderPtr & file_provider_,
+                               PageFile::Type          type,
+                               Logger *                log)
 {
     return PageFile(file_id, level, parent_path, file_provider_, type, true, log);
 }
 
-PageFile PageFile::openPageFileForRead(PageFileId file_id, UInt32 level, const std::string & parent_path, const FileProviderPtr & file_provider_, PageFile::Type type, Logger * log)
+PageFile PageFile::openPageFileForRead(PageFileId              file_id,
+                                       UInt32                  level,
+                                       const std::string &     parent_path,
+                                       const FileProviderPtr & file_provider_,
+                                       PageFile::Type          type,
+                                       Logger *                log)
 {
     return PageFile(file_id, level, parent_path, file_provider_, type, false, log);
 }
 
-bool PageFile::isPageFileExist(PageFileIdAndLevel file_id, const String & parent_path, const FileProviderPtr & file_provider_, Type type, Poco::Logger * log)
+bool PageFile::isPageFileExist(
+    PageFileIdAndLevel file_id, const String & parent_path, const FileProviderPtr & file_provider_, Type type, Poco::Logger * log)
 {
     PageFile pf = openPageFileForRead(file_id.first, file_id.second, parent_path, file_provider_, type, log);
     return pf.isExist();

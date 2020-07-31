@@ -89,7 +89,7 @@ public:
         PageMap read(FieldReadInfos & to_read);
 
     private:
-        String data_file_path;
+        String              data_file_path;
         RandomAccessFilePtr file;
     };
 
@@ -230,13 +230,25 @@ public:
     /// Create an empty page file.
     PageFile() = default;
     /// Recover a page file from disk.
-    static std::pair<PageFile, Type> recover(const String & parent_path, const FileProviderPtr & file_provider_, const String & page_file_name, Poco::Logger * log);
+    static std::pair<PageFile, Type>
+    recover(const String & parent_path, const FileProviderPtr & file_provider_, const String & page_file_name, Poco::Logger * log);
     /// Create a new page file.
-    static PageFile newPageFile(PageFileId file_id, UInt32 level, const String & parent_path, const FileProviderPtr & file_provider_, Type type, Poco::Logger * log);
+    static PageFile newPageFile(PageFileId              file_id,
+                                UInt32                  level,
+                                const String &          parent_path,
+                                const FileProviderPtr & file_provider_,
+                                Type                    type,
+                                Poco::Logger *          log);
     /// Open an existing page file for read.
-    static PageFile openPageFileForRead(PageFileId file_id, UInt32 level, const String & parent_path, const FileProviderPtr & file_provider_, Type type, Poco::Logger * log);
+    static PageFile openPageFileForRead(PageFileId              file_id,
+                                        UInt32                  level,
+                                        const String &          parent_path,
+                                        const FileProviderPtr & file_provider_,
+                                        Type                    type,
+                                        Poco::Logger *          log);
     /// If page file is exist.
-    static bool isPageFileExist(PageFileIdAndLevel file_id, const String & parent_path, const FileProviderPtr & file_provider_, Type type, Poco::Logger * log);
+    static bool isPageFileExist(
+        PageFileIdAndLevel file_id, const String & parent_path, const FileProviderPtr & file_provider_, Type type, Poco::Logger * log);
 
     /// Rename this page file into formal style.
     void setFormal();
@@ -251,7 +263,10 @@ public:
     /// Return a writer bound with this PageFile object.
     /// Note that the user MUST keep the PageFile object around before this writer being freed.
     /// And the meta_file_pos, data_file_pos should be properly set before creating writer.
-    std::unique_ptr<Writer> createWriter(bool sync_on_write, bool create_new_file, bool create_new_encryption_info) { return std::make_unique<Writer>(*this, sync_on_write, create_new_file, create_new_encryption_info); }
+    std::unique_ptr<Writer> createWriter(bool sync_on_write, bool create_new_file, bool create_new_encryption_info)
+    {
+        return std::make_unique<Writer>(*this, sync_on_write, create_new_file, create_new_encryption_info);
+    }
     /// Return a reader for this file.
     /// The PageFile object can be released any time.
     std::shared_ptr<Reader> createReader()
@@ -291,10 +306,16 @@ public:
 
 private:
     /// Create a new page file.
-    PageFile(PageFileId file_id_, UInt32 level_, const String & parent_path, const FileProviderPtr & file_provider_, Type type_, bool is_create, Poco::Logger * log);
+    PageFile(PageFileId              file_id_,
+             UInt32                  level_,
+             const String &          parent_path,
+             const FileProviderPtr & file_provider_,
+             Type                    type_,
+             bool                    is_create,
+             Poco::Logger *          log);
 
-    String dataPath() const { return folderPath() + "/page"; }
-    String metaPath() const { return folderPath() + "/meta"; }
+    String         dataPath() const { return folderPath() + "/page"; }
+    String         metaPath() const { return folderPath() + "/meta"; }
     EncryptionPath dataEncryptionPath() const
     {
         String encrypt_path = parent_path + "/" + folder_prefix_formal + "_" + DB::toString(file_id) + "_" + DB::toString(level) + "/page";

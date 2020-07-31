@@ -14,8 +14,8 @@ LegacyCompactor::LegacyCompactor(const PageStorage & storage)
 {
 }
 
-std::tuple<PageFileSet, PageFileSet, size_t>//
-LegacyCompactor::tryCompact( //
+std::tuple<PageFileSet, PageFileSet, size_t> //
+LegacyCompactor::tryCompact(                 //
     PageFileSet &&                       page_files,
     const std::set<PageFileIdAndLevel> & writing_file_ids)
 {
@@ -220,14 +220,11 @@ WriteBatch LegacyCompactor::prepareCheckpointWriteBatch(const PageStorage::Snaps
     return wb;
 }
 
-size_t LegacyCompactor::writeToCheckpoint(const String &             storage_path,
-                                        const PageFileIdAndLevel & file_id,
-                                        WriteBatch &&              wb,
-                                        FileProviderPtr & file_provider,
-                                        Poco::Logger *             log)
+size_t LegacyCompactor::writeToCheckpoint(
+    const String & storage_path, const PageFileIdAndLevel & file_id, WriteBatch && wb, FileProviderPtr & file_provider, Poco::Logger * log)
 {
-    size_t bytes_written = 0;
-    auto checkpoint_file = PageFile::newPageFile(file_id.first, file_id.second, storage_path, file_provider, PageFile::Type::Temp, log);
+    size_t bytes_written   = 0;
+    auto   checkpoint_file = PageFile::newPageFile(file_id.first, file_id.second, storage_path, file_provider, PageFile::Type::Temp, log);
     {
         auto checkpoint_writer = checkpoint_file.createWriter(false, false, false);
 

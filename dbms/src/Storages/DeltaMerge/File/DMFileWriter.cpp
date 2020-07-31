@@ -12,7 +12,7 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
                            size_t                      min_compress_block_size_,
                            size_t                      max_compress_block_size_,
                            const CompressionSettings & compression_settings_,
-                           const FileProviderPtr &           file_provider_,
+                           const FileProviderPtr &     file_provider_,
                            bool                        wal_mode_)
     : dmfile(dmfile_),
       write_columns(write_columns_),
@@ -148,7 +148,8 @@ void DMFileWriter::finalizeColumn(ColId col_id, const IDataType & type)
 
         if (stream->minmaxes)
         {
-            WriteBufferFromFileProvider buf(file_provider, dmfile->colIndexPath(stream_name), dmfile->encryptionIndexPath(stream_name), false);
+            WriteBufferFromFileProvider buf(
+                file_provider, dmfile->colIndexPath(stream_name), dmfile->encryptionIndexPath(stream_name), false);
             stream->minmaxes->write(type, buf);
             buf.sync();
             bytes_written += buf.getPositionInFile();

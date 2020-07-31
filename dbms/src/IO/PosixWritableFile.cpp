@@ -7,9 +7,9 @@
 
 namespace ProfileEvents
 {
-    extern const Event FileOpen;
-    extern const Event FileOpenFailed;
-}
+extern const Event FileOpen;
+extern const Event FileOpenFailed;
+} // namespace ProfileEvents
 
 namespace DB
 {
@@ -34,7 +34,8 @@ PosixWritableFile::~PosixWritableFile()
     ::close(fd);
 }
 
-void PosixWritableFile::open() {
+void PosixWritableFile::open()
+{
     if (fd != -1)
         return;
     doOpenFile(false, -1, 0666);
@@ -51,11 +52,10 @@ void PosixWritableFile::close()
 
 ssize_t PosixWritableFile::write(char * buf, size_t size) { return ::write(fd, buf, size); }
 
-ssize_t PosixWritableFile::pwrite(char *buf, size_t size, off_t offset) const {
-    return ::pwrite(fd, buf, size, offset);
-}
+ssize_t PosixWritableFile::pwrite(char * buf, size_t size, off_t offset) const { return ::pwrite(fd, buf, size, offset); }
 
-void PosixWritableFile::doOpenFile(bool create_new_file_, int flags, mode_t mode) {
+void PosixWritableFile::doOpenFile(bool create_new_file_, int flags, mode_t mode)
+{
     ProfileEvents::increment(ProfileEvents::FileOpen);
 #ifdef __APPLE__
     bool o_direct = (flags != -1) && (flags & O_DIRECT);

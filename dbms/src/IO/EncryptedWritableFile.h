@@ -17,7 +17,7 @@ public:
 
     ssize_t write(char * buf, size_t size) override;
 
-    ssize_t  pwrite(char *buf, size_t size, off_t offset) const override;
+    ssize_t pwrite(char * buf, size_t size, off_t offset) const override;
 
     std::string getFileName() const override { return file->getFileName(); }
 
@@ -27,7 +27,7 @@ public:
 
     void close() override;
 
-    bool isClosed() override {return file->isClosed(); }
+    bool isClosed() override { return file->isClosed(); }
 
 private:
     WritableFilePtr file;

@@ -99,12 +99,12 @@ public:
     };
 
 public:
-    PageStorage(String                 name,
-                const String &         storage_path,
-                const Config &         config_,
+    PageStorage(String                  name,
+                const String &          storage_path,
+                const Config &          config_,
                 const FileProviderPtr & file_provider_,
-                TiFlashMetricsPtr      metrics_ = nullptr,
-                PathCapacityMetricsPtr global_capacity_ = nullptr);
+                TiFlashMetricsPtr       metrics_         = nullptr,
+                PathCapacityMetricsPtr  global_capacity_ = nullptr);
 
     void restore();
 
@@ -140,8 +140,10 @@ public:
 
     FileProviderPtr getFileProvider() const { return file_provider; }
 
-    static PageFileSet
-    listAllPageFiles(const String & storage_path, FileProviderPtr & file_provider, Poco::Logger * page_file_log, const ListPageFilesOption & option = ListPageFilesOption());
+    static PageFileSet listAllPageFiles(const String &              storage_path,
+                                        FileProviderPtr &           file_provider,
+                                        Poco::Logger *              page_file_log,
+                                        const ListPageFilesOption & option = ListPageFilesOption());
 
 private:
     WriterPtr getWriter(PageFile & page_file);

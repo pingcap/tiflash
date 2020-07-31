@@ -151,8 +151,8 @@ DataCompactor<SnapshotPtr>::migratePages( //
     }
 
     // Create a tmp PageFile for migration
-    PageFile gc_file
-        = PageFile::newPageFile(migrate_file_id.first, migrate_file_id.second, storage_path, file_provider, PageFile::Type::Temp, page_file_log);
+    PageFile gc_file = PageFile::newPageFile(
+        migrate_file_id.first, migrate_file_id.second, storage_path, file_provider, PageFile::Type::Temp, page_file_log);
     LOG_INFO(log,
              storage_name << " GC decide to migrate " << candidates.size() << " files, containing " << migrate_page_count
                           << " pages to PageFile_" << gc_file.getFileId() << "_" << gc_file.getLevel());
