@@ -12,6 +12,7 @@ namespace ProfileEvents
 {
     extern const Event FileOpen;
     extern const Event FileOpenFailed;
+    extern const Event FileFSync;
     extern const Event WriteBufferAIOWrite;
     extern const Event WriteBufferAIOWriteBytes;
 }
@@ -95,6 +96,7 @@ void WriteBufferAIO::sync()
     flush();
 
     /// Ask OS to flush data to disk.
+    ProfileEvents::increment(ProfileEvents::FileFSync);
     int res = ::fsync(fd);
     if (res == -1)
         throwFromErrno("Cannot fsync " + getFileName(), ErrorCodes::CANNOT_FSYNC);
