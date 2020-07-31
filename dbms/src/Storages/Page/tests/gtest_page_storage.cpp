@@ -29,7 +29,12 @@ namespace tests
 class PageStorage_test : public ::testing::Test
 {
 public:
-    PageStorage_test() : path(DB::tests::TiFlashTestEnv::getTemporaryPath() + "page_storage_test"), storage(), file_provider{DB::tests::TiFlashTestEnv::getContext().getFileProvider()} {}
+    PageStorage_test()
+        : path(DB::tests::TiFlashTestEnv::getTemporaryPath() + "page_storage_test"),
+          storage(),
+          file_provider{DB::tests::TiFlashTestEnv::getContext().getFileProvider()}
+    {
+    }
 
 protected:
     static void SetUpTestCase() { TiFlashTestEnv::setupLogger(); }

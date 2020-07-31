@@ -13,7 +13,8 @@ namespace tests
 TEST(PageFile_test, Compare)
 {
     const FileProviderPtr file_provider = TiFlashTestEnv::getContext().getFileProvider();
-    PageFile checkpoint_pf = PageFile::openPageFileForRead(55, 0, ".", file_provider, PageFile::Type::Checkpoint, &Poco::Logger::get("PageFile"));
+    PageFile              checkpoint_pf
+        = PageFile::openPageFileForRead(55, 0, ".", file_provider, PageFile::Type::Checkpoint, &Poco::Logger::get("PageFile"));
 
     PageFile pf0 = PageFile::openPageFileForRead(2, 0, ".", file_provider, PageFile::Type::Formal, &Poco::Logger::get("PageFile"));
     PageFile pf1 = PageFile::openPageFileForRead(55, 1, ".", file_provider, PageFile::Type::Formal, &Poco::Logger::get("PageFile"));
@@ -35,7 +36,6 @@ TEST(PageFile_test, Compare)
     ASSERT_EQ(pf_set.begin()->fileIdLevel(), checkpoint_pf.fileIdLevel());
     ASSERT_EQ(pf_set.rbegin()->getType(), PageFile::Type::Formal);
     ASSERT_EQ(pf_set.rbegin()->fileIdLevel(), pf1.fileIdLevel());
-
 }
 
 TEST(Page_test, GetField)
@@ -131,8 +131,8 @@ TEST(PageEntry_test, GetFieldInfo)
     ASSERT_EQ(end, entry.size);
     ASSERT_EQ(entry.getFieldSize(4), entry.size - 1024);
 
-    ASSERT_THROW({ entry.getFieldOffsets(5);}, DB::Exception);
-    ASSERT_THROW({ entry.getFieldSize(5);}, DB::Exception);
+    ASSERT_THROW({ entry.getFieldOffsets(5); }, DB::Exception);
+    ASSERT_THROW({ entry.getFieldSize(5); }, DB::Exception);
 }
 
 } // namespace tests

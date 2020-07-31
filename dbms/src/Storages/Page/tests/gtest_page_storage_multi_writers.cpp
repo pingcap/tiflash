@@ -37,7 +37,12 @@ using PSPtr = std::shared_ptr<DB::PageStorage>;
 class PageStorageMultiWriters_test : public ::testing::Test
 {
 public:
-    PageStorageMultiWriters_test() : path(DB::tests::TiFlashTestEnv::getTemporaryPath() + "page_storage_multi_writers_test"), storage(), file_provider{DB::tests::TiFlashTestEnv::getContext().getFileProvider()} {}
+    PageStorageMultiWriters_test()
+        : path(DB::tests::TiFlashTestEnv::getTemporaryPath() + "page_storage_multi_writers_test"),
+          storage(),
+          file_provider{DB::tests::TiFlashTestEnv::getContext().getFileProvider()}
+    {
+    }
 
 protected:
     static void SetUpTestCase() { TiFlashTestEnv::setupLogger(); }

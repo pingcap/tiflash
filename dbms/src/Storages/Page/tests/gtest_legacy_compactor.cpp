@@ -164,9 +164,9 @@ try
 {
     TiFlashTestEnv::setupLogger();
 
-    const String path = TiFlashTestEnv::getTemporaryPath() + "/legacy_compactor_test";
+    const String          path          = TiFlashTestEnv::getTemporaryPath() + "/legacy_compactor_test";
     const FileProviderPtr file_provider = TiFlashTestEnv::getContext().getFileProvider();
-    PageStorage  storage("compact_test", path, {}, file_provider);
+    PageStorage           storage("compact_test", path, {}, file_provider);
 
     PageStorage::ListPageFilesOption opt;
     opt.ignore_checkpoint = false;
