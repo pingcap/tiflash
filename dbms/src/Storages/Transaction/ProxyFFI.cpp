@@ -109,12 +109,12 @@ void HandleDestroy(TiFlashServer * server, RegionId region_id)
     }
 }
 
-void HandleIngestSST(TiFlashServer * server, SnapshotViewArray snaps, RaftCmdHeader header)
+TiFlashApplyRes HandleIngestSST(TiFlashServer * server, SnapshotViewArray snaps, RaftCmdHeader header)
 {
     try
     {
         auto & kvstore = server->tmt->getKVStore();
-        kvstore->handleIngestSST(header.region_id, snaps, header.index, header.term, *server->tmt);
+        return kvstore->handleIngestSST(header.region_id, snaps, header.index, header.term, *server->tmt);
     }
     catch (...)
     {
