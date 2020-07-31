@@ -6,6 +6,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace DB
 {
@@ -31,6 +32,8 @@ struct TiFlashError
     const std::string description;
     const std::string workaround;
     const std::string message_template;
+
+    std::string standardName() const { return "FLASH:" + error_class + ":" + error_code; }
 };
 
 /// TiFlashErrorRegistry will registers and checks all errors when TiFlash startup
@@ -79,6 +82,17 @@ public:
     std::optional<TiFlashError> get(const std::string & error_class, int error_code) const
     {
         return get(error_class, std::to_string(error_code));
+    }
+
+    std::vector<TiFlashError> allErrors() const
+    {
+        std::vector<TiFlashError> res;
+        res.reserve(all_errors.size());
+        for (auto error : all_errors)
+        {
+            res.push_back(error.second);
+        }
+        return res;
     }
 
 private:
