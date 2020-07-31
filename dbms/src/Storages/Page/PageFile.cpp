@@ -866,7 +866,6 @@ size_t PageFile::removeDataIfExists() const
     {
         bytes_removed = data_file.getSize();
         file_provider->deleteFile(dataPath(), dataEncryptionPath());
-        data_file.remove();
     }
     return bytes_removed;
 }
