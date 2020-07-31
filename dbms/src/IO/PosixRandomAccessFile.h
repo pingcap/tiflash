@@ -1,12 +1,21 @@
 #pragma once
 
+#include <Common/CurrentMetrics.h>
 #include <IO/RandomAccessFile.h>
 #include <string>
+
+namespace CurrentMetrics
+{
+extern const Metric OpenFileForRead;
+}
 
 namespace DB
 {
 class PosixRandomAccessFile : public RandomAccessFile
 {
+protected:
+    CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForRead};
+
 public:
     PosixRandomAccessFile(const std::string & file_name_, int flags);
 

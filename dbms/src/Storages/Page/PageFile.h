@@ -1,5 +1,6 @@
 #pragma once
 
+#include <IO/FileProvider.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
@@ -37,7 +38,7 @@ public:
         friend class PageFile;
 
     public:
-        Writer(PageFile &, bool sync_on_write);
+        Writer(PageFile &, bool sync_on_write, bool create_new_file = true, bool create_new_encryption_info = true);
         ~Writer();
 
         [[nodiscard]] size_t write(WriteBatch & wb, PageEntriesEdit & edit);
@@ -55,8 +56,8 @@ public:
         String data_file_path;
         String meta_file_path;
 
-        int data_file_fd = 0;
-        int meta_file_fd = 0;
+        WritableFilePtr data_file;
+        WritableFilePtr meta_file;
 
         Clock::time_point last_write_time;
     };
@@ -89,7 +90,8 @@ public:
 
     private:
         String data_file_path;
-        int    data_file_fd;
+
+        RandomAccessFilePtr file;
     };
 
     struct Comparator
@@ -229,13 +231,25 @@ public:
     /// Create an empty page file.
     PageFile() = default;
     /// Recover a page file from disk.
-    static std::pair<PageFile, Type> recover(const String & parent_path, const String & page_file_name, Poco::Logger * log);
+    static std::pair<PageFile, Type>
+    recover(const String & parent_path, const FileProviderPtr & file_provider_, const String & page_file_name, Poco::Logger * log);
     /// Create a new page file.
-    static PageFile newPageFile(PageFileId file_id, UInt32 level, const String & parent_path, Type type, Poco::Logger * log);
+    static PageFile newPageFile(PageFileId              file_id,
+                                UInt32                  level,
+                                const String &          parent_path,
+                                const FileProviderPtr & file_provider_,
+                                Type                    type,
+                                Poco::Logger *          log);
     /// Open an existing page file for read.
-    static PageFile openPageFileForRead(PageFileId file_id, UInt32 level, const String & parent_path, Type type, Poco::Logger * log);
+    static PageFile openPageFileForRead(PageFileId              file_id,
+                                        UInt32                  level,
+                                        const String &          parent_path,
+                                        const FileProviderPtr & file_provider_,
+                                        Type                    type,
+                                        Poco::Logger *          log);
     /// If page file is exist.
-    static bool isPageFileExist(PageFileIdAndLevel file_id, const String & parent_path, Type type, Poco::Logger * log);
+    static bool isPageFileExist(
+        PageFileIdAndLevel file_id, const String & parent_path, const FileProviderPtr & file_provider_, Type type, Poco::Logger * log);
 
     /// Rename this page file into formal style.
     void setFormal();
@@ -250,7 +264,10 @@ public:
     /// Return a writer bound with this PageFile object.
     /// Note that the user MUST keep the PageFile object around before this writer being freed.
     /// And the meta_file_pos, data_file_pos should be properly set before creating writer.
-    std::unique_ptr<Writer> createWriter(bool sync_on_write) { return std::make_unique<Writer>(*this, sync_on_write); }
+    std::unique_ptr<Writer> createWriter(bool sync_on_write, bool create_new_file, bool create_new_encryption_info)
+    {
+        return std::make_unique<Writer>(*this, sync_on_write, create_new_file, create_new_encryption_info);
+    }
     /// Return a reader for this file.
     /// The PageFile object can be released any time.
     std::shared_ptr<Reader> createReader()
@@ -290,10 +307,26 @@ public:
 
 private:
     /// Create a new page file.
-    PageFile(PageFileId file_id_, UInt32 level_, const String & parent_path, Type type_, bool is_create, Poco::Logger * log);
+    PageFile(PageFileId              file_id_,
+             UInt32                  level_,
+             const String &          parent_path,
+             const FileProviderPtr & file_provider_,
+             Type                    type_,
+             bool                    is_create,
+             Poco::Logger *          log);
 
-    String dataPath() const { return folderPath() + "/page"; }
-    String metaPath() const { return folderPath() + "/meta"; }
+    String         dataPath() const { return folderPath() + "/page"; }
+    String         metaPath() const { return folderPath() + "/meta"; }
+    EncryptionPath dataEncryptionPath() const
+    {
+        String encrypt_path = parent_path + "/" + folder_prefix_formal + "_" + DB::toString(file_id) + "_" + DB::toString(level) + "/page";
+        return EncryptionPath(encrypt_path, "");
+    }
+    EncryptionPath metaEncryptionPath() const
+    {
+        String encrypt_path = parent_path + "/" + folder_prefix_formal + "_" + DB::toString(file_id) + "_" + DB::toString(level) + "/meta";
+        return EncryptionPath(encrypt_path, "");
+    }
 
     constexpr static const char * folder_prefix_formal     = "page";
     constexpr static const char * folder_prefix_temp       = ".temp.page";
@@ -307,6 +340,8 @@ private:
     UInt32 level   = 0; // 0: normal, >= 1: generated by GC.
     Type   type    = Type::Formal;
     String parent_path{}; // The parent folder of this page file.
+
+    FileProviderPtr file_provider;
 
     // The append pos.
     UInt64 data_file_pos = 0;

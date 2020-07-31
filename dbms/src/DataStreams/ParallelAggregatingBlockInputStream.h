@@ -1,7 +1,8 @@
 #pragma once
 
 #include <Interpreters/Aggregator.h>
-#include <IO/ReadBufferFromFile.h>
+#include <IO/FileProvider.h>
+#include <IO/ReadBufferFromFileProvider.h>
 #include <IO/CompressedReadBuffer.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/ParallelInputsProcessor.h>
@@ -23,7 +24,7 @@ public:
       */
     ParallelAggregatingBlockInputStream(
         const BlockInputStreams & inputs, const BlockInputStreamPtr & additional_input_at_end,
-        const Aggregator::Params & params_, bool final_, size_t max_threads_, size_t temporary_data_merge_threads_);
+        const Aggregator::Params & params_, const FileProviderPtr & file_provider_, bool final_, size_t max_threads_, size_t temporary_data_merge_threads_);
 
     String getName() const override { return "ParallelAggregating"; }
 
@@ -42,6 +43,7 @@ protected:
 private:
     Aggregator::Params params;
     Aggregator aggregator;
+    FileProviderPtr file_provider;
     bool final;
     size_t max_threads;
     size_t temporary_data_merge_threads;
@@ -61,11 +63,13 @@ private:
     /// To read the data stored into the temporary data file.
     struct TemporaryFileStream
     {
-        ReadBufferFromFile file_in;
+        FileProviderPtr file_provider;
+        ReadBufferFromFileProvider file_in;
         CompressedReadBuffer compressed_in;
         BlockInputStreamPtr block_in;
 
-        TemporaryFileStream(const std::string & path);
+        TemporaryFileStream(const std::string & path, const FileProviderPtr & file_provider_);
+        ~TemporaryFileStream();
     };
     std::vector<std::unique_ptr<TemporaryFileStream>> temporary_inputs;
 

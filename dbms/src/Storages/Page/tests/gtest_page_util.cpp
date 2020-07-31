@@ -1,5 +1,6 @@
 #include "gtest/gtest.h"
 
+#include <IO/PosixWritableFile.h>
 #include <Poco/Logger.h>
 
 #include <Storages/Page/PageUtil.h>
@@ -14,10 +15,12 @@ TEST(PageUtils_test, ReadWriteFile)
 {
     ::remove(FileName.c_str());
 
-    int fd = PageUtil::openFile<false, false>(FileName);
-    PageUtil::writeFile(fd, 0, "123", 3, FileName);
-    PageUtil::syncFile(fd, FileName);
-    ::close(fd);
+    WritableFilePtr file = std::make_shared<PosixWritableFile>(FileName, true, -1, 0666);
+
+    std::string data_to_write = "123";
+    PageUtil::writeFile(file, 0, data_to_write.data(), 3, FileName);
+    PageUtil::syncFile(file, FileName);
+    file->close();
 
     int fd2 = PageUtil::openFile<true, true>(FileName);
     ASSERT_GT(fd2, 0);

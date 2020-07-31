@@ -53,7 +53,10 @@ String PageStorage::StatisticsInfo::toString() const
     return ss.str();
 }
 
-PageFileSet PageStorage::listAllPageFiles(const String & storage_path, Poco::Logger * page_file_log, const ListPageFilesOption & option)
+PageFileSet PageStorage::listAllPageFiles(const String &              storage_path,
+                                          const FileProviderPtr &     file_provider,
+                                          Poco::Logger *              page_file_log,
+                                          const ListPageFilesOption & option)
 {
     // collect all pages from `storage_path` and recover to `PageFile` objects
     Poco::File folder(storage_path);
@@ -76,7 +79,7 @@ PageFileSet PageStorage::listAllPageFiles(const String & storage_path, Poco::Log
         if (name == PageStorage::ARCHIVE_SUBDIR)
             continue;
 
-        auto [page_file, page_file_type] = PageFile::recover(storage_path, name, page_file_log);
+        auto [page_file, page_file_type] = PageFile::recover(storage_path, file_provider, name, page_file_log);
         if (page_file_type == PageFile::Type::Formal)
             page_files.insert(page_file);
         else if (page_file_type == PageFile::Type::Legacy)
@@ -104,11 +107,16 @@ PageFileSet PageStorage::listAllPageFiles(const String & storage_path, Poco::Log
     return page_files;
 }
 
-PageStorage::PageStorage(
-    String name, const String & storage_path_, const Config & config_, TiFlashMetricsPtr metrics_, PathCapacityMetricsPtr global_capacity_)
+PageStorage::PageStorage(String                  name,
+                         const String &          storage_path_,
+                         const Config &          config_,
+                         const FileProviderPtr & file_provider_,
+                         TiFlashMetricsPtr       metrics_,
+                         PathCapacityMetricsPtr  global_capacity_)
     : storage_name(std::move(name)),
       storage_path(storage_path_),
       config(config_),
+      file_provider(file_provider_),
       write_files(std::max(1UL, config.num_write_slots)),
       page_file_log(&Poco::Logger::get("PageFile")),
       log(&Poco::Logger::get("PageStorage")),
@@ -132,7 +140,7 @@ void PageStorage::restore()
 #endif
     opt.ignore_legacy      = false;
     opt.ignore_checkpoint  = false;
-    PageFileSet page_files = PageStorage::listAllPageFiles(storage_path, page_file_log, opt);
+    PageFileSet page_files = PageStorage::listAllPageFiles(storage_path, file_provider, page_file_log, opt);
 
     /// Restore current version from both formal and legacy page files
 
@@ -301,16 +309,17 @@ PageStorage::WriterPtr PageStorage::getWriter(PageFile & page_file)
         && page_file.getMetaFileAppendPos() < config.file_meta_roll_size;
     if (is_writable)
     {
-        write_file_writer = page_file.createWriter(config.sync_on_write);
+        write_file_writer = page_file.createWriter(config.sync_on_write, false, false);
     }
     else
     {
         PageFileIdAndLevel max_writing_id_lvl{0, 0};
         for (const auto & pf : write_files)
             max_writing_id_lvl = std::max(max_writing_id_lvl, pf.fileIdLevel());
-        page_file = PageFile::newPageFile(max_writing_id_lvl.first + 1, 0, storage_path, PageFile::Type::Formal, page_file_log);
+        page_file
+            = PageFile::newPageFile(max_writing_id_lvl.first + 1, 0, storage_path, file_provider, PageFile::Type::Formal, page_file_log);
         LOG_DEBUG(log, storage_name << " create new PageFile_" + DB::toString(max_writing_id_lvl.first + 1) + "_0 for write.");
-        write_file_writer = page_file.createWriter(config.sync_on_write);
+        write_file_writer = page_file.createWriter(config.sync_on_write, true, true);
     }
     return write_file_writer;
 }
@@ -322,8 +331,8 @@ PageStorage::ReaderPtr PageStorage::getReader(const PageFileIdAndLevel & file_id
     auto & pages_reader = open_read_files[file_id_level];
     if (pages_reader == nullptr)
     {
-        auto page_file
-            = PageFile::openPageFileForRead(file_id_level.first, file_id_level.second, storage_path, PageFile::Type::Formal, page_file_log);
+        auto page_file = PageFile::openPageFileForRead(
+            file_id_level.first, file_id_level.second, storage_path, file_provider, PageFile::Type::Formal, page_file_log);
         if (unlikely(!page_file.isExist()))
             throw Exception("Try to create reader for " + page_file.toString() + ", but PageFile is broken, check "
                                 + page_file.folderPath(),
@@ -380,8 +389,9 @@ void PageStorage::write(WriteBatch && wb)
             LOG_DEBUG(log,
                       storage_name << " PageFile_" << page_file.getFileId()
                                    << "_0 is full, create new PageFile_" + DB::toString(max_writing_id_lvl.first + 1) + "_0 for write");
-            page_file     = PageFile::newPageFile(max_writing_id_lvl.first + 1, 0, storage_path, PageFile::Type::Formal, page_file_log);
-            file_to_write = page_file.createWriter(config.sync_on_write);
+            page_file = PageFile::newPageFile(
+                max_writing_id_lvl.first + 1, 0, storage_path, file_provider, PageFile::Type::Formal, page_file_log);
+            file_to_write = page_file.createWriter(config.sync_on_write, true, true);
         }
 
         idle_writers.emplace_back(std::move(file_to_write));
@@ -613,14 +623,17 @@ void PageStorage::drop()
 
     ListPageFilesOption opt;
     opt.ignore_checkpoint = false;
-    opt.ignore_legacy = false;
-    opt.remove_tmp_files = false;
-    auto   page_files      = PageStorage::listAllPageFiles(storage_path, page_file_log, opt);
+    opt.ignore_legacy     = false;
+    opt.remove_tmp_files  = false;
+    auto page_files       = PageStorage::listAllPageFiles(storage_path, file_provider, page_file_log, opt);
 
     // TODO: count how many bytes in "archive" directory.
     size_t bytes_to_remove = 0;
     for (const auto & page_file : page_files)
+    {
         bytes_to_remove += page_file.getDiskSize();
+        page_file.destroy();
+    }
 
     if (Poco::File directory(storage_path); directory.exists())
         directory.remove(true);
@@ -674,7 +687,7 @@ bool PageStorage::gc()
     }
     ListPageFilesOption opt;
     opt.remove_tmp_files = true;
-    auto page_files      = PageStorage::listAllPageFiles(storage_path, page_file_log, opt);
+    auto page_files      = PageStorage::listAllPageFiles(storage_path, file_provider, page_file_log, opt);
 
     std::set<PageFileIdAndLevel> writing_file_id_levels;
     PageFileIdAndLevel           min_writing_file_id_level;

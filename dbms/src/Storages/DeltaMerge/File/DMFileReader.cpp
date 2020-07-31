@@ -91,7 +91,8 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
         }
     }
 
-    buf = std::make_unique<CompressedReadBufferFromFile>(reader.file_provider, data_path, estimated_size, aio_threshold, buffer_size);
+    buf = std::make_unique<CompressedReadBufferFromFile>(
+        reader.file_provider, data_path, reader.dmfile->encryptionDataPath(file_name_base), estimated_size, aio_threshold, buffer_size);
 }
 
 DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
@@ -104,20 +105,20 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
                            const RSOperatorPtr & filter_,
                            const IdSetPtr &      read_packs_,
                            // caches
-                           UInt64             hash_salt_,
-                           MarkCache *        mark_cache_,
-                           MinMaxIndexCache * index_cache_,
-                           bool               enable_column_cache_,
-                           ColumnCachePtr &   column_cache_,
-                           size_t             aio_threshold,
-                           size_t             max_read_buffer_size,
-                           const FileProviderPtr &  file_provider_,
-                           size_t             rows_threshold_per_read_)
+                           UInt64                  hash_salt_,
+                           MarkCache *             mark_cache_,
+                           MinMaxIndexCache *      index_cache_,
+                           bool                    enable_column_cache_,
+                           ColumnCachePtr &        column_cache_,
+                           size_t                  aio_threshold,
+                           size_t                  max_read_buffer_size,
+                           const FileProviderPtr & file_provider_,
+                           size_t                  rows_threshold_per_read_)
     : dmfile(dmfile_),
       read_columns(read_columns_),
       enable_clean_read(enable_clean_read_),
       max_read_version(max_read_version_),
-      pack_filter(dmfile_, index_cache_, hash_salt_, handle_range_, filter_, read_packs_),
+      pack_filter(dmfile_, index_cache_, hash_salt_, handle_range_, filter_, read_packs_, file_provider_),
       handle_res(pack_filter.getHandleRes()),
       use_packs(pack_filter.getUsePacks()),
       skip_packs_by_column(read_columns.size(), 0),

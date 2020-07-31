@@ -15,8 +15,8 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/InterpreterCreateQuery.h>
-#include <IO/WriteBufferFromFile.h>
-#include <IO/ReadBufferFromFile.h>
+#include <IO/ReadBufferFromFileProvider.h>
+#include <IO/WriteBufferFromFileProvider.h>
 
 
 namespace DB
@@ -33,7 +33,6 @@ namespace ErrorCodes
     extern const int CANNOT_GET_CREATE_TABLE_QUERY;
     extern const int SYNTAX_ERROR;
 }
-
 
 static constexpr size_t PRINT_MESSAGE_EACH_N_TABLES = 256;
 static constexpr size_t PRINT_MESSAGE_EACH_N_SECONDS = 5;
@@ -53,7 +52,6 @@ namespace detail
     }
 
 }
-
 
 DatabaseOrdinary::DatabaseOrdinary(String name_, const String & metadata_path_, const Context & context)
     : DatabaseWithOwnTablesBase(std::move(name_))
@@ -164,7 +162,7 @@ void DatabaseOrdinary::createTable(
         statement = getTableDefinitionFromCreateQuery(query);
 
         /// Exclusive flags guarantees, that table is not created right now in another thread. Otherwise, exception will be thrown.
-        WriteBufferFromFile out(table_metadata_tmp_path, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, EncryptionPath(table_metadata_path, ""), true, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
         if (settings.fsync_metadata)
@@ -252,7 +250,7 @@ void DatabaseOrdinary::renameTable(
     // TODO: Atomic rename table is not fixed.
     FAIL_POINT_TRIGGER_EXCEPTION(exception_between_rename_table_data_and_metadata);
 
-    ASTPtr ast = DatabaseLoading::getQueryFromMetadata(detail::getTableMetadataPath(metadata_path, table_name));
+    ASTPtr ast = DatabaseLoading::getQueryFromMetadata(context, detail::getTableMetadataPath(metadata_path, table_name));
     if (!ast)
         throw Exception("There is no metadata file for table " + table_name, ErrorCodes::FILE_DOESNT_EXIST);
     ASTCreateQuery & ast_create_query = typeid_cast<ASTCreateQuery &>(*ast);
@@ -288,7 +286,7 @@ ASTPtr DatabaseOrdinary::getCreateTableQueryImpl(const Context & context,
     ASTPtr ast;
 
     auto table_metadata_path = detail::getTableMetadataPath(metadata_path, table_name);
-    ast = DatabaseLoading::getCreateQueryFromMetadata(table_metadata_path, name, throw_on_error);
+    ast = DatabaseLoading::getCreateQueryFromMetadata(context, table_metadata_path, name, throw_on_error);
     if (!ast && throw_on_error)
     {
         /// Handle system.* tables for which there are no table.sql files.
@@ -314,12 +312,12 @@ ASTPtr DatabaseOrdinary::tryGetCreateTableQuery(const Context & context, const S
     return getCreateTableQueryImpl(context, table_name, false);
 }
 
-ASTPtr DatabaseOrdinary::getCreateDatabaseQuery(const Context & /*context*/) const
+ASTPtr DatabaseOrdinary::getCreateDatabaseQuery(const Context & context) const
 {
     ASTPtr ast;
 
     auto database_metadata_path = detail::getDatabaseMetadataPath(metadata_path);
-    ast = DatabaseLoading::getCreateQueryFromMetadata(database_metadata_path, name, true);
+    ast = DatabaseLoading::getCreateQueryFromMetadata(context, database_metadata_path, name, true);
     if (!ast)
     {
         /// Handle databases (such as default) for which there are no database.sql files.
@@ -386,7 +384,7 @@ void DatabaseOrdinary::alterTable(
 
     {
         char in_buf[METADATA_FILE_BUFFER_SIZE];
-        ReadBufferFromFile in(table_metadata_path, METADATA_FILE_BUFFER_SIZE, -1, in_buf);
+        ReadBufferFromFileProvider in(context.getFileProvider(), table_metadata_path, EncryptionPath(table_metadata_path, ""), METADATA_FILE_BUFFER_SIZE, -1, in_buf);
         readStringUntilEOF(statement, in);
     }
 
@@ -404,7 +402,7 @@ void DatabaseOrdinary::alterTable(
     statement = getTableDefinitionFromCreateQuery(ast);
 
     {
-        WriteBufferFromFile out(table_metadata_tmp_path, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, EncryptionPath(table_metadata_path, ""), true, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
         if (context.getSettingsRef().fsync_metadata)

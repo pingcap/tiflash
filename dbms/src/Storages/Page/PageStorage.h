@@ -1,5 +1,6 @@
 #pragma once
 
+#include <IO/FileProvider.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageFile.h>
@@ -98,11 +99,12 @@ public:
     };
 
 public:
-    PageStorage(String                 name,
-                const String &         storage_path,
-                const Config &         config_,
-                TiFlashMetricsPtr      metrics_ = nullptr,
-                PathCapacityMetricsPtr global_capacity_ = nullptr);
+    PageStorage(String                  name,
+                const String &          storage_path,
+                const Config &          config_,
+                const FileProviderPtr & file_provider_,
+                TiFlashMetricsPtr       metrics_         = nullptr,
+                PathCapacityMetricsPtr  global_capacity_ = nullptr);
 
     void restore();
 
@@ -136,8 +138,12 @@ public:
     // `remover` will be called with living normal page ids after gc run a round.
     void registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover);
 
-    static PageFileSet
-    listAllPageFiles(const String & storage_path, Poco::Logger * page_file_log, const ListPageFilesOption & option = ListPageFilesOption());
+    FileProviderPtr getFileProvider() const { return file_provider; }
+
+    static PageFileSet listAllPageFiles(const String &              storage_path,
+                                        const FileProviderPtr &     file_provider,
+                                        Poco::Logger *              page_file_log,
+                                        const ListPageFilesOption & option = ListPageFilesOption());
 
 private:
     WriterPtr getWriter(PageFile & page_file);
@@ -161,6 +167,8 @@ private:
     String storage_name; // Identify between different Storage
     String storage_path;
     Config config;
+
+    FileProviderPtr file_provider;
 
     std::mutex              write_mutex;
     std::condition_variable write_mutex_cv;

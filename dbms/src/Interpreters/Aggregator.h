@@ -21,6 +21,8 @@
 #include <Interpreters/AggregationCommon.h>
 #include <Interpreters/Compiler.h>
 
+#include <IO/FileProvider.h>
+
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnAggregateFunction.h>
@@ -1108,10 +1110,11 @@ public:
         void calculateColumnNumbers(const Block & block);
     };
 
+
     Aggregator(const Params & params_);
 
     /// Aggregate the source. Get the result in the form of one of the data structures.
-    void execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result);
+    void execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, const FileProviderPtr & file_provider);
 
     using AggregateColumns = std::vector<ColumnRawPtrs>;
     using AggregateColumnsData = std::vector<ColumnAggregateFunction::Container *>;
@@ -1119,7 +1122,7 @@ public:
     using AggregateFunctionsPlainPtrs = std::vector<IAggregateFunction *>;
 
     /// Process one block. Return false if the processing should be aborted (with group_by_overflow_mode = 'break').
-    bool executeOnBlock(const Block & block, AggregatedDataVariants & result,
+    bool executeOnBlock(const Block & block, AggregatedDataVariants & result, const FileProviderPtr & file_provider,
         ColumnRawPtrs & key_columns, AggregateColumns & aggregate_columns,    /// Passed to not create them anew for each block
         StringRefs & keys,                                        /// - pass the corresponding objects that are initially empty.
         bool & no_more_keys);
@@ -1160,7 +1163,7 @@ public:
     void setCancellationHook(const CancellationHook cancellation_hook);
 
     /// For external aggregation.
-    void writeToTemporaryFile(AggregatedDataVariants & data_variants);
+    void writeToTemporaryFile(AggregatedDataVariants & data_variants, const FileProviderPtr & file_provider);
 
     bool hasTemporaryFiles() const { return !temporary_files.empty(); }
 

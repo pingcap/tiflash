@@ -867,7 +867,7 @@ void DAGQueryBlockInterpreter::executeWhere(Pipeline & pipeline, const Expressio
 }
 
 void DAGQueryBlockInterpreter::executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expr, Names & key_names,
-    TiDB::TiDBCollators & collators, AggregateDescriptions & aggregates)
+    TiDB::TiDBCollators & collators, AggregateDescriptions & aggregates, const FileProviderPtr & file_provider)
 {
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expr); });
 
@@ -915,7 +915,7 @@ void DAGQueryBlockInterpreter::executeAggregation(Pipeline & pipeline, const Exp
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.streams.size() > 1)
     {
-        pipeline.firstStream() = std::make_shared<ParallelAggregatingBlockInputStream>(pipeline.streams, nullptr, params, true, max_streams,
+        pipeline.firstStream() = std::make_shared<ParallelAggregatingBlockInputStream>(pipeline.streams, nullptr, params, file_provider, true, max_streams,
             settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
                                                                 : static_cast<size_t>(settings.max_threads));
 
@@ -923,7 +923,7 @@ void DAGQueryBlockInterpreter::executeAggregation(Pipeline & pipeline, const Exp
     }
     else
     {
-        pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(pipeline.firstStream(), params, true);
+        pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(pipeline.firstStream(), params, file_provider, true);
     }
     // add cast
 }
@@ -1329,7 +1329,7 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     if (res.need_aggregate)
     {
         // execute aggregation
-        executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions);
+        executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions, context.getFileProvider());
         recordProfileStreams(pipeline, query_block.aggregation_name);
     }
     if (res.before_order_and_select)

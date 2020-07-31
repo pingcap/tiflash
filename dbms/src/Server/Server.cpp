@@ -579,7 +579,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->initializeTiFlashMetrics();
 
     /// Init File Provider
-    global_context->initializeFileProvider(&tiflash_instance_wrap, true);
+    if (proxy_conf.is_proxy_runnable)
+    {
+        global_context->initializeFileProvider(&tiflash_instance_wrap, tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled());
+    }
+    else
+    {
+        global_context->initializeFileProvider(&tiflash_instance_wrap, false);
+    }
 
     /// Set path for format schema files
     auto format_schema_path = Poco::File(config().getString("format_schema_path", path + "format_schemas/"));

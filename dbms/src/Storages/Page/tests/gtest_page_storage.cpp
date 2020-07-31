@@ -1,4 +1,5 @@
 #include <Common/CurrentMetrics.h>
+#include <IO/FileProvider.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <Poco/AutoPtr.h>
 #include <Poco/ConsoleChannel.h>
@@ -28,7 +29,12 @@ namespace tests
 class PageStorage_test : public ::testing::Test
 {
 public:
-    PageStorage_test() : path(DB::tests::TiFlashTestEnv::getTemporaryPath() + "page_storage_test"), storage() {}
+    PageStorage_test()
+        : path(DB::tests::TiFlashTestEnv::getTemporaryPath() + "page_storage_test"),
+          storage(),
+          file_provider{DB::tests::TiFlashTestEnv::getContext().getFileProvider()}
+    {
+    }
 
 protected:
     static void SetUpTestCase() { TiFlashTestEnv::setupLogger(); }
@@ -50,7 +56,7 @@ protected:
 
     std::shared_ptr<PageStorage> reopenWithConfig(const PageStorage::Config & config_)
     {
-        auto storage = std::make_shared<PageStorage>("test.t", path, config_);
+        auto storage = std::make_shared<PageStorage>("test.t", path, config_, file_provider);
         storage->restore();
         return storage;
     }
@@ -59,6 +65,7 @@ protected:
     String                       path;
     PageStorage::Config          config;
     std::shared_ptr<PageStorage> storage;
+    const FileProviderPtr        file_provider;
 };
 
 TEST_F(PageStorage_test, WriteRead)
@@ -603,7 +610,7 @@ try
         wb.putPage(1, 0, buf, buf_sz);
         storage->write(std::move(wb));
 
-        auto f = PageFile::openPageFileForRead(1, 0, storage->storage_path, PageFile::Type::Formal, storage->log);
+        auto f = PageFile::openPageFileForRead(1, 0, storage->storage_path, file_provider, PageFile::Type::Formal, storage->log);
         f.setLegacy();
     }
 
@@ -614,9 +621,9 @@ try
         auto buf = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         wb.putPage(1, 0, buf, buf_sz);
 
-        auto f = PageFile::newPageFile(2, 0, storage->storage_path, PageFile::Type::Temp, storage->log);
+        auto f = PageFile::newPageFile(2, 0, storage->storage_path, file_provider, PageFile::Type::Temp, storage->log);
         {
-            auto w = f.createWriter(false);
+            auto w = f.createWriter(false, true, true);
 
             PageEntriesEdit edit;
             (void)w->write(wb, edit);
@@ -627,7 +634,7 @@ try
     {
         PageStorage::ListPageFilesOption opt;
         opt.ignore_legacy = true;
-        auto page_files   = storage->listAllPageFiles(storage->storage_path, storage->log, opt);
+        auto page_files   = storage->listAllPageFiles(storage->storage_path, file_provider, storage->log, opt);
         // Legacy should be ignored
         ASSERT_EQ(page_files.size(), 1UL);
         for (auto & page_file : page_files)
@@ -639,7 +646,7 @@ try
     {
         PageStorage::ListPageFilesOption opt;
         opt.ignore_checkpoint = true;
-        auto page_files       = storage->listAllPageFiles(storage->storage_path, storage->log, opt);
+        auto page_files       = storage->listAllPageFiles(storage->storage_path, file_provider, storage->log, opt);
         // Snapshot should be ignored
         ASSERT_EQ(page_files.size(), 1UL);
         for (auto & page_file : page_files)

@@ -1,6 +1,7 @@
 #include <Poco/Logger.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageFile.h>
+#include <test_utils/TiflashTestBasic.h>
 
 #include "gtest/gtest.h"
 
@@ -11,10 +12,12 @@ namespace tests
 
 TEST(PageFile_test, Compare)
 {
-    PageFile checkpoint_pf = PageFile::openPageFileForRead(55, 0, ".", PageFile::Type::Checkpoint, &Poco::Logger::get("PageFile"));
+    const FileProviderPtr file_provider = TiFlashTestEnv::getContext().getFileProvider();
+    PageFile              checkpoint_pf
+        = PageFile::openPageFileForRead(55, 0, ".", file_provider, PageFile::Type::Checkpoint, &Poco::Logger::get("PageFile"));
 
-    PageFile pf0 = PageFile::openPageFileForRead(2, 0, ".", PageFile::Type::Formal, &Poco::Logger::get("PageFile"));
-    PageFile pf1 = PageFile::openPageFileForRead(55, 1, ".", PageFile::Type::Formal, &Poco::Logger::get("PageFile"));
+    PageFile pf0 = PageFile::openPageFileForRead(2, 0, ".", file_provider, PageFile::Type::Formal, &Poco::Logger::get("PageFile"));
+    PageFile pf1 = PageFile::openPageFileForRead(55, 1, ".", file_provider, PageFile::Type::Formal, &Poco::Logger::get("PageFile"));
 
     PageFile::Comparator comp;
     ASSERT_EQ(comp(pf0, pf1), true);
@@ -33,7 +36,6 @@ TEST(PageFile_test, Compare)
     ASSERT_EQ(pf_set.begin()->fileIdLevel(), checkpoint_pf.fileIdLevel());
     ASSERT_EQ(pf_set.rbegin()->getType(), PageFile::Type::Formal);
     ASSERT_EQ(pf_set.rbegin()->fileIdLevel(), pf1.fileIdLevel());
-
 }
 
 TEST(Page_test, GetField)
@@ -129,8 +131,8 @@ TEST(PageEntry_test, GetFieldInfo)
     ASSERT_EQ(end, entry.size);
     ASSERT_EQ(entry.getFieldSize(4), entry.size - 1024);
 
-    ASSERT_THROW({ entry.getFieldOffsets(5);}, DB::Exception);
-    ASSERT_THROW({ entry.getFieldSize(5);}, DB::Exception);
+    ASSERT_THROW({ entry.getFieldOffsets(5); }, DB::Exception);
+    ASSERT_THROW({ entry.getFieldSize(5); }, DB::Exception);
 }
 
 } // namespace tests

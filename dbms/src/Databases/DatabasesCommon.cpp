@@ -7,7 +7,7 @@
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/formatAST.h>
-#include <IO/ReadBufferFromFile.h>
+#include <IO/ReadBufferFromFileProvider.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Storages/StorageFactory.h>
@@ -198,14 +198,14 @@ DatabaseWithOwnTablesBase::~DatabaseWithOwnTablesBase()
 namespace DatabaseLoading
 {
 
-ASTPtr getQueryFromMetadata(const String & metadata_path, bool throw_on_error)
+ASTPtr getQueryFromMetadata(const Context & context, const String & metadata_path, bool throw_on_error)
 {
     if (!Poco::File(metadata_path).exists())
         return nullptr;
 
     String query;
     {
-        ReadBufferFromFile in(metadata_path, 4096);
+        ReadBufferFromFileProvider in(context.getFileProvider(), metadata_path, EncryptionPath(metadata_path, ""), 4096);
         readStringUntilEOF(query, in);
     }
 
@@ -221,9 +221,9 @@ ASTPtr getQueryFromMetadata(const String & metadata_path, bool throw_on_error)
     return ast;
 }
 
-ASTPtr getCreateQueryFromMetadata(const String & metadata_path, const String & database, bool throw_on_error)
+ASTPtr getCreateQueryFromMetadata(const Context & context, const String & metadata_path, const String & database, bool throw_on_error)
 {
-    ASTPtr ast = DatabaseLoading::getQueryFromMetadata(metadata_path, throw_on_error);
+    ASTPtr ast = DatabaseLoading::getQueryFromMetadata(context, metadata_path, throw_on_error);
     if (ast)
     {
         ASTCreateQuery & ast_create_query = typeid_cast<ASTCreateQuery &>(*ast);
@@ -280,12 +280,11 @@ void loadTable(Context & context,
     bool has_force_restore_data_flag)
 {
     Logger * log = &Logger::get("loadTable");
-
-    const String table_metadata_path = database_metadata_path + "/" + file_name;
+    const String table_metadata_path = database_metadata_path + (endsWith(database_metadata_path, "/") ? "" : "/") + file_name;
 
     String s;
     {
-        ReadBufferFromFile in(table_metadata_path, 1024);
+        ReadBufferFromFileProvider in(context.getFileProvider(), table_metadata_path, EncryptionPath(table_metadata_path, ""), 1024);
         readStringUntilEOF(s, in);
     }
 

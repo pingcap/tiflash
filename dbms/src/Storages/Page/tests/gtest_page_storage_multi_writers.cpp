@@ -1,4 +1,5 @@
 #include <Common/CurrentMetrics.h>
+#include <IO/FileProvider.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <Poco/AutoPtr.h>
 #include <Poco/File.h>
@@ -36,7 +37,12 @@ using PSPtr = std::shared_ptr<DB::PageStorage>;
 class PageStorageMultiWriters_test : public ::testing::Test
 {
 public:
-    PageStorageMultiWriters_test() : path(DB::tests::TiFlashTestEnv::getTemporaryPath() + "page_storage_multi_writers_test"), storage() {}
+    PageStorageMultiWriters_test()
+        : path(DB::tests::TiFlashTestEnv::getTemporaryPath() + "page_storage_multi_writers_test"),
+          storage(),
+          file_provider{DB::tests::TiFlashTestEnv::getContext().getFileProvider()}
+    {
+    }
 
 protected:
     static void SetUpTestCase() { TiFlashTestEnv::setupLogger(); }
@@ -59,7 +65,7 @@ protected:
 
     std::shared_ptr<PageStorage> reopenWithConfig(const PageStorage::Config & config_)
     {
-        auto storage = std::make_shared<PageStorage>("test.t", path, config_);
+        auto storage = std::make_shared<PageStorage>("test.t", path, config_, file_provider);
         storage->restore();
         return storage;
     }
@@ -68,6 +74,7 @@ protected:
     String                       path;
     PageStorage::Config          config;
     std::shared_ptr<PageStorage> storage;
+    const FileProviderPtr        file_provider;
 };
 
 struct TestContext

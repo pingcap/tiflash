@@ -18,13 +18,14 @@
 namespace DB::PageUtil
 {
 
-void syncFile(int fd, const std::string & path)
+void syncFile(WritableFilePtr & file, const std::string & path)
 {
-    if (-1 == ::fsync(fd))
+    // TODO: provide a sync api in WritableFile
+    if (-1 == ::fsync(file->getFd()))
         DB::throwFromErrno("Cannot fsync " + path, ErrorCodes::CANNOT_FSYNC);
 }
 
-void writeFile(int fd, UInt64 offset, const char * data, size_t to_write, const std::string & path)
+void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const std::string & path)
 {
     ProfileEvents::increment(ProfileEvents::PSMWriteCalls);
     ProfileEvents::increment(ProfileEvents::PSMWriteBytes, to_write);
@@ -36,7 +37,7 @@ void writeFile(int fd, UInt64 offset, const char * data, size_t to_write, const 
         ssize_t res = 0;
         {
             CurrentMetrics::Increment metric_increment{CurrentMetrics::Write};
-            res = ::pwrite(fd, data + bytes_written, to_write - bytes_written, offset + bytes_written);
+            res = file->pwrite(data + bytes_written, to_write - bytes_written, offset + bytes_written);
         }
 
         if ((-1 == res || 0 == res) && errno != EINTR)
@@ -50,6 +51,41 @@ void writeFile(int fd, UInt64 offset, const char * data, size_t to_write, const 
     }
 }
 
+
+void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, size_t expected_bytes, const std::string & path)
+{
+    if (unlikely(expected_bytes == 0))
+        return;
+
+    ProfileEvents::increment(ProfileEvents::PSMReadCalls);
+
+    size_t bytes_read = 0;
+    while (bytes_read < expected_bytes)
+    {
+        ProfileEvents::increment(ProfileEvents::PSMReadIOCalls);
+
+        ssize_t res = 0;
+        {
+            CurrentMetrics::Increment metric_increment{CurrentMetrics::Read};
+            res = file->pread(const_cast<char *>(buf + bytes_read), expected_bytes - bytes_read, offset + bytes_read);
+        }
+        if (!res)
+            break;
+
+        if (-1 == res && errno != EINTR)
+        {
+            ProfileEvents::increment(ProfileEvents::PSMReadFailed);
+            DB::throwFromErrno("Cannot read from file " + path, ErrorCodes::CANNOT_READ_FROM_FILE_DESCRIPTOR);
+        }
+
+        if (res > 0)
+            bytes_read += res;
+    }
+    ProfileEvents::increment(ProfileEvents::PSMReadBytes, bytes_read);
+
+    if (unlikely(bytes_read != expected_bytes))
+        throw DB::Exception("Not enough data in file " + path, ErrorCodes::FILE_SIZE_NOT_MATCH);
+}
 
 void readFile(int fd, const off_t offset, const char * buf, size_t expected_bytes, const std::string & path)
 {

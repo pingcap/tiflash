@@ -52,14 +52,15 @@ DMFilePtr DMFile::restore(UInt64 file_id, UInt64 ref_id, const String & parent_p
 
 void DMFile::writeMeta()
 {
-    String meta_path = metaPath();
+    String meta_path     = metaPath();
     String tmp_meta_path = meta_path + ".tmp";
+
     WriteBufferFromFile buf(tmp_meta_path, 4096);
     writeString("DTFile format: ", buf);
     writeIntText(static_cast<std::underlying_type_t<DMFileVersion>>(DMFileVersion::CURRENT_VERSION), buf);
     writeString("\n", buf);
     writeText(column_stats, CURRENT_VERSION, buf);
-    
+
     Poco::File(tmp_meta_path).renameTo(meta_path);
 }
 
@@ -119,7 +120,7 @@ void DMFile::readMeta()
     }
 }
 
-void DMFile::finalize(FileProviderPtr &file_provider)
+void DMFile::finalize()
 {
     writeMeta();
     if (status != Status::WRITING)
@@ -132,15 +133,6 @@ void DMFile::finalize(FileProviderPtr &file_provider)
     Poco::File file(new_path);
     if (file.exists())
         file.remove(true);
-
-    // TODO: use link + delete instead?
-    Poco::File folder(old_file.path());
-    std::vector<std::string> file_names;
-    folder.list(file_names);
-    for (auto & name : file_names)
-    {
-        file_provider->renameFile(old_file.path() + "/" + name, new_path + "/" + name);
-    }
     old_file.renameTo(new_path);
 }
 
@@ -191,11 +183,9 @@ void DMFile::enableGC()
         ngc_file.remove();
 }
 
-void DMFile::remove()
+void DMFile::remove(const FileProviderPtr & file_provider)
 {
-    Poco::File file(path());
-    if (file.exists())
-        file.remove(true);
+    file_provider->deleteFile(path(), EncryptionPath(encryptionBasePath(), ""));
 }
 
 

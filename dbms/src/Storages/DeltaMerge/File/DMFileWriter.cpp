@@ -12,7 +12,7 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
                            size_t                      min_compress_block_size_,
                            size_t                      max_compress_block_size_,
                            const CompressionSettings & compression_settings_,
-                           const FileProviderPtr &           file_provider_,
+                           const FileProviderPtr &     file_provider_,
                            bool                        wal_mode_)
     : dmfile(dmfile_),
       write_columns(write_columns_),
@@ -24,6 +24,7 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
       file_provider(file_provider_)
 {
     dmfile->setStatus(DMFile::Status::WRITING);
+    file_provider->createEncryptionInfo(dmfile->encryptionBasePath());
     for (auto & cd : write_columns)
     {
         // TODO: currently we only generate index for Integers, Date, DateTime types, and this should be configurable by user.
@@ -83,7 +84,7 @@ void DMFileWriter::finalize()
         finalizeColumn(cd.id, *(cd.type));
     }
 
-    dmfile->finalize(file_provider);
+    dmfile->finalize();
 }
 
 void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColumn & column)
@@ -147,7 +148,8 @@ void DMFileWriter::finalizeColumn(ColId col_id, const IDataType & type)
 
         if (stream->minmaxes)
         {
-            WriteBufferFromFile buf(dmfile->colIndexPath(stream_name));
+            WriteBufferFromFileProvider buf(
+                file_provider, dmfile->colIndexPath(stream_name), dmfile->encryptionIndexPath(stream_name), false);
             stream->minmaxes->write(type, buf);
             buf.sync();
             bytes_written += buf.getPositionInFile();
