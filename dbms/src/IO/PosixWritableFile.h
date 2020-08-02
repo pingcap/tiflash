@@ -39,6 +39,8 @@ public:
 
     bool isClosed() override { return fd == -1; }
 
+    int fsync() override;
+
 private:
     void doOpenFile(bool create_new_file_, int flags, mode_t mode);
 

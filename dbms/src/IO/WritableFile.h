@@ -24,6 +24,8 @@ public:
     virtual void close() = 0;
 
     virtual bool isClosed() = 0;
+
+    virtual int fsync() = 0;
 };
 
 using WritableFilePtr = std::shared_ptr<WritableFile>;

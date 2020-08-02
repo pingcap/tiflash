@@ -29,6 +29,8 @@ public:
 
     bool isClosed() override { return file->isClosed(); }
 
+    int fsync() override { return file->fsync(); }
+
 private:
     WritableFilePtr file;
 

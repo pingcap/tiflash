@@ -9,6 +9,7 @@ namespace ProfileEvents
 {
 extern const Event FileOpen;
 extern const Event FileOpenFailed;
+extern const Event FileFSync;
 } // namespace ProfileEvents
 
 namespace DB
@@ -89,6 +90,11 @@ void PosixWritableFile::doOpenFile(bool create_new_file_, int flags, mode_t mode
         }
     }
 #endif
+}
+
+int PosixWritableFile::fsync() {
+    ProfileEvents::increment(ProfileEvents::FileFSync);
+    return ::fsync(fd);
 }
 
 } // namespace DB
