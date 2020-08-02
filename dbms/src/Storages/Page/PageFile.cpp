@@ -19,6 +19,11 @@
 
 #include <ext/scope_guard.h>
 
+namespace CurrentMetrics
+{
+extern const Metric OpenFileForRead;
+}
+
 namespace DB
 {
 // =========================================================
@@ -240,7 +245,6 @@ void PageFile::MetaMergingReader::initialize()
     if (unlikely(underlying_file->getFd() == -1))
         throw Exception("Try to read meta of " + page_file.toString() + ", but open file error. Path: " + path, ErrorCodes::LOGICAL_ERROR);
     SCOPE_EXIT({ underlying_file->close(); });
-
     meta_buffer = (char *)page_file.alloc(meta_size);
     PageUtil::readFile(underlying_file, 0, meta_buffer, meta_size, path);
     status = Status::Opened;

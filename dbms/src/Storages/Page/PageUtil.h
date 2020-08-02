@@ -41,12 +41,6 @@ extern const Event PSMWriteFailed;
 extern const Event PSMReadFailed;
 } // namespace ProfileEvents
 
-namespace CurrentMetrics
-{
-extern const Metric Write;
-extern const Metric Read;
-} // namespace CurrentMetrics
-
 namespace DB
 {
 
@@ -104,6 +98,7 @@ int openFile(const std::string & path)
 inline void touchFile(const std::string & path)
 {
     auto fd = openFile<false>(path);
+    CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForWrite};
     if (fd > 0)
         ::close(fd);
     else

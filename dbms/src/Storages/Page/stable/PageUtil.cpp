@@ -14,11 +14,17 @@
 
 #include <ext/scope_guard.h>
 
+namespace ProfileEvents
+{
+extern const Event FileFSync;
+} // namespace ProfileEvents
+
 namespace DB::stable::PageUtil
 {
 
 void syncFile(int fd, const std::string & path)
 {
+    ProfileEvents::increment(ProfileEvents::FileFSync);
     if (-1 == ::fsync(fd))
         DB::throwFromErrno("Cannot fsync " + path, ErrorCodes::CANNOT_FSYNC);
 }
