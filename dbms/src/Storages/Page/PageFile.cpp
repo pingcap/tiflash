@@ -429,7 +429,6 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
     {
         data_file->open();
         meta_file->open();
-        std::cout << "open data_file fd: " << std::to_string(data_file->getFd()) << std::endl;
     }
 
     // TODO: investigate if not copy data into heap, write big pages can be faster?
