@@ -41,7 +41,7 @@ namespace DB::PageUtil
 void syncFile(WritableFilePtr & file, const std::string & path)
 {
     std::cout << "sync file fd: " << file->getFd() << std::endl;
-    if (-1 == ::fsync(file->fsync()))
+    if (-1 == file->fsync())
         DB::throwFromErrno("Cannot fsync file: " + path + " fd: " + std::to_string(file->getFd()), ErrorCodes::CANNOT_FSYNC);
 }
 
