@@ -62,7 +62,7 @@ extern const int UNKNOWN_FORMAT_VERSION;
 namespace DM
 {
 
-const Segment::Version Segment::CURRENT_VERSION = 1;
+const Segment::Version Segment::CURRENT_VERSION = 2;
 const static size_t    SEGMENT_BUFFER_SIZE      = 128; // More than enough.
 
 DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
@@ -172,14 +172,22 @@ SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
     Version              version;
     readIntBinary(version, buf);
-    if (version != CURRENT_VERSION)
+    if (version > CURRENT_VERSION)
         throw Exception("version not match", ErrorCodes::LOGICAL_ERROR);
-    UInt64      epoch;
-    HandleRange range;
-    PageId      next_segment_id, delta_id, stable_id;
+    UInt64 epoch;
+    PageId next_segment_id, delta_id, stable_id;
 
     readIntBinary(epoch, buf);
-    auto pk_range = std::make_shared<PKRange>(PKRange::deserializePKRange(buf));
+    PKRangePtr pk_range = nullptr;
+    if (version > 1)
+        pk_range = std::make_shared<PKRange>(PKRange::deserializePKRange(buf));
+    else
+    {
+        HandleRange range;
+        readIntBinary(range.start, buf);
+        readIntBinary(range.end, buf);
+        pk_range = std::make_shared<PKRange>(PKRange::fromHandleRange(range));
+    }
     readIntBinary(next_segment_id, buf);
     readIntBinary(delta_id, buf);
     readIntBinary(stable_id, buf);

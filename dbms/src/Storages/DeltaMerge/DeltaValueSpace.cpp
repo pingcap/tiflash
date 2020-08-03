@@ -18,7 +18,7 @@ namespace DB
 {
 namespace DM
 {
-const UInt64 DeltaValueSpace::CURRENT_VERSION = 1;
+const UInt64 DeltaValueSpace::CURRENT_VERSION = 2;
 
 using Snapshot    = DeltaValueSpace::Snapshot;
 using SnapshotPtr = std::shared_ptr<Snapshot>;

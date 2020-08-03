@@ -62,14 +62,22 @@ inline void serializePack(const Pack & pack, const BlockPtr & schema, WriteBuffe
     }
 }
 
-inline PackPtr deserializePack(PrimaryKeyPtr pk, ReadBuffer & buf)
+inline PackPtr deserializePack(PrimaryKeyPtr pk, ReadBuffer & buf, UInt64 version)
 {
     auto pack        = std::make_shared<Pack>(pk);
     pack->saved      = true;  // Must be true, otherwise it should not be here.
     pack->appendable = false; // Must be false, otherwise it should not be here.
     readIntBinary(pack->rows, buf);
     readIntBinary(pack->bytes, buf);
-    pack->delete_range = PKRange::deserializePKRange(buf);
+    if (version == 1)
+    {
+        HandleRange range;
+        readIntBinary(range.start, buf);
+        readIntBinary(range.end, buf);
+        pack->delete_range = PKRange::fromHandleRange(range);
+    }
+    else
+        pack->delete_range = PKRange::deserializePKRange(buf);
     readIntBinary(pack->data_page, buf);
     UInt32 column_size;
     readIntBinary(column_size, buf);
@@ -128,7 +136,7 @@ Packs deserializePacks(PrimaryKeyPtr pk, ReadBuffer & buf)
     // Check binary version
     UInt64 version;
     readIntBinary(version, buf);
-    if (version != DeltaValueSpace::CURRENT_VERSION)
+    if (version > DeltaValueSpace::CURRENT_VERSION)
         throw Exception("Pack binary version not match: " + DB::toString(version), ErrorCodes::LOGICAL_ERROR);
     size_t size;
     readIntBinary(size, buf);
@@ -136,7 +144,7 @@ Packs deserializePacks(PrimaryKeyPtr pk, ReadBuffer & buf)
     BlockPtr last_schema;
     for (size_t i = 0; i < (size_t)size; ++i)
     {
-        auto pack = deserializePack(pk, buf);
+        auto pack = deserializePack(pk, buf, version);
         if (!pack->isDeleteRange())
         {
             if (!pack->schema)

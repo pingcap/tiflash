@@ -283,6 +283,7 @@ struct TableInfo
     std::vector<ColumnInfo> columns;
     SchemaState state = StateNone;
     bool pk_is_handle = false;
+    bool is_common_handle = false;
     String comment;
     Timestamp update_timestamp = 0;
     bool is_partition_table = false;
