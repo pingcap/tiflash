@@ -16,7 +16,10 @@ void TiFlashErrorRegistry::initialize()
     do                                                                                                 \
     {                                                                                                  \
         if (auto [_, took_place] = all_classes.insert(class_name); !took_place)                        \
+        {                                                                                              \
+            (void)_;                                                                                   \
             throw Exception("Error Class " + class_name + " is duplicate, please check related code"); \
+        }                                                                                              \
     } while (0)
 
     // Register error classes with macro REGISTER_ERROR_CLASS.
