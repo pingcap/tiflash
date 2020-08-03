@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/CurrentMetrics.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
@@ -13,6 +14,12 @@ namespace Poco
 {
 class Logger;
 } // namespace Poco
+
+namespace CurrentMetrics
+{
+extern const Metric OpenFileForRead;
+extern const Metric OpenFileForWrite;
+} // namespace CurrentMetrics
 
 namespace DB
 {
@@ -58,6 +65,9 @@ public:
         int data_file_fd = 0;
         int meta_file_fd = 0;
 
+        // Use `changeTo` to increase/decrease value later
+        CurrentMetrics::Increment fd_increment{CurrentMetrics::OpenFileForWrite, 0};
+
         Clock::time_point last_write_time;
     };
 
@@ -90,6 +100,8 @@ public:
     private:
         String data_file_path;
         int    data_file_fd;
+
+        CurrentMetrics::Increment fd_increment{CurrentMetrics::OpenFileForRead};
     };
 
     struct Comparator
