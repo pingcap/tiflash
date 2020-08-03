@@ -66,11 +66,6 @@ int mainEntryVersion(int , char **)
 
 int mainExportError(int argc, char ** argv)
 {
-    // std::cout << argc << std::endl;
-    // for (int i = 0; i < argc; i ++)
-    // {
-    //     std::cout << argv[i] << std::endl;
-    // }
     if (argc < 2)
     {
         std::cerr << "Usage:" << std::endl;
