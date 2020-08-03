@@ -446,6 +446,7 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
     };
     std::cout << "before write, data_file fd " << std::to_string(data_file->getFd()) << "meta_file fd " << std::to_string(meta_file->getFd());
     write_buf(data_file, page_file.data_file_pos, data_file_path, data_buf);
+    std::cout << "after sync data_file\n";
     write_buf(meta_file, page_file.meta_file_pos, meta_file_path, meta_buf);
 
     page_file.data_file_pos += data_buf.size();
