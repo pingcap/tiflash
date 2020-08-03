@@ -74,7 +74,7 @@ int mainExportError(int argc, char ** argv)
     }
     std::string dst_path = argv[1];
     DB::WriteBufferFromFile wb(dst_path);
-    auto registry = DB::TiFlashErrorRegistry::getInstance();
+    auto & registry = DB::TiFlashErrorRegistry::instance();
     auto all_errors = registry.allErrors();
 
     {

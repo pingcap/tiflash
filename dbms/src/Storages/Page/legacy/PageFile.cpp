@@ -177,7 +177,7 @@ void readFile(int fd, const off_t offset, const char * buf, size_t expected_byte
     ProfileEvents::increment(ProfileEvents::PSMReadBytes, bytes_read);
 
     if (unlikely(bytes_read != expected_bytes))
-        throw DB::TiFlashException("Not enough data in file " + path, TiFlashErrorRegistry::simpleGet(ErrorClass::PageStorage, "FileSizeNotMatch"));
+        throw DB::TiFlashException("Not enough data in file " + path, Errors::PageStorage::FileSizeNotMatch);
 }
 
 /// Write and advance sizeof(T) bytes.
@@ -224,7 +224,7 @@ std::unique_ptr<C> readValuesFromFile(const std::string & path, Allocator<false>
     }
 
     if (unlikely(pos != data + file_size))
-        throw DB::TiFlashException("pos not match", TiFlashErrorRegistry::simpleGet(ErrorClass::PageStorage, "FileSizeNotMatch"));
+        throw DB::TiFlashException("pos not match", Errors::PageStorage::FileSizeNotMatch);
 
     return values;
 }

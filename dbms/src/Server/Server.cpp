@@ -347,7 +347,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     registerTableFunctions();
     registerStorages();
 
-    TiFlashErrorRegistry::getInstance(); // This invocation is for initializing
+    TiFlashErrorRegistry::instance(); // This invocation is for initializing
 
     TiFlashProxyConfig proxy_conf(config());
     TiFlashServer tiflash_instance_wrap{};
