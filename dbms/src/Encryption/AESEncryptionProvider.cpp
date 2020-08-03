@@ -1,3 +1,4 @@
+#include <common/likely.h>
 #include <Common/Exception.h>
 #include <Encryption/AESEncryptionProvider.h>
 #include <IO/FileProvider.h>
@@ -25,6 +26,10 @@ BlockAccessCipherStreamPtr AESEncryptionProvider::createCipherStream(const Encry
     else
     {
         auto file_info = key_manager->getFile(encryption_path_.dir_name);
+        if (unlikely(file_info.method == EncryptionMethod::Plaintext))
+        {
+            throw Exception("Cannot get encryption info for file: " + encryption_path_.dir_name);
+        }
         method = file_info.method;
         key = *file_info.key;
         iv = *file_info.iv;

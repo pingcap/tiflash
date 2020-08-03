@@ -3,7 +3,7 @@
 #include <Databases/DatabaseOrdinary.h>
 #include <Databases/DatabaseTiFlash.h>
 #include <Databases/DatabasesCommon.h>
-#include <IO/ReadBufferFromFile.h>
+#include <IO/ReadBufferFromFileProvider.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/loadMetadata.h>
@@ -60,7 +60,7 @@ static void loadDatabase(
 
     if (Poco::File(database_metadata_file).exists())
     {
-        ReadBufferFromFile in(database_metadata_file, 1024);
+        ReadBufferFromFileProvider in(context.getFileProvider(), database_metadata_file, EncryptionPath(database_metadata_file, ""), 1024);
         readStringUntilEOF(database_attach_query, in);
     }
     else
@@ -99,8 +99,7 @@ void loadMetadata(Context & context)
         if (db_name == SYSTEM_DATABASE)
             continue;
 
-        const auto file_path = path + file;
-        databases.emplace(db_name, file_path);
+        databases.emplace(db_name, path + file);
     }
 
     {
