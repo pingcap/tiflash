@@ -443,10 +443,8 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
         if (sync_on_write)
             PageUtil::syncFile(file, path);
     };
-
     write_buf(data_file, page_file.data_file_pos, data_file_path, data_buf);
     write_buf(meta_file, page_file.meta_file_pos, meta_file_path, meta_buf);
-    std::cout << data_file_path << " write size " + std::to_string(data_buf.size()) << std::endl;
 
     page_file.data_file_pos += data_buf.size();
     page_file.meta_file_pos += meta_buf.size();
