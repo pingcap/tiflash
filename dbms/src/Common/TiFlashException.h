@@ -2,6 +2,7 @@
 
 #include <Common/Exception.h>
 
+#include <ext/singleton.h>
 #include <map>
 #include <memory>
 #include <optional>
@@ -37,20 +38,15 @@ struct TiFlashError
 };
 
 /// TiFlashErrorRegistry will registers and checks all errors when TiFlash startup
-class TiFlashErrorRegistry
+class TiFlashErrorRegistry : public ext::singleton<TiFlashErrorRegistry>
 {
 public:
-    // Meyer's Singleton, thread safe after C++11
-    static TiFlashErrorRegistry & getInstance()
-    {
-        static TiFlashErrorRegistry registry;
-        return registry;
-    }
-
+    friend ext::singleton<TiFlashErrorRegistry>;
+    
     static TiFlashError simpleGet(const std::string & error_class, const std::string & error_code)
     {
-        auto instance = getInstance();
-        auto error = instance.get(error_class, error_code);
+        auto & _instance = instance();
+        auto error = _instance.get(error_class, error_code);
         if (error.has_value())
         {
             return error.value();
@@ -95,9 +91,10 @@ public:
         return res;
     }
 
-private:
+protected:
     TiFlashErrorRegistry() { initialize(); }
 
+private:
     void registerError(const std::string & error_class, const std::string & error_code, const std::string & description,
         const std::string & workaround, const std::string & message_template = "");
 
