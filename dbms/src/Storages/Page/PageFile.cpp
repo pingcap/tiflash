@@ -444,7 +444,7 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
         if (sync_on_write)
             PageUtil::syncFile(file, path);
     };
-    std::cout << "before write, data_file fd " << std::to_string(data_file->getFd()) << "meta_file fd " << std::to_string(meta_file->getFd());
+    std::cout << "before write, data_file fd " << std::to_string(data_file->getFd()) << "meta_file fd " << std::to_string(meta_file->getFd()) << std::endl;
     write_buf(data_file, page_file.data_file_pos, data_file_path, data_buf);
     std::cout << "after sync data_file\n";
     write_buf(meta_file, page_file.meta_file_pos, meta_file_path, meta_buf);
@@ -480,6 +480,7 @@ void PageFile::Writer::closeFd()
         data_file->close();
         meta_file->close();
     });
+    std::cout << "close file fd " << std::to_string(data_file->getFd()) << std::endl;
     PageUtil::syncFile(data_file, data_file_path);
     PageUtil::syncFile(meta_file, meta_file_path);
 }
