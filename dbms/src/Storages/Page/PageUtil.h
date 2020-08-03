@@ -132,36 +132,6 @@ inline T get(std::conditional_t<advance, char *&, const char *> pos)
     return v;
 }
 
-//template <typename C, typename T = typename C::value_type>
-//std::unique_ptr<C> readValuesFromFile(const std::string & path, Allocator<false> & allocator)
-//{
-//    Poco::File file(path);
-//    if (!file.exists())
-//        return {};
-//
-//    size_t file_size = file.getSize();
-//    int    file_fd   = openFile<true>(path);
-//    SCOPE_EXIT({ ::close(file_fd); });
-//    char * data = (char *)allocator.alloc(file_size);
-//    SCOPE_EXIT({ allocator.free(data, file_size); });
-//    char * pos = data;
-//
-//    readFile(file_fd, 0, data, file_size, path);
-//
-//    auto               size   = get<UInt64>(pos);
-//    std::unique_ptr<C> values = std::make_unique<C>();
-//    for (size_t i = 0; i < size; ++i)
-//    {
-//        T v = get<T>(pos);
-//        values->push_back(v);
-//    }
-//
-//    if (unlikely(pos != data + file_size))
-//        throw DB::Exception("pos not match", ErrorCodes::FILE_SIZE_NOT_MATCH);
-//
-//    return values;
-//}
-
 } // namespace PageUtil
 
 } // namespace DB

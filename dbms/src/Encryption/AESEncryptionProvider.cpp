@@ -64,10 +64,16 @@ BlockAccessCipherStreamPtr AESEncryptionProvider::createCipherStream(const Encry
     }
     auto iv_high = readBigEndian<uint64_t>(reinterpret_cast<const char *>(iv.data()));
     auto iv_low = readBigEndian<uint64_t>(reinterpret_cast<const char *>(iv.data() + sizeof(uint64_t)));
+    // Currently all encryption info are stored in one file called file.dict.
+    // Every update of file.dict will sync the whole file.
+    // So when the file is too large, the update cost increases.
+    // To keep the file size as small as possible, we reuse the encryption info among a group of related files.(e.g. the files of a DMFile)
+    // For security reason, the same `iv` is not allowed to encrypt two different files,
+    // so we combine the `iv` fetched from file.dict with the hash value of the file name to calculate the real `iv` for every file.
     if (!encryption_path_.file_name.empty())
     {
         std::size_t file_name_hash = std::hash<std::string>{}(encryption_path_.file_name);
-        iv_high += file_name_hash;
+        iv_high ^= file_name_hash;
     }
     return std::make_shared<AESCTRCipherStream>(cipher, key, iv_high, iv_low);
 }

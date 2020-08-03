@@ -318,8 +318,8 @@ void DatabaseTiFlash::alterTable(
     /// Read the definition of the table and replace the necessary parts with new ones.
 
     const String table_name_escaped = escapeForFileName(name);
-    const String table_metadata_tmp_path = metadata_path + "/" + table_name_escaped + ".sql.tmp";
-    const String table_metadata_path = metadata_path + "/" + table_name_escaped + ".sql";
+    const String table_metadata_tmp_path = metadata_path + (endsWith(metadata_path, "/") ? "" : "/") + table_name_escaped + ".sql.tmp";
+    const String table_metadata_path = metadata_path + (endsWith(metadata_path, "/") ? "" : "/") + table_name_escaped + ".sql";
     String statement;
 
     {

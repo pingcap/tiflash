@@ -1514,7 +1514,6 @@ TiFlashMetricsPtr Context::getTiFlashMetrics() const
 
 void Context::initializeFileProvider(TiFlashServer * tiflash_instance_wrap, bool enable_encryption)
 {
-    // TODO: initialize FileProvider according to config
     auto lock = getLock();
     if (shared->file_provider)
         throw Exception("File provider has already been initialized.", ErrorCodes::LOGICAL_ERROR);
