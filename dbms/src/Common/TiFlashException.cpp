@@ -26,7 +26,7 @@ void TiFlashErrorRegistry::initialize()
 #define E(error_code, desc, workaround, message_template) registerError(NAME, #error_code, desc, workaround, message_template);
 
     ERROR_CLASS_LIST
-#undef X
+#undef C
 #undef E
 }
 
