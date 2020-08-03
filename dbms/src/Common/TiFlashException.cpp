@@ -12,33 +12,16 @@ void TiFlashErrorRegistry::initialize()
 
     using namespace ErrorClass;
 
-#define REGISTER_ERROR_CLASS(class_name)                                                               \
-    do                                                                                                 \
-    {                                                                                                  \
-        if (auto [_, took_place] = all_classes.insert(class_name); !took_place)                        \
-        {                                                                                              \
-            (void)_;                                                                                   \
-            throw Exception("Error Class " + class_name + " is duplicate, please check related code"); \
-        }                                                                                              \
-    } while (0)
+/// Register error classes, and check their uniqueness
+#define X(class_name)                                                                              \
+    if (auto [_, took_place] = all_classes.insert(class_name); !took_place)                        \
+    {                                                                                              \
+        (void)_;                                                                                   \
+        throw Exception("Error Class " + class_name + " is duplicate, please check related code"); \
+    }
 
-    // Register error classes with macro REGISTER_ERROR_CLASS.
-    // For example, REGISTER_ERROR_CLASS(Foo) will register a class named "Foo",
-    // and the macro parameter Foo is a DB::std::string variable defined in current scope with value "Foo".
-    // All class should be named in Pascal case(words start with upper case).
-
-    // Classify by Module
-    REGISTER_ERROR_CLASS(PageStorage);
-    REGISTER_ERROR_CLASS(DeltaTree);
-    REGISTER_ERROR_CLASS(DDL);
-    REGISTER_ERROR_CLASS(Coprocessor);
-
-    // Classify by conception
-    REGISTER_ERROR_CLASS(Table);
-    REGISTER_ERROR_CLASS(Decimal);
-    REGISTER_ERROR_CLASS(BroadcastJoin);
-
-#undef REGISTER_ERROR_CLASS
+    ERROR_CLASS_LIST
+#undef X
 
     // Example:
     // registerError(MyClass, "Unimplemented",

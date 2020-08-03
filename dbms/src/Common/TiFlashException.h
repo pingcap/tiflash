@@ -12,16 +12,20 @@
 namespace DB
 {
 
+#define ERROR_CLASS_LIST \
+    X(PageStorage)       \
+    X(DeltaTree)         \
+    X(DDL)               \
+    X(Coprocessor)       \
+    X(Table)             \
+    X(Decimal)           \
+    X(BroadcastJoin)
+
 namespace ErrorClass
 {
-const std::string PageStorage = "PageStorage";
-const std::string DeltaTree = "DeltaTree";
-const std::string DDL = "DDL";
-const std::string Coprocessor = "Coprocessor";
-
-const std::string Table = "Table";
-const std::string Decimal = "Decimal";
-const std::string BroadcastJoin = "BroadcastJoin";
+#define X(class_name) const std::string class_name = #class_name;
+ERROR_CLASS_LIST
+#undef X
 } // namespace ErrorClass
 
 /// TiFlashError is core struct of standard error,
@@ -42,7 +46,7 @@ class TiFlashErrorRegistry : public ext::singleton<TiFlashErrorRegistry>
 {
 public:
     friend ext::singleton<TiFlashErrorRegistry>;
-    
+
     static TiFlashError simpleGet(const std::string & error_class, const std::string & error_code)
     {
         auto & _instance = instance();
