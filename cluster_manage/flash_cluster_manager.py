@@ -22,10 +22,6 @@ def handle_receive_signal(signal_number, _):
     terminal = handle_receive_signal
 
 
-def get_host():
-    return socket.gethostbyname(socket.gethostname())
-
-
 def wrap_try_get_lock(func):
     def wrap_func(manager, *args, **kwargs):
         manager.try_get_lock()
@@ -49,8 +45,7 @@ class Store:
         self.inner = pd_store
         address = self.inner['address']
         host, port = address.split(':')
-        self.ip = socket.gethostbyname(host)
-        self.address = '{}:{}'.format(self.ip, port)
+        self.address = '{}:{}'.format(host, port)
         self.tiflash_http_address = None
 
     @property

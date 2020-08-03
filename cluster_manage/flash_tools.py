@@ -19,9 +19,9 @@ class FlashConfig:
         p = self.conf_toml['flash']
         service_addr = p['service_addr']
         host, port = [e.strip() for e in service_addr.split(':')]
-        self.service_ip = socket.gethostbyname(host)
-        self.service_addr = '{}:{}'.format(self.service_ip, port)
-        self.http_addr = '{}:{}'.format(self.service_ip, self.http_port)
+        self.service_host = host
+        self.service_addr = '{}:{}'.format(self.service_host, port)
+        self.http_addr = '{}:{}'.format(self.service_host, self.http_port)
         self.tidb_status_addr = util.compute_addr_list(p['tidb_status_addr'])
         flash_cluster = p['flash_cluster']
         self.cluster_master_ttl = flash_cluster['master_ttl']
@@ -38,6 +38,7 @@ class FlashConfig:
                 self.key_path = security['key_path']
                 self.cert_path = security['cert_path']
                 self.enable_tls = True
+
 
 def main():
     pass
