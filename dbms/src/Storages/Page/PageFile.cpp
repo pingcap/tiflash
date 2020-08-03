@@ -479,7 +479,6 @@ void PageFile::Writer::closeFd()
         data_file->close();
         meta_file->close();
     });
-    std::cout << "sync file " << data_file_path << std::endl;
     PageUtil::syncFile(data_file, data_file_path);
     PageUtil::syncFile(meta_file, meta_file_path);
 }
