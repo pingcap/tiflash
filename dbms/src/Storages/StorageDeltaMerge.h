@@ -48,7 +48,7 @@ public:
     /// Write from raft layer.
     void write(Block && block, const Settings & settings);
 
-    void flushCache(const Context & context) override { flushCache(context, DM::PKRange::fromHandleRange(DM::HandleRange::newAll())); }
+    void flushCache(const Context & context) override;
 
     void flushCache(const Context & context, const DB::HandleRange<HandleID> & range_to_flush) override
     {

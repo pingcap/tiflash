@@ -388,6 +388,7 @@ public:
                 columns_[i] = std::move(columns[i]);
             return PKRange(pk, is_infinite, columns_);
         }
+        bool hasCompletedRange() { return columns[0]->size() == 2; }
     };
 
 
@@ -612,7 +613,10 @@ public:
             writeIntBinary(col_define.id, buf);
             writeStringBinary(col_define.name, buf);
             writeStringBinary(col_define.type->getName(), buf);
-            writeIntBinary(col_define.collator->getCollatorId(), buf);
+            if (col_define.collator != nullptr)
+                writeIntBinary(col_define.collator->getCollatorId(), buf);
+            else
+                writeIntBinary((Int32)0, buf);
             col_define.type->serializeBinary(col_define.default_value, buf);
         }
         writeBoolText(is_infinite[0], buf);
@@ -639,7 +643,8 @@ public:
             col_define.type = data_type_factory.get(type_name);
             Int32 collator_id;
             readIntBinary(collator_id, buf);
-            col_define.collator = TiDB::ITiDBCollator::getCollator(collator_id);
+            if (collator_id != 0)
+                col_define.collator = TiDB::ITiDBCollator::getCollator(collator_id);
             col_define.type->deserializeBinary(col_define.default_value, buf);
             pk->emplace_back(col_define);
         }

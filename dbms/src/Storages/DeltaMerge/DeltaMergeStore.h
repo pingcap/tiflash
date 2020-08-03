@@ -303,6 +303,7 @@ public:
     void                check(const Context & db_context);
     DeltaMergeStoreStat getStat();
     SegmentStats        getSegmentStats();
+    PrimaryKeyPtr       getPrimaryKey() const { return pk; }
 
 private:
     DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings);

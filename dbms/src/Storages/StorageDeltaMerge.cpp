@@ -532,6 +532,8 @@ BlockInputStreams StorageDeltaMerge::read( //
 
 void StorageDeltaMerge::checkStatus(const Context & context) { store->check(context); }
 
+void StorageDeltaMerge::flushCache(const Context & context) { flushCache(context, DM::PKRange::newAll(store->getPrimaryKey())); }
+
 void StorageDeltaMerge::flushCache(const Context & context, const DM::PKRange & range_to_flush)
 {
     store->flushCache(context, range_to_flush);
@@ -550,8 +552,7 @@ size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM
 {
     size_t rows = 0;
 
-    ColumnDefines to_read{getExtraHandleColumnDefine()};
-    auto stream = store->read(context, context.getSettingsRef(), to_read, {range}, 1, MAX_UINT64, EMPTY_FILTER)[0];
+    auto stream = store->read(context, context.getSettingsRef(), *store->getPrimaryKey(), {range}, 1, MAX_UINT64, EMPTY_FILTER)[0];
     stream->readPrefix();
     Block block;
     while ((block = stream->read()))
@@ -565,35 +566,39 @@ DM::PKRange getRange(DM::DeltaMergeStorePtr & store, const Context & context, si
 {
     auto start_index = rand() % (total_rows - delete_rows + 1);
 
-    DM::HandleRange range = DM::HandleRange::newAll();
+    DM::PKRange::Creator creator(store->getPrimaryKey());
     {
-        ColumnDefines to_read{getExtraHandleColumnDefine()};
-        auto stream = store->read(context, context.getSettingsRef(), to_read, {DM::PKRange::fromHandleRange(DM::HandleRange::newAll())}, 1,
+        auto stream = store->read(context, context.getSettingsRef(), *store->getPrimaryKey(), {PKRange::newAll(store->getPrimaryKey())}, 1,
             MAX_UINT64, EMPTY_FILTER)[0];
         stream->readPrefix();
         Block block;
         size_t index = 0;
         while ((block = stream->read()))
         {
-            auto & data = toColumnVectorData<Handle>(block.getByPosition(0).column);
-            for (size_t i = 0; i < data.size(); ++i)
+            size_t rows = block.rows();
+            for (size_t i = 0; i < rows; i++)
             {
                 if (index == start_index)
-                    range.start = data[i];
+                    creator.setStart(block, i);
                 if (index == start_index + delete_rows)
-                    range.end = data[i];
-                ++index;
+                {
+                    creator.setEnd(block, i);
+                    break;
+                }
+                index++;
             }
         }
         stream->readSuffix();
     }
 
-    return PKRange::fromHandleRange(range);
+    if (unlikely(!creator.hasCompletedRange()))
+        return PKRange::newAll(store->getPrimaryKey());
+    return creator.getRange();
 }
 
 void StorageDeltaMerge::deleteRows(const Context & context, size_t delete_rows)
 {
-    size_t total_rows = getRows(store, context, DM::PKRange::fromHandleRange(DM::HandleRange::newAll()));
+    size_t total_rows = getRows(store, context, PKRange::newAll(store->getPrimaryKey()));
     delete_rows = std::min(total_rows, delete_rows);
     auto delete_range = getRange(store, context, total_rows, delete_rows);
     size_t actual_delete_rows = getRows(store, context, delete_range);
@@ -602,7 +607,7 @@ void StorageDeltaMerge::deleteRows(const Context & context, size_t delete_rows)
 
     store->deleteRange(context, context.getSettingsRef(), delete_range);
 
-    size_t after_delete_rows = getRows(store, context, DM::PKRange::fromHandleRange(DM::HandleRange::newAll()));
+    size_t after_delete_rows = getRows(store, context, PKRange::newAll(store->getPrimaryKey()));
     if (after_delete_rows != total_rows - delete_rows)
         LOG_ERROR(log, "Rows after delete range not match, expected: " << (total_rows - delete_rows) << ", got: " << after_delete_rows);
 }
@@ -766,7 +771,7 @@ void StorageDeltaMerge::rename(
             ErrorCodes::DIRECTORY_ALREADY_EXISTS};
 
     // flush store and then reset store to new path
-    store->flushCache(global_context, PKRange::fromHandleRange(DM::HandleRange::newAll()));
+    store->flushCache(global_context, PKRange::newAll(store->getPrimaryKey()));
     ColumnDefines table_column_defines = store->getTableColumns();
     ColumnDefine handle_column_define = store->getHandle();
     DeltaMergeStore::Settings settings = store->getSettings();
