@@ -2,6 +2,7 @@
 
 #include <Storages/Transaction/ColumnFamily.h>
 
+#include <atomic>
 #include <cstdint>
 #include <string>
 
