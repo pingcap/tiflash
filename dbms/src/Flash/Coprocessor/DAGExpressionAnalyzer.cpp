@@ -537,7 +537,7 @@ bool DAGExpressionAnalyzer::appendJoinKey(ExpressionActionsChain & chain, const 
             /// In TiDB, it returns t1_id,t1_value,t2_id,t2_value
             /// So in order to make the join compatible with TiDB, if the join key is a columnRef, for inner/left
             /// join, add a new key as right join key, for right join, add a new key as left join key
-            String updated_key_name = "_j_k_" + key_name;
+            String updated_key_name = (tiflash_left ? "_l_k_" : "_r_k_") + key_name;
             actions->add(ExpressionAction::copyColumn(key_name, updated_key_name));
             key_name = updated_key_name;
             has_actions = true;
