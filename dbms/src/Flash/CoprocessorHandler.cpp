@@ -1,4 +1,5 @@
 #include <Common/Stopwatch.h>
+#include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
@@ -60,7 +61,8 @@ grpc::Status CoprocessorHandler::execute()
                 dag_request.ParseFromString(cop_request->data());
                 LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
                 if (dag_request.has_is_rpn_expr() && dag_request.is_rpn_expr())
-                    throw Exception("DAG request with rpn expression is not supported in TiFlash", ErrorCodes::NOT_IMPLEMENTED);
+                    throw TiFlashException("DAG request with rpn expression is not supported in TiFlash",
+                        Errors::Coprocessor::Unimplemented);
                 tipb::SelectResponse dag_response;
                 std::unordered_map<RegionID, RegionInfo> regions;
                 const std::unordered_set<UInt64> bypass_lock_ts(
@@ -79,10 +81,16 @@ grpc::Status CoprocessorHandler::execute()
             case COP_REQ_TYPE_ANALYZE:
             case COP_REQ_TYPE_CHECKSUM:
             default:
-                throw Exception(
-                    "Coprocessor request type " + std::to_string(cop_request->tp()) + " is not implemented", ErrorCodes::NOT_IMPLEMENTED);
+                throw TiFlashException("Coprocessor request type " + std::to_string(cop_request->tp()) + " is not implemented",
+                    Errors::Coprocessor::Unimplemented);
         }
         return grpc::Status::OK;
+    }
+    catch (const TiFlashException & e)
+    {
+        LOG_ERROR(log, __PRETTY_FUNCTION__ << ":" << e.standardText() << "\n" << e.getStackTrace().toString());
+        GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_error, reason_internal_error).Increment();
+        return recordError(grpc::StatusCode::INTERNAL, e.standardText());
     }
     catch (const LockException & e)
     {

@@ -1,5 +1,6 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Columns/ColumnSet.h>
+#include <Common/TiFlashException.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeSet.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -125,7 +126,7 @@ static String buildCastFunction(DAGExpressionAnalyzer * analyzer, const tipb::Ex
 {
     if (expr.children_size() != 1)
     {
-        throw Exception("Cast function only support one argument", ErrorCodes::COP_BAD_DAG_REQUEST);
+        throw TiFlashException("Cast function only support one argument", Errors::Coprocessor::BadRequest);
     }
     String name = analyzer->getActions(expr.children(0), actions);
     name = analyzer->appendCastIfNeeded(expr, actions, name, true);
@@ -139,17 +140,17 @@ static String buildDateAddFunction(DAGExpressionAnalyzer * analyzer, const tipb:
         {"YEAR", "addYears"}, {"HOUR", "addHours"}, {"MINUTE", "addMinutes"}, {"SECOND", "addSeconds"}});
     if (expr.children_size() != 3)
     {
-        throw Exception("date add function requires three arguments", ErrorCodes::COP_BAD_DAG_REQUEST);
+        throw TiFlashException("date add function requires three arguments", Errors::Coprocessor::BadRequest);
     }
     String date_column = analyzer->getActions(expr.children(0), actions);
     String delta_column = analyzer->getActions(expr.children(1), actions);
     if (expr.children(2).tp() != tipb::ExprType::String)
     {
-        throw Exception("3rd argument of date add function must be string literal", ErrorCodes::COP_BAD_DAG_REQUEST);
+        throw TiFlashException("3rd argument of date add function must be string literal", Errors::Coprocessor::BadRequest);
     }
     String unit = expr.children(2).val();
     if (unit_to_func_name_map.find(unit) == unit_to_func_name_map.end())
-        throw Exception("date_add does not support unit " + unit + " yet.", ErrorCodes::NOT_IMPLEMENTED);
+        throw TiFlashException("date_add does not support unit " + unit + " yet.", Errors::Coprocessor::Unimplemented);
     String func_name = unit_to_func_name_map.find(unit)->second;
     const auto & date_column_type = removeNullable(actions->getSampleBlock().getByName(date_column).type);
     if (!date_column_type->isDateOrDateTime())
@@ -210,7 +211,7 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
     if (agg.group_by_size() == 0 && agg.agg_func_size() == 0)
     {
         //should not reach here
-        throw Exception("Aggregation executor without group by/agg exprs", ErrorCodes::COP_BAD_DAG_REQUEST);
+        throw TiFlashException("Aggregation executor without group by/agg exprs", Errors::Coprocessor::BadRequest);
     }
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsChain::Step & step = chain.steps.back();
@@ -407,7 +408,7 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
         auto const_expr_name = getActions(const_expr, actions);
         return applyFunction("notEquals", {column_name, const_expr_name}, actions, nullptr);
     }
-    throw Exception("Filter on " + org_type->getName() + " is not supported.", ErrorCodes::NOT_IMPLEMENTED);
+    throw TiFlashException("Filter on " + org_type->getName() + " is not supported.", Errors::Coprocessor::Unimplemented);
 }
 
 void DAGExpressionAnalyzer::appendOrderBy(
@@ -415,7 +416,7 @@ void DAGExpressionAnalyzer::appendOrderBy(
 {
     if (topN.order_by_size() == 0)
     {
-        throw Exception("TopN executor without order by exprs", ErrorCodes::COP_BAD_DAG_REQUEST);
+        throw TiFlashException("TopN executor without order by exprs", Errors::Coprocessor::BadRequest);
     }
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsChain::Step & step = chain.steps.back();
@@ -688,7 +689,7 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(
 
     if (!expr.has_field_type())
     {
-        throw Exception("Function Expression without field type", ErrorCodes::COP_BAD_DAG_REQUEST);
+        throw TiFlashException("Function Expression without field type", Errors::Coprocessor::BadRequest);
     }
     if (exprHasValidFieldType(expr))
     {
@@ -786,7 +787,7 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
     {
         if (isAggFunctionExpr(expr))
         {
-            throw Exception("agg function is not supported yet", ErrorCodes::UNSUPPORTED_METHOD);
+            throw TiFlashException("agg function is not supported yet", Errors::Coprocessor::Unimplemented);
         }
         const String & func_name = getFunctionName(expr);
         if (function_builder_map.find(func_name) != function_builder_map.end())
@@ -800,7 +801,7 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
     }
     else
     {
-        throw Exception("Unsupported expr type: " + getTypeName(expr), ErrorCodes::UNSUPPORTED_METHOD);
+        throw TiFlashException("Unsupported expr type: " + getTypeName(expr), Errors::Coprocessor::Unimplemented);
     }
 
     ret = alignReturnType(expr, actions, ret, output_as_uint8_type);
