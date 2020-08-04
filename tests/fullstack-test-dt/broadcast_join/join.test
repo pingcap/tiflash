@@ -1,0 +1,71 @@
+mysql> drop table if exists test.t1;
+mysql> drop table if exists test.t2;
+
+# Test broadcast join
+mysql> create table test.t1 (id int, value int);
+mysql> create table test.t2 (id int, value int);
+
+mysql> insert into test.t1 values(1,2),(3,4),(7,8),(9,10);
+mysql> insert into test.t2 values(3,4),(5,6);
+
+mysql> alter table test.t1 set tiflash replica 1;
+mysql> alter table test.t2 set tiflash replica 1;
+
+func> wait_table test t1
+func> wait_table test t2
+
+mysql> analyze table test.t1;
+mysql> analyze table test.t2;
+
+mysql> set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ * from test.t1 join test.t2 on t2.id = t1.id;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    3 |     4 |    3 |     4 |
++------+-------+------+-------+
+
+mysql> set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ * from test.t1 left join test.t2 on t2.id = t1.id;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    1 |     2 | NULL |  NULL |
+|    3 |     4 |    3 |     4 |
+|    7 |     8 | NULL |  NULL |
+|    9 |    10 | NULL |  NULL |
++------+-------+------+-------+
+
+mysql> set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ * from test.t1 right join test.t2 on t2.id = t1.id;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    3 |     4 |    3 |     4 |
+| NULL |  NULL |    5 |     6 |
++------+-------+------+-------+
+
+mysql> set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ t1.id,t1.value,t2.id,t2.value from test.t2 join test.t1 on t2.id = t1.id;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    3 |     4 |    3 |     4 |
++------+-------+------+-------+
+
+mysql> set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ t1.id,t1.value,t2.id,t2.value from test.t2 left join test.t1 on t2.id = t1.id;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    3 |     4 |    3 |     4 |
+| NULL |  NULL |    5 |     6 |
++------+-------+------+-------+
+
+mysql> set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ t1.id,t1.value,t2.id,t2.value from test.t2 right join test.t1 on t2.id = t1.id;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    1 |     2 | NULL |  NULL |
+|    3 |     4 |    3 |     4 |
+|    7 |     8 | NULL |  NULL |
+|    9 |    10 | NULL |  NULL |
++------+-------+------+-------+
+
+mysql> drop table if exists test.t1;
+mysql> drop table if exists test.t2;

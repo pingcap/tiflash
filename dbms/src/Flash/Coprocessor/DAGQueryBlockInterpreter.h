@@ -30,6 +30,11 @@ using RegionPtr = std::shared_ptr<Region>;
 struct Pipeline
 {
     BlockInputStreams streams;
+    /** When executing FULL or RIGHT JOIN, there will be a data stream from which you can read "not joined" rows.
+      * It has a special meaning, since reading from it should be done after reading from the main streams.
+      * It is appended to the main streams in UnionBlockInputStream or ParallelAggregatingBlockInputStream.
+      */
+    BlockInputStreamPtr stream_with_non_joined_data;
 
     BlockInputStreamPtr & firstStream() { return streams.at(0); }
 
@@ -38,9 +43,11 @@ struct Pipeline
     {
         for (auto & stream : streams)
             transform(stream);
+        if (stream_with_non_joined_data)
+            transform(stream_with_non_joined_data);
     }
 
-    bool hasMoreThanOneStream() const { return streams.size() > 1; }
+    bool hasMoreThanOneStream() const { return streams.size() + (stream_with_non_joined_data ? 1 : 0) > 1; }
 };
 
 struct AnalysisResult
@@ -76,16 +83,18 @@ public:
 
     BlockInputStreams execute();
 
+    static void executeUnion(Pipeline & pipeline, size_t max_streams);
+
 private:
     void executeRemoteQuery(Pipeline & pipeline);
     void executeImpl(Pipeline & pipeline);
     void executeTS(const tipb::TableScan & ts, Pipeline & pipeline);
     void executeJoin(const tipb::Join & join, Pipeline & pipeline, SubqueryForSet & right_query);
-    void prepareJoinKeys(const tipb::Join & join, const DataTypes & key_types, Pipeline & pipeline, Names & key_names, bool tiflash_left);
+    void prepareJoinKeys(const google::protobuf::RepeatedPtrField<tipb::Expr> & keys, const DataTypes & key_types, Pipeline & pipeline,
+        Names & key_names, bool tiflash_left, bool is_right_out_join);
     void executeWhere(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column);
     void executeExpression(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr);
     void executeOrder(Pipeline & pipeline, std::vector<NameAndTypePair> & order_columns);
-    void executeUnion(Pipeline & pipeline);
     void executeLimit(Pipeline & pipeline);
     void executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, Names & aggregation_keys,
         TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions);

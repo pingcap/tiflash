@@ -69,10 +69,9 @@ public:
     String applyFunction(
         const String & func_name, const Names & arg_names, ExpressionActionsPtr & actions, std::shared_ptr<TiDB::ITiDBCollator> collator);
     Int32 getImplicitCastCount() { return implicit_cast_count; };
-    bool appendTimeZoneCastsAfterTS(
-        ExpressionActionsChain & chain, std::vector<bool> is_ts_column, bool keep_UTC_column);
-    bool appendJoinKey(
-        ExpressionActionsChain & chain, const tipb::Join & join, const DataTypes & key_types, Names & key_names, bool tiflash_left);
+    bool appendTimeZoneCastsAfterTS(ExpressionActionsChain & chain, std::vector<bool> is_ts_column, bool keep_UTC_column);
+    bool appendJoinKey(ExpressionActionsChain & chain, const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
+        const DataTypes & key_types, Names & key_names, bool tiflash_left, bool is_right_out_join);
     String appendTimeZoneCast(const String & tz_col, const String & ts_col, const String & func_name, ExpressionActionsPtr & actions);
     DAGPreparedSets & getPreparedSets() { return prepared_sets; }
     String convertToUInt8(ExpressionActionsPtr & actions, const String & column_name);
