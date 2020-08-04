@@ -59,7 +59,6 @@ template <bool batch>
 void DAGDriver<batch>::execute()
 try
 {
-    throw TiFlashException("Test TiFlash Exception", Errors::Coprocessor::BadRequest);
     DAGContext dag_context;
     DAGQuerySource dag(context, dag_context, regions, dag_request, writer, batch);
 
