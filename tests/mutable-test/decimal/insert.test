@@ -9,12 +9,12 @@
 >> insert into test values (1)
 
 >> insert into test values (11)
-Code: 9004. DB::Exception: Decimal value overflow
+Code: 0. DB::TiFlashException: Decimal value overflow
 
 >> insert into test values (9.91)
 
 >> insert into test values (9.95)
-Code: 9004. DB::Exception: Decimal value overflow
+Code: 0. DB::TiFlashException: Decimal value overflow
 
 >> select a from test
 ┌─a───┐
