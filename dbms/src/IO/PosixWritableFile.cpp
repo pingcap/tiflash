@@ -29,6 +29,7 @@ PosixWritableFile::PosixWritableFile(const std::string & file_name_, bool create
 
 PosixWritableFile::~PosixWritableFile()
 {
+    metric_increment.destroy();
     if (fd < 0)
         return;
 
@@ -48,7 +49,6 @@ void PosixWritableFile::close()
         throw Exception("Cannot close file", ErrorCodes::CANNOT_CLOSE_FILE);
 
     fd = -1;
-    metric_increment.destroy();
 }
 
 ssize_t PosixWritableFile::write(char * buf, size_t size) { return ::write(fd, buf, size); }
