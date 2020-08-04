@@ -20,11 +20,10 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
       max_compress_block_size(max_compress_block_size_),
       compression_settings(compression_settings_),
       wal_mode(wal_mode_),
-      pack_stat_file(dmfile->packStatPath()),
+      pack_stat_file(file_provider_, dmfile->packStatPath(), dmfile->encryptionPackStatPath(), true),
       file_provider(file_provider_)
 {
     dmfile->setStatus(DMFile::Status::WRITING);
-    file_provider->createEncryptionInfo(dmfile->encryptionBasePath());
     for (auto & cd : write_columns)
     {
         // TODO: currently we only generate index for Integers, Date, DateTime types, and this should be configurable by user.
@@ -84,7 +83,7 @@ void DMFileWriter::finalize()
         finalizeColumn(cd.id, *(cd.type));
     }
 
-    dmfile->finalize();
+    dmfile->finalize(file_provider);
 }
 
 void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColumn & column)

@@ -80,7 +80,7 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
         auto file_id          = context.storage_pool.data().getNormalPageId(ref_id);
         auto file_parent_path = context.extra_paths.getPath(file_id) + "/" + STABLE_FOLDER_NAME;
 
-        auto dmfile = DMFile::restore(file_id, ref_id, file_parent_path);
+        auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, ref_id, file_parent_path);
         stable->files.push_back(dmfile);
     }
 

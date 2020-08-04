@@ -25,6 +25,8 @@ public:
 
     int getFd() const override { return file->getFd(); }
 
+    bool isClosed() const override { return file->isClosed(); }
+
     void close() override;
 
 private:

@@ -246,7 +246,7 @@ void PageFile::MetaMergingReader::initialize()
         throw Exception("Try to read meta of " + page_file.toString() + ", but open file error. Path: " + path, ErrorCodes::LOGICAL_ERROR);
     SCOPE_EXIT({ underlying_file->close(); });
     meta_buffer = (char *)page_file.alloc(meta_size);
-    PageUtil::readFile(underlying_file, 0, meta_buffer, meta_size, path);
+    PageUtil::readFile(underlying_file, 0, meta_buffer, meta_size);
     status = Status::Opened;
 }
 
@@ -523,7 +523,7 @@ PageMap PageFile::Reader::read(PageIdAndEntries & to_read)
     PageMap page_map;
     for (const auto & [page_id, entry] : to_read)
     {
-        PageUtil::readFile(file, entry.offset, pos, entry.size, data_file_path);
+        PageUtil::readFile(file, entry.offset, pos, entry.size);
 
         if constexpr (PAGE_CHECKSUM_ON_READ)
         {
@@ -574,7 +574,7 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
     {
         auto && [page_id, entry] = *it;
 
-        PageUtil::readFile(file, entry.offset, data_buf, entry.size, data_file_path);
+        PageUtil::readFile(file, entry.offset, data_buf, entry.size);
 
         if constexpr (PAGE_CHECKSUM_ON_READ)
         {
@@ -650,7 +650,7 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read)
             // TODO: Continuously fields can read by one system call.
             const auto [beg_offset, end_offset] = entry.getFieldOffsets(field_index);
             const auto size_to_read             = end_offset - beg_offset;
-            PageUtil::readFile(file, entry.offset + beg_offset, write_offset, size_to_read, data_file_path);
+            PageUtil::readFile(file, entry.offset + beg_offset, write_offset, size_to_read);
             fields_offset_in_page.emplace(field_index, read_size_this_entry);
 
             if constexpr (PAGE_CHECKSUM_ON_READ)

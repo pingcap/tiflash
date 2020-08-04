@@ -29,6 +29,8 @@ public:
 
     std::string getFileName() const override { return file_name; }
 
+    bool isClosed() const override { return fd == -1; }
+
     int getFd() const override { return fd; }
 
     void close() override;

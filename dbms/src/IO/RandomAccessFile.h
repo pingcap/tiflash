@@ -24,6 +24,8 @@ public:
 
     virtual int getFd() const = 0;
 
+    virtual bool isClosed() const = 0;
+
     virtual void close() = 0;
 };
 

@@ -55,4 +55,11 @@ bool ReadBufferFromFileProvider::nextImpl()
 
 off_t ReadBufferFromFileProvider::doSeekInFile(off_t offset, int whence) { return file->seek(offset, whence); }
 
+ReadBufferFromFileProvider::~ReadBufferFromFileProvider() {
+    if (file->isClosed())
+        return;
+
+    file->close();
+}
+
 } // namespace DB

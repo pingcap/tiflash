@@ -29,7 +29,7 @@ public:
 
     ReadBufferFromFileProvider(ReadBufferFromFileProvider &&) = default;
 
-    ~ReadBufferFromFileProvider() override = default;
+    ~ReadBufferFromFileProvider() override;
 
     void close();
 

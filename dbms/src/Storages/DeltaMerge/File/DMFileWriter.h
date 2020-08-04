@@ -4,7 +4,6 @@
 #include <DataStreams/MarkInCompressedFile.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <IO/HashingWriteBuffer.h>
-#include <IO/WriteBufferFromFile.h>
 #include <IO/WriteBufferFromFileProvider.h>
 #include <IO/WriteBufferFromOStream.h>
 #include <IO/createWriteBufferFromFileBase.h>
@@ -41,7 +40,7 @@ public:
               compressed_buf(plain_hashing, compression_settings),
               original_hashing(compressed_buf),
               minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr),
-              mark_file(dmfile->colMarkPath(file_base_name))
+              mark_file(file_provider, dmfile->colMarkPath(file_base_name), dmfile->encryptionMarkPath(file_base_name), false)
         {
         }
 
@@ -69,7 +68,7 @@ public:
         HashingWriteBuffer         original_hashing;
 
         MinMaxIndexPtr      minmaxes;
-        WriteBufferFromFile mark_file;
+        WriteBufferFromFileProvider mark_file;
     };
     using StreamPtr     = std::unique_ptr<Stream>;
     using ColumnStreams = std::map<String, StreamPtr>;
@@ -104,7 +103,8 @@ private:
     bool                wal_mode;
 
     ColumnStreams       column_streams;
-    WriteBufferFromFile pack_stat_file;
+
+    WriteBufferFromFileProvider pack_stat_file;
 
     FileProviderPtr file_provider;
 };

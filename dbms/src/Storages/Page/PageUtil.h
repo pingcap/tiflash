@@ -109,7 +109,7 @@ void syncFile(WritableFilePtr & file, const std::string & path);
 
 void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const std::string & path);
 
-void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, size_t expected_bytes, const std::string & path);
+void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, size_t expected_bytes);
 
 void readFile(int fd, const off_t offset, const char * buf, size_t expected_bytes, const std::string & path);
 

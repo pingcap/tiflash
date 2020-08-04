@@ -51,4 +51,20 @@ void WriteBufferFromFileProvider::nextImpl()
     }
 }
 
+WriteBufferFromFileProvider::~WriteBufferFromFileProvider() {
+    if (file->isClosed())
+        return;
+
+    try
+    {
+        next();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+    }
+
+    file->close();
+}
+
 } // namespace DB

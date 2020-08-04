@@ -71,7 +71,7 @@ void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_wri
 }
 
 
-void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, size_t expected_bytes, const std::string & path)
+void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, size_t expected_bytes)
 {
     if (unlikely(expected_bytes == 0))
         return;
@@ -94,7 +94,7 @@ void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, 
         if (-1 == res && errno != EINTR)
         {
             ProfileEvents::increment(ProfileEvents::PSMReadFailed);
-            DB::throwFromErrno("Cannot read from file " + path, ErrorCodes::CANNOT_READ_FROM_FILE_DESCRIPTOR);
+            DB::throwFromErrno("Cannot read from file " + file->getFileName(), ErrorCodes::CANNOT_READ_FROM_FILE_DESCRIPTOR);
         }
 
         if (res > 0)
@@ -103,42 +103,7 @@ void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, 
     ProfileEvents::increment(ProfileEvents::PSMReadBytes, bytes_read);
 
     if (unlikely(bytes_read != expected_bytes))
-        throw DB::Exception("Not enough data in file " + path, ErrorCodes::FILE_SIZE_NOT_MATCH);
-}
-
-void readFile(int fd, const off_t offset, const char * buf, size_t expected_bytes, const std::string & path)
-{
-    if (unlikely(expected_bytes == 0))
-        return;
-
-    ProfileEvents::increment(ProfileEvents::PSMReadCalls);
-
-    size_t bytes_read = 0;
-    while (bytes_read < expected_bytes)
-    {
-        ProfileEvents::increment(ProfileEvents::PSMReadIOCalls);
-
-        ssize_t res = 0;
-        {
-            CurrentMetrics::Increment metric_increment{CurrentMetrics::Read};
-            res = ::pread(fd, const_cast<char *>(buf + bytes_read), expected_bytes - bytes_read, offset + bytes_read);
-        }
-        if (!res)
-            break;
-
-        if (-1 == res && errno != EINTR)
-        {
-            ProfileEvents::increment(ProfileEvents::PSMReadFailed);
-            DB::throwFromErrno("Cannot read from file " + path, ErrorCodes::CANNOT_READ_FROM_FILE_DESCRIPTOR);
-        }
-
-        if (res > 0)
-            bytes_read += res;
-    }
-    ProfileEvents::increment(ProfileEvents::PSMReadBytes, bytes_read);
-
-    if (unlikely(bytes_read != expected_bytes))
-        throw DB::Exception("Not enough data in file " + path, ErrorCodes::FILE_SIZE_NOT_MATCH);
+        throw DB::Exception("Not enough data in file " + file->getFileName(), ErrorCodes::FILE_SIZE_NOT_MATCH);
 }
 
 } // namespace DB::PageUtil

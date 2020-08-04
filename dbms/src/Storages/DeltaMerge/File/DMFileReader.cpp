@@ -32,11 +32,9 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
         if (res->empty()) // 0 rows.
             return res;
         size_t size = sizeof(MarkInCompressedFile) * reader.dmfile->getPacks();
-        auto   fd   = PageUtil::openFile<true>(mark_path);
+        auto file = reader.file_provider->newRandomAccessFile(mark_path, reader.dmfile->encryptionMarkPath(file_name_base));
 
-        CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForRead};
-        SCOPE_EXIT({ ::close(fd); });
-        PageUtil::readFile(fd, 0, reinterpret_cast<char *>(res->data()), size, mark_path);
+        PageUtil::readFile(file, 0, reinterpret_cast<char *>(res->data()), size);
 
         return res;
     };

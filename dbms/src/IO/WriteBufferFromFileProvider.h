@@ -23,7 +23,7 @@ public:
         char * existing_memory = nullptr,
         size_t alignment = 0);
 
-    ~WriteBufferFromFileProvider() override = default;
+    ~WriteBufferFromFileProvider() override;
 
     void close();
 
