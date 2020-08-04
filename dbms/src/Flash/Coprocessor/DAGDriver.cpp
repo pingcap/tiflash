@@ -65,7 +65,7 @@ try
     BlockIO streams = executeQuery(dag, context, internal, QueryProcessingStage::Complete);
     if (!streams.in || streams.out)
         // Only query is allowed, so streams.in must not be null and streams.out must be null
-        throw Exception("DAG is not query.", ErrorCodes::LOGICAL_ERROR);
+        throw TiFlashException("DAG is not query.", Errors::Coprocessor::Internal);
 
     if constexpr (!batch)
     {
@@ -95,8 +95,8 @@ try
             // Under some test cases, there may be dag response whose size is bigger than INT_MAX, and GRPC can not limit it.
             // Throw exception to prevent receiver from getting wrong response.
             if (p_stream->getProfileInfo().bytes > std::numeric_limits<int>::max())
-                throw Exception(
-                    "DAG response is too big, please check config about region size or region merge scheduler", ErrorCodes::LOGICAL_ERROR);
+                throw TiFlashException("DAG response is too big, please check config about region size or region merge scheduler",
+                    Errors::Coprocessor::Internal);
         }
     }
 }
@@ -107,6 +107,11 @@ catch (const RegionException & e)
 catch (const LockException & e)
 {
     throw;
+}
+catch (const TiFlashException & e)
+{
+    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": " << e.standardText() << "\n" << e.getStackTrace().toString());
+    recordError(grpc::StatusCode::INTERNAL, e.standardText());
 }
 catch (const Exception & e)
 {

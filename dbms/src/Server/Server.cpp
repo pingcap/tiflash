@@ -7,6 +7,7 @@
 #include <Common/Macros.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashBuildInfo.h>
+#include <Common/TiFlashException.h>
 #include <Common/config.h>
 #include <Common/escapeForFileName.h>
 #include <Common/getFQDNOrHostName.h>
@@ -264,6 +265,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     registerAggregateFunctions();
     registerTableFunctions();
     registerStorages();
+
+    TiFlashErrorRegistry::instance(); // This invocation is for initializing
 
     TiFlashProxyConfig proxy_conf(config());
     TiFlashServer tiflash_instance_wrap{};
