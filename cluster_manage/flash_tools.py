@@ -1,6 +1,6 @@
 #!/usr/bin/python3
-import socket
 import toml
+
 import util
 
 
@@ -16,9 +16,8 @@ class FlashConfig:
         p = self.conf_toml['flash']
         service_addr = p['service_addr']
         host, port = [e.strip() for e in service_addr.split(':')]
-        self.service_ip = socket.gethostbyname(host)
-        self.service_addr = '{}:{}'.format(self.service_ip, port)
-        self.http_addr = '{}:{}'.format(self.service_ip, self.http_port)
+        self.service_addr = '{}:{}'.format(host, port)
+        self.http_addr = '{}:{}'.format(host, self.http_port)
         self.tidb_status_addr = util.compute_addr_list(p['tidb_status_addr'])
         flash_cluster = p['flash_cluster']
         self.cluster_master_ttl = flash_cluster['master_ttl']
@@ -26,6 +25,7 @@ class FlashConfig:
             int(flash_cluster['refresh_interval']), self.cluster_master_ttl)
         self.update_rule_interval = int(flash_cluster['update_rule_interval'])
         self.log_path = flash_cluster.get('log', '{}/flash_cluster_manager.log'.format(tmp_path))
+
 
 
 def main():
