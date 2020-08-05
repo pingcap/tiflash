@@ -201,149 +201,20 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 
     return {{meta_buffer, meta_pos}, {data_buffer, data_pos}};
 }
-
-/// Analyze meta file, and return <available meta size, available data size>.
-/// TODO: this is somehow duplicated with `PageFile::MetaMergingReader::moveNext`, we should find a better way.
-std::pair<UInt64, UInt64> analyzeMetaFile( //
-    const String &           path,
-    PageFileId               file_id,
-    UInt32                   level,
-    const char *             meta_data,
-    const size_t             meta_data_size,
-    PageEntriesEdit &        edit,
-    WriteBatch::SequenceID & max_wb_sequence,
-    Logger *                 log)
-{
-    const char * meta_data_end = meta_data + meta_data_size;
-
-    UInt64 page_data_file_size = 0;
-    char * pos                 = const_cast<char *>(meta_data);
-    while (pos < meta_data_end)
-    {
-        if (pos + sizeof(WBSize) > meta_data_end)
-        {
-            LOG_WARNING(log, "Incomplete write batch, ignored.");
-            break;
-        }
-        const char * wb_start_pos = pos;
-        const auto   wb_bytes     = PageUtil::get<WBSize>(pos);
-        if (wb_start_pos + wb_bytes > meta_data_end)
-        {
-            LOG_WARNING(log, "Incomplete write batch, ignored.");
-            break;
-        }
-
-        WriteBatch::SequenceID wb_sequence    = 0;
-        const auto             binary_version = PageUtil::get<PageFileVersion>(pos);
-        if (binary_version == PageFile::VERSION_BASE)
-        {
-            wb_sequence = 0;
-        }
-        else if (binary_version == PageFile::VERSION_FLASH_341)
-        {
-            wb_sequence = PageUtil::get<WriteBatch::SequenceID>(pos);
-        }
-        else
-        {
-            throw Exception("Binary version not match, version: " + DB::toString(binary_version) + ", path: " + path,
-                            ErrorCodes::LOGICAL_ERROR);
-        }
-        max_wb_sequence = std::max(max_wb_sequence, wb_sequence);
-
-        // check the checksum of WriteBatch
-        const auto wb_bytes_without_checksum = wb_bytes - sizeof(Checksum);
-        const auto wb_checksum               = PageUtil::get<Checksum, false>(wb_start_pos + wb_bytes_without_checksum);
-        const auto checksum_calc             = CityHash_v1_0_2::CityHash64(wb_start_pos, wb_bytes_without_checksum);
-        if (wb_checksum != checksum_calc)
-        {
-            std::stringstream ss;
-            ss << "expected: " << std::hex << wb_checksum << ", but: " << checksum_calc;
-            throw Exception("Write batch checksum not match, path: " + path + ", offset: " + DB::toString(wb_start_pos - meta_data)
-                                + ", bytes: " + DB::toString(wb_bytes) + ", " + ss.str(),
-                            ErrorCodes::CHECKSUM_DOESNT_MATCH);
-        }
-
-        // recover WriteBatch
-        while (pos < wb_start_pos + wb_bytes_without_checksum)
-        {
-            const auto is_put     = PageUtil::get<IsPut>(pos);
-            const auto write_type = static_cast<WriteBatch::WriteType>(is_put);
-            switch (write_type)
-            {
-            case WriteBatch::WriteType::PUT:
-            case WriteBatch::WriteType::UPSERT: {
-                PageFlags flags;
-                auto      page_id = PageUtil::get<PageId>(pos);
-                PageEntry entry;
-                if (binary_version == PageFile::VERSION_BASE)
-                {
-                    entry.file_id = file_id;
-                    entry.level   = level;
-                }
-                else if (binary_version == PageFile::VERSION_FLASH_341)
-                {
-                    entry.file_id = PageUtil::get<PageFileId>(pos);
-                    entry.level   = PageUtil::get<PageFileLevel>(pos);
-                    flags         = PageUtil::get<PageFlags>(pos);
-                }
-                entry.tag      = PageUtil::get<PageTag>(pos);
-                entry.offset   = PageUtil::get<PageOffset>(pos);
-                entry.size     = PageUtil::get<PageSize>(pos);
-                entry.checksum = PageUtil::get<Checksum>(pos);
-
-                if (binary_version == PageFile::VERSION_FLASH_341)
-                {
-                    const UInt64 num_fields = PageUtil::get<UInt64>(pos);
-                    entry.field_offsets.reserve(num_fields);
-                    for (size_t i = 0; i < num_fields; ++i)
-                    {
-                        auto field_offset   = PageUtil::get<UInt64>(pos);
-                        auto field_checksum = PageUtil::get<UInt64>(pos);
-                        entry.field_offsets.emplace_back(field_offset, field_checksum);
-                    }
-                }
-
-                if (write_type == WriteBatch::WriteType::PUT)
-                {
-                    edit.put(page_id, entry);
-                    page_data_file_size += entry.size;
-                }
-                else if (write_type == WriteBatch::WriteType::UPSERT)
-                {
-                    edit.upsertPage(page_id, entry);
-                    // If it is a deatch page, don't move data offset.
-                    page_data_file_size += flags.isDetachPage() ? 0 : entry.size;
-                }
-                break;
-            }
-            case WriteBatch::WriteType::DEL: {
-                auto page_id = PageUtil::get<PageId>(pos);
-                edit.del(page_id); // Reserve the order of removal.
-                break;
-            }
-            case WriteBatch::WriteType::REF: {
-                const auto ref_id  = PageUtil::get<PageId>(pos);
-                const auto page_id = PageUtil::get<PageId>(pos);
-                edit.ref(ref_id, page_id);
-                break;
-            }
-            }
-        }
-        // move `pos` over the checksum of WriteBatch
-        pos += sizeof(Checksum);
-
-        if (pos != wb_start_pos + wb_bytes)
-            throw Exception("pos not match", ErrorCodes::LOGICAL_ERROR);
-    }
-    return {pos - meta_data, page_data_file_size};
-}
 } // namespace PageMetaFormat
+
+// =========================================================
+// PageFile::MetaMergingReader
+// =========================================================
 
 PageFile::MetaMergingReader::~MetaMergingReader()
 {
     page_file.free(meta_buffer, meta_size);
 }
 
+// Try to initiallize access to meta, read the whole metadata to memory.
+// Status -> Finished if metadata size is zero.
+//        -> Opened if metadata successfully load from disk.
 void PageFile::MetaMergingReader::initialize()
 {
     if (status == Status::Opened)
@@ -379,7 +250,6 @@ bool PageFile::MetaMergingReader::hasNext() const
     return (status == Status::Uninitialized) || (status == Status::Opened && meta_file_offset < meta_size);
 }
 
-/// TODO: this is somehow duplicated with `analyzeMetaFile`, we should find a better way.
 void PageFile::MetaMergingReader::moveNext()
 {
     curr_edit.clear();
@@ -906,32 +776,6 @@ bool PageFile::isPageFileExist(PageFileIdAndLevel file_id, const String & parent
 {
     PageFile pf = openPageFileForRead(file_id.first, file_id.second, parent_path, type, log);
     return pf.isExist();
-}
-
-void PageFile::readAndSetPageMetas(PageEntriesEdit & edit, WriteBatch::SequenceID & max_wb_sequence)
-{
-    const auto path = metaPath();
-    Poco::File file(path);
-    if (unlikely(!file.exists()))
-        throw Exception("Try to read meta of PageFile_" + DB::toString(file_id) + "_" + DB::toString(level)
-                            + ", but not exists. Path: " + path,
-                        ErrorCodes::LOGICAL_ERROR);
-
-    const size_t file_size = file.getSize();
-    const int    file_fd   = PageUtil::openFile<true, false>(path);
-    // File not exists.
-    if (unlikely(!file_fd))
-        return;
-    SCOPE_EXIT({ ::close(file_fd); });
-
-    char * meta_data = (char *)alloc(file_size);
-    SCOPE_EXIT({ free(meta_data, file_size); });
-
-    PageUtil::readFile(file_fd, 0, meta_data, file_size, path);
-
-    // analyze meta file and update page_entries
-    std::tie(this->meta_file_pos, this->data_file_pos)
-        = PageMetaFormat::analyzeMetaFile(folderPath(), file_id, level, meta_data, file_size, edit, max_wb_sequence, log);
 }
 
 void PageFile::setFormal()
