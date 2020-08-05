@@ -8,11 +8,9 @@
 #undef protected
 
 #include <Poco/AutoPtr.h>
-#include <Poco/ConsoleChannel.h>
-#include <Poco/FormattingChannel.h>
-#include <Poco/PatternFormatter.h>
 #include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
 #include <Storages/Page/VersionSet/PageEntriesVersionSetWithDelta.h>
+#include <test_utils/TiflashTestBasic.h>
 
 namespace DB
 {
@@ -25,15 +23,7 @@ class PageMapVersionSet_test : public ::testing::Test
 public:
     PageMapVersionSet_test() : log(&Poco::Logger::get("PageMapVersionSet_test")) {}
 
-    static void SetUpTestCase()
-    {
-        Poco::AutoPtr<Poco::ConsoleChannel>   channel = new Poco::ConsoleChannel(std::cerr);
-        Poco::AutoPtr<Poco::PatternFormatter> formatter(new Poco::PatternFormatter);
-        formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i <%p> %s: %t");
-        Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
-        Logger::root().setChannel(formatting_channel);
-        Logger::root().setLevel("trace");
-    }
+    static void SetUpTestCase() { TiFlashTestEnv::setupLogger(); }
 
     void SetUp() override
     {

@@ -89,6 +89,11 @@ public:
         Logger::root().setLevel(level);
     }
 
+    // If you want to run these tests, you should set this envrionment variablle
+    // For example:
+    //     ALSO_RUN_WITH_TEST_DATA=1 ./dbms/gtests_dbms --gtest_filter='IDAsPath*'
+    static bool isTestsWithDataEnabled() { return (Poco::Environment::get("ALSO_RUN_WITH_TEST_DATA", "0") == "1"); }
+
     static Strings findTestDataPath(const String & name)
     {
         const static std::vector<String> SEARCH_PATH = {"../tests/testdata/", "/tests/testdata/"};
@@ -138,6 +143,15 @@ public:
         return context;
     }
 };
+
+#define CHECK_TESTS_WITH_DATA_ENABLED                                                                        \
+    if (!TiFlashTestEnv::isTestsWithDataEnabled())                                                           \
+    {                                                                                                        \
+        LOG_INFO(&Logger::get("GTEST"),                                                                      \
+            "Test: " << ::testing::UnitTest::GetInstance()->current_test_info()->test_case_name() << "."     \
+                     << ::testing::UnitTest::GetInstance()->current_test_info()->name() << " is disabled."); \
+        return;                                                                                              \
+    }
 
 } // namespace tests
 } // namespace DB

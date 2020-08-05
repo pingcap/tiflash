@@ -1,10 +1,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
-#include <Poco/ConsoleChannel.h>
 #include <Poco/File.h>
-#include <Poco/FormattingChannel.h>
-#include <Poco/PatternFormatter.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <gtest/gtest.h>
@@ -27,15 +24,7 @@ public:
     DeltaMergeStore_test() : name("DeltaMergeStore_test"), path(DB::tests::TiFlashTestEnv::getTemporaryPath() + name) {}
 
 protected:
-    static void SetUpTestCase()
-    {
-        Poco::AutoPtr<Poco::ConsoleChannel>   channel = new Poco::ConsoleChannel(std::cerr);
-        Poco::AutoPtr<Poco::PatternFormatter> formatter(new Poco::PatternFormatter);
-        formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i [%I] <%p> %s: %t");
-        Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
-        Logger::root().setChannel(formatting_channel);
-        Logger::root().setLevel("trace");
-    }
+    static void SetUpTestCase() { DB::tests::TiFlashTestEnv::setupLogger(); }
 
     void cleanUp()
     {
@@ -58,8 +47,8 @@ protected:
         auto         cols                 = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;
         ColumnDefine handle_column_define = (*cols)[0];
 
-        DeltaMergeStorePtr s
-            = std::make_shared<DeltaMergeStore>(*context, path, false, "test", name, *cols, handle_column_define, DeltaMergeStore::Settings());
+        DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(
+            *context, path, false, "test", name, *cols, handle_column_define, DeltaMergeStore::Settings());
         return s;
     }
 
