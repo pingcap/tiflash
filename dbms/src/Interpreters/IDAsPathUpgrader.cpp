@@ -592,12 +592,15 @@ void IDAsPathUpgrader::fixNotEscapedDirectories()
                 renamePath(not_escaped_path + "/meta", escaped_path + "/meta", log, true);
                 renamePath(not_escaped_path + "/data", escaped_path + "/data", log, true);
                 renamePath(not_escaped_path + "/log", escaped_path + "/log", log, true);
+                // For the cases that database's name did not need to be escaped but table's name did.
+                renamePath(not_escaped_path + "/stable", escaped_path + "/stable", log, false);
                 tryRemoveDirectory(not_escaped_path, log);
             }
             auto db_tbl_not_escaped_path = not_escaped_path;
             if (db_name != db_name_escaped)
             {
-                // Stable dir was created by old PathPool, database name and table name are not escaped.
+                // For the cases that database's name need to be escaped.
+                // Stable dir was created by old PathPool, database name and table name were not escaped.
                 db_tbl_not_escaped_path = table.getDataDirectory(root_path, db_info, false, false);
                 auto not_escaped_stable = db_tbl_not_escaped_path + "/stable";
                 auto escaped_stable = table.getDataDirectory(root_path, db_info, true, true) + "/stable";
