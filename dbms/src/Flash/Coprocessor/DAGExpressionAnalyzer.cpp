@@ -506,7 +506,7 @@ void DAGExpressionAnalyzer::appendJoin(
 }
 /// return true if some actions is needed
 bool DAGExpressionAnalyzer::appendJoinKey(ExpressionActionsChain & chain, const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-    const DataTypes & key_types, Names & key_names, bool tiflash_left, bool is_right_out_join)
+    const DataTypes & key_types, Names & key_names, bool left, bool is_right_out_join)
 {
     bool ret = false;
     initChain(chain, getCurrentInputColumns());
@@ -525,7 +525,7 @@ bool DAGExpressionAnalyzer::appendJoinKey(ExpressionActionsChain & chain, const 
             key_name = appendCast(key_types[i], actions, key_name);
             has_actions = true;
         }
-        if (!has_actions && (!tiflash_left || is_right_out_join))
+        if (!has_actions && (!left || is_right_out_join))
         {
             /// if the join key is a columnRef, then add a new column as the join key if needed.
             /// In ClickHouse, the columns returned by join are: join_keys, left_columns and right_columns
@@ -537,7 +537,7 @@ bool DAGExpressionAnalyzer::appendJoinKey(ExpressionActionsChain & chain, const 
             /// In TiDB, it returns t1_id,t1_value,t2_id,t2_value
             /// So in order to make the join compatible with TiDB, if the join key is a columnRef, for inner/left
             /// join, add a new key as right join key, for right join, add a new key as left join key
-            String updated_key_name = (tiflash_left ? "_l_k_" : "_r_k_") + key_name;
+            String updated_key_name = (left ? "_l_k_" : "_r_k_") + key_name;
             actions->add(ExpressionAction::copyColumn(key_name, updated_key_name));
             key_name = updated_key_name;
             has_actions = true;
