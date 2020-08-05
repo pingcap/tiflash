@@ -71,7 +71,6 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("dump_all_region", dbgFuncDumpAllRegion);
     regSchemalessFunc("dump_all_mock_region", dbgFuncDumpAllMockRegion);
     regSchemalessFunc("remove_region", dbgFuncRemoveRegion);
-    regSchemalessFunc("dump_region_table", ClusterManage::dumpRegionTable);
     regSchemalessFunc("find_region_by_range", ClusterManage::findRegionByRange);
     regSchemalessFunc("check_table_optimize", ClusterManage::checkTableOptimize);
 
