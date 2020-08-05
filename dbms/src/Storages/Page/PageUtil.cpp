@@ -2,6 +2,8 @@
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Common/TiFlashException.h>
+
 #include <IO/WriteHelpers.h>
 
 #include <boost/algorithm/string/classification.hpp>
@@ -103,7 +105,7 @@ void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, 
     ProfileEvents::increment(ProfileEvents::PSMReadBytes, bytes_read);
 
     if (unlikely(bytes_read != expected_bytes))
-        throw DB::Exception("Not enough data in file " + file->getFileName(), ErrorCodes::FILE_SIZE_NOT_MATCH);
+        throw DB::Exception("Not enough data in file " + file->getFileName(), Errors::PageStorage::FileSizeNotMatch);
 }
 
 } // namespace DB::PageUtil

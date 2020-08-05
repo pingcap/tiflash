@@ -201,4 +201,6 @@ void GcPreHandledSnapshot(TiFlashServer *, void * res)
     delete snap;
 }
 
+void GcCppString(TiFlashServer *, TiFlashRawString s) { delete s; }
+
 } // namespace DB

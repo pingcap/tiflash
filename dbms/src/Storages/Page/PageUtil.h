@@ -7,6 +7,7 @@
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Common/TiFlashException.h>
 #include <common/logger_useful.h>
 
 #include <IO/FileProvider.h>
@@ -131,7 +132,6 @@ inline T get(std::conditional_t<advance, char *&, const char *> pos)
         pos += sizeof(T);
     return v;
 }
-
 } // namespace PageUtil
 
 } // namespace DB

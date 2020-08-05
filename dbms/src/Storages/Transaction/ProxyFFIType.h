@@ -177,6 +177,14 @@ enum class TiFlashStatus : uint8_t
     Stopped,
 };
 
+struct CppStrWithView
+{
+    TiFlashRawString inner{nullptr};
+    BaseBuffView view;
+
+    CppStrWithView(std::string && v) : inner(new std::string(std::move(v))), view(*inner) {}
+};
+
 struct TiFlashServerHelper
 {
     uint32_t magic_number; // use a very special number to check whether this struct is legal
@@ -197,6 +205,8 @@ struct TiFlashServerHelper
     void * (*fn_pre_handle_snapshot)(TiFlashServer *, BaseBuffView, uint64_t, SnapshotViewArray, uint64_t, uint64_t);
     void (*fn_apply_pre_handled_snapshot)(TiFlashServer *, void *);
     void (*fn_gc_pre_handled_snapshot)(TiFlashServer *, void *);
+    CppStrWithView (*fn_handle_get_table_sync_status)(TiFlashServer *, uint64_t);
+    void (*gc_cpp_string)(TiFlashServer *, TiFlashRawString);
 };
 
 void run_tiflash_proxy_ffi(int argc, const char ** argv, const TiFlashServerHelper *);
@@ -224,4 +234,7 @@ void * PreHandleSnapshot(
     TiFlashServer * server, BaseBuffView region_buff, uint64_t peer_id, SnapshotViewArray snaps, uint64_t index, uint64_t term);
 void ApplyPreHandledSnapshot(TiFlashServer * server, void * res);
 void GcPreHandledSnapshot(TiFlashServer * server, void * res);
+CppStrWithView HandleGetTableSyncStatus(TiFlashServer *, uint64_t);
+void GcCppString(TiFlashServer *, TiFlashRawString);
+
 } // namespace DB
