@@ -1,5 +1,4 @@
 #!/usr/bin/python3
-import requests
 
 import util
 
@@ -15,14 +14,14 @@ def get_region_count_by_table(store_list, table_id):
     from tikv_util import common
 
     checker = common.CheckRegionCnt()
+    err = []
     for store in store_list:
-        sql = 'DBGInvoke dump_region_table({},true)'.format(table_id)
         try:
-            res = curl_flash(store.tiflash_http_address, sql)
+            res = util.curl_http('{}/tiflash/sync-status/{}'.format(store.tiflash_status_address, table_id))
             checker.add(res.content)
-        except requests.exceptions.RequestException:
-            continue
-    return checker.compute()
+        except Exception as e:
+            err.append(e)
+    return checker.compute(), err
 
 
 def get_regions_by_range(address, start_key, end_key):
