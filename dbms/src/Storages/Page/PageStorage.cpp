@@ -97,7 +97,11 @@ PageFileSet PageStorage::listAllPageFiles(const String &              storage_pa
             // For Temp and Invalid
             if (option.remove_tmp_files)
             {
-                // Remove temporary file.
+                if (page_file_type == PageFile::Type::Temp)
+                {
+                    page_file.deleteEncryptionInfo();
+                }
+                // Remove temp and invalid file.
                 Poco::File file(storage_path + "/" + name);
                 file.remove(true);
             }
@@ -843,7 +847,10 @@ void PageStorage::archivePageFiles(const PageFileSet & page_files)
         auto       dest = archive_path.toString() + "/" + path.getFileName();
         Poco::File file(path);
         if (file.exists())
+        {
             file.moveTo(dest);
+            page_file.deleteEncryptionInfo();
+        }
     }
     LOG_INFO(log, storage_name << " archive " + DB::toString(page_files.size()) + " files to " + archive_path.toString());
 }

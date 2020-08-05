@@ -303,6 +303,12 @@ public:
 
     String folderPath() const;
 
+    void deleteEncryptionInfo() const
+    {
+        file_provider->deleteEncryptionInfo(dataEncryptionPath());
+        file_provider->deleteEncryptionInfo(metaEncryptionPath());
+    }
+
     String toString() const { return "PageFile_" + DB::toString(file_id) + "_" + DB::toString(level) + ", type: " + typeToString(type); }
 
 private:

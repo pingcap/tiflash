@@ -32,5 +32,8 @@ void EncryptedFileProvider::deleteFile(const std::string & file_path_, const Enc
     key_manager->deleteFile(encryption_path_.dir_name);
 }
 
-void EncryptedFileProvider::createEncryptionInfo(const std::string & file_path_) const { key_manager->newFile(file_path_); }
+void EncryptedFileProvider::deleteEncryptionInfo(const EncryptionPath &encryption_path_) const {
+    key_manager->deleteFile(encryption_path_.dir_name);
+}
+
 } // namespace DB

@@ -19,6 +19,6 @@ public:
 
     void deleteFile(const std::string & file_path_, const EncryptionPath & encryption_path_) const override;
 
-    void createEncryptionInfo(const std::string & file_path_) const override;
+    void deleteEncryptionInfo(const EncryptionPath & encryption_path_) const override;
 };
 } // namespace DB

@@ -743,7 +743,8 @@ PageFile::recover(const String & parent_path, const FileProviderPtr & file_provi
     if (ss[0] == folder_prefix_temp)
     {
         LOG_INFO(log, "Temporary page file, ignored: " + page_file_name);
-        return {{}, Type::Temp};
+        pf.type = Type::Temp;
+        return {pf, Type::Temp};
     }
     else if (ss[0] == folder_prefix_legacy)
     {

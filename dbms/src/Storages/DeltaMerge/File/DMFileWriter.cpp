@@ -20,7 +20,7 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
       max_compress_block_size(max_compress_block_size_),
       compression_settings(compression_settings_),
       wal_mode(wal_mode_),
-      pack_stat_file(file_provider_, dmfile->packStatPath(), dmfile->encryptionPackStatPath(), true),
+      pack_stat_file(file_provider_, dmfile->packStatPath(), dmfile->encryptionPackStatPath(), true), // assume pack_stat_file is the first file created inside DMFile
       file_provider(file_provider_)
 {
     dmfile->setStatus(DMFile::Status::WRITING);

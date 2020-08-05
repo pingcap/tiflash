@@ -105,7 +105,7 @@ void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, 
     ProfileEvents::increment(ProfileEvents::PSMReadBytes, bytes_read);
 
     if (unlikely(bytes_read != expected_bytes))
-        throw DB::Exception("Not enough data in file " + file->getFileName(), Errors::PageStorage::FileSizeNotMatch);
+        throw DB::TiFlashException("Not enough data in file " + file->getFileName(), Errors::PageStorage::FileSizeNotMatch);
 }
 
 } // namespace DB::PageUtil

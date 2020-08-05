@@ -30,6 +30,8 @@ void PosixFileProvider::deleteFile(const std::string & file_path_, const Encrypt
     }
 }
 
-void PosixFileProvider::createEncryptionInfo(const std::string & file_path_) const { std::ignore = file_path_; }
-
+void PosixFileProvider::deleteEncryptionInfo(const EncryptionPath &encryption_path_) const
+{
+    std::ignore = encryption_path_;
+}
 } // namespace DB
