@@ -306,8 +306,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     if (!ts.has_table_id())
     {
         // do not have table id
-        throw TiFlashException(
-            "Table id not specified in table scan executor", Errors::Coprocessor::BadRequest);
+        throw TiFlashException("Table id not specified in table scan executor", Errors::Coprocessor::BadRequest);
     }
     if (dag.getRegions().empty())
     {
@@ -380,8 +379,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         storage = context.getTMTContext().getStorages().get(table_id);
         if (storage == nullptr)
         {
-            throw TiFlashException(
-                "Table " + std::to_string(table_id) + " doesn't exist.", Errors::Table::NotExists);
+            throw TiFlashException("Table " + std::to_string(table_id) + " doesn't exist.", Errors::Table::NotExists);
         }
         table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
     }
@@ -430,8 +428,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
                 if ((size_t)i >= required_columns.size())
                 {
                     // array index out of bound
-                    throw TiFlashException(
-                        "Output offset index is out of bound", Errors::Coprocessor::BadRequest);
+                    throw TiFlashException("Output offset index is out of bound", Errors::Coprocessor::BadRequest);
                 }
                 // do not have alias
                 final_project.emplace_back(required_columns[i], "");
@@ -623,16 +620,15 @@ void DAGQueryBlockInterpreter::prepareJoinKeys(const google::protobuf::RepeatedP
 /// TiDB only require the join key to be the same category
 /// for example decimal(10,2) join decimal(20,0) is allowed in
 /// TiDB and will throw exception in ClickHouse
-void getJoinKeyTypes(const google::protobuf::RepeatedPtrField<tipb::Expr> & left_join_keys,
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & right_join_keys, DataTypes & key_types)
+void getJoinKeyTypes(const tipb::Join & join, DataTypes & key_types)
 {
-    for (int i = 0; i < left_join_keys.size(); i++)
+    for (int i = 0; i < join.left_join_keys().size(); i++)
     {
-        if (!exprHasValidFieldType(left_join_keys[i]) || !exprHasValidFieldType(right_join_keys[i]))
+        if (!exprHasValidFieldType(join.left_join_keys(i)) || !exprHasValidFieldType(join.right_join_keys(i)))
             throw TiFlashException("Join key without field type", Errors::Coprocessor::BadRequest);
         DataTypes types;
-        types.emplace_back(getDataTypeByFieldType(left_join_keys[i].field_type()));
-        types.emplace_back(getDataTypeByFieldType(right_join_keys[i].field_type()));
+        types.emplace_back(getDataTypeByFieldType(join.left_join_keys(i).field_type()));
+        types.emplace_back(getDataTypeByFieldType(join.right_join_keys(i).field_type()));
         try
         {
             DataTypePtr common_type = getLeastSupertype(types);
@@ -732,10 +728,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     }
 
     DataTypes join_key_types;
-    if (join.inner_idx() == 0)
-        getJoinKeyTypes(join.right_join_keys(), join.left_join_keys(), join_key_types);
-    else
-        getJoinKeyTypes(join.left_join_keys(), join.right_join_keys(), join_key_types);
+    getJoinKeyTypes(join, join_key_types);
     TiDB::TiDBCollators collators;
     size_t join_key_size = join_key_types.size();
     if (join.probe_types_size() == static_cast<int>(join_key_size) && join.build_types_size() == join.probe_types_size())
@@ -744,8 +737,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
             if (removeNullable(join_key_types[i])->isString())
             {
                 if (join.probe_types(i).collate() != join.build_types(i).collate())
-                    throw TiFlashException(
-                        "Join with different collators on the join key", Errors::Coprocessor::BadRequest);
+                    throw TiFlashException("Join with different collators on the join key", Errors::Coprocessor::BadRequest);
                 collators.push_back(getCollatorFromFieldType(join.probe_types(i)));
             }
             else
@@ -974,8 +966,7 @@ void DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVersion(TableID table_
         if (!storage_)
         {
             if (schema_synced)
-                throw TiFlashException(
-                    "Table " + std::to_string(table_id) + " doesn't exist.", Errors::Table::NotExists);
+                throw TiFlashException("Table " + std::to_string(table_id) + " doesn't exist.", Errors::Table::NotExists);
             else
                 return std::make_tuple(nullptr, nullptr, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, false);
         }
@@ -1204,8 +1195,7 @@ void copyExecutorTreeWithLocalTableScan(
     }
 
     if (current->tp() != tipb::ExecType::TypeTableScan)
-        throw TiFlashException(
-            "Only support copy from table scan sourced query block", Errors::Coprocessor::Internal);
+        throw TiFlashException("Only support copy from table scan sourced query block", Errors::Coprocessor::Internal);
     exec->set_tp(tipb::ExecType::TypeTableScan);
     exec->set_executor_id("tablescan_" + std::to_string(exec_id));
     auto * new_ts = new tipb::TableScan(current->tbl_scan());
@@ -1225,8 +1215,7 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
     // in parellel, but current remote query is running in
     // parellel, so just disable this corner case.
     if (query_block.aggregation || query_block.limitOrTopN)
-        throw TiFlashException(
-            "Remote query containing agg or limit or topN is not supported", Errors::Coprocessor::BadRequest);
+        throw TiFlashException("Remote query containing agg or limit or topN is not supported", Errors::Coprocessor::BadRequest);
     const auto & ts = query_block.source->tbl_scan();
     std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
     for (auto & range : ts.ranges())
