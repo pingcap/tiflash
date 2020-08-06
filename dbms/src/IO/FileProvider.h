@@ -14,12 +14,6 @@
 
 namespace DB
 {
-struct EncryptionPath
-{
-    EncryptionPath(const std::string & dir_name_, const std::string & file_name_) : dir_name{dir_name_}, file_name{file_name_} {}
-    const std::string dir_name;
-    const std::string file_name;
-};
 
 class FileProvider
 {

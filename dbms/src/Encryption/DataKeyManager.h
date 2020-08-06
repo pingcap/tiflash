@@ -46,26 +46,6 @@ public:
         }
     }
 
-    void linkFile(const std::string & src_fname, const std::string & dst_fname) override
-    {
-        auto r = tiflash_instance_wrap->proxy_helper->linkFile(src_fname, dst_fname);
-        if (unlikely(r.res != FileEncryptionRes::Ok))
-        {
-            throw Exception("Link encryption info from file: " + src_fname + " to file: " + dst_fname + " meet error: " + *r.erro_msg,
-                ErrorCodes::DATA_ENCRYPTION_ERROR);
-        }
-    }
-
-    void renameFile(const std::string & src_fname, const std::string & dst_fname) override
-    {
-        auto r = tiflash_instance_wrap->proxy_helper->renameFile(src_fname, dst_fname);
-        if (unlikely(r.res != FileEncryptionRes::Ok))
-        {
-            throw Exception("Move encryption info from file: " + src_fname + " to file: " + dst_fname + " meet error: " + *r.erro_msg,
-                ErrorCodes::DATA_ENCRYPTION_ERROR);
-        }
-    }
-
 private:
     TiFlashServer * tiflash_instance_wrap;
 };

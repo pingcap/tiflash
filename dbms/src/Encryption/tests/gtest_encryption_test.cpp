@@ -1,5 +1,4 @@
 #include <Encryption/AESCTRCipherStream.h>
-#include <Encryption/AESEncryptionProvider.h>
 #include <Encryption/MockKeyManager.h>
 #include <IO/FileProvider.h>
 #include <gtest/gtest.h>
@@ -89,8 +88,8 @@ public:
         std::string key_str(reinterpret_cast<const char *>(test::KEY), KeySize(method));
         std::string iv_str(reinterpret_cast<const char *>(iv), 16);
         KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(method, key_str, iv_str);
-        EncryptionProviderPtr encryption_provider = std::make_shared<AESEncryptionProvider>(key_manager);
-        BlockAccessCipherStreamPtr cipher_stream = encryption_provider->createCipherStream(EncryptionPath("encryption", ""), true);
+        auto encryption_info = key_manager->newFile("encryption");
+        BlockAccessCipherStreamPtr cipher_stream = createCipherStream(encryption_info, EncryptionPath("encryption", ""));
 
         size_t data_size = end - start;
         // Allocate exact size. AESCTRCipherStream should make sure there will be

@@ -30,18 +30,6 @@ public:
 
     void deleteFile(const std::string & fname) override { std::ignore = fname; }
 
-    void linkFile(const std::string & src_fname, const std::string & dst_fname) override
-    {
-        std::ignore = src_fname;
-        std::ignore = dst_fname;
-    }
-
-    void renameFile(const std::string & src_fname, const std::string & dst_fname) override
-    {
-        std::ignore = src_fname;
-        std::ignore = dst_fname;
-    }
-
 private:
     EncryptionMethod method;
     std::string key;

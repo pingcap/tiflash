@@ -3,7 +3,6 @@
 #include <cstddef>
 #include <memory>
 #include <string>
-
 #include <Storages/Transaction/ProxyFFIType.h>
 
 namespace DB
@@ -33,10 +32,6 @@ public:
     virtual FileEncryptionInfo newFile(const std::string & fname) = 0;
 
     virtual void deleteFile(const std::string & fname) = 0;
-
-    virtual void linkFile(const std::string & src_fname, const std::string & dst_fname) = 0;
-
-    virtual void renameFile(const std::string & src_fname, const std::string & dst_fname) = 0;
 };
 
 using KeyManagerPtr = std::shared_ptr<KeyManager>;
