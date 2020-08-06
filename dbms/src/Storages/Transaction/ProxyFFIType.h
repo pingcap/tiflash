@@ -4,7 +4,7 @@
 
 #include <atomic>
 #include <cstdint>
-#include <memory>
+#include <cstring>
 #include <string>
 
 namespace DB
