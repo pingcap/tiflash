@@ -24,6 +24,8 @@ public:
 
     void deleteFile(const String & file_path_, const EncryptionPath & encryption_path_) const;
 
+    void createEncryptionInfo(const EncryptionPath & encryption_path_) const;
+
     void deleteEncryptionInfo(const EncryptionPath & encryption_path_) const;
 
     bool isFileEncrypted(const EncryptionPath & encryption_path_) const;

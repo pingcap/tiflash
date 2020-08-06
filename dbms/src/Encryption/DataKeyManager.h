@@ -21,7 +21,7 @@ public:
     FileEncryptionInfo getFile(const String & fname) override
     {
         auto r = tiflash_instance_wrap->proxy_helper->getFile(fname);
-        if (unlikely(r.res != FileEncryptionRes::Ok))
+        if (unlikely(r.res != FileEncryptionRes::Ok && r.res != FileEncryptionRes::Disabled))
         {
             throw DB::TiFlashException("Get encryption info for file: " + fname + " meet error: " + *r.erro_msg, Errors::Encryption::Internal);
         }
@@ -31,7 +31,7 @@ public:
     FileEncryptionInfo newFile(const String & fname) override
     {
         auto r = tiflash_instance_wrap->proxy_helper->newFile(fname);
-        if (unlikely(r.res != FileEncryptionRes::Ok))
+        if (unlikely(r.res != FileEncryptionRes::Ok && r.res != FileEncryptionRes::Disabled))
         {
             throw DB::TiFlashException("Create encryption info for file: " + fname + " meet error: " + *r.erro_msg, Errors::Encryption::Internal);
         }
@@ -41,7 +41,7 @@ public:
     void deleteFile(const String & fname) override
     {
         auto r = tiflash_instance_wrap->proxy_helper->deleteFile(fname);
-        if (unlikely(r.res != FileEncryptionRes::Ok))
+        if (unlikely(r.res != FileEncryptionRes::Ok && r.res != FileEncryptionRes::Disabled))
         {
             throw DB::TiFlashException("Delete encryption info for file: " + fname + " meet error: " + *r.erro_msg, Errors::Encryption::Internal);
         }

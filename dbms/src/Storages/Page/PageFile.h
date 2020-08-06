@@ -303,13 +303,19 @@ public:
 
     String folderPath() const;
 
+    void createEncryptionInfo() const
+    {
+        file_provider->createEncryptionInfo(dataEncryptionPath());
+        file_provider->createEncryptionInfo(metaEncryptionPath());
+    }
+
     void deleteEncryptionInfo() const
     {
         file_provider->deleteEncryptionInfo(dataEncryptionPath());
         file_provider->deleteEncryptionInfo(metaEncryptionPath());
     }
 
-    bool reuseableForWrite() const
+    bool reusableForWrite() const
     {
         auto file_encrypted = file_provider->isFileEncrypted(dataEncryptionPath());
         auto encryption_enabled = file_provider->isEncryptionEnabled();

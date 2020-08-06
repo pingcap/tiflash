@@ -21,7 +21,7 @@ FileProvider::newRandomAccessFile(const String &file_path_, const EncryptionPath
 {
     RandomAccessFilePtr file = std::make_shared<PosixRandomAccessFile>(file_path_, flags);
     auto encryption_info = key_manager->getFile(encryption_path_.dir_name);
-    if (encryption_info.method != EncryptionMethod::Plaintext)
+    if (encryption_info.res != FileEncryptionRes::Disabled && encryption_info.method != EncryptionMethod::Plaintext)
     {
         file = std::make_shared<EncryptedRandomAccessFile>(file, createCipherStream(encryption_info, encryption_path_));
     }
@@ -63,6 +63,13 @@ void FileProvider::deleteFile(const String &file_path_, const EncryptionPath &en
     key_manager->deleteFile(encryption_path_.dir_name);
 }
 
+void FileProvider::createEncryptionInfo(const EncryptionPath &encryption_path_) const {
+    if (encryption_enabled)
+    {
+        key_manager->newFile(encryption_path_.dir_name);
+    }
+}
+
 void FileProvider::deleteEncryptionInfo(const EncryptionPath &encryption_path_) const
 {
     key_manager->deleteFile(encryption_path_.dir_name);
@@ -70,7 +77,7 @@ void FileProvider::deleteEncryptionInfo(const EncryptionPath &encryption_path_) 
 
 bool FileProvider::isFileEncrypted(const EncryptionPath &encryption_path_) const {
     auto encryption_info = key_manager->getFile(encryption_path_.dir_name);
-    return encryption_info.method != EncryptionMethod::Plaintext;
+    return (encryption_info.res != FileEncryptionRes::Disabled) && (encryption_info.method != EncryptionMethod::Plaintext);
 }
 
 bool FileProvider::isEncryptionEnabled() const {
