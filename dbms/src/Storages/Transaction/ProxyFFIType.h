@@ -100,6 +100,8 @@ enum class EncryptionMethod : uint8_t
     Aes256Ctr = 4,
 };
 
+const char * IntoEncryptionMethodName(EncryptionMethod);
+
 struct FileEncryptionInfo
 {
     FileEncryptionRes res;
@@ -153,6 +155,7 @@ struct TiFlashRaftProxyHelper
 public:
     bool checkServiceStopped() const;
     bool checkEncryptionEnabled() const;
+    EncryptionMethod getEncryptionMethod() const;
     FileEncryptionInfo getFile(std::string_view) const;
     FileEncryptionInfo newFile(std::string_view) const;
     FileEncryptionInfo deleteFile(std::string_view) const;
@@ -162,7 +165,8 @@ public:
 private:
     TiFlashRaftProxyPtr proxy_ptr;
     uint8_t (*fn_handle_check_service_stopped)(TiFlashRaftProxyPtr);
-    uint8_t (*fn_handle_enable_encryption)(TiFlashRaftProxyPtr);
+    uint8_t (*fn_is_encryption_enabled)(TiFlashRaftProxyPtr);
+    EncryptionMethod (*fn_encryption_method)(TiFlashRaftProxyPtr);
     FileEncryptionInfo (*fn_handle_get_file)(TiFlashRaftProxyPtr, BaseBuffView);
     FileEncryptionInfo (*fn_handle_new_file)(TiFlashRaftProxyPtr, BaseBuffView);
     FileEncryptionInfo (*fn_handle_delete_file)(TiFlashRaftProxyPtr, BaseBuffView);
