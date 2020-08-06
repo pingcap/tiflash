@@ -1,7 +1,15 @@
 #pragma once
 
+#include <common/likely.h>
+#include <Common/Exception.h>
+#include <Encryption/KeyManager.h>
+#include <IO/EncryptedRandomAccessFile.h>
+#include <IO/EncryptedWritableFile.h>
+#include <IO/PosixRandomAccessFile.h>
+#include <IO/PosixWritableFile.h>
 #include <IO/RandomAccessFile.h>
 #include <IO/WritableFile.h>
+#include <Poco/File.h>
 #include <string>
 
 namespace DB
@@ -15,30 +23,26 @@ struct EncryptionPath
 
 class FileProvider
 {
-protected:
-    virtual RandomAccessFilePtr newRandomAccessFileImpl(
-        const std::string & file_path_, const EncryptionPath & encryption_path_, int flags) const = 0;
-
-    virtual WritableFilePtr newWritableFileImpl(const std::string & file_path_, const EncryptionPath & encryption_path_,
-        bool create_new_file_, bool create_new_encryption_info_, int flags, mode_t mode) const = 0;
-
 public:
-    RandomAccessFilePtr newRandomAccessFile(const std::string & file_path_, const EncryptionPath & encryption_path_, int flags = -1) const
-    {
-        return newRandomAccessFileImpl(file_path_, encryption_path_, flags);
-    }
+    FileProvider(KeyManagerPtr key_manager_, bool encryption_enabled_)
+        : key_manager{std::move(key_manager_)},
+          encryption_enabled{encryption_enabled_}
+    {}
+
+    RandomAccessFilePtr newRandomAccessFile(const std::string & file_path_, const EncryptionPath & encryption_path_, int flags = -1) const;
 
     WritableFilePtr newWritableFile(const std::string & file_path_, const EncryptionPath & encryption_path_, bool create_new_file_ = true,
-        bool create_new_encryption_info_ = true, int flags = -1, mode_t mode = 0666) const
-    {
-        return newWritableFileImpl(file_path_, encryption_path_, create_new_file_, create_new_encryption_info_, flags, mode);
-    }
+        bool create_new_encryption_info_ = true, int flags = -1, mode_t mode = 0666) const;
 
-    virtual void deleteFile(const std::string & file_path_, const EncryptionPath & encryption_path_) const = 0;
+    void deleteFile(const std::string & file_path_, const EncryptionPath & encryption_path_) const;
 
-    virtual void deleteEncryptionInfo(const EncryptionPath & encryption_path_) const = 0;
+    void deleteEncryptionInfo(const EncryptionPath & encryption_path_) const;
 
-    virtual ~FileProvider() = default;
+    ~FileProvider() = default;
+
+private:
+    KeyManagerPtr key_manager;
+    bool encryption_enabled;
 };
 
 using FileProviderPtr = std::shared_ptr<FileProvider>;

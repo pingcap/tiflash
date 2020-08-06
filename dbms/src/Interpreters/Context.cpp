@@ -51,11 +51,9 @@
 #include <Interpreters/SharedQueries.h>
 #include <Interpreters/Context.h>
 #include <Common/DNSCache.h>
-#include <IO/EncryptedFileProvider.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
 #include <IO/PersistedCache.h>
-#include <IO/PosixFileProvider.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
@@ -1517,16 +1515,7 @@ void Context::initializeFileProvider(TiFlashServer * tiflash_instance_wrap, bool
     auto lock = getLock();
     if (shared->file_provider)
         throw Exception("File provider has already been initialized.", ErrorCodes::LOGICAL_ERROR);
-    if (enable_encryption)
-    {
-        FileProviderPtr plain_file_provider = std::make_shared<PosixFileProvider>();
-        shared->file_provider = std::make_shared<EncryptedFileProvider>(plain_file_provider,
-            std::make_shared<DataKeyManager>(tiflash_instance_wrap));
-    }
-    else
-    {
-        shared->file_provider = std::make_shared<PosixFileProvider>();
-    }
+    shared->file_provider = std::make_shared<FileProvider>(std::make_shared<DataKeyManager>(tiflash_instance_wrap), enable_encryption);
 }
 
 FileProviderPtr Context::getFileProvider() const

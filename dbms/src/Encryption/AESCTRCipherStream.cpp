@@ -131,4 +131,5 @@ void AESCTRCipherStream::cipher(uint64_t file_offset, char * data, size_t data_s
     FreeCipherContext(ctx);
 #endif
 }
+
 } // namespace DB

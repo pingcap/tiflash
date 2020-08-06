@@ -23,8 +23,6 @@ inline size_t KeySize(EncryptionMethod method)
     }
 }
 
-using FileEncryptionInfoPtr = std::shared_ptr<FileEncryptionInfo>;
-
 class KeyManager
 {
 public:
