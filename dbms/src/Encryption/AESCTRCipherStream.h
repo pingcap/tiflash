@@ -4,7 +4,6 @@
 #include <IO/Endian.h>
 #include <openssl/aes.h>
 #include <openssl/evp.h>
-#include <Storages/Transaction/ProxyFFIType.h>
 
 namespace DB
 {
@@ -68,6 +67,4 @@ private:
     const uint64_t initial_iv_high_;
     const uint64_t initial_iv_low_;
 };
-
-BlockAccessCipherStreamPtr createCipherStream(const FileEncryptionInfo & encryption_info_, const EncryptionPath & encryption_path_);
 } // namespace DB
