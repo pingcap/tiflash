@@ -245,6 +245,14 @@ void PageStorage::restore()
         if (page_file.getLevel() == 0)
             write_files[0] = page_file;
     }
+    if (write_files[0].isValid() && !write_files[0].reuseableForWrite())
+    {
+        LOG_DEBUG(log,
+                      storage_name << " PageFile_" << write_files[0].getFileId()
+                                   << "_0 cannot be reused for write due to encryption reason, create new PageFile_" + DB::toString(write_files[0].getFileId() + 1) + "_0 for write");
+        write_files[0] = PageFile::newPageFile(
+             write_files[0].getFileId() + 1, 0, storage_path, file_provider, PageFile::Type::Formal, page_file_log);
+    }
     if (global_capacity)
         global_capacity->addUsedSize(storage_path, total_recover_bytes);
 #ifndef PAGE_STORAGE_UTIL_DEBUGGGING

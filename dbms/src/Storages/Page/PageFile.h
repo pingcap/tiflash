@@ -309,6 +309,13 @@ public:
         file_provider->deleteEncryptionInfo(metaEncryptionPath());
     }
 
+    bool reuseableForWrite() const
+    {
+        auto file_encrypted = file_provider->isFileEncrypted(dataEncryptionPath());
+        auto encryption_enabled = file_provider->isEncryptionEnabled();
+        return (file_encrypted && encryption_enabled) || (!file_encrypted && !encryption_enabled);
+    }
+
     String toString() const { return "PageFile_" + DB::toString(file_id) + "_" + DB::toString(level) + ", type: " + typeToString(type); }
 
 private:

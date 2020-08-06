@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Common/TiFlashException.h>
 #include <Encryption/KeyManager.h>
 #include <common/likely.h>
 
@@ -17,32 +18,32 @@ public:
 
     ~DataKeyManager() = default;
 
-    FileEncryptionInfo getFile(const std::string & fname) override
+    FileEncryptionInfo getFile(const String & fname) override
     {
         auto r = tiflash_instance_wrap->proxy_helper->getFile(fname);
         if (unlikely(r.res != FileEncryptionRes::Ok))
         {
-            throw Exception("Get encryption info for file: " + fname + " meet error: " + *r.erro_msg, ErrorCodes::DATA_ENCRYPTION_ERROR);
+            throw DB::TiFlashException("Get encryption info for file: " + fname + " meet error: " + *r.erro_msg, Errors::Encryption::Internal);
         }
         return r;
     }
 
-    FileEncryptionInfo newFile(const std::string & fname) override
+    FileEncryptionInfo newFile(const String & fname) override
     {
         auto r = tiflash_instance_wrap->proxy_helper->newFile(fname);
         if (unlikely(r.res != FileEncryptionRes::Ok))
         {
-            throw Exception("Create encryption info for file: " + fname + " meet error: " + *r.erro_msg, ErrorCodes::DATA_ENCRYPTION_ERROR);
+            throw DB::TiFlashException("Create encryption info for file: " + fname + " meet error: " + *r.erro_msg, Errors::Encryption::Internal);
         }
         return r;
     }
 
-    void deleteFile(const std::string & fname) override
+    void deleteFile(const String & fname) override
     {
         auto r = tiflash_instance_wrap->proxy_helper->deleteFile(fname);
         if (unlikely(r.res != FileEncryptionRes::Ok))
         {
-            throw Exception("Delete encryption info for file: " + fname + " meet error: " + *r.erro_msg, ErrorCodes::DATA_ENCRYPTION_ERROR);
+            throw DB::TiFlashException("Delete encryption info for file: " + fname + " meet error: " + *r.erro_msg, Errors::Encryption::Internal);
         }
     }
 

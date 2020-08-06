@@ -1,4 +1,11 @@
+#include <common/likely.h>
+#include <Common/TiFlashException.h>
+#include <IO/EncryptedRandomAccessFile.h>
+#include <IO/EncryptedWritableFile.h>
 #include <IO/FileProvider.h>
+#include <IO/PosixRandomAccessFile.h>
+#include <IO/PosixWritableFile.h>
+#include <Poco/File.h>
 
 namespace DB
 {
@@ -9,7 +16,7 @@ extern const int DATA_ENCRYPTION_ERROR;
 } // namespace ErrorCodes
 
 RandomAccessFilePtr
-FileProvider::newRandomAccessFile(const std::string &file_path_, const EncryptionPath &encryption_path_,
+FileProvider::newRandomAccessFile(const String &file_path_, const EncryptionPath &encryption_path_,
                                   int flags) const
 {
     RandomAccessFilePtr file = std::make_shared<PosixRandomAccessFile>(file_path_, flags);
@@ -21,7 +28,7 @@ FileProvider::newRandomAccessFile(const std::string &file_path_, const Encryptio
     return file;
 }
 
-WritableFilePtr FileProvider::newWritableFile(const std::string &file_path_, const EncryptionPath &encryption_path_,
+WritableFilePtr FileProvider::newWritableFile(const String &file_path_, const EncryptionPath &encryption_path_,
                                               bool create_new_file_, bool create_new_encryption_info_, int flags,
                                               mode_t mode) const
 {
@@ -38,7 +45,7 @@ WritableFilePtr FileProvider::newWritableFile(const std::string &file_path_, con
             auto encryption_info = key_manager->getFile(encryption_path_.dir_name);
             if (unlikely(encryption_info.method == EncryptionMethod::Plaintext))
             {
-                throw Exception("Cannot get encryption info for file: " + encryption_path_.dir_name);
+                throw DB::TiFlashException("Cannot get encryption info for file: " + encryption_path_.dir_name, Errors::Encryption::Internal);
             }
             file = std::make_shared<EncryptedWritableFile>(file, createCipherStream(encryption_info, encryption_path_));
         }
@@ -46,7 +53,7 @@ WritableFilePtr FileProvider::newWritableFile(const std::string &file_path_, con
     return file;
 }
 
-void FileProvider::deleteFile(const std::string &file_path_, const EncryptionPath &encryption_path_) const
+void FileProvider::deleteFile(const String &file_path_, const EncryptionPath &encryption_path_) const
 {
     Poco::File data_file(file_path_);
     if (data_file.exists())
@@ -59,6 +66,15 @@ void FileProvider::deleteFile(const std::string &file_path_, const EncryptionPat
 void FileProvider::deleteEncryptionInfo(const EncryptionPath &encryption_path_) const
 {
     key_manager->deleteFile(encryption_path_.dir_name);
+}
+
+bool FileProvider::isFileEncrypted(const EncryptionPath &encryption_path_) const {
+    auto encryption_info = key_manager->getFile(encryption_path_.dir_name);
+    return encryption_info.method != EncryptionMethod::Plaintext;
+}
+
+bool FileProvider::isEncryptionEnabled() const {
+    return encryption_enabled;
 }
 
 }

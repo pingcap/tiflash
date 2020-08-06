@@ -9,13 +9,13 @@ class MockKeyManager : public KeyManager
 public:
     ~MockKeyManager() = default;
     
-    MockKeyManager(EncryptionMethod method_, const std::string & key_, const std::string & iv) : method{method_}, key{key_}, iv{iv} {}
+    MockKeyManager(EncryptionMethod method_, const String & key_, const String & iv) : method{method_}, key{key_}, iv{iv} {}
 
-    FileEncryptionInfo getFile(const std::string & fname) override
+    FileEncryptionInfo getFile(const String & fname) override
     {
         std::ignore = fname;
-        auto * file_key = new std::string(key);
-        auto * file_iv = new std::string(iv);
+        auto * file_key = new String(key);
+        auto * file_iv = new String(iv);
         FileEncryptionInfo file_info{
             FileEncryptionRes::Ok,
             method,
@@ -26,13 +26,13 @@ public:
         return file_info;
     }
 
-    FileEncryptionInfo newFile(const std::string & fname) override { return getFile(fname); }
+    FileEncryptionInfo newFile(const String & fname) override { return getFile(fname); }
 
-    void deleteFile(const std::string & fname) override { std::ignore = fname; }
+    void deleteFile(const String & fname) override { std::ignore = fname; }
 
 private:
     EncryptionMethod method;
-    std::string key;
-    std::string iv;
+    String key;
+    String iv;
 };
 } // namespace DB
