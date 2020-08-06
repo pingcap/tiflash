@@ -469,8 +469,7 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
 // useless casts to all the timestamp columns, in order to avoid redundant cast, when cast the ts
 // column to the columns with session-level timezone info, the original ts columns with UTC timezone
 // are still kept, and the InterpreterDAG will choose the correct column based on encode type
-bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(
-    ExpressionActionsChain & chain, std::vector<bool> is_ts_column, bool keep_UTC_column)
+bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(ExpressionActionsChain & chain, std::vector<bool> is_ts_column, bool keep_UTC_column)
 {
     if (context.getTimezoneInfo().is_utc_timezone)
         return false;
@@ -506,14 +505,12 @@ void DAGExpressionAnalyzer::appendJoin(
     actions->add(ExpressionAction::ordinaryJoin(join_query.join, columns_added_by_join));
 }
 /// return true if some actions is needed
-bool DAGExpressionAnalyzer::appendJoinKey(
-    ExpressionActionsChain & chain, const tipb::Join & join, const DataTypes & key_types, Names & key_names, bool tiflash_left)
+bool DAGExpressionAnalyzer::appendJoinKey(ExpressionActionsChain & chain, const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
+    const DataTypes & key_types, Names & key_names, bool left, bool is_right_out_join)
 {
     bool ret = false;
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsPtr actions = chain.getLastActions();
-    const auto & keys = ((tiflash_left && join.inner_idx() == 1) || (!tiflash_left && join.inner_idx() == 0)) ? join.left_join_keys()
-                                                                                                              : join.right_join_keys();
 
     for (int i = 0; i < keys.size(); i++)
     {
@@ -528,10 +525,19 @@ bool DAGExpressionAnalyzer::appendJoinKey(
             key_name = appendCast(key_types[i], actions, key_name);
             has_actions = true;
         }
-        if (!tiflash_left && !has_actions)
+        if (!has_actions && (!left || is_right_out_join))
         {
-            // for right side table, add a new column
-            String updated_key_name = "_r_k_" + key_name;
+            /// if the join key is a columnRef, then add a new column as the join key if needed.
+            /// In ClickHouse, the columns returned by join are: join_keys, left_columns and right_columns
+            /// where left_columns and right_columns don't include the join keys if they are ColumnRef
+            /// In TiDB, the columns returned by join are left_columns, right_columns, if the join keys
+            /// are ColumnRef, they will be included in both left_columns and right_columns
+            /// E.g, for table t1(id, value), t2(id, value) and query select * from t1 join t2 on t1.id = t2.id
+            /// In ClickHouse, it returns id,t1_value,t2_value
+            /// In TiDB, it returns t1_id,t1_value,t2_id,t2_value
+            /// So in order to make the join compatible with TiDB, if the join key is a columnRef, for inner/left
+            /// join, add a new key as right join key, for right join, add a new key as left join key
+            String updated_key_name = (left ? "_l_k_" : "_r_k_") + key_name;
             actions->add(ExpressionAction::copyColumn(key_name, updated_key_name));
             key_name = updated_key_name;
             has_actions = true;
