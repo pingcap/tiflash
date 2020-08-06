@@ -39,7 +39,6 @@ public:
 
 private:
     BlockInputStreams executeQueryBlock(DAGQueryBlock & query_block, std::vector<SubqueriesForSets> & subqueriesForSets);
-    void executeUnion(Pipeline & pipeline);
     RegionException::RegionReadStatus getRegionReadStatus(const RegionPtr & current_region);
 
 private:
