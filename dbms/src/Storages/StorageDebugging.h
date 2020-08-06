@@ -90,11 +90,6 @@ private:
 
     std::mutex mutex;
 
-    DataTypePtr getPKTypeImpl() const override
-    {
-        throw Exception("Method getPKTypeImpl is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
-    }
-
 protected:
     StorageDebugging(String database_name_,
         String table_name_,

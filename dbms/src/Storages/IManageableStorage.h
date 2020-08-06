@@ -99,23 +99,7 @@ public:
     /// Remove this storage from TMTContext. Should be called after its metadata and data have been removed from disk.
     virtual void removeFromTMTContext() = 0;
 
-    PKType getPKType() const
-    {
-        static const DataTypeInt64 & dataTypeInt64 = {};
-        static const DataTypeUInt64 & dataTypeUInt64 = {};
-
-        auto pk_data_type = getPKTypeImpl();
-        if (pk_data_type->equals(dataTypeInt64))
-            return PKType::INT64;
-        else if (pk_data_type->equals(dataTypeUInt64))
-            return PKType::UINT64;
-        return PKType::UNSPECIFIED;
-    }
-
     virtual SortDescription getPrimarySortDescription() const = 0;
-
-private:
-    virtual DataTypePtr getPKTypeImpl() const = 0;
 
 private:
     /// Timestamp when this table is dropped.

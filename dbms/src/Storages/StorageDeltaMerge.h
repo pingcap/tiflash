@@ -120,8 +120,6 @@ private:
         const DB::DM::OptionTableInfoConstRef table_info_,
         const Context & context);
 
-    DataTypePtr getPKTypeImpl() const override;
-
 private:
     using ColumnIdMap = std::unordered_map<String, size_t>;
 

@@ -77,34 +77,13 @@ DeltaMergeStore::BackgroundTask DeltaMergeStore::MergeDeltaTaskPool::nextTask(Lo
 //   DeltaMergeStore
 // ================================================
 
-namespace
-{
-// Actually we will always store a column of `_tidb_rowid`, no matter it
-// exist in `table_columns` or not.
-ColumnDefinesPtr getStoreColumns(const ColumnDefines & table_columns)
-{
-    auto columns = std::make_shared<ColumnDefines>();
-    // First three columns are always _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
-    columns->emplace_back(getExtraHandleColumnDefine());
-    columns->emplace_back(getVersionColumnDefine());
-    columns->emplace_back(getTagColumnDefine());
-    // Add other columns
-    for (const auto & col : table_columns)
-    {
-        if (col.name != EXTRA_HANDLE_COLUMN_NAME && col.name != VERSION_COLUMN_NAME && col.name != TAG_COLUMN_NAME)
-            columns->emplace_back(col);
-    }
-    return columns;
-}
-} // namespace
-
 DeltaMergeStore::DeltaMergeStore(Context &             db_context,
                                  const String &        path_,
                                  bool                  data_path_contains_database_name,
                                  const String &        db_name_,
                                  const String &        table_name_,
                                  const ColumnDefines & columns,
-                                 const ColumnDefine &  handle,
+                                 const ColumnDefines & pk_columns,
                                  const Settings &      settings_)
     : path(path_),
       global_context(db_context.getGlobalContext()),
@@ -112,8 +91,7 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
       storage_pool(db_name_ + "." + table_name_, path, global_context, db_context.getSettingsRef()),
       db_name(db_name_),
       table_name(table_name_),
-      pk(std::make_shared<PrimaryKey>(ColumnDefines{handle})),
-      original_table_handle_define(handle),
+      pk(std::make_shared<PrimaryKey>(pk_columns)),
       background_pool(db_context.getBackgroundPool()),
       hash_salt(++DELTA_MERGE_STORE_HASH_SALT),
       log(&Logger::get("DeltaMergeStore[" + db_name + "." + table_name + "]"))
@@ -125,17 +103,24 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
     // restore existing dm files and set capacity for extra_paths.
     restoreExtraPathCapacity();
 
-    original_table_columns.emplace_back(original_table_handle_define);
-    original_table_columns.emplace_back(getVersionColumnDefine());
-    original_table_columns.emplace_back(getTagColumnDefine());
+    std::unordered_set<ColId> added_column_ids;
+    original_table_columns = std::make_shared<ColumnDefines>();
+    for (auto & col_define : *pk)
+    {
+        original_table_columns->emplace_back(col_define);
+        added_column_ids.insert(col_define.id);
+    }
+    original_table_columns->emplace_back(getVersionColumnDefine());
+    added_column_ids.insert(VERSION_COLUMN_ID);
+    original_table_columns->emplace_back(getTagColumnDefine());
+    added_column_ids.insert(TAG_COLUMN_ID);
     for (const auto & col : columns)
     {
-        if (col.id != original_table_handle_define.id && col.id != VERSION_COLUMN_ID && col.id != TAG_COLUMN_ID)
-            original_table_columns.emplace_back(col);
+        if (added_column_ids.find(col.id) == added_column_ids.end())
+            original_table_columns->emplace_back(col);
     }
 
-    original_table_header = std::make_shared<Block>(toEmptyBlock(original_table_columns));
-    store_columns         = getStoreColumns(original_table_columns);
+    original_table_header = std::make_shared<Block>(toEmptyBlock(*original_table_columns));
 
     auto dm_context = newDMContext(db_context, db_context.getSettingsRef());
 
@@ -310,7 +295,7 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
                                extra_paths,
                                storage_pool,
                                hash_salt,
-                               store_columns,
+                               original_table_columns,
                                latest_gc_safe_point,
                                settings.not_compress_columns,
                                db_settings);
@@ -353,23 +338,10 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
     auto  dm_context = newDMContext(db_context, db_settings);
     Block block      = to_write;
 
-    // Add an extra handle column, if handle reused the original column data.
-    if (pkIsHandle())
-    {
-        auto handle_pos = getPosByColumnId(block, original_table_handle_define.id);
-        addColumnToBlock(block, //
-                         EXTRA_HANDLE_COLUMN_ID,
-                         EXTRA_HANDLE_COLUMN_NAME,
-                         EXTRA_HANDLE_COLUMN_TYPE,
-                         EXTRA_HANDLE_COLUMN_TYPE->createColumn());
-        FunctionToInt64::create(db_context)->execute(block, {handle_pos}, block.columns() - 1);
-    }
-
     {
         // Sort by handle & version in ascending order.
-        SortDescription sort;
-        sort.emplace_back(EXTRA_HANDLE_COLUMN_NAME, 1, 0);
-        sort.emplace_back(VERSION_COLUMN_NAME, 1, 0);
+        SortDescription sort = getPrimarySortDescription();
+        sort.emplace_back(VERSION_COLUMN_NAME, 1, 1);
 
         if (rows > 1 && !isAlreadySorted(block, sort))
             stableSortBlock(block, sort);
@@ -1499,40 +1471,29 @@ void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
 {
     std::unique_lock lock(read_write_mutex);
 
-    ColumnDefines new_original_table_columns(original_table_columns.begin(), original_table_columns.end());
+    ColumnDefinesPtr new_original_table_columns
+        = std::make_shared<ColumnDefines>(original_table_columns->begin(), original_table_columns->end());
     for (const auto & command : commands)
     {
-        applyAlter(new_original_table_columns, command, table_info, max_column_id_used);
+        applyAlter(*new_original_table_columns, command, table_info, max_column_id_used);
     }
 
-    if (table_info)
+    // Update primary keys from TiDB::TableInfo
+    if (table_info && (table_info->get().is_common_handle || table_info->get().pk_is_handle))
     {
-        // Update primary keys from TiDB::TableInfo
-
-        // For TiDB 3.1/4.0, there should be only one column with pri key flag.
-        // FIXME: With feature clustered index in TiDB 5.0, there could be multiple columns with primary key flag
-        std::vector<String> pk_names;
+        std::unordered_map<ColId, String> id_to_names;
         for (const auto & col : table_info->get().columns)
         {
-            if (col.hasPriKeyFlag())
-            {
-                pk_names.emplace_back(col.name);
-            }
+            if (col.hasPartKeyFlag())
+                id_to_names[col.id] = col.name;
         }
-        if (table_info->get().pk_is_handle && pk_names.size() == 1)
-        {
-            // Only update primary key name if pk is handle and there is only one column with
-            // primary key flag
-            original_table_handle_define.name = pk_names[0];
-        }
+        for (size_t i = 0; i < pk->size(); i++)
+            (*pk)[i].name = id_to_names[(*pk)[i].id];
     }
 
-    auto new_store_columns = getStoreColumns(new_original_table_columns);
-
     original_table_columns.swap(new_original_table_columns);
-    store_columns.swap(new_store_columns);
 
-    std::atomic_store<Block>(&original_table_header, std::make_shared<Block>(toEmptyBlock(original_table_columns)));
+    std::atomic_store<Block>(&original_table_header, std::make_shared<Block>(toEmptyBlock(*original_table_columns)));
 }
 
 
@@ -1541,7 +1502,11 @@ SortDescription DeltaMergeStore::getPrimarySortDescription() const
     std::shared_lock lock(read_write_mutex);
 
     SortDescription desc;
-    desc.emplace_back(original_table_handle_define.name, /* direction_= */ 1, /* nulls_direction_= */ 1);
+    for (auto & col_def : *pk)
+    {
+        /// primary key can not be NULL, so do not need to care about nulls_direction
+        desc.emplace_back(col_def.name, 1, 1, col_def.collator);
+    }
     return desc;
 }
 

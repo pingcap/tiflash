@@ -234,7 +234,7 @@ public:
                     const String &        db_name,
                     const String &        tbl_name,
                     const ColumnDefines & columns,
-                    const ColumnDefine &  handle,
+                    const ColumnDefines & pk_columns,
                     const Settings &      settings_);
     ~DeltaMergeStore();
 
@@ -293,11 +293,9 @@ public:
                      ColumnID &                    max_column_id_used,
                      const Context &               context);
 
-    const ColumnDefines & getTableColumns() const { return original_table_columns; }
-    const ColumnDefine &  getHandle() const { return original_table_handle_define; }
+    const ColumnDefines & getTableColumns() const { return *original_table_columns; }
     BlockPtr              getHeader() const;
     const Settings &      getSettings() const { return settings; }
-    DataTypePtr           getPKDataType() const { return original_table_handle_define.type; }
     SortDescription       getPrimarySortDescription() const;
 
     void                check(const Context & db_context);
@@ -307,8 +305,6 @@ public:
 
 private:
     DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings);
-
-    bool pkIsHandle() const { return original_table_handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
 
     void waitForWrite(const DMContextPtr & context, const SegmentPtr & segment);
     void waitForDeleteRange(const DMContextPtr & context, const SegmentPtr & segment);
@@ -337,14 +333,8 @@ private:
 
     PrimaryKeyPtr pk;
 
-    ColumnDefines original_table_columns;
-    BlockPtr      original_table_header; // Used to speed up getHeader()
-    ColumnDefine  original_table_handle_define;
-
-    // The columns we actually store.
-    // First three columns are always _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
-    // No matter `tidb_rowid` exist in `table_columns` or not.
-    ColumnDefinesPtr store_columns;
+    ColumnDefinesPtr original_table_columns;
+    BlockPtr         original_table_header; // Used to speed up getHeader()
 
     std::atomic<bool> shutdown_called{false};
 
