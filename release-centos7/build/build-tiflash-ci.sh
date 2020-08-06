@@ -51,6 +51,7 @@ min_size=$((102400))
 if [[ ${proxy_size} -lt ${min_size} ]]
 then
     echo "try to build libtiflash_proxy.so"
+    export PATH=$PATH:$HOME/.cargo/bin
     make release
     echo "try to upload libtiflash_proxy.so"
     cd target/release

@@ -762,12 +762,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         /// initialize TMTContext
         global_context->getTMTContext().restore();
-        if (proxy_conf.is_proxy_runnable)
-        {
-            tiflash_instance_wrap.tmt = &global_context->getTMTContext();
-            LOG_INFO(log, "let tiflash proxy start all services");
-            tiflash_instance_wrap.status = TiFlashStatus::Running;
-        }
     }
 
     /// Then, startup grpc server to serve raft and/or flash services.
@@ -1118,6 +1112,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         SessionCleaner session_cleaner(*global_context);
         ClusterManagerService cluster_manager_service(*global_context, config_path);
+
+        if (proxy_conf.is_proxy_runnable)
+        {
+            tiflash_instance_wrap.tmt = &global_context->getTMTContext();
+            LOG_INFO(log, "let tiflash proxy start all services");
+            tiflash_instance_wrap.status = TiFlashStatus::Running;
+        }
 
         waitForTerminationRequest();
 
