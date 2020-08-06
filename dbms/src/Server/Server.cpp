@@ -354,7 +354,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     TiFlashServerHelper helper{
         // a special number, also defined in proxy
         .magic_number = 0x13579BDF,
-        .version = 10,
+        .version = 11,
         .inner = &tiflash_instance_wrap,
         .fn_gen_cpp_string = GenCppRawString,
         .fn_handle_write_raft_cmd = HandleWriteRaftCmd,
@@ -388,7 +388,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
         LOG_INFO(log, "tiflash proxy is initialized");
         if (tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled())
-            LOG_INFO(log, "encryption is enabled");
+        {
+            auto method = tiflash_instance_wrap.proxy_helper->getEncryptionMethod();
+            LOG_INFO(log, "encryption is enabled, method is " << IntoEncryptionMethodName(method));
+        }
         else
             LOG_INFO(log, "encryption is disabled");
     }
