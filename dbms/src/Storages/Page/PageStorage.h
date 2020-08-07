@@ -84,8 +84,8 @@ public:
     using ReaderPtr     = std::shared_ptr<PageFile::Reader>;
     using OpenReadFiles = std::map<PageFileIdAndLevel, ReaderPtr>;
 
-    using MetaMergingQueue = std::
-        priority_queue<PageFile::MetaMergingReaderPtr, std::vector<PageFile::MetaMergingReaderPtr>, PageFile::MergingPtrComparator>;
+    using MetaMergingQueue
+        = std::priority_queue<PageFile::MetaMergingReaderPtr, std::vector<PageFile::MetaMergingReaderPtr>, PageFile::MergingPtrComparator>;
 
     using PathAndIdsVec        = std::vector<std::pair<String, std::set<PageId>>>;
     using ExternalPagesScanner = std::function<PathAndIdsVec()>;
@@ -110,7 +110,7 @@ public:
     PageStorage(String                 name,
                 const String &         storage_path,
                 const Config &         config_,
-                TiFlashMetricsPtr      metrics_ = nullptr,
+                TiFlashMetricsPtr      metrics_         = nullptr,
                 PathCapacityMetricsPtr global_capacity_ = nullptr);
 
     void restore();
@@ -171,10 +171,11 @@ private:
     String storage_path;
     Config config;
 
-    std::mutex              write_mutex;
+    std::mutex              write_mutex; // A mutex protect `idle_writers`,`write_files` and `statistics`.
     std::condition_variable write_mutex_cv;
     std::vector<PageFile>   write_files;
     std::deque<WriterPtr>   idle_writers;
+    StatisticsInfo          statistics;
 
     // A sequence number to keep ordering between multi-writers.
     std::atomic<WriteBatch::SequenceID> write_batch_seq = 0;
@@ -192,7 +193,6 @@ private:
     ExternalPagesScanner external_pages_scanner = nullptr;
     ExternalPagesRemover external_pages_remover = nullptr;
 
-    StatisticsInfo statistics;
     StatisticsInfo last_gc_statistics;
 
     // For reporting metrics to prometheus
