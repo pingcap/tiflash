@@ -4,7 +4,6 @@
 #include <IO/RandomAccessFile.h>
 #include <IO/WritableFile.h>
 #include <string>
-#include <Storages/Transaction/ProxyFFIType.h>
 #include <Encryption/BlockAccessCipherStream.h>
 
 namespace DB
@@ -42,6 +41,4 @@ private:
 };
 
 using FileProviderPtr = std::shared_ptr<FileProvider>;
-
-BlockAccessCipherStreamPtr createCipherStream(const FileEncryptionInfo & encryption_info_, const EncryptionPath & encryption_path_);
 } // namespace DB
