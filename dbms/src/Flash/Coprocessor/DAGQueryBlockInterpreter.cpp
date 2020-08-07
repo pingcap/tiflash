@@ -1353,7 +1353,7 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     if (res.need_aggregate)
     {
         // execute aggregation
-        executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions, context.getFileProvider());
+        executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions);
         recordProfileStreams(pipeline, query_block.aggregation_name);
     }
     if (res.before_order_and_select)
