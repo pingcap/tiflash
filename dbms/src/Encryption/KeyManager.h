@@ -2,20 +2,12 @@
 
 #include <cstddef>
 #include <memory>
+#include <IO/EncryptionPath.h>
 #include <string>
 #include <Storages/Transaction/ProxyFFIType.h>
 
 namespace DB
 {
-using String = std::string;
-
-struct EncryptionPath
-{
-    EncryptionPath(const std::string & dir_name_, const std::string & file_name_) : dir_name{dir_name_}, file_name{file_name_} {}
-    const std::string dir_name;
-    const std::string file_name;
-};
-
 inline size_t KeySize(EncryptionMethod method)
 {
     switch (method)
