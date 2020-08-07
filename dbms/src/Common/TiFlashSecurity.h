@@ -66,9 +66,9 @@ public:
                 has_tls_config = true;
                 LOG_INFO(log, "security config is set: ca path is " << ca_path << " cert path is " << cert_path << " key path is " << key_path );
             }
-            if (config.has("security.cluster_verify_cn") && has_tls_config)
+            if (config.has("security.cert_allowed_cn") && has_tls_config)
             {
-                String verify_cns = config.getString("security.cluster_verify_cn");
+                String verify_cns = config.getString("security.cert_allowed_cn");
                 Poco::StringTokenizer string_tokens(verify_cns, ",");
                 for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
                 {
