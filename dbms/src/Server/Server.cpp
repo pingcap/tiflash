@@ -892,7 +892,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 }
                 else if (security_config.has_tls_config)
                 {
-                    LOG_ERROR(log, "tcp_port is closed because tls config is set");
+                    LOG_INFO(log, "tcp_port is closed because tls config is set");
                 }
 
                 /// TCP with SSL
@@ -917,7 +917,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 }
                 else if (security_config.has_tls_config)
                 {
-                    LOG_ERROR(log, "tcp_port is closed because tls config is set");
+                    LOG_INFO(log, "tcp_port is closed because tls config is set");
                 }
 
                 /// At least one of TCP and HTTP servers must be created.
@@ -938,7 +938,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 }
                 else if (security_config.has_tls_config)
                 {
-                    LOG_ERROR(log, "internal http port is closed because tls config is set");
+                    LOG_INFO(log, "internal http port is closed because tls config is set");
                 }
             }
             catch (const Poco::Net::NetException & e)
