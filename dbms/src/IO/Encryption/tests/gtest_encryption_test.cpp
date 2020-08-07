@@ -1,5 +1,5 @@
-#include <Encryption/AESCTRCipherStream.h>
-#include <Encryption/MockKeyManager.h>
+#include <IO/Encryption/AESCTRCipherStream.h>
+#include <IO/Encryption/MockKeyManager.h>
 #include <IO/FileProvider.h>
 #include <gtest/gtest.h>
 #include <random>

@@ -1,6 +1,6 @@
 #include <Common/Exception.h>
-#include <Encryption/AESCTRCipherStream.h>
-#include <Encryption/KeyManager.h>
+#include <IO/Encryption/AESCTRCipherStream.h>
+#include <IO/Encryption/KeyManager.h>
 #include <cstddef>
 
 namespace DB

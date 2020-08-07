@@ -2,7 +2,7 @@
 
 #include <Common/Exception.h>
 #include <Common/TiFlashException.h>
-#include <Encryption/KeyManager.h>
+#include <IO/Encryption/KeyManager.h>
 #include <common/likely.h>
 
 namespace DB

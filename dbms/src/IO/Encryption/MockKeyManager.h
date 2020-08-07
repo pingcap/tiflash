@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Encryption/KeyManager.h>
+#include <IO/Encryption/KeyManager.h>
 
 namespace DB
 {

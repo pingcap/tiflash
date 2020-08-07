@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Encryption/BlockAccessCipherStream.h>
+#include <IO/Encryption/BlockAccessCipherStream.h>
 #include <IO/Endian.h>
 #include <openssl/aes.h>
 #include <openssl/evp.h>
