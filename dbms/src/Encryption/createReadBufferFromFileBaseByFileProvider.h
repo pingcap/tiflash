@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Encryption/FileProvider.h>
 #include <IO/ReadBufferFromFileBase.h>
 #include <string>
 #include <memory>
@@ -12,10 +13,15 @@ namespace DB
   * estimated_size - the number of bytes to read
   * aio_threshold - the minimum number of bytes for asynchronous reads
   *
+  * Caution: (AIO is not supported yet.)
+  *
   * If aio_threshold = 0 or estimated_size < aio_threshold, read operations are executed synchronously.
   * Otherwise, the read operations are performed asynchronously.
   */
-std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBase(const std::string & filename_,
+
+std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvider(FileProviderPtr &file_provider,
+        const std::string & filename_,
+        const EncryptionPath & encryption_path_,
         size_t estimated_size,
         size_t aio_threshold,
         size_t buffer_size_ = DBMS_DEFAULT_BUFFER_SIZE,

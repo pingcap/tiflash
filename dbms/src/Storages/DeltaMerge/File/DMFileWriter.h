@@ -5,8 +5,8 @@
 #include <IO/CompressedWriteBuffer.h>
 #include <IO/HashingWriteBuffer.h>
 #include <Encryption/WriteBufferFromFileProvider.h>
+#include <Encryption/createWriteBufferFromFileBaseByFileProvider.h>
 #include <IO/WriteBufferFromOStream.h>
-#include <IO/createWriteBufferFromFileBase.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 
@@ -29,7 +29,7 @@ public:
                size_t              max_compress_block_size,
                FileProviderPtr &   file_provider,
                bool                do_index)
-            : plain_file(createWriteBufferFromFileBase(file_provider,
+            : plain_file(createWriteBufferFromFileBaseByFileProvider(file_provider,
                                                        dmfile->colDataPath(file_base_name),
                                                        dmfile->encryptionDataPath(file_base_name),
                                                        false,
