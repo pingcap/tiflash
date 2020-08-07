@@ -408,7 +408,10 @@ void PageStorage::write(WriteBatch && wb)
     // persist the invalid ref pair into PageFile.
     versioned_page_entries.apply(edit);
 
-    statistics.mergeEdits(edit);
+    {
+        std::unique_lock lock(write_mutex);
+        statistics.mergeEdits(edit);
+    }
 }
 
 PageStorage::SnapshotPtr PageStorage::getSnapshot()
@@ -684,7 +687,6 @@ bool PageStorage::gc()
         gc_is_running.compare_exchange_strong(is_running, false);
     });
 
-    LOG_TRACE(log, storage_name << " Before gc, " << statistics.toString());
 
     /// Get all pending external pages and PageFiles. Note that we should get external pages before PageFiles.
     PathAndIdsVec external_pages;
@@ -698,6 +700,7 @@ bool PageStorage::gc()
 
     std::set<PageFileIdAndLevel> writing_file_id_levels;
     PageFileIdAndLevel           min_writing_file_id_level;
+    StatisticsInfo               statistics_snapshot; // statistics snapshot copy with lock protection
     {
         std::lock_guard<std::mutex> lock(write_mutex);
         for (size_t i = 0; i < write_files.size(); ++i)
@@ -711,7 +714,9 @@ bool PageStorage::gc()
         {
             writer->tryCloseIdleFd(config.open_file_max_idle_time);
         }
+        statistics_snapshot = statistics;
     }
+    LOG_TRACE(log, storage_name << " Before gc, " << statistics_snapshot.toString());
 
     GCDebugInfo debugging_info;
     // Helper function for apply edits and clean up before gc exit.
@@ -785,11 +790,11 @@ bool PageStorage::gc()
             // If only few page files, running gc is useless.
             gc_type = GCType::Skip;
         }
-        else if (last_gc_statistics.equals(statistics))
+        else if (last_gc_statistics.equals(statistics_snapshot))
         {
             // No write since last gc. Give it a chance for running GC, ensure that we are able to
             // reclaim disk usage when PageStorage is read-only in extreme cases.
-            if (DB::MVCC::utils::randInt(0, 1000) < config.prob_do_gc_when_write_is_low) 
+            if (DB::MVCC::utils::randInt(0, 1000) < config.prob_do_gc_when_write_is_low)
                 gc_type = GCType::LowWrite;
             else
                 gc_type = GCType::Skip;
@@ -856,7 +861,7 @@ bool PageStorage::gc()
     apply_and_cleanup(std::move(gc_file_entries_edit));
 
     // Simply copy without any locks, it should be fine since we only use it to skip useless GC routine when this PageStorage is cold.
-    last_gc_statistics = statistics;
+    last_gc_statistics = statistics_snapshot;
 
     LOG_INFO(log,
              storage_name << " GC exit within " << DB::toString(watch.elapsedSeconds(), 2) << " sec. PageFiles from [" //
