@@ -890,15 +890,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
                     LOG_INFO(log, "Listening tcp: " + address.toString());
                 }
+                else if (security_config.has_tls_config)
+                {
+                    LOG_ERROR(log, "tcp_port is closed because tls config is set");
+                }
 
                 /// TCP with SSL
-                if (config().has("tcp_port_secure"))
+                if (config().has("tcp_port_secure") && !security_config.has_tls_config)
                 {
 #if Poco_NetSSL_FOUND
-                    if (!security_config.has_tls_config)
-                    {
-                        LOG_ERROR(log, "tcp_port_secure is set but tls config is not set");
-                    }
                     Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
                         security_config.key_path,
                         security_config.cert_path,
@@ -915,13 +915,17 @@ int Server::main(const std::vector<std::string> & /*args*/)
                         ErrorCodes::SUPPORT_IS_DISABLED};
 #endif
                 }
+                else if (security_config.has_tls_config)
+                {
+                    LOG_ERROR(log, "tcp_port is closed because tls config is set");
+                }
 
                 /// At least one of TCP and HTTP servers must be created.
                 if (servers.empty())
                     throw Exception("No 'tcp_port' and 'http_port' is specified in configuration file.", ErrorCodes::NO_ELEMENTS_IN_CONFIG);
 
                 /// Interserver IO HTTP
-                if (config().has("interserver_http_port"))
+                if (config().has("interserver_http_port") && !security_config.has_tls_config)
                 {
                     Poco::Net::ServerSocket socket;
                     auto address = socket_bind_listen(socket, listen_host, config().getInt("interserver_http_port"));
@@ -931,6 +935,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
                         new InterserverIOHTTPHandlerFactory(*this, "InterserverIOHTTPHandler-factory"), server_pool, socket, http_params));
 
                     LOG_INFO(log, "Listening interserver http: " + address.toString());
+                }
+                else if (security_config.has_tls_config)
+                {
+                    LOG_ERROR(log, "internal http port is closed because tls config is set");
                 }
             }
             catch (const Poco::Net::NetException & e)
