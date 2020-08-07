@@ -2,9 +2,9 @@
 
 #include <Encryption/BlockAccessCipherStream.h>
 #include <IO/Endian.h>
+#include <Storages/Transaction/ProxyFFIType.h>
 #include <openssl/aes.h>
 #include <openssl/evp.h>
-#include <Storages/Transaction/ProxyFFIType.h>
 
 namespace DB
 {
@@ -60,7 +60,8 @@ public:
         cipher(file_offset, data, data_size, false /*is_encrypt*/);
     }
 
-    static BlockAccessCipherStreamPtr createCipherStream(const FileEncryptionInfo & encryption_info_, const EncryptionPath & encryption_path_);
+    static BlockAccessCipherStreamPtr createCipherStream(
+        const FileEncryptionInfo & encryption_info_, const EncryptionPath & encryption_path_);
 
 private:
     void cipher(uint64_t file_offset, char * data, size_t data_size, bool is_encrypt);

@@ -133,7 +133,8 @@ void AESCTRCipherStream::cipher(uint64_t file_offset, char * data, size_t data_s
 #endif
 }
 
-BlockAccessCipherStreamPtr AESCTRCipherStream::createCipherStream(const FileEncryptionInfo & encryption_info_, const EncryptionPath & encryption_path_)
+BlockAccessCipherStreamPtr AESCTRCipherStream::createCipherStream(
+    const FileEncryptionInfo & encryption_info_, const EncryptionPath & encryption_path_)
 {
     std::string key = *(encryption_info_.key);
 
@@ -150,12 +151,13 @@ BlockAccessCipherStreamPtr AESCTRCipherStream::createCipherStream(const FileEncr
             cipher = EVP_aes_256_ctr();
             break;
         default:
-            throw Exception("Unsupported encryption method: " + std::to_string(static_cast<int>(encryption_info_.method)), ErrorCodes::NOT_IMPLEMENTED);
+            throw Exception(
+                "Unsupported encryption method: " + std::to_string(static_cast<int>(encryption_info_.method)), ErrorCodes::NOT_IMPLEMENTED);
     }
     if (key.size() != KeySize(encryption_info_.method))
     {
-        throw Exception("Encryption key size mismatch. " + std::to_string(key.size()) + "(actual) vs. " + std::to_string(KeySize(encryption_info_.method))
-                + "(expected).",
+        throw Exception("Encryption key size mismatch. " + std::to_string(key.size()) + "(actual) vs. "
+                + std::to_string(KeySize(encryption_info_.method)) + "(expected).",
             ErrorCodes::DATA_ENCRYPTION_ERROR);
     }
     if (encryption_info_.iv->size() != AES_BLOCK_SIZE)

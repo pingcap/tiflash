@@ -1,5 +1,5 @@
-#include <Encryption/createWriteBufferFromFileBaseByFileProvider.h>
 #include <Encryption/WriteBufferFromFileProvider.h>
+#include <Encryption/createWriteBufferFromFileBaseByFileProvider.h>
 #if !defined(__APPLE__) && !defined(__FreeBSD__) && !defined(_MSC_VER)
 #include <IO/WriteBufferAIO.h>
 #endif
@@ -8,7 +8,7 @@
 
 namespace ProfileEvents
 {
-    extern const Event CreatedWriteBufferOrdinary;
+extern const Event CreatedWriteBufferOrdinary;
 }
 
 namespace DB
@@ -16,17 +16,18 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int NOT_IMPLEMENTED;
+extern const int NOT_IMPLEMENTED;
 }
 
 WriteBufferFromFileBase * createWriteBufferFromFileBaseByFileProvider(FileProviderPtr & file_provider, const std::string & filename_,
-                const EncryptionPath & encryption_path_, bool create_new_encryption_info_, size_t estimated_size, size_t aio_threshold, size_t buffer_size_, int flags_, mode_t mode, char * existing_memory_,
-        size_t alignment)
+    const EncryptionPath & encryption_path_, bool create_new_encryption_info_, size_t estimated_size, size_t aio_threshold,
+    size_t buffer_size_, int flags_, mode_t mode, char * existing_memory_, size_t alignment)
 {
     if ((aio_threshold == 0) || (estimated_size < aio_threshold))
     {
         ProfileEvents::increment(ProfileEvents::CreatedWriteBufferOrdinary);
-        return new WriteBufferFromFileProvider(file_provider, filename_, encryption_path_, create_new_encryption_info_, buffer_size_, flags_, mode, existing_memory_, alignment);
+        return new WriteBufferFromFileProvider(file_provider, filename_, encryption_path_, create_new_encryption_info_, buffer_size_,
+            flags_, mode, existing_memory_, alignment);
     }
     else
     {
@@ -35,4 +36,4 @@ WriteBufferFromFileBase * createWriteBufferFromFileBaseByFileProvider(FileProvid
     }
 }
 
-}
+} // namespace DB

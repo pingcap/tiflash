@@ -23,7 +23,8 @@ public:
         auto r = tiflash_instance_wrap->proxy_helper->getFile(fname);
         if (unlikely(r.res != FileEncryptionRes::Ok && r.res != FileEncryptionRes::Disabled))
         {
-            throw DB::TiFlashException("Get encryption info for file: " + fname + " meet error: " + *r.erro_msg, Errors::Encryption::Internal);
+            throw DB::TiFlashException(
+                "Get encryption info for file: " + fname + " meet error: " + *r.erro_msg, Errors::Encryption::Internal);
         }
         return r;
     }
@@ -33,7 +34,8 @@ public:
         auto r = tiflash_instance_wrap->proxy_helper->newFile(fname);
         if (unlikely(r.res != FileEncryptionRes::Ok && r.res != FileEncryptionRes::Disabled))
         {
-            throw DB::TiFlashException("Create encryption info for file: " + fname + " meet error: " + *r.erro_msg, Errors::Encryption::Internal);
+            throw DB::TiFlashException(
+                "Create encryption info for file: " + fname + " meet error: " + *r.erro_msg, Errors::Encryption::Internal);
         }
         return r;
     }
@@ -43,7 +45,8 @@ public:
         auto r = tiflash_instance_wrap->proxy_helper->deleteFile(fname);
         if (unlikely(r.res != FileEncryptionRes::Ok && r.res != FileEncryptionRes::Disabled))
         {
-            throw DB::TiFlashException("Delete encryption info for file: " + fname + " meet error: " + *r.erro_msg, Errors::Encryption::Internal);
+            throw DB::TiFlashException(
+                "Delete encryption info for file: " + fname + " meet error: " + *r.erro_msg, Errors::Encryption::Internal);
         }
     }
 

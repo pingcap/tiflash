@@ -8,7 +8,7 @@ class MockKeyManager : public KeyManager
 {
 public:
     ~MockKeyManager() = default;
-    
+
     MockKeyManager(EncryptionMethod method_, const String & key_, const String & iv) : method{method_}, key{key_}, iv{iv} {}
 
     FileEncryptionInfo getFile(const String & fname) override

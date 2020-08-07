@@ -22,7 +22,8 @@ extern const int CANNOT_OPEN_FILE;
 extern const int CANNOT_CLOSE_FILE;
 } // namespace ErrorCodes
 
-PosixWritableFile::PosixWritableFile(const std::string & file_name_, bool truncate_when_exists_, int flags, mode_t mode) : file_name{file_name_}
+PosixWritableFile::PosixWritableFile(const std::string & file_name_, bool truncate_when_exists_, int flags, mode_t mode)
+    : file_name{file_name_}
 {
     doOpenFile(truncate_when_exists_, flags, mode);
 }
@@ -92,7 +93,8 @@ void PosixWritableFile::doOpenFile(bool truncate_when_exists_, int flags, mode_t
 #endif
 }
 
-int PosixWritableFile::fsync() {
+int PosixWritableFile::fsync()
+{
     ProfileEvents::increment(ProfileEvents::FileFSync);
     return ::fsync(fd);
 }

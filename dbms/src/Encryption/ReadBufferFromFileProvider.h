@@ -8,7 +8,7 @@
 
 namespace CurrentMetrics
 {
-    extern const Metric OpenFileForRead;
+extern const Metric OpenFileForRead;
 }
 
 namespace DB

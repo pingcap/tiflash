@@ -14,8 +14,7 @@ class FileProvider
 {
 public:
     FileProvider(KeyManagerPtr key_manager_, bool encryption_enabled_)
-        : key_manager{std::move(key_manager_)},
-          encryption_enabled{encryption_enabled_}
+        : key_manager{std::move(key_manager_)}, encryption_enabled{encryption_enabled_}
     {}
 
     RandomAccessFilePtr newRandomAccessFile(const String & file_path_, const EncryptionPath & encryption_path_, int flags = -1) const;

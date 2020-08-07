@@ -1,10 +1,10 @@
 #pragma once
 
+#include <Encryption/EncryptionPath.h>
+#include <Storages/Transaction/ProxyFFIType.h>
 #include <cstddef>
 #include <memory>
-#include <Encryption/EncryptionPath.h>
 #include <string>
-#include <Storages/Transaction/ProxyFFIType.h>
 
 namespace DB
 {

@@ -1,5 +1,5 @@
-#include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <Encryption/CompressedReadBufferFromFileProvider.h>
+#include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <IO/WriteHelpers.h>
 
 
@@ -8,7 +8,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int SEEK_POSITION_OUT_OF_BOUND;
+extern const int SEEK_POSITION_OUT_OF_BOUND;
 }
 
 
@@ -29,12 +29,11 @@ bool CompressedReadBufferFromFileProvider::nextImpl()
 }
 
 
-CompressedReadBufferFromFileProvider::CompressedReadBufferFromFileProvider(
-    FileProviderPtr & file_provider, const std::string & path, const EncryptionPath & encryption_path,
-    size_t estimated_size, size_t aio_threshold, size_t buf_size)
+CompressedReadBufferFromFileProvider::CompressedReadBufferFromFileProvider(FileProviderPtr & file_provider, const std::string & path,
+    const EncryptionPath & encryption_path, size_t estimated_size, size_t aio_threshold, size_t buf_size)
     : BufferWithOwnMemory<ReadBuffer>(0),
-        p_file_in(createReadBufferFromFileBaseByFileProvider(file_provider, path, encryption_path, estimated_size, aio_threshold, buf_size)),
-        file_in(*p_file_in)
+      p_file_in(createReadBufferFromFileBaseByFileProvider(file_provider, path, encryption_path, estimated_size, aio_threshold, buf_size)),
+      file_in(*p_file_in)
 {
     compressed_in = &file_in;
 }
@@ -42,9 +41,8 @@ CompressedReadBufferFromFileProvider::CompressedReadBufferFromFileProvider(
 
 void CompressedReadBufferFromFileProvider::seek(size_t offset_in_compressed_file, size_t offset_in_decompressed_block)
 {
-    if (size_compressed &&
-        offset_in_compressed_file == file_in.getPositionInFile() - size_compressed &&
-        offset_in_decompressed_block <= working_buffer.size())
+    if (size_compressed && offset_in_compressed_file == file_in.getPositionInFile() - size_compressed
+        && offset_in_decompressed_block <= working_buffer.size())
     {
         bytes += offset();
         pos = working_buffer.begin() + offset_in_decompressed_block;
@@ -60,8 +58,9 @@ void CompressedReadBufferFromFileProvider::seek(size_t offset_in_compressed_file
 
         if (offset_in_decompressed_block > working_buffer.size())
             throw Exception("Seek position is beyond the decompressed block"
-            " (pos: " + toString(offset_in_decompressed_block) + ", block size: " + toString(working_buffer.size()) + ")",
-            ErrorCodes::SEEK_POSITION_OUT_OF_BOUND);
+                            " (pos: "
+                    + toString(offset_in_decompressed_block) + ", block size: " + toString(working_buffer.size()) + ")",
+                ErrorCodes::SEEK_POSITION_OUT_OF_BOUND);
 
         pos = working_buffer.begin() + offset_in_decompressed_block;
         bytes -= offset();
@@ -113,4 +112,4 @@ size_t CompressedReadBufferFromFileProvider::readBig(char * to, size_t n)
     return bytes_read;
 }
 
-}
+} // namespace DB

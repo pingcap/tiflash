@@ -51,7 +51,8 @@ void WriteBufferFromFileProvider::nextImpl()
     }
 }
 
-WriteBufferFromFileProvider::~WriteBufferFromFileProvider() {
+WriteBufferFromFileProvider::~WriteBufferFromFileProvider()
+{
     if (file->isClosed())
         return;
 

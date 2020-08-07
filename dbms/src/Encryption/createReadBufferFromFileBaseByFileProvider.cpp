@@ -1,5 +1,5 @@
-#include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
+#include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
 
 #if !defined(__APPLE__) && !defined(__FreeBSD__) && !defined(_MSC_VER)
 #include <IO/ReadBufferAIO.h>
@@ -9,23 +9,25 @@
 
 namespace ProfileEvents
 {
-    extern const Event CreatedReadBufferOrdinary;
+extern const Event CreatedReadBufferOrdinary;
 }
 
 namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int NOT_IMPLEMENTED;
+extern const int NOT_IMPLEMENTED;
 }
 
-std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvider(FileProviderPtr & file_provider, const std::string & filename_, const EncryptionPath & encryption_path_,
-        size_t estimated_size, size_t aio_threshold, size_t buffer_size_, int flags_, char * existing_memory_, size_t alignment)
+std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvider(FileProviderPtr & file_provider,
+    const std::string & filename_, const EncryptionPath & encryption_path_, size_t estimated_size, size_t aio_threshold,
+    size_t buffer_size_, int flags_, char * existing_memory_, size_t alignment)
 {
     if ((aio_threshold == 0) || (estimated_size < aio_threshold))
     {
         ProfileEvents::increment(ProfileEvents::CreatedReadBufferOrdinary);
-        return std::make_unique<ReadBufferFromFileProvider>(file_provider, filename_, encryption_path_, buffer_size_, flags_, existing_memory_, alignment);
+        return std::make_unique<ReadBufferFromFileProvider>(
+            file_provider, filename_, encryption_path_, buffer_size_, flags_, existing_memory_, alignment);
     }
     else
     {
@@ -34,4 +36,4 @@ std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvid
     }
 }
 
-}
+} // namespace DB

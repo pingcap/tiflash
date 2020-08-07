@@ -1,6 +1,6 @@
 #include <Encryption/AESCTRCipherStream.h>
-#include <Encryption/MockKeyManager.h>
 #include <Encryption/FileProvider.h>
+#include <Encryption/MockKeyManager.h>
 #include <gtest/gtest.h>
 #include <random>
 
@@ -89,7 +89,8 @@ public:
         std::string iv_str(reinterpret_cast<const char *>(iv), 16);
         KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(method, key_str, iv_str);
         auto encryption_info = key_manager->newFile("encryption");
-        BlockAccessCipherStreamPtr cipher_stream = AESCTRCipherStream::createCipherStream(encryption_info, EncryptionPath("encryption", ""));
+        BlockAccessCipherStreamPtr cipher_stream
+            = AESCTRCipherStream::createCipherStream(encryption_info, EncryptionPath("encryption", ""));
 
         size_t data_size = end - start;
         // Allocate exact size. AESCTRCipherStream should make sure there will be
