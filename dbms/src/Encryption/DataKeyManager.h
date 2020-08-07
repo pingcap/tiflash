@@ -7,10 +7,6 @@
 
 namespace DB
 {
-namespace ErrorCodes
-{
-extern const int DATA_ENCRYPTION_ERROR;
-} // namespace ErrorCodes
 class DataKeyManager : public KeyManager
 {
 public:
