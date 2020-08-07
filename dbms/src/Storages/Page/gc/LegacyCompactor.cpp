@@ -226,7 +226,7 @@ size_t LegacyCompactor::writeToCheckpoint(
     size_t bytes_written   = 0;
     auto   checkpoint_file = PageFile::newPageFile(file_id.first, file_id.second, storage_path, file_provider, PageFile::Type::Temp, log);
     {
-        auto checkpoint_writer = checkpoint_file.createWriter(false, false, false);
+        auto checkpoint_writer = checkpoint_file.createWriter(false, false);
 
         PageEntriesEdit edit;
         bytes_written += checkpoint_writer->write(wb, edit);

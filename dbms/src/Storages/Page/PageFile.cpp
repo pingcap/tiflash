@@ -396,7 +396,7 @@ void PageFile::MetaMergingReader::moveNext()
 // PageFile::Writer
 // =========================================================
 
-PageFile::Writer::Writer(PageFile & page_file_, bool sync_on_write_, bool create_new_file, bool create_new_encryption_info)
+PageFile::Writer::Writer(PageFile & page_file_, bool sync_on_write_, bool create_new_file)
     : page_file(page_file_),
       sync_on_write(sync_on_write_),
       data_file_path(page_file.dataPath()),
@@ -406,9 +406,9 @@ PageFile::Writer::Writer(PageFile & page_file_, bool sync_on_write_, bool create
 {
     // Create data and meta file, prevent empty page folder from being removed by GC.
     data_file = page_file.file_provider->newWritableFile(
-        page_file.dataPath(), page_file.dataEncryptionPath(), create_new_file, create_new_encryption_info);
+        page_file.dataPath(), page_file.dataEncryptionPath(), create_new_file, create_new_file);
     meta_file = page_file.file_provider->newWritableFile(
-        page_file.metaPath(), page_file.metaEncryptionPath(), create_new_file, create_new_encryption_info);
+        page_file.metaPath(), page_file.metaEncryptionPath(), create_new_file, create_new_file);
     data_file->close();
     meta_file->close();
 }
@@ -487,13 +487,13 @@ void PageFile::Writer::closeFd()
 
 PageFile::Reader::Reader(PageFile & page_file)
     : data_file_path(page_file.dataPath()),
-      file{page_file.file_provider->newRandomAccessFile(page_file.dataPath(), page_file.dataEncryptionPath())}
+      data_file{page_file.file_provider->newRandomAccessFile(page_file.dataPath(), page_file.dataEncryptionPath())}
 {
 }
 
 PageFile::Reader::~Reader()
 {
-    file->close();
+    data_file->close();
 }
 
 PageMap PageFile::Reader::read(PageIdAndEntries & to_read)
@@ -523,7 +523,7 @@ PageMap PageFile::Reader::read(PageIdAndEntries & to_read)
     PageMap page_map;
     for (const auto & [page_id, entry] : to_read)
     {
-        PageUtil::readFile(file, entry.offset, pos, entry.size);
+        PageUtil::readFile(data_file, entry.offset, pos, entry.size);
 
         if constexpr (PAGE_CHECKSUM_ON_READ)
         {
@@ -574,7 +574,7 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
     {
         auto && [page_id, entry] = *it;
 
-        PageUtil::readFile(file, entry.offset, data_buf, entry.size);
+        PageUtil::readFile(data_file, entry.offset, data_buf, entry.size);
 
         if constexpr (PAGE_CHECKSUM_ON_READ)
         {
@@ -650,7 +650,7 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read)
             // TODO: Continuously fields can read by one system call.
             const auto [beg_offset, end_offset] = entry.getFieldOffsets(field_index);
             const auto size_to_read             = end_offset - beg_offset;
-            PageUtil::readFile(file, entry.offset + beg_offset, write_offset, size_to_read);
+            PageUtil::readFile(data_file, entry.offset + beg_offset, write_offset, size_to_read);
             fields_offset_in_page.emplace(field_index, read_size_this_entry);
 
             if constexpr (PAGE_CHECKSUM_ON_READ)

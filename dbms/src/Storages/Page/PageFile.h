@@ -38,7 +38,7 @@ public:
         friend class PageFile;
 
     public:
-        Writer(PageFile &, bool sync_on_write, bool create_new_file = true, bool create_new_encryption_info = true);
+        Writer(PageFile &, bool sync_on_write, bool create_new_file = true);
         ~Writer();
 
         [[nodiscard]] size_t write(WriteBatch & wb, PageEntriesEdit & edit);
@@ -91,7 +91,7 @@ public:
     private:
         String data_file_path;
 
-        RandomAccessFilePtr file;
+        RandomAccessFilePtr data_file;
     };
 
     struct Comparator
@@ -264,9 +264,9 @@ public:
     /// Return a writer bound with this PageFile object.
     /// Note that the user MUST keep the PageFile object around before this writer being freed.
     /// And the meta_file_pos, data_file_pos should be properly set before creating writer.
-    std::unique_ptr<Writer> createWriter(bool sync_on_write, bool create_new_file, bool create_new_encryption_info)
+    std::unique_ptr<Writer> createWriter(bool sync_on_write, bool create_new_file)
     {
-        return std::make_unique<Writer>(*this, sync_on_write, create_new_file, create_new_encryption_info);
+        return std::make_unique<Writer>(*this, sync_on_write, create_new_file);
     }
     /// Return a reader for this file.
     /// The PageFile object can be released any time.
@@ -315,6 +315,7 @@ public:
         file_provider->deleteEncryptionInfo(metaEncryptionPath());
     }
 
+    // Encryption can be turned on / turned off for existing cluster, we should take care of it when trying to reuse PageFile.
     bool reusableForWrite() const
     {
         auto file_encrypted = file_provider->isFileEncrypted(dataEncryptionPath());
@@ -336,6 +337,8 @@ private:
 
     String         dataPath() const { return folderPath() + "/page"; }
     String         metaPath() const { return folderPath() + "/meta"; }
+    // dataEncryptionPath() and metaEncryptionPath() have no relation with PageFile's type
+    // Their results remain unchanged during a PageFile's lifecycle to simplify the management of encryption info
     EncryptionPath dataEncryptionPath() const
     {
         String encrypt_path = parent_path + "/" + folder_prefix_formal + "_" + DB::toString(file_id) + "_" + DB::toString(level) + "/page";

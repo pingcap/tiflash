@@ -178,8 +178,13 @@ BlockAccessCipherStreamPtr AESCTRCipherStream::createCipherStream(
     // so we combine the `iv` fetched from file.dict with the hash value of the file name to calculate the real `iv` for every file.
     if (!encryption_path_.file_name.empty())
     {
-        std::size_t file_name_hash = std::hash<std::string>{}(encryption_path_.file_name);
-        iv_high ^= file_name_hash;
+        unsigned char md5_value[MD5_DIGEST_LENGTH];
+        static_assert(MD5_DIGEST_LENGTH == sizeof(uint64_t) * 2);
+        MD5((unsigned char *)encryption_path_.file_name.c_str(), encryption_path_.file_name.size(), md5_value);
+        auto md5_high = readBigEndian<uint64_t>(reinterpret_cast<const char *>(&md5_value));
+        auto md5_low = readBigEndian<uint64_t>(reinterpret_cast<const char *>(&md5_value  + sizeof(uint64_t)));
+        iv_high ^= md5_high;
+        iv_low ^= md5_low;
     }
     return std::make_shared<AESCTRCipherStream>(cipher, key, iv_high, iv_low);
 }

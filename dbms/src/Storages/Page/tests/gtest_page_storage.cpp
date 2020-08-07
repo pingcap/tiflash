@@ -623,7 +623,7 @@ try
 
         auto f = PageFile::newPageFile(2, 0, storage->storage_path, file_provider, PageFile::Type::Temp, storage->log);
         {
-            auto w = f.createWriter(false, true, true);
+            auto w = f.createWriter(false, true);
 
             PageEntriesEdit edit;
             (void)w->write(wb, edit);

@@ -324,7 +324,7 @@ PageStorage::WriterPtr PageStorage::getWriter(PageFile & page_file)
         && page_file.getMetaFileAppendPos() < config.file_meta_roll_size;
     if (is_writable)
     {
-        write_file_writer = page_file.createWriter(config.sync_on_write, false, false);
+        write_file_writer = page_file.createWriter(config.sync_on_write, false);
     }
     else
     {
@@ -334,7 +334,7 @@ PageStorage::WriterPtr PageStorage::getWriter(PageFile & page_file)
         page_file
             = PageFile::newPageFile(max_writing_id_lvl.first + 1, 0, storage_path, file_provider, PageFile::Type::Formal, page_file_log);
         LOG_DEBUG(log, storage_name << " create new PageFile_" + DB::toString(max_writing_id_lvl.first + 1) + "_0 for write.");
-        write_file_writer = page_file.createWriter(config.sync_on_write, true, true);
+        write_file_writer = page_file.createWriter(config.sync_on_write, true);
     }
     return write_file_writer;
 }
@@ -406,7 +406,7 @@ void PageStorage::write(WriteBatch && wb)
                                    << "_0 is full, create new PageFile_" + DB::toString(max_writing_id_lvl.first + 1) + "_0 for write");
             page_file = PageFile::newPageFile(
                 max_writing_id_lvl.first + 1, 0, storage_path, file_provider, PageFile::Type::Formal, page_file_log);
-            file_to_write = page_file.createWriter(config.sync_on_write, true, true);
+            file_to_write = page_file.createWriter(config.sync_on_write, true);
         }
 
         idle_writers.emplace_back(std::move(file_to_write));

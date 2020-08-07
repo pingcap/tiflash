@@ -5,6 +5,7 @@
 #include <Storages/Transaction/ProxyFFIType.h>
 #include <openssl/aes.h>
 #include <openssl/evp.h>
+#include <openssl/md5.h>
 
 namespace DB
 {

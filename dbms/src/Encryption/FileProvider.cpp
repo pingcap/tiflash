@@ -77,6 +77,7 @@ void FileProvider::deleteEncryptionInfo(const EncryptionPath & encryption_path_)
 bool FileProvider::isFileEncrypted(const EncryptionPath & encryption_path_) const
 {
     auto encryption_info = key_manager->getFile(encryption_path_.dir_name);
+    // FileEncryptionRes::Disabled means encryption feature has never been enabled, so no file will be encrypted
     return (encryption_info.res != FileEncryptionRes::Disabled) && (encryption_info.method != EncryptionMethod::Plaintext);
 }
 
