@@ -21,7 +21,7 @@ protected:
     CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForWrite};
 
 public:
-    PosixWritableFile(const std::string & file_name_, bool create_new_file_, int flags, mode_t mode);
+    PosixWritableFile(const std::string & file_name_, bool truncate_when_exists_, int flags, mode_t mode);
 
     ~PosixWritableFile() override;
 
@@ -42,7 +42,7 @@ public:
     int fsync() override;
 
 private:
-    void doOpenFile(bool create_new_file_, int flags, mode_t mode);
+    void doOpenFile(bool truncate_when_exists_, int flags, mode_t mode);
 
 private:
     std::string file_name;

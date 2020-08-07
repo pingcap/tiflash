@@ -22,9 +22,9 @@ extern const int CANNOT_OPEN_FILE;
 extern const int CANNOT_CLOSE_FILE;
 } // namespace ErrorCodes
 
-PosixWritableFile::PosixWritableFile(const std::string & file_name_, bool create_new_file_, int flags, mode_t mode) : file_name{file_name_}
+PosixWritableFile::PosixWritableFile(const std::string & file_name_, bool truncate_when_exists_, int flags, mode_t mode) : file_name{file_name_}
 {
-    doOpenFile(create_new_file_, flags, mode);
+    doOpenFile(truncate_when_exists_, flags, mode);
 }
 
 PosixWritableFile::~PosixWritableFile()
@@ -55,7 +55,7 @@ ssize_t PosixWritableFile::write(char * buf, size_t size) { return ::write(fd, b
 
 ssize_t PosixWritableFile::pwrite(char * buf, size_t size, off_t offset) const { return ::pwrite(fd, buf, size, offset); }
 
-void PosixWritableFile::doOpenFile(bool create_new_file_, int flags, mode_t mode)
+void PosixWritableFile::doOpenFile(bool truncate_when_exists_, int flags, mode_t mode)
 {
     ProfileEvents::increment(ProfileEvents::FileOpen);
 #ifdef __APPLE__
@@ -66,7 +66,7 @@ void PosixWritableFile::doOpenFile(bool create_new_file_, int flags, mode_t mode
 
     if (flags == -1)
     {
-        if (create_new_file_)
+        if (truncate_when_exists_)
             flags = O_WRONLY | O_TRUNC | O_CREAT;
         else
             flags = O_WRONLY | O_CREAT;

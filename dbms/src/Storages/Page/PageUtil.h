@@ -112,8 +112,6 @@ void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_wri
 
 void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, size_t expected_bytes);
 
-void readFile(int fd, const off_t offset, const char * buf, size_t expected_bytes, const std::string & path);
-
 /// Write and advance sizeof(T) bytes.
 template <typename T>
 inline void put(char *& pos, const T & v)

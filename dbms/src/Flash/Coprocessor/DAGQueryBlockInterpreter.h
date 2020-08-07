@@ -98,7 +98,7 @@ private:
     void executeOrder(Pipeline & pipeline, std::vector<NameAndTypePair> & order_columns);
     void executeLimit(Pipeline & pipeline);
     void executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, Names & aggregation_keys,
-        TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions, const FileProviderPtr & file_provider);
+        TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions);
     void executeFinalProject(Pipeline & pipeline);
     void getAndLockStorageWithSchemaVersion(TableID table_id, Int64 schema_version);
     SortDescription getSortDescription(std::vector<NameAndTypePair> & order_columns);

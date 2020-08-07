@@ -33,7 +33,7 @@ public:
 
 private:
     WritableFilePtr file;
-
+    // logic file_offset for EncryptedWritableFile, should be same as the underlying plaintext file
     off_t file_offset;
 
     BlockAccessCipherStreamPtr stream;
