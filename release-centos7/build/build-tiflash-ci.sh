@@ -67,7 +67,7 @@ cmake "$SRCPATH" \
     -DENABLE_EMBEDDED_COMPILER=$ENABLE_EMBEDDED_COMPILER \
     -DENABLE_TESTS=$ENABLE_TEST \
     -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE
-make -j $NPROC
+make -j $NPROC tiflash
 
 cp -f "$build_dir/dbms/src/Server/tiflash" "$install_dir/tiflash"
 cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "$install_dir/libtiflash_proxy.so"
