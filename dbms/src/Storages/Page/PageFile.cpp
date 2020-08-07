@@ -405,17 +405,17 @@ PageFile::Writer::Writer(PageFile & page_file_, bool sync_on_write_, bool create
       meta_file{nullptr}
 {
     // Create data and meta file, prevent empty page folder from being removed by GC.
-    //    PageUtil::touchFile(data_file_path);
-    //    PageUtil::touchFile(meta_file_path);
     data_file = page_file.file_provider->newWritableFile(
         page_file.dataPath(), page_file.dataEncryptionPath(), create_new_file, create_new_encryption_info);
     meta_file = page_file.file_provider->newWritableFile(
         page_file.metaPath(), page_file.metaEncryptionPath(), create_new_file, create_new_encryption_info);
+    data_file->close();
+    meta_file->close();
 }
 
 PageFile::Writer::~Writer()
 {
-    if (data_file->getFd() == -1)
+    if (data_file->isClosed())
         return;
 
     closeFd();
@@ -714,7 +714,10 @@ PageFile::PageFile(PageFileId              file_id_,
     {
         Poco::File file(folderPath());
         if (file.exists())
+        {
+            deleteEncryptionInfo();
             file.remove(true);
+        }
         file.createDirectories();
     }
 }
