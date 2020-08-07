@@ -1,5 +1,5 @@
 #include <Common/Exception.h>
-#include <IO/EncryptedRandomAccessFile.h>
+#include <Encryption/EncryptedRandomAccessFile.h>
 #include <fcntl.h>
 #include <unistd.h>
 

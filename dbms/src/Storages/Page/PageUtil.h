@@ -17,8 +17,8 @@
 #include <fcntl.h>
 #endif
 
-#include <IO/RandomAccessFile.h>
-#include <IO/WritableFile.h>
+#include <Encryption/RandomAccessFile.h>
+#include <Encryption/WritableFile.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Poco/File.h>
 #include <ext/scope_guard.h>

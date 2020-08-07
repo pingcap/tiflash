@@ -2,8 +2,8 @@
 #include <Common/Stopwatch.h>
 #include <Common/escapeForFileName.h>
 #include <Databases/DatabaseTiFlash.h>
-#include <IO/ReadBufferFromFileProvider.h>
-#include <IO/WriteBufferFromFileProvider.h>
+#include <Encryption/ReadBufferFromFileProvider.h>
+#include <Encryption/WriteBufferFromFileProvider.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Parsers/ASTCreateQuery.h>

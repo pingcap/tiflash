@@ -2,8 +2,8 @@
 
 #include <Encryption/BlockAccessCipherStream.h>
 #include <Encryption/KeyManager.h>
-#include <IO/RandomAccessFile.h>
-#include <IO/WritableFile.h>
+#include <Encryption/RandomAccessFile.h>
+#include <Encryption/WritableFile.h>
 #include <string>
 
 namespace DB

@@ -2,7 +2,7 @@
 
 #include <cstddef>
 #include <memory>
-#include <IO/EncryptionPath.h>
+#include <Encryption/EncryptionPath.h>
 #include <string>
 #include <Storages/Transaction/ProxyFFIType.h>
 

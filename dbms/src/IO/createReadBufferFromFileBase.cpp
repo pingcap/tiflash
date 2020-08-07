@@ -1,6 +1,6 @@
 #include <IO/createReadBufferFromFileBase.h>
 #include <IO/ReadBufferFromFile.h>
-#include <IO/ReadBufferFromFileProvider.h>
+#include <Encryption/ReadBufferFromFileProvider.h>
 
 #if !defined(__APPLE__) && !defined(__FreeBSD__) && !defined(_MSC_VER)
 #include <IO/ReadBufferAIO.h>

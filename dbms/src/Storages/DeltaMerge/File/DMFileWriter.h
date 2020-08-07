@@ -4,7 +4,7 @@
 #include <DataStreams/MarkInCompressedFile.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <IO/HashingWriteBuffer.h>
-#include <IO/WriteBufferFromFileProvider.h>
+#include <Encryption/WriteBufferFromFileProvider.h>
 #include <IO/WriteBufferFromOStream.h>
 #include <IO/createWriteBufferFromFileBase.h>
 #include <Storages/DeltaMerge/File/DMFile.h>

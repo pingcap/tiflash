@@ -3,7 +3,7 @@
 
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
-#include <IO/PosixWritableFile.h>
+#include <Encryption/PosixWritableFile.h>
 
 namespace ProfileEvents
 {

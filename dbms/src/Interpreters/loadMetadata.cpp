@@ -3,7 +3,7 @@
 #include <Databases/DatabaseOrdinary.h>
 #include <Databases/DatabaseTiFlash.h>
 #include <Databases/DatabasesCommon.h>
-#include <IO/ReadBufferFromFileProvider.h>
+#include <Encryption/ReadBufferFromFileProvider.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/loadMetadata.h>

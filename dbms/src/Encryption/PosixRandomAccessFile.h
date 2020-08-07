@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Common/CurrentMetrics.h>
-#include <IO/RandomAccessFile.h>
+#include <Encryption/RandomAccessFile.h>
 #include <string>
 
 namespace CurrentMetrics

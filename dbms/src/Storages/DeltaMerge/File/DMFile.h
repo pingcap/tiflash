@@ -2,7 +2,7 @@
 
 #include <Core/Types.h>
 #include <Encryption/FileProvider.h>
-#include <IO/ReadBufferFromFileProvider.h>
+#include <Encryption/ReadBufferFromFileProvider.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/ColumnStat.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>

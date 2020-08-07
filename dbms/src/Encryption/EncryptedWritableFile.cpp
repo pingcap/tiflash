@@ -1,4 +1,4 @@
-#include <IO/EncryptedWritableFile.h>
+#include <Encryption/EncryptedWritableFile.h>
 
 namespace DB
 {

@@ -1,6 +1,6 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <IO/ReadHelpers.h>
-#include <IO/WriteBufferFromFileProvider.h>
+#include <Encryption/WriteBufferFromFileProvider.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/File/DMFile.h>

@@ -15,7 +15,7 @@
 #include <DataStreams/NativeBlockOutputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
-#include <IO/WriteBufferFromFileProvider.h>
+#include <Encryption/WriteBufferFromFileProvider.h>
 #include <IO/CompressedWriteBuffer.h>
 
 #include <Interpreters/Aggregator.h>

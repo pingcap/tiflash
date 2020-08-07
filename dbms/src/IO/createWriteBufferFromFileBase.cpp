@@ -1,6 +1,6 @@
 #include <IO/createWriteBufferFromFileBase.h>
 #include <IO/WriteBufferFromFile.h>
-#include <IO/WriteBufferFromFileProvider.h>
+#include <Encryption/WriteBufferFromFileProvider.h>
 #if !defined(__APPLE__) && !defined(__FreeBSD__) && !defined(_MSC_VER)
 #include <IO/WriteBufferAIO.h>
 #endif

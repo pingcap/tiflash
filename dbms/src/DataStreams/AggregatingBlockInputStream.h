@@ -2,7 +2,7 @@
 
 #include <Interpreters/Aggregator.h>
 #include <Encryption/FileProvider.h>
-#include <IO/ReadBufferFromFileProvider.h>
+#include <Encryption/ReadBufferFromFileProvider.h>
 #include <IO/CompressedReadBuffer.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 

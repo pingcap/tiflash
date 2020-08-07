@@ -1,6 +1,6 @@
 #include "gtest/gtest.h"
 
-#include <IO/PosixWritableFile.h>
+#include <Encryption/PosixWritableFile.h>
 #include <Poco/Logger.h>
 
 #include <Storages/Page/PageUtil.h>

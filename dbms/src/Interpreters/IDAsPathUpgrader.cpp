@@ -4,8 +4,8 @@
 #include <Databases/DatabaseOrdinary.h>
 #include <Databases/DatabasesCommon.h>
 #include <Debug/MockSchemaNameMapper.h>
-#include <IO/ReadBufferFromFileProvider.h>
-#include <IO/WriteBufferFromFileProvider.h>
+#include <Encryption/ReadBufferFromFileProvider.h>
+#include <Encryption/WriteBufferFromFileProvider.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/IDAsPathUpgrader.h>
 #include <Parsers/ASTCreateQuery.h>

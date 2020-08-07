@@ -1,6 +1,6 @@
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
-#include <IO/PosixRandomAccessFile.h>
+#include <Encryption/PosixRandomAccessFile.h>
 #include <fcntl.h>
 #include <unistd.h>
 

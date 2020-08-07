@@ -15,8 +15,8 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/InterpreterCreateQuery.h>
-#include <IO/ReadBufferFromFileProvider.h>
-#include <IO/WriteBufferFromFileProvider.h>
+#include <Encryption/ReadBufferFromFileProvider.h>
+#include <Encryption/WriteBufferFromFileProvider.h>
 
 
 namespace DB

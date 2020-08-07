@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Encryption/FileProvider.h>
-#include <IO/WritableFile.h>
+#include <Encryption/WritableFile.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
 
 namespace DB

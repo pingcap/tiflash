@@ -7,7 +7,7 @@
 
 #include <Common/escapeForFileName.h>
 
-#include <IO/WriteBufferFromFileProvider.h>
+#include <Encryption/WriteBufferFromFileProvider.h>
 #include <IO/WriteHelpers.h>
 
 #include <Parsers/ASTColumnDeclaration.h>

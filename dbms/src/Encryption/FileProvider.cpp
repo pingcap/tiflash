@@ -1,10 +1,10 @@
 #include <common/likely.h>
 #include <Common/TiFlashException.h>
-#include <IO/EncryptedRandomAccessFile.h>
-#include <IO/EncryptedWritableFile.h>
+#include <Encryption/EncryptedRandomAccessFile.h>
+#include <Encryption/EncryptedWritableFile.h>
 #include <Encryption/FileProvider.h>
-#include <IO/PosixRandomAccessFile.h>
-#include <IO/PosixWritableFile.h>
+#include <Encryption/PosixRandomAccessFile.h>
+#include <Encryption/PosixWritableFile.h>
 #include <Poco/File.h>
 
 namespace DB

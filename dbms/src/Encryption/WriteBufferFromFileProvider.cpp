@@ -1,4 +1,4 @@
-#include <IO/WriteBufferFromFileProvider.h>
+#include <Encryption/WriteBufferFromFileProvider.h>
 
 namespace DB
 {
