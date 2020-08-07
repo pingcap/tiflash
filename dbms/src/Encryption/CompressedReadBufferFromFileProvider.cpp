@@ -1,5 +1,5 @@
-#include <IO/CompressedReadBufferFromFile.h>
-#include <IO/createReadBufferFromFileBase.h>
+#include <Encryption/createReadBufferFromFileBaseByFileProvider.h>
+#include <Encryption/CompressedReadBufferFromFileProvider.h>
 #include <IO/WriteHelpers.h>
 
 
@@ -12,7 +12,7 @@ namespace ErrorCodes
 }
 
 
-bool CompressedReadBufferFromFile::nextImpl()
+bool CompressedReadBufferFromFileProvider::nextImpl()
 {
     size_t size_decompressed;
     size_t size_compressed_without_checksum;
@@ -29,16 +29,18 @@ bool CompressedReadBufferFromFile::nextImpl()
 }
 
 
-CompressedReadBufferFromFile::CompressedReadBufferFromFile(
-    const std::string & path, size_t estimated_size, size_t aio_threshold, size_t buf_size)
+CompressedReadBufferFromFileProvider::CompressedReadBufferFromFileProvider(
+    FileProviderPtr & file_provider, const std::string & path, const EncryptionPath & encryption_path,
+    size_t estimated_size, size_t aio_threshold, size_t buf_size)
     : BufferWithOwnMemory<ReadBuffer>(0),
-        p_file_in(createReadBufferFromFileBase(path, estimated_size, aio_threshold, buf_size)),
+        p_file_in(createReadBufferFromFileBaseByFileProvider(file_provider, path, encryption_path, estimated_size, aio_threshold, buf_size)),
         file_in(*p_file_in)
 {
     compressed_in = &file_in;
 }
 
-void CompressedReadBufferFromFile::seek(size_t offset_in_compressed_file, size_t offset_in_decompressed_block)
+
+void CompressedReadBufferFromFileProvider::seek(size_t offset_in_compressed_file, size_t offset_in_decompressed_block)
 {
     if (size_compressed &&
         offset_in_compressed_file == file_in.getPositionInFile() - size_compressed &&
@@ -67,7 +69,7 @@ void CompressedReadBufferFromFile::seek(size_t offset_in_compressed_file, size_t
 }
 
 
-size_t CompressedReadBufferFromFile::readBig(char * to, size_t n)
+size_t CompressedReadBufferFromFileProvider::readBig(char * to, size_t n)
 {
     size_t bytes_read = 0;
 

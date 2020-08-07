@@ -28,5 +28,4 @@ std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBaseByFileProvid
         int flags_ = -1,
         char * existing_memory_ = nullptr,
         size_t alignment = 0);
-
 }

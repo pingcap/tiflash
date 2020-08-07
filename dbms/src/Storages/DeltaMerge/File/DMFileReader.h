@@ -1,7 +1,7 @@
 #pragma once
 
 #include <DataStreams/MarkInCompressedFile.h>
-#include <IO/CompressedReadBufferFromFile.h>
+#include <Encryption/CompressedReadBufferFromFileProvider.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
@@ -32,7 +32,7 @@ public:
         double                   avg_size_hint;
         MarksInCompressedFilePtr marks;
 
-        std::unique_ptr<CompressedReadBufferFromFile> buf;
+        std::unique_ptr<CompressedReadBufferFromFileProvider> buf;
     };
     using StreamPtr     = std::unique_ptr<Stream>;
     using ColumnStreams = std::map<String, StreamPtr>;
