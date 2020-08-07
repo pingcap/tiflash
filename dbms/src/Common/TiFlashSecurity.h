@@ -64,6 +64,7 @@ public:
             else
             {
                 has_tls_config = true;
+                LOG_INFO(log, "security config is set: ca path is " << ca_path << " cert path is " << cert_path << " key path is " << key_path );
             }
             if (config.has("security.cluster_verify_cn") && has_tls_config)
             {
@@ -131,3 +132,4 @@ private:
 };
 
 } // namespace DB
+
