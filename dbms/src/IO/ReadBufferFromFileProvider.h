@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Common/CurrentMetrics.h>
-#include <IO/FileProvider.h>
+#include <Encryption/FileProvider.h>
 #include <IO/ReadBuffer.h>
 #include <IO/ReadBufferFromFileBase.h>
 #include <IO/ReadBufferFromFileDescriptor.h>

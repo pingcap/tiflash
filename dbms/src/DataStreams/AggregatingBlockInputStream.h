@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Interpreters/Aggregator.h>
-#include <IO/FileProvider.h>
+#include <Encryption/FileProvider.h>
 #include <IO/ReadBufferFromFileProvider.h>
 #include <IO/CompressedReadBuffer.h>
 #include <DataStreams/IProfilingBlockInputStream.h>

@@ -1,5 +1,5 @@
 #include <Common/CurrentMetrics.h>
-#include <IO/FileProvider.h>
+#include <Encryption/FileProvider.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <Poco/AutoPtr.h>
 #include <Poco/File.h>

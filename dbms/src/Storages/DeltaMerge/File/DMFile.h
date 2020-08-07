@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Core/Types.h>
-#include <IO/FileProvider.h>
+#include <Encryption/FileProvider.h>
 #include <IO/ReadBufferFromFileProvider.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/ColumnStat.h>

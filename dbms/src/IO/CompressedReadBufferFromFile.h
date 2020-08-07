@@ -1,7 +1,7 @@
 #pragma once
 
 #include <IO/CompressedReadBufferBase.h>
-#include <IO/FileProvider.h>
+#include <Encryption/FileProvider.h>
 #include <IO/ReadBufferFromFileBase.h>
 
 #include <time.h>

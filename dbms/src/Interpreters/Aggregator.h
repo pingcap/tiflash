@@ -21,7 +21,7 @@
 #include <Interpreters/AggregationCommon.h>
 #include <Interpreters/Compiler.h>
 
-#include <IO/FileProvider.h>
+#include <Encryption/FileProvider.h>
 
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnFixedString.h>

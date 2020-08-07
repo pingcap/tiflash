@@ -1,7 +1,7 @@
 #pragma once
 
-#include <IO/Encryption/BlockAccessCipherStream.h>
-#include <IO/Encryption/KeyManager.h>
+#include <Encryption/BlockAccessCipherStream.h>
+#include <Encryption/KeyManager.h>
 #include <IO/RandomAccessFile.h>
 #include <IO/WritableFile.h>
 #include <string>

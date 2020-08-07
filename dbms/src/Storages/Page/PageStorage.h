@@ -1,6 +1,6 @@
 #pragma once
 
-#include <IO/FileProvider.h>
+#include <Encryption/FileProvider.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageFile.h>

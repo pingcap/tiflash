@@ -2,7 +2,7 @@
 #include <Common/TiFlashException.h>
 #include <IO/EncryptedRandomAccessFile.h>
 #include <IO/EncryptedWritableFile.h>
-#include <IO/FileProvider.h>
+#include <Encryption/FileProvider.h>
 #include <IO/PosixRandomAccessFile.h>
 #include <IO/PosixWritableFile.h>
 #include <Poco/File.h>

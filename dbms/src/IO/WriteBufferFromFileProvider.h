@@ -1,6 +1,6 @@
 #pragma once
 
-#include <IO/FileProvider.h>
+#include <Encryption/FileProvider.h>
 #include <IO/WritableFile.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
 

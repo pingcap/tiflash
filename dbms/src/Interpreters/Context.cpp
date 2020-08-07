@@ -50,7 +50,7 @@
 #include <Interpreters/SharedQueries.h>
 #include <Interpreters/Context.h>
 #include <Common/DNSCache.h>
-#include <IO/Encryption/DataKeyManager.h>
+#include <Encryption/DataKeyManager.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
 #include <IO/PersistedCache.h>

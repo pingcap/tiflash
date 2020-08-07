@@ -10,7 +10,7 @@
 #include <Common/TiFlashException.h>
 #include <common/logger_useful.h>
 
-#include <IO/FileProvider.h>
+#include <Encryption/FileProvider.h>
 #include <IO/WriteHelpers.h>
 
 #ifndef __APPLE__

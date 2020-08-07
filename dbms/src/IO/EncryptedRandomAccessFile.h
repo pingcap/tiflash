@@ -1,6 +1,6 @@
 #pragma once
 
-#include <IO/Encryption/AESCTRCipherStream.h>
+#include <Encryption/AESCTRCipherStream.h>
 #include <IO/RandomAccessFile.h>
 #include <string>
 
