@@ -3,25 +3,30 @@
 namespace DB
 {
 
-MockKeyManager::MockKeyManager() : MockKeyManager(default_method, String(reinterpret_cast<const char *>(default_key), 32), String(reinterpret_cast<const char *>(default_iv), 16)) {}
+MockKeyManager::MockKeyManager()
+    : MockKeyManager(
+        default_method, String(reinterpret_cast<const char *>(default_key), 32), String(reinterpret_cast<const char *>(default_iv), 16))
+{}
 
-MockKeyManager::MockKeyManager(EncryptionMethod method_, const String &key_, const String &iv) : method{method_}, key{key_}, iv{iv} {}
+MockKeyManager::MockKeyManager(EncryptionMethod method_, const String & key_, const String & iv) : method{method_}, key{key_}, iv{iv} {}
 
-FileEncryptionInfo MockKeyManager::getFile(const String &fname) {
+FileEncryptionInfo MockKeyManager::getFile(const String & fname)
+{
     std::ignore = fname;
     auto * file_key = new String(key);
     auto * file_iv = new String(iv);
     FileEncryptionInfo file_info{
-            FileEncryptionRes::Ok,
-            method,
-            file_key,
-            file_iv,
-            nullptr,
+        FileEncryptionRes::Ok,
+        method,
+        file_key,
+        file_iv,
+        nullptr,
     };
     return file_info;
 }
 
 const EncryptionMethod MockKeyManager::default_method = EncryptionMethod::Aes256Ctr;
-const unsigned char MockKeyManager::default_key[] = "\xe4\x3e\x8e\xca\x2a\x83\xe1\x88\xfb\xd8\x02\xdc\xf3\x62\x65\x3e\x00\xee\x31\x39\xe7\xfd\x1d\x92\x20\xb1\x62\xae\xb2\xaf\x0f\x1a";
+const unsigned char MockKeyManager::default_key[]
+    = "\xe4\x3e\x8e\xca\x2a\x83\xe1\x88\xfb\xd8\x02\xdc\xf3\x62\x65\x3e\x00\xee\x31\x39\xe7\xfd\x1d\x92\x20\xb1\x62\xae\xb2\xaf\x0f\x1a";
 const unsigned char MockKeyManager::default_iv[] = "\x77\x9b\x82\x72\x26\xb5\x76\x50\xf7\x05\xd2\xd6\xb8\xaa\xa9\x2c";
-}
+} // namespace DB

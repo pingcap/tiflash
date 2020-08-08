@@ -9,7 +9,8 @@ class MockKeyManager : public KeyManager
 public:
     ~MockKeyManager() = default;
 
-    MockKeyManager();;
+    MockKeyManager();
+    ;
 
     MockKeyManager(EncryptionMethod method_, const String & key_, const String & iv);
 
