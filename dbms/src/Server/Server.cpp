@@ -18,6 +18,8 @@
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
 #include <IO/ReadHelpers.h>
+#include <Encryption/DataKeyManager.h>
+#include <Encryption/MockKeyManager.h>
 #include <Encryption/FileProvider.h>
 #include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
@@ -687,11 +689,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
             auto method = tiflash_instance_wrap.proxy_helper->getEncryptionMethod();
             enable_encryption = (method != EncryptionMethod::Plaintext);
         }
-        global_context->initializeFileProvider(&tiflash_instance_wrap, enable_encryption);
+        KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(&tiflash_instance_wrap);
+        global_context->initializeFileProvider(key_manager, enable_encryption);
     }
     else
     {
-        global_context->initializeFileProvider(&tiflash_instance_wrap, false);
+        KeyManagerPtr key_manager = std::make_shared<MockKeyManager>();
+        global_context->initializeFileProvider(key_manager, true);
     }
 
     /// Set path for format schema files

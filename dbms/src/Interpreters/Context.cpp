@@ -1510,12 +1510,12 @@ TiFlashMetricsPtr Context::getTiFlashMetrics() const
     return shared->tiflash_metrics;
 }
 
-void Context::initializeFileProvider(TiFlashServer * tiflash_instance_wrap, bool enable_encryption)
+void Context::initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption)
 {
     auto lock = getLock();
     if (shared->file_provider)
         throw Exception("File provider has already been initialized.", ErrorCodes::LOGICAL_ERROR);
-    shared->file_provider = std::make_shared<FileProvider>(std::make_shared<DataKeyManager>(tiflash_instance_wrap), enable_encryption);
+    shared->file_provider = std::make_shared<FileProvider>(key_manager, enable_encryption);
 }
 
 FileProviderPtr Context::getFileProvider() const

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Encryption/MockKeyManager.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/IDataType.h>
 #include <Interpreters/Context.h>
@@ -130,7 +131,8 @@ public:
             context.setApplicationType(DB::Context::ApplicationType::SERVER);
 
             context.initializeTiFlashMetrics();
-            context.initializeFileProvider(nullptr, false);
+            KeyManagerPtr key_manager = std::make_shared<MockKeyManager>();
+            context.initializeFileProvider(key_manager, true);
             std::vector<size_t> all_capacity{0};
 
             // FIXME: These paths are only set at the first time
