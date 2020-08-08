@@ -56,7 +56,7 @@ void FileProvider::deleteFile(const String & file_path_, const EncryptionPath & 
     Poco::File data_file(file_path_);
     if (data_file.exists())
     {
-        data_file.remove();
+        data_file.remove(true);
     }
     key_manager->deleteFile(encryption_path_.dir_name);
 }
