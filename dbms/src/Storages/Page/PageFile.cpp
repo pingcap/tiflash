@@ -402,7 +402,8 @@ PageFile::Writer::Writer(PageFile & page_file_, bool sync_on_write_, bool create
       data_file_path(page_file.dataPath()),
       meta_file_path(page_file.metaPath()),
       data_file{nullptr},
-      meta_file{nullptr}
+      meta_file{nullptr},
+      last_write_time(Clock::now())
 {
     // Create data and meta file, prevent empty page folder from being removed by GC.
     data_file = page_file.file_provider->newWritableFile(
@@ -487,7 +488,7 @@ void PageFile::Writer::closeFd()
 
 PageFile::Reader::Reader(PageFile & page_file)
     : data_file_path(page_file.dataPath()),
-      data_file{page_file.file_provider->newRandomAccessFile(page_file.dataPath(), page_file.dataEncryptionPath())}
+      data_file{page_file.file_provider->newRandomAccessFile(page_file.dataPath(), page_file.dataEncryptionPath())}, last_read_time(Clock::now())
 {
 }
 
@@ -549,6 +550,8 @@ PageMap PageFile::Reader::read(PageIdAndEntries & to_read)
     if (unlikely(pos != data_buf + buf_size))
         throw Exception("pos not match", ErrorCodes::LOGICAL_ERROR);
 
+    last_read_time = Clock::now();
+
     return page_map;
 }
 
@@ -605,6 +608,8 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
 
         handler(page_id, page);
     }
+
+    last_read_time = Clock::now();
 }
 
 PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read)
@@ -686,9 +691,17 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read)
         throw Exception("Pos not match, expect to read " + DB::toString(buf_size) + " bytes, but only " + DB::toString(pos - data_buf),
                         ErrorCodes::LOGICAL_ERROR);
 
+    last_read_time = Clock::now();
+
     return page_map;
 }
 
+bool PageFile::Reader::isIdle(const Seconds & max_idle_time)
+{
+    if (max_idle_time.count() == 0)
+        return false;
+    return (Clock::now() - last_read_time >= max_idle_time);
+}
 
 // =========================================================
 // PageFile

@@ -8,6 +8,7 @@
 #include <Storages/Page/gc/DataCompactor.h>
 #include <Storages/Page/gc/LegacyCompactor.h>
 #include <Storages/Page/gc/restoreFromCheckpoints.h>
+#include <Storages/Page/mvcc/utils.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <common/logger_useful.h>
 
@@ -53,6 +54,10 @@ String PageStorage::StatisticsInfo::toString() const
     return ss.str();
 }
 
+bool PageStorage::StatisticsInfo::equals(const StatisticsInfo & rhs)
+{
+    return puts == rhs.puts && refs == rhs.refs && deletes == rhs.deletes && upserts == rhs.upserts;
+}
 PageFileSet PageStorage::listAllPageFiles(const String &              storage_path,
                                           const FileProviderPtr &     file_provider,
                                           Poco::Logger *              page_file_log,
@@ -130,6 +135,11 @@ PageStorage::PageStorage(String                  name,
 {
     // at least 1 write slots
     config.num_write_slots = std::max(1UL, config.num_write_slots);
+}
+
+static inline bool isPageFileSizeFitsWritable(const PageFile & pf, const PageStorage::Config & config)
+{
+    return pf.getDataFileAppendPos() < config.file_roll_size && pf.getMetaFileAppendPos() < config.file_meta_roll_size;
 }
 
 void PageStorage::restore()
@@ -235,25 +245,36 @@ void PageStorage::restore()
         removePageFilesIf(page_files, [&page_files_to_remove](const PageFile & pf) -> bool { return page_files_to_remove.count(pf) > 0; });
     }
 
-    // TODO: reuse some page_files
     // fill write_files
+    bool hasReusablePageFile = false;
+    UInt64 maxFileId = 0;
     size_t total_recover_bytes = 0;
-    for (auto & page_file : page_files)
     {
-        total_recover_bytes += page_file.getDiskSize();
-        // We need to keep a PageFile with largest FileID in write_files
-        if (page_file.getLevel() == 0)
-            write_files[0] = page_file;
+        size_t next_write_fill_idx = 0;
+        for (auto & page_file : page_files)
+        {
+            total_recover_bytes += page_file.getDiskSize();
+            // Try best to reuse writable page files
+            if (page_file.getLevel() == 0 && page_file.getType() == PageFile::Type::Formal
+                && isPageFileSizeFitsWritable(page_file, config) && page_file.reusableForWrite())
+            {
+                write_files[next_write_fill_idx] = page_file;
+                next_write_fill_idx              = (next_write_fill_idx + 1) % write_files.size();
+                hasReusablePageFile = true;
+            }
+            if (page_file.getFileId() > maxFileId)
+            {
+                maxFileId = page_file.getFileId();
+            }
+        }
     }
-    if (write_files[0].isValid() && !write_files[0].reusableForWrite())
+    if (!hasReusablePageFile)
     {
-
         auto page_file
-            = PageFile::newPageFile(write_files[0].getFileId() + 1, 0, storage_path, file_provider, PageFile::Type::Formal, page_file_log);
+            = PageFile::newPageFile(maxFileId + 1, 0, storage_path, file_provider, PageFile::Type::Formal, page_file_log);
         page_file.createEncryptionInfo();
         LOG_DEBUG(log,
-                storage_name << " PageFile_" << write_files[0].getFileId()
-                        << "_0 cannot be reused for write due to encryption reason, create new PageFile_" + DB::toString(write_files[0].getFileId() + 1) + "_0 for write");
+                storage_name << "No PageFile can be reused for write, create new PageFile_" + DB::toString(maxFileId + 1) + "_0 for write");
         write_files[0] = page_file;
     }
     if (global_capacity)
@@ -320,8 +341,7 @@ PageStorage::WriterPtr PageStorage::getWriter(PageFile & page_file)
     WriterPtr write_file_writer;
 
     bool is_writable = page_file.isValid() && page_file.getType() == PageFile::Type::Formal //
-        && page_file.getDataFileAppendPos() < config.file_roll_size                         //
-        && page_file.getMetaFileAppendPos() < config.file_meta_roll_size;
+        && isPageFileSizeFitsWritable(page_file, config);
     if (is_writable)
     {
         write_file_writer = page_file.createWriter(config.sync_on_write, false);
@@ -392,9 +412,7 @@ void PageStorage::write(WriteBatch && wb)
             }
         }
         auto & page_file   = write_files[index];
-        bool   is_writable = page_file.isValid()                        //
-            && page_file.getDataFileAppendPos() < config.file_roll_size //
-            && page_file.getMetaFileAppendPos() < config.file_meta_roll_size;
+        bool   is_writable = page_file.isValid() && isPageFileSizeFitsWritable(page_file, config);
         if (!is_writable)
         {
             file_to_write = nullptr; // reset writer first
@@ -420,7 +438,10 @@ void PageStorage::write(WriteBatch && wb)
     // persist the invalid ref pair into PageFile.
     versioned_page_entries.apply(edit);
 
-    statistics.mergeEdits(edit);
+    {
+        std::unique_lock lock(write_mutex);
+        statistics.mergeEdits(edit);
+    }
 }
 
 PageStorage::SnapshotPtr PageStorage::getSnapshot()
@@ -680,6 +701,13 @@ struct GCDebugInfo
     size_t num_bytes_remove_data = 0;
 };
 
+enum class GCType
+{
+    Normal = 0,
+    Skip,
+    LowWrite,
+};
+
 bool PageStorage::gc()
 {
     // If another thread is running gc, just return;
@@ -692,7 +720,6 @@ bool PageStorage::gc()
         gc_is_running.compare_exchange_strong(is_running, false);
     });
 
-    LOG_TRACE(log, storage_name << " Before gc, " << statistics.toString());
 
     /// Get all pending external pages and PageFiles. Note that we should get external pages before PageFiles.
     PathAndIdsVec external_pages;
@@ -706,6 +733,7 @@ bool PageStorage::gc()
 
     std::set<PageFileIdAndLevel> writing_file_id_levels;
     PageFileIdAndLevel           min_writing_file_id_level;
+    StatisticsInfo               statistics_snapshot; // statistics snapshot copy with lock protection
     {
         std::lock_guard<std::mutex> lock(write_mutex);
         for (size_t i = 0; i < write_files.size(); ++i)
@@ -719,7 +747,9 @@ bool PageStorage::gc()
         {
             writer->tryCloseIdleFd(config.open_file_max_idle_time);
         }
+        statistics_snapshot = statistics;
     }
+    LOG_TRACE(log, storage_name << " Before gc, " << statistics_snapshot.toString());
 
     GCDebugInfo debugging_info;
     // Helper function for apply edits and clean up before gc exit.
@@ -744,6 +774,18 @@ bool PageStorage::gc()
                     open_read_files.erase(page_id_and_lvl);
                 }
             }
+
+            // Close idle reader.
+            // Other read threads may take a shared pointer of reader for reading. We can not prevent other readers
+            // by locking at `open_read_files_mutex`. Instead of closing file descriptor, free the shared pointer
+            // of idle readers here. The file descriptor will be closed after all readers done.
+            for (auto iter = open_read_files.begin(); iter != open_read_files.end(); /*empty*/)
+            {
+                if (iter->second->isIdle(config.open_file_max_idle_time))
+                    iter = open_read_files.erase(iter);
+                else
+                    ++iter;
+            }
         }
 
         // Delete obsolete files that are not used by any version, without lock
@@ -763,6 +805,7 @@ bool PageStorage::gc()
         }
     };
 
+    GCType gc_type = GCType::Normal;
     // Ignore page files that maybe writing to.
     {
         PageFileSet removed_page_files;
@@ -773,7 +816,25 @@ bool PageStorage::gc()
             removed_page_files.emplace(pf);
         }
         page_files.swap(removed_page_files);
+
+        /// Strategies to reduce useless GC actions.
         if (page_files.size() < 3)
+        {
+            // If only few page files, running gc is useless.
+            gc_type = GCType::Skip;
+        }
+        else if (last_gc_statistics.equals(statistics_snapshot))
+        {
+            // No write since last gc. Give it a chance for running GC, ensure that we are able to
+            // reclaim disk usage when PageStorage is read-only in extreme cases.
+            if (DB::MVCC::utils::randInt(0, 1000) < config.prob_do_gc_when_write_is_low)
+                gc_type = GCType::LowWrite;
+            else
+                gc_type = GCType::Skip;
+        }
+
+        // Shorcut for early exit GC routine.
+        if (gc_type == GCType::Skip)
         {
             // Apply empty edit and cleanup.
             apply_and_cleanup(PageEntriesEdit{});
@@ -785,7 +846,10 @@ bool PageStorage::gc()
     Stopwatch watch;
     if (metrics)
     {
-        GET_METRIC(metrics, tiflash_storage_page_gc_count, type_exec).Increment();
+        if (gc_type == GCType::LowWrite)
+            GET_METRIC(metrics, tiflash_storage_page_gc_count, type_low_write).Increment();
+        else
+            GET_METRIC(metrics, tiflash_storage_page_gc_count, type_exec).Increment();
     }
     SCOPE_EXIT({
         if (metrics)
@@ -828,6 +892,9 @@ bool PageStorage::gc()
     }
 
     apply_and_cleanup(std::move(gc_file_entries_edit));
+
+    // Simply copy without any locks, it should be fine since we only use it to skip useless GC routine when this PageStorage is cold.
+    last_gc_statistics = statistics_snapshot;
 
     LOG_INFO(log,
              storage_name << " GC exit within " << DB::toString(watch.elapsedSeconds(), 2) << " sec. PageFiles from [" //

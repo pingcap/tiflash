@@ -88,12 +88,17 @@ public:
         using FieldReadInfos = std::vector<FieldReadInfo>;
         PageMap read(FieldReadInfos & to_read);
 
+        bool isIdle(const Seconds & max_idle_time);
     private:
         String data_file_path;
 
         RandomAccessFilePtr data_file;
+
+        Clock::time_point last_read_time;
     };
 
+    // PageFile with type "Checkpoint" is smaller than other types.
+    // Then compare PageFile by theirs <FileID, Level>.
     struct Comparator
     {
         bool operator()(const PageFile & lhs, const PageFile & rhs) const
@@ -144,23 +149,15 @@ public:
         PageFileIdAndLevel     fileIdLevel() const { return page_file.fileIdLevel(); }
         PageFile &             belongingPageFile() { return page_file; }
 
-        template <bool legacy_is_smaller>
         static bool compare(const MetaMergingReader & lhs, const MetaMergingReader & rhs)
         {
             if (lhs.page_file.getType() != rhs.page_file.getType())
             {
-                // If any PageFile's type is checkpoint, it is smaller
+                // If one PageFile's type is checkpoint, it is smaller
                 if (lhs.page_file.getType() == PageFile::Type::Checkpoint)
                     return true;
                 else if (rhs.page_file.getType() == PageFile::Type::Checkpoint)
                     return false;
-                if constexpr (legacy_is_smaller)
-                {
-                    if (lhs.page_file.getType() == PageFile::Type::Legacy)
-                        return true;
-                    else if (rhs.page_file.getType() == PageFile::Type::Legacy)
-                        return false;
-                }
                 // else fallback to later compare
             }
             if (lhs.curr_write_batch_sequence == rhs.curr_write_batch_sequence)
@@ -189,13 +186,12 @@ public:
     };
     using MetaMergingReaderPtr = std::shared_ptr<MetaMergingReader>;
 
-    template <bool is_legacy_smaller>
     struct MergingPtrComparator
     {
         bool operator()(const MetaMergingReaderPtr & lhs, const MetaMergingReaderPtr & rhs) const
         {
             // priority_queue always pop the "biggest" elem
-            return MetaMergingReader::compare<is_legacy_smaller>(*rhs, *lhs);
+            return MetaMergingReader::compare(*rhs, *lhs);
         }
     };
 
