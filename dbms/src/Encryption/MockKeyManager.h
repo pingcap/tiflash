@@ -9,10 +9,9 @@ class MockKeyManager : public KeyManager
 public:
     ~MockKeyManager() = default;
 
-    MockKeyManager();
-    ;
+    MockKeyManager(bool encryption_enabled_ = true);
 
-    MockKeyManager(EncryptionMethod method_, const String & key_, const String & iv);
+    MockKeyManager(EncryptionMethod method_, const String & key_, const String & iv, bool encryption_enabled_ = true);
 
     FileEncryptionInfo getFile(const String & fname) override;
 
@@ -29,5 +28,6 @@ private:
     EncryptionMethod method;
     String key;
     String iv;
+    bool encryption_enabled;
 };
 } // namespace DB

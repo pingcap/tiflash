@@ -3,26 +3,40 @@
 namespace DB
 {
 
-MockKeyManager::MockKeyManager()
+MockKeyManager::MockKeyManager(bool encryption_enabled_)
     : MockKeyManager(
-        default_method, String(reinterpret_cast<const char *>(default_key), 32), String(reinterpret_cast<const char *>(default_iv), 16))
+        default_method, String(reinterpret_cast<const char *>(default_key), 32), String(reinterpret_cast<const char *>(default_iv), 16), encryption_enabled_)
 {}
 
-MockKeyManager::MockKeyManager(EncryptionMethod method_, const String & key_, const String & iv) : method{method_}, key{key_}, iv{iv} {}
+MockKeyManager::MockKeyManager(EncryptionMethod method_, const String & key_, const String & iv, bool encryption_enabled_) 
+    : method{method_}, key{key_}, iv{iv}, encryption_enabled{encryption_enabled_} {}
 
 FileEncryptionInfo MockKeyManager::getFile(const String & fname)
 {
     std::ignore = fname;
-    auto * file_key = new String(key);
-    auto * file_iv = new String(iv);
-    FileEncryptionInfo file_info{
-        FileEncryptionRes::Ok,
-        method,
-        file_key,
-        file_iv,
-        nullptr,
-    };
-    return file_info;
+    if (encryption_enabled)
+    {
+        auto * file_key = new String(key);
+        auto * file_iv = new String(iv);
+        FileEncryptionInfo file_info{
+            FileEncryptionRes::Ok,
+            method,
+            file_key,
+            file_iv,
+            nullptr,
+        };
+        return file_info;
+    }
+    else
+    {
+        return FileEncryptionInfo{
+            FileEncryptionRes::Ok,
+            EncryptionMethod::Plaintext,
+            nullptr,
+            nullptr,
+            nullptr,
+        };
+    }
 }
 
 const EncryptionMethod MockKeyManager::default_method = EncryptionMethod::Aes256Ctr;

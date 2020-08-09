@@ -694,7 +694,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     else
     {
-        KeyManagerPtr key_manager = std::make_shared<MockKeyManager>();
+        KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(true);
         global_context->initializeFileProvider(key_manager, true);
     }
 

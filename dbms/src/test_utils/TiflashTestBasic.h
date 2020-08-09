@@ -131,8 +131,8 @@ public:
             context.setApplicationType(DB::Context::ApplicationType::SERVER);
 
             context.initializeTiFlashMetrics();
-            KeyManagerPtr key_manager = std::make_shared<MockKeyManager>();
-            context.initializeFileProvider(key_manager, true);
+            KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
+            context.initializeFileProvider(key_manager, false);
             std::vector<size_t> all_capacity{0};
 
             // FIXME: These paths are only set at the first time
