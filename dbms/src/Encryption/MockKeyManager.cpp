@@ -4,12 +4,13 @@ namespace DB
 {
 
 MockKeyManager::MockKeyManager(bool encryption_enabled_)
-    : MockKeyManager(
-        default_method, String(reinterpret_cast<const char *>(default_key), 32), String(reinterpret_cast<const char *>(default_iv), 16), encryption_enabled_)
+    : MockKeyManager(default_method, String(reinterpret_cast<const char *>(default_key), 32),
+        String(reinterpret_cast<const char *>(default_iv), 16), encryption_enabled_)
 {}
 
-MockKeyManager::MockKeyManager(EncryptionMethod method_, const String & key_, const String & iv, bool encryption_enabled_) 
-    : method{method_}, key{key_}, iv{iv}, encryption_enabled{encryption_enabled_} {}
+MockKeyManager::MockKeyManager(EncryptionMethod method_, const String & key_, const String & iv, bool encryption_enabled_)
+    : method{method_}, key{key_}, iv{iv}, encryption_enabled{encryption_enabled_}
+{}
 
 FileEncryptionInfo MockKeyManager::getFile(const String & fname)
 {
