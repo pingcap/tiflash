@@ -88,33 +88,6 @@ bool FileProvider::isFileEncrypted(const EncryptionPath & encryption_path_) cons
 
 bool FileProvider::isEncryptionEnabled() const { return encryption_enabled; }
 
-void FileProvider::renameFileByLinkAndDelete(const String &src_file_path_, const EncryptionPath &src_encryption_path_,
-                              const String &dst_file_path_, const EncryptionPath &dst_encryption_path_) const
-{
-    Poco::File data_file(src_file_path_);
-    if (unlikely(!data_file.exists()))
-    {
-        throw DB::TiFlashException(
-                "Src file: " + src_file_path_ + " doesn't exist", Errors::Encryption::Internal);
-    }
-    if (unlikely(src_encryption_path_.file_name != dst_encryption_path_.file_name))
-    {
-        throw DB::TiFlashException(
-                "The src file name: " + src_encryption_path_.file_name + " should be identical to dst file name: "
-                + dst_encryption_path_.file_name, Errors::Encryption::Internal);
-    }
-    if (isFileEncrypted(src_encryption_path_))
-    {
-        key_manager->linkFile(src_encryption_path_.full_path, dst_encryption_path_.full_path);
-        data_file.renameTo(dst_file_path_);
-        key_manager->deleteFile(src_encryption_path_.full_path);
-    }
-    else
-    {
-        data_file.renameTo(dst_file_path_);
-    }
-}
-
 void FileProvider::renameFile(const String &src_file_path_, const EncryptionPath &src_encryption_path_,
                               const String &dst_file_path_, const EncryptionPath &dst_encryption_path_) const
 {
@@ -130,6 +103,7 @@ void FileProvider::renameFile(const String &src_file_path_, const EncryptionPath
                 "The src file name: " + src_encryption_path_.file_name + " should be identical to dst file name: "
                 + dst_encryption_path_.file_name, Errors::Encryption::Internal);
     }
+    // rename encryption info(if any) before rename the underlying file
     if (isFileEncrypted(src_encryption_path_))
     {
         key_manager->renameFile(src_encryption_path_.full_path, dst_encryption_path_.full_path);

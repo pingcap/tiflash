@@ -34,9 +34,6 @@ public:
 
     bool isEncryptionEnabled() const;
 
-    void renameFileByLinkAndDelete(const String & src_file_path_, const EncryptionPath & src_encryption_path_,
-            const String & dst_file_path_, const EncryptionPath & dst_encryption_path_) const;
-
     void renameFile(const String & src_file_path_, const EncryptionPath & src_encryption_path_,
             const String & dst_file_path_, const EncryptionPath & dst_encryption_path_) const;
 
