@@ -333,17 +333,14 @@ private:
 
     String         dataPath() const { return folderPath() + "/page"; }
     String         metaPath() const { return folderPath() + "/meta"; }
-    // dataEncryptionPath() and metaEncryptionPath() have no relation with PageFile's type
-    // Their results remain unchanged during a PageFile's lifecycle to simplify the management of encryption info
+
     EncryptionPath dataEncryptionPath() const
     {
-        String encrypt_path = parent_path + "/" + folder_prefix_formal + "_" + DB::toString(file_id) + "_" + DB::toString(level) + "/page";
-        return EncryptionPath(encrypt_path, "");
+        return EncryptionPath(dataPath(), "");
     }
     EncryptionPath metaEncryptionPath() const
     {
-        String encrypt_path = parent_path + "/" + folder_prefix_formal + "_" + DB::toString(file_id) + "_" + DB::toString(level) + "/meta";
-        return EncryptionPath(encrypt_path, "");
+        return EncryptionPath(metaPath(), "");
     }
 
     constexpr static const char * folder_prefix_formal     = "page";

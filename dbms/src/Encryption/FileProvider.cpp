@@ -51,12 +51,12 @@ WritableFilePtr FileProvider::newWritableFile(const String & file_path_, const E
     return file;
 }
 
-void FileProvider::deleteFile(const String & file_path_, const EncryptionPath & encryption_path_) const
+void FileProvider::deleteFile(const String & file_path_, const EncryptionPath & encryption_path_, bool recursive) const
 {
     Poco::File data_file(file_path_);
     if (data_file.exists())
     {
-        data_file.remove(true);
+        data_file.remove(recursive);
     }
     key_manager->deleteFile(encryption_path_.dir_name);
 }
@@ -74,6 +74,11 @@ void FileProvider::deleteEncryptionInfo(const EncryptionPath & encryption_path_)
     key_manager->deleteFile(encryption_path_.dir_name);
 }
 
+void FileProvider::linkEncryptionInfo(const EncryptionPath & src_encryption_path_, const EncryptionPath & dst_encryption_path_) const
+{
+    key_manager->linkFile(src_encryption_path_.dir_name, dst_encryption_path_.dir_name);
+}
+
 bool FileProvider::isFileEncrypted(const EncryptionPath & encryption_path_) const
 {
     auto encryption_info = key_manager->getFile(encryption_path_.dir_name);
@@ -82,5 +87,54 @@ bool FileProvider::isFileEncrypted(const EncryptionPath & encryption_path_) cons
 }
 
 bool FileProvider::isEncryptionEnabled() const { return encryption_enabled; }
+
+void FileProvider::renameFileByLinkAndDelete(const String &src_file_path_, const EncryptionPath &src_encryption_path_,
+                              const String &dst_file_path_, const EncryptionPath &dst_encryption_path_) const
+{
+    Poco::File data_file(src_file_path_);
+    if (unlikely(!data_file.exists()))
+    {
+        throw DB::TiFlashException(
+                "Src file: " + src_file_path_ + " doesn't exist", Errors::Encryption::Internal);
+    }
+    if (unlikely(src_encryption_path_.file_name != dst_encryption_path_.file_name))
+    {
+        throw DB::TiFlashException(
+                "The src file name: " + src_encryption_path_.file_name + " should be identical to dst file name: "
+                + dst_encryption_path_.file_name, Errors::Encryption::Internal);
+    }
+    if (isFileEncrypted(src_encryption_path_))
+    {
+        key_manager->linkFile(src_encryption_path_.dir_name, dst_encryption_path_.dir_name);
+        data_file.renameTo(dst_file_path_);
+        key_manager->deleteFile(src_encryption_path_.dir_name);
+    }
+    else
+    {
+        data_file.renameTo(dst_file_path_);
+    }
+}
+
+void FileProvider::renameFile(const String &src_file_path_, const EncryptionPath &src_encryption_path_,
+                              const String &dst_file_path_, const EncryptionPath &dst_encryption_path_) const
+{
+    Poco::File data_file(src_file_path_);
+    if (unlikely(!data_file.exists()))
+    {
+        throw DB::TiFlashException(
+                "Src file: " + src_file_path_ + " doesn't exist", Errors::Encryption::Internal);
+    }
+    if (unlikely(src_encryption_path_.file_name != dst_encryption_path_.file_name))
+    {
+        throw DB::TiFlashException(
+                "The src file name: " + src_encryption_path_.file_name + " should be identical to dst file name: "
+                + dst_encryption_path_.file_name, Errors::Encryption::Internal);
+    }
+    if (isFileEncrypted(src_encryption_path_))
+    {
+        key_manager->renameFile(src_encryption_path_.dir_name, dst_encryption_path_.dir_name);
+    }
+    data_file.renameTo(dst_file_path_);
+}
 
 } // namespace DB

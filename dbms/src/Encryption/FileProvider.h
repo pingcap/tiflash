@@ -22,15 +22,23 @@ public:
     WritableFilePtr newWritableFile(const String & file_path_, const EncryptionPath & encryption_path_, bool create_new_file_ = true,
         bool create_new_encryption_info_ = true, int flags = -1, mode_t mode = 0666) const;
 
-    void deleteFile(const String & file_path_, const EncryptionPath & encryption_path_) const;
+    void deleteFile(const String & file_path_, const EncryptionPath & encryption_path_, bool recursive = false) const;
 
     void createEncryptionInfo(const EncryptionPath & encryption_path_) const;
 
     void deleteEncryptionInfo(const EncryptionPath & encryption_path_) const;
 
+    void linkEncryptionInfo(const EncryptionPath & src_encryption_path_, const EncryptionPath & dst_encryption_path_) const;
+
     bool isFileEncrypted(const EncryptionPath & encryption_path_) const;
 
     bool isEncryptionEnabled() const;
+
+    void renameFileByLinkAndDelete(const String & src_file_path_, const EncryptionPath & src_encryption_path_,
+            const String & dst_file_path_, const EncryptionPath & dst_encryption_path_) const;
+
+    void renameFile(const String & src_file_path_, const EncryptionPath & src_encryption_path_,
+            const String & dst_file_path_, const EncryptionPath & dst_encryption_path_) const;
 
     ~FileProvider() = default;
 

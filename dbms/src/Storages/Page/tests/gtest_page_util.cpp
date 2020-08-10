@@ -19,7 +19,7 @@ TEST(PageUtils_test, ReadWriteFile)
 
     std::string data_to_write = "123";
     PageUtil::writeFile(file, 0, data_to_write.data(), 3, FileName);
-    PageUtil::syncFile(file, FileName);
+    PageUtil::syncFile(file);
     file->close();
 
     int fd2 = PageUtil::openFile<true, true>(FileName);

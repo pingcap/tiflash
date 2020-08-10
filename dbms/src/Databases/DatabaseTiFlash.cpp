@@ -178,11 +178,12 @@ void DatabaseTiFlash::createTable(const Context & context, const String & table_
 
         /// If it was ATTACH query and file with table metadata already exist
         /// (so, ATTACH is done after DETACH), then rename atomically replaces old file with new one.
-        Poco::File(table_metadata_tmp_path).renameTo(table_metadata_path);
+        context.getFileProvider()->renameFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""),
+                table_metadata_path, EncryptionPath(table_metadata_path, ""));
     }
     catch (...)
     {
-        Poco::File(table_metadata_tmp_path).remove();
+        context.getFileProvider()->deleteFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""));
         throw;
     }
 }
@@ -278,11 +279,12 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
         try
         {
             /// rename atomically replaces the old file with the new one.
-            Poco::File(new_tbl_meta_file_tmp).renameTo(new_tbl_meta_file);
+            context.getFileProvider()->renameFile(new_tbl_meta_file_tmp, EncryptionPath(new_tbl_meta_file_tmp, ""),
+                new_tbl_meta_file, EncryptionPath(new_tbl_meta_file, ""));
         }
         catch (...)
         {
-            Poco::File(new_tbl_meta_file_tmp).remove();
+            context.getFileProvider()->deleteFile(new_tbl_meta_file_tmp, EncryptionPath(new_tbl_meta_file_tmp, ""));
             throw;
         }
 
@@ -355,11 +357,12 @@ void DatabaseTiFlash::alterTable(
     try
     {
         /// rename atomically replaces the old file with the new one.
-        Poco::File(table_metadata_tmp_path).renameTo(table_metadata_path);
+        context.getFileProvider()->renameFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""),
+                table_metadata_path, EncryptionPath(table_metadata_path, ""));
     }
     catch (...)
     {
-        Poco::File(table_metadata_tmp_path).remove();
+        context.getFileProvider()->deleteFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""));
         throw;
     }
 }

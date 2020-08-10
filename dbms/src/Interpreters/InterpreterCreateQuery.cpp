@@ -124,7 +124,7 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
         String statement = statement_stream.str();
 
         /// Exclusive flag guarantees, that database is not created right now in another thread.
-        WriteBufferFromFileProvider out(context.getFileProvider(), metadata_file_tmp_path, EncryptionPath(metadata_file_path, ""), true, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+        WriteBufferFromFileProvider out(context.getFileProvider(), metadata_file_tmp_path, EncryptionPath(metadata_file_tmp_path, ""), true, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
 
         out.next();
@@ -138,7 +138,8 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
         context.addDatabase(database_name, database);
 
         if (need_write_metadata)
-            Poco::File(metadata_file_tmp_path).renameTo(metadata_file_path);
+            context.getFileProvider()->renameFile(metadata_file_tmp_path, EncryptionPath(metadata_file_tmp_path, ""),
+                metadata_file_path, EncryptionPath(metadata_file_path, ""));
 
         FAIL_POINT_TRIGGER_EXCEPTION(exception_between_create_database_meta_and_directory);
         // meta file (not temporary) of database exists means create database success, 

@@ -106,7 +106,7 @@ inline void touchFile(const std::string & path)
         throw Exception("Touch file failed: " + path);
 }
 
-void syncFile(WritableFilePtr & file, const std::string & path);
+void syncFile(WritableFilePtr & file);
 
 void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const std::string & path);
 

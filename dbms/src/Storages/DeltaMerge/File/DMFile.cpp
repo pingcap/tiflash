@@ -185,7 +185,7 @@ void DMFile::enableGC()
 
 void DMFile::remove(const FileProviderPtr & file_provider)
 {
-    file_provider->deleteFile(path(), EncryptionPath(encryptionBasePath(), ""));
+    file_provider->deleteFile(path(), EncryptionPath(encryptionBasePath(), ""), true);
 }
 
 

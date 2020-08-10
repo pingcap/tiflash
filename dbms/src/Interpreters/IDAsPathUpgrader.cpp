@@ -150,14 +150,15 @@ void writeTableDefinitionToFile(const FileProviderPtr & file_provider, const Str
         String statement = getTableDefinitionFromCreateQuery(query);
 
         /// Exclusive flags guarantees, that table is not created right now in another thread. Otherwise, exception will be thrown.
-        WriteBufferFromFileProvider out(file_provider, table_meta_tmp_path, EncryptionPath(table_meta_path, ""), true, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+        WriteBufferFromFileProvider out(file_provider, table_meta_tmp_path, EncryptionPath(table_meta_tmp_path, ""), true, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
         if (fsync_metadata)
             out.sync();
         out.close();
     }
-    Poco::File(table_meta_tmp_path).renameTo(table_meta_path);
+    file_provider->renameFile(table_meta_tmp_path, EncryptionPath(table_meta_tmp_path, ""),
+        table_meta_path, EncryptionPath(table_meta_path, ""));
 }
 
 void writeDatabaseDefinitionToFile(const FileProviderPtr & file_provider, const String & database_meta_path, const ASTPtr & query, bool fsync_metadata)
@@ -167,14 +168,15 @@ void writeDatabaseDefinitionToFile(const FileProviderPtr & file_provider, const 
         String statement = getDatabaseDefinitionFromCreateQuery(query);
 
         /// Exclusive flags guarantees, that table is not created right now in another thread. Otherwise, exception will be thrown.
-        WriteBufferFromFileProvider out(file_provider, db_meta_tmp_path, EncryptionPath(database_meta_path, ""), true, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+        WriteBufferFromFileProvider out(file_provider, db_meta_tmp_path, EncryptionPath(db_meta_tmp_path, ""), true, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
         if (fsync_metadata)
             out.sync();
         out.close();
     }
-    Poco::File(db_meta_tmp_path).renameTo(database_meta_path);
+    file_provider->renameFile(db_meta_tmp_path, EncryptionPath(db_meta_tmp_path, ""),
+        database_meta_path, EncryptionPath(database_meta_path, ""));
 }
 
 ASTPtr parseCreateDatabaseAST(const String & statement)

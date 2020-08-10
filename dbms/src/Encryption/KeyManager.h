@@ -33,6 +33,10 @@ public:
     virtual FileEncryptionInfo newFile(const String & fname) = 0;
 
     virtual void deleteFile(const String & fname) = 0;
+
+    virtual void linkFile(const String & src_fname, const String & dst_fname) = 0;
+
+    virtual void renameFile(const String & src_fname, const String & dst_fname) = 0;
 };
 
 using KeyManagerPtr = std::shared_ptr<KeyManager>;

@@ -246,8 +246,8 @@ void PageStorage::restore()
     }
 
     // fill write_files
-    bool hasReusablePageFile = false;
-    UInt64 maxFileId = 0;
+    bool has_reusable_pageFile = false;
+    PageFileId max_file_id = 0;
     size_t total_recover_bytes = 0;
     {
         size_t next_write_fill_idx = 0;
@@ -260,22 +260,23 @@ void PageStorage::restore()
             {
                 write_files[next_write_fill_idx] = page_file;
                 next_write_fill_idx              = (next_write_fill_idx + 1) % write_files.size();
-                hasReusablePageFile = true;
+                has_reusable_pageFile = true;
             }
-            if (page_file.getFileId() > maxFileId)
+            if (page_file.getFileId() > max_file_id)
             {
-                maxFileId = page_file.getFileId();
+                max_file_id = page_file.getFileId();
             }
         }
     }
-    if (!hasReusablePageFile)
+    if (!has_reusable_pageFile)
     {
         auto page_file
-            = PageFile::newPageFile(maxFileId + 1, 0, storage_path, file_provider, PageFile::Type::Formal, page_file_log);
+            = PageFile::newPageFile(max_file_id + 1, 0, storage_path, file_provider, PageFile::Type::Formal, page_file_log);
         page_file.createEncryptionInfo();
         LOG_DEBUG(log,
-                storage_name << "No PageFile can be reused for write, create new PageFile_" + DB::toString(maxFileId + 1) + "_0 for write");
+                storage_name << "No PageFile can be reused for write, create new PageFile_" + DB::toString(max_file_id + 1) + "_0 for write");
         write_files[0] = page_file;
+        total_recover_bytes += page_file.getDiskSize();
     }
     if (global_capacity)
         global_capacity->addUsedSize(storage_path, total_recover_bytes);

@@ -235,7 +235,7 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
     PageEntriesEdit gc_file_edit;
     const auto      gc_file_id = gc_file.fileIdLevel();
     // No need to sync after each write. Do sync before closing is enough.
-    auto   gc_file_writer = gc_file.createWriter(/* sync_on_write= */ false, false);
+    auto   gc_file_writer = gc_file.createWriter(/* sync_on_write= */ false, true);
     size_t bytes_written  = 0;
 
     // When all data of one PageFile is obsoleted, we just remove its data but leave its meta part on disk.

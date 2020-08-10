@@ -442,7 +442,7 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
     auto write_buf = [&](WritableFilePtr & file, UInt64 offset, const std::string & path, ByteBuffer buf) {
         PageUtil::writeFile(file, offset, buf.begin(), buf.size(), path);
         if (sync_on_write)
-            PageUtil::syncFile(file, path);
+            PageUtil::syncFile(file);
     };
     write_buf(data_file, page_file.data_file_pos, data_file_path, data_buf);
     write_buf(meta_file, page_file.meta_file_pos, meta_file_path, meta_buf);
@@ -478,8 +478,8 @@ void PageFile::Writer::closeFd()
         data_file->close();
         meta_file->close();
     });
-    PageUtil::syncFile(data_file, data_file_path);
-    PageUtil::syncFile(meta_file, meta_file_path);
+    PageUtil::syncFile(data_file);
+    PageUtil::syncFile(meta_file);
 }
 
 // =========================================================
@@ -838,9 +838,15 @@ void PageFile::setFormal()
 {
     if (type != Type::Temp)
         return;
+    auto old_meta_encryption_path = metaEncryptionPath();
+    auto old_data_encryption_path = dataEncryptionPath();
     Poco::File file(folderPath());
     type = Type::Formal;
+    file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());
+    file_provider->linkEncryptionInfo(old_data_encryption_path, dataEncryptionPath());
     file.renameTo(folderPath());
+    file_provider->deleteEncryptionInfo(old_meta_encryption_path);
+    file_provider->deleteEncryptionInfo(old_data_encryption_path);
 }
 
 size_t PageFile::setLegacy()
@@ -849,9 +855,13 @@ size_t PageFile::setLegacy()
         return 0;
     // Rename to legacy dir. Note that we can NOT remove the data part before
     // successfully rename to legacy status.
+    auto old_meta_encryption_path = metaEncryptionPath();
+    auto old_data_encryption_path = dataEncryptionPath();
     Poco::File formal_dir(folderPath());
     type = Type::Legacy;
     formal_dir.renameTo(folderPath());
+    file_provider->deleteEncryptionInfo(old_meta_encryption_path);
+    file_provider->deleteEncryptionInfo(old_data_encryption_path);
     // remove the data part
     return removeDataIfExists();
 }
@@ -870,9 +880,12 @@ size_t PageFile::setCheckpoint()
                             ErrorCodes::LOGICAL_ERROR);
     }
 
+    auto old_meta_encryption_path = metaEncryptionPath();
     Poco::File file(folderPath());
     type = Type::Checkpoint;
+    file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());
     file.renameTo(folderPath());
+    file_provider->deleteEncryptionInfo(old_meta_encryption_path);
     // Remove the data part, should be a emtpy file.
     return removeDataIfExists();
 }

@@ -162,7 +162,7 @@ void DatabaseOrdinary::createTable(
         statement = getTableDefinitionFromCreateQuery(query);
 
         /// Exclusive flags guarantees, that table is not created right now in another thread. Otherwise, exception will be thrown.
-        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, EncryptionPath(table_metadata_path, ""), true, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""), true, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
         if (settings.fsync_metadata)
@@ -181,11 +181,12 @@ void DatabaseOrdinary::createTable(
 
         /// If it was ATTACH query and file with table metadata already exist
         /// (so, ATTACH is done after DETACH), then rename atomically replaces old file with new one.
-        Poco::File(table_metadata_tmp_path).renameTo(table_metadata_path);
+        context.getFileProvider()->renameFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""),
+                table_metadata_path, EncryptionPath(table_metadata_path, ""));
     }
     catch (...)
     {
-        Poco::File(table_metadata_tmp_path).remove();
+        context.getFileProvider()->deleteFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""));
         throw;
     }
 }
@@ -413,11 +414,12 @@ void DatabaseOrdinary::alterTable(
     try
     {
         /// rename atomically replaces the old file with the new one.
-        Poco::File(table_metadata_tmp_path).renameTo(table_metadata_path);
+        context.getFileProvider()->renameFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""),
+                table_metadata_path, EncryptionPath(table_metadata_path, ""));
     }
     catch (...)
     {
-        Poco::File(table_metadata_tmp_path).remove();
+        context.getFileProvider()->deleteFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""));
         throw;
     }
 }

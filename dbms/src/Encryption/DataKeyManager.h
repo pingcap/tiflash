@@ -46,6 +46,26 @@ public:
         }
     }
 
+    void linkFile(const String & src_fname, const String & dst_fname) override
+    {
+        auto r = tiflash_instance_wrap->proxy_helper->linkFile(src_fname, dst_fname);
+        if (unlikely(r.res != FileEncryptionRes::Ok && r.res != FileEncryptionRes::Disabled))
+        {
+            throw DB::TiFlashException(
+                "Link encryption info from file: " + src_fname + " to " + dst_fname + " meet error: " + *r.erro_msg, Errors::Encryption::Internal);
+        }
+    }
+
+    void renameFile(const String & src_fname, const String & dst_fname) override
+    {
+        auto r = tiflash_instance_wrap->proxy_helper->renameFile(src_fname, dst_fname);
+        if (unlikely(r.res != FileEncryptionRes::Ok && r.res != FileEncryptionRes::Disabled))
+        {
+            throw DB::TiFlashException(
+                "Link encryption info from file: " + src_fname + " to " + dst_fname + " meet error: " + *r.erro_msg, Errors::Encryption::Internal);
+        }
+    }
+
 private:
     TiFlashServer * tiflash_instance_wrap;
 };

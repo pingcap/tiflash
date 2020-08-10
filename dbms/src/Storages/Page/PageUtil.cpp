@@ -40,10 +40,10 @@ extern const Metric Read;
 namespace DB::PageUtil
 {
 
-void syncFile(WritableFilePtr & file, const std::string & path)
+void syncFile(WritableFilePtr & file)
 {
     if (-1 == file->fsync())
-        DB::throwFromErrno("Cannot fsync file: " + path, ErrorCodes::CANNOT_FSYNC);
+        DB::throwFromErrno("Cannot fsync file: " + file->getFileName(), ErrorCodes::CANNOT_FSYNC);
 }
 
 void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const std::string & path)
