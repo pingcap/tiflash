@@ -19,6 +19,11 @@
 
 #include <ext/scope_guard.h>
 
+namespace CurrentMetrics
+{
+extern const Metric OpenFileForRead;
+}
+
 namespace DB
 {
 // =========================================================
@@ -238,6 +243,7 @@ void PageFile::MetaMergingReader::initialize()
     // File not exists.
     if (unlikely(!fd))
         throw Exception("Try to read meta of " + page_file.toString() + ", but open file error. Path: " + path, ErrorCodes::LOGICAL_ERROR);
+    CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForRead};
     SCOPE_EXIT({ ::close(fd); });
 
     meta_buffer = (char *)page_file.alloc(meta_size);
@@ -389,7 +395,11 @@ void PageFile::MetaMergingReader::moveNext()
 // =========================================================
 
 PageFile::Writer::Writer(PageFile & page_file_, bool sync_on_write_)
-    : page_file(page_file_), sync_on_write(sync_on_write_), data_file_path(page_file.dataPath()), meta_file_path(page_file.metaPath())
+    : page_file(page_file_),
+      sync_on_write(sync_on_write_),
+      data_file_path(page_file.dataPath()),
+      meta_file_path(page_file.metaPath()),
+      last_write_time(Clock::now())
 {
     // Create data and meta file, prevent empty page folder from being removed by GC.
     PageUtil::touchFile(data_file_path);
@@ -412,6 +422,7 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
     {
         data_file_fd = PageUtil::openFile<false>(data_file_path);
         meta_file_fd = PageUtil::openFile<false>(meta_file_path);
+        fd_increment.changeTo(2);
     }
 
     // TODO: investigate if not copy data into heap, write big pages can be faster?
@@ -461,6 +472,8 @@ void PageFile::Writer::closeFd()
         ::close(data_file_fd);
         ::close(meta_file_fd);
 
+        fd_increment.changeTo(0);
+
         meta_file_fd = 0;
         data_file_fd = 0;
     });
@@ -473,7 +486,7 @@ void PageFile::Writer::closeFd()
 // =========================================================
 
 PageFile::Reader::Reader(PageFile & page_file)
-    : data_file_path(page_file.dataPath()), data_file_fd(PageUtil::openFile<true>(data_file_path))
+    : data_file_path(page_file.dataPath()), data_file_fd(PageUtil::openFile<true>(data_file_path)), last_read_time(Clock::now())
 {
 }
 
@@ -535,6 +548,8 @@ PageMap PageFile::Reader::read(PageIdAndEntries & to_read)
     if (unlikely(pos != data_buf + buf_size))
         throw Exception("pos not match", ErrorCodes::LOGICAL_ERROR);
 
+    last_read_time = Clock::now();
+
     return page_map;
 }
 
@@ -591,6 +606,8 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
 
         handler(page_id, page);
     }
+
+    last_read_time = Clock::now();
 }
 
 PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read)
@@ -672,9 +689,17 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read)
         throw Exception("Pos not match, expect to read " + DB::toString(buf_size) + " bytes, but only " + DB::toString(pos - data_buf),
                         ErrorCodes::LOGICAL_ERROR);
 
+    last_read_time = Clock::now();
+
     return page_map;
 }
 
+bool PageFile::Reader::isIdle(const Seconds & max_idle_time)
+{
+    if (max_idle_time.count() == 0)
+        return false;
+    return (Clock::now() - last_read_time >= max_idle_time);
+}
 
 // =========================================================
 // PageFile

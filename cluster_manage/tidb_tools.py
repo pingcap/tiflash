@@ -7,10 +7,7 @@ import util
 
 def curl_tidb(address, uri):
     r = util.curl_http('{}{}'.format(address, uri))
-    if r.status_code == 200:
-        return r.json()
-    else:
-        return None
+    return util.try_get_json(r)
 
 
 def status(address):
@@ -34,19 +31,15 @@ def db_all_schema(address):
 
 
 def db_flash_replica(tidb_status_addr_list):
+    error_list = []
     for idx, address in enumerate(tidb_status_addr_list):
         try:
-            r = curl_tidb(address, '/tiflash/replica')
-            if r is not None:
-                if idx != 0:
-                    tmp = tidb_status_addr_list[0]
-                    tidb_status_addr_list[0] = address
-                    tidb_status_addr_list[idx] = tmp
-                return r
-        except Exception:
+            return curl_tidb(address, '/tiflash/replica')
+        except Exception as e:
+            error_list.append((address, e))
             continue
 
-    raise Exception('all tidb status addr {} can not be used'.format(tidb_status_addr_list))
+    raise Exception('can not get tiflash replica info from tidb: {}'.format(error_list))
 
 
 def main():

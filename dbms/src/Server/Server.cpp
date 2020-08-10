@@ -7,6 +7,7 @@
 #include <Common/Macros.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashBuildInfo.h>
+#include <Common/TiFlashException.h>
 #include <Common/config.h>
 #include <Common/escapeForFileName.h>
 #include <Common/getFQDNOrHostName.h>
@@ -17,6 +18,7 @@
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
 #include <IO/ReadHelpers.h>
+#include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/DDLWorker.h>
 #include <Interpreters/IDAsPathUpgrader.h>
@@ -106,7 +108,7 @@ struct TiFlashProxyConfig
     static const std::string config_prefix;
     std::vector<const char *> args;
     std::unordered_map<std::string, std::string> val_map;
-    bool inited = false;
+    bool is_proxy_runnable = false;
 
     TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
     {
@@ -131,11 +133,91 @@ struct TiFlashProxyConfig
             args.push_back(v.first.data());
             args.push_back(v.second.data());
         }
-        inited = true;
+        is_proxy_runnable = true;
     }
 };
 
 const std::string TiFlashProxyConfig::config_prefix = "flash.proxy";
+
+struct TiFlashSecurityConfig
+{
+    String ca_path;
+    String cert_path;
+    String key_path;
+
+    bool inited = false;
+    bool has_tls_config = false;
+    grpc::SslCredentialsOptions options;
+
+public:
+    TiFlashSecurityConfig(Poco::Util::LayeredConfiguration & config, Poco::Logger * log)
+    {
+        if (config.has("security"))
+        {
+            bool miss_ca_path = true;
+            bool miss_cert_path = true;
+            bool miss_key_path = true;
+            if (config.has("security.ca_path"))
+            {
+                ca_path = config.getString("security.ca_path");
+                miss_ca_path = false;
+            }
+            if (config.has("security.cert_path"))
+            {
+                cert_path = config.getString("security.cert_path");
+                miss_cert_path = false;
+            }
+            if (config.has("security.key_path"))
+            {
+                key_path = config.getString("security.key_path");
+                miss_key_path = false;
+            }
+            if (miss_ca_path && miss_cert_path && miss_key_path)
+            {
+                LOG_INFO(log, "No security config is set.");
+            }
+            else if (miss_ca_path || miss_cert_path || miss_key_path)
+            {
+                throw Exception("ca_path, cert_path, key_path must be set at the same time.", ErrorCodes::INVALID_CONFIG_PARAMETER);
+            }
+            else
+            {
+                has_tls_config = true;
+            }
+        }
+    }
+
+    grpc::SslCredentialsOptions ReadAndCacheSecurityInfo()
+    {
+        if (inited)
+        {
+            return options;
+        }
+        options.pem_root_certs = readFile(ca_path);
+        options.pem_cert_chain = readFile(cert_path);
+        options.pem_private_key = readFile(key_path);
+        inited = true;
+        return options;
+    }
+
+private:
+    String readFile(const String & filename)
+    {
+        if (filename.empty())
+        {
+            return "";
+        }
+        auto buffer = createReadBufferFromFileBase(filename, 1024, 0);
+        String result;
+        while (!buffer->eof())
+        {
+            char buf[1024];
+            size_t len = buffer->read(buf, 1024);
+            result.append(buf, len);
+        }
+        return result;
+    }
+};
 
 struct TiFlashRaftConfig
 {
@@ -265,6 +347,69 @@ int Server::main(const std::vector<std::string> & /*args*/)
     registerTableFunctions();
     registerStorages();
 
+    TiFlashErrorRegistry::instance(); // This invocation is for initializing
+
+    TiFlashProxyConfig proxy_conf(config());
+    TiFlashServer tiflash_instance_wrap{};
+    TiFlashServerHelper helper{
+        // a special number, also defined in proxy
+        .magic_number = 0x13579BDF,
+        .version = 11,
+        .inner = &tiflash_instance_wrap,
+        .fn_gen_cpp_string = GenCppRawString,
+        .fn_handle_write_raft_cmd = HandleWriteRaftCmd,
+        .fn_handle_admin_raft_cmd = HandleAdminRaftCmd,
+        .fn_handle_apply_snapshot = HandleApplySnapshot,
+        .fn_atomic_update_proxy = AtomicUpdateProxy,
+        .fn_handle_destroy = HandleDestroy,
+        .fn_handle_ingest_sst = HandleIngestSST,
+        .fn_handle_check_terminated = HandleCheckTerminated,
+        .fn_handle_compute_fs_stats = HandleComputeFsStats,
+        .fn_handle_get_tiflash_status = HandleGetTiFlashStatus,
+        .fn_pre_handle_snapshot = PreHandleSnapshot,
+        .fn_apply_pre_handled_snapshot = ApplyPreHandledSnapshot,
+        .fn_gc_pre_handled_snapshot = GcPreHandledSnapshot,
+        .fn_handle_get_table_sync_status = HandleGetTableSyncStatus,
+        .gc_cpp_string = GcCppString,
+    };
+
+    auto proxy_runner = std::thread([&proxy_conf, &log, &helper]() {
+        if (!proxy_conf.is_proxy_runnable)
+            return;
+
+        LOG_INFO(log, "start tiflash proxy");
+        run_tiflash_proxy_ffi((int)proxy_conf.args.size(), proxy_conf.args.data(), &helper);
+    });
+
+    if (proxy_conf.is_proxy_runnable)
+    {
+        LOG_INFO(log, "wait for tiflash proxy initializing");
+        while (!tiflash_instance_wrap.proxy_helper)
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        LOG_INFO(log, "tiflash proxy is initialized");
+        if (tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled())
+        {
+            auto method = tiflash_instance_wrap.proxy_helper->getEncryptionMethod();
+            LOG_INFO(log, "encryption is enabled, method is " << IntoEncryptionMethodName(method));
+        }
+        else
+            LOG_INFO(log, "encryption is disabled");
+    }
+
+    SCOPE_EXIT({
+        if (!proxy_conf.is_proxy_runnable)
+        {
+            proxy_runner.join();
+            return;
+        }
+        LOG_INFO(log, "let tiflash proxy shutdown");
+        tiflash_instance_wrap.status = TiFlashStatus::Stopped;
+        tiflash_instance_wrap.tmt = nullptr;
+        LOG_INFO(log, "wait for tiflash proxy thread to join");
+        proxy_runner.join();
+        LOG_INFO(log, "tiflash proxy thread is joined");
+    });
+
     CurrentMetrics::set(CurrentMetrics::Revision, ClickHouseRevision::get());
 
     // print necessary grpc log.
@@ -347,6 +492,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::string default_database = config().getString("default_database", raft_config.pd_addrs.empty() ? "default" : "system");
     global_context->setPath(path);
     global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
+
+    TiFlashSecurityConfig security_config(config(), log);
 
     /// Create directories for 'path' and for default database, if not exist.
     for (const String & candidate_path : global_context->getPartPathSelector().getAllPath())
@@ -551,7 +698,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
             raft_config.ignore_databases,
             raft_config.kvstore_path,
             raft_config.engine,
-            raft_config.disable_bg_flush);
+            raft_config.disable_bg_flush,
+            security_config.ReadAndCacheSecurityInfo());
         global_context->getTMTContext().reloadConfig(config());
     }
 
@@ -622,7 +770,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::unique_ptr<grpc::Server> flash_grpc_server = nullptr;
     {
         grpc::ServerBuilder builder;
-        builder.AddListeningPort(raft_config.flash_server_addr, grpc::InsecureServerCredentials());
+        if (security_config.has_tls_config)
+        {
+            grpc::SslServerCredentialsOptions server_cred(GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY);
+            auto options = security_config.ReadAndCacheSecurityInfo();
+            server_cred.pem_root_certs = options.pem_root_certs;
+            server_cred.pem_key_cert_pairs.push_back(
+                grpc::SslServerCredentialsOptions::PemKeyCertPair{options.pem_private_key, options.pem_cert_chain});
+            builder.AddListeningPort(raft_config.flash_server_addr, grpc::SslServerCredentials(server_cred));
+        }
+        else
+        {
+            builder.AddListeningPort(raft_config.flash_server_addr, grpc::InsecureServerCredentials());
+        }
 
         /// Init and register flash service.
         flash_service = std::make_unique<FlashService>(*this);
@@ -656,39 +816,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_INFO(log, "Begin to shut down flash service");
         flash_service.reset();
         LOG_INFO(log, "Shut down flash service");
-    });
-
-    TiFlashProxyConfig proxy_conf(config());
-    TiFlashServer tiflash_instance_wrap{.tmt = global_context->getTMTContext()};
-    TiFlashServerHelper helper{
-        // a special number, also defined in proxy
-        .magic_number = 0x13579BDF,
-        .version = 5,
-        .inner = &tiflash_instance_wrap,
-        .fn_gc_buff = GcBuff,
-        .fn_handle_write_raft_cmd = HandleWriteRaftCmd,
-        .fn_handle_admin_raft_cmd = HandleAdminRaftCmd,
-        .fn_handle_apply_snapshot = HandleApplySnapshot,
-        .fn_atomic_update_proxy = AtomicUpdateProxy,
-        .fn_handle_destroy = HandleDestroy,
-        .fn_handle_ingest_sst = HandleIngestSST,
-        .fn_handle_check_terminated = HandleCheckTerminated,
-        .fn_handle_compute_fs_stats = HandleComputeFsStats,
-    };
-
-    auto proxy_runner = std::thread([&proxy_conf, &log, &helper]() {
-        if (!proxy_conf.inited)
-            return;
-
-        LOG_INFO(log, "Start tiflash proxy");
-        run_tiflash_proxy_ffi((int)proxy_conf.args.size(), proxy_conf.args.data(), &helper);
-        LOG_INFO(log, "End tiflash proxy");
-    });
-
-    SCOPE_EXIT({
-        LOG_INFO(log, "Wait for tiflash proxy to join");
-        proxy_runner.join();
-        LOG_INFO(log, "TiFlash proxy finish");
     });
 
     if (has_zookeeper && config().has("distributed_ddl"))
@@ -774,6 +901,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 /// HTTP
                 if (config().has("http_port"))
                 {
+                    if (security_config.has_tls_config)
+                    {
+                        throw Exception("tls config is set but https_port is not set ", ErrorCodes::INVALID_CONFIG_PARAMETER);
+                    }
                     Poco::Net::ServerSocket socket;
                     auto address = socket_bind_listen(socket, listen_host, config().getInt("http_port"));
                     socket.setReceiveTimeout(settings.http_receive_timeout);
@@ -788,9 +919,17 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 if (config().has("https_port"))
                 {
 #if Poco_NetSSL_FOUND
+                    if (!security_config.has_tls_config)
+                    {
+                        LOG_ERROR(log, "https_port is set but tls config is not set");
+                    }
+                    Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
+                        security_config.key_path,
+                        security_config.cert_path,
+                        security_config.ca_path);
                     std::call_once(ssl_init_once, SSLInit);
 
-                    Poco::Net::SecureServerSocket socket;
+                    Poco::Net::SecureServerSocket socket(context);
                     auto address = socket_bind_listen(socket, listen_host, config().getInt("https_port"), /* secure = */ true);
                     socket.setReceiveTimeout(settings.http_receive_timeout);
                     socket.setSendTimeout(settings.http_send_timeout);
@@ -807,6 +946,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 /// TCP
                 if (config().has("tcp_port"))
                 {
+                    if (security_config.has_tls_config)
+                    {
+                        LOG_ERROR(log, "tls config is set but tcp_port_secure is not set.");
+                    }
                     std::call_once(ssl_init_once, SSLInit);
                     Poco::Net::ServerSocket socket;
                     auto address = socket_bind_listen(socket, listen_host, config().getInt("tcp_port"));
@@ -822,7 +965,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 if (config().has("tcp_port_secure"))
                 {
 #if Poco_NetSSL_FOUND
-                    Poco::Net::SecureServerSocket socket;
+                    if (!security_config.has_tls_config)
+                    {
+                        LOG_ERROR(log, "tcp_port_secure is set but tls config is not set");
+                    }
+                    Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
+                        security_config.key_path,
+                        security_config.cert_path,
+                        security_config.ca_path);
+                    Poco::Net::SecureServerSocket socket(context);
                     auto address = socket_bind_listen(socket, listen_host, config().getInt("tcp_port_secure"), /* secure = */ true);
                     socket.setReceiveTimeout(settings.receive_timeout);
                     socket.setSendTimeout(settings.send_timeout);
@@ -962,11 +1113,26 @@ int Server::main(const std::vector<std::string> & /*args*/)
         SessionCleaner session_cleaner(*global_context);
         ClusterManagerService cluster_manager_service(*global_context, config_path);
 
+        if (proxy_conf.is_proxy_runnable)
+        {
+            tiflash_instance_wrap.tmt = &global_context->getTMTContext();
+            LOG_INFO(log, "let tiflash proxy start all services");
+            tiflash_instance_wrap.status = TiFlashStatus::Running;
+        }
+
         waitForTerminationRequest();
 
         {
             global_context->getTMTContext().setTerminated();
             LOG_INFO(log, "Set tmt context terminated");
+            // wait proxy to stop services
+            if (proxy_conf.is_proxy_runnable)
+            {
+                LOG_INFO(log, "wait tiflash proxy to stop all services");
+                while (!tiflash_instance_wrap.proxy_helper->checkServiceStopped())
+                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                LOG_INFO(log, "all services in tiflash proxy are stopped");
+            }
         }
     }
 

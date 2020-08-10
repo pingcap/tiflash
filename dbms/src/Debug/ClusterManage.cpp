@@ -4,6 +4,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/ProxyFFIType.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
 #include <Storages/Transaction/RegionTable.h>
@@ -18,14 +19,10 @@ extern const int BAD_ARGUMENTS;
 extern const int UNKNOWN_TABLE;
 } // namespace ErrorCodes
 
-void ClusterManage::dumpRegionTable(Context & context, const ASTs & args, Printer output)
+CppStrWithView HandleGetTableSyncStatus(TiFlashServer * server, uint64_t table_id)
 {
-    if (args.size() < 2)
-        throw Exception("Args not matched, should be: table-id, if-dump-regions", ErrorCodes::BAD_ARGUMENTS);
-
-    auto & tmt = context.getTMTContext();
-    TableID table_id = (TableID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
-    bool dump_regions = typeid_cast<const ASTIdentifier &>(*args[1]).name == "true";
+    std::stringstream ss;
+    auto & tmt = *server->tmt;
 
     std::vector<RegionID> region_list;
     size_t count = 0;
@@ -35,26 +32,17 @@ void ClusterManage::dumpRegionTable(Context & context, const ASTs & args, Printe
     {
         tmt.getRegionTable().handleInternalRegionsByTable(table_id, [&](const RegionTable::InternalRegions & regions) {
             count = regions.size();
-            if (dump_regions)
-            {
-                region_list.reserve(regions.size());
-                for (const auto & region : regions)
-                    region_list.push_back(region.first);
-            }
+            region_list.reserve(regions.size());
+            for (const auto & region : regions)
+                region_list.push_back(region.first);
         });
     }
+    ss << count << std::endl;
+    for (const auto & region_id : region_list)
+        ss << region_id << ' ';
+    ss << std::endl;
 
-    output(toString(count));
-    if (dump_regions)
-    {
-        std::stringstream ss;
-
-        for (const auto & region_id : region_list)
-        {
-            ss << region_id << ' ';
-        }
-        output(ss.str());
-    }
+    return CppStrWithView(ss.str());
 }
 
 inline std::string ToPdKey(const char * key, const size_t len)

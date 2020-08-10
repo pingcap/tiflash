@@ -1,7 +1,9 @@
 #include <common/config_common.h>
 #include <Common/config.h>
 #include <Common/ClickHouseRevision.h>
+#include <Common/ErrorExporter.h>
 #include <Common/TiFlashBuildInfo.h>
+#include <IO/WriteBufferFromFile.h>
 #include <config_tools.h>
 #include <iostream>
 #include <vector>
@@ -62,6 +64,30 @@ int mainEntryVersion(int , char **)
     return 0;
 }
 
+int mainExportError(int argc, char ** argv)
+{
+    if (argc < 2)
+    {
+        std::cerr << "Usage:" << std::endl;
+        std::cerr << "\ttiflash errgen [DST]" << std::endl;
+        return -1;
+    }
+    std::string dst_path = argv[1];
+    DB::WriteBufferFromFile wb(dst_path);
+    auto & registry = DB::TiFlashErrorRegistry::instance();
+    auto all_errors = registry.allErrors();
+
+    {
+        // RAII
+        DB::ErrorExporter exporter(wb);
+        for (auto error : all_errors)
+        {
+            exporter.writeError(error);
+        }
+    }
+    return 0;
+}
+
 namespace
 {
 
@@ -100,6 +126,7 @@ std::pair<const char *, MainFunc> clickhouse_applications[] =
     {"lld", mainEntryClickHouseLLD},
 #endif
     {"version", mainEntryVersion},
+    {"errgen", mainExportError}
 };
 
 

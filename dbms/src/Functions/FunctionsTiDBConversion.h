@@ -1288,9 +1288,31 @@ struct TiDBConvertToTime
 
             for (size_t i = 0; i < size; i++)
             {
-                WriteBufferFromString wb(result_buffer);
-                FormatImpl<FromDataType>::execute(vec_from[i], wb, &type, nullptr);
+                {
+                    WriteBufferFromString wb(result_buffer);
+                    FormatImpl<FromDataType>::execute(vec_from[i], wb, &type, nullptr);
+                }
                 MyDateTime datetime(parseMyDateTime(result_buffer).template safeGet<UInt64>());
+                if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
+                {
+                    MyDate date(datetime.year, datetime.month, datetime.day);
+                    vec_to[i] = date.toPackedUInt();
+                }
+                else
+                {
+                    vec_to[i] = datetime.toPackedUInt();
+                }
+            }
+        }
+        else if constexpr (std::is_same_v<FromDataType, DataTypeMyDate> || std::is_same_v<FromDataType, DataTypeMyDateTime>)
+        {
+            const auto * col_from = checkAndGetColumn<ColumnDecimal<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
+            const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
+
+            for (size_t i = 0; i < size; i++)
+            {
+                MyDateTime datetime(vec_from[i]);
+
                 if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
                 {
                     MyDate date(datetime.year, datetime.month, datetime.day);

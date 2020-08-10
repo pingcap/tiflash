@@ -1,3 +1,4 @@
+#include <Common/TiFlashException.h>
 #include <Core/Types.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
@@ -26,7 +27,8 @@ const String & getAggFunctionName(const tipb::Expr & expr)
 {
     if (agg_func_map.find(expr.tp()) == agg_func_map.end())
     {
-        throw Exception(tipb::ExprType_Name(expr.tp()) + " is not supported.", ErrorCodes::UNSUPPORTED_METHOD);
+        throw TiFlashException(
+            tipb::ExprType_Name(expr.tp()) + " is not supported.", Errors::Coprocessor::Unimplemented);
     }
     return agg_func_map[expr.tp()];
 }
@@ -37,7 +39,8 @@ const String & getFunctionName(const tipb::Expr & expr)
     {
         if (agg_func_map.find(expr.tp()) == agg_func_map.end())
         {
-            throw Exception(tipb::ExprType_Name(expr.tp()) + " is not supported.", ErrorCodes::UNSUPPORTED_METHOD);
+            throw TiFlashException(
+                tipb::ExprType_Name(expr.tp()) + " is not supported.", Errors::Coprocessor::Unimplemented);
         }
         return agg_func_map[expr.tp()];
     }
@@ -45,7 +48,8 @@ const String & getFunctionName(const tipb::Expr & expr)
     {
         if (scalar_func_map.find(expr.sig()) == scalar_func_map.end())
         {
-            throw Exception(tipb::ScalarFuncSig_Name(expr.sig()) + " is not supported.", ErrorCodes::UNSUPPORTED_METHOD);
+            throw TiFlashException(tipb::ScalarFuncSig_Name(expr.sig()) + " is not supported.",
+                Errors::Coprocessor::Unimplemented);
         }
         return scalar_func_map[expr.sig()];
     }
@@ -84,12 +88,14 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
             else if (field.getType() == Field::Types::Decimal256)
                 return field.get<DecimalField<Decimal256>>().toString();
             else
-                throw Exception("Not decimal literal" + expr.DebugString(), ErrorCodes::COP_BAD_DAG_REQUEST);
+                throw TiFlashException(
+                    "Not decimal literal" + expr.DebugString(), Errors::Coprocessor::BadRequest);
         }
         case tipb::ExprType::MysqlTime:
         {
             if (!expr.has_field_type() || (expr.field_type().tp() != TiDB::TypeDate && expr.field_type().tp() != TiDB::TypeDatetime))
-                throw Exception("Invalid MySQL Time literal " + expr.DebugString(), ErrorCodes::COP_BAD_DAG_REQUEST);
+                throw TiFlashException(
+                    "Invalid MySQL Time literal " + expr.DebugString(), Errors::Coprocessor::BadRequest);
             auto t = decodeDAGUInt64(expr.val());
             // TODO: Use timezone in DAG request.
             return std::to_string(TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field().get<Int64>());
@@ -105,19 +111,22 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
         case tipb::ExprType::ApproxCountDistinct:
             if (agg_func_map.find(expr.tp()) == agg_func_map.end())
             {
-                throw Exception(tipb::ExprType_Name(expr.tp()) + " not supported", ErrorCodes::UNSUPPORTED_METHOD);
+                throw TiFlashException(
+                    tipb::ExprType_Name(expr.tp()) + " not supported", Errors::Coprocessor::Unimplemented);
             }
             func_name = agg_func_map.find(expr.tp())->second;
             break;
         case tipb::ExprType::ScalarFunc:
             if (scalar_func_map.find(expr.sig()) == scalar_func_map.end())
             {
-                throw Exception(tipb::ScalarFuncSig_Name(expr.sig()) + " not supported", ErrorCodes::UNSUPPORTED_METHOD);
+                throw TiFlashException(tipb::ScalarFuncSig_Name(expr.sig()) + " not supported",
+                    Errors::Coprocessor::Unimplemented);
             }
             func_name = scalar_func_map.find(expr.sig())->second;
             break;
         default:
-            throw Exception(tipb::ExprType_Name(expr.tp()) + " not supported", ErrorCodes::UNSUPPORTED_METHOD);
+            throw TiFlashException(
+                tipb::ExprType_Name(expr.tp()) + " not supported", Errors::Coprocessor::Unimplemented);
     }
     // build function expr
     if (functionIsInOrGlobalInOperator(func_name))
@@ -237,7 +246,8 @@ Field decodeLiteral(const tipb::Expr & expr)
         case tipb::ExprType::MysqlTime:
         {
             if (!expr.has_field_type() || (expr.field_type().tp() != TiDB::TypeDate && expr.field_type().tp() != TiDB::TypeDatetime))
-                throw Exception("Invalid MySQL Time literal " + expr.DebugString(), ErrorCodes::COP_BAD_DAG_REQUEST);
+                throw TiFlashException(
+                    "Invalid MySQL Time literal " + expr.DebugString(), Errors::Coprocessor::BadRequest);
             auto t = decodeDAGUInt64(expr.val());
             // TODO: Use timezone in DAG request.
             return TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field();
@@ -249,9 +259,11 @@ Field decodeLiteral(const tipb::Expr & expr)
         case tipb::ExprType::MysqlSet:
         case tipb::ExprType::MysqlJson:
         case tipb::ExprType::ValueList:
-            throw Exception(tipb::ExprType_Name(expr.tp()) + " is not supported yet", ErrorCodes::UNSUPPORTED_METHOD);
+            throw TiFlashException(
+                tipb::ExprType_Name(expr.tp()) + " is not supported yet", Errors::Coprocessor::Unimplemented);
         default:
-            throw Exception("Should not reach here: not a literal expression", ErrorCodes::LOGICAL_ERROR);
+            throw TiFlashException(
+                "Should not reach here: not a literal expression", Errors::Coprocessor::Internal);
     }
 }
 
@@ -260,7 +272,7 @@ String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<Nam
     auto column_index = decodeDAGInt64(expr.val());
     if (column_index < 0 || column_index >= (Int64)input_col.size())
     {
-        throw Exception("Column index out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
+        throw TiFlashException("Column index out of bound", Errors::Coprocessor::BadRequest);
     }
     return input_col[column_index].name;
 }
@@ -326,7 +338,8 @@ UInt8 getFieldLengthForArrowEncode(Int32 tp)
         case TiDB::TypeJSON:
             return VAR_SIZE;
         default:
-            throw Exception("not supported field type in arrow encode: " + std::to_string(tp));
+            throw TiFlashException("not supported field type in arrow encode: " + std::to_string(tp),
+                Errors::Coprocessor::Internal);
     }
 }
 
@@ -407,27 +420,27 @@ std::unordered_map<tipb::ExprType, String> agg_func_map({
 
 std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::CastIntAsInt, "cast"}, {tipb::ScalarFuncSig::CastIntAsReal, "cast"},
-    {tipb::ScalarFuncSig::CastIntAsString, "cast"}, {tipb::ScalarFuncSig::CastIntAsDecimal, "tidb_cast"},
-    {tipb::ScalarFuncSig::CastIntAsTime, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastIntAsString, "cast"}, {tipb::ScalarFuncSig::CastIntAsDecimal, "cast"},
+    {tipb::ScalarFuncSig::CastIntAsTime, "cast"},
     //{tipb::ScalarFuncSig::CastIntAsDuration, "cast"},
     //{tipb::ScalarFuncSig::CastIntAsJson, "cast"},
 
     {tipb::ScalarFuncSig::CastRealAsInt, "cast"}, {tipb::ScalarFuncSig::CastRealAsReal, "cast"},
-    {tipb::ScalarFuncSig::CastRealAsString, "cast"}, {tipb::ScalarFuncSig::CastRealAsDecimal, "tidb_cast"},
-    {tipb::ScalarFuncSig::CastRealAsTime, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastRealAsString, "cast"}, {tipb::ScalarFuncSig::CastRealAsDecimal, "cast"},
+    {tipb::ScalarFuncSig::CastRealAsTime, "cast"},
     //{tipb::ScalarFuncSig::CastRealAsDuration, "cast"},
     //{tipb::ScalarFuncSig::CastRealAsJson, "cast"},
 
     {tipb::ScalarFuncSig::CastDecimalAsInt, "cast"}, {tipb::ScalarFuncSig::CastDecimalAsReal, "cast"},
-    {tipb::ScalarFuncSig::CastDecimalAsString, "cast"}, {tipb::ScalarFuncSig::CastDecimalAsDecimal, "tidb_cast"},
-    {tipb::ScalarFuncSig::CastDecimalAsTime, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastDecimalAsString, "cast"}, {tipb::ScalarFuncSig::CastDecimalAsDecimal, "cast"},
+    {tipb::ScalarFuncSig::CastDecimalAsTime, "cast"},
     //{tipb::ScalarFuncSig::CastDecimalAsDuration, "cast"},
     //{tipb::ScalarFuncSig::CastDecimalAsJson, "cast"},
 
     {tipb::ScalarFuncSig::CastStringAsInt, "cast"},
     //{tipb::ScalarFuncSig::CastStringAsReal, "cast"},
-    {tipb::ScalarFuncSig::CastStringAsString, "cast"}, {tipb::ScalarFuncSig::CastStringAsDecimal, "tidb_cast"},
-    {tipb::ScalarFuncSig::CastStringAsTime, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastStringAsString, "cast"}, {tipb::ScalarFuncSig::CastStringAsDecimal, "cast"},
+    {tipb::ScalarFuncSig::CastStringAsTime, "cast"},
     //{tipb::ScalarFuncSig::CastStringAsDuration, "cast"},
     //{tipb::ScalarFuncSig::CastStringAsJson, "cast"},
 
