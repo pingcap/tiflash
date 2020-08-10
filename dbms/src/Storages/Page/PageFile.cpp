@@ -859,6 +859,7 @@ size_t PageFile::setLegacy()
     auto old_data_encryption_path = dataEncryptionPath();
     Poco::File formal_dir(folderPath());
     type = Type::Legacy;
+    file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());
     formal_dir.renameTo(folderPath());
     file_provider->deleteEncryptionInfo(old_meta_encryption_path);
     file_provider->deleteEncryptionInfo(old_data_encryption_path);
