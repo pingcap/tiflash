@@ -6,8 +6,8 @@
 #include <Interpreters/Context.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/StoragePool.h>
-#include <Storages/DeltaMerge/PKRange.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TiDB.h>
@@ -129,7 +129,7 @@ public:
         NotCompress not_compress_columns{};
     };
 
-    using SegmentSortedMap = std::map<PKRange::End, SegmentPtr, std::less<>>;
+    using SegmentSortedMap = std::map<RowKeyValue, SegmentPtr, std::less<>>;
     using SegmentMap       = std::unordered_map<PageId, SegmentPtr>;
 
     enum ThreadType
@@ -334,6 +334,7 @@ private:
     String table_name;
 
     PrimaryKeyPtr pk;
+    bool          is_common_handle;
 
     ColumnDefines original_table_columns;
     BlockPtr      original_table_header; // Used to speed up getHeader()

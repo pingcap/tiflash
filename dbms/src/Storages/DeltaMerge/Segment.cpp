@@ -128,7 +128,7 @@ Segment::Segment(UInt64                      epoch_, //
                  const StableValueSpacePtr & stable_)
     : epoch(epoch_),
       range(range_),
-      pk_range(std::make_shared<PKRange>(PKRange::fromHandleRange(range))),
+      rowkey_range(RowKeyRange::fromHandleRange(range)),
       segment_id(segment_id_),
       next_segment_id(next_segment_id_),
       delta(delta_),
@@ -252,7 +252,7 @@ bool Segment::write(DMContext & dm_context, const HandleRange & delete_range)
     return delta->appendDeleteRange(dm_context, delete_range);
 }
 
-bool Segment::write(DMContext & dm_context, const PKRange & delete_range)
+bool Segment::write(DMContext & dm_context, const RowKeyRange & delete_range)
 {
     return write(dm_context, delete_range.toHandleRange());
 }
@@ -1037,8 +1037,8 @@ String Segment::info() const
 {
     std::stringstream s;
     s << "{[id:" << segment_id << "], [next:" << next_segment_id << "], [epoch:" << epoch << "], [range:" << range.toString()
-      << "], [pk_range:" << pk_range->toString() << "], [delta rows:" << delta->getRows() << "], [delete ranges:" << delta->getDeletes()
-      << "], [stable(" << stable->getDMFilesString() << "):" << stable->getRows() << "]}";
+      << "], [rowkey_range:" << rowkey_range.toString() << "], [delta rows:" << delta->getRows()
+      << "], [delete ranges:" << delta->getDeletes() << "], [stable(" << stable->getDMFilesString() << "):" << stable->getRows() << "]}";
     return s.str();
 }
 

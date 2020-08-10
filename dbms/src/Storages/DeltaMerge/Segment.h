@@ -7,7 +7,7 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Index/MinMax.h>
 #include <Storages/DeltaMerge/Range.h>
-#include <Storages/DeltaMerge/PKRange.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/Page/PageDefines.h>
@@ -98,7 +98,7 @@ public:
     bool writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit);
     bool write(DMContext & dm_context, const Block & block); // For test only
     bool write(DMContext & dm_context, const HandleRange & delete_range);
-    bool write(DMContext & dm_context, const PKRange & delete_range);
+    bool write(DMContext & dm_context, const RowKeyRange & delete_range);
 
     SegmentSnapshotPtr createSnapshot(const DMContext & dm_context, bool is_update = false) const;
 
@@ -169,7 +169,7 @@ public:
     void check(DMContext & dm_context, const String & when) const;
 
     const HandleRange & getRange() const { return range; }
-    const PKRangePtr &  getPKRange() const { return pk_range; }
+    const RowKeyRange & getRowKeyRange() const { return rowkey_range; }
 
     const DeltaValueSpacePtr &  getDelta() const { return delta; }
     const StableValueSpacePtr & getStable() const { return stable; }
@@ -261,7 +261,7 @@ private:
 private:
     const UInt64      epoch; // After split / merge / merge delta, epoch got increased by 1.
     const HandleRange range;
-    const PKRangePtr  pk_range;
+    const RowKeyRange rowkey_range;
     const PageId      segment_id;
     const PageId      next_segment_id;
 
