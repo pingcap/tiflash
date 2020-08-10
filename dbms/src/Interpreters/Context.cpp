@@ -1436,18 +1436,16 @@ DDLWorker & Context::getDDLWorker() const
 }
 
 void Context::createTMTContext(const std::vector<std::string> & pd_addrs,
-                               const std::string & learner_key,
-                               const std::string & learner_value,
                                const std::unordered_set<std::string> & ignore_databases,
                                const std::string & kvstore_path,
                                ::TiDB::StorageEngine engine,
                                bool disable_bg_flush,
-                               grpc::SslCredentialsOptions cred_options)
+                               pingcap::ClusterConfig cluster_config)
 {
     auto lock = getLock();
     if (shared->tmt_context)
         throw Exception("TMTContext has already existed", ErrorCodes::LOGICAL_ERROR);
-    shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, engine, disable_bg_flush, cred_options);
+    shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, ignore_databases, kvstore_path, engine, disable_bg_flush, cluster_config);
 }
 
 void Context::initializePathCapacityMetric(const std::vector<std::string> & all_path, std::vector<size_t> && all_capacity)
