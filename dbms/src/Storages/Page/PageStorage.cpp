@@ -276,7 +276,6 @@ void PageStorage::restore()
         LOG_DEBUG(log,
                 storage_name << "No PageFile can be reused for write, create new PageFile_" + DB::toString(max_file_id + 1) + "_0 for write");
         write_files[0] = page_file;
-        total_recover_bytes += page_file.getDiskSize();
     }
     if (global_capacity)
         global_capacity->addUsedSize(storage_path, total_recover_bytes);
