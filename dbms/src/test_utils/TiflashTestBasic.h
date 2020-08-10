@@ -134,7 +134,7 @@ public:
 
             // FIXME: These paths are only set at the first time
             context.initializePathCapacityMetric(testdata_path, std::move(all_capacity));
-            context.createTMTContext({}, "", "", {"default"}, root_path + "/kvstore", TiDB::StorageEngine::TMT, false);
+            context.createTMTContext({}, {"default"}, root_path + "/kvstore", TiDB::StorageEngine::TMT, false);
 
             context.getTMTContext().restore();
         }
