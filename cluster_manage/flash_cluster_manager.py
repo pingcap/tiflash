@@ -1,17 +1,16 @@
 #!/usr/bin/python3
 import logging
 import os
-import socket
 import time
 from logging.handlers import RotatingFileHandler
 
 import conf
+import define
 import flash_http_client
 import placement_rule
 import tidb_tools
 import util
 from pd_client import PDClient, EtcdClient
-import define
 
 terminal: bool = False
 
@@ -20,10 +19,6 @@ def handle_receive_signal(signal_number, _):
     print('Received signal: ', signal_number)
     global terminal
     terminal = handle_receive_signal
-
-
-def get_host():
-    return socket.gethostbyname(socket.gethostname())
 
 
 def wrap_try_get_lock(func):
@@ -49,9 +44,9 @@ class Store:
         self.inner = pd_store
         address = self.inner['address']
         host, port = address.split(':')
-        self.ip = socket.gethostbyname(host)
-        self.address = '{}:{}'.format(self.ip, port)
-        self.tiflash_http_address = None
+        self.address = '{}:{}'.format(host, port)
+        _, status_port = self.inner['status_address'].split(':')
+        self.tiflash_status_address = '{}:{}'.format(host, status_port)
 
     @property
     def id(self):
@@ -114,21 +109,10 @@ class TiFlashClusterManager:
             if cur >= ts + conf.flash_conf.cluster_refresh_interval:
                 self._try_refresh()
 
-    def _get_http_port_for_all_store(self):
-        http_info_map = {}
-        for value, metadata in self.pd_client.etcd_client.get_by_prefix(define.TIFLASH_CLUSTER_HTTP_PORT):
-            key = str(metadata.key, encoding='utf-8')[len(define.TIFLASH_CLUSTER_HTTP_PORT):]
-            http_info_map[key] = str(value, encoding='utf-8')
-
-        for store in self.stores.values():
-            store.tiflash_http_address = http_info_map.get(store.address)
-
-        self.logger.debug('http port of all store: {}'.format(http_info_map))
-
     def _update_http_port(self):
         key = '{}{}'.format(define.TIFLASH_CLUSTER_HTTP_PORT, self.cur_store.address)
         val = conf.flash_conf.http_addr
-        self.pd_client.etcd_client.update(key, val, max(conf.flash_conf.cluster_master_ttl, 300))
+        self.pd_client.etcd_client.update(key, val, max(conf.flash_conf.cluster_master_ttl, 120))
 
     def __init__(self, pd_client: PDClient, tidb_status_addr_list):
         self.logger = logging.getLogger('TiFlashManager')
@@ -188,7 +172,9 @@ class TiFlashClusterManager:
     def compute_sync_data_process(self, table_id, start_key, end_key):
         stats_region: dict = self.pd_client.get_stats_region_by_range_json(start_key, end_key)
         region_count = stats_region.get('count', 0)
-        flash_region_count = flash_http_client.get_region_count_by_table(self.stores.values(), table_id)
+        flash_region_count, err = flash_http_client.get_region_count_by_table(self.stores.values(), table_id)
+        if err:
+            self.logger.error('fail to get table replica sync status {}'.format(err))
         return region_count, flash_region_count
 
     @wrap_try_get_lock
@@ -247,8 +233,6 @@ class TiFlashClusterManager:
     def table_update(self):
         if self.escape_table_update():
             return
-
-        self._get_http_port_for_all_store()
 
         all_replica_available = True
         table_list = tidb_tools.db_flash_replica(self.tidb_status_addr_list)
