@@ -15,14 +15,14 @@ using TiFlashRaftProxyPtr = void *;
 class TMTContext;
 struct TiFlashServer;
 
-enum TiFlashApplyRes : uint32_t
+enum class TiFlashApplyRes : uint32_t
 {
     None = 0,
     Persist,
     NotFound,
 };
 
-enum WriteCmdType : uint8_t
+enum class WriteCmdType : uint8_t
 {
     Put = 0,
     Del,
@@ -99,6 +99,8 @@ enum class EncryptionMethod : uint8_t
     Aes256Ctr = 4,
 };
 
+const char * IntoEncryptionMethodName(EncryptionMethod);
+
 struct FileEncryptionInfo
 {
     FileEncryptionRes res;
@@ -148,6 +150,7 @@ struct TiFlashRaftProxyHelper
 public:
     bool checkServiceStopped() const;
     bool checkEncryptionEnabled() const;
+    EncryptionMethod getEncryptionMethod() const;
     FileEncryptionInfo getFile(std::string_view) const;
     FileEncryptionInfo newFile(std::string_view) const;
     FileEncryptionInfo deleteFile(std::string_view) const;
@@ -157,12 +160,28 @@ public:
 private:
     TiFlashRaftProxyPtr proxy_ptr;
     uint8_t (*fn_handle_check_service_stopped)(TiFlashRaftProxyPtr);
-    uint8_t (*fn_handle_enable_encryption)(TiFlashRaftProxyPtr);
+    uint8_t (*fn_is_encryption_enabled)(TiFlashRaftProxyPtr);
+    EncryptionMethod (*fn_encryption_method)(TiFlashRaftProxyPtr);
     FileEncryptionInfo (*fn_handle_get_file)(TiFlashRaftProxyPtr, BaseBuffView);
     FileEncryptionInfo (*fn_handle_new_file)(TiFlashRaftProxyPtr, BaseBuffView);
     FileEncryptionInfo (*fn_handle_delete_file)(TiFlashRaftProxyPtr, BaseBuffView);
     FileEncryptionInfo (*fn_handle_link_file)(TiFlashRaftProxyPtr, BaseBuffView, BaseBuffView);
     FileEncryptionInfo (*fn_handle_rename_file)(TiFlashRaftProxyPtr, BaseBuffView, BaseBuffView);
+};
+
+enum class TiFlashStatus : uint8_t
+{
+    IDLE = 0,
+    Running,
+    Stopped,
+};
+
+struct CppStrWithView
+{
+    TiFlashRawString inner{nullptr};
+    BaseBuffView view;
+
+    CppStrWithView(std::string && v) : inner(new std::string(std::move(v))), view(*inner) {}
 };
 
 struct TiFlashServerHelper
@@ -178,10 +197,15 @@ struct TiFlashServerHelper
     void (*fn_handle_apply_snapshot)(const TiFlashServer *, BaseBuffView, uint64_t, SnapshotViewArray, uint64_t, uint64_t);
     void (*fn_atomic_update_proxy)(TiFlashServer *, TiFlashRaftProxyHelper *);
     void (*fn_handle_destroy)(TiFlashServer *, RegionId);
-    void (*fn_handle_ingest_sst)(TiFlashServer *, SnapshotViewArray, RaftCmdHeader);
+    TiFlashApplyRes (*fn_handle_ingest_sst)(TiFlashServer *, SnapshotViewArray, RaftCmdHeader);
     uint8_t (*fn_handle_check_terminated)(TiFlashServer *);
     FsStats (*fn_handle_compute_fs_stats)(TiFlashServer *);
-    uint8_t (*fn_handle_check_tiflash_alive)(TiFlashServer *);
+    TiFlashStatus (*fn_handle_get_tiflash_status)(TiFlashServer *);
+    void * (*fn_pre_handle_snapshot)(TiFlashServer *, BaseBuffView, uint64_t, SnapshotViewArray, uint64_t, uint64_t);
+    void (*fn_apply_pre_handled_snapshot)(TiFlashServer *, void *);
+    void (*fn_gc_pre_handled_snapshot)(TiFlashServer *, void *);
+    CppStrWithView (*fn_handle_get_table_sync_status)(TiFlashServer *, uint64_t);
+    void (*gc_cpp_string)(TiFlashServer *, TiFlashRawString);
 };
 
 void run_tiflash_proxy_ffi(int argc, const char ** argv, const TiFlashServerHelper *);
@@ -191,6 +215,7 @@ struct TiFlashServer
 {
     TMTContext * tmt{nullptr};
     TiFlashRaftProxyHelper * proxy_helper{nullptr};
+    std::atomic<TiFlashStatus> status{TiFlashStatus::IDLE};
 };
 
 TiFlashRawString GenCppRawString(BaseBuffView);
@@ -200,8 +225,15 @@ void HandleApplySnapshot(
 TiFlashApplyRes HandleWriteRaftCmd(const TiFlashServer * server, WriteCmdsView req_buff, RaftCmdHeader header);
 void AtomicUpdateProxy(TiFlashServer * server, TiFlashRaftProxyHelper * proxy);
 void HandleDestroy(TiFlashServer * server, RegionId region_id);
-void HandleIngestSST(TiFlashServer * server, SnapshotViewArray snaps, RaftCmdHeader header);
+TiFlashApplyRes HandleIngestSST(TiFlashServer * server, SnapshotViewArray snaps, RaftCmdHeader header);
 uint8_t HandleCheckTerminated(TiFlashServer * server);
 FsStats HandleComputeFsStats(TiFlashServer * server);
-uint8_t HandleCheckTiFlashAlive(TiFlashServer * server);
+TiFlashStatus HandleGetTiFlashStatus(TiFlashServer * server);
+void * PreHandleSnapshot(
+    TiFlashServer * server, BaseBuffView region_buff, uint64_t peer_id, SnapshotViewArray snaps, uint64_t index, uint64_t term);
+void ApplyPreHandledSnapshot(TiFlashServer * server, void * res);
+void GcPreHandledSnapshot(TiFlashServer * server, void * res);
+CppStrWithView HandleGetTableSyncStatus(TiFlashServer *, uint64_t);
+void GcCppString(TiFlashServer *, TiFlashRawString);
+
 } // namespace DB

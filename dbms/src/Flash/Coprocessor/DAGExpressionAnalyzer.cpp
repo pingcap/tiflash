@@ -1,5 +1,6 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Columns/ColumnSet.h>
+#include <Common/TiFlashException.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeSet.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -145,9 +146,9 @@ static String buildCastFunctionInternal(DAGExpressionAnalyzer * analyzer, const 
 static String buildCastFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
 {
     if (expr.children_size() != 1)
-        throw Exception("Cast function only support one argument", ErrorCodes::COP_BAD_DAG_REQUEST);
+        throw TiFlashException("Cast function only support one argument", Errors::Coprocessor::BadRequest);
     if (!exprHasValidFieldType(expr))
-        throw Exception("CAST function without valid field type", ErrorCodes::COP_BAD_DAG_REQUEST);
+        throw TiFlashException("CAST function without valid field type", Errors::Coprocessor::BadRequest);
 
     String name = analyzer->getActions(expr.children(0), actions);
     DataTypePtr expected_type = getDataTypeByFieldType(expr.field_type());
@@ -167,17 +168,17 @@ static String buildDateAddFunction(DAGExpressionAnalyzer * analyzer, const tipb:
         {"YEAR", "addYears"}, {"HOUR", "addHours"}, {"MINUTE", "addMinutes"}, {"SECOND", "addSeconds"}});
     if (expr.children_size() != 3)
     {
-        throw Exception("date add function requires three arguments", ErrorCodes::COP_BAD_DAG_REQUEST);
+        throw TiFlashException("date add function requires three arguments", Errors::Coprocessor::BadRequest);
     }
     String date_column = analyzer->getActions(expr.children(0), actions);
     String delta_column = analyzer->getActions(expr.children(1), actions);
     if (expr.children(2).tp() != tipb::ExprType::String)
     {
-        throw Exception("3rd argument of date add function must be string literal", ErrorCodes::COP_BAD_DAG_REQUEST);
+        throw TiFlashException("3rd argument of date add function must be string literal", Errors::Coprocessor::BadRequest);
     }
     String unit = expr.children(2).val();
     if (unit_to_func_name_map.find(unit) == unit_to_func_name_map.end())
-        throw Exception("date_add does not support unit " + unit + " yet.", ErrorCodes::NOT_IMPLEMENTED);
+        throw TiFlashException("date_add does not support unit " + unit + " yet.", Errors::Coprocessor::Unimplemented);
     String func_name = unit_to_func_name_map.find(unit)->second;
     const auto & date_column_type = removeNullable(actions->getSampleBlock().getByName(date_column).type);
     if (!date_column_type->isDateOrDateTime())
@@ -238,7 +239,7 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
     if (agg.group_by_size() == 0 && agg.agg_func_size() == 0)
     {
         //should not reach here
-        throw Exception("Aggregation executor without group by/agg exprs", ErrorCodes::COP_BAD_DAG_REQUEST);
+        throw TiFlashException("Aggregation executor without group by/agg exprs", Errors::Coprocessor::BadRequest);
     }
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsChain::Step & step = chain.steps.back();
@@ -442,7 +443,7 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
         auto const_expr_name = getActions(const_expr, actions);
         return applyFunction("notEquals", {column_name, const_expr_name}, actions, nullptr);
     }
-    throw Exception("Filter on " + org_type->getName() + " is not supported.", ErrorCodes::NOT_IMPLEMENTED);
+    throw TiFlashException("Filter on " + org_type->getName() + " is not supported.", Errors::Coprocessor::Unimplemented);
 }
 
 void DAGExpressionAnalyzer::appendOrderBy(
@@ -450,7 +451,7 @@ void DAGExpressionAnalyzer::appendOrderBy(
 {
     if (topN.order_by_size() == 0)
     {
-        throw Exception("TopN executor without order by exprs", ErrorCodes::COP_BAD_DAG_REQUEST);
+        throw TiFlashException("TopN executor without order by exprs", Errors::Coprocessor::BadRequest);
     }
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsChain::Step & step = chain.steps.back();
@@ -539,14 +540,12 @@ void DAGExpressionAnalyzer::appendJoin(
     actions->add(ExpressionAction::ordinaryJoin(join_query.join, columns_added_by_join));
 }
 /// return true if some actions is needed
-bool DAGExpressionAnalyzer::appendJoinKey(
-    ExpressionActionsChain & chain, const tipb::Join & join, const DataTypes & key_types, Names & key_names, bool tiflash_left)
+bool DAGExpressionAnalyzer::appendJoinKey(ExpressionActionsChain & chain, const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
+    const DataTypes & key_types, Names & key_names, bool left, bool is_right_out_join)
 {
     bool ret = false;
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsPtr actions = chain.getLastActions();
-    const auto & keys = ((tiflash_left && join.inner_idx() == 1) || (!tiflash_left && join.inner_idx() == 0)) ? join.left_join_keys()
-                                                                                                              : join.right_join_keys();
 
     for (int i = 0; i < keys.size(); i++)
     {
@@ -561,10 +560,19 @@ bool DAGExpressionAnalyzer::appendJoinKey(
             key_name = appendCast(key_types[i], actions, key_name);
             has_actions = true;
         }
-        if (!tiflash_left && !has_actions)
+        if (!has_actions && (!left || is_right_out_join))
         {
-            // for right side table, add a new column
-            String updated_key_name = "_r_k_" + key_name;
+            /// if the join key is a columnRef, then add a new column as the join key if needed.
+            /// In ClickHouse, the columns returned by join are: join_keys, left_columns and right_columns
+            /// where left_columns and right_columns don't include the join keys if they are ColumnRef
+            /// In TiDB, the columns returned by join are left_columns, right_columns, if the join keys
+            /// are ColumnRef, they will be included in both left_columns and right_columns
+            /// E.g, for table t1(id, value), t2(id, value) and query select * from t1 join t2 on t1.id = t2.id
+            /// In ClickHouse, it returns id,t1_value,t2_value
+            /// In TiDB, it returns t1_id,t1_value,t2_id,t2_value
+            /// So in order to make the join compatible with TiDB, if the join key is a columnRef, for inner/left
+            /// join, add a new key as right join key, for right join, add a new key as left join key
+            String updated_key_name = (left ? "_l_k_" : "_r_k_") + key_name;
             actions->add(ExpressionAction::copyColumn(key_name, updated_key_name));
             key_name = updated_key_name;
             has_actions = true;
@@ -716,7 +724,7 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(
 
     if (!expr.has_field_type())
     {
-        throw Exception("Function Expression without field type", ErrorCodes::COP_BAD_DAG_REQUEST);
+        throw TiFlashException("Function Expression without field type", Errors::Coprocessor::BadRequest);
     }
     if (exprHasValidFieldType(expr))
     {
@@ -814,7 +822,7 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
     {
         if (isAggFunctionExpr(expr))
         {
-            throw Exception("agg function is not supported yet", ErrorCodes::UNSUPPORTED_METHOD);
+            throw TiFlashException("agg function is not supported yet", Errors::Coprocessor::Unimplemented);
         }
         const String & func_name = getFunctionName(expr);
         if (function_builder_map.find(func_name) != function_builder_map.end())
@@ -828,7 +836,7 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
     }
     else
     {
-        throw Exception("Unsupported expr type: " + getTypeName(expr), ErrorCodes::UNSUPPORTED_METHOD);
+        throw TiFlashException("Unsupported expr type: " + getTypeName(expr), Errors::Coprocessor::Unimplemented);
     }
 
     ret = alignReturnType(expr, actions, ret, output_as_uint8_type);

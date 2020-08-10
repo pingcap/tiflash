@@ -35,7 +35,7 @@ const std::string & CFToName(const ColumnFamilyType type)
         case ColumnFamilyType::Lock:
             return ColumnFamilyName::Lock;
         default:
-            throw Exception("Can not tell cf type " + std::to_string(type), ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Can not tell cf type " + std::to_string(static_cast<uint8_t>(type)), ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -109,12 +109,12 @@ void HandleDestroy(TiFlashServer * server, RegionId region_id)
     }
 }
 
-void HandleIngestSST(TiFlashServer * server, SnapshotViewArray snaps, RaftCmdHeader header)
+TiFlashApplyRes HandleIngestSST(TiFlashServer * server, SnapshotViewArray snaps, RaftCmdHeader header)
 {
     try
     {
         auto & kvstore = server->tmt->getKVStore();
-        kvstore->handleIngestSST(header.region_id, snaps, header.index, header.term, *server->tmt);
+        return kvstore->handleIngestSST(header.region_id, snaps, header.index, header.term, *server->tmt);
     }
     catch (...)
     {
@@ -140,10 +140,11 @@ FsStats HandleComputeFsStats(TiFlashServer * server)
     return res;
 }
 
-uint8_t HandleCheckTiFlashAlive(TiFlashServer * server) { return server->tmt != nullptr; }
+TiFlashStatus HandleGetTiFlashStatus(TiFlashServer * server) { return server->status.load(); }
 
 bool TiFlashRaftProxyHelper::checkServiceStopped() const { return fn_handle_check_service_stopped(proxy_ptr); }
-bool TiFlashRaftProxyHelper::checkEncryptionEnabled() const { return fn_handle_enable_encryption(proxy_ptr); }
+bool TiFlashRaftProxyHelper::checkEncryptionEnabled() const { return fn_is_encryption_enabled(proxy_ptr); }
+EncryptionMethod TiFlashRaftProxyHelper::getEncryptionMethod() const { return fn_encryption_method(proxy_ptr); }
 FileEncryptionInfo TiFlashRaftProxyHelper::getFile(std::string_view view) const { return fn_handle_get_file(proxy_ptr, view); }
 FileEncryptionInfo TiFlashRaftProxyHelper::newFile(std::string_view view) const { return fn_handle_new_file(proxy_ptr, view); }
 FileEncryptionInfo TiFlashRaftProxyHelper::deleteFile(std::string_view view) const { return fn_handle_delete_file(proxy_ptr, view); }
@@ -154,6 +155,65 @@ FileEncryptionInfo TiFlashRaftProxyHelper::linkFile(std::string_view src, std::s
 FileEncryptionInfo TiFlashRaftProxyHelper::renameFile(std::string_view src, std::string_view dst) const
 {
     return fn_handle_rename_file(proxy_ptr, src, dst);
+}
+
+struct PreHandleSnapshotRes
+{
+    RegionPtr region;
+};
+
+void * PreHandleSnapshot(
+    TiFlashServer * server, BaseBuffView region_buff, uint64_t peer_id, SnapshotViewArray snaps, uint64_t index, uint64_t term)
+{
+    try
+    {
+        metapb::Region region;
+        region.ParseFromArray(region_buff.data, (int)region_buff.len);
+        auto & kvstore = server->tmt->getKVStore();
+        auto new_region = kvstore->preHandleSnapshot(std::move(region), peer_id, snaps, index, term, *server->tmt);
+        auto res = new PreHandleSnapshotRes{new_region};
+        return res;
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        exit(-1);
+    }
+}
+
+void ApplyPreHandledSnapshot(TiFlashServer * server, void * res)
+{
+    PreHandleSnapshotRes * snap = reinterpret_cast<PreHandleSnapshotRes *>(res);
+    try
+    {
+        auto & kvstore = server->tmt->getKVStore();
+        kvstore->handleApplySnapshot(snap->region, *server->tmt);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        exit(-1);
+    }
+}
+
+void GcPreHandledSnapshot(TiFlashServer *, void * res)
+{
+    PreHandleSnapshotRes * snap = reinterpret_cast<PreHandleSnapshotRes *>(res);
+    delete snap;
+}
+
+void GcCppString(TiFlashServer *, TiFlashRawString s) { delete s; }
+
+const char * IntoEncryptionMethodName(EncryptionMethod method)
+{
+    static const char * EncryptionMethodName[] = {
+        "Unknown",
+        "Plaintext",
+        "Aes128Ctr",
+        "Aes192Ctr",
+        "Aes256Ctr",
+    };
+    return EncryptionMethodName[static_cast<uint8_t>(method)];
 }
 
 } // namespace DB

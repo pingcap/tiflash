@@ -1,3 +1,4 @@
+#include <Common/TiFlashException.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
@@ -44,7 +45,8 @@ void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t e
 {
     // Encode data in chunk by chblock encode
     if (start != 0 || end != block.rows())
-        throw Exception("CHBlock encode only support encode whole block");
+        throw TiFlashException(
+            "CHBlock encode only support encode whole block", Errors::Coprocessor::Internal);
     block.checkNumberOfRows();
     size_t columns = block.columns();
     size_t rows = block.rows();

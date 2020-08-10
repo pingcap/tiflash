@@ -19,7 +19,7 @@ interserver_http_port = 9009
 	service_addr = "tiflash0:3930"
 	[flash.flash_cluster]
 		refresh_interval = 20
-		update_rule_interval = 5
+		update_rule_interval = 1
 		master_ttl = 60
 		cluster_manager_path = "/tiflash/flash_cluster_manager"
 	[flash.proxy]
