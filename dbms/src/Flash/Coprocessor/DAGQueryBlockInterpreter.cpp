@@ -1121,7 +1121,7 @@ void DAGQueryBlockInterpreter::recordProfileStreams(Pipeline & pipeline, const S
         dag.getDAGContext().getProfileStreamsMap()[key].input_streams.push_back(stream);
     }
     if (pipeline.stream_with_non_joined_data)
-        dag.getDAGContext().profile_streams_map[key].input_streams.push_back(pipeline.stream_with_non_joined_data);
+        dag.getDAGContext().getProfileStreamsMap()[key].input_streams.push_back(pipeline.stream_with_non_joined_data);
 }
 
 void copyExecutorTreeWithLocalTableScan(
