@@ -407,27 +407,27 @@ std::unordered_map<tipb::ExprType, String> agg_func_map({
 
 std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::CastIntAsInt, "cast"}, {tipb::ScalarFuncSig::CastIntAsReal, "cast"},
-    {tipb::ScalarFuncSig::CastIntAsString, "cast"}, {tipb::ScalarFuncSig::CastIntAsDecimal, "tidb_cast"},
-    {tipb::ScalarFuncSig::CastIntAsTime, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastIntAsString, "cast"}, {tipb::ScalarFuncSig::CastIntAsDecimal, "cast"},
+    {tipb::ScalarFuncSig::CastIntAsTime, "cast"},
     //{tipb::ScalarFuncSig::CastIntAsDuration, "cast"},
     //{tipb::ScalarFuncSig::CastIntAsJson, "cast"},
 
     {tipb::ScalarFuncSig::CastRealAsInt, "cast"}, {tipb::ScalarFuncSig::CastRealAsReal, "cast"},
-    {tipb::ScalarFuncSig::CastRealAsString, "cast"}, {tipb::ScalarFuncSig::CastRealAsDecimal, "tidb_cast"},
-    {tipb::ScalarFuncSig::CastRealAsTime, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastRealAsString, "cast"}, {tipb::ScalarFuncSig::CastRealAsDecimal, "cast"},
+    {tipb::ScalarFuncSig::CastRealAsTime, "cast"},
     //{tipb::ScalarFuncSig::CastRealAsDuration, "cast"},
     //{tipb::ScalarFuncSig::CastRealAsJson, "cast"},
 
     {tipb::ScalarFuncSig::CastDecimalAsInt, "cast"}, {tipb::ScalarFuncSig::CastDecimalAsReal, "cast"},
-    {tipb::ScalarFuncSig::CastDecimalAsString, "cast"}, {tipb::ScalarFuncSig::CastDecimalAsDecimal, "tidb_cast"},
-    {tipb::ScalarFuncSig::CastDecimalAsTime, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastDecimalAsString, "cast"}, {tipb::ScalarFuncSig::CastDecimalAsDecimal, "cast"},
+    {tipb::ScalarFuncSig::CastDecimalAsTime, "cast"},
     //{tipb::ScalarFuncSig::CastDecimalAsDuration, "cast"},
     //{tipb::ScalarFuncSig::CastDecimalAsJson, "cast"},
 
     {tipb::ScalarFuncSig::CastStringAsInt, "cast"},
     //{tipb::ScalarFuncSig::CastStringAsReal, "cast"},
-    {tipb::ScalarFuncSig::CastStringAsString, "cast"}, {tipb::ScalarFuncSig::CastStringAsDecimal, "tidb_cast"},
-    {tipb::ScalarFuncSig::CastStringAsTime, "tidb_cast"},
+    {tipb::ScalarFuncSig::CastStringAsString, "cast"}, {tipb::ScalarFuncSig::CastStringAsDecimal, "cast"},
+    {tipb::ScalarFuncSig::CastStringAsTime, "cast"},
     //{tipb::ScalarFuncSig::CastStringAsDuration, "cast"},
     //{tipb::ScalarFuncSig::CastStringAsJson, "cast"},
 
