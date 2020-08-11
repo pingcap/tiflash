@@ -268,8 +268,11 @@ try
     json->set("state", static_cast<Int32>(state));
     json->set("comment", comment);
 
+#ifndef NDEBUG
+    // Check stringify in Debug mode
     std::stringstream str;
     json->stringify(str);
+#endif
 
     return json;
 }
@@ -337,8 +340,11 @@ try
     json->set("name", name_json);
     json->set("comment", comment);
 
+#ifndef NDEBUG
+    // Check stringify in Debug mode
     std::stringstream str;
     json->stringify(str);
+#endif
 
     return json;
 }
@@ -383,8 +389,11 @@ try
 
     json->set("definitions", def_arr);
 
+#ifndef NDEBUG
+    // Check stringify in Debug mode
     std::stringstream str;
     json->stringify(str);
+#endif
 
     return json;
 }
@@ -415,6 +424,41 @@ catch (const Poco::Exception & e)
 {
     throw DB::Exception(
         std::string(__PRETTY_FUNCTION__) + ": Parse TiDB schema JSON failed (PartitionInfo): " + e.displayText(), DB::Exception(e));
+}
+
+////////////////////////////////
+////// TiFlashReplicaInfo //////
+////////////////////////////////
+
+Poco::JSON::Object::Ptr TiFlashReplicaInfo::getJSONObject() const
+try
+{
+    Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
+    json->set("Count", count);
+
+#ifndef NDEBUG
+    // Check stringify in Debug mode
+    std::stringstream str;
+    json->stringify(str);
+#endif
+
+    return json;
+}
+catch (const Poco::Exception & e)
+{
+    throw DB::Exception(std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (TiFlashReplicaInfo): " + e.displayText(),
+        DB::Exception(e));
+}
+
+void TiFlashReplicaInfo::deserialize(Poco::JSON::Object::Ptr & json)
+try
+{
+    count = json->getValue<UInt64>("Count");
+}
+catch (const Poco::Exception & e)
+{
+    throw DB::Exception(
+        String(__PRETTY_FUNCTION__) + ": Parse TiDB schema JSON failed (TiFlashReplicaInfo): " + e.displayText(), DB::Exception(e));
 }
 
 ////////////////////
@@ -518,6 +562,8 @@ try
 
     json->set("schema_version", schema_version);
 
+    json->set("tiflash_replica", replica_info.getJSONObject());
+
     json->stringify(buf);
 
     return buf.str();
@@ -538,7 +584,6 @@ try
     }
 
     Poco::JSON::Parser parser;
-
     Poco::Dynamic::Var result = parser.parse(json_str);
 
     auto obj = result.extract<Poco::JSON::Object::Ptr>();
@@ -581,6 +626,13 @@ try
     if (obj->has("sequence") && !obj->getObject("sequence").isNull())
     {
         is_sequence = true;
+    }
+    if (obj->has("tiflash_replica"))
+    {
+        if (auto replica_obj = obj->getObject("tiflash_replica"); !replica_obj.isNull())
+        {
+            replica_info.deserialize(replica_obj);
+        }
     }
 }
 catch (const Poco::Exception & e)
