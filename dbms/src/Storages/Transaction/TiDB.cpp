@@ -27,6 +27,10 @@ using DB::DecimalField;
 using DB::Field;
 using DB::SchemaNameMapper;
 
+////////////////////////
+////// ColumnInfo //////
+////////////////////////
+
 ColumnInfo::ColumnInfo(Poco::JSON::Object::Ptr json) { deserialize(json); }
 
 
@@ -316,6 +320,10 @@ catch (const Poco::Exception & e)
         std::string(__PRETTY_FUNCTION__) + ": Parse TiDB schema JSON failed (ColumnInfo): " + e.displayText(), DB::Exception(e));
 }
 
+///////////////////////////
+////// PartitionInfo //////
+///////////////////////////
+
 PartitionDefinition::PartitionDefinition(Poco::JSON::Object::Ptr json) { deserialize(json); }
 
 Poco::JSON::Object::Ptr PartitionDefinition::getJSONObject() const
@@ -409,6 +417,60 @@ catch (const Poco::Exception & e)
         std::string(__PRETTY_FUNCTION__) + ": Parse TiDB schema JSON failed (PartitionInfo): " + e.displayText(), DB::Exception(e));
 }
 
+////////////////////
+////// DBInfo //////
+////////////////////
+
+String DBInfo::serialize() const
+try
+{
+    std::stringstream buf;
+
+    Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
+    json->set("id", id);
+    Poco::JSON::Object::Ptr name_json = new Poco::JSON::Object();
+    name_json->set("O", name);
+    name_json->set("L", name);
+    json->set("db_name", name_json);
+
+    json->set("charset", charset);
+    json->set("collate", collate);
+
+    json->set("state", static_cast<Int32>(state));
+
+    json->stringify(buf);
+
+    return buf.str();
+}
+catch (const Poco::Exception & e)
+{
+    throw DB::Exception(
+        std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (DBInfo): " + e.displayText(), DB::Exception(e));
+}
+
+void DBInfo::deserialize(const String & json_str)
+try
+{
+    Poco::JSON::Parser parser;
+    Poco::Dynamic::Var result = parser.parse(json_str);
+    auto obj = result.extract<Poco::JSON::Object::Ptr>();
+    id = obj->getValue<DatabaseID>("id");
+    name = obj->get("db_name").extract<Poco::JSON::Object::Ptr>()->get("L").convert<String>();
+    charset = obj->get("charset").convert<String>();
+    collate = obj->get("collate").convert<String>();
+    state = static_cast<SchemaState>(obj->getValue<Int32>("state"));
+}
+catch (const Poco::Exception & e)
+{
+    throw DB::Exception(
+        std::string(__PRETTY_FUNCTION__) + ": Parse TiDB schema JSON failed (DBInfo): " + e.displayText() + ", json: " + json_str,
+        DB::Exception(e));
+}
+
+///////////////////////
+////// TableInfo //////
+///////////////////////
+
 TableInfo::TableInfo(const String & table_info_json) { deserialize(table_info_json); }
 
 String TableInfo::serialize() const
@@ -464,52 +526,6 @@ catch (const Poco::Exception & e)
 {
     throw DB::Exception(
         std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (TableInfo): " + e.displayText(), DB::Exception(e));
-}
-
-String DBInfo::serialize() const
-try
-{
-    std::stringstream buf;
-
-    Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
-    json->set("id", id);
-    Poco::JSON::Object::Ptr name_json = new Poco::JSON::Object();
-    name_json->set("O", name);
-    name_json->set("L", name);
-    json->set("db_name", name_json);
-
-    json->set("charset", charset);
-    json->set("collate", collate);
-
-    json->set("state", static_cast<Int32>(state));
-
-    json->stringify(buf);
-
-    return buf.str();
-}
-catch (const Poco::Exception & e)
-{
-    throw DB::Exception(
-        std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (DBInfo): " + e.displayText(), DB::Exception(e));
-}
-
-void DBInfo::deserialize(const String & json_str)
-try
-{
-    Poco::JSON::Parser parser;
-    Poco::Dynamic::Var result = parser.parse(json_str);
-    auto obj = result.extract<Poco::JSON::Object::Ptr>();
-    id = obj->getValue<DatabaseID>("id");
-    name = obj->get("db_name").extract<Poco::JSON::Object::Ptr>()->get("L").convert<String>();
-    charset = obj->get("charset").convert<String>();
-    collate = obj->get("collate").convert<String>();
-    state = static_cast<SchemaState>(obj->getValue<Int32>("state"));
-}
-catch (const Poco::Exception & e)
-{
-    throw DB::Exception(
-        std::string(__PRETTY_FUNCTION__) + ": Parse TiDB schema JSON failed (DBInfo): " + e.displayText() + ", json: " + json_str,
-        DB::Exception(e));
 }
 
 void TableInfo::deserialize(const String & json_str)
