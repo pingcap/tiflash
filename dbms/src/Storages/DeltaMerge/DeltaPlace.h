@@ -1,17 +1,14 @@
 #pragma once
 
-#include <type_traits>
-
 #include <Common/Exception.h>
-
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/IBlockOutputStream.h>
+#include <Interpreters/sortBlock.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
-
-#include <Interpreters/sortBlock.h>
-
 #include <common/logger_useful.h>
+
+#include <type_traits>
 
 
 namespace DB
@@ -207,8 +204,9 @@ bool placeInsert(const SkippableBlockInputStreamPtr & stable, //
                  const IColumn::Permutation &         row_id_ref,
                  const SortDescription &              sort)
 {
-    auto rows            = delta_block.rows();
-    auto [offset, limit] = HandleFilter::getPosRangeOfSorted(range, delta_block.getByPosition(0).column, 0, rows);
+    auto rows = delta_block.rows();
+    auto [offset, limit]
+        = RowKeyFilter::getPosRangeOfSorted(RowKeyRange::fromHandleRange(range), delta_block.getByPosition(0).column, 0, rows);
     if (!limit)
         return rows == limit;
 
@@ -244,8 +242,9 @@ bool placeDelete(const SkippableBlockInputStreamPtr & stable, //
                  DeltaTree &                          delta_tree,
                  const SortDescription &              sort)
 {
-    auto rows            = delta_block.rows();
-    auto [offset, limit] = HandleFilter::getPosRangeOfSorted(range, delta_block.getByPosition(0).column, 0, rows);
+    auto rows = delta_block.rows();
+    auto [offset, limit]
+        = RowKeyFilter::getPosRangeOfSorted(RowKeyRange::fromHandleRange(range), delta_block.getByPosition(0).column, 0, rows);
     if (!limit)
         return rows == limit;
 

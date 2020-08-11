@@ -2,7 +2,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/Pack.h>
 #include <Storages/DeltaMerge/DeltaValueSpace.h>
-#include <Storages/DeltaMerge/HandleFilter.h>
+#include <Storages/DeltaMerge/RowKeyFilter.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 
@@ -246,8 +246,8 @@ size_t DeltaValueSpace::Snapshot::read(const HandleRange & range, MutableColumns
         }
         else
         {
-            auto [actual_offset, actual_limit]
-                = HandleFilter::getPosRangeOfSorted(range, handle_col_data, rows_start_in_pack, rows_in_pack_limit);
+            auto [actual_offset, actual_limit] = RowKeyFilter::getPosRangeOfSorted(
+                RowKeyRange::fromHandleRange(range), columns[0], rows_start_in_pack, rows_in_pack_limit);
 
             for (size_t col_index = 0; col_index < output_columns.size(); ++col_index)
                 output_columns[col_index]->insertRangeFrom(*columns[col_index], actual_offset, actual_limit);

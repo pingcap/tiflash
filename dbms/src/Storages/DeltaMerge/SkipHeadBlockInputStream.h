@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Storages/DeltaMerge/HandleFilter.h>
 #include <Storages/DeltaMerge/Range.h>
+#include <Storages/DeltaMerge/RowKeyFilter.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
 namespace DB
@@ -36,14 +36,15 @@ public:
         while ((block = children.back()->read()))
         {
             auto rows            = block.rows();
-            auto [offset, limit] = HandleFilter::getPosRangeOfSorted(handle_range, block.getByPosition(handle_col_pos).column, 0, rows);
+            auto [offset, limit] = RowKeyFilter::getPosRangeOfSorted(
+                RowKeyRange::fromHandleRange(handle_range), block.getByPosition(handle_col_pos).column, 0, rows);
             if (unlikely(offset + limit != rows))
                 throw Exception("Logical error!");
 
             skip_rows += offset;
             if (limit)
             {
-                sk_first_block = HandleFilter::cutBlock(std::move(block), offset, limit);
+                sk_first_block = RowKeyFilter::cutBlock(std::move(block), offset, limit);
                 break;
             }
         }

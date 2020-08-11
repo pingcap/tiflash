@@ -8,7 +8,7 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
-#include <Storages/DeltaMerge/HandleFilter.h>
+#include <Storages/DeltaMerge/RowKeyFilter.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
 namespace DB
@@ -418,7 +418,8 @@ private:
         auto offset      = cur_stable_block_pos;
         auto limit       = copy_rows;
 
-        auto [final_offset, final_limit] = HandleFilter::getPosRangeOfSorted(handle_range, cur_stable_block_columns[0], offset, limit);
+        auto [final_offset, final_limit]
+            = RowKeyFilter::getPosRangeOfSorted(RowKeyRange::fromHandleRange(handle_range), cur_stable_block_columns[0], offset, limit);
 
         if constexpr (skippable_place)
         {

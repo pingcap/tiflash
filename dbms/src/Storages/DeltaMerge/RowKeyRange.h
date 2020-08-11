@@ -328,6 +328,19 @@ struct RowKeyRange
 
     inline bool check(const StringRef & value) const { return checkStart(value) && checkEnd(value); }
     inline bool check(Int64 value) const { return checkStart(value) && checkEnd(value); }
+    inline bool check(const ColumnPtr & column, size_t index) const
+    {
+        if (is_common_handle)
+        {
+            const auto & column_string = *checkAndGetColumn<ColumnString>(&*column);
+            return check(getStringRefData(column_string.getChars(), column_string.getOffsets(), index));
+        }
+        else
+        {
+            const auto & int_handle_data = toColumnVectorData<Int64>(column);
+            return check(int_handle_data[index]);
+        }
+    }
 
     inline RowKeyValue getStart() const
     {
@@ -373,8 +386,8 @@ struct RowKeyRange
     {
         if (is_common_handle)
         {
-            const auto * column_string = checkAndGetColumn<ColumnString>(&*column);
-            return getPosRange(column_string->getChars(), column_string->getOffsets(), offset, limit);
+            const auto & column_string = *checkAndGetColumn<ColumnString>(&*column);
+            return getPosRange(column_string.getChars(), column_string.getOffsets(), offset, limit);
         }
         const auto & int_handle_data = toColumnVectorData<Int64>(column);
         size_t start_index = check(int_handle_data[offset]) ? offset : lowerBound(int_handle_data, offset, offset + limit, getStart());
