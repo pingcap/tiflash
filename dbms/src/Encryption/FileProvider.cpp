@@ -12,7 +12,6 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int NOT_IMPLEMENTED;
-extern const int DATA_ENCRYPTION_ERROR;
 } // namespace ErrorCodes
 
 RandomAccessFilePtr FileProvider::newRandomAccessFile(const String & file_path_, const EncryptionPath & encryption_path_, int flags) const
