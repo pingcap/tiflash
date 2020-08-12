@@ -149,7 +149,7 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
             auto segment_id = storage_pool.newMetaPageId();
             if (segment_id != DELTA_MERGE_FIRST_SEGMENT_ID)
                 throw Exception("The first segment id should be " + DB::toString(DELTA_MERGE_FIRST_SEGMENT_ID), ErrorCodes::LOGICAL_ERROR);
-            auto first_segment = Segment::newSegment(*dm_context, HandleRange::newAll(), segment_id, 0);
+            auto first_segment = Segment::newSegment(*dm_context, RowKeyRange::newAll(pk->size(), is_common_handle), segment_id, 0);
             segments.emplace(first_segment->getRowKeyRange().getEnd(), first_segment);
             id_to_segment.emplace(segment_id, first_segment);
         }
@@ -393,20 +393,14 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
 
     Segments updated_segments;
 
-    size_t       offset = 0;
-    size_t       limit;
-    const auto   handle_column        = block.getByName(EXTRA_HANDLE_COLUMN_NAME).column;
-    const auto & handle_column_string = *checkAndGetColumn<ColumnString>(&*handle_column);
-    const auto & handle_column_int    = toColumnVectorData<HandleID>(handle_column);
+    size_t     offset = 0;
+    size_t     limit;
+    const auto handle_column = block.getByName(EXTRA_HANDLE_COLUMN_NAME).column;
+    auto       rowkey_column = RowKeyColumn(handle_column, is_common_handle);
 
     while (offset != rows)
     {
-        StringRef start_rowkey_string;
-        Int64     start_rowkey_int;
-        if (is_common_handle)
-            start_rowkey_string = getStringRefData(handle_column_string.getChars(), handle_column_string.getOffsets(), offset);
-        else
-            start_rowkey_int = handle_column_int[offset];
+        RowKeyValue  start_key = rowkey_column.getRowKeyValue(offset);
         WriteBatches wbs(storage_pool);
         PackPtr      write_pack;
         RowKeyRange  write_range;
@@ -418,13 +412,11 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             {
                 std::shared_lock lock(read_write_mutex);
 
-                auto segment_it = is_common_handle ? segments.upper_bound(start_rowkey_string) : segments.upper_bound(start_rowkey_int);
+                auto segment_it = segments.upper_bound(start_key);
                 if (segment_it == segments.end())
                 {
                     // todo print meaningful start row key
-                    throw Exception("Failed to locate segment begin with start: "
-                                        + (is_common_handle ? start_rowkey_string.toString() : std::to_string(start_rowkey_int)),
-                                    ErrorCodes::LOGICAL_ERROR);
+                    throw Exception("Failed to locate segment begin with start: " + start_key.toString(), ErrorCodes::LOGICAL_ERROR);
                 }
                 segment = segment_it->second;
             }
@@ -1448,7 +1440,7 @@ void DeltaMergeStore::check(const Context & /*db_context*/)
     std::shared_lock lock(read_write_mutex);
 
     UInt64      next_segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
-    RowKeyRange last_range      = RowKeyRange::newAll(pk, is_common_handle);
+    RowKeyRange last_range      = RowKeyRange::newAll(pk->size(), is_common_handle);
     RowKeyValue last_end        = last_range.getStart();
     for (const auto & [end, segment] : segments)
     {
@@ -1479,7 +1471,7 @@ void DeltaMergeStore::check(const Context & /*db_context*/)
         last_end        = last_range.getEnd();
         next_segment_id = segment->nextSegmentId();
     }
-    if (!last_range.isEndInfinite(pk))
+    if (!last_range.isEndInfinite())
         throw Exception("Last range " + last_range.toString() + " is expected to have infinite end edge");
 }
 

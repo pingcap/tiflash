@@ -121,14 +121,14 @@ StableValueSpacePtr createNewStable(DMContext & context, const BlockInputStreamP
 //==========================================================================================
 
 Segment::Segment(UInt64                      epoch_, //
-                 const HandleRange &         range_,
+                 const RowKeyRange &         rowkey_range_,
                  PageId                      segment_id_,
                  PageId                      next_segment_id_,
                  const DeltaValueSpacePtr &  delta_,
                  const StableValueSpacePtr & stable_)
     : epoch(epoch_),
-      range(range_),
-      rowkey_range(RowKeyRange::fromHandleRange(range)),
+      rowkey_range(rowkey_range_),
+      range(rowkey_range.toHandleRange()),
       segment_id(segment_id_),
       next_segment_id(next_segment_id_),
       delta(delta_),
@@ -138,7 +138,7 @@ Segment::Segment(UInt64                      epoch_, //
 }
 
 SegmentPtr Segment::newSegment(
-    DMContext & context, const HandleRange & range, PageId segment_id, PageId next_segment_id, PageId delta_id, PageId stable_id)
+    DMContext & context, const RowKeyRange & range, PageId segment_id, PageId next_segment_id, PageId delta_id, PageId stable_id)
 {
     WriteBatches wbs(context.storage_pool);
 
@@ -158,10 +158,10 @@ SegmentPtr Segment::newSegment(
     return segment;
 }
 
-SegmentPtr Segment::newSegment(DMContext & context, const HandleRange & range, PageId segment_id, PageId next_segment_id)
+SegmentPtr Segment::newSegment(DMContext & context, const RowKeyRange & rowkey_range, PageId segment_id, PageId next_segment_id)
 {
     return newSegment(
-        context, range, segment_id, next_segment_id, context.storage_pool.newMetaPageId(), context.storage_pool.newMetaPageId());
+        context, rowkey_range, segment_id, next_segment_id, context.storage_pool.newMetaPageId(), context.storage_pool.newMetaPageId());
 }
 
 SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
@@ -187,7 +187,7 @@ SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
     auto delta = std::make_shared<DeltaValueSpace>(delta_id);
     delta->restore(context);
     auto stable  = StableValueSpace::restore(context, stable_id);
-    auto segment = std::make_shared<Segment>(epoch, range, segment_id, next_segment_id, delta, stable);
+    auto segment = std::make_shared<Segment>(epoch, RowKeyRange::fromHandleRange(range), segment_id, next_segment_id, delta, stable);
 
     return segment;
 }
@@ -484,7 +484,7 @@ SegmentPtr Segment::applyMergeDelta(DMContext &                 context,
     new_delta->saveMeta(wbs);
 
     auto new_me = std::make_shared<Segment>(epoch + 1, //
-                                            range,
+                                            rowkey_range,
                                             segment_id,
                                             next_segment_id,
                                             new_delta,
@@ -838,15 +838,16 @@ SegmentPair Segment::applySplit(DMContext &                dm_context, //
     auto my_delta    = std::make_shared<DeltaValueSpace>(delta->getId(), my_delta_packs);
     auto other_delta = std::make_shared<DeltaValueSpace>(other_delta_id, other_delta_packs);
 
-    auto new_me = std::make_shared<Segment>(this->epoch + 1, //
-                                            my_range,
+    RowKeyRange my_rowkey_range = RowKeyRange::fromHandleRange(my_range);
+    auto        new_me          = std::make_shared<Segment>(this->epoch + 1, //
+                                            RowKeyRange::fromHandleRange(my_range),
                                             this->segment_id,
                                             other_segment_id,
                                             my_delta,
                                             split_info.my_stable);
 
     auto other = std::make_shared<Segment>(INITIAL_EPOCH, //
-                                           other_range,
+                                           RowKeyRange::fromHandleRange(other_range),
                                            other_segment_id,
                                            this->next_segment_id,
                                            other_delta,
@@ -972,7 +973,7 @@ SegmentPtr Segment::applyMerge(DMContext &                 dm_context, //
     auto merged_delta = std::make_shared<DeltaValueSpace>(left->delta->getId(), merged_packs);
 
     auto merged = std::make_shared<Segment>(left->epoch + 1, //
-                                            merged_range,
+                                            RowKeyRange::fromHandleRange(merged_range),
                                             left->segment_id,
                                             right->next_segment_id,
                                             merged_delta,
@@ -1113,7 +1114,7 @@ SkippableBlockInputStreamPtr Segment::getPlacedStream(const DMContext &         
         delta_snap,
         delta_index_begin,
         delta_index_end,
-        handle_range,
+        RowKeyRange::fromHandleRange(handle_range),
         expected_block_size);
 }
 

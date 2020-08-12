@@ -73,20 +73,20 @@ public:
     Segment & operator=(Segment &&) = delete;
 
     Segment(UInt64                      epoch_, //
-            const HandleRange &         range_,
+            const RowKeyRange &         rowkey_range_,
             PageId                      segment_id_,
             PageId                      next_segment_id_,
             const DeltaValueSpacePtr &  delta_,
             const StableValueSpacePtr & stable_);
 
     static SegmentPtr newSegment(DMContext &         context, //
-                                 const HandleRange & range_,
+                                 const RowKeyRange & rowkey_range,
                                  PageId              segment_id,
                                  PageId              next_segment_id,
                                  PageId              delta_id,
                                  PageId              stable_id);
     static SegmentPtr newSegment(DMContext &         context, //
-                                 const HandleRange & range,
+                                 const RowKeyRange & rowkey_range,
                                  PageId              segment_id,
                                  PageId              next_segment_id);
 
@@ -260,8 +260,8 @@ private:
 
 private:
     const UInt64      epoch; // After split / merge / merge delta, epoch got increased by 1.
-    const HandleRange range;
     const RowKeyRange rowkey_range;
+    const HandleRange range;
     const PageId      segment_id;
     const PageId      next_segment_id;
 
