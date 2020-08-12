@@ -13,15 +13,10 @@ namespace DB::DM
 {
 using PrimaryKey    = ColumnDefines;
 using PrimaryKeyPtr = std::shared_ptr<PrimaryKey>;
+using StringPtr     = std::shared_ptr<String>;
 
 struct RowKeyRange;
 String rangeToString(const RowKeyRange & range);
-
-inline StringRef getStringRefData(const ColumnString::Chars_t & data, const ColumnString::Offsets & offsets, const size_t pos)
-{
-    size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
-    return StringRef(reinterpret_cast<const char *>(&data[prev_offset]), offsets[pos] - prev_offset - 1);
-}
 
 static const Int64 int_handle_min = std::numeric_limits<HandleID>::min();
 static const Int64 int_handle_max = std::numeric_limits<HandleID>::max();
@@ -32,6 +27,7 @@ inline String getIntHandleMinKey()
     DB::EncodeInt64(int_handle_min, ss);
     return ss.str();
 }
+
 inline String getIntHandleMaxKey()
 {
     std::stringstream ss;
@@ -193,8 +189,11 @@ struct RowKeyColumn
     {
         if (is_common_handle)
         {
-            auto value = getStringRefData(*string_data, *string_offsets, index);
-            return RowKeyValue{is_common_handle, value.data, value.size, 0};
+            size_t prev_offset = index == 0 ? 0 : (*string_offsets)[index - 1];
+            return RowKeyValue{is_common_handle,
+                               reinterpret_cast<const char *>(&(*string_data)[prev_offset]),
+                               (*string_offsets)[index] - prev_offset - 1,
+                               0};
         }
         else
         {
