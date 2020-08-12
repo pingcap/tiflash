@@ -356,9 +356,8 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         return;
     }
 
-    auto di = getter.getDatabase(diff.schema_id);
-
-    if (di == nullptr)
+    auto db_info = getter.getDatabase(diff.schema_id);
+    if (db_info == nullptr)
         throw TiFlashException("miss database: " + std::to_string(diff.schema_id), Errors::DDL::MissingTable);
 
     TableID old_table_id = 0, new_table_id = 0;
@@ -392,24 +391,29 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         // Add primary key change primary keys to not null, so it's equal to alter table for tiflash.
         case SchemaActionType::AddPrimaryKey:
         {
-            applyAlterTable(di, diff.table_id);
+            applyAlterTable(db_info, diff.table_id);
             break;
         }
         case SchemaActionType::RenameTable:
         {
-            applyRenameTable(di, diff.table_id);
+            applyRenameTable(db_info, diff.table_id);
             break;
         }
         case SchemaActionType::AddTablePartition:
         case SchemaActionType::DropTablePartition:
         case SchemaActionType::TruncateTablePartition:
         {
-            applyPartitionDiff(di, diff.table_id);
+            applyPartitionDiff(db_info, diff.table_id);
             break;
         }
         case SchemaActionType::ExchangeTablePartition:
         {
             applyExchangeTablePartition(diff);
+            break;
+        }
+        case SchemaActionType::SetTiFlashReplica:
+        {
+            applySetTiFlashReplica(db_info, diff.table_id);
             break;
         }
         default:
@@ -421,12 +425,12 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
 
     if (old_table_id)
     {
-        applyDropTable(di, old_table_id);
+        applyDropTable(db_info, old_table_id);
     }
 
     if (new_table_id)
     {
-        applyCreateTable(di, new_table_id);
+        applyCreateTable(db_info, new_table_id);
     }
 }
 
@@ -980,6 +984,39 @@ void SchemaBuilder<Getter, NameMapper>::applyDropTable(DBInfoPtr db_info, TableI
     // Drop logical table at last, only logical table drop will be treated as "complete".
     // Intermediate failure will hide the logical table drop so that schema syncing when restart will re-drop all (despite some physical tables may have dropped).
     applyDropPhysicalTable(name_mapper.mapDatabaseName(*db_info), table_info.id);
+}
+
+template <typename Getter, typename NameMapper>
+void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(TiDB::DBInfoPtr db_info, TableID table_id)
+{
+    auto latest_table_info = getter.getTableInfo(db_info->id, table_id);
+    if (unlikely(latest_table_info == nullptr))
+    {
+        throw TiFlashException("miss table in TiKV : " + DB::toString(table_id), Errors::DDL::MissingTable);
+    }
+    auto & tmt_context = context.getTMTContext();
+    auto storage = tmt_context.getStorages().get(latest_table_info->id);
+    if (unlikely(storage == nullptr))
+    {
+        throw TiFlashException(
+            "miss table in TiFlash : " + name_mapper.debugCanonicalName(*db_info, *latest_table_info), Errors::DDL::MissingTable);
+    }
+
+    auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
+    if (unlikely(!managed_storage))
+        throw Exception(name_mapper.debugCanonicalName(*db_info, *latest_table_info) + " is not a ManageableStorage");
+    
+    // Get a copy of old table info and update replica info
+    TiDB::TableInfo table_info = managed_storage->getTableInfo();
+    table_info.replica_info = latest_table_info->replica_info;
+
+    AlterCommands commands;
+    LOG_INFO(log, "Updating replica info for " << name_mapper.debugCanonicalName(*db_info, table_info));
+    // Note that update replica info will update table info in table create statement by modifying
+    // original table info with new replica info instead of using latest_table_info directly, so that
+    // other changes (ALTER commands) won't be saved.
+    storage->alterFromTiDB(commands, name_mapper.mapDatabaseName(*db_info), table_info, name_mapper, context);
+    LOG_INFO(log, "Updated replica info for " << name_mapper.debugCanonicalName(*db_info, table_info));
 }
 
 template <typename Getter, typename NameMapper>
