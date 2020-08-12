@@ -23,16 +23,19 @@ inline StringRef getStringRefData(const ColumnString::Chars_t & data, const Colu
     return StringRef(reinterpret_cast<const char *>(&data[prev_offset]), offsets[pos] - prev_offset - 1);
 }
 
+static const Int64 int_handle_min = std::numeric_limits<HandleID>::min();
+static const Int64 int_handle_max = std::numeric_limits<HandleID>::max();
+
 inline String getIntHandleMinKey()
 {
     std::stringstream ss;
-    DB::EncodeInt64(std::numeric_limits<Int64>::min(), ss);
+    DB::EncodeInt64(int_handle_min, ss);
     return ss.str();
 }
 inline String getIntHandleMaxKey()
 {
     std::stringstream ss;
-    DB::EncodeInt64(std::numeric_limits<Int64>::max(), ss);
+    DB::EncodeInt64(int_handle_max, ss);
     ss.put('\0');
     return ss.str();
 }
@@ -93,7 +96,7 @@ inline int compare(const RowKeyValue & a, const RowKeyValue & b)
     {
         if (a.int_value != b.int_value)
             return a.int_value > b.int_value ? 1 : -1;
-        if likely (a.int_value != std::numeric_limits<Int64>::max() || (a.data == nullptr && b.data == nullptr))
+        if likely (a.int_value != int_handle_max || (a.data == nullptr && b.data == nullptr))
             return 0;
         bool a_inf = false;
         bool b_inf = false;
@@ -227,7 +230,7 @@ struct RowKeyRange
 {
     // todo use template to refine is_common_handle
     bool is_common_handle;
-    /// start and end in RowKeyRange is always meaningful
+    /// start and end in RowKeyRange are always meaningful
     String start;
     String end;
     Int64  int_start = 0;
@@ -246,8 +249,9 @@ struct RowKeyRange
         }
     }
 
-    RowKeyRange(const String & start_, const String & end_, Int64 int_start_, Int64 int_end_, size_t rowkey_column_size_)
-        : is_common_handle(false),
+    RowKeyRange(
+        const String & start_, const String & end_, Int64 int_start_, Int64 int_end_, bool is_common_handle_, size_t rowkey_column_size_)
+        : is_common_handle(is_common_handle_),
           start(start_),
           end(end_),
           int_start(int_start_),
@@ -283,11 +287,17 @@ struct RowKeyRange
             {
                 std::stringstream ss;
                 DB::EncodeInt64(start_value.int_value, ss);
-                return RowKeyRange(ss.str(), int_handle_max_key, is_common_handle, rowkey_column_size);
+                return RowKeyRange(
+                    ss.str(), int_handle_max_key, start_value.int_value, int_handle_max, is_common_handle, rowkey_column_size);
             }
             else
             {
-                return RowKeyRange(String(start_value.data, start_value.size), int_handle_max_key, is_common_handle, rowkey_column_size);
+                return RowKeyRange(String(start_value.data, start_value.size),
+                                   int_handle_max_key,
+                                   start_value.int_value,
+                                   int_handle_max,
+                                   is_common_handle,
+                                   rowkey_column_size);
             }
         }
     }
@@ -305,10 +315,15 @@ struct RowKeyRange
             {
                 std::stringstream ss;
                 DB::EncodeInt64(end_value.int_value, ss);
-                return RowKeyRange(int_handle_min_key, ss.str(), is_common_handle, rowkey_column_size);
+                return RowKeyRange(int_handle_min_key, ss.str(), int_handle_min, end_value.int_value, is_common_handle, rowkey_column_size);
             }
             else
-                return RowKeyRange(int_handle_min_key, String(end_value.data, end_value.size), is_common_handle, rowkey_column_size);
+                return RowKeyRange(int_handle_min_key,
+                                   String(end_value.data, end_value.size),
+                                   int_handle_min,
+                                   end_value.int_value,
+                                   is_common_handle,
+                                   rowkey_column_size);
         }
     }
 
@@ -336,7 +351,8 @@ struct RowKeyRange
         }
         else
         {
-            return RowKeyRange(int_handle_max_key, int_handle_min_key, is_common_handle, rowkey_column_size);
+            return RowKeyRange(
+                int_handle_max_key, int_handle_min_key, int_handle_max, int_handle_min, is_common_handle, rowkey_column_size);
         }
     }
 
@@ -375,8 +391,7 @@ struct RowKeyRange
         }
         else
         {
-            return int_start == std::numeric_limits<Int64>::min() && int_end == std::numeric_limits<Int64>::max()
-                && end.compare(int_handle_max_key) >= 0;
+            return int_start == int_handle_min && int_end == int_handle_max && end.compare(int_handle_max_key) >= 0;
         }
     }
 
@@ -393,7 +408,7 @@ struct RowKeyRange
         }
         else
         {
-            return end.compare(int_handle_max_key) >= 0;
+            return int_end == int_handle_max && end.compare(int_handle_max_key) >= 0;
         }
     }
 
@@ -411,7 +426,7 @@ struct RowKeyRange
         }
         else
         {
-            return int_start == std::numeric_limits<Int64>::min();
+            return int_start == int_handle_min;
         }
     }
 
@@ -419,26 +434,25 @@ struct RowKeyRange
 
     inline RowKeyRange shrink(const RowKeyRange & other) const
     {
-        return RowKeyRange(max(start, other.start), min(end, other.end), is_common_handle, rowkey_column_size);
+        return RowKeyRange(max(start, other.start),
+                           min(end, other.end),
+                           std::max(int_start, other.int_start),
+                           std::min(int_end, other.int_end),
+                           is_common_handle,
+                           rowkey_column_size);
     }
 
     inline RowKeyRange merge(const RowKeyRange & other) const
     {
-        return RowKeyRange(min(start, other.start), max(end, other.end), is_common_handle, rowkey_column_size);
+        return RowKeyRange(min(start, other.start),
+                           max(end, other.end),
+                           std::min(int_start, other.int_start),
+                           std::max(int_end, other.int_end),
+                           is_common_handle,
+                           rowkey_column_size);
     }
 
     inline bool intersect(const RowKeyRange & other) const { return max(other.start, start).compare(min(other.end, end)) < 0; }
-
-    // [first, last_include]
-    /*
-    inline bool intersect(const StringRef & first, const StringRef & last_include) const
-    {
-        const StringRef & max_start = max(first, StringRef(start.data(), start.size()));
-        return (compare(last_include.data, last_include.size, end.data(), end.size()) >= 0 && checkEnd(max_start))
-            || (compare(last_include.data, last_include.size, end.data(), end.size()) < 0
-                && compare(max_start.data, max_start.size, last_include.data, last_include.size) <= 0);
-    }
-     */
 
     // [first, last_include]
     inline bool include(const RowKeyValue & first, const RowKeyValue & last_include) const { return check(first) && check(last_include); }
@@ -492,8 +506,7 @@ struct RowKeyRange
     {
         if (handle_range.all())
         {
-            return RowKeyRange(
-                int_handle_min_key, int_handle_max_key, std::numeric_limits<Int64>::min(), std::numeric_limits<Int64>::max(), 1);
+            return RowKeyRange(int_handle_min_key, int_handle_max_key, int_handle_min, int_handle_max, false, 1);
         }
         std::stringstream ss;
         DB::EncodeInt64(handle_range.start, ss);
@@ -501,7 +514,7 @@ struct RowKeyRange
         ss.str(std::string());
         DB::EncodeInt64(handle_range.end, ss);
         String end = ss.str();
-        return RowKeyRange(start, end, handle_range.start, handle_range.end, 1);
+        return RowKeyRange(start, end, handle_range.start, handle_range.end, false, 1);
     }
 
     inline String toString() const { return rangeToString(*this); }
