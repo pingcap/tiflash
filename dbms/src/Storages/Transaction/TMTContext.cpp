@@ -12,15 +12,14 @@
 namespace DB
 {
 
-TMTContext::TMTContext(Context & context_, const std::vector<std::string> & addrs, const std::string & learner_key,
-    const std::string & learner_value, const std::unordered_set<std::string> & ignore_databases_, const std::string & kvstore_path,
-    ::TiDB::StorageEngine engine_, bool disable_bg_flush_)
+TMTContext::TMTContext(Context & context_, const std::vector<std::string> & addrs,
+    const std::unordered_set<std::string> & ignore_databases_, const std::string & kvstore_path, ::TiDB::StorageEngine engine_,
+    bool disable_bg_flush_, const pingcap::ClusterConfig & cluster_config)
     : context(context_),
       kvstore(std::make_shared<KVStore>(kvstore_path)),
       region_table(context),
       background_service(nullptr),
-      cluster(addrs.size() == 0 ? std::make_shared<pingcap::kv::Cluster>()
-                                : std::make_shared<pingcap::kv::Cluster>(addrs, learner_key, learner_value)),
+      cluster(addrs.size() == 0 ? std::make_shared<pingcap::kv::Cluster>() : std::make_shared<pingcap::kv::Cluster>(addrs, cluster_config)),
       ignore_databases(ignore_databases_),
       schema_syncer(addrs.size() == 0 ? std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<true>>(cluster))
                                       : std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<false>>(cluster))),
