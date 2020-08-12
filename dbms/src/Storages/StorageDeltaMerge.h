@@ -4,7 +4,7 @@
 #include <Core/SortDescription.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/DeltaMerge/Range.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
@@ -48,14 +48,18 @@ public:
     /// Write from raft layer.
     void write(Block && block, const Settings & settings);
 
-    void flushCache(const Context & context) override { flushCache(context, DM::HandleRange::newAll()); }
+    void flushCache(const Context & context) override
+    {
+        /// todo fix hardcoded value
+        flushCache(context, DM::RowKeyRange::newAll(1, false));
+    }
 
     void flushCache(const Context & context, const DB::HandleRange<HandleID> & range_to_flush) override
     {
-        flushCache(context, toDMHandleRange(range_to_flush));
+        flushCache(context, DM::RowKeyRange::fromHandleRange(toDMHandleRange(range_to_flush)));
     }
 
-    void flushCache(const Context & context, const DM::HandleRange & range_to_flush);
+    void flushCache(const Context & context, const DM::RowKeyRange & range_to_flush);
 
     void mergeDelta(const Context & context) override;
 

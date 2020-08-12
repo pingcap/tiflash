@@ -111,7 +111,7 @@ void DeltaValueSpace::saveMeta(WriteBatches & wbs) const
 }
 
 Packs DeltaValueSpace::checkHeadAndCloneTail(DMContext &         context,
-                                             const HandleRange & target_range,
+                                             const RowKeyRange & target_range,
                                              const Packs &       head_packs,
                                              WriteBatches &      wbs) const
 {
@@ -144,7 +144,7 @@ Packs DeltaValueSpace::checkHeadAndCloneTail(DMContext &         context,
         auto   new_pack = std::make_shared<Pack>(*pack);
         if (pack->isDeleteRange())
         {
-            new_pack->delete_range = pack->delete_range.shrink(target_range);
+            new_pack->delete_range = pack->delete_range.shrink(target_range.toHandleRange());
             if (!new_pack->delete_range.none())
                 tail_clone.push_back(new_pack);
         }

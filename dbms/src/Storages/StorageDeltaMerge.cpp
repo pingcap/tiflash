@@ -532,7 +532,7 @@ BlockInputStreams StorageDeltaMerge::read( //
 
 void StorageDeltaMerge::checkStatus(const Context & context) { store->check(context); }
 
-void StorageDeltaMerge::flushCache(const Context & context, const DM::HandleRange & range_to_flush)
+void StorageDeltaMerge::flushCache(const Context & context, const DM::RowKeyRange & range_to_flush)
 {
     store->flushCache(context, range_to_flush);
 }
@@ -765,7 +765,7 @@ void StorageDeltaMerge::rename(
             ErrorCodes::DIRECTORY_ALREADY_EXISTS};
 
     // flush store and then reset store to new path
-    store->flushCache(global_context);
+    store->flushCache(global_context, RowKeyRange::newAll(1, false));
     ColumnDefines table_column_defines = store->getTableColumns();
     ColumnDefine handle_column_define = store->getHandle();
     DeltaMergeStore::Settings settings = store->getSettings();

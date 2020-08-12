@@ -5,6 +5,8 @@
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/Page/PageStorage.h>
 
+#include "RowKeyRange.h"
+
 namespace DB
 {
 namespace DM
@@ -70,7 +72,7 @@ public:
 
         SkippableBlockInputStreamPtr getInputStream(const DMContext &     context, //
                                                     const ColumnDefines & read_columns,
-                                                    const HandleRange &   handle_range,
+                                                    const RowKeyRange &   rowkey_range,
                                                     const RSOperatorPtr & filter,
                                                     UInt64                max_data_version,
                                                     bool                  enable_clean_read);

@@ -327,8 +327,8 @@ BlockOrDeletes DeltaValueSpace::Snapshot::getMergeBlocks(size_t rows_begin, size
 
 bool DeltaValueSpace::Snapshot::shouldPlace(const DMContext &   context,
                                             DeltaIndexPtr       my_delta_index,
-                                            const HandleRange & segment_range,
-                                            const HandleRange & relevant_range,
+                                            const RowKeyRange & segment_range,
+                                            const RowKeyRange & relevant_range,
                                             UInt64              max_version)
 {
     auto [placed_rows, placed_delete_ranges] = my_delta_index->getPlacedStatus();
@@ -350,12 +350,12 @@ bool DeltaValueSpace::Snapshot::shouldPlace(const DMContext &   context,
         size_t rows_end_in_pack   = pack_rows[pack_index];
 
         auto & columns          = getColumnsOfPack(pack_index, /* handle and version */ 2);
-        auto & handle_col_data  = toColumnVectorData<Handle>(columns[0]);
+        auto   rowkey_column    = RowKeyColumn(columns[0], segment_range.is_common_handle);
         auto & version_col_data = toColumnVectorData<UInt64>(columns[1]);
 
         for (auto i = rows_start_in_pack; i < rows_end_in_pack; ++i)
         {
-            if (version_col_data[i] <= max_version && relevant_range.check(handle_col_data[i]))
+            if (version_col_data[i] <= max_version && relevant_range.check(rowkey_column.getRowKeyValue(i)))
                 return true;
         }
     }

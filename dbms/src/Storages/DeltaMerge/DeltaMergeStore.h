@@ -34,7 +34,7 @@ static const PageId DELTA_MERGE_FIRST_SEGMENT_ID = 1;
 struct SegmentStat
 {
     UInt64      segment_id;
-    HandleRange range;
+    RowKeyRange range;
 
     UInt64 rows          = 0;
     UInt64 size          = 0;
@@ -272,13 +272,13 @@ public:
                            const SegmentIdSet &  read_segments       = {});
 
     /// Force flush all data to disk.
-    void flushCache(const Context & context, const HandleRange & range = HandleRange::newAll())
+    void flushCache(const Context & context, const RowKeyRange & range)
     {
         auto dm_context = newDMContext(context, context.getSettingsRef());
         flushCache(dm_context, range);
     }
 
-    void flushCache(const DMContextPtr & dm_context, const HandleRange & range);
+    void flushCache(const DMContextPtr & dm_context, const RowKeyRange & range);
 
     /// Do merge delta for all segments. Only used for debug.
     void mergeDeltaAll(const Context & context);

@@ -244,7 +244,7 @@ void removeObsoleteDataInStorage(Context * const context, const TableID table_id
         /// Now we assume that these won't block for long time.
         auto dm_handle_range = toDMHandleRange(handle_range);
         dm_storage->deleteRange(dm_handle_range, context->getSettingsRef());
-        dm_storage->flushCache(*context, dm_handle_range); // flush to disk
+        dm_storage->flushCache(*context, DM::RowKeyRange::fromHandleRange(dm_handle_range)); // flush to disk
     }
     catch (DB::Exception & e)
     {

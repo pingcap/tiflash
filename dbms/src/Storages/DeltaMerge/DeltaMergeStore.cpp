@@ -209,7 +209,8 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
                     continue;
 
                 // Note that ref_id is useless here.
-                auto dmfile = DMFile::restore(global_context.getFileProvider(), id, /* ref_id= */ 0, path + "/" + STABLE_FOLDER_NAME, false);
+                auto dmfile
+                    = DMFile::restore(global_context.getFileProvider(), id, /* ref_id= */ 0, path + "/" + STABLE_FOLDER_NAME, false);
                 if (dmfile->canGC())
                 {
                     extra_paths.removeDMFile(dmfile->fileId());
@@ -384,7 +385,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         for (auto & [end, segment] : segments)
         {
             (void)end;
-            msg += DB::toString(segment->segmentId()) + ":" + segment->getRange().toString() + ",";
+            msg += DB::toString(segment->segmentId()) + ":" + segment->getRowKeyRange().toString() + ",";
         }
         msg.pop_back();
         msg += "}";
@@ -465,9 +466,9 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
 
     if (db_settings.dt_flush_after_write)
     {
-        HandleRange merge_range = HandleRange::newNone();
+        RowKeyRange merge_range = RowKeyRange::newNone(pk->size(), is_common_handle);
         for (auto & segment : updated_segments)
-            merge_range = merge_range.merge(segment->getRange());
+            merge_range = merge_range.merge(segment->getRowKeyRange());
         flushCache(dm_context, merge_range);
     }
 
@@ -495,7 +496,7 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
         for (auto & [end, segment] : segments)
         {
             (void)end;
-            msg += DB::toString(segment->segmentId()) + ":" + segment->getRange().toString() + ",";
+            msg += DB::toString(segment->segmentId()) + ":" + segment->getRowKeyRange().toString() + ",";
         }
         msg.pop_back();
         msg += "}";
@@ -548,9 +549,9 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
         checkSegmentUpdate(dm_context, segment, ThreadType::Write);
 }
 
-void DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const HandleRange & handle_range)
+void DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRange & range)
 {
-    RowKeyRange cur_range = RowKeyRange::fromHandleRange(handle_range);
+    RowKeyRange cur_range = range;
     while (!cur_range.none())
     {
         RowKeyRange segment_range;
@@ -660,7 +661,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
                 auto segment_snap = segment->createSnapshot(*dm_context);
                 if (unlikely(!segment_snap))
                     throw Exception("Failed to get segment snap", ErrorCodes::LOGICAL_ERROR);
-                tasks.push(std::make_shared<SegmentReadTask>(segment, segment_snap, HandleRanges{segment->getRange()}));
+                tasks.push(std::make_shared<SegmentReadTask>(segment, segment_snap, RowKeyRanges{segment->getRowKeyRange()}));
             }
         }
     }
@@ -735,7 +736,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
                     tasks.push(std::make_shared<SegmentReadTask>(segment, segment_snap));
                 }
 
-                tasks.back()->addRange(req_range.toHandleRange());
+                tasks.back()->addRange(req_range);
 
                 if (req_range.getEnd() < seg_range.getEnd())
                 {
@@ -942,7 +943,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         /// For complexity reason, currently we only try to merge with next segment. Normally it is good enough.
 
         // The last segment cannot be merged.
-        if (segment->getRange().end == P_INF_HANDLE)
+        if (segment->getRowKeyRange().isEndInfinite())
             return {};
         SegmentPtr next_segment;
         {
@@ -1669,7 +1670,7 @@ SegmentStats DeltaMergeStore::getSegmentStats()
         auto &      stable = segment->getStable();
 
         stat.segment_id = segment->segmentId();
-        stat.range      = segment->getRange();
+        stat.range      = segment->getRowKeyRange();
 
         stat.rows          = segment->getEstimatedRows();
         stat.size          = delta->getBytes() + stable->getBytes();

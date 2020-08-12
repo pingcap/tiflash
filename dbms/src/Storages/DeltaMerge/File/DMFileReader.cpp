@@ -32,7 +32,7 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
         if (res->empty()) // 0 rows.
             return res;
         size_t size = sizeof(MarkInCompressedFile) * reader.dmfile->getPacks();
-        auto file = reader.file_provider->newRandomAccessFile(mark_path, reader.dmfile->encryptionMarkPath(file_name_base));
+        auto   file = reader.file_provider->newRandomAccessFile(mark_path, reader.dmfile->encryptionMarkPath(file_name_base));
 
         PageUtil::readFile(file, 0, reinterpret_cast<char *>(res->data()), size);
 
@@ -107,7 +107,7 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
                            bool   enable_clean_read_,
                            UInt64 max_read_version_,
                            // filters
-                           const HandleRange &   handle_range_,
+                           const RowKeyRange &   rowkey_range_,
                            const RSOperatorPtr & filter_,
                            const IdSetPtr &      read_packs_,
                            // caches
@@ -124,7 +124,7 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
       read_columns(read_columns_),
       enable_clean_read(enable_clean_read_),
       max_read_version(max_read_version_),
-      pack_filter(dmfile_, index_cache_, hash_salt_, handle_range_, filter_, read_packs_, file_provider_),
+      pack_filter(dmfile_, index_cache_, hash_salt_, rowkey_range_.toHandleRange(), filter_, read_packs_, file_provider_),
       handle_res(pack_filter.getHandleRes()),
       use_packs(pack_filter.getUsePacks()),
       skip_packs_by_column(read_columns.size(), 0),

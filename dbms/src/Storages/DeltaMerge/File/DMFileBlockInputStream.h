@@ -18,7 +18,7 @@ public:
                            UInt64                hash_salt,
                            const DMFilePtr &     dmfile,
                            const ColumnDefines & read_columns,
-                           const HandleRange &   handle_range,
+                           const RowKeyRange &   rowkey_range,
                            const RSOperatorPtr & filter,
                            ColumnCachePtr &      column_cache_,
                            const IdSetPtr &      read_packs,
@@ -29,7 +29,7 @@ public:
                  enable_clean_read,
                  max_read_version,
                  // filters
-                 handle_range,
+                 rowkey_range,
                  filter,
                  read_packs,
                  // caches

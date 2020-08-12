@@ -10,6 +10,8 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageDefines.h>
 
+#include "RowKeyRange.h"
+
 namespace DB
 {
 namespace DM
@@ -169,8 +171,8 @@ public:
 
         bool shouldPlace(const DMContext &   context,
                          DeltaIndexPtr       my_delta_index,
-                         const HandleRange & segment_range,
-                         const HandleRange & relevant_range,
+                         const RowKeyRange & segment_range,
+                         const RowKeyRange & relevant_range,
                          UInt64              max_version);
 
     private:
@@ -260,7 +262,7 @@ public:
     ///   Otherwise, throw an exception.
     ///
     /// Note that this method is expected to be called by some one who already have lock on this instance.
-    Packs checkHeadAndCloneTail(DMContext & context, const HandleRange & target_range, const Packs & head_packs, WriteBatches & wbs) const;
+    Packs checkHeadAndCloneTail(DMContext & context, const RowKeyRange & target_range, const Packs & head_packs, WriteBatches & wbs) const;
 
     PageId getId() const { return id; }
 

@@ -7,6 +7,7 @@
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/MarkCache.h>
 
 namespace DB
@@ -43,19 +44,19 @@ public:
                  bool   enable_clean_read_,
                  UInt64 max_data_version_,
                  // filters
-                 const HandleRange &   handle_range_,
+                 const RowKeyRange &   rowkey_range_,
                  const RSOperatorPtr & filter_,
                  const IdSetPtr &      read_packs_, // filter by pack index
                  // caches
-                 UInt64             hash_salt_,
-                 MarkCache *        mark_cache_,
-                 MinMaxIndexCache * index_cache_,
-                 bool               enable_column_cache_,
-                 ColumnCachePtr &   column_cache_,
-                 size_t             aio_threshold,
-                 size_t             max_read_buffer_size,
-                 const FileProviderPtr &  file_provider_,
-                 size_t             rows_threshold_per_read_ = DMFILE_READ_ROWS_THRESHOLD);
+                 UInt64                  hash_salt_,
+                 MarkCache *             mark_cache_,
+                 MinMaxIndexCache *      index_cache_,
+                 bool                    enable_column_cache_,
+                 ColumnCachePtr &        column_cache_,
+                 size_t                  aio_threshold,
+                 size_t                  max_read_buffer_size,
+                 const FileProviderPtr & file_provider_,
+                 size_t                  rows_threshold_per_read_ = DMFILE_READ_ROWS_THRESHOLD);
 
     Block getHeader() const { return toEmptyBlock(read_columns); }
 
