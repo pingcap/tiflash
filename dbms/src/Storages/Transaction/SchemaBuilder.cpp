@@ -1005,9 +1005,19 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(TiDB::DBInfoPtr d
     auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
     if (unlikely(!managed_storage))
         throw Exception(name_mapper.debugCanonicalName(*db_info, *latest_table_info) + " is not a ManageableStorage");
-    
+
+    applySetTiFlashReplica(db_info, latest_table_info, managed_storage);
+}
+
+template <typename Getter, typename NameMapper>
+void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(
+    TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr latest_table_info, ManageableStoragePtr storage)
+{
+    if (storage->getTableInfo().replica_info.count == latest_table_info->replica_info.count)
+        return;
+
     // Get a copy of old table info and update replica info
-    TiDB::TableInfo table_info = managed_storage->getTableInfo();
+    TiDB::TableInfo table_info = storage->getTableInfo();
     table_info.replica_info = latest_table_info->replica_info;
 
     AlterCommands commands;
@@ -1086,6 +1096,8 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
             }
             /// Rename if needed.
             applyRenameLogicalTable(db, table, storage);
+            /// Update replica info if needed.
+            applySetTiFlashReplica(db, table, storage);
             /// Alter if needed.
             applyAlterLogicalTable(db, table, storage);
             LOG_DEBUG(log, "Table " << name_mapper.debugCanonicalName(*db, *table) << " synced during sync all schemas");
