@@ -89,7 +89,8 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
     Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams;
 
     Poco::Net::SocketAddress addr("0.0.0.0", std::stoi(metrics_port));
-    socket.bind(addr);
+    socket.bind(addr, true);
+    socket.listen();
     auto server = std::make_shared<Poco::Net::HTTPServer>(new MetricHandlerFactory(collectable), socket, http_params);
     return server;
 }
@@ -156,6 +157,7 @@ MetricsPrometheus::MetricsPrometheus(
         if (security_config.has_tls_config)
         {
             server = getHTTPServer(security_config, tiflash_metrics->registry, metrics_port);
+            server->start();
             LOG_INFO(log, "Enable prometheus secure pull mode; Metrics Port = " << metrics_port);
         }
         else
