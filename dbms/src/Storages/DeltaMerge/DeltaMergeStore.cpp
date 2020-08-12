@@ -207,11 +207,11 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
                     continue;
 
                 // Note that ref_id is useless here.
-                auto dmfile = DMFile::restore(id, /* ref_id= */ 0, path + "/" + STABLE_FOLDER_NAME, false);
+                auto dmfile = DMFile::restore(global_context.getFileProvider(), id, /* ref_id= */ 0, path + "/" + STABLE_FOLDER_NAME, false);
                 if (dmfile->canGC())
                 {
                     extra_paths.removeDMFile(dmfile->fileId());
-                    dmfile->remove();
+                    dmfile->remove(global_context.getFileProvider());
                 }
 
                 LOG_DEBUG(log, "GC removed useless dmfile: " << dmfile->path());
@@ -1516,7 +1516,7 @@ void DeltaMergeStore::restoreExtraPathCapacity()
         auto parent_path = root_path + "/" + STABLE_FOLDER_NAME;
         for (auto & file_id : DMFile::listAllInPath(parent_path, false))
         {
-            auto dmfile = DMFile::restore(file_id, /* ref_id= */ 0, parent_path, true);
+            auto dmfile = DMFile::restore(global_context.getFileProvider(), file_id, /* ref_id= */ 0, parent_path, true);
             extra_paths.addDMFile(file_id, dmfile->getBytesOnDisk(), root_path);
         }
     }

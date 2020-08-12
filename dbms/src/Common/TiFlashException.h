@@ -96,6 +96,11 @@ namespace DB
         E(Internal, "Broadcast Join internal error.",                                                                       \
             "Please contact with developer, \n"                                                                             \
             "better providing information about your cluster(log, topology information etc.).",                             \
+            "");)                                                                                                           \
+    C(Encryption,                                                                                                           \
+        E(Internal, "Encryption internal error.",                                                                           \
+            "Please contact with developer, \n"                                                                             \
+            "better providing information about your cluster(log, topology information etc.).",                             \
             "");)
 
 
