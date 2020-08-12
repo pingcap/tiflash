@@ -467,7 +467,7 @@ private:
                 output_columns[column_id]->reserve(max_block_size);
         }
 
-        auto actual_write = delta_value_space->read(rowkey_range.toHandleRange(), output_columns, use_delta_offset, write_rows);
+        auto actual_write = delta_value_space->read(rowkey_range, output_columns, use_delta_offset, write_rows);
 
         if constexpr (skippable_place)
         {

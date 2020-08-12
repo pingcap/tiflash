@@ -33,12 +33,11 @@ static std::atomic_uint64_t NEXT_PACK_ID{0};
 
 struct BlockOrDelete
 {
-    BlockOrDelete() = default;
-    BlockOrDelete(Block && block_) : block(block_) {}
-    BlockOrDelete(const HandleRange & delete_range_) : delete_range(delete_range_) {}
+    BlockOrDelete(Block && block_, const RowKeyRange & delete_range_) : block(block_), delete_range(delete_range_) {}
+    BlockOrDelete(const RowKeyRange & delete_range_) : delete_range(delete_range_) {}
 
     Block       block;
-    HandleRange delete_range;
+    RowKeyRange delete_range;
 };
 using BlockOrDeletes = std::vector<BlockOrDelete>;
 
@@ -67,7 +66,7 @@ public:
         UInt64      rows  = 0;
         UInt64      bytes = 0;
         BlockPtr    schema;
-        HandleRange delete_range;
+        RowKeyRange delete_range;
         PageId      data_page = 0;
 
         /// The members below are not serialized.
@@ -167,7 +166,7 @@ public:
         BlockOrDeletes getMergeBlocks(size_t rows_begin, size_t deletes_begin, size_t rows_end, size_t deletes_end);
 
         Block  read(size_t pack_index);
-        size_t read(const HandleRange & range, MutableColumns & output_columns, size_t offset, size_t limit);
+        size_t read(const RowKeyRange & range, MutableColumns & output_columns, size_t offset, size_t limit);
 
         bool shouldPlace(const DMContext &   context,
                          DeltaIndexPtr       my_delta_index,
@@ -324,7 +323,7 @@ public:
 
     bool appendToCache(DMContext & context, const Block & block, size_t offset, size_t limit);
 
-    bool appendDeleteRange(DMContext & context, const HandleRange & delete_range);
+    bool appendDeleteRange(DMContext & context, const RowKeyRange & delete_range);
 
     /// Flush the data of packs which haven't write to disk yet, and also save the metadata of packs.
     bool flush(DMContext & context);

@@ -291,6 +291,7 @@ struct RowKeyRange
             }
         }
     }
+
     static RowKeyRange endWith(const RowKeyValue & end_value, bool is_common_handle, size_t rowkey_column_size)
     {
         if (is_common_handle)
@@ -337,6 +338,26 @@ struct RowKeyRange
         {
             return RowKeyRange(int_handle_max_key, int_handle_min_key, is_common_handle, rowkey_column_size);
         }
+    }
+
+    void serialize(WriteBuffer & buf) const
+    {
+        writeBoolText(is_common_handle, buf);
+        writeIntBinary(rowkey_column_size, buf);
+        writeStringBinary(start, buf);
+        writeStringBinary(end, buf);
+    }
+
+    static RowKeyRange deserialize(ReadBuffer & buf)
+    {
+        bool   is_common_handle;
+        size_t rowkey_column_size;
+        String start, end;
+        readBoolText(is_common_handle, buf);
+        readIntBinary(rowkey_column_size, buf);
+        readStringBinary(start, buf);
+        readStringBinary(end, buf);
+        return RowKeyRange(start, end, is_common_handle, rowkey_column_size);
     }
 
     inline bool all() const

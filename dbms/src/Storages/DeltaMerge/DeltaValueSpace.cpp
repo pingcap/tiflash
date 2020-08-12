@@ -19,7 +19,7 @@ namespace DB
 {
 namespace DM
 {
-const UInt64 DeltaValueSpace::CURRENT_VERSION = 1;
+const UInt64 DeltaValueSpace::CURRENT_VERSION = 2;
 
 using Snapshot    = DeltaValueSpace::Snapshot;
 using SnapshotPtr = std::shared_ptr<Snapshot>;
@@ -144,7 +144,7 @@ Packs DeltaValueSpace::checkHeadAndCloneTail(DMContext &         context,
         auto   new_pack = std::make_shared<Pack>(*pack);
         if (pack->isDeleteRange())
         {
-            new_pack->delete_range = pack->delete_range.shrink(target_range.toHandleRange());
+            new_pack->delete_range = pack->delete_range.shrink(target_range);
             if (!new_pack->delete_range.none())
                 tail_clone.push_back(new_pack);
         }
@@ -357,7 +357,7 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
     return true;
 }
 
-bool DeltaValueSpace::appendDeleteRange(DMContext & /*context*/, const HandleRange & delete_range)
+bool DeltaValueSpace::appendDeleteRange(DMContext & /*context*/, const RowKeyRange & delete_range)
 {
     std::scoped_lock lock(mutex);
     if (abandoned.load(std::memory_order_relaxed))

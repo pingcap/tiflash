@@ -185,16 +185,7 @@ SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
         rowkey_range = RowKeyRange::fromHandleRange(range);
     }
     else
-    {
-        bool   is_common_handle;
-        size_t rowkey_column_size;
-        String start, end;
-        readBoolText(is_common_handle, buf);
-        readIntBinary(rowkey_column_size, buf);
-        readStringBinary(start, buf);
-        readStringBinary(end, buf);
-        rowkey_range = RowKeyRange(start, end, is_common_handle, rowkey_column_size);
-    }
+        rowkey_range = RowKeyRange::deserialize(buf);
     readIntBinary(next_segment_id, buf);
     readIntBinary(delta_id, buf);
     readIntBinary(stable_id, buf);
@@ -212,10 +203,7 @@ void Segment::serialize(WriteBatch & wb)
     MemoryWriteBuffer buf(0, SEGMENT_BUFFER_SIZE);
     writeIntBinary(CURRENT_VERSION, buf);
     writeIntBinary(epoch, buf);
-    writeBoolText(rowkey_range.is_common_handle, buf);
-    writeIntBinary(rowkey_range.rowkey_column_size, buf);
-    writeStringBinary(rowkey_range.start, buf);
-    writeStringBinary(rowkey_range.end, buf);
+    rowkey_range.serialize(buf);
     writeIntBinary(next_segment_id, buf);
     writeIntBinary(delta->getId(), buf);
     writeIntBinary(stable->getId(), buf);
@@ -256,9 +244,9 @@ bool Segment::write(DMContext & dm_context, const Block & block)
     }
 }
 
-bool Segment::write(DMContext & dm_context, const HandleRange & delete_range)
+bool Segment::write(DMContext & dm_context, const RowKeyRange & delete_range)
 {
-    auto new_range = delete_range.shrink(rowkey_range.toHandleRange());
+    auto new_range = delete_range.shrink(rowkey_range);
     if (new_range.none())
     {
         LOG_WARNING(log, "Try to write an invalid delete range " << delete_range.toString() << " into " << simpleInfo());
@@ -267,11 +255,6 @@ bool Segment::write(DMContext & dm_context, const HandleRange & delete_range)
 
     LOG_TRACE(log, "Segment [" << segment_id << "] write delete range: " << delete_range.toString());
     return delta->appendDeleteRange(dm_context, delete_range);
-}
-
-bool Segment::write(DMContext & dm_context, const RowKeyRange & delete_range)
-{
-    return write(dm_context, delete_range.toHandleRange());
 }
 
 SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool is_update) const
@@ -1189,11 +1172,9 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(const DMContext &         dm
         if (!v.delete_range.none())
         {
             if (dm_context.enable_skippable_place)
-                fully_indexed &= placeDelete<true>(
-                    dm_context, stable_snap, delta_snap, RowKeyRange::fromHandleRange(v.delete_range), *my_delta_tree, relevant_range);
+                fully_indexed &= placeDelete<true>(dm_context, stable_snap, delta_snap, v.delete_range, *my_delta_tree, relevant_range);
             else
-                fully_indexed &= placeDelete<false>(
-                    dm_context, stable_snap, delta_snap, RowKeyRange::fromHandleRange(v.delete_range), *my_delta_tree, relevant_range);
+                fully_indexed &= placeDelete<false>(dm_context, stable_snap, delta_snap, v.delete_range, *my_delta_tree, relevant_range);
 
             ++my_placed_deletes;
         }
