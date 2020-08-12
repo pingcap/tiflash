@@ -1,7 +1,7 @@
 #pragma once
 
 #include <DataStreams/MarkInCompressedFile.h>
-#include <IO/CompressedReadBufferFromFile.h>
+#include <Encryption/CompressedReadBufferFromFileProvider.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
@@ -32,7 +32,7 @@ public:
         double                   avg_size_hint;
         MarksInCompressedFilePtr marks;
 
-        std::unique_ptr<CompressedReadBufferFromFile> buf;
+        std::unique_ptr<CompressedReadBufferFromFileProvider> buf;
     };
     using StreamPtr     = std::unique_ptr<Stream>;
     using ColumnStreams = std::map<String, StreamPtr>;
@@ -54,6 +54,7 @@ public:
                  ColumnCachePtr &   column_cache_,
                  size_t             aio_threshold,
                  size_t             max_read_buffer_size,
+                 const FileProviderPtr &  file_provider_,
                  size_t             rows_threshold_per_read_ = DMFILE_READ_ROWS_THRESHOLD);
 
     Block getHeader() const { return toEmptyBlock(read_columns); }
@@ -90,10 +91,11 @@ private:
     const bool     enable_column_cache;
     ColumnCachePtr column_cache;
 
-
     const size_t rows_threshold_per_read;
 
     size_t next_pack_id = 0;
+
+    FileProviderPtr file_provider;
 
     Logger * log;
 };

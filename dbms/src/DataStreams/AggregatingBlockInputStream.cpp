@@ -30,7 +30,7 @@ Block AggregatingBlockInputStream::readImpl()
         Aggregator::CancellationHook hook = [&]() { return this->isCancelled(); };
         aggregator.setCancellationHook(hook);
 
-        aggregator.execute(children.back(), *data_variants);
+        aggregator.execute(children.back(), *data_variants, file_provider);
 
         if (!aggregator.hasTemporaryFiles())
         {
@@ -49,14 +49,14 @@ Block AggregatingBlockInputStream::readImpl()
             {
                 /// Flush data in the RAM to disk also. It's easier than merging on-disk and RAM data.
                 if (data_variants->size())
-                    aggregator.writeToTemporaryFile(*data_variants);
+                    aggregator.writeToTemporaryFile(*data_variants, file_provider);
             }
 
             const auto & files = aggregator.getTemporaryFiles();
             BlockInputStreams input_streams;
             for (const auto & file : files.files)
             {
-                temporary_inputs.emplace_back(std::make_unique<TemporaryFileStream>(file->path()));
+                temporary_inputs.emplace_back(std::make_unique<TemporaryFileStream>(file->path(), file_provider));
                 input_streams.emplace_back(temporary_inputs.back()->block_in);
             }
 
@@ -75,8 +75,13 @@ Block AggregatingBlockInputStream::readImpl()
 }
 
 
-AggregatingBlockInputStream::TemporaryFileStream::TemporaryFileStream(const std::string & path)
-    : file_in(path), compressed_in(file_in),
+AggregatingBlockInputStream::TemporaryFileStream::TemporaryFileStream(const std::string & path, const FileProviderPtr & file_provider)
+    : file_in(file_provider, path, EncryptionPath(path, "")), compressed_in(file_in),
     block_in(std::make_shared<NativeBlockInputStream>(compressed_in, ClickHouseRevision::get())) {}
+
+AggregatingBlockInputStream::TemporaryFileStream::~TemporaryFileStream()
+{
+    file_provider->deleteFile(file_in.getFileName(), EncryptionPath(file_in.getFileName(), ""));
+}
 
 }

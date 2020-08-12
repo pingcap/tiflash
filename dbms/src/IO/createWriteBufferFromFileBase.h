@@ -21,5 +21,4 @@ WriteBufferFromFileBase * createWriteBufferFromFileBase(const std::string & file
         mode_t mode = 0666,
         char * existing_memory_ = nullptr,
         size_t alignment = 0);
-
 }
