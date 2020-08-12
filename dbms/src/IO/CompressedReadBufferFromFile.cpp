@@ -38,7 +38,6 @@ CompressedReadBufferFromFile::CompressedReadBufferFromFile(
     compressed_in = &file_in;
 }
 
-
 void CompressedReadBufferFromFile::seek(size_t offset_in_compressed_file, size_t offset_in_decompressed_block)
 {
     if (size_compressed &&

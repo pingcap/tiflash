@@ -28,6 +28,7 @@
 #include <Parsers/ASTOrderByElement.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 
+#include <Encryption/FileProvider.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/InterpreterSetQuery.h>
@@ -506,7 +507,7 @@ void InterpreterSelectQuery::executeImpl(Pipeline & pipeline, const BlockInputSt
                 executeWhere(pipeline, expressions.before_where);
 
             if (expressions.need_aggregate)
-                executeAggregation(pipeline, expressions.before_aggregation, aggregate_overflow_row, aggregate_final);
+                executeAggregation(pipeline, expressions.before_aggregation, context.getFileProvider(), aggregate_overflow_row, aggregate_final);
             else
             {
                 executeExpression(pipeline, expressions.before_order_and_select);
@@ -948,7 +949,7 @@ void InterpreterSelectQuery::executeWhere(Pipeline & pipeline, const ExpressionA
 }
 
 
-void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expression, bool overflow_row, bool final)
+void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expression, const FileProviderPtr & file_provider, bool overflow_row, bool final)
 {
     pipeline.transform([&](auto & stream)
     {
@@ -988,7 +989,7 @@ void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const Expre
     if (pipeline.streams.size() > 1)
     {
         pipeline.firstStream() = std::make_shared<ParallelAggregatingBlockInputStream>(
-            pipeline.streams, pipeline.stream_with_non_joined_data, params, final,
+            pipeline.streams, pipeline.stream_with_non_joined_data, params, file_provider, final,
             max_streams,
             settings.aggregation_memory_efficient_merge_threads
                 ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
@@ -1008,7 +1009,7 @@ void InterpreterSelectQuery::executeAggregation(Pipeline & pipeline, const Expre
         if (pipeline.stream_with_non_joined_data)
             inputs.push_back(pipeline.stream_with_non_joined_data);
 
-        pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(std::make_shared<ConcatBlockInputStream>(inputs), params, final);
+        pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(std::make_shared<ConcatBlockInputStream>(inputs), params, file_provider, final);
 
         pipeline.stream_with_non_joined_data = nullptr;
     }

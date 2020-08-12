@@ -4,8 +4,8 @@
 #include <Databases/DatabaseOrdinary.h>
 #include <Databases/DatabasesCommon.h>
 #include <Debug/MockSchemaNameMapper.h>
-#include <IO/ReadBufferFromFile.h>
-#include <IO/WriteBufferFromFile.h>
+#include <Encryption/ReadBufferFromFileProvider.h>
+#include <Encryption/WriteBufferFromFileProvider.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/IDAsPathUpgrader.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -40,12 +40,12 @@ static constexpr auto SYSTEM_DATABASE = "system";
 
 namespace
 {
-std::shared_ptr<ASTFunction> getDatabaseEngine(const String & filename)
+std::shared_ptr<ASTFunction> getDatabaseEngine(const FileProviderPtr & file_provider, const String & filename)
 {
     String query;
     if (Poco::File(filename).exists())
     {
-        ReadBufferFromFile in(filename, 1024);
+        ReadBufferFromFileProvider in(file_provider, filename, EncryptionPath(filename, ""), 1024);
         readStringUntilEOF(query, in);
     }
     else
@@ -67,12 +67,12 @@ std::shared_ptr<ASTFunction> getDatabaseEngine(const String & filename)
 }
 
 // Get <TableName, TableInfo> from `table_metadata_file`
-std::pair<String, TiDB::TableInfo> getTableInfo(const String & table_metadata_file)
+std::pair<String, TiDB::TableInfo> getTableInfo(const FileProviderPtr & file_provider, const String & table_metadata_file)
 {
     String definition;
     if (Poco::File(table_metadata_file).exists())
     {
-        ReadBufferFromFile in(table_metadata_file, 1024);
+        ReadBufferFromFileProvider in(file_provider, table_metadata_file, EncryptionPath(table_metadata_file, ""), 1024);
         readStringUntilEOF(definition, in);
     }
     else
@@ -143,38 +143,40 @@ void renamePath(const String & old_path, const String & new_path, Poco::Logger *
     }
 }
 
-void writeTableDefinitionToFile(const String & table_meta_path, const ASTPtr & query, bool fsync_metadata)
+void writeTableDefinitionToFile(const FileProviderPtr & file_provider, const String & table_meta_path, const ASTPtr & query, bool fsync_metadata)
 {
     String table_meta_tmp_path = table_meta_path + ".tmp";
     {
         String statement = getTableDefinitionFromCreateQuery(query);
 
         /// Exclusive flags guarantees, that table is not created right now in another thread. Otherwise, exception will be thrown.
-        WriteBufferFromFile out(table_meta_tmp_path, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+        WriteBufferFromFileProvider out(file_provider, table_meta_tmp_path, EncryptionPath(table_meta_tmp_path, ""), true, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
         if (fsync_metadata)
             out.sync();
         out.close();
     }
-    Poco::File(table_meta_tmp_path).renameTo(table_meta_path);
+    file_provider->renameFile(table_meta_tmp_path, EncryptionPath(table_meta_tmp_path, ""),
+        table_meta_path, EncryptionPath(table_meta_path, ""));
 }
 
-void writeDatabaseDefinitionToFile(const String & database_meta_path, const ASTPtr & query, bool fsync_metadata)
+void writeDatabaseDefinitionToFile(const FileProviderPtr & file_provider, const String & database_meta_path, const ASTPtr & query, bool fsync_metadata)
 {
     String db_meta_tmp_path = database_meta_path + ".tmp";
     {
         String statement = getDatabaseDefinitionFromCreateQuery(query);
 
         /// Exclusive flags guarantees, that table is not created right now in another thread. Otherwise, exception will be thrown.
-        WriteBufferFromFile out(db_meta_tmp_path, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+        WriteBufferFromFileProvider out(file_provider, db_meta_tmp_path, EncryptionPath(db_meta_tmp_path, ""), true, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
         if (fsync_metadata)
             out.sync();
         out.close();
     }
-    Poco::File(db_meta_tmp_path).renameTo(database_meta_path);
+    file_provider->renameFile(db_meta_tmp_path, EncryptionPath(db_meta_tmp_path, ""),
+        database_meta_path, EncryptionPath(database_meta_path, ""));
 }
 
 ASTPtr parseCreateDatabaseAST(const String & statement)
@@ -307,29 +309,29 @@ String IDAsPathUpgrader::DatabaseDiskInfo::doGetMetaFilePath(const String & root
 // "metadata/${db_name}/"
 String IDAsPathUpgrader::DatabaseDiskInfo::doGetMetaDirectory(const String & root_path, bool tmp) const
 {
-    return root_path + "/metadata/" + escapeForFileName(name + (tmp ? TMP_SUFFIX : "")) + "/";
+    return root_path + (endsWith(root_path, "/") ? "" : "/") + "metadata/" + escapeForFileName(name + (tmp ? TMP_SUFFIX : "")) + "/";
 }
 // "data/${db_name}/"
 String IDAsPathUpgrader::DatabaseDiskInfo::doGetDataDirectory(const String & root_path, bool escape, bool tmp) const
 {
     // Old data path don't do escape for path
     if (escape)
-        return root_path + "/data/" + escapeForFileName(name + (tmp ? TMP_SUFFIX : "")) + "/";
+        return root_path + (endsWith(root_path, "/") ? "" : "/") + "data/" + escapeForFileName(name + (tmp ? TMP_SUFFIX : "")) + "/";
     else
     {
         // Old extra data path (in PathPool) don't escape for path.
-        return root_path + "/data/" + name + (tmp ? TMP_SUFFIX : "") + "/";
+        return root_path + (endsWith(root_path, "/") ? "" : "/") + "data/" + name + (tmp ? TMP_SUFFIX : "") + "/";
     }
 }
 // "extra_data/${db_name}/"
 String IDAsPathUpgrader::DatabaseDiskInfo::doGetExtraDirectory(const String & extra_root, bool escape, bool tmp) const
 {
     if (escape)
-        return extra_root + "/" + escapeForFileName(name + (tmp ? TMP_SUFFIX : "")) + "/";
+        return extra_root + (endsWith(extra_root, "/") ? "" : "/") + escapeForFileName(name + (tmp ? TMP_SUFFIX : "")) + "/";
     else
     {
         // Old extra data path (in PathPool) don't escape for path.
-        return extra_root + "/" + name + (tmp ? TMP_SUFFIX : "") + "/";
+        return extra_root + (endsWith(extra_root, "/") ? "" : "/") + name + (tmp ? TMP_SUFFIX : "") + "/";
     }
 }
 
@@ -342,7 +344,7 @@ String IDAsPathUpgrader::DatabaseDiskInfo::getNewMetaFilePath(const String & roo
 // "metadata/db_${id}/"
 String IDAsPathUpgrader::DatabaseDiskInfo::getNewMetaDirectory(const String & root_path) const
 {
-    return root_path + "/metadata/" + escapeForFileName(newName()) + "/";
+    return root_path + (endsWith(root_path, "/") ? "" : "/") + "/metadata/" + escapeForFileName(newName()) + "/";
 }
 // "data/"
 String IDAsPathUpgrader::DatabaseDiskInfo::getNewDataDirectory(const String & root_path) const { return root_path + "/data/"; }
@@ -420,7 +422,7 @@ bool IDAsPathUpgrader::needUpgrade()
     {
         (void)db_name;
         const String database_metadata_file = db_info.getMetaFilePath(root_path);
-        auto engine = getDatabaseEngine(database_metadata_file);
+        auto engine = getDatabaseEngine(global_context.getFileProvider(), database_metadata_file);
         db_info.engine = engine->name;
         if (db_info.engine != "TiFlash")
         {
@@ -536,7 +538,7 @@ void IDAsPathUpgrader::linkDatabaseTableInfos(const std::vector<TiDB::DBInfoPtr>
         {
             String table_meta_file = db_meta_dir + "/" + table_filename;
             // Name in table_info may not be updated, use the name in `ATTACH TABLE <name> ...`.
-            auto [old_name, table_info] = getTableInfo(table_meta_file);
+            auto [old_name, table_info] = getTableInfo(global_context.getFileProvider(), table_meta_file);
             db_info.tables.emplace_back( //
                 TableDiskInfo{old_name, std::make_shared<TiDB::TableInfo>(table_info), mapper});
         }
@@ -717,7 +719,7 @@ void IDAsPathUpgrader::renameDatabase(const String & db_name, const DatabaseDisk
         const String statement = "ATTACH DATABASE `" + mapped_db_name + "` ENGINE=TiFlash('" + db_info.getTiDBSerializeInfo() + "', 1)\n";
         auto ast = parseCreateDatabaseAST(statement);
         const auto & settings = global_context.getSettingsRef();
-        writeDatabaseDefinitionToFile(new_meta_file, ast, settings.fsync_metadata);
+        writeDatabaseDefinitionToFile(global_context.getFileProvider(), new_meta_file, ast, settings.fsync_metadata);
     }
 
     {
@@ -773,7 +775,7 @@ void IDAsPathUpgrader::renameTable(
     // Recreate metadata file
     {
         auto old_tbl_meta_file = table.getMetaFilePath(root_path, db_info);
-        auto ast = DatabaseLoading::getQueryFromMetadata(old_tbl_meta_file, /*throw_on_error=*/true);
+        auto ast = DatabaseLoading::getQueryFromMetadata(global_context, old_tbl_meta_file, /*throw_on_error=*/true);
         if (!ast)
             throw Exception("There is no metadata file for table " + table.name() + ", expected file: " + old_tbl_meta_file,
                 ErrorCodes::FILE_DOESNT_EXIST);
@@ -808,7 +810,7 @@ void IDAsPathUpgrader::renameTable(
 
         const String new_tbl_meta_file = table.getNewMetaFilePath(root_path, db_info);
         const auto & settings = global_context.getSettingsRef();
-        writeTableDefinitionToFile(new_tbl_meta_file, ast, settings.fsync_metadata);
+        writeTableDefinitionToFile(global_context.getFileProvider(), new_tbl_meta_file, ast, settings.fsync_metadata);
 
         // Remove old metadata file
         if (auto file = Poco::File(old_tbl_meta_file); file.exists())
