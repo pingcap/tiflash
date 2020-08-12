@@ -13,7 +13,7 @@ namespace DM
 
 const Int64 StableValueSpace::CURRENT_VERSION = 1;
 
-void StableValueSpace::setFiles(const DMFiles & files_, DMContext * dm_context, HandleRange range)
+void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & range, DMContext * dm_context)
 {
     UInt64 rows  = 0;
     UInt64 bytes = 0;
@@ -32,7 +32,8 @@ void StableValueSpace::setFiles(const DMFiles & files_, DMContext * dm_context, 
         auto hash_salt   = dm_context->hash_salt;
         for (auto & file : files_)
         {
-            DMFilePackFilter pack_filter(file, index_cache, hash_salt, range, EMPTY_FILTER, {}, dm_context->db_context.getFileProvider());
+            DMFilePackFilter pack_filter(
+                file, index_cache, hash_salt, range.toHandleRange(), EMPTY_FILTER, {}, dm_context->db_context.getFileProvider());
             auto [file_valid_rows, file_valid_bytes] = pack_filter.validRowsAndBytes();
             rows += file_valid_rows;
             bytes += file_valid_bytes;

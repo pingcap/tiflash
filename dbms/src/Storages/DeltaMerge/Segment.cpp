@@ -108,7 +108,7 @@ StableValueSpacePtr createNewStable(DMContext & context, const BlockInputStreamP
     PageId dmfile_id = context.storage_pool.newDataPageId();
     auto   dmfile    = writeIntoNewDMFile(context, input_stream, dmfile_id, store_path + "/" + STABLE_FOLDER_NAME);
     auto   stable    = std::make_shared<StableValueSpace>(stable_id);
-    stable->setFiles({dmfile});
+    stable->setFiles({dmfile}, RowKeyRange::newAll(context.rowkey_column_size, context.is_common_handle));
     stable->saveMeta(wbs.meta);
     wbs.data.putExternal(dmfile_id, 0);
     context.extra_paths.addDMFile(dmfile_id, dmfile->getBytesOnDisk(), store_path);
@@ -736,8 +736,8 @@ Segment::SplitInfo Segment::prepareSplitLogical(DMContext &                dm_co
     auto my_stable    = std::make_shared<StableValueSpace>(segment_snap->stable->getId());
     auto other_stable = std::make_shared<StableValueSpace>(other_stable_id);
 
-    my_stable->setFiles(my_stable_files, &dm_context, my_range.toHandleRange());
-    other_stable->setFiles(other_stable_files, &dm_context, other_range.toHandleRange());
+    my_stable->setFiles(my_stable_files, my_range, &dm_context);
+    other_stable->setFiles(other_stable_files, other_range, &dm_context);
 
     LOG_DEBUG(log, "Segment [" << segment_id << "] prepare split logical done");
 

@@ -315,6 +315,8 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
                                store_columns,
                                latest_gc_safe_point,
                                settings.not_compress_columns,
+                               is_common_handle,
+                               pk->size(),
                                db_settings);
     return DMContextPtr(ctx);
 }
