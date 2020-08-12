@@ -17,8 +17,9 @@ namespace DB
 
 ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     const BlockInputStreams & inputs, const BlockInputStreamPtr & additional_input_at_end,
-    const Aggregator::Params & params_, bool final_, size_t max_threads_, size_t temporary_data_merge_threads_)
-    : params(params_), aggregator(params),
+    const Aggregator::Params & params_, const FileProviderPtr & file_provider_, bool final_, size_t max_threads_,
+    size_t temporary_data_merge_threads_)
+    : params(params_), aggregator(params), file_provider(file_provider_),
     final(final_), max_threads(std::min(inputs.size(), max_threads_)), temporary_data_merge_threads(temporary_data_merge_threads_),
     keys_size(params.keys_size), aggregates_size(params.aggregates_size),
     handler(*this), processor(inputs, additional_input_at_end, max_threads, handler)
@@ -78,7 +79,7 @@ Block ParallelAggregatingBlockInputStream::readImpl()
             BlockInputStreams input_streams;
             for (const auto & file : files.files)
             {
-                temporary_inputs.emplace_back(std::make_unique<TemporaryFileStream>(file->path()));
+                temporary_inputs.emplace_back(std::make_unique<TemporaryFileStream>(file->path(), file_provider));
                 input_streams.emplace_back(temporary_inputs.back()->block_in);
             }
 
@@ -101,15 +102,19 @@ Block ParallelAggregatingBlockInputStream::readImpl()
 }
 
 
-ParallelAggregatingBlockInputStream::TemporaryFileStream::TemporaryFileStream(const std::string & path)
-    : file_in(path), compressed_in(file_in),
+ParallelAggregatingBlockInputStream::TemporaryFileStream::TemporaryFileStream(const std::string & path,
+    const FileProviderPtr & file_provider_)
+    : file_provider(file_provider_), file_in(file_provider, path, EncryptionPath(path, "")), compressed_in(file_in),
     block_in(std::make_shared<NativeBlockInputStream>(compressed_in, ClickHouseRevision::get())) {}
 
-
+ParallelAggregatingBlockInputStream::TemporaryFileStream::~TemporaryFileStream()
+{
+    file_provider->deleteFile(file_in.getFileName(), EncryptionPath(file_in.getFileName(), ""));
+}
 
 void ParallelAggregatingBlockInputStream::Handler::onBlock(Block & block, size_t thread_num)
 {
-    parent.aggregator.executeOnBlock(block, *parent.many_data[thread_num],
+    parent.aggregator.executeOnBlock(block, *parent.many_data[thread_num], parent.file_provider,
         parent.threads_data[thread_num].key_columns, parent.threads_data[thread_num].aggregate_columns,
         parent.threads_data[thread_num].key, parent.no_more_keys);
 
@@ -128,7 +133,7 @@ void ParallelAggregatingBlockInputStream::Handler::onFinishThread(size_t thread_
             data.convertToTwoLevel();
 
         if (data.size())
-            parent.aggregator.writeToTemporaryFile(data);
+            parent.aggregator.writeToTemporaryFile(data, parent.file_provider);
     }
 }
 
@@ -144,7 +149,7 @@ void ParallelAggregatingBlockInputStream::Handler::onFinish()
                 data->convertToTwoLevel();
 
             if (data->size())
-                parent.aggregator.writeToTemporaryFile(*data);
+                parent.aggregator.writeToTemporaryFile(*data, parent.file_provider);
         }
     }
 }
@@ -204,7 +209,7 @@ void ParallelAggregatingBlockInputStream::execute()
     /// If there was no data, and we aggregate without keys, we must return single row with the result of empty aggregation.
     /// To do this, we pass a block with zero rows to aggregate.
     if (total_src_rows == 0 && params.keys_size == 0 && !params.empty_result_for_aggregation_by_empty_set)
-        aggregator.executeOnBlock(children.at(0)->getHeader(), *many_data[0],
+        aggregator.executeOnBlock(children.at(0)->getHeader(), *many_data[0], file_provider,
             threads_data[0].key_columns, threads_data[0].aggregate_columns,
             threads_data[0].key, no_more_keys);
 }

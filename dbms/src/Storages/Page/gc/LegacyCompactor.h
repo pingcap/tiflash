@@ -25,12 +25,17 @@ private:
     collectPageFilesToCompact(const PageFileSet & page_files, const std::set<PageFileIdAndLevel> & writing_fiel_ids);
 
     static WriteBatch prepareCheckpointWriteBatch(const PageStorage::SnapshotPtr snapshot, const WriteBatch::SequenceID wb_sequence);
-    [[nodiscard]] static size_t
-    writeToCheckpoint(const String & storage_path, const PageFileIdAndLevel & file_id, WriteBatch && wb, Poco::Logger * log);
+    [[nodiscard]] static size_t writeToCheckpoint(const String &             storage_path,
+                                                  const PageFileIdAndLevel & file_id,
+                                                  WriteBatch &&              wb,
+                                                  FileProviderPtr &          file_provider,
+                                                  Poco::Logger *             log);
 
 private:
     const String & storage_name;
     const String & storage_path;
+
+    FileProviderPtr file_provider;
 
     const PageStorage::Config & config;
 
