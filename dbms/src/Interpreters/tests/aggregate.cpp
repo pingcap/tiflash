@@ -9,6 +9,7 @@
 
 #include <DataStreams/OneBlockInputStream.h>
 
+#include <IO/PosixFileProvider.h>
 #include <Interpreters/Aggregator.h>
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
@@ -86,8 +87,9 @@ int main(int argc, char ** argv)
         {
             Stopwatch stopwatch;
             stopwatch.start();
-
-            aggregator.execute(stream, aggregated_data_variants);
+            
+            FileProviderPtr file_provider = std::make_shared<PosixFileProvider>();
+            aggregator.execute(stream, aggregated_data_variants, file_provider);
 
             stopwatch.stop();
             std::cout << std::fixed << std::setprecision(2)
