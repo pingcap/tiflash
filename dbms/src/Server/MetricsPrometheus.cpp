@@ -155,11 +155,15 @@ MetricsPrometheus::MetricsPrometheus(
         if (security_config.has_tls_config)
         {
             server = getHTTPServer(security_config, tiflash_metrics->registry, conf.getString(status_metrics_port));
+            LOG_INFO(log, "Enable prometheus secure pull mode; Metrics Port = " << metrics_port);
         }
-        auto metrics_port = conf.getString(status_metrics_port);
-        exposer = std::make_shared<prometheus::Exposer>(metrics_port);
-        exposer->RegisterCollectable(tiflash_metrics->registry);
-        LOG_INFO(log, "Enable prometheus pull mode; Metrics Port = " << metrics_port);
+        else
+        {
+            auto metrics_port = conf.getString(status_metrics_port);
+            exposer = std::make_shared<prometheus::Exposer>(metrics_port);
+            exposer->RegisterCollectable(tiflash_metrics->registry);
+            LOG_INFO(log, "Enable prometheus pull mode; Metrics Port = " << metrics_port);
+        }
     }
     else
     {
