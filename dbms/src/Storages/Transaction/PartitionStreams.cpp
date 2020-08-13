@@ -32,7 +32,7 @@ void writeRegionDataToStorage(Context & context, const RegionPtr & region, Regio
     auto atomicReadWrite = [&](bool force_decode) {
         /// Get storage based on table ID.
         auto storage = tmt.getStorages().get(table_id);
-        if (storage == nullptr || storage->isTombstone())
+        if (storage == nullptr)
         {
             if (!force_decode) // Need to update.
                 return false;
