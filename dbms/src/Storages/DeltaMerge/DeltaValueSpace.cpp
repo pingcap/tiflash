@@ -86,8 +86,13 @@ void DeltaValueSpace::checkNewPacks(const Packs & new_packs)
 // Public methods
 // ================================================
 
-DeltaValueSpace::DeltaValueSpace(PageId id_, const Packs & packs_)
-    : id(id_), packs(packs_), delta_index(std::make_shared<DeltaIndex>()), log(&Logger::get("DeltaValueSpace"))
+DeltaValueSpace::DeltaValueSpace(PageId id_, bool is_common_handle_, size_t rowkey_column_size_, const Packs & packs_)
+    : id(id_),
+      packs(packs_),
+      delta_index(std::make_shared<DeltaIndex>()),
+      is_common_handle(is_common_handle_),
+      rowkey_column_size(rowkey_column_size_),
+      log(&Logger::get("DeltaValueSpace"))
 {
     setUp();
 }

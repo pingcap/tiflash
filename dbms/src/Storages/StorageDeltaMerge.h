@@ -51,7 +51,7 @@ public:
     void flushCache(const Context & context) override
     {
         /// todo fix hardcoded value
-        flushCache(context, DM::RowKeyRange::newAll(1, false));
+        flushCache(context, DM::RowKeyRange::newAll(is_common_handle, rowkey_columns->size()));
     }
 
     void flushCache(const Context & context, const DB::HandleRange<HandleID> & range_to_flush) override
@@ -136,6 +136,9 @@ private:
     DM::DeltaMergeStorePtr store;
 
     Strings pk_column_names; // TODO: remove it. Only use for debug from ch-client.
+    bool is_common_handle;
+    bool pk_is_handle;
+    DM::RowKeyColumnsPtr rowkey_columns;
     OrderedNameSet hidden_columns;
 
     // The table schema synced from TiDB

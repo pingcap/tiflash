@@ -217,7 +217,8 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
 
     if (!table_info.pk_is_handle)
     {
-        auto ch_col = NameAndTypePair(MutableSupport::tidb_pk_column_name, MutableSupport::tidb_pk_column_type);
+        auto ch_col = NameAndTypePair(MutableSupport::tidb_pk_column_name,
+            table_info.is_common_handle ? MutableSupport::tidb_pk_column_string_type : MutableSupport::tidb_pk_column_int_type);
         auto mut_col = ch_col.type->createColumn();
         column_map.insert(handle_col_id, std::move(mut_col), std::move(ch_col), -1, data_list.size());
     }

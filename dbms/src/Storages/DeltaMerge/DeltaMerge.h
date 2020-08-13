@@ -46,6 +46,8 @@ private:
     IndexIterator      delta_index_end;
 
     RowKeyRange rowkey_range;
+    bool        is_common_handle;
+    size_t      rowkey_column_size;
 
     size_t max_block_size;
 
@@ -85,12 +87,14 @@ public:
           delta_index_it(delta_index_start_),
           delta_index_end(delta_index_end_),
           rowkey_range(rowkey_range_),
+          is_common_handle(rowkey_range.is_common_handle),
+          rowkey_column_size(rowkey_range.rowkey_column_size),
           max_block_size(max_block_size_)
     {
         if constexpr (skippable_place)
         {
-            if (rowkey_range.isEndInfinite())
-                throw Exception("The end of handle range should be +inf in skippable_place mode");
+            if (!rowkey_range.isEndInfinite())
+                throw Exception("The end of rowkey range should be +Inf in skippable_place mode");
         }
 
         header      = stable_input_stream->getHeader();
@@ -105,7 +109,7 @@ public:
         {
             use_stable_rows = delta_index_it.getSid();
         }
-        all_range  = RowKeyRange::newAll(rowkey_range.rowkey_column_size, rowkey_range.is_common_handle);
+        all_range  = RowKeyRange::newAll(is_common_handle, rowkey_column_size);
         last_value = all_range.getStart();
     }
 
@@ -170,7 +174,7 @@ private:
 
             ++num_read;
 
-            auto   rowkey_column  = RowKeyColumn(block.getByPosition(0).column, rowkey_range.is_common_handle);
+            auto   rowkey_column  = RowKeyColumnContainer(block.getByPosition(0).column, is_common_handle);
             auto & version_column = toColumnVectorData<UInt64>(block.getByPosition(1).column);
             for (size_t i = 0; i < rowkey_column.column->size(); ++i)
             {

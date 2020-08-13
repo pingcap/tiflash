@@ -22,7 +22,10 @@ static const String STABLE_FOLDER_NAME = "stable";
 class StableValueSpace : public std::enable_shared_from_this<StableValueSpace>
 {
 public:
-    StableValueSpace(PageId id_) : id(id_), log(&Logger::get("StableValueSpace")) {}
+    StableValueSpace(PageId id_, bool is_common_handle_, size_t rowkey_column_size_)
+        : id(id_), is_common_handle(is_common_handle_), rowkey_column_size(rowkey_column_size_), log(&Logger::get("StableValueSpace"))
+    {
+    }
 
     // Set DMFiles for this value space.
     // If this value space is logical splited, specify `range` and `dm_context` so that we can get more precise
@@ -53,6 +56,8 @@ public:
 
         PageId id;
         UInt64 valid_rows;
+        bool   is_common_handle;
+        size_t rowkey_column_size;
 
         PageId getId() { return id; }
 
@@ -94,6 +99,8 @@ private:
     UInt64  valid_rows;
     UInt64  valid_bytes;
     DMFiles files;
+    bool    is_common_handle;
+    size_t  rowkey_column_size;
 
     Logger * log;
 };

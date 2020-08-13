@@ -258,6 +258,8 @@ private:
 private:
     const UInt64 epoch; // After split / merge / merge delta, epoch got increased by 1.
     RowKeyRange  rowkey_range;
+    bool         is_common_handle;
+    size_t       rowkey_column_size;
     const PageId segment_id;
     const PageId next_segment_id;
 

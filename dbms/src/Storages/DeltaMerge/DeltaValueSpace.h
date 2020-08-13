@@ -149,6 +149,9 @@ public:
         // The data of packs when reading.
         std::vector<Columns> packs_data;
 
+        bool   is_common_handle;
+        size_t rowkey_column_size;
+
         ~Snapshot();
 
         size_t getPackCount() const { return packs.size(); }
@@ -206,6 +209,9 @@ private:
 
     DeltaIndexPtr delta_index;
 
+    bool   is_common_handle;
+    size_t rowkey_column_size;
+
     // Protects the operations in this instance.
     mutable std::mutex mutex;
 
@@ -219,7 +225,7 @@ private:
     void checkNewPacks(const Packs & new_packs);
 
 public:
-    explicit DeltaValueSpace(PageId id_, const Packs & packs_ = {});
+    DeltaValueSpace(PageId id_, bool is_common_handle_, size_t rowkey_column_size_, const Packs & packs_ = {});
 
     String simpleInfo() const { return "Delta [" + DB::toString(id) + "]"; }
     String info() const

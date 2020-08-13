@@ -433,6 +433,7 @@ try
     json->set("cols", cols_arr);
     json->set("state", static_cast<Int32>(state));
     json->set("pk_is_handle", pk_is_handle);
+    json->set("is_common_handle", is_common_handle);
     json->set("comment", comment);
     json->set("update_timestamp", update_timestamp);
     if (is_partition_table)
@@ -543,6 +544,8 @@ try
 
     state = static_cast<SchemaState>(obj->getValue<Int32>("state"));
     pk_is_handle = obj->getValue<bool>("pk_is_handle");
+    if (obj->has("is_common_handle"))
+        is_common_handle = obj->getValue<bool>("is_common_handle");
     comment = obj->getValue<String>("comment");
     update_timestamp = obj->getValue<Timestamp>("update_timestamp");
     auto partition_obj = obj->getObject("partition");

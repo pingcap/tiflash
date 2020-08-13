@@ -11,9 +11,9 @@
 
 namespace DB::DM
 {
-using PrimaryKey    = ColumnDefines;
-using PrimaryKeyPtr = std::shared_ptr<PrimaryKey>;
-using StringPtr     = std::shared_ptr<String>;
+using RowKeyColumns    = ColumnDefines;
+using RowKeyColumnsPtr = std::shared_ptr<RowKeyColumns>;
+using StringPtr        = std::shared_ptr<String>;
 
 struct RowKeyRange;
 String rangeToString(const RowKeyRange & range);
@@ -160,14 +160,14 @@ inline const RowKeyValue & max(const RowKeyValue & a, const RowKeyValue & b)
     return compare(a, b) >= 0 ? a : b;
 }
 
-struct RowKeyColumn
+struct RowKeyColumnContainer
 {
     const ColumnPtr &             column;
     const ColumnString::Chars_t * string_data;
     const ColumnString::Offsets * string_offsets;
     const PaddedPODArray<Int64> * int_data;
     bool                          is_common_handle;
-    RowKeyColumn(const ColumnPtr & column_, bool is_common_handle_) : column(column_), is_common_handle(is_common_handle_)
+    RowKeyColumnContainer(const ColumnPtr & column_, bool is_common_handle_) : column(column_), is_common_handle(is_common_handle_)
     {
         if (is_common_handle)
         {
@@ -201,7 +201,7 @@ struct RowKeyColumn
 namespace
 {
 // https://en.cppreference.com/w/cpp/algorithm/lower_bound
-size_t lowerBound(const RowKeyColumn & rowkey_column, size_t first, size_t last, const RowKeyValue & value)
+size_t lowerBound(const RowKeyColumnContainer & rowkey_column, size_t first, size_t last, const RowKeyValue & value)
 {
     size_t count = last - first;
     while (count > 0)
@@ -346,7 +346,7 @@ struct RowKeyRange
         }
     }
 
-    static RowKeyRange newAll(size_t rowkey_column_size, bool is_common_handle)
+    static RowKeyRange newAll(bool is_common_handle, size_t rowkey_column_size)
     {
         if (is_common_handle)
         {
@@ -359,7 +359,7 @@ struct RowKeyRange
         }
     }
 
-    static RowKeyRange newNone(size_t rowkey_column_size, bool is_common_handle)
+    static RowKeyRange newNone(bool is_common_handle, size_t rowkey_column_size)
     {
         if (is_common_handle)
         {
@@ -550,8 +550,8 @@ struct RowKeyRange
     /// return <offset, limit>
     std::pair<size_t, size_t> getPosRange(const ColumnPtr & column, const size_t offset, const size_t limit) const
     {
-        RowKeyColumn rowkey_column(column, is_common_handle);
-        size_t       start_index
+        RowKeyColumnContainer rowkey_column(column, is_common_handle);
+        size_t                start_index
             = check(rowkey_column.getRowKeyValue(offset)) ? offset : lowerBound(rowkey_column, offset, offset + limit, getStart());
         size_t end_index = check(rowkey_column.getRowKeyValue(offset + limit - 1))
             ? offset + limit
@@ -613,9 +613,9 @@ inline String toString(const RowKeyRanges & ranges)
     return s;
 }
 
-inline RowKeyRange mergeRanges(const RowKeyRanges & ranges, size_t rowkey_column_size, bool is_common_handle)
+inline RowKeyRange mergeRanges(const RowKeyRanges & ranges, bool is_common_handle, size_t rowkey_column_size)
 {
-    RowKeyRange range = RowKeyRange::newNone(rowkey_column_size, is_common_handle);
+    RowKeyRange range = RowKeyRange::newNone(is_common_handle, rowkey_column_size);
     for (auto & r : ranges)
     {
         range.start     = min(range.start, r.start);

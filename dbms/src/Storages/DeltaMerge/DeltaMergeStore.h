@@ -234,6 +234,8 @@ public:
                     const String &        tbl_name,
                     const ColumnDefines & columns,
                     const ColumnDefine &  handle,
+                    RowKeyColumnsPtr      rowkey_columns_,
+                    bool                  is_common_handle_,
                     const Settings &      settings_);
     ~DeltaMergeStore();
 
@@ -299,9 +301,11 @@ public:
     DataTypePtr           getPKDataType() const { return original_table_handle_define.type; }
     SortDescription       getPrimarySortDescription() const;
 
-    void                check(const Context & db_context);
-    DeltaMergeStoreStat getStat();
-    SegmentStats        getSegmentStats();
+    void                     check(const Context & db_context);
+    DeltaMergeStoreStat      getStat();
+    SegmentStats             getSegmentStats();
+    const RowKeyColumnsPtr & getRowKeyColumns() const { return rowkey_columns; }
+    bool                     common_handle() const { return is_common_handle; }
 
 private:
     DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings);
@@ -333,8 +337,8 @@ private:
     String db_name;
     String table_name;
 
-    PrimaryKeyPtr pk;
-    bool          is_common_handle;
+    RowKeyColumnsPtr rowkey_columns;
+    bool             is_common_handle;
 
     ColumnDefines original_table_columns;
     BlockPtr      original_table_header; // Used to speed up getHeader()

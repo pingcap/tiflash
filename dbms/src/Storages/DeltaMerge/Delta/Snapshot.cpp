@@ -46,12 +46,14 @@ SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool is_u
     if (abandoned.load(std::memory_order_relaxed))
         return {};
 
-    auto snap          = std::make_shared<Snapshot>();
-    snap->is_update    = is_update;
-    snap->delta        = this->shared_from_this();
-    snap->storage_snap = std::make_shared<StorageSnapshot>(context.storage_pool, true);
-    snap->rows         = rows;
-    snap->deletes      = deletes;
+    auto snap                = std::make_shared<Snapshot>();
+    snap->is_update          = is_update;
+    snap->delta              = this->shared_from_this();
+    snap->is_common_handle   = is_common_handle;
+    snap->rowkey_column_size = rowkey_column_size;
+    snap->storage_snap       = std::make_shared<StorageSnapshot>(context.storage_pool, true);
+    snap->rows               = rows;
+    snap->deletes            = deletes;
     snap->packs.reserve(packs.size());
 
     snap->shared_delta_index = delta_index;
@@ -233,7 +235,7 @@ size_t DeltaValueSpace::Snapshot::read(const RowKeyRange & range, MutableColumns
 
         // TODO: this get the full columns of pack, which may cause unnecessary copying
         auto & columns       = getColumnsOfPack(pack_index, output_columns.size());
-        auto   rowkey_column = RowKeyColumn(columns[0], false);
+        auto   rowkey_column = RowKeyColumnContainer(columns[0], false);
         if (rows_in_pack_limit == 1)
         {
             if (range.check(rowkey_column.getRowKeyValue(rows_start_in_pack)))
@@ -263,7 +265,7 @@ Block DeltaValueSpace::Snapshot::read(size_t col_num, size_t offset, size_t limi
     MutableColumns columns;
     for (size_t i = 0; i < col_num; ++i)
         columns.push_back(column_defines[i].type->createColumn());
-    auto actually_read = read(RowKeyRange::newAll(1, false), columns, offset, limit);
+    auto actually_read = read(RowKeyRange::newAll(is_common_handle, rowkey_column_size), columns, offset, limit);
     if (unlikely(actually_read != limit))
         throw Exception("Expected read " + DB::toString(limit) + " rows, but got " + DB::toString(actually_read));
     Block block;
@@ -311,7 +313,8 @@ BlockOrDeletes DeltaValueSpace::Snapshot::getMergeBlocks(size_t rows_begin, size
             if (block_rows_end != block_rows_start)
             {
                 /// TODO: Here we hard code the first two columns: handle and version
-                res.emplace_back(read(2, block_rows_start, block_rows_end - block_rows_start), RowKeyRange::newNone(1, false));
+                res.emplace_back(read(2, block_rows_start, block_rows_end - block_rows_start),
+                                 RowKeyRange::newNone(is_common_handle, rowkey_column_size));
             }
 
             if (pack.isDeleteRange())
@@ -350,7 +353,7 @@ bool DeltaValueSpace::Snapshot::shouldPlace(const DMContext &   context,
         size_t rows_end_in_pack   = pack_rows[pack_index];
 
         auto & columns          = getColumnsOfPack(pack_index, /* handle and version */ 2);
-        auto   rowkey_column    = RowKeyColumn(columns[0], segment_range.is_common_handle);
+        auto   rowkey_column    = RowKeyColumnContainer(columns[0], is_common_handle);
         auto & version_col_data = toColumnVectorData<UInt64>(columns[1]);
 
         for (auto i = rows_start_in_pack; i < rows_end_in_pack; ++i)

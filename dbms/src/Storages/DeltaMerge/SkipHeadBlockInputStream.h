@@ -15,7 +15,7 @@ public:
         : input(input_), rowkey_range(rowkey_range_), handle_col_pos(handle_col_pos_)
     {
         if (rowkey_range.isEndInfinite())
-            throw Exception("The end of handle range should be +Inf for SkipHeadBlockInputStream");
+            throw Exception("The end of rowkey range should be +Inf for SkipHeadBlockInputStream");
 
         children.push_back(input);
     }

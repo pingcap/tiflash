@@ -61,7 +61,7 @@ inline Block filterSorted(const RowKeyRange & rowkey_range, Block && block, size
 inline Block filterUnsorted(const RowKeyRange & rowkey_range, Block && block, size_t handle_pos)
 {
     size_t rows          = block.rows();
-    auto   rowkey_column = RowKeyColumn(block.getByPosition(handle_pos).column, rowkey_range.is_common_handle);
+    auto   rowkey_column = RowKeyColumnContainer(block.getByPosition(handle_pos).column, rowkey_range.is_common_handle);
 
     IColumn::Filter filter(rows);
     size_t          passed_count = 0;
@@ -109,7 +109,7 @@ public:
             if (!block.rows())
                 continue;
 
-            auto rowkey_column = RowKeyColumn(block.getByPosition(handle_col_pos).column, rowkey_range.is_common_handle);
+            auto rowkey_column = RowKeyColumnContainer(block.getByPosition(handle_col_pos).column, rowkey_range.is_common_handle);
             /// If clean read optimized, only first row's (the smallest) handle is returned as a ColumnConst.
             if (rowkey_column.column->isColumnConst())
             {

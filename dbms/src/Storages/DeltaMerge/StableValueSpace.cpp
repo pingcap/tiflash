@@ -60,7 +60,7 @@ void StableValueSpace::saveMeta(WriteBatch & meta_wb)
 
 StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
 {
-    auto stable = std::make_shared<StableValueSpace>(id);
+    auto stable = std::make_shared<StableValueSpace>(id, context.is_common_handle, context.rowkey_column_size);
 
     Page                 page = context.storage_pool.meta().read(id);
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
@@ -154,10 +154,12 @@ using SnapshotPtr = std::shared_ptr<Snapshot>;
 
 SnapshotPtr StableValueSpace::createSnapshot()
 {
-    auto snap        = std::make_shared<Snapshot>();
-    snap->id         = id;
-    snap->valid_rows = valid_rows;
-    snap->stable     = this->shared_from_this();
+    auto snap                = std::make_shared<Snapshot>();
+    snap->id                 = id;
+    snap->valid_rows         = valid_rows;
+    snap->stable             = this->shared_from_this();
+    snap->is_common_handle   = is_common_handle;
+    snap->rowkey_column_size = rowkey_column_size;
 
     for (size_t i = 0; i < files.size(); i++)
     {

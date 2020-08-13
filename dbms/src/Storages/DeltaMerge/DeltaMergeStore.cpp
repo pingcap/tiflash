@@ -81,11 +81,11 @@ namespace
 {
 // Actually we will always store a column of `_tidb_rowid`, no matter it
 // exist in `table_columns` or not.
-ColumnDefinesPtr getStoreColumns(const ColumnDefines & table_columns)
+ColumnDefinesPtr getStoreColumns(const ColumnDefines & table_columns, bool is_common_handle)
 {
     auto columns = std::make_shared<ColumnDefines>();
     // First three columns are always _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
-    columns->emplace_back(getExtraHandleColumnDefine());
+    columns->emplace_back(getExtraHandleColumnDefine(is_common_handle));
     columns->emplace_back(getVersionColumnDefine());
     columns->emplace_back(getTagColumnDefine());
     // Add other columns
@@ -105,6 +105,8 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
                                  const String &        table_name_,
                                  const ColumnDefines & columns,
                                  const ColumnDefine &  handle,
+                                 RowKeyColumnsPtr      rowkey_columns_,
+                                 bool                  is_common_handle_,
                                  const Settings &      settings_)
     : path(path_),
       global_context(db_context.getGlobalContext()),
@@ -112,8 +114,8 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
       storage_pool(db_name_ + "." + table_name_, path, global_context, db_context.getSettingsRef()),
       db_name(db_name_),
       table_name(table_name_),
-      pk(std::make_shared<PrimaryKey>(ColumnDefines{handle})),
-      is_common_handle(false),
+      rowkey_columns(rowkey_columns_),
+      is_common_handle(is_common_handle_),
       original_table_handle_define(handle),
       background_pool(db_context.getBackgroundPool()),
       hash_salt(++DELTA_MERGE_STORE_HASH_SALT),
@@ -136,7 +138,7 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
     }
 
     original_table_header = std::make_shared<Block>(toEmptyBlock(original_table_columns));
-    store_columns         = getStoreColumns(original_table_columns);
+    store_columns         = getStoreColumns(original_table_columns, is_common_handle);
 
     auto dm_context = newDMContext(db_context, db_context.getSettingsRef());
 
@@ -149,7 +151,8 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
             auto segment_id = storage_pool.newMetaPageId();
             if (segment_id != DELTA_MERGE_FIRST_SEGMENT_ID)
                 throw Exception("The first segment id should be " + DB::toString(DELTA_MERGE_FIRST_SEGMENT_ID), ErrorCodes::LOGICAL_ERROR);
-            auto first_segment = Segment::newSegment(*dm_context, RowKeyRange::newAll(pk->size(), is_common_handle), segment_id, 0);
+            auto first_segment
+                = Segment::newSegment(*dm_context, RowKeyRange::newAll(is_common_handle, rowkey_columns->size()), segment_id, 0);
             segments.emplace(first_segment->getRowKeyRange().getEnd(), first_segment);
             id_to_segment.emplace(segment_id, first_segment);
         }
@@ -316,7 +319,7 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
                                latest_gc_safe_point,
                                settings.not_compress_columns,
                                is_common_handle,
-                               pk->size(),
+                               rowkey_columns->size(),
                                db_settings);
     return DMContextPtr(ctx);
 }
@@ -364,8 +367,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         addColumnToBlock(block, //
                          EXTRA_HANDLE_COLUMN_ID,
                          EXTRA_HANDLE_COLUMN_NAME,
-                         EXTRA_HANDLE_COLUMN_TYPE,
-                         EXTRA_HANDLE_COLUMN_TYPE->createColumn());
+                         EXTRA_HANDLE_COLUMN_INT_TYPE,
+                         EXTRA_HANDLE_COLUMN_INT_TYPE->createColumn());
         FunctionToInt64::create(db_context)->execute(block, {handle_pos}, block.columns() - 1);
     }
 
@@ -399,7 +402,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
     size_t     offset = 0;
     size_t     limit;
     const auto handle_column = block.getByName(EXTRA_HANDLE_COLUMN_NAME).column;
-    auto       rowkey_column = RowKeyColumn(handle_column, is_common_handle);
+    auto       rowkey_column = RowKeyColumnContainer(handle_column, is_common_handle);
 
     while (offset != rows)
     {
@@ -468,7 +471,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
 
     if (db_settings.dt_flush_after_write)
     {
-        RowKeyRange merge_range = RowKeyRange::newNone(pk->size(), is_common_handle);
+        RowKeyRange merge_range = RowKeyRange::newNone(is_common_handle, rowkey_columns->size());
         for (auto & segment : updated_segments)
             merge_range = merge_range.merge(segment->getRowKeyRange());
         flushCache(dm_context, merge_range);
@@ -1437,7 +1440,7 @@ void DeltaMergeStore::check(const Context & /*db_context*/)
     std::shared_lock lock(read_write_mutex);
 
     UInt64      next_segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
-    RowKeyRange last_range      = RowKeyRange::newAll(pk->size(), is_common_handle);
+    RowKeyRange last_range      = RowKeyRange::newAll(is_common_handle, rowkey_columns->size());
     RowKeyValue last_end        = last_range.getStart();
     for (const auto & [end, segment] : segments)
     {
@@ -1492,10 +1495,8 @@ void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
 
     if (table_info)
     {
-        // Update primary keys from TiDB::TableInfo
-
-        // For TiDB 3.1/4.0, there should be only one column with pri key flag.
-        // FIXME: With feature clustered index in TiDB 5.0, there could be multiple columns with primary key flag
+        // Update primary keys from TiDB::TableInfo when pk_is_handle = true
+        // todo update the column name in rowkey_columns
         std::vector<String> pk_names;
         for (const auto & col : table_info->get().columns)
         {
@@ -1512,7 +1513,7 @@ void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
         }
     }
 
-    auto new_store_columns = getStoreColumns(new_original_table_columns);
+    auto new_store_columns = getStoreColumns(new_original_table_columns, is_common_handle);
 
     original_table_columns.swap(new_original_table_columns);
     store_columns.swap(new_store_columns);
