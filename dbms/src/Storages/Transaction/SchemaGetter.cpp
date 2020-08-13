@@ -146,7 +146,7 @@ void SchemaDiff::deserialize(const String & data)
     Poco::Dynamic::Var result = parser.parse(data);
     auto obj = result.extract<Poco::JSON::Object::Ptr>();
     version = obj->getValue<Int64>("version");
-    type = (SchemaActionType)obj->getValue<Int32>("type");
+    type = static_cast<SchemaActionType>(obj->getValue<Int32>("type"));
     schema_id = obj->getValue<Int64>("schema_id");
     table_id = obj->getValue<Int64>("table_id");
 
