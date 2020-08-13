@@ -32,12 +32,12 @@ void writeRegionDataToStorage(Context & context, const RegionPtr & region, Regio
     auto atomicReadWrite = [&](bool force_decode) {
         /// Get storage based on table ID.
         auto storage = tmt.getStorages().get(table_id);
-        if (storage == nullptr)
+        if (storage == nullptr || storage->isTombstone())
         {
             if (!force_decode) // Need to update.
                 return false;
-            // Table must have just been dropped or truncated.
-            return true;
+            if (storage == nullptr) // Table must have just been GC-ed.
+                return true;
         }
 
         /// Lock throughout decode and write, during which schema must not change.
