@@ -114,7 +114,8 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
         switch (write.type)
         {
         case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::UPSERT: {
+        case WriteBatch::WriteType::UPSERT:
+        {
             PageFlags  flags;
             Checksum   page_checksum = 0;
             PageOffset page_offset   = 0;
@@ -239,15 +240,13 @@ void PageFile::MetaMergingReader::initialize()
         return;
     }
 
-    const int fd = PageUtil::openFile<true, false>(path);
+    auto underlying_file = page_file.file_provider->newRandomAccessFile(path, page_file.metaEncryptionPath());
     // File not exists.
-    if (unlikely(!fd))
+    if (unlikely(underlying_file->getFd() == -1))
         throw Exception("Try to read meta of " + page_file.toString() + ", but open file error. Path: " + path, ErrorCodes::LOGICAL_ERROR);
-    CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForRead};
-    SCOPE_EXIT({ ::close(fd); });
-
+    SCOPE_EXIT({ underlying_file->close(); });
     meta_buffer = (char *)page_file.alloc(meta_size);
-    PageUtil::readFile(fd, 0, meta_buffer, meta_size, path);
+    PageUtil::readFile(underlying_file, 0, meta_buffer, meta_size);
     status = Status::Opened;
 }
 
@@ -320,7 +319,8 @@ void PageFile::MetaMergingReader::moveNext()
         switch (write_type)
         {
         case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::UPSERT: {
+        case WriteBatch::WriteType::UPSERT:
+        {
             PageMetaFormat::PageFlags flags;
 
             auto      page_id = PageUtil::get<PageId>(pos);
@@ -366,12 +366,14 @@ void PageFile::MetaMergingReader::moveNext()
             }
             break;
         }
-        case WriteBatch::WriteType::DEL: {
+        case WriteBatch::WriteType::DEL:
+        {
             auto page_id = PageUtil::get<PageId>(pos);
             curr_edit.del(page_id);
             break;
         }
-        case WriteBatch::WriteType::REF: {
+        case WriteBatch::WriteType::REF:
+        {
             const auto ref_id  = PageUtil::get<PageId>(pos);
             const auto page_id = PageUtil::get<PageId>(pos);
             curr_edit.ref(ref_id, page_id);
@@ -394,21 +396,27 @@ void PageFile::MetaMergingReader::moveNext()
 // PageFile::Writer
 // =========================================================
 
-PageFile::Writer::Writer(PageFile & page_file_, bool sync_on_write_)
+PageFile::Writer::Writer(PageFile & page_file_, bool sync_on_write_, bool create_new_file)
     : page_file(page_file_),
       sync_on_write(sync_on_write_),
       data_file_path(page_file.dataPath()),
       meta_file_path(page_file.metaPath()),
+      data_file{nullptr},
+      meta_file{nullptr},
       last_write_time(Clock::now())
 {
     // Create data and meta file, prevent empty page folder from being removed by GC.
-    PageUtil::touchFile(data_file_path);
-    PageUtil::touchFile(meta_file_path);
+    data_file = page_file.file_provider->newWritableFile(
+        page_file.dataPath(), page_file.dataEncryptionPath(), create_new_file, create_new_file);
+    meta_file = page_file.file_provider->newWritableFile(
+        page_file.metaPath(), page_file.metaEncryptionPath(), create_new_file, create_new_file);
+    data_file->close();
+    meta_file->close();
 }
 
 PageFile::Writer::~Writer()
 {
-    if (!data_file_fd)
+    if (data_file->isClosed())
         return;
 
     closeFd();
@@ -418,11 +426,10 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
 {
     ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
 
-    if (!data_file_fd)
+    if (data_file->isClosed())
     {
-        data_file_fd = PageUtil::openFile<false>(data_file_path);
-        meta_file_fd = PageUtil::openFile<false>(meta_file_path);
-        fd_increment.changeTo(2);
+        data_file->open();
+        meta_file->open();
     }
 
     // TODO: investigate if not copy data into heap, write big pages can be faster?
@@ -432,14 +439,13 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
     SCOPE_EXIT({ page_file.free(meta_buf.begin(), meta_buf.size()); });
     SCOPE_EXIT({ page_file.free(data_buf.begin(), data_buf.size()); });
 
-    auto write_buf = [&](int fd, UInt64 offset, const std::string & path, ByteBuffer buf) {
-        PageUtil::writeFile(fd, offset, buf.begin(), buf.size(), path);
+    auto write_buf = [&](WritableFilePtr & file, UInt64 offset, const std::string & path, ByteBuffer buf) {
+        PageUtil::writeFile(file, offset, buf.begin(), buf.size(), path);
         if (sync_on_write)
-            PageUtil::syncFile(fd, path);
+            PageUtil::syncFile(file);
     };
-
-    write_buf(data_file_fd, page_file.data_file_pos, data_file_path, data_buf);
-    write_buf(meta_file_fd, page_file.meta_file_pos, meta_file_path, meta_buf);
+    write_buf(data_file, page_file.data_file_pos, data_file_path, data_buf);
+    write_buf(meta_file, page_file.meta_file_pos, meta_file_path, meta_buf);
 
     page_file.data_file_pos += data_buf.size();
     page_file.meta_file_pos += meta_buf.size();
@@ -452,7 +458,7 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
 
 void PageFile::Writer::tryCloseIdleFd(const Seconds & max_idle_time)
 {
-    if (max_idle_time.count() == 0 || !data_file_fd)
+    if (max_idle_time.count() == 0 || data_file->isClosed())
         return;
     if (Clock::now() - last_write_time >= max_idle_time)
         closeFd();
@@ -465,20 +471,15 @@ PageFileIdAndLevel PageFile::Writer::fileIdLevel() const
 
 void PageFile::Writer::closeFd()
 {
-    if (!data_file_fd)
+    if (data_file->isClosed())
         return;
 
     SCOPE_EXIT({
-        ::close(data_file_fd);
-        ::close(meta_file_fd);
-
-        fd_increment.changeTo(0);
-
-        meta_file_fd = 0;
-        data_file_fd = 0;
+        data_file->close();
+        meta_file->close();
     });
-    PageUtil::syncFile(data_file_fd, data_file_path);
-    PageUtil::syncFile(meta_file_fd, meta_file_path);
+    PageUtil::syncFile(data_file);
+    PageUtil::syncFile(meta_file);
 }
 
 // =========================================================
@@ -486,13 +487,14 @@ void PageFile::Writer::closeFd()
 // =========================================================
 
 PageFile::Reader::Reader(PageFile & page_file)
-    : data_file_path(page_file.dataPath()), data_file_fd(PageUtil::openFile<true>(data_file_path)), last_read_time(Clock::now())
+    : data_file_path(page_file.dataPath()),
+      data_file{page_file.file_provider->newRandomAccessFile(page_file.dataPath(), page_file.dataEncryptionPath())}, last_read_time(Clock::now())
 {
 }
 
 PageFile::Reader::~Reader()
 {
-    ::close(data_file_fd);
+    data_file->close();
 }
 
 PageMap PageFile::Reader::read(PageIdAndEntries & to_read)
@@ -522,7 +524,7 @@ PageMap PageFile::Reader::read(PageIdAndEntries & to_read)
     PageMap page_map;
     for (const auto & [page_id, entry] : to_read)
     {
-        PageUtil::readFile(data_file_fd, entry.offset, pos, entry.size, data_file_path);
+        PageUtil::readFile(data_file, entry.offset, pos, entry.size);
 
         if constexpr (PAGE_CHECKSUM_ON_READ)
         {
@@ -575,7 +577,7 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
     {
         auto && [page_id, entry] = *it;
 
-        PageUtil::readFile(data_file_fd, entry.offset, data_buf, entry.size, data_file_path);
+        PageUtil::readFile(data_file, entry.offset, data_buf, entry.size);
 
         if constexpr (PAGE_CHECKSUM_ON_READ)
         {
@@ -653,7 +655,7 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read)
             // TODO: Continuously fields can read by one system call.
             const auto [beg_offset, end_offset] = entry.getFieldOffsets(field_index);
             const auto size_to_read             = end_offset - beg_offset;
-            PageUtil::readFile(data_file_fd, entry.offset + beg_offset, write_offset, size_to_read, data_file_path);
+            PageUtil::readFile(data_file, entry.offset + beg_offset, write_offset, size_to_read);
             fields_offset_in_page.emplace(field_index, read_size_this_entry);
 
             if constexpr (PAGE_CHECKSUM_ON_READ)
@@ -705,19 +707,36 @@ bool PageFile::Reader::isIdle(const Seconds & max_idle_time)
 // PageFile
 // =========================================================
 
-PageFile::PageFile(PageFileId file_id_, UInt32 level_, const std::string & parent_path, PageFile::Type type_, bool is_create, Logger * log_)
-    : file_id(file_id_), level(level_), type(type_), parent_path(parent_path), data_file_pos(0), meta_file_pos(0), log(log_)
+PageFile::PageFile(PageFileId              file_id_,
+                   UInt32                  level_,
+                   const std::string &     parent_path,
+                   const FileProviderPtr & file_provider_,
+                   PageFile::Type          type_,
+                   bool                    is_create,
+                   Logger *                log_)
+    : file_id(file_id_),
+      level(level_),
+      type(type_),
+      parent_path(parent_path),
+      file_provider{file_provider_},
+      data_file_pos(0),
+      meta_file_pos(0),
+      log(log_)
 {
     if (is_create)
     {
         Poco::File file(folderPath());
         if (file.exists())
+        {
+            deleteEncryptionInfo();
             file.remove(true);
+        }
         file.createDirectories();
     }
 }
 
-std::pair<PageFile, PageFile::Type> PageFile::recover(const String & parent_path, const String & page_file_name, Logger * log)
+std::pair<PageFile, PageFile::Type>
+PageFile::recover(const String & parent_path, const FileProviderPtr & file_provider_, const String & page_file_name, Logger * log)
 {
 
     if (!startsWith(page_file_name, folder_prefix_formal) && !startsWith(page_file_name, folder_prefix_temp)
@@ -736,11 +755,12 @@ std::pair<PageFile, PageFile::Type> PageFile::recover(const String & parent_path
 
     PageFileId file_id = std::stoull(ss[1]);
     UInt32     level   = std::stoi(ss[2]);
-    PageFile   pf(file_id, level, parent_path, Type::Formal, /* is_create */ false, log);
+    PageFile   pf(file_id, level, parent_path, file_provider_, Type::Formal, /* is_create */ false, log);
     if (ss[0] == folder_prefix_temp)
     {
         LOG_INFO(log, "Temporary page file, ignored: " + page_file_name);
-        return {{}, Type::Temp};
+        pf.type = Type::Temp;
+        return {pf, Type::Temp};
     }
     else if (ss[0] == folder_prefix_legacy)
     {
@@ -787,19 +807,30 @@ std::pair<PageFile, PageFile::Type> PageFile::recover(const String & parent_path
     return {{}, Type::Invalid};
 }
 
-PageFile PageFile::newPageFile(PageFileId file_id, UInt32 level, const std::string & parent_path, PageFile::Type type, Logger * log)
+PageFile PageFile::newPageFile(PageFileId              file_id,
+                               UInt32                  level,
+                               const std::string &     parent_path,
+                               const FileProviderPtr & file_provider_,
+                               PageFile::Type          type,
+                               Logger *                log)
 {
-    return PageFile(file_id, level, parent_path, type, true, log);
+    return PageFile(file_id, level, parent_path, file_provider_, type, true, log);
 }
 
-PageFile PageFile::openPageFileForRead(PageFileId file_id, UInt32 level, const std::string & parent_path, PageFile::Type type, Logger * log)
+PageFile PageFile::openPageFileForRead(PageFileId              file_id,
+                                       UInt32                  level,
+                                       const std::string &     parent_path,
+                                       const FileProviderPtr & file_provider_,
+                                       PageFile::Type          type,
+                                       Logger *                log)
 {
-    return PageFile(file_id, level, parent_path, type, false, log);
+    return PageFile(file_id, level, parent_path, file_provider_, type, false, log);
 }
 
-bool PageFile::isPageFileExist(PageFileIdAndLevel file_id, const String & parent_path, Type type, Poco::Logger * log)
+bool PageFile::isPageFileExist(
+    PageFileIdAndLevel file_id, const String & parent_path, const FileProviderPtr & file_provider_, Type type, Poco::Logger * log)
 {
-    PageFile pf = openPageFileForRead(file_id.first, file_id.second, parent_path, type, log);
+    PageFile pf = openPageFileForRead(file_id.first, file_id.second, parent_path, file_provider_, type, log);
     return pf.isExist();
 }
 
@@ -807,9 +838,15 @@ void PageFile::setFormal()
 {
     if (type != Type::Temp)
         return;
+    auto old_meta_encryption_path = metaEncryptionPath();
+    auto old_data_encryption_path = dataEncryptionPath();
     Poco::File file(folderPath());
     type = Type::Formal;
+    file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());
+    file_provider->linkEncryptionInfo(old_data_encryption_path, dataEncryptionPath());
     file.renameTo(folderPath());
+    file_provider->deleteEncryptionInfo(old_meta_encryption_path);
+    file_provider->deleteEncryptionInfo(old_data_encryption_path);
 }
 
 size_t PageFile::setLegacy()
@@ -818,9 +855,14 @@ size_t PageFile::setLegacy()
         return 0;
     // Rename to legacy dir. Note that we can NOT remove the data part before
     // successfully rename to legacy status.
+    auto old_meta_encryption_path = metaEncryptionPath();
+    auto old_data_encryption_path = dataEncryptionPath();
     Poco::File formal_dir(folderPath());
     type = Type::Legacy;
+    file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());
     formal_dir.renameTo(folderPath());
+    file_provider->deleteEncryptionInfo(old_meta_encryption_path);
+    file_provider->deleteEncryptionInfo(old_data_encryption_path);
     // remove the data part
     return removeDataIfExists();
 }
@@ -839,9 +881,12 @@ size_t PageFile::setCheckpoint()
                             ErrorCodes::LOGICAL_ERROR);
     }
 
+    auto old_meta_encryption_path = metaEncryptionPath();
     Poco::File file(folderPath());
     type = Type::Checkpoint;
+    file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());
     file.renameTo(folderPath());
+    file_provider->deleteEncryptionInfo(old_meta_encryption_path);
     // Remove the data part, should be a emtpy file.
     return removeDataIfExists();
 }
@@ -852,7 +897,7 @@ size_t PageFile::removeDataIfExists() const
     if (auto data_file = Poco::File(dataPath()); data_file.exists())
     {
         bytes_removed = data_file.getSize();
-        data_file.remove();
+        file_provider->deleteFile(dataPath(), dataEncryptionPath());
     }
     return bytes_removed;
 }
@@ -864,16 +909,9 @@ void PageFile::destroy() const
     if (file.exists())
     {
         // remove meta first, then remove data
-        Poco::File meta_file(metaPath());
-        if (meta_file.exists())
-        {
-            meta_file.remove();
-        }
-        Poco::File data_file(dataPath());
-        if (data_file.exists())
-        {
-            data_file.remove();
-        }
+        file_provider->deleteFile(metaPath(), metaEncryptionPath());
+        file_provider->deleteFile(dataPath(), dataEncryptionPath());
+
         // drop dir
         file.remove(true);
     }

@@ -40,6 +40,7 @@ public:
                  column_cache_,
                  context.getSettingsRef().min_bytes_to_use_direct_io,
                  context.getSettingsRef().max_read_buffer_size,
+                 context.getFileProvider(),
                  expected_size)
     {
     }
