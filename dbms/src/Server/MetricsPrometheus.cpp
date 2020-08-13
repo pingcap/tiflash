@@ -43,8 +43,12 @@ private:
     {
         auto collected_metrics = std::vector<prometheus::MetricFamily>{};
 
-        auto && metrics = collectable.lock()->Collect();
-        collected_metrics.insert(collected_metrics.end(), std::make_move_iterator(metrics.begin()), std::make_move_iterator(metrics.end()));
+        auto collect = collectable.lock();
+        if (collect) {
+            auto &&metrics = collect->Collect();
+            collected_metrics.insert(collected_metrics.end(), std::make_move_iterator(metrics.begin()),
+                                     std::make_move_iterator(metrics.end()));
+        }
         return collected_metrics;
     }
 
