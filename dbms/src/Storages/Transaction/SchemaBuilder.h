@@ -68,6 +68,9 @@ private:
     void applyRenamePhysicalTable(TiDB::DBInfoPtr new_db_info, TiDB::TableInfo & new_table_info, ManageableStoragePtr storage);
 
     void applyExchangeTablePartition(const SchemaDiff & diff);
+
+    void applySetTiFlashReplica(TiDB::DBInfoPtr db_info, TableID table_id);
+    void applySetTiFlashReplica(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info, ManageableStoragePtr storage);
 };
 
 } // namespace DB
