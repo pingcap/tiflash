@@ -12,6 +12,7 @@
 #include <Poco/Net/HTTPServerRequest.h>
 #include <Poco/Net/HTTPServerResponse.h>
 #include <Poco/Net/SecureServerSocket.h>
+#include <Poco/Crypto/X509Certificate.h>
 #include <daemon/BaseDaemon.h>
 #include <prometheus/collectable.h>
 #include <prometheus/exposer.h>
@@ -87,7 +88,14 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
     Poco::Net::Context::Ptr context = new Poco::Net::Context(
         Poco::Net::Context::TLSV1_2_SERVER_USE, security_config.key_path, security_config.cert_path, security_config.ca_path);
 
-    context->enableExtendedCertificateVerification(false);
+    std::function<bool(const Poco::Crypto::X509Certificate &)> check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
+        if (security_config.allowed_common_names.empty()) {
+            return true;
+        }
+         return security_config.allowed_common_names.count(cert.commonName()) > 0;
+    };
+
+    context->setAdhocVerification(check_common_name);
 
     Poco::Net::SecureServerSocket socket(context);
 
