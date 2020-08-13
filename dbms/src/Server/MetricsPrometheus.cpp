@@ -52,7 +52,7 @@ private:
         return collected_metrics;
     }
 
-    const std::weak_ptr<prometheus::Collectable> & collectable;
+    std::weak_ptr<prometheus::Collectable> collectable;
 };
 
 class MetricHandlerFactory : public Poco::Net::HTTPRequestHandlerFactory
@@ -77,7 +77,7 @@ public:
     }
 
 private:
-    const std::weak_ptr<prometheus::Collectable> & collectable;
+    std::weak_ptr<prometheus::Collectable> collectable;
 };
 
 std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
