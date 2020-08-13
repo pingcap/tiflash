@@ -469,6 +469,46 @@ struct RowKeyRange
                            rowkey_column_size);
     }
 
+    inline void setStart(const RowKeyValue & value)
+    {
+        if (is_common_handle)
+        {
+            start = std::make_shared<String>(value.data, value.size);
+        }
+        else
+        {
+            int_start = value.int_value;
+            if (value.data != nullptr)
+                start = std::make_shared<String>(value.data, value.size);
+            else
+            {
+                std::stringstream ss;
+                DB::EncodeInt64(value.int_value, ss);
+                start = std::make_shared<String>(ss.str());
+            }
+        }
+    }
+
+    inline void setEnd(const RowKeyValue & value)
+    {
+        if (is_common_handle)
+        {
+            end = std::make_shared<String>(value.data, value.size);
+        }
+        else
+        {
+            int_end = value.int_value;
+            if (value.data != nullptr)
+                end = std::make_shared<String>(value.data, value.size);
+            else
+            {
+                std::stringstream ss;
+                DB::EncodeInt64(value.int_value, ss);
+                end = std::make_shared<String>(ss.str());
+            }
+        }
+    }
+
     inline bool intersect(const RowKeyRange & other) const { return max(other.start, start)->compare(*min(other.end, end)) < 0; }
 
     // [first, last_include]

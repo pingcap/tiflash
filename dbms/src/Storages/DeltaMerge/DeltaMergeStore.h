@@ -252,7 +252,7 @@ public:
     void write(const Context & db_context, const DB::Settings & db_settings, const Block & block);
 
     // Deprated
-    void deleteRange(const Context & db_context, const DB::Settings & db_settings, const HandleRange & delete_range);
+    void deleteRange(const Context & db_context, const DB::Settings & db_settings, const RowKeyRange & delete_range);
 
     BlockInputStreams readRaw(const Context &       db_context,
                               const DB::Settings &  db_settings,
@@ -264,7 +264,7 @@ public:
     BlockInputStreams read(const Context &       db_context,
                            const DB::Settings &  db_settings,
                            const ColumnDefines & columns_to_read,
-                           const HandleRanges &  sorted_ranges,
+                           const RowKeyRanges &  sorted_ranges,
                            size_t                num_streams,
                            UInt64                max_version,
                            const RSOperatorPtr & filter,
@@ -284,7 +284,7 @@ public:
     void mergeDeltaAll(const Context & context);
 
     /// Compact fregment packs into bigger one.
-    void compact(const Context & context, const HandleRange & range = HandleRange::newAll());
+    void compact(const Context & context, const RowKeyRange & range);
 
     /// Apply `commands` on `table_columns`
     void applyAlters(const AlterCommands &         commands, //

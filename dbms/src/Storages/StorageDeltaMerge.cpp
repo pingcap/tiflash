@@ -519,8 +519,11 @@ BlockInputStreams StorageDeltaMerge::read( //
         else
             LOG_DEBUG(log, "Rough set filter is disabled.");
 
+        RowKeyRanges rowkey_ranges;
+        for (auto & r : ranges)
+            rowkey_ranges.emplace_back(RowKeyRange::fromHandleRange(r));
 
-        auto streams = store->read(context, context.getSettingsRef(), columns_to_read, ranges, num_streams,
+        auto streams = store->read(context, context.getSettingsRef(), columns_to_read, rowkey_ranges, num_streams,
             /*max_version=*/mvcc_query_info.read_tso, rs_operator, max_block_size, parseSegmentSet(select_query.segment_expression_list));
 
         /// Ensure read_tso info after read.
@@ -539,14 +542,14 @@ void StorageDeltaMerge::flushCache(const Context & context, const DM::RowKeyRang
 
 void StorageDeltaMerge::mergeDelta(const Context & context) { store->mergeDeltaAll(context); }
 
-void StorageDeltaMerge::deleteRange(const DM::HandleRange & range_to_delete, const Settings & settings)
+void StorageDeltaMerge::deleteRange(const DM::RowKeyRange & range_to_delete, const Settings & settings)
 {
     auto metrics = global_context.getTiFlashMetrics();
     GET_METRIC(metrics, tiflash_storage_command_count, type_delete_range).Increment();
     return store->deleteRange(global_context, settings, range_to_delete);
 }
 
-size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM::HandleRange & range)
+size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM::RowKeyRange & range)
 {
     size_t rows = 0;
 
@@ -561,26 +564,27 @@ size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM
     return rows;
 }
 
-DM::HandleRange getRange(DM::DeltaMergeStorePtr & store, const Context & context, size_t total_rows, size_t delete_rows)
+DM::RowKeyRange getRange(DM::DeltaMergeStorePtr & store, const Context & context, size_t total_rows, size_t delete_rows)
 {
     auto start_index = rand() % (total_rows - delete_rows + 1);
 
-    DM::HandleRange range = DM::HandleRange::newAll();
+    DM::RowKeyRange range = DM::RowKeyRange::newAll(1, false);
     {
         ColumnDefines to_read{getExtraHandleColumnDefine()};
-        auto stream = store->read(context, context.getSettingsRef(), to_read, {DM::HandleRange::newAll()}, 1, MAX_UINT64, EMPTY_FILTER)[0];
+        auto stream
+            = store->read(context, context.getSettingsRef(), to_read, {DM::RowKeyRange::newAll(1, false)}, 1, MAX_UINT64, EMPTY_FILTER)[0];
         stream->readPrefix();
         Block block;
         size_t index = 0;
         while ((block = stream->read()))
         {
-            auto & data = toColumnVectorData<Handle>(block.getByPosition(0).column);
-            for (size_t i = 0; i < data.size(); ++i)
+            auto data = RowKeyColumn(block.getByPosition(0).column, false);
+            for (size_t i = 0; i < data.column->size(); ++i)
             {
                 if (index == start_index)
-                    range.start = data[i];
+                    range.setStart(data.getRowKeyValue(i));
                 if (index == start_index + delete_rows)
-                    range.end = data[i];
+                    range.setEnd(data.getRowKeyValue(i));
                 ++index;
             }
         }
@@ -592,7 +596,7 @@ DM::HandleRange getRange(DM::DeltaMergeStorePtr & store, const Context & context
 
 void StorageDeltaMerge::deleteRows(const Context & context, size_t delete_rows)
 {
-    size_t total_rows = getRows(store, context, DM::HandleRange::newAll());
+    size_t total_rows = getRows(store, context, DM::RowKeyRange::newAll(1, false));
     delete_rows = std::min(total_rows, delete_rows);
     auto delete_range = getRange(store, context, total_rows, delete_rows);
     size_t actual_delete_rows = getRows(store, context, delete_range);
@@ -601,7 +605,7 @@ void StorageDeltaMerge::deleteRows(const Context & context, size_t delete_rows)
 
     store->deleteRange(context, context.getSettingsRef(), delete_range);
 
-    size_t after_delete_rows = getRows(store, context, DM::HandleRange::newAll());
+    size_t after_delete_rows = getRows(store, context, DM::RowKeyRange::newAll(1, false));
     if (after_delete_rows != total_rows - delete_rows)
         LOG_ERROR(log, "Rows after delete range not match, expected: " << (total_rows - delete_rows) << ", got: " << after_delete_rows);
 }

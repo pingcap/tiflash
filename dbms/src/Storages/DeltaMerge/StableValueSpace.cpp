@@ -32,8 +32,7 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
         auto hash_salt   = dm_context->hash_salt;
         for (auto & file : files_)
         {
-            DMFilePackFilter pack_filter(
-                file, index_cache, hash_salt, range.toHandleRange(), EMPTY_FILTER, {}, dm_context->db_context.getFileProvider());
+            DMFilePackFilter pack_filter(file, index_cache, hash_salt, range, EMPTY_FILTER, {}, dm_context->db_context.getFileProvider());
             auto [file_valid_rows, file_valid_bytes] = pack_filter.validRowsAndBytes();
             rows += file_valid_rows;
             bytes += file_valid_bytes;
