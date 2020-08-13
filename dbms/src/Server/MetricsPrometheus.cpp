@@ -6,13 +6,13 @@
 #include <Common/TiFlashMetrics.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/Context.h>
+#include <Poco/Crypto/X509Certificate.h>
 #include <Poco/Net/Context.h>
 #include <Poco/Net/HTTPRequestHandler.h>
 #include <Poco/Net/HTTPRequestHandlerFactory.h>
 #include <Poco/Net/HTTPServerRequest.h>
 #include <Poco/Net/HTTPServerResponse.h>
 #include <Poco/Net/SecureServerSocket.h>
-#include <Poco/Crypto/X509Certificate.h>
 #include <daemon/BaseDaemon.h>
 #include <prometheus/collectable.h>
 #include <prometheus/exposer.h>
@@ -89,10 +89,11 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
         Poco::Net::Context::TLSV1_2_SERVER_USE, security_config.key_path, security_config.cert_path, security_config.ca_path);
 
     std::function<bool(const Poco::Crypto::X509Certificate &)> check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
-        if (security_config.allowed_common_names.empty()) {
+        if (security_config.allowed_common_names.empty())
+        {
             return true;
         }
-         return security_config.allowed_common_names.count(cert.commonName()) > 0;
+        return security_config.allowed_common_names.count(cert.commonName()) > 0;
     };
 
     context->setAdhocVerification(check_common_name);
