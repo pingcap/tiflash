@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Common/TiFlashSecurity.h>
+#include <Poco/Net/HTTPServer.h>
 #include <Poco/Util/Timer.h>
 #include <common/logger_useful.h>
 #include <prometheus/exposer.h>
@@ -22,7 +24,7 @@ using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 class MetricsPrometheus
 {
 public:
-    MetricsPrometheus(Context & context, const AsynchronousMetrics & async_metrics_);
+    MetricsPrometheus(Context & context, const AsynchronousMetrics & async_metrics_, const TiFlashSecurityConfig & config);
     ~MetricsPrometheus();
 
 private:
@@ -40,6 +42,8 @@ private:
     int metrics_interval;
     std::shared_ptr<prometheus::Gateway> gateway;
     std::shared_ptr<prometheus::Exposer> exposer;
+
+    std::shared_ptr<Poco::Net::HTTPServer> server;
 };
 
 } // namespace DB

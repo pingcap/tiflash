@@ -64,15 +64,25 @@ public:
             else
             {
                 has_tls_config = true;
-                LOG_INFO(log, "security config is set: ca path is " << ca_path << " cert path is " << cert_path << " key path is " << key_path );
+                LOG_INFO(
+                    log, "security config is set: ca path is " << ca_path << " cert path is " << cert_path << " key path is " << key_path);
             }
             if (config.has("security.cert_allowed_cn") && has_tls_config)
             {
                 String verify_cns = config.getString("security.cert_allowed_cn");
+                if (verify_cns.size() > 2 && verify_cns[0] == '[' && verify_cns[verify_cns.size() - 1] == ']')
+                {
+                    verify_cns = verify_cns.substr(1, verify_cns.size() - 2);
+                }
                 Poco::StringTokenizer string_tokens(verify_cns, ",");
                 for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
                 {
-                    allowed_common_names.insert(*it);
+                    std::string cn = *it;
+                    if (cn.size() > 2 && cn[0] == '\"' && cn[cn.size() - 1] == '\"')
+                    {
+                        cn = cn.substr(1, cn.size() - 2);
+                    }
+                    allowed_common_names.insert(std::move(cn));
                 }
             }
         }
@@ -132,4 +142,3 @@ private:
 };
 
 } // namespace DB
-
