@@ -261,6 +261,19 @@ struct DBInfo
 struct TableInfo;
 using TableInfoPtr = std::shared_ptr<TableInfo>;
 
+struct TiFlashReplicaInfo
+{
+    UInt64 count = 0;
+
+    /// Fields below are useless for tiflash now.
+    // Strings location_labels
+    // bool available
+    // std::vector<Int64> available_partition_ids;
+
+    Poco::JSON::Object::Ptr getJSONObject() const;
+    void deserialize(Poco::JSON::Object::Ptr & json);
+};
+
 struct TableInfo
 {
     TableInfo() = default;
@@ -294,6 +307,9 @@ struct TableInfo
     // If the table is sequence, we should ignore it.
     bool is_sequence = false;
     Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
+
+    // The TiFlash replica info persisted by TiDB
+    TiFlashReplicaInfo replica_info;
 
     ::TiDB::StorageEngine engine_type = ::TiDB::StorageEngine::UNSPECIFIED;
 

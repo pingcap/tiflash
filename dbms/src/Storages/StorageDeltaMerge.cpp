@@ -735,13 +735,28 @@ try
         {
             // find the column we are going to modify
             auto col_iter = command.findColumn(new_columns.ordinary); // just find in ordinary columns
-            if (!isSupportedDataTypeCast(col_iter->type, command.data_type))
+            if (unlikely(!isSupportedDataTypeCast(col_iter->type, command.data_type)))
             {
-                // check that lossy changes is forbidden
-                // check that changing the UNSIGNED attribute is forbidden
-                throw Exception("Storage engine " + getName() + " doesn't support lossy data type modify from " + col_iter->type->getName()
-                        + " to " + command.data_type->getName(),
-                    ErrorCodes::NOT_IMPLEMENTED);
+                // If this table has no tiflash replica, simply ignore this check because TiDB constraint
+                // on DDL is not strict. (https://github.com/pingcap/tidb/issues/17530)
+                // If users applied unsupported column type change on table with tiflash replica. To get rid of
+                // this exception and avoid of reading broken data, they have truncate that table.
+                if (table_info && table_info.value().get().replica_info.count == 0)
+                {
+                    LOG_WARNING(log,
+                        "Accept lossy column data type modification. Table (id:" + DB::toString(table_info.value().get().id)
+                            + ") modify column " + command.column_name + "(" + DB::toString(command.column_id) + ") from "
+                            + col_iter->type->getName() + " to " + command.data_type->getName());
+                }
+                else
+                {
+                    // check that lossy changes is forbidden
+                    // check that changing the UNSIGNED attribute is forbidden
+                    throw Exception("Storage engine " + getName() + " doesn't support lossy data type modification. Try to modify column "
+                            + command.column_name + "(" + DB::toString(command.column_id) + ") from " + col_iter->type->getName() + " to "
+                            + command.data_type->getName(),
+                        ErrorCodes::NOT_IMPLEMENTED);
+                }
             }
         }
     }
