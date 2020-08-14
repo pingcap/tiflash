@@ -207,7 +207,7 @@ struct TiDBConvertToString
         }
         else
             throw Exception(
-                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of first argument of function TiDB_cast",
+                "Illegal column " + block.getByPosition(arguments[0]).column->getName() + " of first argument of function tidb_cast",
                 ErrorCodes::ILLEGAL_COLUMN);
 
         if constexpr (return_nullable)
@@ -1188,7 +1188,10 @@ struct TiDBConvertToTime
                 StringRef string_value(&(*chars)[current_offset], string_size);
                 try
                 {
-                    MyDateTime datetime(parseMyDateTime(string_value.toString()).template safeGet<UInt64>());
+                    String str = string_value.toString();
+                    Field packed_uint_value = parseMyDateTime(str);
+                    UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
+                    MyDateTime datetime(packed_uint);
                     if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
                     {
                         MyDate date(datetime.year, datetime.month, datetime.day);
@@ -1196,13 +1199,13 @@ struct TiDBConvertToTime
                     }
                     else
                     {
-                        vec_to[i] = datetime.toPackedUInt();
+                        vec_to[i] = packed_uint;
                     }
                 }
                 catch (const Exception &)
                 {
                     // Fill NULL if cannot parse
-                    vec_null_map_to[i] = 1;
+                    (*vec_null_map_to)[i] = 1;
                 }
                 current_offset = next_offset;
             }
@@ -1232,7 +1235,7 @@ struct TiDBConvertToTime
                 catch (const Exception &)
                 {
                     // Cannot cast, fill with NULL
-                    vec_null_map_to[i] = 1;
+                   (*vec_null_map_to)[i] = 1;
                 }
             }
         }
@@ -1254,13 +1257,15 @@ struct TiDBConvertToTime
 
                 if (value_str == "0")
                 {
-                    vec_null_map_to[i] = 1;
+                    (*vec_null_map_to)[i] = 1;
                 }
                 else
                 {
                     try
                     {
-                        MyDateTime datetime(parseMyDateTime(value_str).template safeGet<UInt64>());
+                        Field packed_uint_value = parseMyDateTime(value_str);
+                        UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
+                        MyDateTime datetime(packed_uint);
                         if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
                         {
                             MyDate date(datetime.year, datetime.month, datetime.day);
@@ -1268,13 +1273,13 @@ struct TiDBConvertToTime
                         }
                         else
                         {
-                            vec_to[i] = datetime.toPackedUInt();
+                            vec_to[i] = packed_uint;
                         }
                     }
                     catch (const Exception &)
                     {
                         // Fill NULL if cannot parse
-                        vec_null_map_to[i] = 1;
+                        (*vec_null_map_to)[i] = 1;
                     }
                 }
             }
