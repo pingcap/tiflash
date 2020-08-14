@@ -48,4 +48,6 @@ private:
     ImutRegionRangePtr region_range = nullptr;
 };
 
+HandleRange<HandleID> getHandleRangeByTable(const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & rawKeys, TableID table_id);
+
 } // namespace DB

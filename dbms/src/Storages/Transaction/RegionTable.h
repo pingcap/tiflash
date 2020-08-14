@@ -40,12 +40,12 @@ class RegionTable : private boost::noncopyable
 public:
     struct InternalRegion
     {
-        InternalRegion(const RegionID region_id_, const HandleRange<HandleID> & range_in_table_ = {0, 0})
+        InternalRegion(const RegionID region_id_, const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & range_in_table_)
             : region_id(region_id_), range_in_table(range_in_table_)
         {}
 
         RegionID region_id;
-        HandleRange<HandleID> range_in_table;
+        std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> range_in_table;
         bool pause_flush = false;
         Int64 cache_bytes = 0;
         Timepoint last_flush_time = Clock::now();

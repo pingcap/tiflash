@@ -259,7 +259,7 @@ void dbgFuncDumpAllRegion(Context & context, TableID table_id, bool ignore_none,
     size_t size = 0;
     context.getTMTContext().getKVStore()->traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
         std::ignore = region_id;
-        auto range = region->getHandleRangeByTable(table_id);
+        auto range = getHandleRangeByTable(region->getRange()->rawKeys(), table_id);
         size += 1;
         std::stringstream ss;
 

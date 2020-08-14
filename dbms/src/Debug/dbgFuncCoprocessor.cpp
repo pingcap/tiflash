@@ -189,7 +189,7 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
             throw Exception("No such region", ErrorCodes::BAD_ARGUMENTS);
     }
 
-    auto handle_range = region->getHandleRangeByTable(table_id);
+    auto handle_range = getHandleRangeByTable(region->getRange()->rawKeys(), table_id);
     std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
     DecodedTiKVKey start_key = RecordKVFormat::genRawKey(table_id, handle_range.first.handle_id);
     DecodedTiKVKey end_key = RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id);
@@ -227,7 +227,7 @@ BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
     std::ignore = table_id;
 
     RegionPtr region = context.getTMTContext().getKVStore()->getRegion(region_id);
-    auto handle_range = region->getHandleRangeByTable(table_id);
+    auto handle_range = getHandleRangeByTable(region->getRange()->rawKeys(), table_id);
     std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
     DecodedTiKVKey start_key = RecordKVFormat::genRawKey(table_id, handle_range.first.handle_id);
     DecodedTiKVKey end_key = RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id);

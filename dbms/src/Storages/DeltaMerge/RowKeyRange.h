@@ -5,8 +5,10 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/Transaction/DatumCodec.h>
+#include <Storages/Transaction/RegionRangeKeys.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
+#include <Storages/Transaction/TiKVRecordFormat.h>
 #include <Storages/Transaction/Types.h>
 
 namespace DB::DM
@@ -573,6 +575,36 @@ struct RowKeyRange
         String end = ss.str();
         return RowKeyRange(std::make_shared<String>(start), std::make_shared<String>(end), handle_range.start, handle_range.end, false, 1);
     }
+
+    static RowKeyRange fromRegionRange(const std::shared_ptr<const RegionRangeKeys> & region_range,
+                                       const TableID                                  table_id,
+                                       bool                                           is_common_handle,
+                                       size_t                                         rowkey_column_size)
+    {
+        return fromRegionRange(region_range->rawKeys(), region_range->getMappedTableID(), table_id, is_common_handle, rowkey_column_size);
+    }
+    static RowKeyRange fromRegionRange(const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & raw_keys,
+                                       const TableID                                           table_id_in_raw_key,
+                                       const TableID                                           table_id,
+                                       bool                                                    is_common_handle,
+                                       size_t                                                  rowkey_column_size)
+    {
+        if (likely(table_id_in_raw_key == table_id))
+        {
+            auto & start_key = *raw_keys.first;
+            auto & end_key   = *raw_keys.second;
+            auto   start_ptr = std::make_shared<std::string>(start_key.begin() + RecordKVFormat::RAW_KEY_NO_HANDLE_SIZE, start_key.end());
+            auto   end_ptr   = std::make_shared<std::string>(end_key.begin() + RecordKVFormat::RAW_KEY_NO_HANDLE_SIZE, end_key.end());
+            return RowKeyRange(start_ptr, end_ptr, is_common_handle, rowkey_column_size);
+        }
+        else
+        {
+            /// if table id is not the same, just return none range
+            /// maybe should throw exception since it should not happen
+            return newNone(is_common_handle, rowkey_column_size);
+        }
+    }
+
 
     inline String toString() const { return rangeToString(*this); }
 

@@ -31,6 +31,7 @@ struct TiKVRangeKey : boost::noncopyable
     TiKVKey key;
 };
 
+using DecodedTiKVKeyPtr = std::shared_ptr<DecodedTiKVKey>;
 class RegionRangeKeys : boost::noncopyable
 {
 public:
@@ -38,16 +39,15 @@ public:
 
     const RegionRange & comparableKeys() const;
     static RegionRange makeComparableKeys(TiKVKey && start_key, TiKVKey && end_key);
-    const std::pair<DecodedTiKVKey, DecodedTiKVKey> & rawKeys() const;
-    HandleRange<HandleID> getHandleRangeByTable(const TableID table_id) const;
+    const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & rawKeys() const;
     explicit RegionRangeKeys(TiKVKey && start_key, TiKVKey && end_key);
     TableID getMappedTableID() const;
 
 private:
     RegionRange ori;
-    std::pair<DecodedTiKVKey, DecodedTiKVKey> raw;
+    std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> raw;
     TableID mapped_table_id;
-    HandleRange<HandleID> mapped_handle_range;
+    //HandleRange<HandleID> mapped_handle_range;
 };
 
 } // namespace DB

@@ -410,7 +410,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
             {
                 regions_executor_data.emplace_back(
                         RegionQueryInfo{id, region->version(), region->confVer(),
-                                        region->getHandleRangeByTable(data.table_info->id), {}});
+                                        getHandleRangeByTable(region->getRange()->rawKeys(), data.table_info->id), {}});
             }
         }
 

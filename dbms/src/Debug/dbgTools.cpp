@@ -266,7 +266,7 @@ void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
 
     // Using the region meta's table ID rather than table_info's, as this could be a partition table so that the table ID should be partition ID.
     const auto range = region->getRange();
-    TableID table_id = RecordKVFormat::getTableId(range->rawKeys().first);
+    TableID table_id = RecordKVFormat::getTableId(*range->rawKeys().first);
 
     TiKVKey key = RecordKVFormat::genKey(table_id, handle_id);
     std::stringstream ss;
@@ -430,7 +430,7 @@ void concurrentBatchInsert(const TiDB::TableInfo & table_info, Int64 concurrent_
     tmt.getKVStore()->traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
         curr_max_region_id = (curr_max_region_id == InvalidRegionID) ? region_id : std::max<RegionID>(curr_max_region_id, region_id);
         const auto range = region->getRange();
-        curr_max_handle_id = std::max(RecordKVFormat::getHandle(range->rawKeys().second), curr_max_handle_id);
+        curr_max_handle_id = std::max(RecordKVFormat::getHandle(*range->rawKeys().second), curr_max_handle_id);
     });
 
     Int64 key_num_each_region = flush_num * batch_num;
@@ -476,7 +476,7 @@ Int64 concurrentRangeOperate(
     for (auto region : regions)
     {
         const auto range = region->getRange();
-        const auto & [ss, ee] = range->getHandleRangeByTable(table_info.id);
+        const auto & [ss, ee] = getHandleRangeByTable(range->rawKeys(), table_info.id);
         TiKVRange::Handle handle_begin = std::max<TiKVRange::Handle>(ss, start_handle);
         TiKVRange::Handle handle_end = std::min<TiKVRange::Handle>(ee, end_handle);
         if (handle_end <= handle_begin)

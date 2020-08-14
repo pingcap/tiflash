@@ -142,7 +142,7 @@ std::pair<RegionDataReadInfoList, RegionException::RegionReadStatus> resolveLock
             if (version != region_version || conf_ver != conf_version)
                 return {{}, RegionException::VERSION_ERROR};
 
-            handle_range = key_range->getHandleRangeByTable(table_id);
+            handle_range = getHandleRangeByTable(key_range->rawKeys(), table_id);
         }
 
         /// Deal with locks.

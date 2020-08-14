@@ -56,8 +56,8 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
         {
             if (region == nullptr)
                 continue;
-            regions_info.emplace_back(
-                RegionQueryInfo{id, region->version(), region->confVer(), region->getHandleRangeByTable(table_id), {}});
+            regions_info.emplace_back(RegionQueryInfo{
+                id, region->version(), region->confVer(), getHandleRangeByTable(region->getRange()->rawKeys(), table_id), {}});
         }
     }
 

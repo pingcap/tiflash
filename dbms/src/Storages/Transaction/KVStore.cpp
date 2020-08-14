@@ -92,7 +92,6 @@ void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
     if (tmt.isBgFlushDisabled())
     {
         auto table_id = region.getMappedTableID();
-        auto handle_range = region.getHandleRangeByTable(table_id);
         auto storage = tmt.getStorages().get(table_id);
         if (storage == nullptr)
         {
@@ -101,7 +100,7 @@ void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
                     + " with table id: " + DB::toString(table_id) + ", ignored");
             return;
         }
-        storage->flushCache(tmt.getContext(), handle_range);
+        storage->flushCache(tmt.getContext(), region);
     }
 }
 

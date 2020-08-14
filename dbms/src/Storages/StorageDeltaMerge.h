@@ -54,9 +54,11 @@ public:
         flushCache(context, DM::RowKeyRange::newAll(is_common_handle, rowkey_columns->size()));
     }
 
-    void flushCache(const Context & context, const DB::HandleRange<HandleID> & range_to_flush) override
+    void flushCache(const Context & context, const Region & region) override
     {
-        flushCache(context, DM::RowKeyRange::fromHandleRange(toDMHandleRange(range_to_flush)));
+        flushCache(context,
+            DM::RowKeyRange::fromRegionRange(
+                region.getRange(), region.getRange()->getMappedTableID(), is_common_handle, rowkey_columns->size()));
     }
 
     void flushCache(const Context & context, const DM::RowKeyRange & range_to_flush);
@@ -103,6 +105,11 @@ public:
     void deleteRows(const Context &, size_t rows) override;
 
     const DM::DeltaMergeStorePtr & getStore() { return store; }
+
+    bool isCommonHandle() const override { return is_common_handle; }
+
+    size_t getRowKeyColumnSize() const override { return rowkey_columns->size(); }
+
 
 protected:
     StorageDeltaMerge(const String & path_,

@@ -37,7 +37,8 @@ MakeRegionQueryInfos(const std::unordered_map<RegionID, RegionInfo> & dag_region
     {
         if (r.key_ranges.empty())
         {
-            throw TiFlashException("Income key ranges is empty for region: " + std::to_string(r.region_id), Errors::Coprocessor::BadRequest);
+            throw TiFlashException(
+                "Income key ranges is empty for region: " + std::to_string(r.region_id), Errors::Coprocessor::BadRequest);
         }
         if (region_force_retry.count(id))
         {
@@ -57,7 +58,7 @@ MakeRegionQueryInfos(const std::unordered_map<RegionID, RegionInfo> & dag_region
             info.region_id = id;
             info.version = r.region_version;
             info.conf_version = r.region_conf_version;
-            info.range_in_table = region_range->getHandleRangeByTable(table_id);
+            info.range_in_table = getHandleRangeByTable(region_range->rawKeys(), table_id);
             for (const auto & p : r.key_ranges)
             {
                 TiKVRange::Handle start = TiKVRange::getRangeHandle<true>(p.first, table_id);

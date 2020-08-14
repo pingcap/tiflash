@@ -148,8 +148,6 @@ public:
     /// version, conf_version, range
     std::tuple<RegionVersion, RegionVersion, ImutRegionRangePtr> dumpVersionRange() const;
 
-    HandleRange<HandleID> getHandleRangeByTable(TableID table_id) const;
-
     void assignRegion(Region && new_region);
 
     using HandleMap = std::unordered_map<HandleID, std::tuple<Timestamp, UInt8>>;
