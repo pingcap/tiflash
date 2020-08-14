@@ -18,14 +18,23 @@ namespace ErrorCodes
 extern const int NOT_IMPLEMENTED;
 }
 
+constexpr char tls_err_msg[] = "common name check is failed";
+
 FlashService::FlashService(IServer & server_)
-    : server(server_), metrics(server.context().getTiFlashMetrics()), log(&Logger::get("FlashService"))
+    : server(server_),
+      metrics(server.context().getTiFlashMetrics()),
+      security_config(server_.securityConfig()),
+      log(&Logger::get("FlashService"))
 {}
 
 grpc::Status FlashService::Coprocessor(
     grpc::ServerContext * grpc_context, const coprocessor::Request * request, coprocessor::Response * response)
 {
     GET_METRIC(metrics, tiflash_coprocessor_request_count, type_cop).Increment();
+    if (!security_config.checkGrpcContext(grpc_context))
+    {
+        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
+    }
     auto start_time = std::chrono::system_clock::now();
     SCOPE_EXIT({
         std::chrono::duration<double> duration_sec = std::chrono::system_clock::now() - start_time;
@@ -55,6 +64,11 @@ grpc::Status FlashService::Coprocessor(
 {
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling coprocessor request: " << request->DebugString());
 
+    if (!security_config.checkGrpcContext(grpc_context))
+    {
+        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
+    }
+
     GET_METRIC(metrics, tiflash_coprocessor_request_count, type_super_batch).Increment();
     Stopwatch watch;
     SCOPE_EXIT({ GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_super_batch).Observe(watch.elapsedSeconds()); });
@@ -77,6 +91,11 @@ grpc::Status FlashService::Coprocessor(
 grpc::Status FlashService::BatchCommands(
     grpc::ServerContext * grpc_context, grpc::ServerReaderWriter<::tikvpb::BatchCommandsResponse, tikvpb::BatchCommandsRequest> * stream)
 {
+    if (!security_config.checkGrpcContext(grpc_context))
+    {
+        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
+    }
+
     auto [context, status] = createDBContext(grpc_context);
     if (!status.ok())
     {

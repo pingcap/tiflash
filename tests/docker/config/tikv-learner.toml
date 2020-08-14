@@ -12,6 +12,8 @@
 
 [server]
 engine-addr = "tiflash0:3930"
+status-addr = "0.0.0.0:20181"
+advertise-status-addr = "tiflash0:20181"
 
 [storage]
 

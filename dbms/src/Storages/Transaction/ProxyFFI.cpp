@@ -143,7 +143,8 @@ FsStats HandleComputeFsStats(TiFlashServer * server)
 TiFlashStatus HandleGetTiFlashStatus(TiFlashServer * server) { return server->status.load(); }
 
 bool TiFlashRaftProxyHelper::checkServiceStopped() const { return fn_handle_check_service_stopped(proxy_ptr); }
-bool TiFlashRaftProxyHelper::checkEncryptionEnabled() const { return fn_handle_enable_encryption(proxy_ptr); }
+bool TiFlashRaftProxyHelper::checkEncryptionEnabled() const { return fn_is_encryption_enabled(proxy_ptr); }
+EncryptionMethod TiFlashRaftProxyHelper::getEncryptionMethod() const { return fn_encryption_method(proxy_ptr); }
 FileEncryptionInfo TiFlashRaftProxyHelper::getFile(std::string_view view) const { return fn_handle_get_file(proxy_ptr, view); }
 FileEncryptionInfo TiFlashRaftProxyHelper::newFile(std::string_view view) const { return fn_handle_new_file(proxy_ptr, view); }
 FileEncryptionInfo TiFlashRaftProxyHelper::deleteFile(std::string_view view) const { return fn_handle_delete_file(proxy_ptr, view); }
@@ -199,6 +200,20 @@ void GcPreHandledSnapshot(TiFlashServer *, void * res)
 {
     PreHandleSnapshotRes * snap = reinterpret_cast<PreHandleSnapshotRes *>(res);
     delete snap;
+}
+
+void GcCppString(TiFlashServer *, TiFlashRawString s) { delete s; }
+
+const char * IntoEncryptionMethodName(EncryptionMethod method)
+{
+    static const char * EncryptionMethodName[] = {
+        "Unknown",
+        "Plaintext",
+        "Aes128Ctr",
+        "Aes192Ctr",
+        "Aes256Ctr",
+    };
+    return EncryptionMethodName[static_cast<uint8_t>(method)];
 }
 
 } // namespace DB
