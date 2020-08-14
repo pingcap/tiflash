@@ -814,7 +814,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
                     TiKVKey start_key = RecordKVFormat::encodeAsTiKVKey(region.start_key());
                     TiKVKey end_key = RecordKVFormat::encodeAsTiKVKey(region.end_key());
                     RegionRangeKeys region_range(std::move(start_key), std::move(end_key));
-                    info.range_in_table = getHandleRangeByTable(region_range.rawKeys(), managed_storage->getTableInfo().id);
+                    info.range_in_table = region_range.rawKeys();
                 }
                 query_info.mvcc_query_info->regions_query_info.push_back(info);
             }

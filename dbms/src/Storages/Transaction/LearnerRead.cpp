@@ -56,8 +56,7 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
         {
             if (region == nullptr)
                 continue;
-            regions_info.emplace_back(RegionQueryInfo{
-                id, region->version(), region->confVer(), getHandleRangeByTable(region->getRange()->rawKeys(), table_id), {}});
+            regions_info.emplace_back(RegionQueryInfo{id, region->version(), region->confVer(), region->getRange()->rawKeys(), {}});
         }
     }
 
@@ -103,9 +102,8 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
                 region_status = status;
                 LOG_WARNING(log,
                     "Check memory cache, region " << region_id << ", version " << region_to_query.version << ", handle range ["
-                                                  << region_to_query.range_in_table.first.toString() << ", "
-                                                  << region_to_query.range_in_table.second.toString() << ") , status "
-                                                  << RegionException::RegionReadStatusString(status));
+                                                  << *region_to_query.range_in_table.first << ", " << *region_to_query.range_in_table.second
+                                                  << ") , status " << RegionException::RegionReadStatusString(status));
                 return;
             }
 
@@ -153,8 +151,8 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
                 {
                     LOG_WARNING(log,
                         "Check memory cache, region " << region_id << ", version " << region_to_query.version << ", handle range ["
-                                                      << region_to_query.range_in_table.first.toString() << ", "
-                                                      << region_to_query.range_in_table.second.toString() << ") , status "
+                                                      << *region_to_query.range_in_table.first << ", "
+                                                      << *region_to_query.range_in_table.second << ") , status "
                                                       << RegionException::RegionReadStatusString(status));
                     region_status = status;
                 }
@@ -212,8 +210,8 @@ void validateQueryInfo(
         {
             LOG_WARNING(log,
                 "Check after read from Storage, region " << region_query_info.region_id << ", version " << region_query_info.version //
-                                                         << ", handle range [" << region_query_info.range_in_table.first.toString() << ", "
-                                                         << region_query_info.range_in_table.second.toString() << "), status "
+                                                         << ", handle range [" << *region_query_info.range_in_table.first << ", "
+                                                         << *region_query_info.range_in_table.second << "), status "
                                                          << RegionException::RegionReadStatusString(status));
             // throw region exception and let TiDB retry
             throwRetryRegion(regions_query_info, status);

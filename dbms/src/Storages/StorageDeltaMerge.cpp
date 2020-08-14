@@ -483,20 +483,21 @@ BlockInputStreams StorageDeltaMerge::read( //
                 if (!region.required_handle_ranges.empty())
                 {
                     for (const auto & range : region.required_handle_ranges)
-                        ss << region.region_id << "[" << range.first.toString() << "," << range.second.toString() << "),";
+                        ss << region.region_id << "[" << *range.first << "," << *range.second << "),";
                 }
                 else
                 {
                     /// only used for test cases
                     const auto & range = region.range_in_table;
-                    ss << region.region_id << "[" << range.first.toString() << "," << range.second.toString() << "),";
+                    ss << region.region_id << "[" << *range.first << "," << *range.second << "),";
                 }
             }
             str_query_ranges = ss.str();
             LOG_TRACE(log, "reading ranges: orig, " << str_query_ranges);
         }
 
-        HandleRanges ranges = getQueryRanges(mvcc_query_info.regions_query_info);
+        RowKeyRanges ranges
+            = getQueryRanges(mvcc_query_info.regions_query_info, tidb_table_info.id, is_common_handle, rowkey_columns->size());
 
         if (log->trace())
         {
@@ -547,11 +548,7 @@ BlockInputStreams StorageDeltaMerge::read( //
         else
             LOG_DEBUG(log, "Rough set filter is disabled.");
 
-        RowKeyRanges rowkey_ranges;
-        for (auto & r : ranges)
-            rowkey_ranges.emplace_back(RowKeyRange::fromHandleRange(r));
-
-        auto streams = store->read(context, context.getSettingsRef(), columns_to_read, rowkey_ranges, num_streams,
+        auto streams = store->read(context, context.getSettingsRef(), columns_to_read, ranges, num_streams,
             /*max_version=*/mvcc_query_info.read_tso, rs_operator, max_block_size, parseSegmentSet(select_query.segment_expression_list));
 
         /// Ensure read_tso info after read.

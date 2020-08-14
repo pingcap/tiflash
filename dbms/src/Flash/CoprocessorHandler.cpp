@@ -31,14 +31,14 @@ CoprocessorHandler::CoprocessorHandler(
     : cop_context(cop_context_), cop_request(cop_request_), cop_response(cop_response_), log(&Logger::get("CoprocessorHandler"))
 {}
 
-std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> CoprocessorHandler::GenCopKeyRange(
+std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> CoprocessorHandler::GenCopKeyRange(
     const ::google::protobuf::RepeatedPtrField<::coprocessor::KeyRange> & ranges)
 {
-    std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
+    std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges;
     for (auto & range : ranges)
     {
-        DecodedTiKVKey start(std::string(range.start()));
-        DecodedTiKVKey end(std::string(range.end()));
+        DecodedTiKVKeyPtr start = std::make_shared<DecodedTiKVKey>(std::string(range.start()));
+        DecodedTiKVKeyPtr end = std::make_shared<DecodedTiKVKey>(std::string(range.end()));
         key_ranges.emplace_back(std::make_pair(std::move(start), std::move(end)));
     }
     return key_ranges;
@@ -61,8 +61,8 @@ grpc::Status CoprocessorHandler::execute()
                 dag_request.ParseFromString(cop_request->data());
                 LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
                 if (dag_request.has_is_rpn_expr() && dag_request.is_rpn_expr())
-                    throw TiFlashException("DAG request with rpn expression is not supported in TiFlash",
-                        Errors::Coprocessor::Unimplemented);
+                    throw TiFlashException(
+                        "DAG request with rpn expression is not supported in TiFlash", Errors::Coprocessor::Unimplemented);
                 tipb::SelectResponse dag_response;
                 std::unordered_map<RegionID, RegionInfo> regions;
                 const std::unordered_set<UInt64> bypass_lock_ts(

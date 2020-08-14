@@ -315,7 +315,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         for (auto & info : region_retry)
         {
             for (auto & range : info.second.key_ranges)
-                ranges.emplace_back(range.first, range.second);
+                ranges.emplace_back(*range.first, *range.second);
         }
         sort(ranges.begin(), ranges.end());
         executeRemoteQueryImpl(pipeline, ranges, dag_req, schema);
