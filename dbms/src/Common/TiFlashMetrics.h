@@ -74,6 +74,12 @@ namespace DB
         F(type_seg_split, {{"type", "seg_split"}}, ExpBuckets{0.0005, 2, 20}),                                                            \
         F(type_seg_merge, {{"type", "seg_merge"}}, ExpBuckets{0.0005, 2, 20}),                                                            \
         F(type_place_index_update, {{"type", "place_index_update"}}, ExpBuckets{0.0005, 2, 20}))                                          \
+    M(tiflash_storage_throughput, "Calculate the throughput of tasks of storage ", Counter,                       /**/                    \
+        F(type_write, {"type", "write"}),                                                                         /**/                    \
+        F(type_delta_merge, {"type", "delta_merge"}))                                                             /**/                    \
+    M(tiflash_storage_write_stall_duration_seconds, "The write stall duration of storage, in seconds", Histogram, /**/                    \
+        F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}),                                            /**/                    \
+        F(type_delete_range, {{"type", "delete_range"}}, ExpBuckets{0.0005, 2, 20}))                              /**/                    \
     M(tiflash_storage_page_gc_count, "Total number of page's gc execution.", Counter, F(type_exec, {"type", "exec"}),                     \
         F(type_low_write, {"type", "low_write"}))                                                                                         \
     M(tiflash_storage_page_gc_duration_seconds, "Bucketed histogram of page's gc task duration", Histogram,                               \

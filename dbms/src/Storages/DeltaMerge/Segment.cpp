@@ -50,6 +50,13 @@ extern const Event DMDeltaMergeNS;
 
 } // namespace ProfileEvents
 
+namespace CurrentMetrics
+{
+extern const Metric DT_DeltaCompact;
+extern const Metric DT_DeltaFlush;
+extern const Metric DT_PlaceIndexUpdate;
+} // namespace CurrentMetrics
+
 namespace DB
 {
 
@@ -1002,6 +1009,7 @@ void Segment::check(DMContext &, const String &) const {}
 
 bool Segment::flushCache(DMContext & dm_context)
 {
+    CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_DeltaFlush};
     GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_delta_flush).Increment();
     Stopwatch watch;
     SCOPE_EXIT(
@@ -1012,6 +1020,7 @@ bool Segment::flushCache(DMContext & dm_context)
 
 bool Segment::compactDelta(DMContext & dm_context)
 {
+    CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_DeltaCompact};
     GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_delta_compact).Increment();
     Stopwatch watch;
     SCOPE_EXIT(
@@ -1135,6 +1144,7 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(const DMContext &         dm
     if (!delta_snap->shouldPlace(dm_context, my_delta_index, range, relevant_range, max_version))
         return {my_delta_index, false};
 
+    CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_PlaceIndexUpdate};
     GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_place_index_update).Increment();
     Stopwatch watch;
     SCOPE_EXIT({
