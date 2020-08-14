@@ -36,6 +36,9 @@ struct SegmentSnapshot : private boost::noncopyable
     StableSnapshotPtr stable;
 
     SegmentSnapshot(const DeltaSnapshotPtr & delta_, const StableSnapshotPtr & stable_) : delta(delta_), stable(stable_) {}
+
+    UInt64 getBytes() { return delta->getBytes() + stable->getBytes(); }
+    UInt64 getRows() { return delta->getRows() + stable->getRows(); }
 };
 
 /// A segment contains many rows of a table. A table is split into segments by consecutive ranges.
