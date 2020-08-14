@@ -1235,7 +1235,7 @@ struct TiDBConvertToTime
                 catch (const Exception &)
                 {
                     // Cannot cast, fill with NULL
-                   (*vec_null_map_to)[i] = 1;
+                    (*vec_null_map_to)[i] = 1;
                 }
             }
         }
@@ -1466,7 +1466,7 @@ private:
                     block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
             };
         /// cast as real
-        if (checkDataType<DataTypeFloat64>(to_type.get()))
+        if (checkDataType<DataTypeFloat64>(to_type.get()) || checkDataType<DataTypeFloat32>(to_type.get()))
             return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_,
                        const Context & context_) {
                 if (hasUnsignedFlag(tidb_tp_))
