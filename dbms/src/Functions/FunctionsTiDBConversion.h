@@ -648,7 +648,7 @@ struct TiDBConvertToFloat
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
 
-        /// NOTICE: Since ToFieldType only can be Float32 or Float64, convert from_value to Float64 and then implicitly cast to ToFieldType is fine. 
+        /// NOTICE: Since ToFieldType only can be Float32 or Float64, convert from_value to Float64 and then implicitly cast to ToFieldType is fine.
         auto col_to = ColumnVector<ToFieldType>::create();
         typename ColumnVector<ToFieldType>::Container & vec_to = col_to->getData();
         vec_to.resize(size);
@@ -1293,15 +1293,12 @@ struct TiDBConvertToTime
             const auto * col_from = checkAndGetColumn<ColumnDecimal<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
             const typename ColumnDecimal<FromFieldType>::Container & vec_from = col_from->getData();
 
-            String result_buffer;
 
             for (size_t i = 0; i < size; i++)
             {
-                {
-                    WriteBufferFromString wb(result_buffer);
-                    FormatImpl<FromDataType>::execute(vec_from[i], wb, &type, nullptr);
-                }
-                MyDateTime datetime(parseMyDateTime(result_buffer).template safeGet<UInt64>());
+                const FromFieldType & value = vec_from[i];
+                String value_str = value.toString(type.getScale());
+                MyDateTime datetime(parseMyDateTime(value_str).template safeGet<UInt64>());
                 if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
                 {
                     MyDate date(datetime.year, datetime.month, datetime.day);
