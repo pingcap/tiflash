@@ -532,10 +532,12 @@ struct TiDBConvertToInteger
 };
 
 /// cast int/real/decimal/time/string as real
-template <typename FromDataType, bool return_nullable, bool to_unsigned>
+template <typename FromDataType, typename ToDataType, bool return_nullable, bool to_unsigned>
 struct TiDBConvertToFloat
 {
+    static_assert(std::is_same_v<ToDataType, DataTypeFloat32> || std::is_same_v<ToDataType, DataTypeFloat64>);
     using FromFieldType = typename FromDataType::FieldType;
+    using ToFieldType = typename ToDataType::FieldType;
 
     static Float64 produceTargetFloat64(Float64 value, bool need_truncate, Float64 shift, Float64 max_f, const Context & context)
     {
@@ -640,13 +642,15 @@ struct TiDBConvertToFloat
         Float64 f = strtod(float_string.data, nullptr);
         return produceTargetFloat64(f, need_truncate, shift, max_f, context);
     }
+
     static void execute(
         Block & block, const ColumnNumbers & arguments, size_t result, bool, const tipb::FieldType & tp, const Context & context)
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
 
-        auto col_to = ColumnVector<Float64>::create();
-        typename ColumnVector<Float64>::Container & vec_to = col_to->getData();
+        /// NOTICE: Since ToFieldType only can be Float32 or Float64, convert from_value to Float64 and then implicitly cast to ToFieldType is fine. 
+        auto col_to = ColumnVector<ToFieldType>::create();
+        typename ColumnVector<ToFieldType>::Container & vec_to = col_to->getData();
         vec_to.resize(size);
 
         ColumnUInt8::MutablePtr col_null_map_to;
@@ -1466,17 +1470,31 @@ private:
                     block, arguments, result, decimal_type->getPrec(), decimal_type->getScale(), in_union_, tidb_tp_, context_);
             };
         /// cast as real
-        if (checkDataType<DataTypeFloat64>(to_type.get()) || checkDataType<DataTypeFloat32>(to_type.get()))
+        if (checkDataType<DataTypeFloat64>(to_type.get()))
             return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_,
                        const Context & context_) {
                 if (hasUnsignedFlag(tidb_tp_))
                 {
-                    TiDBConvertToFloat<FromDataType, return_nullable, true>::execute(
+                    TiDBConvertToFloat<FromDataType, DataTypeFloat64, return_nullable, true>::execute(
                         block, arguments, result, in_union_, tidb_tp_, context_);
                 }
                 else
                 {
-                    TiDBConvertToFloat<FromDataType, return_nullable, false>::execute(
+                    TiDBConvertToFloat<FromDataType, DataTypeFloat64, return_nullable, false>::execute(
+                        block, arguments, result, in_union_, tidb_tp_, context_);
+                }
+            };
+        if (checkDataType<DataTypeFloat32>(to_type.get()))
+            return [](Block & block, const ColumnNumbers & arguments, const size_t result, bool in_union_, const tipb::FieldType & tidb_tp_,
+                       const Context & context_) {
+                if (hasUnsignedFlag(tidb_tp_))
+                {
+                    TiDBConvertToFloat<FromDataType, DataTypeFloat32, return_nullable, true>::execute(
+                        block, arguments, result, in_union_, tidb_tp_, context_);
+                }
+                else
+                {
+                    TiDBConvertToFloat<FromDataType, DataTypeFloat32, return_nullable, false>::execute(
                         block, arguments, result, in_union_, tidb_tp_, context_);
                 }
             };
