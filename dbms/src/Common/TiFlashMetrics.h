@@ -76,7 +76,9 @@ namespace DB
         F(type_place_index_update, {{"type", "place_index_update"}}, ExpBuckets{0.0005, 2, 20}))                                          \
     M(tiflash_storage_throughput, "Calculate the throughput of tasks of storage ", Counter,                       /**/                    \
         F(type_write, {"type", "write"}),                                                                         /**/                    \
-        F(type_delta_merge, {"type", "delta_merge"}))                                                             /**/                    \
+        F(type_delta_merge, {"type", "delta_merge"}),                                                             /**/                    \
+        F(type_split, {"type", "split"}),                                                                         /**/                    \
+        F(type_merge, {"type", "merge"}))                                                                         /**/                    \
     M(tiflash_storage_write_stall_duration_seconds, "The write stall duration of storage, in seconds", Histogram, /**/                    \
         F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}),                                            /**/                    \
         F(type_delete_range, {{"type", "delete_range"}}, ExpBuckets{0.0005, 2, 20}))                              /**/                    \
