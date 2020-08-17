@@ -3526,7 +3526,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_storage_throughput{instance=~\"$instance\", type=\"write\"}[5m]))",
+              "expr": "sum(rate(tiflash_storage_throughput{instance=~\"$instance\", type=\"write\"}[1m]))",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 1,
@@ -3535,7 +3535,7 @@
               "step": 10
             },
             {
-              "expr": "sum(rate(tiflash_storage_throughput{instance=~\"$instance\", type!=\"write\"}[5m]))",
+              "expr": "sum(rate(tiflash_storage_throughput{instance=~\"$instance\", type!=\"write\"}[1m]))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "delta-management",
