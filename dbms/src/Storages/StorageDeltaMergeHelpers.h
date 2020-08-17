@@ -81,6 +81,8 @@ inline DM::RowKeyRanges getQueryRanges(
     ranges.reserve(handle_ranges.size());
 
     DM::RowKeyRange current;
+    StringPtr start;
+    StringPtr end;
     for (size_t i = 0; i < handle_ranges.size(); ++i)
     {
         const size_t region_idx = sort_index[i];
@@ -93,29 +95,28 @@ inline DM::RowKeyRanges getQueryRanges(
 
         if (i == 0)
         {
-            current.start = handle_range.start;
-            current.end = handle_range.end;
+            start = handle_range.start;
+            end = handle_range.end;
         }
-        else if (*current.end == *handle_range.start)
+        else if (*end == *handle_range.start)
         {
             // concat this range_in_table to current
-            current.end = handle_range.end;
+            end = handle_range.end;
         }
-        else if (current.end->compare(*handle_range.start) < 0)
+        else if (end->compare(*handle_range.start) < 0)
         {
-            ranges.emplace_back(current);
-
+            ranges.emplace_back(start, end, is_common_handle, rowkey_column_size);
             // start a new range
-            current.start = handle_range.start;
-            current.end = handle_range.end;
+            start = handle_range.start;
+            end = handle_range.end;
         }
         else
         {
-            throw Exception("Overlap region range between " + current.toString() + " and [" //
+            throw Exception("Overlap region range between " + *start + "," + *end + " and [" //
                 + *handle_range.start + "," + *handle_range.end + ")");
         }
     }
-    ranges.emplace_back(current);
+    ranges.emplace_back(start, end, is_common_handle, rowkey_column_size);
 
     return ranges;
 }

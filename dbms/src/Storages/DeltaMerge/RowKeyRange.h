@@ -222,17 +222,6 @@ size_t lowerBound(const RowKeyColumnContainer & rowkey_column, size_t first, siz
 }
 } // namespace
 
-struct CommonHandleRangeMinMax
-{
-    StringPtr min;
-    StringPtr max;
-    CommonHandleRangeMinMax(size_t rowkey_column_size)
-        : min(std::make_shared<String>(rowkey_column_size, TiDB::CodecFlag::CodecFlagBytes)),
-          max(std::make_shared<String>(rowkey_column_size, TiDB::CodecFlag::CodecFlagMax))
-    {
-    }
-};
-
 struct RowKeyRange
 {
     // todo use template to refine is_common_handle
@@ -244,9 +233,52 @@ struct RowKeyRange
     Int64     int_end   = 0;
     size_t    rowkey_column_size;
 
+    struct CommonHandleRangeMinMax
+    {
+        StringPtr min;
+        StringPtr max;
+        CommonHandleRangeMinMax(size_t rowkey_column_size)
+            : min(std::make_shared<String>(rowkey_column_size, TiDB::CodecFlag::CodecFlagBytes)),
+              max(std::make_shared<String>(rowkey_column_size, TiDB::CodecFlag::CodecFlagMax))
+        {
+        }
+    };
+
+    struct TableRangeMinMax
+    {
+        StringPtr min;
+        StringPtr max;
+
+        TableRangeMinMax(TableID table_id, bool is_common_handle, size_t rowkey_column_size)
+        {
+            std::stringstream ss;
+            ss.put('t');
+            EncodeInt64(table_id, ss);
+            ss.put('_');
+            ss.put('r');
+            String prefix = ss.str();
+            if (is_common_handle)
+            {
+                auto & common_handle_min_max = RowKeyRange::getMinMaxData(rowkey_column_size);
+                String min_str               = prefix + (*common_handle_min_max.min);
+                min                          = std::make_shared<String>(min_str);
+                String max_str               = prefix + (*common_handle_min_max.max);
+                max                          = std::make_shared<String>(max_str);
+            }
+            else
+            {
+                min = std::make_shared<String>(prefix + *int_handle_min_key);
+                max = std::make_shared<String>(prefix + *int_handle_max_key);
+            }
+        }
+    };
+
     static std::unordered_map<size_t, CommonHandleRangeMinMax> min_max_data;
     static std::mutex                                          mutex;
+    static std::unordered_map<TableID, TableRangeMinMax>       table_min_max_data;
+    static std::mutex                                          table_mutex;
     static const CommonHandleRangeMinMax &                     getMinMaxData(size_t rowkey_column_size);
+    static const TableRangeMinMax & getTableMinMaxData(TableID table_id, bool is_common_handle, size_t rowkey_column_size);
 
     RowKeyRange(const StringPtr start_, const StringPtr end_, bool is_common_handle_, size_t rowkey_column_size_)
         : is_common_handle(is_common_handle_), start(start_), end(end_), rowkey_column_size(rowkey_column_size_)
@@ -591,10 +623,31 @@ struct RowKeyRange
     {
         if (likely(table_id_in_raw_key == table_id))
         {
-            auto & start_key = *raw_keys.first;
-            auto & end_key   = *raw_keys.second;
-            auto   start_ptr = std::make_shared<std::string>(start_key.begin() + RecordKVFormat::RAW_KEY_NO_HANDLE_SIZE, start_key.end());
-            auto   end_ptr   = std::make_shared<std::string>(end_key.begin() + RecordKVFormat::RAW_KEY_NO_HANDLE_SIZE, end_key.end());
+            auto &    start_key             = *raw_keys.first;
+            auto &    end_key               = *raw_keys.second;
+            auto      table_range_min_max   = getTableMinMaxData(table_id, is_common_handle, rowkey_column_size);
+            auto      common_handle_min_max = getMinMaxData(rowkey_column_size);
+            StringPtr start_ptr, end_ptr;
+            if (start_key.compare(*table_range_min_max.min) <= 0)
+            {
+                if (is_common_handle)
+                    start_ptr = common_handle_min_max.min;
+                else
+                    start_ptr = int_handle_min_key;
+            }
+            else
+            {
+                start_ptr = std::make_shared<std::string>(start_key.begin() + RecordKVFormat::RAW_KEY_NO_HANDLE_SIZE, start_key.end());
+            }
+            if (end_key.compare(*table_range_min_max.max) >= 0)
+            {
+                if (is_common_handle)
+                    end_ptr = common_handle_min_max.max;
+                else
+                    end_ptr = int_handle_max_key;
+            }
+            else
+                end_ptr = std::make_shared<std::string>(end_key.begin() + RecordKVFormat::RAW_KEY_NO_HANDLE_SIZE, end_key.end());
             return RowKeyRange(start_ptr, end_ptr, is_common_handle, rowkey_column_size);
         }
         else

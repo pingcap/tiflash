@@ -50,7 +50,8 @@ void writeRegionDataToStorage(Context & context, const RegionPtr & region, Regio
             storage->getColumns().getNamesOfPhysical(),
             data_list_read,
             std::numeric_limits<Timestamp>::max(),
-            force_decode);
+            force_decode,
+            nullptr);
         if (!ok)
             return false;
         region_decode_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();

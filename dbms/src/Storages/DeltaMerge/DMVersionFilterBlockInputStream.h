@@ -1,10 +1,10 @@
 #pragma once
 
-#include <common/logger_useful.h>
-
 #include <Columns/ColumnsCommon.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -24,8 +24,12 @@ class DMVersionFilterBlockInputStream : public IBlockInputStream
     static_assert(MODE == DM_VERSION_FILTER_MODE_MVCC || MODE == DM_VERSION_FILTER_MODE_COMPACT);
 
 public:
-    DMVersionFilterBlockInputStream(const BlockInputStreamPtr & input, const ColumnDefines & read_columns, UInt64 version_limit_)
+    DMVersionFilterBlockInputStream(const BlockInputStreamPtr & input,
+                                    const ColumnDefines &       read_columns,
+                                    UInt64                      version_limit_,
+                                    bool                        is_common_handle_)
         : version_limit(version_limit_),
+          is_common_handle(is_common_handle_),
           header(toEmptyBlock(read_columns)),
           log(&Logger::get("DMVersionFilterBlockInputStream<" + String(MODE == DM_VERSION_FILTER_MODE_MVCC ? "MVCC" : "COMPACT") + ">"))
     {
@@ -63,19 +67,20 @@ public:
 private:
     inline void checkWithNextIndex(size_t i)
     {
-#define cur_handle (*handle_col_data)[i]
-#define next_handle (*handle_col_data)[i + 1]
+#define cur_handle rowkey_column->getRowKeyValue(i)
+#define next_handle rowkey_column->getRowKeyValue(i + 1)
 #define cur_version (*version_col_data)[i]
 #define next_version (*version_col_data)[i + 1]
 #define deleted (*delete_col_data)[i]
         if constexpr (MODE == DM_VERSION_FILTER_MODE_MVCC)
         {
-            filter[i] = !deleted && cur_version <= version_limit && (cur_handle != next_handle || next_version > version_limit);
+            filter[i] = !deleted && cur_version <= version_limit && (compare(cur_handle, next_handle) != 0 || next_version > version_limit);
         }
         else if constexpr (MODE == DM_VERSION_FILTER_MODE_COMPACT)
         {
-            filter[i]    = cur_version >= version_limit || ((cur_handle != next_handle || next_version > version_limit) && !deleted);
-            not_clean[i] = filter[i] && (cur_handle == next_handle || deleted);
+            filter[i]
+                = cur_version >= version_limit || ((compare(cur_handle, next_handle) != 0 || next_version > version_limit) && !deleted);
+            not_clean[i] = filter[i] && (compare(cur_handle, next_handle) == 0 || deleted);
         }
         else
         {
@@ -93,14 +98,14 @@ private:
         raw_block = ::DB::DM::readNextBlock(children.back());
         if (!raw_block)
         {
-            handle_col_data  = nullptr;
+            rowkey_column    = nullptr;
             version_col_data = nullptr;
             delete_col_data  = nullptr;
             return false;
         }
         else
         {
-            handle_col_data  = getColumnVectorDataPtr<Handle>(raw_block, handle_col_pos);
+            rowkey_column    = std::make_unique<RowKeyColumnContainer>(raw_block.getByPosition(handle_col_pos).column, is_common_handle);
             version_col_data = getColumnVectorDataPtr<UInt64>(raw_block, version_col_pos);
             delete_col_data  = getColumnVectorDataPtr<UInt8>(raw_block, delete_col_pos);
             return true;
@@ -109,6 +114,8 @@ private:
 
 private:
     UInt64 version_limit;
+    bool   is_common_handle;
+    size_t rowkey_column_size;
     Block  header;
 
     size_t handle_col_pos;
@@ -121,9 +128,10 @@ private:
 
     Block raw_block;
 
-    PaddedPODArray<Handle> const * handle_col_data  = nullptr;
-    PaddedPODArray<UInt64> const * version_col_data = nullptr;
-    PaddedPODArray<UInt8> const *  delete_col_data  = nullptr;
+    //PaddedPODArray<Handle> const * handle_col_data  = nullptr;
+    std::unique_ptr<RowKeyColumnContainer> rowkey_column    = nullptr;
+    PaddedPODArray<UInt64> const *         version_col_data = nullptr;
+    PaddedPODArray<UInt8> const *          delete_col_data  = nullptr;
 
     size_t total_blocks        = 0;
     size_t total_rows          = 0;

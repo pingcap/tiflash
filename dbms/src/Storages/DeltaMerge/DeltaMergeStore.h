@@ -305,7 +305,7 @@ public:
     DeltaMergeStoreStat      getStat();
     SegmentStats             getSegmentStats();
     const RowKeyColumnsPtr & getRowKeyColumns() const { return rowkey_columns; }
-    bool                     common_handle() const { return is_common_handle; }
+    bool                     isCommonHandle() const { return is_common_handle; }
 
 private:
     DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings);

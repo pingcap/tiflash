@@ -578,7 +578,7 @@ size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM
 {
     size_t rows = 0;
 
-    ColumnDefines to_read{getExtraHandleColumnDefine(store->common_handle())};
+    ColumnDefines to_read{getExtraHandleColumnDefine(store->isCommonHandle())};
     auto stream = store->read(context, context.getSettingsRef(), to_read, {range}, 1, MAX_UINT64, EMPTY_FILTER)[0];
     stream->readPrefix();
     Block block;
@@ -593,17 +593,17 @@ DM::RowKeyRange getRange(DM::DeltaMergeStorePtr & store, const Context & context
 {
     auto start_index = rand() % (total_rows - delete_rows + 1);
 
-    DM::RowKeyRange range = DM::RowKeyRange::newAll(store->common_handle(), store->getRowKeyColumns()->size());
+    DM::RowKeyRange range = DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumns()->size());
     {
-        ColumnDefines to_read{getExtraHandleColumnDefine(store->common_handle())};
+        ColumnDefines to_read{getExtraHandleColumnDefine(store->isCommonHandle())};
         auto stream = store->read(context, context.getSettingsRef(), to_read,
-            {DM::RowKeyRange::newAll(store->common_handle(), store->getRowKeyColumns()->size())}, 1, MAX_UINT64, EMPTY_FILTER)[0];
+            {DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumns()->size())}, 1, MAX_UINT64, EMPTY_FILTER)[0];
         stream->readPrefix();
         Block block;
         size_t index = 0;
         while ((block = stream->read()))
         {
-            auto data = RowKeyColumnContainer(block.getByPosition(0).column, false);
+            auto data = RowKeyColumnContainer(block.getByPosition(0).column, store->isCommonHandle());
             for (size_t i = 0; i < data.column->size(); ++i)
             {
                 if (index == start_index)

@@ -235,7 +235,7 @@ size_t DeltaValueSpace::Snapshot::read(const RowKeyRange & range, MutableColumns
 
         // TODO: this get the full columns of pack, which may cause unnecessary copying
         auto & columns       = getColumnsOfPack(pack_index, output_columns.size());
-        auto   rowkey_column = RowKeyColumnContainer(columns[0], false);
+        auto   rowkey_column = RowKeyColumnContainer(columns[0], is_common_handle);
         if (rows_in_pack_limit == 1)
         {
             if (range.check(rowkey_column.getRowKeyValue(rows_start_in_pack)))

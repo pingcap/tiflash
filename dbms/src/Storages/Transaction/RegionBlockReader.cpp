@@ -122,14 +122,17 @@ void setPKVersionDel(ColumnUInt8 & delmark_col,
         if (commit_ts > tso)
             continue;
 
-        bool should_skip;
-        if constexpr (pk_type == TMTPKType::UINT64)
+        bool should_skip = false;
+        if constexpr (pk_type != TMTPKType::STRING)
         {
-            should_skip = scan_filter != nullptr && scan_filter->filter(static_cast<UInt64>(pk));
-        }
-        else
-        {
-            should_skip = scan_filter != nullptr && scan_filter->filter(static_cast<Int64>(pk));
+            if constexpr (pk_type == TMTPKType::UINT64)
+            {
+                should_skip = scan_filter != nullptr && scan_filter->filter(static_cast<UInt64>(pk));
+            }
+            else
+            {
+                should_skip = scan_filter != nullptr && scan_filter->filter(static_cast<Int64>(pk));
+            }
         }
         if (should_skip)
             continue;
@@ -141,6 +144,8 @@ void setPKVersionDel(ColumnUInt8 & delmark_col,
             typeid_cast<ColumnVector<Int64> &>(*pk_column).insert(static_cast<Int64>(pk));
         else if constexpr (pk_type == TMTPKType::UINT64)
             typeid_cast<ColumnVector<UInt64> &>(*pk_column).insert(static_cast<UInt64>(pk));
+        else if constexpr (pk_type == TMTPKType::STRING)
+            pk_column->insert(Field(pk->data(), pk->size()));
         else
             pk_column->insert(Field(static_cast<Int64>(pk)));
     }
@@ -243,6 +248,9 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                 break;
             case TMTPKType::UINT64:
                 func = setPKVersionDel<TMTPKType::UINT64>;
+                break;
+            case TMTPKType::STRING:
+                func = setPKVersionDel<TMTPKType::STRING>;
                 break;
             default:
                 break;
