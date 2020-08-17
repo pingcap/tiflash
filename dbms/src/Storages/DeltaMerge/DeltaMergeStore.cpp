@@ -363,7 +363,6 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
     EventRecorder write_block_recorder(ProfileEvents::DMWriteBlock, ProfileEvents::DMWriteBlockNS);
 
     const auto rows  = to_write.rows();
-    const auto bytes = to_write.bytes();
     if (rows == 0)
         return;
 
@@ -381,6 +380,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
                          EXTRA_HANDLE_COLUMN_TYPE->createColumn());
         FunctionToInt64::create(db_context)->execute(block, {handle_pos}, block.columns() - 1);
     }
+
+    const auto bytes = to_write.bytes();
 
     {
         // Sort by handle & version in ascending order.
