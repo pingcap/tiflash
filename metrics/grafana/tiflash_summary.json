@@ -3684,7 +3684,7 @@
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
           "decimals": 1,
-          "description": "The total bytes of write and delta's background management (delay = write - delta_management)",
+          "description": "The total bytes of write and delta's background management",
           "fill": 1,
           "gridPos": {
             "h": 7,
@@ -3746,6 +3746,7 @@
             {
               "expr": "sum(tiflash_storage_throughput{instance=~\"$instance\", type=\"write\"}) - sum(tiflash_storage_throughput{instance=~\"$instance\", type!=\"write\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "delay",
               "refId": "C"
