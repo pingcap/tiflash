@@ -1282,9 +1282,14 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 
     wbs.writeRemoves();
 
-    // Only physical split will merge delta data into stable.
     if (!split_info.is_logical)
         GET_METRIC(dm_context.metrics, tiflash_storage_throughput, type_split).Increment(delta_bytes);
+    else
+    {
+        // For logical split, delta is duplicated into two segments. And will be merged into stable twice later. So we need to decrease it here.
+        // Otherwise the final total delta merge bytes is greater than bytes written into.
+        GET_METRIC(dm_context.metrics, tiflash_storage_throughput, type_delta_merge).Decrement(delta_bytes);
+    }
 
     if constexpr (DM_RUN_CHECK)
         check(dm_context.db_context);

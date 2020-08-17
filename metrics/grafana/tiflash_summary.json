@@ -3526,7 +3526,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_storage_throughput{instance=~\"$instance\", type=\"write\"}[1m]))",
+              "expr": "sum(rate(tiflash_storage_throughput{instance=~\"$instance\", type=\"write\"}[5m]))",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 1,
@@ -3535,7 +3535,7 @@
               "step": 10
             },
             {
-              "expr": "sum(rate(tiflash_storage_throughput{instance=~\"$instance\", type!=\"write\"}[1m]))",
+              "expr": "sum(rate(tiflash_storage_throughput{instance=~\"$instance\", type!=\"write\"}[5m]))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "delta-management",
@@ -3684,7 +3684,7 @@
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
           "decimals": 1,
-          "description": "The total bytes of write and delta's background management",
+          "description": "The total bytes of write and delta's background management (delay = write - delta_management)",
           "fill": 1,
           "gridPos": {
             "h": 7,
@@ -3719,7 +3719,12 @@
           "points": false,
           "renderer": "flot",
           "repeatedByRow": true,
-          "seriesOverrides": [],
+          "seriesOverrides": [
+            {
+              "alias": "delay",
+              "yaxis": 2
+            }
+          ],
           "spaceLength": 10,
           "stack": false,
           "steppedLine": false,
@@ -3737,6 +3742,13 @@
               "intervalFactor": 1,
               "legendFormat": "delta_management",
               "refId": "A"
+            },
+            {
+              "expr": "sum(tiflash_storage_throughput{instance=~\"$instance\", type=\"write\"}) - sum(tiflash_storage_throughput{instance=~\"$instance\", type!=\"write\"})",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "delay",
+              "refId": "C"
             }
           ],
           "thresholds": [],
@@ -3771,7 +3783,7 @@
               "label": null,
               "logBase": 1,
               "max": null,
-              "min": "0",
+              "min": "-100000000",
               "show": true
             }
           ],

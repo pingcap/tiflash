@@ -74,7 +74,7 @@ namespace DB
         F(type_seg_split, {{"type", "seg_split"}}, ExpBuckets{0.0005, 2, 20}),                                                            \
         F(type_seg_merge, {{"type", "seg_merge"}}, ExpBuckets{0.0005, 2, 20}),                                                            \
         F(type_place_index_update, {{"type", "place_index_update"}}, ExpBuckets{0.0005, 2, 20}))                                          \
-    M(tiflash_storage_throughput, "Calculate the throughput of tasks of storage ", Counter,                       /**/                    \
+    M(tiflash_storage_throughput, "Calculate the throughput of tasks of storage ", Gauge,                         /**/                    \
         F(type_write, {"type", "write"}),                                                                         /**/                    \
         F(type_delta_merge, {"type", "delta_merge"}),                                                             /**/                    \
         F(type_split, {"type", "split"}),                                                                         /**/                    \
