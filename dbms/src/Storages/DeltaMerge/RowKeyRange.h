@@ -668,8 +668,7 @@ struct RowKeyRange
 template <bool right_open = true>
 inline String rangeToString(const String & start, const String & end, bool)
 {
-    /// todo show the decoded value
-    String s = "[" + start + "," + end;
+    String s = "[" + ToHex(start.data(), start.size()) + "," + ToHex(end.data(), end.size());
     if constexpr (right_open)
         s += ")";
     else

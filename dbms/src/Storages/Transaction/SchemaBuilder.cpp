@@ -172,12 +172,16 @@ inline SchemaChanges detectSchemaChanges(Logger * log, Context & context, const 
                           it->name = new_name;
                       if (table_info.is_common_handle)
                       {
-                          /// update primary index info
+                          /// TiDB only saves column name(not column id) in index info, so have to update primary
+                          /// index info when rename column
                           auto & index_info = table_info.getPrimaryIndexInfo();
                           for (auto & col : index_info.idx_cols)
                           {
                               if (col.name == old_name)
+                              {
                                   col.name = new_name;
+                                  break;
+                              }
                           }
                       }
                   };
