@@ -169,6 +169,7 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
         rowkey_column_defines.clear();
         rowkey_column_defines.push_back(handle_column_define);
     }
+    rowkey_column_size = rowkey_column_defines.size();
     store = std::make_shared<DeltaMergeStore>(global_context, path, data_path_contains_database_name, db_name_, table_name_,
         std::move(table_column_defines), std::move(handle_column_define), is_common_handle, rowkey_column_size,
         DeltaMergeStore::Settings());
