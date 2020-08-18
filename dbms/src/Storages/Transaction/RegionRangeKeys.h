@@ -47,7 +47,6 @@ private:
     RegionRange ori;
     std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> raw;
     TableID mapped_table_id;
-    //HandleRange<HandleID> mapped_handle_range;
 };
 
 } // namespace DB

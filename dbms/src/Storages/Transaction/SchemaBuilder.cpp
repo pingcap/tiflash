@@ -87,9 +87,8 @@ AlterCommand newRenameColCommand(const String & old_col, const String & new_col,
     return command;
 }
 
-using ColumnInfos = std::vector<ColumnInfo>;
-using ColumnInfosModifier = std::function<void(ColumnInfos & column_infos)>;
-using SchemaChange = std::pair<AlterCommands, ColumnInfosModifier>;
+using TableInfoModifier = std::function<void(TableInfo & table_info)>;
+using SchemaChange = std::pair<AlterCommands, TableInfoModifier>;
 using SchemaChanges = std::vector<SchemaChange>;
 
 /// When schema change detected, the modification to original table info must be preserved as well.
@@ -126,7 +125,8 @@ inline SchemaChanges detectSchemaChanges(Logger * log, Context & context, const 
         }
         if (!drop_commands.empty())
         {
-            result.emplace_back(std::move(drop_commands), [column_ids_to_drop{std::move(column_ids_to_drop)}](ColumnInfos & column_infos) {
+            result.emplace_back(std::move(drop_commands), [column_ids_to_drop{std::move(column_ids_to_drop)}](TableInfo & table_info) {
+                auto & column_infos = table_info.columns;
                 column_infos.erase(std::remove_if(column_infos.begin(),
                                        column_infos.end(),
                                        [&](const auto & column_info) { return column_ids_to_drop.count(column_info.id) > 0; }),
@@ -163,12 +163,23 @@ inline SchemaChanges detectSchemaChanges(Logger * log, Context & context, const 
                 = newRenameColCommand(rename_pair.first.name, rename_pair.second.name, rename_pair.second.id, orig_table_info);
             auto rename_modifier
                 = [column_id = rename_command.column_id, old_name = rename_command.column_name, new_name = rename_command.new_column_name](
-                      ColumnInfos & column_infos) {
+                      TableInfo & table_info) {
+                      auto & column_infos = table_info.columns;
                       auto it = std::find_if(column_infos.begin(), column_infos.end(), [&](const auto & column_info) {
                           return column_info.id == column_id && column_info.name == old_name;
                       });
                       if (it != column_infos.end())
                           it->name = new_name;
+                      if (table_info.is_common_handle)
+                      {
+                          /// update primary index info
+                          auto & index_info = table_info.getPrimaryIndexInfo();
+                          for (auto & col : index_info.idx_cols)
+                          {
+                              if (col.name == old_name)
+                                  col.name = new_name;
+                          }
+                      }
                   };
             rename_commands.emplace_back(std::move(rename_command));
             result.emplace_back(std::move(rename_commands), rename_modifier);
@@ -206,7 +217,8 @@ inline SchemaChanges detectSchemaChanges(Logger * log, Context & context, const 
         }
         if (!alter_commands.empty())
         {
-            result.emplace_back(std::move(alter_commands), [alter_map{std::move(alter_map)}](ColumnInfos & column_infos) {
+            result.emplace_back(std::move(alter_commands), [alter_map{std::move(alter_map)}](TableInfo & table_info) {
+                auto & column_infos = table_info.columns;
                 std::for_each(column_infos.begin(), column_infos.end(), [&](auto & column_info) {
                     if (auto it = alter_map.find(column_info.id); it != alter_map.end())
                         column_info = it->second;
@@ -239,7 +251,8 @@ inline SchemaChanges detectSchemaChanges(Logger * log, Context & context, const 
         }
         if (!add_commands.empty())
         {
-            result.emplace_back(std::move(add_commands), [new_column_infos{std::move(new_column_infos)}](ColumnInfos & column_infos) {
+            result.emplace_back(std::move(add_commands), [new_column_infos{std::move(new_column_infos)}](TableInfo & table_info) {
+                auto & column_infos = table_info.columns;
                 std::for_each(new_column_infos.begin(), new_column_infos.end(), [&](auto & new_column_info) {
                     column_infos.emplace_back(std::move(new_column_info));
                 });
@@ -288,7 +301,7 @@ void SchemaBuilder<Getter, NameMapper>::applyAlterPhysicalTable(DBInfoPtr db_inf
     for (const auto & schema_change : schema_changes)
     {
         /// Update column infos by applying schema change in this step.
-        schema_change.second(orig_table_info.columns);
+        schema_change.second(orig_table_info);
         /// Update schema version aggressively for the sake of correctness.
         orig_table_info.schema_version = target_version;
         storage->alterFromTiDB(schema_change.first, name_mapper.mapDatabaseName(*db_info), orig_table_info, name_mapper, context);

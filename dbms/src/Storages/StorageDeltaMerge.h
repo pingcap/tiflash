@@ -51,14 +51,14 @@ public:
     void flushCache(const Context & context) override
     {
         /// todo fix hardcoded value
-        flushCache(context, DM::RowKeyRange::newAll(is_common_handle, rowkey_columns->size()));
+        flushCache(context, DM::RowKeyRange::newAll(is_common_handle, rowkey_column_size));
     }
 
     void flushCache(const Context & context, const Region & region) override
     {
         flushCache(context,
             DM::RowKeyRange::fromRegionRange(
-                region.getRange(), region.getRange()->getMappedTableID(), is_common_handle, rowkey_columns->size()));
+                region.getRange(), region.getRange()->getMappedTableID(), is_common_handle, rowkey_column_size));
     }
 
     void flushCache(const Context & context, const DM::RowKeyRange & range_to_flush);
@@ -108,7 +108,7 @@ public:
 
     bool isCommonHandle() const override { return is_common_handle; }
 
-    size_t getRowKeyColumnSize() const override { return rowkey_columns->size(); }
+    size_t getRowKeyColumnSize() const override { return rowkey_column_size; }
 
 
 protected:
@@ -145,7 +145,7 @@ private:
     Strings pk_column_names; // TODO: remove it. Only use for debug from ch-client.
     bool is_common_handle;
     bool pk_is_handle;
-    DM::RowKeyColumnsPtr rowkey_columns;
+    size_t rowkey_column_size;
     OrderedNameSet hidden_columns;
 
     // The table schema synced from TiDB

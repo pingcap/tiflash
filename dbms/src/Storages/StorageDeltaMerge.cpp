@@ -169,9 +169,9 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
         rowkey_column_defines.clear();
         rowkey_column_defines.push_back(handle_column_define);
     }
-    rowkey_columns = std::make_shared<RowKeyColumns>(std::move(rowkey_column_defines));
     store = std::make_shared<DeltaMergeStore>(global_context, path, data_path_contains_database_name, db_name_, table_name_,
-        std::move(table_column_defines), std::move(handle_column_define), rowkey_columns, is_common_handle, DeltaMergeStore::Settings());
+        std::move(table_column_defines), std::move(handle_column_define), is_common_handle, rowkey_column_size,
+        DeltaMergeStore::Settings());
 }
 
 void StorageDeltaMerge::drop()
@@ -496,8 +496,7 @@ BlockInputStreams StorageDeltaMerge::read( //
             LOG_TRACE(log, "reading ranges: orig, " << str_query_ranges);
         }
 
-        RowKeyRanges ranges
-            = getQueryRanges(mvcc_query_info.regions_query_info, tidb_table_info.id, is_common_handle, rowkey_columns->size());
+        RowKeyRanges ranges = getQueryRanges(mvcc_query_info.regions_query_info, tidb_table_info.id, is_common_handle, rowkey_column_size);
 
         if (log->trace())
         {
@@ -593,11 +592,11 @@ DM::RowKeyRange getRange(DM::DeltaMergeStorePtr & store, const Context & context
 {
     auto start_index = rand() % (total_rows - delete_rows + 1);
 
-    DM::RowKeyRange range = DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumns()->size());
+    DM::RowKeyRange range = DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize());
     {
         ColumnDefines to_read{getExtraHandleColumnDefine(store->isCommonHandle())};
         auto stream = store->read(context, context.getSettingsRef(), to_read,
-            {DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumns()->size())}, 1, MAX_UINT64, EMPTY_FILTER)[0];
+            {DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())}, 1, MAX_UINT64, EMPTY_FILTER)[0];
         stream->readPrefix();
         Block block;
         size_t index = 0;
@@ -621,7 +620,7 @@ DM::RowKeyRange getRange(DM::DeltaMergeStorePtr & store, const Context & context
 
 void StorageDeltaMerge::deleteRows(const Context & context, size_t delete_rows)
 {
-    size_t total_rows = getRows(store, context, DM::RowKeyRange::newAll(is_common_handle, rowkey_columns->size()));
+    size_t total_rows = getRows(store, context, DM::RowKeyRange::newAll(is_common_handle, rowkey_column_size));
     delete_rows = std::min(total_rows, delete_rows);
     auto delete_range = getRange(store, context, total_rows, delete_rows);
     size_t actual_delete_rows = getRows(store, context, delete_range);
@@ -630,7 +629,7 @@ void StorageDeltaMerge::deleteRows(const Context & context, size_t delete_rows)
 
     store->deleteRange(context, context.getSettingsRef(), delete_range);
 
-    size_t after_delete_rows = getRows(store, context, DM::RowKeyRange::newAll(is_common_handle, rowkey_columns->size()));
+    size_t after_delete_rows = getRows(store, context, DM::RowKeyRange::newAll(is_common_handle, rowkey_column_size));
     if (after_delete_rows != total_rows - delete_rows)
         LOG_ERROR(log, "Rows after delete range not match, expected: " << (total_rows - delete_rows) << ", got: " << after_delete_rows);
 }
@@ -809,7 +808,7 @@ void StorageDeltaMerge::rename(
             ErrorCodes::DIRECTORY_ALREADY_EXISTS};
 
     // flush store and then reset store to new path
-    store->flushCache(global_context, RowKeyRange::newAll(is_common_handle, rowkey_columns->size()));
+    store->flushCache(global_context, RowKeyRange::newAll(is_common_handle, rowkey_column_size));
     ColumnDefines table_column_defines = store->getTableColumns();
     ColumnDefine handle_column_define = store->getHandle();
     DeltaMergeStore::Settings settings = store->getSettings();
@@ -824,7 +823,7 @@ void StorageDeltaMerge::rename(
     // generate a new store
     store = std::make_shared<DeltaMergeStore>(global_context,                          //
         new_path, data_path_contains_database_name, new_database_name, new_table_name, //
-        std::move(table_column_defines), std::move(handle_column_define), rowkey_columns, is_common_handle, settings);
+        std::move(table_column_defines), std::move(handle_column_define), rowkey_column_size, is_common_handle, settings);
 
     path = new_path;
 }

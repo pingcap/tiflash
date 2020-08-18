@@ -82,7 +82,6 @@ RegionRangeKeys::RegionRangeKeys(TiKVKey && start_key, TiKVKey && end_key)
             "Illegal region range, should not happen, start key: " + ori.first.key.toHex() + ", end key: " + ori.second.key.toHex(),
             ErrorCodes::LOGICAL_ERROR);
     }
-    getHandleRangeByTable(raw, mapped_table_id);
 }
 
 TableID RegionRangeKeys::getMappedTableID() const { return mapped_table_id; }

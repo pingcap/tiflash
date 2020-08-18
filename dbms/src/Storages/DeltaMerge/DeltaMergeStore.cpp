@@ -105,8 +105,8 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
                                  const String &        table_name_,
                                  const ColumnDefines & columns,
                                  const ColumnDefine &  handle,
-                                 RowKeyColumnsPtr      rowkey_columns_,
                                  bool                  is_common_handle_,
+                                 size_t                rowkey_column_size_,
                                  const Settings &      settings_)
     : path(path_),
       global_context(db_context.getGlobalContext()),
@@ -114,8 +114,8 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
       storage_pool(db_name_ + "." + table_name_, path, global_context, db_context.getSettingsRef()),
       db_name(db_name_),
       table_name(table_name_),
-      rowkey_columns(rowkey_columns_),
       is_common_handle(is_common_handle_),
+      rowkey_column_size(rowkey_column_size_),
       original_table_handle_define(handle),
       background_pool(db_context.getBackgroundPool()),
       hash_salt(++DELTA_MERGE_STORE_HASH_SALT),
@@ -151,8 +151,7 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
             auto segment_id = storage_pool.newMetaPageId();
             if (segment_id != DELTA_MERGE_FIRST_SEGMENT_ID)
                 throw Exception("The first segment id should be " + DB::toString(DELTA_MERGE_FIRST_SEGMENT_ID), ErrorCodes::LOGICAL_ERROR);
-            auto first_segment
-                = Segment::newSegment(*dm_context, RowKeyRange::newAll(is_common_handle, rowkey_columns->size()), segment_id, 0);
+            auto first_segment = Segment::newSegment(*dm_context, RowKeyRange::newAll(is_common_handle, rowkey_column_size), segment_id, 0);
             segments.emplace(first_segment->getRowKeyRange().getEnd(), first_segment);
             id_to_segment.emplace(segment_id, first_segment);
         }
@@ -319,7 +318,7 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
                                latest_gc_safe_point,
                                settings.not_compress_columns,
                                is_common_handle,
-                               rowkey_columns->size(),
+                               rowkey_column_size,
                                db_settings);
     return DMContextPtr(ctx);
 }
@@ -471,7 +470,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
 
     if (db_settings.dt_flush_after_write)
     {
-        RowKeyRange merge_range = RowKeyRange::newNone(is_common_handle, rowkey_columns->size());
+        RowKeyRange merge_range = RowKeyRange::newNone(is_common_handle, rowkey_column_size);
         for (auto & segment : updated_segments)
             merge_range = merge_range.merge(segment->getRowKeyRange());
         flushCache(dm_context, merge_range);
@@ -1440,7 +1439,7 @@ void DeltaMergeStore::check(const Context & /*db_context*/)
     std::shared_lock lock(read_write_mutex);
 
     UInt64      next_segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
-    RowKeyRange last_range      = RowKeyRange::newAll(is_common_handle, rowkey_columns->size());
+    RowKeyRange last_range      = RowKeyRange::newAll(is_common_handle, rowkey_column_size);
     RowKeyValue last_end        = last_range.getStart();
     for (const auto & [end, segment] : segments)
     {

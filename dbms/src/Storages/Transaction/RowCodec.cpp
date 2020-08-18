@@ -94,7 +94,9 @@ bool hasMissingColumns(const DecodedFields & decoded_fields, const TableInfo & t
             continue;
         // We consider a missing column could be safely filled with NULL, unless it has not default value and is NOT NULL.
         // This could saves lots of unnecessary schema syncs for old data with a schema that has newly added columns.
-        if (column_info.hasNoDefaultValueFlag() && column_info.hasNotNullFlag())
+        // for clustered index, if the pk column does not exists, it can still be decoded from the key
+        if (!(table_info.is_common_handle && column_info.hasPriKeyFlag()) && column_info.hasNoDefaultValueFlag()
+            && column_info.hasNotNullFlag())
             return true;
     }
     return false;
