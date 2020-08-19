@@ -922,7 +922,7 @@ void DAGQueryBlockInterpreter::executeAggregation(Pipeline & pipeline, const Exp
     if (pipeline.streams.size() > 1)
     {
         pipeline.firstStream() = std::make_shared<ParallelAggregatingBlockInputStream>(pipeline.streams,
-            pipeline.stream_with_non_joined_data, params, true, max_streams,
+            pipeline.stream_with_non_joined_data, params, context.getFileProvider(), true, max_streams,
             settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
                                                                 : static_cast<size_t>(settings.max_threads));
 
@@ -939,7 +939,7 @@ void DAGQueryBlockInterpreter::executeAggregation(Pipeline & pipeline, const Exp
         if (pipeline.stream_with_non_joined_data)
             inputs.push_back(pipeline.stream_with_non_joined_data);
         pipeline.firstStream()
-            = std::make_shared<AggregatingBlockInputStream>(std::make_shared<ConcatBlockInputStream>(inputs), params, true);
+            = std::make_shared<AggregatingBlockInputStream>(std::make_shared<ConcatBlockInputStream>(inputs), params, context.getFileProvider(), true);
         pipeline.stream_with_non_joined_data = nullptr;
     }
     // add cast

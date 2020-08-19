@@ -50,6 +50,7 @@
 #include <Interpreters/SharedQueries.h>
 #include <Interpreters/Context.h>
 #include <Common/DNSCache.h>
+#include <Encryption/DataKeyManager.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
 #include <IO/PersistedCache.h>
@@ -161,6 +162,7 @@ struct ContextShared
     PartPathSelectorPtr part_path_selector_ptr;             /// PartPathSelector service instance.
     PathCapacityMetricsPtr path_capacity_ptr;               /// Path capacity metrics
     TiFlashMetricsPtr tiflash_metrics;                      /// TiFlash metrics registry.
+    FileProviderPtr file_provider;                          /// File provider.
 
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
@@ -1513,6 +1515,20 @@ TiFlashMetricsPtr Context::getTiFlashMetrics() const
 {
     auto lock = getLock();
     return shared->tiflash_metrics;
+}
+
+void Context::initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption)
+{
+    auto lock = getLock();
+    if (shared->file_provider)
+        throw Exception("File provider has already been initialized.", ErrorCodes::LOGICAL_ERROR);
+    shared->file_provider = std::make_shared<FileProvider>(key_manager, enable_encryption);
+}
+
+FileProviderPtr Context::getFileProvider() const
+{
+    auto lock = getLock();
+    return shared->file_provider;
 }
 
 zkutil::ZooKeeperPtr Context::getZooKeeper() const
