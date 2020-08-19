@@ -63,8 +63,13 @@ inline DM::HandleRanges getQueryRanges(const DB::MvccQueryInfo::RegionsQueryInfo
     else if (handle_ranges.size() == 1)
     {
         // Shortcut for only one region info
-        const auto & range_in_table = handle_ranges[0];
-        ranges.emplace_back(toDMHandleRange(range_in_table));
+        const auto & range = handle_ranges[0];
+        if (unlikely(range.first.type == DB::TiKVHandle::HandleIDType::MAX))
+            throw TiFlashException("Income handle range [" + range.first.toString() + "," + range.second.toString()
+                    + ") is illegal for region: " + DB::toString(regions[0].region_id),
+                Errors::Coprocessor::BadRequest);
+        else
+            ranges.emplace_back(toDMHandleRange(range));
         return ranges;
     }
 

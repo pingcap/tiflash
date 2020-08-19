@@ -10,12 +10,11 @@ namespace DB
 inline std::string ToHex(const char * data, const size_t size)
 {
     std::stringstream ss;
-    ss << "[" << std::hex;
+    ss << "[" << std::uppercase << std::setfill('0') << std::hex;
     for (size_t i = 0; i < size; ++i)
     {
-        ss << Int32(UInt8(data[i]));
-        if (i + 1 != size)
-            ss << ' ';
+        // width need to be set for each output (https://stackoverflow.com/questions/405039/permanent-stdsetw)
+        ss << std::setw(2) << Int32(UInt8(data[i]));
     }
     ss << "]";
     return ss.str();

@@ -257,7 +257,7 @@ TEST(TiKVKeyValue_test, PortedTests)
         s[0] = char(1);
         s[3] = char(111);
         const auto & key = TiKVKey(s.data(), s.size());
-        ASSERT_TRUE(key.toHex() == "[1 32 33 6f]");
+        ASSERT_EQ(key.toHex(), "[0132336F]");
     }
 
     {
@@ -279,8 +279,8 @@ TEST(TiKVKeyValue_test, PortedTests)
         ASSERT_TRUE(RecordKVFormat::getHandle(range.rawKeys().first) == 2);
         ASSERT_TRUE(RecordKVFormat::getHandle(range.rawKeys().second) == 4);
 
-        ASSERT_TRUE(range.comparableKeys().first.state == TiKVRangeKey::NORMAL);
-        ASSERT_TRUE(range.comparableKeys().second.state == TiKVRangeKey::NORMAL);
+        ASSERT_EQ(range.comparableKeys().first.state, TiKVRangeKey::NORMAL);
+        ASSERT_EQ(range.comparableKeys().second.state, TiKVRangeKey::NORMAL);
 
         auto range2 = RegionRangeKeys::makeComparableKeys(TiKVKey{}, TiKVKey{});
         ASSERT_TRUE(range2.first.state == TiKVRangeKey::MIN);
@@ -315,6 +315,23 @@ TEST(TiKVKeyValue_test, PortedTests)
     }
 
     ASSERT_TRUE(res);
+}
+
+TEST(TiKVKeyValue_test, ToHex)
+{
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wc++11-narrowing"
+    std::string key{
+        0x74, 0x80, 0x00, 0x00, //
+        0x00, 0x00, 0x00, 0x00, //
+        0x35, 0x5f, 0x72, 0xff, //
+        0xff, 0xff, 0xff, 0xff, //
+        0xff, 0xff, 0xff, 0x00, //
+    };
+#pragma GCC diagnostic pop
+    auto hex_key = DB::ToHex(key.data(), key.size());
+    EXPECT_EQ(hex_key.size(), 2 + 40UL);
+    EXPECT_EQ(hex_key, "[7480000000000000355F72FFFFFFFFFFFFFFFF00]");
 }
 
 namespace

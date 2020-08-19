@@ -1,5 +1,10 @@
+#include <Columns/IColumn.h>
+#include <Core/NamesAndTypes.h>
+#include <Storages/Transaction/Types.h>
+
 #include <sparsehash/dense_hash_map>
 #include <sparsehash/dense_hash_set>
+#include <vector>
 
 namespace DB
 {

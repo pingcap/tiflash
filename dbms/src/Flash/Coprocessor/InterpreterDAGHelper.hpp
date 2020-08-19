@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/TiFlashException.h>
+#include <Storages/Transaction/RegionException.h>
 
 namespace DB
 {
@@ -37,8 +38,10 @@ MakeRegionQueryInfos(const std::unordered_map<RegionID, RegionInfo> & dag_region
     {
         if (r.key_ranges.empty())
         {
-            throw TiFlashException("Income key ranges is empty for region: " + std::to_string(r.region_id), Errors::Coprocessor::BadRequest);
+            throw TiFlashException(
+                "Income key ranges is empty for region: " + std::to_string(r.region_id), Errors::Coprocessor::BadRequest);
         }
+
         if (region_force_retry.count(id))
         {
             region_need_retry.emplace(id, r);
@@ -63,9 +66,11 @@ MakeRegionQueryInfos(const std::unordered_map<RegionID, RegionInfo> & dag_region
                 TiKVRange::Handle start = TiKVRange::getRangeHandle<true>(p.first, table_id);
                 TiKVRange::Handle end = TiKVRange::getRangeHandle<false>(p.second, table_id);
                 auto range = std::make_pair(start, end);
-                if (range.first < info.range_in_table.first || range.second > info.range_in_table.second)
-                    throw TiFlashException(
-                        "Income key ranges is illegal for region: " + std::to_string(r.region_id), Errors::Coprocessor::BadRequest);
+                if (unlikely(range.first < info.range_in_table.first || range.second > info.range_in_table.second
+                        || range.first.type == DB::TiKVHandle::HandleIDType::MAX))
+                    throw TiFlashException("Income key range [" + DB::ToHex(p.first.data(), p.first.size()) + ","
+                            + DB::ToHex(p.second.data(), p.second.size()) + ") is illegal for region: " + DB::toString(r.region_id),
+                        Errors::Coprocessor::BadRequest);
 
                 info.required_handle_ranges.emplace_back(range);
             }
