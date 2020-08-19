@@ -581,6 +581,19 @@ struct RowKeyRange
         return {int_start, int_end};
     }
 
+    std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> toRegionRange(TableID table_id)
+    {
+        std::stringstream ss;
+        ss.put('t');
+        EncodeInt64(table_id, ss);
+        ss.put('_');
+        ss.put('r');
+        String            prefix    = ss.str();
+        DecodedTiKVKeyPtr start_key = std::make_shared<DecodedTiKVKey>(prefix + *start);
+        DecodedTiKVKeyPtr end_key   = std::make_shared<DecodedTiKVKey>(prefix + *end);
+        return {start_key, end_key};
+    }
+
     /// return <offset, limit>
     std::pair<size_t, size_t> getPosRange(const ColumnPtr & column, const size_t offset, const size_t limit) const
     {

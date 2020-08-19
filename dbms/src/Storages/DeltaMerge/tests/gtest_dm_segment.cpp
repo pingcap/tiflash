@@ -52,7 +52,7 @@ protected:
         setColumns(cols);
 
         auto segment_id = storage_pool->newMetaPageId();
-        return Segment::newSegment(*dm_context_, HandleRange::newAll(), segment_id, 0);
+        return Segment::newSegment(*dm_context_, RowKeyRange::newAll(false, 1), segment_id, 0);
     }
 
     // setColumns should update dm_context at the same time
@@ -68,6 +68,8 @@ protected:
                                                   table_columns_,
                                                   /*min_version_*/ 0,
                                                   settings.not_compress_columns,
+                                                  false,
+                                                  1,
                                                   db_context->getSettingsRef());
     }
 
@@ -118,7 +120,7 @@ try
     { // Round 1
         {
             // read written data (only in delta)
-            auto   in            = segment->getInputStream(dmContext(), *tableColumns());
+            auto   in            = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
             size_t num_rows_read = 0;
             in->readPrefix();
             while (Block block = in->read())
@@ -136,7 +138,7 @@ try
 
         {
             // read written data (only in stable)
-            auto   in            = segment->getInputStream(dmContext(), *tableColumns());
+            auto   in            = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
             size_t num_rows_read = 0;
             in->readPrefix();
             while (Block block = in->read())
@@ -159,7 +161,7 @@ try
     { // Round 2
         {
             // read written data (both in delta and stable)
-            auto   in            = segment->getInputStream(dmContext(), *tableColumns());
+            auto   in            = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
             size_t num_rows_read = 0;
             in->readPrefix();
             while (Block block = in->read())
@@ -177,7 +179,7 @@ try
 
         {
             // read written data (only in stable)
-            auto   in            = segment->getInputStream(dmContext(), *tableColumns());
+            auto   in            = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
             size_t num_rows_read = 0;
             in->readPrefix();
             while (Block block = in->read())
@@ -210,7 +212,7 @@ try
     if (read_before_delete)
     {
         // read written data
-        auto   in            = segment->getInputStream(dmContext(), *tableColumns());
+        auto   in            = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
         size_t num_rows_read = 0;
         in->readPrefix();
         while (Block block = in->read())
@@ -224,7 +226,7 @@ try
     {
         // test delete range [1,99) for data in delta
         HandleRange remove(1, 99);
-        segment->write(dmContext(), {remove});
+        segment->write(dmContext(), {RowKeyRange::fromHandleRange(remove)});
         // TODO test delete range partial overlap with segment
         // TODO test delete range not included by segment
     }
@@ -237,7 +239,7 @@ try
 
     {
         // read after delete range
-        auto in = segment->getInputStream(dmContext(), *tableColumns());
+        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
         in->readPrefix();
         while (Block block = in->read())
         {
@@ -271,7 +273,7 @@ try
     if (read_before_delete)
     {
         // read written data
-        auto   in            = segment->getInputStream(dmContext(), *tableColumns());
+        auto   in            = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
         size_t num_rows_read = 0;
         in->readPrefix();
         while (Block block = in->read())
@@ -290,7 +292,7 @@ try
     {
         // test delete range [1,99) for data in stable
         HandleRange remove(1, 99);
-        segment->write(dmContext(), {remove});
+        segment->write(dmContext(), {RowKeyRange::fromHandleRange(remove)});
         // TODO test delete range partial overlap with segment
         // TODO test delete range not included by segment
 
@@ -306,7 +308,7 @@ try
 
     {
         // read after delete range
-        auto in = segment->getInputStream(dmContext(), *tableColumns());
+        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
         in->readPrefix();
         while (Block block = in->read())
         {
@@ -349,7 +351,7 @@ try
     if (read_before_delete)
     {
         // read written data
-        auto   in            = segment->getInputStream(dmContext(), *tableColumns());
+        auto   in            = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
         size_t num_rows_read = 0;
         in->readPrefix();
         while (Block block = in->read())
@@ -363,7 +365,7 @@ try
     {
         // test delete range [1,99) for data in stable and delta
         HandleRange remove(1, 99);
-        segment->write(dmContext(), {remove});
+        segment->write(dmContext(), {RowKeyRange::fromHandleRange(remove)});
         // TODO test delete range partial overlap with segment
         // TODO test delete range not included by segment
     }
@@ -376,7 +378,7 @@ try
 
     {
         // read after delete range
-        auto in = segment->getInputStream(dmContext(), *tableColumns());
+        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
         in->readPrefix();
         while (Block block = in->read())
         {
@@ -415,7 +417,7 @@ try
     {
         // Test delete range [70, 100)
         HandleRange del{70, 100};
-        segment->write(dmContext(), {del});
+        segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         // flush segment
         segment = segment->mergeDelta(dmContext());
     }
@@ -423,7 +425,7 @@ try
     {
         // Read after deletion
         // The deleted range has no overlap with current data, so there should be no change
-        auto in = segment->getInputStream(dmContext(), *tableColumns());
+        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
         in->readPrefix();
         while (Block block = in->read())
         {
@@ -446,7 +448,7 @@ try
     {
         // Test delete range [63, 70)
         HandleRange del{63, 70};
-        segment->write(dmContext(), {del});
+        segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         // flush segment
         segment = segment->mergeDelta(dmContext());
     }
@@ -454,7 +456,7 @@ try
     {
         // Read after deletion
         // The deleted range has overlap range [63, 64) with current data, so the record with Handle 63 should be deleted
-        auto in = segment->getInputStream(dmContext(), *tableColumns());
+        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
         in->readPrefix();
         while (Block block = in->read())
         {
@@ -476,14 +478,14 @@ try
     {
         // Test delete range [1, 32)
         HandleRange del{1, 32};
-        segment->write(dmContext(), {del});
+        segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         // flush segment
         segment = segment->mergeDelta(dmContext());
     }
 
     {
         // Read after deletion
-        auto in = segment->getInputStream(dmContext(), *tableColumns());
+        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
         in->readPrefix();
         while (Block block = in->read())
         {
@@ -505,14 +507,14 @@ try
         // Test delete range [1, 32)
         // delete should be idempotent
         HandleRange del{1, 32};
-        segment->write(dmContext(), {del});
+        segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         // flush segment
         segment = segment->mergeDelta(dmContext());
     }
 
     {
         // Read after deletion
-        auto in = segment->getInputStream(dmContext(), *tableColumns());
+        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
         in->readPrefix();
         while (Block block = in->read())
         {
@@ -534,14 +536,14 @@ try
         // Test delete range [0, 2)
         // There is an overlap range [0, 1)
         HandleRange del{0, 2};
-        segment->write(dmContext(), {del});
+        segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         // flush segment
         segment = segment->mergeDelta(dmContext());
     }
 
     {
         // Read after deletion
-        auto in = segment->getInputStream(dmContext(), *tableColumns());
+        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
         in->readPrefix();
         while (Block block = in->read())
         {
@@ -572,7 +574,7 @@ try
 
     {
         // read written data
-        auto in = segment->getInputStream(dmContext(), *tableColumns());
+        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
 
         size_t num_rows_read = 0;
         in->readPrefix();
@@ -584,7 +586,7 @@ try
         ASSERT_EQ(num_rows_read, num_rows_write);
     }
 
-    const auto old_range = segment->getRange();
+    const auto old_range = segment->getRowKeyRange();
 
     SegmentPtr new_segment;
     // test split segment
@@ -592,9 +594,9 @@ try
         std::tie(segment, new_segment) = segment->split(dmContext());
     }
     // check segment range
-    const auto s1_range = segment->getRange();
+    const auto s1_range = segment->getRowKeyRange();
     EXPECT_EQ(s1_range.start, old_range.start);
-    const auto s2_range = new_segment->getRange();
+    const auto s2_range = new_segment->getRowKeyRange();
     EXPECT_EQ(s2_range.start, s1_range.end);
     EXPECT_EQ(s2_range.end, old_range.end);
     // TODO check segment epoch is increase
@@ -603,7 +605,7 @@ try
     size_t num_rows_seg2 = 0;
     {
         {
-            auto in = segment->getInputStream(dmContext(), *tableColumns());
+            auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
             in->readPrefix();
             while (Block block = in->read())
             {
@@ -612,7 +614,7 @@ try
             in->readSuffix();
         }
         {
-            auto in = segment->getInputStream(dmContext(), *tableColumns());
+            auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
             in->readPrefix();
             while (Block block = in->read())
             {
@@ -630,14 +632,14 @@ try
         segment = Segment::merge(dmContext(), segment, new_segment);
         {
             // check merged segment range
-            const auto & merged_range = segment->getRange();
+            const auto & merged_range = segment->getRowKeyRange();
             EXPECT_EQ(merged_range.start, s1_range.start);
             EXPECT_EQ(merged_range.end, s2_range.end);
             // TODO check segment epoch is increase
         }
         {
             size_t num_rows_read = 0;
-            auto   in            = segment->getInputStream(dmContext(), *tableColumns());
+            auto   in            = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
             in->readPrefix();
             while (Block block = in->read())
             {
@@ -657,8 +659,8 @@ try
     // If they are equal, result will be true, otherwise it will be false.
     auto compare = [&](const SegmentPtr & seg1, const SegmentPtr & seg2, bool & result) {
         result   = false;
-        auto in1 = seg1->getInputStream(dmContext(), *tableColumns());
-        auto in2 = seg2->getInputStream(dmContext(), *tableColumns());
+        auto in1 = seg1->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in2 = seg2->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
         in1->readPrefix();
         in2->readPrefix();
         for (;;)
@@ -729,7 +731,7 @@ try
     {
         // Do some update and restore again
         HandleRange del(0, 32);
-        segment->write(dmContext(), {del});
+        segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         new_segment = segment->restoreSegment(dmContext(), segment->segmentId());
     }
 
@@ -775,7 +777,7 @@ try
             // if pk % 5 >= 2, then the record would be reserved
             HandleRange del{Int64((num_batches_written - 1) * num_rows_per_write),
                             Int64((num_batches_written - 1) * num_rows_per_write + 2)};
-            segment->write(dmContext(), {del});
+            segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         }
 
         {
@@ -790,7 +792,7 @@ try
 
         {
             // Read after writing
-            auto   in            = segment->getInputStream(dmContext(), *tableColumns());
+            auto   in            = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
             size_t num_rows_read = 0;
             in->readPrefix();
             while (Block block = in->read())
@@ -906,7 +908,7 @@ try
 
     {
         // read written data
-        BlockInputStreamPtr in = segment->getInputStream(dmContext(), *columns_to_read);
+        auto in = segment->getInputStream(dmContext(), *columns_to_read, {RowKeyRange::newAll(false, 1)});
 
         // check that we can read correct values
         size_t num_rows_read = 0;
@@ -962,7 +964,7 @@ try
 
     {
         // read written data
-        BlockInputStreamPtr in = segment->getInputStream(dmContext(), *columns_to_read);
+        auto in = segment->getInputStream(dmContext(), *columns_to_read, {RowKeyRange::newAll(false, 1)});
 
         // check that we can read correct values
         size_t num_rows_read = 0;
@@ -1043,7 +1045,7 @@ try
 
     {
         // read written data
-        auto in = segment->getInputStream(dmContext(), *columns_after_ddl);
+        auto in = segment->getInputStream(dmContext(), *columns_after_ddl, {RowKeyRange::newAll(false, 1)});
 
         // check that we can read correct values
         size_t num_rows_read = 0;
@@ -1097,7 +1099,7 @@ try
 
     {
         // read written data
-        BlockInputStreamPtr in = segment->getInputStream(dmContext(), *columns_after_ddl);
+        auto in = segment->getInputStream(dmContext(), *columns_after_ddl, {RowKeyRange::newAll(false, 1)});
 
         // check that we can read correct values
         size_t num_rows_read = 0;

@@ -1,7 +1,6 @@
-#include <Storages/DeltaMerge/tests/dm_basic_include.h>
-
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
+#include <Storages/DeltaMerge/tests/dm_basic_include.h>
 
 namespace DB
 {
@@ -45,8 +44,9 @@ private:
 template <int MODE>
 BlockInputStreamPtr genInputStream(const BlocksList & blocks, const ColumnDefines & columns, UInt64 max_version)
 {
-    ColumnDefine handle_define(TiDBPkColumnID, DMTestEnv::pk_name, EXTRA_HANDLE_COLUMN_TYPE);
-    return std::make_shared<DMVersionFilterBlockInputStream<MODE>>(std::make_shared<DebugBlockInputStream>(blocks), columns, max_version);
+    ColumnDefine handle_define(TiDBPkColumnID, DMTestEnv::pk_name, EXTRA_HANDLE_COLUMN_INT_TYPE);
+    return std::make_shared<DMVersionFilterBlockInputStream<MODE>>(
+        std::make_shared<DebugBlockInputStream>(blocks), columns, max_version, false);
 }
 
 } // namespace

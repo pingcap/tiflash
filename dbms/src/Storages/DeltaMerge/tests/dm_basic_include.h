@@ -16,6 +16,8 @@ namespace DM
 namespace tests
 {
 
+#define GET_REGION_RANGE(start, end, table_id) RowKeyRange::fromHandleRange(::DB::DM::HandleRange((start), (end))).toRegionRange((table_id))
+
 // Add this so that we can call typeFromString under namespace DB::DM::tests
 using DB::tests::typeFromString;
 
@@ -69,7 +71,7 @@ public:
                                          UInt64         tso       = 2,
                                          const String & pk_name_  = pk_name,
                                          ColumnID       pk_col_id = EXTRA_HANDLE_COLUMN_ID,
-                                         DataTypePtr    pk_type   = EXTRA_HANDLE_COLUMN_TYPE)
+                                         DataTypePtr    pk_type   = EXTRA_HANDLE_COLUMN_INT_TYPE)
     {
         Block        block;
         const size_t num_rows = (end - beg);
@@ -184,7 +186,7 @@ public:
         Block        block;
         const size_t num_rows = 1;
         {
-            ColumnWithTypeAndName col1(EXTRA_HANDLE_COLUMN_TYPE, pk_name);
+            ColumnWithTypeAndName col1(EXTRA_HANDLE_COLUMN_INT_TYPE, pk_name);
             {
                 IColumn::MutablePtr m_col = col1.type->createColumn();
                 // insert form large to small

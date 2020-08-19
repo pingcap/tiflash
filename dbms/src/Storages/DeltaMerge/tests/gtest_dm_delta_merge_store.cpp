@@ -48,7 +48,7 @@ protected:
         ColumnDefine handle_column_define = (*cols)[0];
 
         DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(
-            *context, path, false, "test", name, *cols, handle_column_define, DeltaMergeStore::Settings());
+            *context, path, false, "test", name, *cols, handle_column_define, false, 1, DeltaMergeStore::Settings());
         return s;
     }
 
@@ -75,7 +75,7 @@ try
         auto & h = store->getHandle();
         ASSERT_EQ(h.name, EXTRA_HANDLE_COLUMN_NAME);
         ASSERT_EQ(h.id, EXTRA_HANDLE_COLUMN_ID);
-        ASSERT_TRUE(h.type->equals(*EXTRA_HANDLE_COLUMN_TYPE));
+        ASSERT_TRUE(h.type->equals(*EXTRA_HANDLE_COLUMN_INT_TYPE));
     }
     {
         // check column structure of store
@@ -188,7 +188,7 @@ try
         BlockInputStreamPtr in      = store->read(*context,
                                              context->getSettingsRef(),
                                              columns,
-                                             {HandleRange::newAll()},
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
@@ -279,7 +279,7 @@ try
         BlockInputStreamPtr in            = store->read(*context,
                                              context->getSettingsRef(),
                                              columns,
-                                             {HandleRange::newAll()},
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
@@ -307,7 +307,7 @@ try
     const size_t num_deleted_rows = 64;
     {
         HandleRange range(0, num_deleted_rows);
-        store->deleteRange(*context, context->getSettingsRef(), range);
+        store->deleteRange(*context, context->getSettingsRef(), RowKeyRange::fromHandleRange(range));
     }
     // Read after deletion
     {
@@ -315,7 +315,7 @@ try
         BlockInputStreamPtr in            = store->read(*context,
                                              context->getSettingsRef(),
                                              columns,
-                                             {HandleRange::newAll()},
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
@@ -357,7 +357,7 @@ try
         store->write(*context, context->getSettingsRef(), block2);
         store->write(*context, context->getSettingsRef(), block3);
 
-        store->flushCache(*context);
+        store->flushCache(*context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
     }
 
     {
@@ -365,7 +365,7 @@ try
         BlockInputStreamPtr in            = store->read(*context,
                                              context->getSettingsRef(),
                                              columns,
-                                             {HandleRange::newAll()},
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
@@ -403,10 +403,10 @@ try
         store->write(*context, context->getSettingsRef(), block2);
         store->write(*context, context->getSettingsRef(), block3);
 
-        store->flushCache(*context);
+        store->flushCache(*context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
     }
 
-    store->compact(*context);
+    store->compact(*context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
 
     // Read without version
     {
@@ -414,7 +414,7 @@ try
         BlockInputStreamPtr in            = store->read(*context,
                                              context->getSettingsRef(),
                                              columns,
-                                             {HandleRange::newAll()},
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
@@ -444,7 +444,7 @@ try
         BlockInputStreamPtr in            = store->read(*context,
                                              context->getSettingsRef(),
                                              columns,
-                                             {HandleRange::newAll()},
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
                                              /* max_version= */ UInt64(1),
                                              EMPTY_FILTER,
@@ -498,7 +498,7 @@ try
         BlockInputStreamPtr in            = store->read(*context,
                                              settings,
                                              columns,
-                                             {HandleRange::newAll()},
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
@@ -536,7 +536,7 @@ try
         BlockInputStreamPtr in            = store->read(*context,
                                              settings,
                                              columns,
-                                             {HandleRange::newAll()},
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
@@ -594,7 +594,7 @@ try
         BlockInputStreams ins     = store->read(*context,
                                             context->getSettingsRef(),
                                             columns,
-                                            {HandleRange::newAll()},
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
@@ -616,7 +616,7 @@ try
         BlockInputStreams ins     = store->read(*context,
                                             context->getSettingsRef(),
                                             columns,
-                                            {HandleRange::newAll()},
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso2,
                                             EMPTY_FILTER,
@@ -638,7 +638,7 @@ try
         BlockInputStreams ins     = store->read(*context,
                                             context->getSettingsRef(),
                                             columns,
-                                            {HandleRange::newAll()},
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
@@ -660,7 +660,7 @@ try
         BlockInputStreams ins     = store->read(*context,
                                             context->getSettingsRef(),
                                             columns,
-                                            {HandleRange::newAll()},
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso1 - 1,
                                             EMPTY_FILTER,
@@ -701,7 +701,7 @@ try
                 false);
 
             store->write(*context, settings, block);
-            store->flushCache(*context);
+            store->flushCache(*context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
             num_rows_write_in_total += num_rows_per_write;
         }
 
@@ -718,7 +718,7 @@ try
                                                 context->getSettingsRef(),
                                                 //                                                settings,
                                                 columns,
-                                                {HandleRange::newAll()},
+                                                {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                                 /* num_streams= */ 1,
                                                 /* max_version= */ std::numeric_limits<UInt64>::max(),
                                                 EMPTY_FILTER,
@@ -833,7 +833,7 @@ try
         BlockInputStreams ins     = store->read(*context,
                                             context->getSettingsRef(),
                                             columns,
-                                            {HandleRange::newAll()},
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
@@ -946,7 +946,7 @@ try
         BlockInputStreams ins     = store->read(*context,
                                             context->getSettingsRef(),
                                             columns,
-                                            {HandleRange::newAll()},
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
@@ -1040,7 +1040,7 @@ try
         BlockInputStreams ins     = store->read(*context,
                                             context->getSettingsRef(),
                                             columns,
-                                            {HandleRange::newAll()},
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
@@ -1141,7 +1141,7 @@ try
         auto in = store->read(*context,
                               context->getSettingsRef(),
                               store->getTableColumns(),
-                              {HandleRange::newAll()},
+                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
@@ -1217,7 +1217,7 @@ try
         auto in = store->read(*context,
                               context->getSettingsRef(),
                               store->getTableColumns(),
-                              {HandleRange::newAll()},
+                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
@@ -1312,7 +1312,7 @@ try
         BlockInputStreams ins     = store->read(*context,
                                             context->getSettingsRef(),
                                             columns,
-                                            {HandleRange::newAll()},
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
@@ -1438,7 +1438,7 @@ try
         BlockInputStreams ins     = store->read(*context,
                                             context->getSettingsRef(),
                                             columns,
-                                            {HandleRange::newAll()},
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
@@ -1492,7 +1492,7 @@ try
             BlockInputStreams ins     = store->read(*context,
                                                 context->getSettingsRef(),
                                                 columns,
-                                                {HandleRange::newAll()},
+                                                {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                                 /* num_streams= */ 1,
                                                 /* max_version= */ std::numeric_limits<UInt64>::max(),
                                                 EMPTY_FILTER,
