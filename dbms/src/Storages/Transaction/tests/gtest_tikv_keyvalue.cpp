@@ -320,7 +320,7 @@ TEST(TiKVKeyValue_test, PortedTests)
 TEST(TiKVKeyValue_test, ToHex)
 {
 #pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wc++11-narrowing"
+#pragma GCC diagnostic ignored "-Wnarrowing"
     std::string key{
         0x74, 0x80, 0x00, 0x00, //
         0x00, 0x00, 0x00, 0x00, //
