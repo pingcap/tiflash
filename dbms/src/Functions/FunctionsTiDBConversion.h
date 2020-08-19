@@ -1156,12 +1156,13 @@ struct TiDBConvertToTime
     static_assert(std::is_same_v<ToDataType, DataTypeMyDate> || std::is_same_v<ToDataType, DataTypeMyDateTime>);
 
     using FromFieldType = typename FromDataType::FieldType;
+    using ToFieldType = typename ToDataType::FieldType;
 
     static void execute(Block & block, const ColumnNumbers & arguments, size_t result, bool, const tipb::FieldType &, const Context &)
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
-        auto col_to = ColumnVector<DataTypeMyDate::FieldType>::create();
-        typename ColumnVector<DataTypeMyDate::FieldType>::Container & vec_to = col_to->getData();
+        auto col_to = ColumnUInt64::create();
+        ColumnUInt64::Container & vec_to = col_to->getData();
         vec_to.resize(size);
 
         ColumnUInt8::MutablePtr col_null_map_to;
@@ -1212,6 +1213,26 @@ struct TiDBConvertToTime
                     (*vec_null_map_to)[i] = 1;
                 }
                 current_offset = next_offset;
+            }
+        }
+        else if constexpr (std::is_same_v<FromDataType, DataTypeMyDate> || std::is_same_v<FromDataType, DataTypeMyDateTime>)
+        {
+            const auto * col_from = checkAndGetColumn<ColumnUInt64>(block.getByPosition(arguments[0]).column.get());
+            const ColumnUInt64::Container & vec_from = col_from->getData();
+
+            for (size_t i = 0; i < size; i++)
+            {
+                MyDateTime datetime(vec_from[i]);
+
+                if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
+                {
+                    MyDate date(datetime.year, datetime.month, datetime.day);
+                    vec_to[i] = date.toPackedUInt();
+                }
+                else
+                {
+                    vec_to[i] = datetime.toPackedUInt();
+                }
             }
         }
         else if constexpr (std::is_integral_v<FromFieldType>)
@@ -1299,26 +1320,6 @@ struct TiDBConvertToTime
                 const FromFieldType & value = vec_from[i];
                 String value_str = value.toString(type.getScale());
                 MyDateTime datetime(parseMyDateTime(value_str).template safeGet<UInt64>());
-                if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
-                {
-                    MyDate date(datetime.year, datetime.month, datetime.day);
-                    vec_to[i] = date.toPackedUInt();
-                }
-                else
-                {
-                    vec_to[i] = datetime.toPackedUInt();
-                }
-            }
-        }
-        else if constexpr (std::is_same_v<FromDataType, DataTypeMyDate> || std::is_same_v<FromDataType, DataTypeMyDateTime>)
-        {
-            const auto * col_from = checkAndGetColumn<ColumnDecimal<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
-            const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
-
-            for (size_t i = 0; i < size; i++)
-            {
-                MyDateTime datetime(vec_from[i]);
-
                 if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
                 {
                     MyDate date(datetime.year, datetime.month, datetime.day);
