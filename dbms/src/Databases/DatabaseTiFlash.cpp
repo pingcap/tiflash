@@ -158,7 +158,7 @@ void DatabaseTiFlash::createTable(const Context & context, const String & table_
         const String statement = getTableDefinitionFromCreateQuery(query);
 
         /// Exclusive flags guarantees, that table is not created right now in another thread. Otherwise, exception will be thrown.
-        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, EncryptionPath(table_metadata_path, ""),
+        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""),
             statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
@@ -267,7 +267,7 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
         statement = getTableDefinitionFromCreateQuery(ast);
 
         {
-            WriteBufferFromFileProvider out(context.getFileProvider(), new_tbl_meta_file_tmp, EncryptionPath(new_tbl_meta_file, ""),
+            WriteBufferFromFileProvider out(context.getFileProvider(), new_tbl_meta_file_tmp, EncryptionPath(new_tbl_meta_file_tmp, ""),
                 statement.size(), O_WRONLY | O_CREAT | O_EXCL);
             writeString(statement, out);
             out.next();
@@ -345,7 +345,7 @@ void DatabaseTiFlash::alterTable(
     statement = getTableDefinitionFromCreateQuery(ast);
 
     {
-        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, EncryptionPath(table_metadata_path, ""),
+        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""),
             statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
