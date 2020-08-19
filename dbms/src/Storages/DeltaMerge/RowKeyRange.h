@@ -503,6 +503,18 @@ struct RowKeyRange
                            rowkey_column_size);
     }
 
+    inline void setStart(StringPtr value, Int64 int_value)
+    {
+        start     = value;
+        int_start = int_value;
+    }
+
+    inline void setEnd(StringPtr value, Int64 int_value)
+    {
+        end     = value;
+        int_end = int_value;
+    }
+
     inline void setStart(const RowKeyValue & value)
     {
         if (is_common_handle)

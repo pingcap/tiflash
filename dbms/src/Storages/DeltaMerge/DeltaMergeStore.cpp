@@ -544,8 +544,8 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
             }
         }
 
-        cur_range.start = segment_range.end;
-        cur_range.end   = delete_range.end;
+        cur_range.setStart(segment_range.end, segment_range.int_end);
+        cur_range.setEnd(delete_range.end, delete_range.int_end);
     }
 
     for (auto & segment : updated_segments)
@@ -583,7 +583,7 @@ void DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRa
             }
         }
 
-        cur_range.start = segment_range.end;
+        cur_range.setStart(segment_range.end, segment_range.int_end);
     }
 }
 
@@ -639,7 +639,7 @@ void DeltaMergeStore::compact(const Context & db_context, const RowKeyRange & ra
             }
         }
 
-        cur_range.start = segment_range.end;
+        cur_range.setStart(segment_range.end, segment_range.int_end);
     }
 }
 

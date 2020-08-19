@@ -48,10 +48,10 @@ public:
 
     static constexpr const char * pk_name = "_tidb_rowid";
 
-    static ColumnDefinesPtr getDefaultColumns()
+    static ColumnDefinesPtr getDefaultColumns(bool is_common_handle = false)
     {
         ColumnDefinesPtr columns = std::make_shared<ColumnDefines>();
-        columns->emplace_back(ColumnDefine(EXTRA_HANDLE_COLUMN_ID, pk_name, std::make_shared<DataTypeInt64>()));
+        columns->emplace_back(getExtraHandleColumnDefine(is_common_handle));
         columns->emplace_back(getVersionColumnDefine());
         columns->emplace_back(getTagColumnDefine());
         return columns;
@@ -68,10 +68,12 @@ public:
     static Block prepareSimpleWriteBlock(size_t         beg,
                                          size_t         end,
                                          bool           reversed,
-                                         UInt64         tso       = 2,
-                                         const String & pk_name_  = pk_name,
-                                         ColumnID       pk_col_id = EXTRA_HANDLE_COLUMN_ID,
-                                         DataTypePtr    pk_type   = EXTRA_HANDLE_COLUMN_INT_TYPE)
+                                         UInt64         tso                = 2,
+                                         const String & pk_name_           = pk_name,
+                                         ColumnID       pk_col_id          = EXTRA_HANDLE_COLUMN_ID,
+                                         DataTypePtr    pk_type            = EXTRA_HANDLE_COLUMN_INT_TYPE,
+                                         bool           is_common_handle   = false,
+                                         size_t         rowkey_column_size = 1)
     {
         Block        block;
         const size_t num_rows = (end - beg);
@@ -83,13 +85,26 @@ public:
                 for (size_t i = 0; i < num_rows; i++)
                 {
                     Field field;
-                    if (!reversed)
+                    if (is_common_handle)
                     {
-                        field = Int64(beg + i);
+                        Int64             value = reversed ? end - 1 - i : beg + i;
+                        std::stringstream ss;
+                        for (size_t index = 0; index < rowkey_column_size; index++)
+                        {
+                            ::DB::EncodeInt64(value, ss);
+                        }
+                        field = ss.str();
                     }
                     else
                     {
-                        field = Int64(end - 1 - i);
+                        if (!reversed)
+                        {
+                            field = Int64(beg + i);
+                        }
+                        else
+                        {
+                            field = Int64(end - 1 - i);
+                        }
                     }
                     m_col->insert(field);
                 }

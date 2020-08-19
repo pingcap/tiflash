@@ -595,10 +595,10 @@ try
     }
     // check segment range
     const auto s1_range = segment->getRowKeyRange();
-    EXPECT_EQ(s1_range.start, old_range.start);
+    EXPECT_EQ(*s1_range.start, *old_range.start);
     const auto s2_range = new_segment->getRowKeyRange();
-    EXPECT_EQ(s2_range.start, s1_range.end);
-    EXPECT_EQ(s2_range.end, old_range.end);
+    EXPECT_EQ(*s2_range.start, *s1_range.end);
+    EXPECT_EQ(*s2_range.end, *old_range.end);
     // TODO check segment epoch is increase
 
     size_t num_rows_seg1 = 0;
