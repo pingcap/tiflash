@@ -81,7 +81,7 @@ AggregatingBlockInputStream::TemporaryFileStream::TemporaryFileStream(const std:
 
 AggregatingBlockInputStream::TemporaryFileStream::~TemporaryFileStream()
 {
-    file_provider->deleteFile(file_in.getFileName(), EncryptionPath(file_in.getFileName(), ""));
+    file_provider->deleteRegularFile(file_in.getFileName(), EncryptionPath(file_in.getFileName(), ""));
 }
 
 }

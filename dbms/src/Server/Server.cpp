@@ -359,6 +359,24 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setGlobalContext(*global_context);
     global_context->setApplicationType(Context::ApplicationType::SERVER);
 
+    /// Init File Provider
+    if (proxy_conf.is_proxy_runnable)
+    {
+        bool enable_encryption = tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled();
+        if (enable_encryption)
+        {
+            auto method = tiflash_instance_wrap.proxy_helper->getEncryptionMethod();
+            enable_encryption = (method != EncryptionMethod::Plaintext);
+        }
+        KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(&tiflash_instance_wrap);
+        global_context->initializeFileProvider(key_manager, enable_encryption);
+    }
+    else
+    {
+        KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
+        global_context->initializeFileProvider(key_manager, false);
+    }
+
     bool has_zookeeper = config().has("zookeeper");
 
     std::vector<String> all_fast_path;
@@ -416,9 +434,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         p += "/data";
 
     if (path_realtime_mode && all_normal_path.size() > 1)
-        global_context->setExtraPaths(std::vector<String>(extra_paths.begin() + 1, extra_paths.end()), global_context->getPathCapacity());
+        global_context->setExtraPaths(std::vector<String>(extra_paths.begin() + 1, extra_paths.end()), global_context->getPathCapacity(), global_context->getFileProvider());
     else
-        global_context->setExtraPaths(extra_paths, global_context->getPathCapacity());
+        global_context->setExtraPaths(extra_paths, global_context->getPathCapacity(), global_context->getFileProvider());
 
     const std::string path = all_normal_path[0];
     TiFlashRaftConfig raft_config(path, config(), log);
@@ -493,7 +511,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             if (it->isFile() && startsWith(it.name(), "tmp"))
             {
                 LOG_DEBUG(log, "Removing old temporary file " << it->path());
-                it->remove();
+                global_context->getFileProvider()->deleteRegularFile(it->path(), EncryptionPath(it->path(), ""));
             }
         }
     }
@@ -611,24 +629,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();
-
-    /// Init File Provider
-    if (proxy_conf.is_proxy_runnable)
-    {
-        bool enable_encryption = tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled();
-        if (enable_encryption)
-        {
-            auto method = tiflash_instance_wrap.proxy_helper->getEncryptionMethod();
-            enable_encryption = (method != EncryptionMethod::Plaintext);
-        }
-        KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(&tiflash_instance_wrap);
-        global_context->initializeFileProvider(key_manager, enable_encryption);
-    }
-    else
-    {
-        KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(true);
-        global_context->initializeFileProvider(key_manager, true);
-    }
 
     /// Set path for format schema files
     auto format_schema_path = Poco::File(config().getString("format_schema_path", path + "format_schemas/"));

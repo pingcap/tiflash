@@ -168,6 +168,13 @@ SnapshotPtr StableValueSpace::createSnapshot()
     return snap;
 }
 
+void StableValueSpace::remove(const FileProviderPtr & file_provider) {
+    for (auto & file : files)
+    {
+        file->remove(file_provider);
+    }
+}
+
 SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DMContext &     context, //
                                                                         const ColumnDefines & read_columns,
                                                                         const HandleRange &   handle_range,

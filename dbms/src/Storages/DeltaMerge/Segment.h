@@ -195,6 +195,11 @@ public:
     }
     bool hasAbandoned() { return delta->hasAbandoned(); }
 
+    void remove(const FileProviderPtr & file_provider)
+    {
+        stable->remove(file_provider);
+    }
+
 private:
     ReadInfo getReadInfo(const DMContext &          dm_context,
                          const ColumnDefines &      read_columns,

@@ -50,14 +50,59 @@ WritableFilePtr FileProvider::newWritableFile(const String & file_path_, const E
     return file;
 }
 
-void FileProvider::deleteFile(const String & file_path_, const EncryptionPath & encryption_path_, bool recursive) const
+void FileProvider::deleteDirectory(const String & dir_path_, bool dir_path_as_encryption_path, bool recursive) const
+{
+    Poco::File dir_file(dir_path_);
+    if (dir_file.exists())
+    {
+        if (dir_path_as_encryption_path)
+        {
+            key_manager->deleteFile(dir_path_);
+            dir_file.remove(recursive);
+        }
+        else if (recursive)
+        {
+            std::vector<Poco::File> files;
+            dir_file.list(files);
+            for (auto & file : files)
+            {
+                if (file.isFile())
+                {
+                    key_manager->deleteFile(file.path());
+                }
+                else if (file.isDirectory())
+                {
+                    deleteDirectory(file.path(), false, recursive);
+                }
+                else
+                {
+                    throw DB::TiFlashException(
+                            "Unknown file type: " + file.path(), Errors::Encryption::Internal);
+                }
+            }
+            dir_file.remove(recursive);
+        }
+        else
+        {
+            // recursive must be false here
+            dir_file.remove(false);
+        }
+    }
+}
+
+void FileProvider::deleteRegularFile(const String & file_path_, const EncryptionPath & encryption_path_) const
 {
     Poco::File data_file(file_path_);
     if (data_file.exists())
     {
-        data_file.remove(recursive);
+        if (unlikely(!data_file.isFile()))
+        {
+            throw DB::TiFlashException(
+                    "File: " + data_file.path() + " is not a regular file", Errors::Encryption::Internal);
+        }
+        key_manager->deleteFile(encryption_path_.full_path);
+        data_file.remove(false);
     }
-    key_manager->deleteFile(encryption_path_.full_path);
 }
 
 void FileProvider::createEncryptionInfo(const EncryptionPath & encryption_path_) const
