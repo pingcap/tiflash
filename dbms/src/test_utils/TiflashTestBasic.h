@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Encryption/MockKeyManager.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/IDataType.h>
 #include <Interpreters/Context.h>
@@ -130,11 +131,13 @@ public:
             context.setApplicationType(DB::Context::ApplicationType::SERVER);
 
             context.initializeTiFlashMetrics();
+            KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
+            context.initializeFileProvider(key_manager, false);
             std::vector<size_t> all_capacity{0};
 
             // FIXME: These paths are only set at the first time
             context.initializePathCapacityMetric(testdata_path, std::move(all_capacity));
-            context.createTMTContext({}, "", "", {"default"}, root_path + "/kvstore", TiDB::StorageEngine::TMT, false);
+            context.createTMTContext({}, {"default"}, root_path + "/kvstore", TiDB::StorageEngine::TMT, false);
 
             context.getTMTContext().restore();
         }

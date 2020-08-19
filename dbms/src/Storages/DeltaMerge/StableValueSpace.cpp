@@ -32,7 +32,7 @@ void StableValueSpace::setFiles(const DMFiles & files_, DMContext * dm_context, 
         auto hash_salt   = dm_context->hash_salt;
         for (auto & file : files_)
         {
-            DMFilePackFilter pack_filter(file, index_cache, hash_salt, range, EMPTY_FILTER, {});
+            DMFilePackFilter pack_filter(file, index_cache, hash_salt, range, EMPTY_FILTER, {}, dm_context->db_context.getFileProvider());
             auto [file_valid_rows, file_valid_bytes] = pack_filter.validRowsAndBytes();
             rows += file_valid_rows;
             bytes += file_valid_bytes;
@@ -80,7 +80,7 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
         auto file_id          = context.storage_pool.data().getNormalPageId(ref_id);
         auto file_parent_path = context.extra_paths.getPath(file_id) + "/" + STABLE_FOLDER_NAME;
 
-        auto dmfile = DMFile::restore(file_id, ref_id, file_parent_path);
+        auto dmfile = DMFile::restore(context.db_context.getFileProvider(), file_id, ref_id, file_parent_path);
         stable->files.push_back(dmfile);
     }
 

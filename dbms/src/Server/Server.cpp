@@ -18,6 +18,9 @@
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
 #include <IO/ReadHelpers.h>
+#include <Encryption/DataKeyManager.h>
+#include <Encryption/MockKeyManager.h>
+#include <Encryption/FileProvider.h>
 #include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/DDLWorker.h>
@@ -139,85 +142,6 @@ struct TiFlashProxyConfig
 
 const std::string TiFlashProxyConfig::config_prefix = "flash.proxy";
 
-struct TiFlashSecurityConfig
-{
-    String ca_path;
-    String cert_path;
-    String key_path;
-
-    bool inited = false;
-    bool has_tls_config = false;
-    grpc::SslCredentialsOptions options;
-
-public:
-    TiFlashSecurityConfig(Poco::Util::LayeredConfiguration & config, Poco::Logger * log)
-    {
-        if (config.has("security"))
-        {
-            bool miss_ca_path = true;
-            bool miss_cert_path = true;
-            bool miss_key_path = true;
-            if (config.has("security.ca_path"))
-            {
-                ca_path = config.getString("security.ca_path");
-                miss_ca_path = false;
-            }
-            if (config.has("security.cert_path"))
-            {
-                cert_path = config.getString("security.cert_path");
-                miss_cert_path = false;
-            }
-            if (config.has("security.key_path"))
-            {
-                key_path = config.getString("security.key_path");
-                miss_key_path = false;
-            }
-            if (miss_ca_path && miss_cert_path && miss_key_path)
-            {
-                LOG_INFO(log, "No security config is set.");
-            }
-            else if (miss_ca_path || miss_cert_path || miss_key_path)
-            {
-                throw Exception("ca_path, cert_path, key_path must be set at the same time.", ErrorCodes::INVALID_CONFIG_PARAMETER);
-            }
-            else
-            {
-                has_tls_config = true;
-            }
-        }
-    }
-
-    grpc::SslCredentialsOptions ReadAndCacheSecurityInfo()
-    {
-        if (inited)
-        {
-            return options;
-        }
-        options.pem_root_certs = readFile(ca_path);
-        options.pem_cert_chain = readFile(cert_path);
-        options.pem_private_key = readFile(key_path);
-        inited = true;
-        return options;
-    }
-
-private:
-    String readFile(const String & filename)
-    {
-        if (filename.empty())
-        {
-            return "";
-        }
-        auto buffer = createReadBufferFromFileBase(filename, 1024, 0);
-        String result;
-        while (!buffer->eof())
-        {
-            char buf[1024];
-            size_t len = buffer->read(buf, 1024);
-            result.append(buf, len);
-        }
-        return result;
-    }
-};
 
 struct TiFlashRaftConfig
 {
@@ -317,6 +241,17 @@ TiFlashRaftConfig::TiFlashRaftConfig(const std::string & path, Poco::Util::Layer
             disable_bg_flush = true;
         }
     }
+}
+
+pingcap::ClusterConfig getClusterConfig(const TiFlashSecurityConfig & security_config, const TiFlashRaftConfig & raft_config)
+{
+    pingcap::ClusterConfig config;
+    config.learner_key = raft_config.learner_key;
+    config.learner_value = raft_config.learner_value;
+    config.ca_path = security_config.ca_path;
+    config.cert_path = security_config.cert_path;
+    config.key_path = security_config.key_path;
+    return config;
 }
 
 Logger * grpc_log = nullptr;
@@ -493,7 +428,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setPath(path);
     global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
 
-    TiFlashSecurityConfig security_config(config(), log);
+    security_config = TiFlashSecurityConfig(config(), log);
 
     /// Create directories for 'path' and for default database, if not exist.
     for (const String & candidate_path : global_context->getPartPathSelector().getAllPath())
@@ -677,6 +612,24 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();
 
+    /// Init File Provider
+    if (proxy_conf.is_proxy_runnable)
+    {
+        bool enable_encryption = tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled();
+        if (enable_encryption)
+        {
+            auto method = tiflash_instance_wrap.proxy_helper->getEncryptionMethod();
+            enable_encryption = (method != EncryptionMethod::Plaintext);
+        }
+        KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(&tiflash_instance_wrap);
+        global_context->initializeFileProvider(key_manager, enable_encryption);
+    }
+    else
+    {
+        KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(true);
+        global_context->initializeFileProvider(key_manager, true);
+    }
+
     /// Set path for format schema files
     auto format_schema_path = Poco::File(config().getString("format_schema_path", path + "format_schemas/"));
     global_context->setFormatSchemaPath(format_schema_path.path() + "/");
@@ -692,14 +645,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         LOG_DEBUG(log, "Default storage engine: " << static_cast<Int64>(raft_config.engine));
         /// create TMTContext
+        auto cluster_config = getClusterConfig(security_config, raft_config);
         global_context->createTMTContext(raft_config.pd_addrs,
-            raft_config.learner_key,
-            raft_config.learner_value,
             raft_config.ignore_databases,
             raft_config.kvstore_path,
             raft_config.engine,
             raft_config.disable_bg_flush,
-            security_config.ReadAndCacheSecurityInfo());
+            cluster_config);
         global_context->getTMTContext().reloadConfig(config());
     }
 
@@ -960,15 +912,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
                     LOG_INFO(log, "Listening tcp: " + address.toString());
                 }
+                else if (security_config.has_tls_config)
+                {
+                    LOG_INFO(log, "tcp_port is closed because tls config is set");
+                }
 
                 /// TCP with SSL
-                if (config().has("tcp_port_secure"))
+                if (config().has("tcp_port_secure") && !security_config.has_tls_config)
                 {
 #if Poco_NetSSL_FOUND
-                    if (!security_config.has_tls_config)
-                    {
-                        LOG_ERROR(log, "tcp_port_secure is set but tls config is not set");
-                    }
                     Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
                         security_config.key_path,
                         security_config.cert_path,
@@ -985,13 +937,17 @@ int Server::main(const std::vector<std::string> & /*args*/)
                         ErrorCodes::SUPPORT_IS_DISABLED};
 #endif
                 }
+                else if (security_config.has_tls_config)
+                {
+                    LOG_INFO(log, "tcp_port is closed because tls config is set");
+                }
 
                 /// At least one of TCP and HTTP servers must be created.
                 if (servers.empty())
                     throw Exception("No 'tcp_port' and 'http_port' is specified in configuration file.", ErrorCodes::NO_ELEMENTS_IN_CONFIG);
 
                 /// Interserver IO HTTP
-                if (config().has("interserver_http_port"))
+                if (config().has("interserver_http_port") && !security_config.has_tls_config)
                 {
                     Poco::Net::ServerSocket socket;
                     auto address = socket_bind_listen(socket, listen_host, config().getInt("interserver_http_port"));
@@ -1001,6 +957,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
                         new InterserverIOHTTPHandlerFactory(*this, "InterserverIOHTTPHandler-factory"), server_pool, socket, http_params));
 
                     LOG_INFO(log, "Listening interserver http: " + address.toString());
+                }
+                else if (security_config.has_tls_config)
+                {
+                    LOG_INFO(log, "internal http port is closed because tls config is set");
                 }
             }
             catch (const Poco::Net::NetException & e)
@@ -1108,7 +1068,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             metrics_transmitters.emplace_back(std::make_unique<MetricsTransmitter>(*global_context, async_metrics, graphite_key));
         }
 
-        auto metrics_prometheus = std::make_unique<MetricsPrometheus>(*global_context, async_metrics);
+        auto metrics_prometheus = std::make_unique<MetricsPrometheus>(*global_context, async_metrics, security_config);
 
         SessionCleaner session_cleaner(*global_context);
         ClusterManagerService cluster_manager_service(*global_context, config_path);

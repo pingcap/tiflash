@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/TiFlashSecurity.h>
 #include <Interpreters/Context.h>
 #include <common/logger_useful.h>
 
@@ -37,6 +38,8 @@ private:
 private:
     IServer & server;
     TiFlashMetricsPtr metrics;
+
+    const TiFlashSecurityConfig & security_config;
 
     Logger * log;
 };

@@ -16,7 +16,10 @@
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/TimezoneInfo.h>
 #include <IO/CompressionSettings.h>
+#include <Encryption/FileProvider.h>
+#include <pingcap/Config.h>
 #include <Storages/PartPathSelector.h>
+#include <Storages/Transaction/ProxyFFIType.h>
 #include <Storages/Transaction/StorageEngineType.h>
 
 
@@ -379,13 +382,11 @@ public:
     DDLWorker & getDDLWorker() const;
 
     void createTMTContext(const std::vector<std::string> & pd_addrs,
-                          const std::string & learner_key,
-                          const std::string & learner_value,
                           const std::unordered_set<std::string> & ignore_databases,
                           const std::string & kvstore_path,
                           ::TiDB::StorageEngine engine,
                           bool disable_bg_tasks,
-                          grpc::SslCredentialsOptions cred_options = {});
+                          pingcap::ClusterConfig cluster_config = {});
 
     void initializeSchemaSyncService();
     SchemaSyncServicePtr & getSchemaSyncService();
@@ -398,6 +399,9 @@ public:
 
     void initializeTiFlashMetrics();
     TiFlashMetricsPtr getTiFlashMetrics() const;
+
+    void initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption);
+    FileProviderPtr getFileProvider() const;
 
     Clusters & getClusters() const;
     std::shared_ptr<Cluster> getCluster(const std::string & cluster_name) const;
