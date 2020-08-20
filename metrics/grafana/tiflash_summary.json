@@ -3526,7 +3526,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_storage_throughput{instance=~\"$instance\", type=\"write\"}[1m]))",
+              "expr": "sum(rate(tiflash_storage_throughput_bytes{instance=~\"$instance\", type=\"write\"}[1m]))",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 1,
@@ -3535,7 +3535,7 @@
               "step": 10
             },
             {
-              "expr": "sum(rate(tiflash_storage_throughput{instance=~\"$instance\", type!=\"write\"}[1m]))",
+              "expr": "sum(rate(tiflash_storage_throughput_bytes{instance=~\"$instance\", type!=\"write\"}[1m]))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "delta-management",
@@ -3730,21 +3730,21 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(tiflash_storage_throughput{instance=~\"$instance\", type=\"write\"})",
+              "expr": "sum(tiflash_storage_throughput_bytes{instance=~\"$instance\", type=\"write\"})",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "write",
               "refId": "B"
             },
             {
-              "expr": "sum(tiflash_storage_throughput{instance=~\"$instance\", type!=\"write\"})",
+              "expr": "sum(tiflash_storage_throughput_bytes{instance=~\"$instance\", type!=\"write\"})",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "delta_management",
               "refId": "A"
             },
             {
-              "expr": "sum(tiflash_storage_throughput{instance=~\"$instance\", type=\"write\"}) - sum(tiflash_storage_throughput{instance=~\"$instance\", type!=\"write\"})",
+              "expr": "sum(tiflash_storage_throughput_bytes{instance=~\"$instance\", type=\"write\"}) - sum(tiflash_storage_throughput_bytes{instance=~\"$instance\", type!=\"write\"})",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
