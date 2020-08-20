@@ -816,7 +816,7 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, const S
         wbs.removed_data.delPage(file->refId());
     }
 
-    LOG_INFO(log, "Segment [" << segment_id << "] prepare split physical end");
+    LOG_INFO(log, "Segment [" << segment_id << "] prepare split physical done");
 
     return {false, split_point, my_new_stable, other_stable};
 }
