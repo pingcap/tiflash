@@ -381,8 +381,6 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         FunctionToInt64::create(db_context)->execute(block, {handle_pos}, block.columns() - 1);
     }
 
-    const auto bytes = to_write.bytes();
-
     {
         // Sort by handle & version in ascending order.
         SortDescription sort;
@@ -392,6 +390,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         if (rows > 1 && !isAlreadySorted(block, sort))
             stableSortBlock(block, sort);
     }
+
+    const auto bytes = to_write.bytes();
 
     if (false && log->trace())
     {
@@ -1283,7 +1283,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
         }
 
         duplicated_bytes = new_left->getDelta()->getBytes();
-        duplicated_rows = new_right->getDelta()->getBytes();
+        duplicated_rows  = new_right->getDelta()->getBytes();
 
         LOG_DEBUG(log, "Apply split done. Segment [" << segment->segmentId() << "]");
     }
