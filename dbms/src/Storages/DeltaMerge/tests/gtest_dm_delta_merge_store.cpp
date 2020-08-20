@@ -1577,6 +1577,7 @@ try
         table_column_defines->emplace_back(col_str_define);
         table_column_defines->emplace_back(col_i8_define);
 
+        cleanUp();
         store = reload(table_column_defines, true, 2);
     }
 

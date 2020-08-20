@@ -80,7 +80,7 @@ inline DM::RowKeyRanges getQueryRanges(
 
     ranges.reserve(handle_ranges.size());
 
-    DM::RowKeyRange current = handle_ranges[0];
+    DM::RowKeyRange current = handle_ranges[sort_index[0]];
     for (size_t i = 1; i < handle_ranges.size(); ++i)
     {
         const size_t region_idx = sort_index[i];

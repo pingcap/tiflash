@@ -627,8 +627,10 @@ try
     index_type = json->getValue<Int32>("index_type");
     is_unique = json->getValue<bool>("is_unique");
     is_primary = json->getValue<bool>("is_primary");
-    is_invisible = json->getValue<bool>("is_invisible");
-    is_global = json->getValue<bool>("is_global");
+    if (json->has("is_invisible"))
+        is_invisible = json->getValue<bool>("is_invisible");
+    if (json->has("is_global"))
+        is_global = json->getValue<bool>("is_global");
 }
 catch (const Poco::Exception & e)
 {
