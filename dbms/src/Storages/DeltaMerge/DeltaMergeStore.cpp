@@ -1229,6 +1229,9 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     auto delta_bytes = (Int64)segment_snap->delta->getBytes();
     auto delta_rows  = (Int64)segment_snap->delta->getRows();
 
+    size_t duplicated_bytes = 0;
+    size_t duplicated_rows  = 0;
+
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_SegmentSplit};
     GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_seg_split).Increment();
     Stopwatch watch_seg_split;
@@ -1279,6 +1282,9 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
             new_right->check(dm_context, "After split right");
         }
 
+        duplicated_bytes = new_left->getDelta()->getBytes();
+        duplicated_rows = new_right->getDelta()->getBytes();
+
         LOG_DEBUG(log, "Apply split done. Segment [" << segment->segmentId() << "]");
     }
 
@@ -1293,8 +1299,8 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     {
         // For logical split, delta is duplicated into two segments. And will be merged into stable twice later. So we need to decrease it here.
         // Otherwise the final total delta merge bytes is greater than bytes written into.
-        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_bytes, type_delta_merge).Decrement(delta_bytes);
-        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_rows, type_delta_merge).Decrement(delta_rows);
+        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_bytes, type_delta_merge).Decrement(duplicated_bytes);
+        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_rows, type_delta_merge).Decrement(duplicated_rows);
     }
 
     if constexpr (DM_RUN_CHECK)
