@@ -607,9 +607,9 @@ DM::RowKeyRange getRange(DM::DeltaMergeStorePtr & store, const Context & context
             for (size_t i = 0; i < data.column->size(); ++i)
             {
                 if (index == start_index)
-                    range.setStart(data.getRowKeyValue(i));
+                    range.setStart(data.getRowKeyValue(i).toRowKeyValueWithOwnString());
                 if (index == start_index + delete_rows)
-                    range.setEnd(data.getRowKeyValue(i));
+                    range.setEnd(data.getRowKeyValue(i).toRowKeyValueWithOwnString());
                 ++index;
             }
         }

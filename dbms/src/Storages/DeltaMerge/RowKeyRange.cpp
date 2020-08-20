@@ -20,9 +20,25 @@ String getIntHandleMaxKey()
     return ss.str();
 }
 
-const StringPtr int_handle_min_key = std::make_shared<String>(getIntHandleMinKey());
-const StringPtr int_handle_max_key = std::make_shared<String>(getIntHandleMaxKey());
-const StringPtr empty_string_ptr   = std::make_shared<String>("");
+const RowKeyValueWithOwnString int_handle_min_key
+    = RowKeyValueWithOwnString(false, std::make_shared<String>(getIntHandleMinKey()), int_handle_min);
+const RowKeyValueWithOwnString int_handle_max_key
+    = RowKeyValueWithOwnString(false, std::make_shared<String>(getIntHandleMaxKey()), int_handle_max);
+const RowKeyValueWithOwnString empty_string_ptr = RowKeyValueWithOwnString(true, std::make_shared<String>(""), 0);
+
+RowKeyValueWithOwnString RowKeyValue::toRowKeyValueWithOwnString() const
+{
+    if (data == nullptr)
+    {
+        std::stringstream ss;
+        DB::EncodeInt64(int_value, ss);
+        return RowKeyValueWithOwnString(is_common_handle, std::make_shared<String>(ss.str()), int_value);
+    }
+    else
+    {
+        return RowKeyValueWithOwnString(is_common_handle, std::make_shared<String>(data, size), int_value);
+    }
+}
 
 std::unordered_map<size_t, RowKeyRange::CommonHandleRangeMinMax> RowKeyRange::min_max_data = {
     {1, RowKeyRange::CommonHandleRangeMinMax(1)},

@@ -72,18 +72,16 @@ inline DM::RowKeyRanges getQueryRanges(
 
     std::sort(sort_index.begin(), sort_index.end(), //
         [&handle_ranges](const size_t lhs, const size_t rhs) {
-            int first_result = handle_ranges[lhs].start->compare(*handle_ranges[rhs].start);
+            int first_result = handle_ranges[lhs].start.value->compare(*handle_ranges[rhs].start.value);
             if (likely(first_result != 0))
                 return first_result < 0;
-            return handle_ranges[lhs].end->compare(*handle_ranges[rhs].end) < 0;
+            return handle_ranges[lhs].end.value->compare(*handle_ranges[rhs].end.value) < 0;
         });
 
     ranges.reserve(handle_ranges.size());
 
-    DM::RowKeyRange current;
-    StringPtr start;
-    StringPtr end;
-    for (size_t i = 0; i < handle_ranges.size(); ++i)
+    DM::RowKeyRange current = handle_ranges[0];
+    for (size_t i = 1; i < handle_ranges.size(); ++i)
     {
         const size_t region_idx = sort_index[i];
         const auto & handle_range = handle_ranges[region_idx];
@@ -93,30 +91,25 @@ inline DM::RowKeyRanges getQueryRanges(
             continue;
         }
 
-        if (i == 0)
-        {
-            start = handle_range.start;
-            end = handle_range.end;
-        }
-        else if (*end == *handle_range.start)
+        if (*current.end.value == *handle_range.start.value)
         {
             // concat this range_in_table to current
-            end = handle_range.end;
+            current.end = handle_range.end;
         }
-        else if (end->compare(*handle_range.start) < 0)
+        else if (current.end.value->compare(*handle_range.start.value) < 0)
         {
-            ranges.emplace_back(start, end, is_common_handle, rowkey_column_size);
+            ranges.emplace_back(current);
             // start a new range
-            start = handle_range.start;
-            end = handle_range.end;
+            current.start = handle_range.start;
+            current.end = handle_range.end;
         }
         else
         {
-            throw Exception("Overlap region range between " + *start + "," + *end + " and [" //
-                + *handle_range.start + "," + *handle_range.end + ")");
+            throw Exception("Overlap region range between " + current.start.toString() + "," + current.end.toString() + " and [" //
+                + handle_range.start.toString() + "," + handle_range.end.toString() + ")");
         }
     }
-    ranges.emplace_back(start, end, is_common_handle, rowkey_column_size);
+    ranges.emplace_back(current);
 
     return ranges;
 }

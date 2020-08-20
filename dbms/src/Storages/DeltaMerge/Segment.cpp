@@ -528,7 +528,7 @@ SegmentPair Segment::split(DMContext & dm_context) const
     return segment_pair;
 }
 
-RowKeySplitPoint Segment::getSplitPointFast(DMContext & dm_context, const StableSnapshotPtr & stable_snap) const
+RowKeyValueWithOwnString Segment::getSplitPointFast(DMContext & dm_context, const StableSnapshotPtr & stable_snap) const
 {
     // FIXME: this method does not consider invalid packs in stable dmfiles.
 
@@ -595,10 +595,10 @@ RowKeySplitPoint Segment::getSplitPointFast(DMContext & dm_context, const Stable
     stream.readSuffix();
 
     RowKeyColumnContainer rowkey_column(block.getByPosition(0).column, is_common_handle);
-    return RowKeySplitPoint(rowkey_column.getRowKeyValue(read_row_in_pack));
+    return RowKeyValueWithOwnString(rowkey_column.getRowKeyValue(read_row_in_pack));
 }
 
-RowKeySplitPoint
+RowKeyValueWithOwnString
 Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, const SegmentSnapshotPtr & segment_snap) const
 {
     EventRecorder recorder(ProfileEvents::DMSegmentGetSplitPoint, ProfileEvents::DMSegmentGetSplitPointNS);
@@ -638,9 +638,9 @@ Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, c
 
     stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stream, rowkey_range, 0);
 
-    size_t           split_row_index = exact_rows / 2;
-    RowKeySplitPoint split_point;
-    size_t           count = 0;
+    size_t                   split_row_index = exact_rows / 2;
+    RowKeyValueWithOwnString split_point;
+    size_t                   count = 0;
 
     stream->readPrefix();
     while (true)
@@ -653,7 +653,7 @@ Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, c
         {
             size_t                offset_in_block = block.rows() - (count - split_row_index);
             RowKeyColumnContainer rowkey_column(block.getByName(handle.name).column, is_common_handle);
-            split_point = RowKeySplitPoint(rowkey_column.getRowKeyValue(offset_in_block));
+            split_point = RowKeyValueWithOwnString(rowkey_column.getRowKeyValue(offset_in_block));
             break;
         }
     }
@@ -674,9 +674,9 @@ Segment::SplitInfo Segment::prepareSplit(DMContext & dm_context, const SegmentSn
         return prepareSplitPhysical(dm_context, segment_snap, wbs);
     else
     {
-        RowKeySplitPoint split_point     = getSplitPointFast(dm_context, segment_snap->stable);
-        RowKeyValue      split_value     = split_point.toRowKeyValue();
-        bool             bad_split_point = !rowkey_range.check(split_value) || compare(split_value, rowkey_range.getStart()) == 0;
+        RowKeyValueWithOwnString split_point     = getSplitPointFast(dm_context, segment_snap->stable);
+        RowKeyValue              split_value     = split_point.toRowKeyValue();
+        bool                     bad_split_point = !rowkey_range.check(split_value) || compare(split_value, rowkey_range.getStart()) == 0;
         if (bad_split_point)
         {
             LOG_INFO(log,
@@ -690,7 +690,7 @@ Segment::SplitInfo Segment::prepareSplit(DMContext & dm_context, const SegmentSn
 
 Segment::SplitInfo Segment::prepareSplitLogical(DMContext &                dm_context,
                                                 const SegmentSnapshotPtr & segment_snap,
-                                                RowKeySplitPoint &         split_point,
+                                                RowKeyValueWithOwnString & split_point,
                                                 WriteBatches &             wbs) const
 {
     LOG_DEBUG(log, "Segment [" << segment_id << "] prepare split logical start");
@@ -699,8 +699,8 @@ Segment::SplitInfo Segment::prepareSplitLogical(DMContext &                dm_co
 
     auto & storage_pool = dm_context.storage_pool;
 
-    RowKeyRange my_range(rowkey_range.start, split_point.value, is_common_handle, rowkey_column_size);
-    RowKeyRange other_range(split_point.value, rowkey_range.end, is_common_handle, rowkey_column_size);
+    RowKeyRange my_range(rowkey_range.start, split_point, is_common_handle, rowkey_column_size);
+    RowKeyRange other_range(split_point, rowkey_range.end, is_common_handle, rowkey_column_size);
 
     if (my_range.none() || other_range.none())
         throw Exception("prepareSplitLogical: unexpected range! my_range: " + my_range.toString()
@@ -755,8 +755,8 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, const S
         = getReadInfo(dm_context, *dm_context.store_columns, segment_snap, {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
     auto split_point = getSplitPointSlow(dm_context, read_info, segment_snap);
 
-    RowKeyRange my_range(rowkey_range.start, split_point.value, is_common_handle, rowkey_column_size);
-    RowKeyRange other_range(split_point.value, rowkey_range.end, is_common_handle, rowkey_column_size);
+    RowKeyRange my_range(rowkey_range.start, split_point, is_common_handle, rowkey_column_size);
+    RowKeyRange other_range(split_point, rowkey_range.end, is_common_handle, rowkey_column_size);
 
     if (my_range.none() || other_range.none())
         throw Exception("prepareSplitPhysical: unexpected range! my_range: " + my_range.toString()
@@ -833,8 +833,8 @@ SegmentPair Segment::applySplit(DMContext &                dm_context, //
 {
     LOG_DEBUG(log, "Segment [" << segment_id << "] apply split");
 
-    RowKeyRange my_range(rowkey_range.start, split_info.split_point.value, is_common_handle, rowkey_column_size);
-    RowKeyRange other_range(split_info.split_point.value, rowkey_range.end, is_common_handle, rowkey_column_size);
+    RowKeyRange my_range(rowkey_range.start, split_info.split_point, is_common_handle, rowkey_column_size);
+    RowKeyRange other_range(split_info.split_point, rowkey_range.end, is_common_handle, rowkey_column_size);
     Packs       empty_packs;
     Packs *     head_packs = split_info.is_logical ? &empty_packs : &segment_snap->delta->packs;
 
