@@ -195,9 +195,9 @@ public:
     }
     bool hasAbandoned() { return delta->hasAbandoned(); }
 
-    void remove(const FileProviderPtr & file_provider)
+    void drop(const FileProviderPtr & file_provider)
     {
-        stable->remove(file_provider);
+        stable->drop(file_provider);
     }
 
 private:

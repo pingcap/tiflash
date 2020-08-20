@@ -168,7 +168,7 @@ SnapshotPtr StableValueSpace::createSnapshot()
     return snap;
 }
 
-void StableValueSpace::remove(const FileProviderPtr & file_provider)
+void StableValueSpace::drop(const FileProviderPtr & file_provider)
 {
     for (auto & file : files)
     {

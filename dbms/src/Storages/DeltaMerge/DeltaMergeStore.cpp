@@ -273,7 +273,7 @@ void DeltaMergeStore::drop()
     for (auto & [end, segment] : segments)
     {
         (void)end;
-        segment->remove(global_context.getFileProvider());
+        segment->drop(global_context.getFileProvider());
     }
     // Drop data in extra path (stable data by default)
     extra_paths.drop(true);
