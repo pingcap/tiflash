@@ -478,7 +478,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         offset += limit;
     }
 
-    GET_METRIC(dm_context->metrics, tiflash_storage_throughput, type_write).Increment(bytes);
+    GET_METRIC(dm_context->metrics, tiflash_storage_throughput_bytes, type_write).Increment(bytes);
+    GET_METRIC(dm_context->metrics, tiflash_storage_throughput_rows, type_write).Increment(rows);
 
     if (db_settings.dt_flush_after_write)
     {
@@ -1226,6 +1227,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 
     // Not counting the early give up action.
     auto delta_bytes = (Int64)segment_snap->delta->getBytes();
+    auto delta_rows  = (Int64)segment_snap->delta->getRows();
 
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_SegmentSplit};
     GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_seg_split).Increment();
@@ -1283,12 +1285,16 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     wbs.writeRemoves();
 
     if (!split_info.is_logical)
-        GET_METRIC(dm_context.metrics, tiflash_storage_throughput, type_split).Increment(delta_bytes);
+    {
+        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_bytes, type_split).Increment(delta_bytes);
+        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_rows, type_split).Increment(delta_rows);
+    }
     else
     {
         // For logical split, delta is duplicated into two segments. And will be merged into stable twice later. So we need to decrease it here.
         // Otherwise the final total delta merge bytes is greater than bytes written into.
-        GET_METRIC(dm_context.metrics, tiflash_storage_throughput, type_delta_merge).Decrement(delta_bytes);
+        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_bytes, type_delta_merge).Decrement(delta_bytes);
+        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_rows, type_delta_merge).Decrement(delta_rows);
     }
 
     if constexpr (DM_RUN_CHECK)
@@ -1330,6 +1336,7 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
 
     // Not counting the early give up action.
     auto delta_bytes = (Int64)left_snap->delta->getBytes() + right_snap->getBytes();
+    auto delta_rows  = (Int64)left_snap->delta->getRows() + right_snap->getRows();
 
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_SegmentMerge};
     GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_seg_merge).Increment();
@@ -1385,7 +1392,8 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
 
     wbs.writeRemoves();
 
-    GET_METRIC(dm_context.metrics, tiflash_storage_throughput, type_split).Increment(delta_bytes);
+    GET_METRIC(dm_context.metrics, tiflash_storage_throughput_bytes, type_split).Increment(delta_bytes);
+    GET_METRIC(dm_context.metrics, tiflash_storage_throughput_rows, type_split).Increment(delta_rows);
 
     if constexpr (DM_RUN_CHECK)
         check(dm_context.db_context);
@@ -1418,6 +1426,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
 
     // Not counting the early give up action.
     auto delta_bytes = (Int64)segment_snap->delta->getBytes();
+    auto delta_rows  = (Int64)segment_snap->delta->getRows();
 
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_DeltaMerge};
     CurrentMetrics::Increment cur_dm_total_bytes{CurrentMetrics::DT_DeltaMergeTotalBytes, (Int64)segment_snap->getBytes()};
@@ -1476,7 +1485,8 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
 
     wbs.writeRemoves();
 
-    GET_METRIC(dm_context.metrics, tiflash_storage_throughput, type_delta_merge).Increment(delta_bytes);
+    GET_METRIC(dm_context.metrics, tiflash_storage_throughput_bytes, type_delta_merge).Increment(delta_bytes);
+    GET_METRIC(dm_context.metrics, tiflash_storage_throughput_rows, type_delta_merge).Increment(delta_rows);
 
     if constexpr (DM_RUN_CHECK)
         check(dm_context.db_context);
