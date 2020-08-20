@@ -595,10 +595,10 @@ try
     }
     // check segment range
     const auto s1_range = segment->getRowKeyRange();
-    EXPECT_EQ(*s1_range.start, *old_range.start);
+    EXPECT_EQ(*s1_range.start.value, *old_range.start.value);
     const auto s2_range = new_segment->getRowKeyRange();
-    EXPECT_EQ(*s2_range.start, *s1_range.end);
-    EXPECT_EQ(*s2_range.end, *old_range.end);
+    EXPECT_EQ(*s2_range.start.value, *s1_range.end.value);
+    EXPECT_EQ(*s2_range.end.value, *old_range.end.value);
     // TODO check segment epoch is increase
 
     size_t num_rows_seg1 = 0;
@@ -633,8 +633,8 @@ try
         {
             // check merged segment range
             const auto & merged_range = segment->getRowKeyRange();
-            EXPECT_EQ(merged_range.start, s1_range.start);
-            EXPECT_EQ(merged_range.end, s2_range.end);
+            EXPECT_EQ(*merged_range.start.value, *s1_range.start.value);
+            EXPECT_EQ(*merged_range.end.value, *s2_range.end.value);
             // TODO check segment epoch is increase
         }
         {

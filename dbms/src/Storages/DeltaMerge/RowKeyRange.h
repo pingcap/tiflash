@@ -28,26 +28,6 @@ inline int compare(const char * a, size_t a_size, const char * b, size_t b_size)
     return a_size == b_size ? 0 : a_size > b_size ? 1 : -1;
 }
 
-inline const String & max(const String & a, const String & b)
-{
-    return a.compare(b) >= 0 ? a : b;
-}
-
-inline const String & min(const String & a, const String & b)
-{
-    return a.compare(b) < 0 ? a : b;
-}
-
-inline const StringRef & max(const StringRef & a, const StringRef & b)
-{
-    return compare(a.data, a.size, b.data, b.size) >= 0 ? a : b;
-}
-
-inline const StringRef & min(const StringRef & a, const StringRef & b)
-{
-    return compare(a.data, a.size, b.data, b.size) < 0 ? a : b;
-}
-
 struct RowKeyValueWithOwnString;
 
 struct RowKeyValue
