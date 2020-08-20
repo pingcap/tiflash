@@ -1068,7 +1068,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             metrics_transmitters.emplace_back(std::make_unique<MetricsTransmitter>(*global_context, async_metrics, graphite_key));
         }
 
-        auto metrics_prometheus = std::make_unique<MetricsPrometheus>(*global_context, async_metrics);
+        auto metrics_prometheus = std::make_unique<MetricsPrometheus>(*global_context, async_metrics, security_config);
 
         SessionCleaner session_cleaner(*global_context);
         ClusterManagerService cluster_manager_service(*global_context, config_path);

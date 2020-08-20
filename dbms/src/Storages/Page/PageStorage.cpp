@@ -274,7 +274,7 @@ void PageStorage::restore()
             = PageFile::newPageFile(max_file_id + 1, 0, storage_path, file_provider, PageFile::Type::Formal, page_file_log);
         page_file.createEncryptionInfo();
         LOG_DEBUG(log,
-                storage_name << "No PageFile can be reused for write, create new PageFile_" + DB::toString(max_file_id + 1) + "_0 for write");
+                storage_name << " No PageFile can be reused for write, create new PageFile_" + DB::toString(max_file_id + 1) + "_0 for write");
         write_files[0] = page_file;
     }
     if (global_capacity)
