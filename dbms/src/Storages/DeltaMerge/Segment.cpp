@@ -942,7 +942,7 @@ StableValueSpacePtr Segment::prepareMerge(DMContext &                dm_context,
     auto merged_stable_id = left->stable->getId();
     auto merged_stable    = createNewStable(dm_context, merged_stream, merged_stable_id, wbs);
 
-    LOG_INFO(left->log, "Segment [" << left->segmentId() << "] and [" << right->segmentId() << "] prepare merge end");
+    LOG_INFO(left->log, "Segment [" << left->segmentId() << "] and [" << right->segmentId() << "] prepare merge done");
 
     return merged_stable;
 }
