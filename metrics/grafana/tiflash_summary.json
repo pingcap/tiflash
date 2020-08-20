@@ -3386,7 +3386,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The current processing number of  segments' background management",
+          "description": "The current processing number of segments' background management",
           "fill": 0,
           "gridPos": {
             "h": 7,
