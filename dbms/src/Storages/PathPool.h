@@ -285,9 +285,9 @@ private:
     String getStorePath(const String & extra_path_root, const String & database_name, const String & table_name)
     {
         if (path_need_database_name)
-            return extra_path_root + (endsWith(extra_path_root, "/") ? "" : "/") + escapeForFileName(database_name) + "/" + escapeForFileName(table_name);
+            return extra_path_root + "/" + escapeForFileName(database_name) + "/" + escapeForFileName(table_name);
         else
-            return extra_path_root + (endsWith(extra_path_root, "/") ? "" : "/") + escapeForFileName(table_name);
+            return extra_path_root + "/" + escapeForFileName(table_name);
     }
 
     void renamePath(const String & old_path, const String & new_path)
