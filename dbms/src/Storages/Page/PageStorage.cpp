@@ -670,7 +670,7 @@ void PageStorage::drop()
 
     if (Poco::File directory(storage_path); directory.exists())
     {
-        file_provider->deleteDirectory(storage_path, false/* dir_path_as_encryption_path */, true/* recursive */);
+        file_provider->deleteDirectory(storage_path, false, true);
     }
 
     global_capacity->freeUsedSize(storage_path, bytes_to_remove);

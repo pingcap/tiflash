@@ -160,7 +160,7 @@ BlockIO InterpreterDropQuery::execute()
 
                 if (Poco::File(table_data_path).exists())
                 {
-                    context.getFileProvider()->deleteDirectory(table_data_path, false/* dir_path_as_encryption_path */, true/* recursive */);
+                    context.getFileProvider()->deleteDirectory(table_data_path, false, true);
                 }
             }
         }
