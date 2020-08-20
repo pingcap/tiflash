@@ -405,8 +405,11 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
     {
         auto & primary_index_info = table_info.getPrimaryIndexInfo();
         readed_primary_key_column_ids.resize(primary_index_info.idx_cols.size(), EmptyColumnID);
-        for (const auto & col : primary_index_info.idx_cols)
-            primary_key_column_pos_map[col.name] = col.offset;
+        for (size_t i = 0; i < primary_index_info.idx_cols.size(); i++)
+        {
+            const auto & col = primary_index_info.idx_cols[i];
+            primary_key_column_pos_map[col.name] = i;
+        }
     }
 
     for (size_t i = 0; i < table_info.columns.size(); i++)
