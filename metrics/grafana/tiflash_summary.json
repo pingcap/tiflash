@@ -3485,7 +3485,7 @@
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
           "decimals": 1,
-          "description": "The throughput of write and  delta's background management",
+          "description": "The throughput of write and delta's background management",
           "fill": 1,
           "gridPos": {
             "h": 7,
