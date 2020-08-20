@@ -100,6 +100,11 @@ try
                     Errors::Coprocessor::Internal);
         }
     }
+
+    for (auto & warn : dag_context.getWarnings())
+    {
+        recordError(warn.first, warn.second);
+    }
 }
 catch (const RegionException & e)
 {

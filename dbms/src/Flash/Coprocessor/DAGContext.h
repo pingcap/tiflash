@@ -32,11 +32,13 @@ public:
     void handleDivisionByZero(const String & msg);
     void handleInvalidTime(const String & msg);
     bool shouldClipToZero();
+    const std::vector<std::pair<Int32, String>> & getWarnings() const { return warnings; }
 
 private:
     std::map<String, ProfileStreamsInfo> profile_streams_map;
     std::unordered_map<String, BlockInputStreams> profile_streams_map_for_join_build_side;
     std::unordered_map<UInt32, std::vector<String>> qb_id_to_join_alias_map;
+    std::vector<std::pair<Int32, String>> warnings;
     UInt64 flags;
     UInt64 sql_mode;
 };
