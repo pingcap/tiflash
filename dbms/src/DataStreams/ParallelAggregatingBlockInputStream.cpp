@@ -109,7 +109,7 @@ ParallelAggregatingBlockInputStream::TemporaryFileStream::TemporaryFileStream(co
 
 ParallelAggregatingBlockInputStream::TemporaryFileStream::~TemporaryFileStream()
 {
-    file_provider->deleteFile(file_in.getFileName(), EncryptionPath(file_in.getFileName(), ""));
+    file_provider->deleteRegularFile(file_in.getFileName(), EncryptionPath(file_in.getFileName(), ""));
 }
 
 void ParallelAggregatingBlockInputStream::Handler::onBlock(Block & block, size_t thread_num)
