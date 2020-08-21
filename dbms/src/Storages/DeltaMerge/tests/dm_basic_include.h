@@ -91,6 +91,7 @@ public:
                         std::stringstream ss;
                         for (size_t index = 0; index < rowkey_column_size; index++)
                         {
+                            ss << TiDB::CodecFlagInt;
                             ::DB::EncodeInt64(value, ss);
                         }
                         field = ss.str();

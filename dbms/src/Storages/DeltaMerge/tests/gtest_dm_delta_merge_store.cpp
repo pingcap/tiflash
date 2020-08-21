@@ -1578,7 +1578,7 @@ try
         table_column_defines->emplace_back(col_i8_define);
 
         cleanUp();
-        store = reload(table_column_defines, true, 2);
+        store = reload(table_column_defines, true, rowkey_column_size);
     }
 
     {
@@ -1673,6 +1673,7 @@ try
                         size_t            k      = 0;
                         for (; cursor < value.size() && k < rowkey_column_size; k++)
                         {
+                            cursor++;
                             Int64 i_value = DB::DecodeInt64(cursor, value);
                             EXPECT_EQ(i_value, i);
                         }
@@ -1719,6 +1720,7 @@ try
                         size_t            k      = 0;
                         for (; cursor < value.size() && k < rowkey_column_size; k++)
                         {
+                            cursor++;
                             Int64 i_value = DB::DecodeInt64(cursor, value);
                             EXPECT_EQ(i_value, i);
                         }
@@ -1739,6 +1741,337 @@ try
         }
         in->readSuffix();
         ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+}
+CATCH
+
+TEST_F(DeltaMergeStore_test, WriteMultipleBlockWithCommonHandle)
+try
+{
+    const size_t num_write_rows       = 32;
+    const size_t rowkey_column_size   = 2;
+    auto         table_column_defines = DMTestEnv::getDefaultColumns(true);
+
+    {
+        cleanUp();
+        store = reload(table_column_defines, true, rowkey_column_size);
+    }
+
+    // Test write multi blocks without overlap
+    {
+        Block block1 = DMTestEnv::prepareSimpleWriteBlock(0,
+                                                          1 * num_write_rows,
+                                                          false,
+                                                          2,
+                                                          EXTRA_HANDLE_COLUMN_NAME,
+                                                          EXTRA_HANDLE_COLUMN_ID,
+                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
+                                                          true,
+                                                          rowkey_column_size);
+        Block block2 = DMTestEnv::prepareSimpleWriteBlock(1 * num_write_rows,
+                                                          2 * num_write_rows,
+                                                          false,
+                                                          2,
+                                                          EXTRA_HANDLE_COLUMN_NAME,
+                                                          EXTRA_HANDLE_COLUMN_ID,
+                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
+                                                          true,
+                                                          rowkey_column_size);
+        Block block3 = DMTestEnv::prepareSimpleWriteBlock(2 * num_write_rows,
+                                                          3 * num_write_rows,
+                                                          false,
+                                                          2,
+                                                          EXTRA_HANDLE_COLUMN_NAME,
+                                                          EXTRA_HANDLE_COLUMN_ID,
+                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
+                                                          true,
+                                                          rowkey_column_size);
+        store->write(*context, context->getSettingsRef(), block1);
+        store->write(*context, context->getSettingsRef(), block2);
+        store->write(*context, context->getSettingsRef(), block3);
+
+        store->flushCache(*context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+    }
+
+    {
+        const auto &        columns       = store->getTableColumns();
+        BlockInputStreamPtr in            = store->read(*context,
+                                             context->getSettingsRef(),
+                                             columns,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
+                                             /* expected_block_size= */ 1024)[0];
+        size_t              num_rows_read = 0;
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                {
+                    if (iter.name == DMTestEnv::pk_name)
+                    {
+                        String value             = c->operator[](i).get<String>();
+                        size_t            cursor = 0;
+                        size_t            k      = 0;
+                        for (; cursor < value.size() && k < rowkey_column_size; k++)
+                        {
+                            cursor++;
+                            Int64 i_value = DB::DecodeInt64(cursor, value);
+                            EXPECT_EQ(i_value, i);
+                        }
+                        EXPECT_EQ(k, rowkey_column_size);
+                        EXPECT_EQ(cursor, value.size());
+                    }
+                }
+            }
+        }
+
+        ASSERT_EQ(num_rows_read, 3 * num_write_rows);
+    }
+
+    store = reload(table_column_defines, true, rowkey_column_size);
+
+    // Test write multi blocks with overlap
+    {
+        UInt64 tso1   = 1;
+        UInt64 tso2   = 100;
+        Block  block1 = DMTestEnv::prepareSimpleWriteBlock(0,
+                                                          1 * num_write_rows,
+                                                          false,
+                                                          tso1,
+                                                          EXTRA_HANDLE_COLUMN_NAME,
+                                                          EXTRA_HANDLE_COLUMN_ID,
+                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
+                                                          true,
+                                                          rowkey_column_size);
+        Block  block2 = DMTestEnv::prepareSimpleWriteBlock(1 * num_write_rows,
+                                                          2 * num_write_rows,
+                                                          false,
+                                                          tso1,
+                                                          EXTRA_HANDLE_COLUMN_NAME,
+                                                          EXTRA_HANDLE_COLUMN_ID,
+                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
+                                                          true,
+                                                          rowkey_column_size);
+        Block  block3 = DMTestEnv::prepareSimpleWriteBlock(num_write_rows / 2,
+                                                          num_write_rows / 2 + num_write_rows,
+                                                          false,
+                                                          tso2,
+                                                          EXTRA_HANDLE_COLUMN_NAME,
+                                                          EXTRA_HANDLE_COLUMN_ID,
+                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
+                                                          true,
+                                                          rowkey_column_size);
+        store->write(*context, context->getSettingsRef(), block1);
+        store->write(*context, context->getSettingsRef(), block2);
+        store->write(*context, context->getSettingsRef(), block3);
+
+        store->flushCache(*context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+    }
+
+    store->compact(*context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+
+    // Read without version
+    {
+        const auto &        columns       = store->getTableColumns();
+        BlockInputStreamPtr in            = store->read(*context,
+                                             context->getSettingsRef(),
+                                             columns,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
+                                             /* expected_block_size= */ 1024)[0];
+        size_t              num_rows_read = 0;
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                {
+                    if (iter.name == DMTestEnv::pk_name)
+                    {
+                        String value             = c->operator[](i).get<String>();
+                        size_t            cursor = 0;
+                        size_t            k      = 0;
+                        for (; cursor < value.size() && k < rowkey_column_size; k++)
+                        {
+                            cursor++;
+                            Int64 i_value = DB::DecodeInt64(cursor, value);
+                            EXPECT_EQ(i_value, i);
+                        }
+                        EXPECT_EQ(k, rowkey_column_size);
+                        EXPECT_EQ(cursor, value.size());
+                    }
+                }
+            }
+        }
+
+        ASSERT_EQ(num_rows_read, 3 * num_write_rows);
+    }
+    // Read with version
+    {
+        const auto &        columns       = store->getTableColumns();
+        BlockInputStreamPtr in            = store->read(*context,
+                                             context->getSettingsRef(),
+                                             columns,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ UInt64(1),
+                                             EMPTY_FILTER,
+                                             /* expected_block_size= */ 1024)[0];
+        size_t              num_rows_read = 0;
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                {
+                    if (iter.name == DMTestEnv::pk_name)
+                    {
+                        String value             = c->operator[](i).get<String>();
+                        size_t            cursor = 0;
+                        size_t            k      = 0;
+                        for (; cursor < value.size() && k < rowkey_column_size; k++)
+                        {
+                            cursor++;
+                            Int64 i_value = DB::DecodeInt64(cursor, value);
+                            EXPECT_EQ(i_value, i);
+                        }
+                        EXPECT_EQ(k, rowkey_column_size);
+                        EXPECT_EQ(cursor, value.size());
+                    }
+                }
+            }
+        }
+
+        ASSERT_EQ(num_rows_read, 2 * num_write_rows);
+    }
+}
+CATCH
+
+TEST_F(DeltaMergeStore_test, DeleteReadWithCommonHandle)
+try
+{
+    const size_t num_rows_write     = 128;
+    size_t       rowkey_column_size = 2;
+    {
+        // Create a block with sequential Int64 handle in range [0, 128)
+        auto table_column_difines = DMTestEnv::getDefaultColumns(true);
+
+        cleanUp();
+        store = reload(table_column_difines, true, rowkey_column_size);
+
+        Block block = DMTestEnv::prepareSimpleWriteBlock(
+            0, 128, false, 2, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_STRING_TYPE, true, rowkey_column_size);
+        store->write(*context, context->getSettingsRef(), block);
+    }
+    // Test Reading first
+    {
+        const auto &        columns       = store->getTableColumns();
+        BlockInputStreamPtr in            = store->read(*context,
+                                             context->getSettingsRef(),
+                                             columns,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
+                                             /* expected_block_size= */ 1024)[0];
+        size_t              num_rows_read = 0;
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                {
+                    if (iter.name == DMTestEnv::pk_name)
+                    {
+                        String value             = c->operator[](i).get<String>();
+                        size_t            cursor = 0;
+                        size_t            k      = 0;
+                        for (; cursor < value.size() && k < rowkey_column_size; k++)
+                        {
+                            cursor++;
+                            Int64 i_value = DB::DecodeInt64(cursor, value);
+                            EXPECT_EQ(i_value, i);
+                        }
+                        EXPECT_EQ(k, rowkey_column_size);
+                        EXPECT_EQ(cursor, value.size());
+                    }
+                }
+            }
+        }
+
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+    // Delete range [0, 64)
+    const size_t num_deleted_rows = 64;
+    {
+        std::stringstream ss;
+        ss << TiDB::CodecFlagInt;
+        DB::EncodeInt64(Int64(0), ss);
+        ss << TiDB::CodecFlagInt;
+        DB::EncodeInt64(Int64(0), ss);
+        RowKeyValueWithOwnString start(true, std::make_shared<String>(ss.str()));
+        ss.str("");
+        ss << TiDB::CodecFlagInt;
+        DB::EncodeInt64(Int64(num_deleted_rows), ss);
+        ss << TiDB::CodecFlagInt;
+        DB::EncodeInt64(Int64(num_deleted_rows), ss);
+        RowKeyValueWithOwnString end(true, std::make_shared<String>(ss.str()));
+        RowKeyRange              range(start, end, true, 2);
+        store->deleteRange(*context, context->getSettingsRef(), range);
+    }
+    // Read after deletion
+    {
+        const auto &        columns       = store->getTableColumns();
+        BlockInputStreamPtr in            = store->read(*context,
+                                             context->getSettingsRef(),
+                                             columns,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
+                                             /* expected_block_size= */ 1024)[0];
+        size_t              num_rows_read = 0;
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                {
+                    if (iter.name == DMTestEnv::pk_name)
+                    {
+                        // Range after deletion is [64, 128)
+                        String value             = c->operator[](i).get<String>();
+                        size_t            cursor = 0;
+                        size_t            k      = 0;
+                        for (; cursor < value.size() && k < rowkey_column_size; k++)
+                        {
+                            cursor++;
+                            Int64 i_value = DB::DecodeInt64(cursor, value);
+                            EXPECT_EQ(i_value, i + Int64(num_deleted_rows));
+                        }
+                        EXPECT_EQ(k, rowkey_column_size);
+                        EXPECT_EQ(cursor, value.size());
+                    }
+                }
+            }
+        }
+
+        ASSERT_EQ(num_rows_read, num_rows_write - num_deleted_rows);
     }
 }
 CATCH
