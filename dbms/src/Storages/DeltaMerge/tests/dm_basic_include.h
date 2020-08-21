@@ -7,6 +7,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Range.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <test_utils/TiflashTestBasic.h>
 
 namespace DB
@@ -238,6 +239,39 @@ public:
             block.insert(str_col);
         }
         return block;
+    }
+
+    static void verifyClusteredIndexValue(const String & value, Int64 ans, size_t rowkey_column_size)
+    {
+        size_t cursor = 0;
+        size_t k      = 0;
+        for (; cursor < value.size() && k < rowkey_column_size; k++)
+        {
+            cursor++;
+            Int64 i_value = DB::DecodeInt64(cursor, value);
+            EXPECT_EQ(i_value, ans);
+        }
+        EXPECT_EQ(k, rowkey_column_size);
+        EXPECT_EQ(cursor, value.size());
+    }
+
+    static RowKeyRange getRowKeyRangeForClusteredIndex(Int64 start, Int64 end, size_t rowkey_column_size)
+    {
+        std::stringstream ss;
+        for (size_t i = 0; i < rowkey_column_size; i++)
+        {
+            ss << TiDB::CodecFlagInt;
+            EncodeInt64(start, ss);
+        }
+        RowKeyValueWithOwnString start_key = RowKeyValueWithOwnString(true, std::make_shared<String>(ss.str()));
+        ss.str("");
+        for (size_t i = 0; i < rowkey_column_size; i++)
+        {
+            ss << TiDB::CodecFlagInt;
+            EncodeInt64(end, ss);
+        }
+        RowKeyValueWithOwnString end_key = RowKeyValueWithOwnString(true, std::make_shared<String>(ss.str()));
+        return RowKeyRange(start_key, end_key, true, rowkey_column_size);
     }
 };
 

@@ -1668,17 +1668,7 @@ try
                 {
                     if (iter.name == DMTestEnv::pk_name)
                     {
-                        String value             = c->operator[](i).get<String>();
-                        size_t            cursor = 0;
-                        size_t            k      = 0;
-                        for (; cursor < value.size() && k < rowkey_column_size; k++)
-                        {
-                            cursor++;
-                            Int64 i_value = DB::DecodeInt64(cursor, value);
-                            EXPECT_EQ(i_value, i);
-                        }
-                        EXPECT_EQ(k, rowkey_column_size);
-                        EXPECT_EQ(cursor, value.size());
+                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
                     }
                     else if (iter.name == col_str_define.name)
                     {
@@ -1715,17 +1705,7 @@ try
                 {
                     if (iter.name == DMTestEnv::pk_name)
                     {
-                        String value             = c->operator[](i).get<String>();
-                        size_t            cursor = 0;
-                        size_t            k      = 0;
-                        for (; cursor < value.size() && k < rowkey_column_size; k++)
-                        {
-                            cursor++;
-                            Int64 i_value = DB::DecodeInt64(cursor, value);
-                            EXPECT_EQ(i_value, i);
-                        }
-                        EXPECT_EQ(k, rowkey_column_size);
-                        EXPECT_EQ(cursor, value.size());
+                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
                     }
                     else if (iter.name == col_str_define.name)
                     {
@@ -1814,17 +1794,7 @@ try
                 {
                     if (iter.name == DMTestEnv::pk_name)
                     {
-                        String value             = c->operator[](i).get<String>();
-                        size_t            cursor = 0;
-                        size_t            k      = 0;
-                        for (; cursor < value.size() && k < rowkey_column_size; k++)
-                        {
-                            cursor++;
-                            Int64 i_value = DB::DecodeInt64(cursor, value);
-                            EXPECT_EQ(i_value, i);
-                        }
-                        EXPECT_EQ(k, rowkey_column_size);
-                        EXPECT_EQ(cursor, value.size());
+                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
                     }
                 }
             }
@@ -1897,17 +1867,7 @@ try
                 {
                     if (iter.name == DMTestEnv::pk_name)
                     {
-                        String value             = c->operator[](i).get<String>();
-                        size_t            cursor = 0;
-                        size_t            k      = 0;
-                        for (; cursor < value.size() && k < rowkey_column_size; k++)
-                        {
-                            cursor++;
-                            Int64 i_value = DB::DecodeInt64(cursor, value);
-                            EXPECT_EQ(i_value, i);
-                        }
-                        EXPECT_EQ(k, rowkey_column_size);
-                        EXPECT_EQ(cursor, value.size());
+                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
                     }
                 }
             }
@@ -1937,17 +1897,7 @@ try
                 {
                     if (iter.name == DMTestEnv::pk_name)
                     {
-                        String value             = c->operator[](i).get<String>();
-                        size_t            cursor = 0;
-                        size_t            k      = 0;
-                        for (; cursor < value.size() && k < rowkey_column_size; k++)
-                        {
-                            cursor++;
-                            Int64 i_value = DB::DecodeInt64(cursor, value);
-                            EXPECT_EQ(i_value, i);
-                        }
-                        EXPECT_EQ(k, rowkey_column_size);
-                        EXPECT_EQ(cursor, value.size());
+                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
                     }
                 }
             }
@@ -1996,17 +1946,7 @@ try
                 {
                     if (iter.name == DMTestEnv::pk_name)
                     {
-                        String value             = c->operator[](i).get<String>();
-                        size_t            cursor = 0;
-                        size_t            k      = 0;
-                        for (; cursor < value.size() && k < rowkey_column_size; k++)
-                        {
-                            cursor++;
-                            Int64 i_value = DB::DecodeInt64(cursor, value);
-                            EXPECT_EQ(i_value, i);
-                        }
-                        EXPECT_EQ(k, rowkey_column_size);
-                        EXPECT_EQ(cursor, value.size());
+                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
                     }
                 }
             }
@@ -2055,17 +1995,8 @@ try
                     if (iter.name == DMTestEnv::pk_name)
                     {
                         // Range after deletion is [64, 128)
-                        String value             = c->operator[](i).get<String>();
-                        size_t            cursor = 0;
-                        size_t            k      = 0;
-                        for (; cursor < value.size() && k < rowkey_column_size; k++)
-                        {
-                            cursor++;
-                            Int64 i_value = DB::DecodeInt64(cursor, value);
-                            EXPECT_EQ(i_value, i + Int64(num_deleted_rows));
-                        }
-                        EXPECT_EQ(k, rowkey_column_size);
-                        EXPECT_EQ(cursor, value.size());
+                        DMTestEnv::verifyClusteredIndexValue(
+                            c->operator[](i).get<String>(), i + Int64(num_deleted_rows), rowkey_column_size);
                     }
                 }
             }
