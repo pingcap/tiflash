@@ -3386,7 +3386,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The current processing number of segments' background management",
+          "description": "The current processing number of  segments' background management",
           "fill": 0,
           "gridPos": {
             "h": 7,
@@ -3485,7 +3485,7 @@
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
           "decimals": 1,
-          "description": "The throughput of write and delta's background management",
+          "description": "The throughput of write and  delta's background management",
           "fill": 1,
           "gridPos": {
             "h": 7,
@@ -3721,7 +3721,7 @@
           "repeatedByRow": true,
           "seriesOverrides": [
             {
-              "alias": "delay",
+              "alias": "/bytes/",
               "yaxis": 2
             }
           ],
@@ -3732,24 +3732,34 @@
             {
               "expr": "sum(tiflash_storage_throughput_bytes{instance=~\"$instance\", type=\"write\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
-              "legendFormat": "write",
+              "legendFormat": "bytes_write",
               "refId": "B"
             },
             {
               "expr": "sum(tiflash_storage_throughput_bytes{instance=~\"$instance\", type!=\"write\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
-              "legendFormat": "delta_management",
+              "legendFormat": "bytes_delta_management",
               "refId": "A"
             },
             {
-              "expr": "sum(tiflash_storage_throughput_bytes{instance=~\"$instance\", type=\"write\"}) - sum(tiflash_storage_throughput_bytes{instance=~\"$instance\", type!=\"write\"})",
+              "expr": "sum(tiflash_storage_throughput_rows{instance=~\"$instance\", type=\"write\"})",
               "format": "time_series",
-              "hide": true,
+              "hide": false,
               "intervalFactor": 1,
-              "legendFormat": "delay",
-              "refId": "C"
+              "legendFormat": "rows_write",
+              "refId": "D"
+            },
+            {
+              "expr": "sum(tiflash_storage_throughput_rows{instance=~\"$instance\", type!=\"write\"})",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 1,
+              "legendFormat": "rows_delta_management",
+              "refId": "E"
             }
           ],
           "thresholds": [],
@@ -3772,7 +3782,7 @@
           },
           "yaxes": [
             {
-              "format": "Bps",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -3784,7 +3794,7 @@
               "label": null,
               "logBase": 1,
               "max": null,
-              "min": "-100000000",
+              "min": null,
               "show": true
             }
           ],
