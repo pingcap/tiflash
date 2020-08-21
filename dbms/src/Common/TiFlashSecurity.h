@@ -1,6 +1,7 @@
 #pragma once
 #include <Core/Types.h>
 #include <IO/createReadBufferFromFileBase.h>
+#include <Poco/String.h>
 #include <Poco/StringTokenizer.h>
 #include <Poco/Util/LayeredConfiguration.h>
 #include <common/logger_useful.h>
@@ -70,23 +71,30 @@ public:
             if (config.has("security.cert_allowed_cn") && has_tls_config)
             {
                 String verify_cns = config.getString("security.cert_allowed_cn");
-                if (verify_cns.size() > 2 && verify_cns[0] == '[' && verify_cns[verify_cns.size() - 1] == ']')
-                {
-                    verify_cns = verify_cns.substr(1, verify_cns.size() - 2);
-                }
-                Poco::StringTokenizer string_tokens(verify_cns, ",");
-                for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
-                {
-                    std::string cn = *it;
-                    if (cn.size() > 2 && cn[0] == '\"' && cn[cn.size() - 1] == '\"')
-                    {
-                        cn = cn.substr(1, cn.size() - 2);
-                    }
-                    allowed_common_names.insert(std::move(cn));
-                }
+                parseAllowedCN(verify_cns);
             }
         }
     }
+
+    void parseAllowedCN(String verify_cns)
+    {
+
+        if (verify_cns.size() > 2 && verify_cns[0] == '[' && verify_cns[verify_cns.size() - 1] == ']')
+        {
+            verify_cns = verify_cns.substr(1, verify_cns.size() - 2);
+        }
+        Poco::StringTokenizer string_tokens(verify_cns, ",");
+        for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
+        {
+            std::string cn = Poco::trim(*it);
+            if (cn.size() > 2 && cn[0] == '\"' && cn[cn.size() - 1] == '\"')
+            {
+                cn = cn.substr(1, cn.size() - 2);
+            }
+            allowed_common_names.insert(std::move(cn));
+        }
+    }
+
 
     bool checkGrpcContext(grpc::ServerContext * grpc_context) const
     {
