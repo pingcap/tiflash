@@ -9,7 +9,8 @@
 
 #include <DataStreams/OneBlockInputStream.h>
 
-#include <IO/PosixFileProvider.h>
+#include <Encryption/MockKeyManager.h>
+#include <Encryption/FileProvider.h>
 #include <Interpreters/Aggregator.h>
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
@@ -88,7 +89,8 @@ int main(int argc, char ** argv)
             Stopwatch stopwatch;
             stopwatch.start();
             
-            FileProviderPtr file_provider = std::make_shared<PosixFileProvider>();
+            KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
+            FileProviderPtr file_provider = std::make_shared<FileProvider>(key_manager, false);
             aggregator.execute(stream, aggregated_data_variants, file_provider);
 
             stopwatch.stop();
