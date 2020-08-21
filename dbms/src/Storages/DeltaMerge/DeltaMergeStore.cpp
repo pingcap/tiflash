@@ -380,6 +380,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
                          EXTRA_HANDLE_COLUMN_TYPE->createColumn());
         FunctionToInt64::create(db_context)->execute(block, {handle_pos}, block.columns() - 1);
     }
+    const auto bytes = to_write.bytes();
 
     {
         // Sort by handle & version in ascending order.
@@ -390,8 +391,6 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         if (rows > 1 && !isAlreadySorted(block, sort))
             stableSortBlock(block, sort);
     }
-
-    const auto bytes = to_write.bytes();
 
     if (false && log->trace())
     {
@@ -1299,8 +1298,8 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     {
         // For logical split, delta is duplicated into two segments. And will be merged into stable twice later. So we need to decrease it here.
         // Otherwise the final total delta merge bytes is greater than bytes written into.
-        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_bytes, type_delta_merge).Decrement(duplicated_bytes);
-        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_rows, type_delta_merge).Decrement(duplicated_rows);
+        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_bytes, type_split).Decrement(duplicated_bytes);
+        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_rows, type_split).Decrement(duplicated_rows);
     }
 
     if constexpr (DM_RUN_CHECK)
@@ -1398,8 +1397,8 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
 
     wbs.writeRemoves();
 
-    GET_METRIC(dm_context.metrics, tiflash_storage_throughput_bytes, type_split).Increment(delta_bytes);
-    GET_METRIC(dm_context.metrics, tiflash_storage_throughput_rows, type_split).Increment(delta_rows);
+    GET_METRIC(dm_context.metrics, tiflash_storage_throughput_bytes, type_merge).Increment(delta_bytes);
+    GET_METRIC(dm_context.metrics, tiflash_storage_throughput_rows, type_merge).Increment(delta_rows);
 
     if constexpr (DM_RUN_CHECK)
         check(dm_context.db_context);

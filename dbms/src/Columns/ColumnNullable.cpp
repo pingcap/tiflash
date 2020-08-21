@@ -314,6 +314,11 @@ size_t ColumnNullable::byteSize() const
     return getNestedColumn().byteSize() + getNullMapColumn().byteSize();
 }
 
+size_t ColumnNullable::byteSize(size_t offset, size_t limit) const
+{
+    return getNestedColumn().byteSize(offset, limit) + getNullMapColumn().byteSize(offset, limit);
+}
+
 size_t ColumnNullable::allocatedBytes() const
 {
     return getNestedColumn().allocatedBytes() + getNullMapColumn().allocatedBytes();

@@ -251,6 +251,15 @@ size_t Block::bytes() const
     return res;
 }
 
+size_t Block::bytes(size_t offset, size_t limit) const
+{
+    size_t res = 0;
+    for (const auto & elem : data)
+        res += elem.column->byteSize(offset, limit);
+
+    return res;
+}
+
 size_t Block::allocatedBytes() const
 {
     size_t res = 0;

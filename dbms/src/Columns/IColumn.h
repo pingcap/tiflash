@@ -259,6 +259,13 @@ public:
     /// Size of column data in memory (may be approximate) - for profiling. Zero, if could not be determined.
     virtual size_t byteSize() const = 0;
 
+    /// Size of column data between [offset, offset+limit) in memory (may be approximate) - for profiling.
+    /// This method throws NOT_IMPLEMENTED exception if it is called with unimplemented subclass.
+    virtual size_t byteSize(size_t offset, size_t limit) const
+    {
+        throw Exception("Method byteSize(size_t, size_t) is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     /// Size of memory, allocated for column.
     /// This is greater or equals to byteSize due to memory reservation in containers.
     /// Zero, if could be determined.
