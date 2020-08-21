@@ -143,7 +143,7 @@ public:
     virtual void shutdown() = 0;
 
     /// Delete metadata, the deletion of which differs from the recursive deletion of the directory, if any.
-    virtual void drop() = 0;
+    virtual void drop(const Context & context) = 0;
 
     virtual ~IDatabase() {}
 };

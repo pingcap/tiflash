@@ -269,12 +269,17 @@ void DeltaMergeStore::drop()
     // Remove all background task first
     shutdown();
     storage_pool.drop();
+    for (auto & [end, segment] : segments)
+    {
+        (void)end;
+        segment->drop(global_context.getFileProvider());
+    }
     // Drop data in extra path (stable data by default)
     extra_paths.drop(true);
     // Check if path(delta && meta by default) is covered by extra_paths, if not, drop it.
     Poco::File dir(path);
     if (dir.exists())
-        dir.remove(true);
+        global_context.getFileProvider()->deleteDirectory(path, false, true);
 
 #if USE_TCMALLOC
     // Reclaim memory.

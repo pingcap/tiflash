@@ -213,7 +213,7 @@ void DatabaseDictionary::shutdown()
 {
 }
 
-void DatabaseDictionary::drop()
+void DatabaseDictionary::drop(const Context & /*context*/)
 {
     /// Additional actions to delete database are not required.
 }

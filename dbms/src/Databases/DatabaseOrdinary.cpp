@@ -186,7 +186,7 @@ void DatabaseOrdinary::createTable(
     }
     catch (...)
     {
-        context.getFileProvider()->deleteFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""));
+        context.getFileProvider()->deleteRegularFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""));
         throw;
     }
 }
@@ -352,21 +352,27 @@ void DatabaseOrdinary::shutdown()
 }
 
 
-void DatabaseOrdinary::drop()
+void DatabaseOrdinary::drop(const Context & context)
 {
+    if (context.getFileProvider()->isEncryptionEnabled())
+    {
+        LOG_WARNING(log, "Encryption is enabled. There may be some encryption info left.");
+    }
     // Remove data dir for this database
     const String database_data_path = getDataPath();
     if (!database_data_path.empty())
-        Poco::File(database_data_path).remove(false);
+        context.getFileProvider()->deleteDirectory(database_data_path, false, false);
     // Remove metadata dir for this database
     if (auto dir = Poco::File(getMetadataPath()); dir.exists())
     {
-        dir.remove(false);
+        context.getFileProvider()->deleteDirectory(getMetadataPath(), false, false);
     }
+
     /// Old ClickHouse versions did not store database.sql files
     if (auto meta_file = Poco::File(detail::getDatabaseMetadataPath(getMetadataPath())); meta_file.exists())
     {
-        meta_file.remove();
+        context.getFileProvider()->deleteRegularFile(detail::getDatabaseMetadataPath(getMetadataPath()),
+                EncryptionPath(detail::getDatabaseMetadataPath(getMetadataPath()), ""));
     }
 }
 
@@ -419,7 +425,7 @@ void DatabaseOrdinary::alterTable(
     }
     catch (...)
     {
-        context.getFileProvider()->deleteFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""));
+        context.getFileProvider()->deleteRegularFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""));
         throw;
     }
 }
