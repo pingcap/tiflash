@@ -156,10 +156,12 @@ BlockIO InterpreterDropQuery::execute()
             const String database_data_path = database->getDataPath();
             if (!database_data_path.empty())
             {
-                String table_data_path = database_data_path + "/" + escapeForFileName(current_table_name);
+                String table_data_path = database_data_path + (endsWith(database_data_path, "/") ? "" : "/") + escapeForFileName(current_table_name);
 
                 if (Poco::File(table_data_path).exists())
-                    Poco::File(table_data_path).remove(true);
+                {
+                    context.getFileProvider()->deleteDirectory(table_data_path, false, true);
+                }
             }
         }
     }
@@ -181,7 +183,7 @@ BlockIO InterpreterDropQuery::execute()
         auto database = context.detachDatabase(database_name);
 
         /// Delete the database and remove its data / meta directory if need.
-        database->drop();
+        database->drop(context);
     }
 
     return {};

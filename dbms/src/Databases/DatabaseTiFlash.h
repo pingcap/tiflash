@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Databases/DatabasesCommon.h>
+#include <Encryption/FileProvider.h>
 
 namespace TiDB
 {
@@ -54,7 +55,7 @@ public:
     String getTableMetadataPath(const String & table_name) const override;
 
     void shutdown() override;
-    void drop() override;
+    void drop(const Context & context) override;
 
     TiDB::DBInfo & getDatabaseInfo() const;
 

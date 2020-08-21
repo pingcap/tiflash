@@ -142,7 +142,7 @@ public:
             context.getTMTContext().restore();
         }
         context.getSettingsRef() = settings;
-        context.setExtraPaths(getExtraPaths(testdata_path), context.getPathCapacity());
+        context.setExtraPaths(getExtraPaths(testdata_path), context.getPathCapacity(), context.getFileProvider());
         return context;
     }
 };
