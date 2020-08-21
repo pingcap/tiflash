@@ -1,4 +1,20 @@
+#include <Common/ProfileEvents.h>
+#include <Common/CurrentMetrics.h>
+
 #include <Encryption/ReadBufferFromFileProvider.h>
+
+
+namespace ProfileEvents
+{
+    extern const Event ReadBufferFromFileDescriptorRead;
+    extern const Event ReadBufferFromFileDescriptorReadFailed;
+    extern const Event ReadBufferFromFileDescriptorReadBytes;
+}
+
+namespace CurrentMetrics
+{
+    extern const Metric Read;
+}
 
 namespace DB
 {
@@ -26,8 +42,11 @@ bool ReadBufferFromFileProvider::nextImpl()
     size_t bytes_read = 0;
     while (!bytes_read)
     {
+        ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorRead);
+
         ssize_t res = 0;
         {
+            CurrentMetrics::Increment metric_increment{CurrentMetrics::Read};
             res = file->read(internal_buffer.begin(), internal_buffer.size());
         }
         if (!res)
@@ -35,6 +54,7 @@ bool ReadBufferFromFileProvider::nextImpl()
 
         if (-1 == res && errno != EINTR)
         {
+            ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorReadFailed);
             throwFromErrno("Cannot read from file " + getFileName(), ErrorCodes::CANNOT_READ_FROM_FILE_DESCRIPTOR);
         }
 
@@ -46,6 +66,7 @@ bool ReadBufferFromFileProvider::nextImpl()
 
     if (bytes_read)
     {
+        ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorReadBytes, bytes_read);
         working_buffer.resize(bytes_read);
     }
     else
