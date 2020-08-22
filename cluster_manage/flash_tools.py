@@ -19,6 +19,9 @@ class FlashConfig:
         p = self.conf_toml['flash']
         service_addr = p['service_addr']
         host, port = [e.strip() for e in service_addr.split(':')]
+        if host == '0.0.0.0':
+            proxy_toml = toml.load(p['proxy']['config'], _dict=dict)
+            host = [e.strip() for e in proxy_toml['server']['engine-addr'].split(':')][0]
         self.service_addr = '{}:{}'.format(host, port)
         self.http_addr = '{}:{}'.format(host, self.http_port)
         self.tidb_status_addr = util.compute_addr_list(p['tidb_status_addr'])
