@@ -13,14 +13,14 @@
 #include <Common/getFQDNOrHostName.h>
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
+#include <Encryption/DataKeyManager.h>
+#include <Encryption/FileProvider.h>
+#include <Encryption/MockKeyManager.h>
 #include <Flash/DiagnosticsService.h>
 #include <Flash/FlashService.h>
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
 #include <IO/ReadHelpers.h>
-#include <Encryption/DataKeyManager.h>
-#include <Encryption/MockKeyManager.h>
-#include <Encryption/FileProvider.h>
 #include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/DDLWorker.h>
@@ -289,23 +289,27 @@ int Server::main(const std::vector<std::string> & /*args*/)
     TiFlashServerHelper helper{
         // a special number, also defined in proxy
         .magic_number = 0x13579BDF,
-        .version = 11,
+        .version = 12,
         .inner = &tiflash_instance_wrap,
         .fn_gen_cpp_string = GenCppRawString,
         .fn_handle_write_raft_cmd = HandleWriteRaftCmd,
         .fn_handle_admin_raft_cmd = HandleAdminRaftCmd,
-        .fn_handle_apply_snapshot = HandleApplySnapshot,
         .fn_atomic_update_proxy = AtomicUpdateProxy,
         .fn_handle_destroy = HandleDestroy,
         .fn_handle_ingest_sst = HandleIngestSST,
         .fn_handle_check_terminated = HandleCheckTerminated,
         .fn_handle_compute_fs_stats = HandleComputeFsStats,
         .fn_handle_get_tiflash_status = HandleGetTiFlashStatus,
-        .fn_pre_handle_snapshot = PreHandleSnapshot,
+        .fn_pre_handle_tikv_snapshot = PreHandleTiKVSnapshot,
         .fn_apply_pre_handled_snapshot = ApplyPreHandledSnapshot,
-        .fn_gc_pre_handled_snapshot = GcPreHandledSnapshot,
         .fn_handle_get_table_sync_status = HandleGetTableSyncStatus,
-        .gc_cpp_string = GcCppString,
+        .gc_raw_cpp_ptr = GcRawCppPtr,
+        .is_tiflash_snapshot = IsTiFlashSnapshot,
+        .gen_tiflash_snapshot = GenTiFlashSnapshot,
+        .serialize_tiflash_snapshot_into = SerializeTiFlashSnapshotInto,
+        .pre_handle_tiflash_snapshot = PreHandleTiFlashSnapshot,
+        .get_region_approximate_size_keys = GetRegionApproximateSizeKeys,
+        .scan_split_keys = ScanSplitKeys,
     };
 
     auto proxy_runner = std::thread([&proxy_conf, &log, &helper]() {
@@ -434,7 +438,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         p += "/data";
 
     if (path_realtime_mode && all_normal_path.size() > 1)
-        global_context->setExtraPaths(std::vector<String>(extra_paths.begin() + 1, extra_paths.end()), global_context->getPathCapacity(), global_context->getFileProvider());
+        global_context->setExtraPaths(std::vector<String>(extra_paths.begin() + 1, extra_paths.end()),
+            global_context->getPathCapacity(),
+            global_context->getFileProvider());
     else
         global_context->setExtraPaths(extra_paths, global_context->getPathCapacity(), global_context->getFileProvider());
 

@@ -75,8 +75,8 @@ public:
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
     void setRegionCompactLogPeriod(Seconds period);
     TiFlashApplyRes handleIngestSST(UInt64 region_id, const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt);
-    RegionPtr preHandleSnapshot(
-        metapb::Region && region, UInt64 peer_id, const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt);
+    void preHandleTiKVSnapshot(RegionPtr region, const SnapshotViewArray snaps, TMTContext & tmt);
+    bool preGenTiFlashSnapshot(UInt64 region_id, UInt64 snap_index, TMTContext & tmt);
 
 private:
     friend class MockTiDB;

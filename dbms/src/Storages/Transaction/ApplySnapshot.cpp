@@ -132,8 +132,6 @@ static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 peer_
     {
         if (peer.id() == peer_id)
         {
-            if (!peer.is_learner())
-                throw Exception(std::string(__PRETTY_FUNCTION__) + ": peer is not learner, should not happen", ErrorCodes::LOGICAL_ERROR);
             return peer;
         }
     }
@@ -141,11 +139,8 @@ static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 peer_
     throw Exception(std::string(__PRETTY_FUNCTION__) + ": peer " + DB::toString(peer_id) + " not found", ErrorCodes::LOGICAL_ERROR);
 }
 
-RegionPtr KVStore::preHandleSnapshot(
-    metapb::Region && region, UInt64 peer_id, const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt)
+RegionPtr GenRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term, TMTContext & tmt)
 {
-    auto start_time = Clock::now();
-
     auto meta = ({
         auto peer = findPeer(region, peer_id);
         raft_serverpb::RaftApplyState apply_state;
@@ -157,10 +152,15 @@ RegionPtr KVStore::preHandleSnapshot(
         RegionMeta(std::move(peer), std::move(region), std::move(apply_state));
     });
     IndexReaderCreateFunc index_reader_create = [&]() -> IndexReaderPtr { return tmt.createIndexReader(); };
-    auto new_region = std::make_shared<Region>(std::move(meta), index_reader_create);
+    return std::make_shared<Region>(std::move(meta), index_reader_create);
+}
+
+void KVStore::preHandleTiKVSnapshot(RegionPtr new_region, const SnapshotViewArray snaps, TMTContext & tmt)
+{
+    auto start_time = Clock::now();
     {
         std::stringstream ss;
-        ss << "Generate snapshot " << new_region->toString(false);
+        ss << "Pre-handle tikv snapshot " << new_region->toString(false);
         if (snaps.len)
             ss << " with data ";
         for (UInt64 i = 0; i < snaps.len; ++i)
@@ -180,7 +180,6 @@ RegionPtr KVStore::preHandleSnapshot(
         ss << " cost " << time_cost << "ms";
         LOG_INFO(log, ss.str());
     }
-    return new_region;
 }
 
 void KVStore::handleApplySnapshot(RegionPtr new_region, TMTContext & tmt)
@@ -195,7 +194,8 @@ void KVStore::handleApplySnapshot(RegionPtr new_region, TMTContext & tmt)
 void KVStore::handleApplySnapshot(
     metapb::Region && region, UInt64 peer_id, const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt)
 {
-    auto new_region = preHandleSnapshot(std::move(region), peer_id, snaps, index, term, tmt);
+    auto new_region = GenRegionPtr(std::move(region), peer_id, index, term, tmt);
+    preHandleTiKVSnapshot(new_region, snaps, tmt);
     handleApplySnapshot(new_region, tmt);
 }
 
@@ -244,6 +244,32 @@ TiFlashApplyRes KVStore::handleIngestSST(UInt64 region_id, const SnapshotViewArr
         region_persister.persist(*region, region_task_lock);
         return TiFlashApplyRes::Persist;
     }
+}
+
+bool KVStore::preGenTiFlashSnapshot(UInt64 region_id, UInt64 snap_index, TMTContext & tmt)
+{
+    auto region_task_lock = region_manager.genRegionTaskLock(region_id);
+
+    const RegionPtr region = getRegion(region_id);
+
+    if (region == nullptr)
+    {
+        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": [region " << region_id << "] is not found, should not generate snapshot");
+        return false;
+    }
+
+    if (auto index = region->appliedIndex(); index != snap_index)
+    {
+        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": expected apply index " << snap_index << " but got " << index);
+        return false;
+    }
+
+    tmt.getRegionTable().tryFlushRegion(region, false);
+    tryFlushRegionCacheInStorage(tmt, *region, log);
+
+    LOG_INFO(log, __FUNCTION__ << ": try to persist " << region->toString(true));
+    region_persister.persist(*region, region_task_lock);
+    return true;
 }
 
 } // namespace DB

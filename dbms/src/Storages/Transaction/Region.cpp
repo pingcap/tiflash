@@ -119,7 +119,7 @@ void RegionRaftCommandDelegate::execChangePeer(
     meta.makeRaftCommandDelegate().execChangePeer(request, response, index, term);
 }
 
-static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 store_id)
+static const metapb::Peer & findPeerByStore(const metapb::Region & region, UInt64 store_id)
 {
     for (const auto & peer : region.peers())
     {
@@ -150,7 +150,7 @@ Regions RegionRaftCommandDelegate::execBatchSplit(
             const auto & region_info = new_region_infos[i];
             if (region_info.id() != meta.regionId())
             {
-                const auto & peer = findPeer(region_info, meta.storeId());
+                const auto & peer = findPeerByStore(region_info, meta.storeId());
                 RegionMeta new_meta(peer, region_info, initialApplyState());
                 auto split_region = splitInto(std::move(new_meta));
                 split_regions.emplace_back(split_region);
