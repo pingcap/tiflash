@@ -212,7 +212,11 @@ bool setColumnValues(ColumnUInt8 & delmark_col,
         delmark_data.emplace_back(write_type == Region::DelFlag);
         version_data.emplace_back(commit_ts);
 
-        /// decode value
+        /// Decode value, all the columns except the pk column should be encoded in the value
+        /// For pk column, if is_common_handle = true or pk_is_handle = true, the pk column might
+        /// be only encoded in the key, if a column exists both in value and key, use the one in
+        /// the value(Based on TiDB's new design, maybe in the future, if a column exists both in
+        /// the key and value, we need to combine them and generate the final column field)
         if (need_decode_value)
         {
             decoded_data.clear();
@@ -330,7 +334,6 @@ bool setColumnValues(ColumnUInt8 & delmark_col,
             }
         }
 
-        /// decode key, and set pk columns if pk columns are encoded in the key(clustered index)
         if constexpr (pk_type == TMTPKType::INT64)
             typeid_cast<ColumnVector<Int64> &>(*(column_map.getMutableColumnPtr(pk_column_ids[0]))).insert(static_cast<Int64>(pk));
         else if constexpr (pk_type == TMTPKType::UINT64)
@@ -338,11 +341,12 @@ bool setColumnValues(ColumnUInt8 & delmark_col,
         else if constexpr (pk_type == TMTPKType::STRING)
         {
             column_map.getMutableColumnPtr(pk_column_ids[0])->insert(Field(pk->data(), pk->size()));
-            /// decode key and insert other pk columns if needed
+            /// decode key and insert pk columns if needed
             size_t cursor = 0, pos = 0;
             while (cursor < pk->size() && pk_column_ids.size() > pos + 1)
             {
                 Field value = DecodeDatum(cursor, *pk);
+                /// for a pk col, if it does not exist in the value, then decode it from the key
                 if (pk_column_ids[pos + 1] != EmptyColumnID && column_map.getMutableColumnPtr(pk_column_ids[pos + 1])->size() == index)
                     column_map.getMutableColumnPtr(pk_column_ids[pos + 1])->insert(value);
                 pos++;
