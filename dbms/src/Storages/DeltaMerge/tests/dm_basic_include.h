@@ -33,7 +33,19 @@ inline ::testing::AssertionResult HandleRangeCompare(const char *        lhs_exp
     else
         return ::testing::internal::EqFailure(lhs_expr, rhs_expr, lhs.toString(), rhs.toString(), false);
 }
+/// helper functions for comparing HandleRange
+inline ::testing::AssertionResult RowKeyRangeCompare(const char *        lhs_expr,
+                                                     const char *        rhs_expr, //
+                                                     const RowKeyRange & lhs,
+                                                     const RowKeyRange & rhs)
+{
+    if (lhs == rhs)
+        return ::testing::AssertionSuccess();
+    else
+        return ::testing::internal::EqFailure(lhs_expr, rhs_expr, lhs.toString(), rhs.toString(), false);
+}
 #define ASSERT_RANGE_EQ(val1, val2) ASSERT_PRED_FORMAT2(::DB::DM::tests::HandleRangeCompare, val1, val2)
+#define ASSERT_ROWKEY_RANGE_EQ(val1, val2) ASSERT_PRED_FORMAT2(::DB::DM::tests::RowKeyRangeCompare, val1, val2)
 #define EXPECT_RANGE_EQ(val1, val2) EXPECT_PRED_FORMAT2(::DB::DM::tests::HandleRangeCompare, val1, val2)
 #define GET_GTEST_FULL_NAME                                                                     \
     (String() + ::testing::UnitTest::GetInstance()->current_test_info()->test_case_name() + "." \
@@ -198,16 +210,30 @@ public:
 
     /// prepare a row like this:
     /// {"pk":pk, "version":tso, "delete_mark":mark, "colname":value}
-    static Block prepareOneRowBlock(Int64 pk, UInt64 tso, UInt8 mark, const String & colname, const String & value)
+    static Block prepareOneRowBlock(
+        Int64 pk, UInt64 tso, UInt8 mark, const String & colname, const String & value, bool is_common_handle, size_t rowkey_column_size)
     {
         Block        block;
         const size_t num_rows = 1;
         {
-            ColumnWithTypeAndName col1(EXTRA_HANDLE_COLUMN_INT_TYPE, pk_name);
+            ColumnWithTypeAndName col1(is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE, pk_name);
             {
                 IColumn::MutablePtr m_col = col1.type->createColumn();
                 // insert form large to small
-                m_col->insert(pk);
+                if (is_common_handle)
+                {
+                    Field             field;
+                    std::stringstream ss;
+                    for (size_t index = 0; index < rowkey_column_size; index++)
+                    {
+                        ss << TiDB::CodecFlagInt;
+                        ::DB::EncodeInt64(pk, ss);
+                    }
+                    field = ss.str();
+                    m_col->insert(field);
+                }
+                else
+                    m_col->insert(pk);
                 col1.column = std::move(m_col);
             }
             block.insert(col1);
