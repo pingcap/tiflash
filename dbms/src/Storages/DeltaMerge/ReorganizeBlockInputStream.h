@@ -26,6 +26,7 @@ public:
             {
                 throw Exception("Try to write block to Pack without pk column", ErrorCodes::LOGICAL_ERROR);
             }
+            is_common_handle = !header.getByName(pk_column_name).type->isInteger();
         }
     }
 
@@ -48,7 +49,7 @@ public:
         {
             next_block = DB::DM::readNextBlock(sorted_input_stream);
 
-            const size_t cut_offset = findCutOffsetInNextBlock(cur_block, next_block, pk_column_name);
+            const size_t cut_offset = findCutOffsetInNextBlock(cur_block, next_block, pk_column_name, is_common_handle);
             if (unlikely(cut_offset == 0))
                 // There is no pk overlap between `cur_block` and `next_block`, or `next_block` is empty, just return `cur_block`.
                 return cur_block;
@@ -84,26 +85,29 @@ public:
     }
 
 private:
-    static size_t findCutOffsetInNextBlock(const Block & cur_block, const Block & next_block, const String & pk_column_name)
+    static size_t
+    findCutOffsetInNextBlock(const Block & cur_block, const Block & next_block, const String & pk_column_name, bool is_common_handle)
     {
         assert(cur_block);
         if (!next_block)
             return 0;
 
-        auto        cur_col      = cur_block.getByName(pk_column_name).column;
-        const Int64 last_curr_pk = cur_col->getInt(cur_col->size() - 1);
-        auto        next_col     = next_block.getByName(pk_column_name).column;
-        size_t      cut_offset   = 0;
+        auto                  cur_col = cur_block.getByName(pk_column_name).column;
+        RowKeyColumnContainer cur_rowkey_column(cur_col, is_common_handle);
+        const auto            last_curr_pk = cur_rowkey_column.getRowKeyValue(cur_col->size() - 1);
+        auto                  next_col     = next_block.getByName(pk_column_name).column;
+        RowKeyColumnContainer next_rowkey_column(next_col, is_common_handle);
+        size_t                cut_offset = 0;
         for (/* */; cut_offset < next_col->size(); ++cut_offset)
         {
-            const Int64 next_pk = next_col->getInt(cut_offset);
-            if (next_pk != last_curr_pk)
+            const auto next_pk = next_rowkey_column.getRowKeyValue(cut_offset);
+            if (compare(next_pk, last_curr_pk) != 0)
             {
                 if constexpr (DM_RUN_CHECK)
                 {
                     if (unlikely(next_pk < last_curr_pk))
-                        throw Exception("InputStream is not sorted, pk in next block is smaller than current block: "
-                                            + DB::toString(next_pk) + " < " + DB::toString(last_curr_pk),
+                        throw Exception("InputStream is not sorted, pk in next block is smaller than current block: " + next_pk.toString()
+                                            + " < " + last_curr_pk.toString(),
                                         ErrorCodes::LOGICAL_ERROR);
                 }
                 break;
@@ -115,6 +119,7 @@ private:
 private:
     BlockInputStreamPtr sorted_input_stream;
     const String        pk_column_name;
+    bool                is_common_handle;
 
     Block cur_block;
     Block next_block;

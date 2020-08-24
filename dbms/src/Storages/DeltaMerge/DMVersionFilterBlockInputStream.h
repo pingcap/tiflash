@@ -115,7 +115,6 @@ private:
 private:
     UInt64 version_limit;
     bool   is_common_handle;
-    size_t rowkey_column_size;
     Block  header;
 
     size_t handle_col_pos;
