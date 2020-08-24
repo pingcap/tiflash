@@ -897,7 +897,7 @@ size_t PageFile::removeDataIfExists() const
     if (auto data_file = Poco::File(dataPath()); data_file.exists())
     {
         bytes_removed = data_file.getSize();
-        file_provider->deleteFile(dataPath(), dataEncryptionPath());
+        file_provider->deleteRegularFile(dataPath(), dataEncryptionPath());
     }
     return bytes_removed;
 }
@@ -909,8 +909,8 @@ void PageFile::destroy() const
     if (file.exists())
     {
         // remove meta first, then remove data
-        file_provider->deleteFile(metaPath(), metaEncryptionPath());
-        file_provider->deleteFile(dataPath(), dataEncryptionPath());
+        file_provider->deleteRegularFile(metaPath(), metaEncryptionPath());
+        file_provider->deleteRegularFile(dataPath(), dataEncryptionPath());
 
         // drop dir
         file.remove(true);

@@ -89,6 +89,8 @@ public:
 
     SnapshotPtr createSnapshot();
 
+    void drop(const FileProviderPtr & file_provider);
+
 private:
     static const Int64 CURRENT_VERSION;
 

@@ -158,7 +158,7 @@ void DatabaseTiFlash::createTable(const Context & context, const String & table_
         const String statement = getTableDefinitionFromCreateQuery(query);
 
         /// Exclusive flags guarantees, that table is not created right now in another thread. Otherwise, exception will be thrown.
-        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, EncryptionPath(table_metadata_path, ""),
+        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""),
             statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
@@ -183,7 +183,7 @@ void DatabaseTiFlash::createTable(const Context & context, const String & table_
     }
     catch (...)
     {
-        context.getFileProvider()->deleteFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""));
+        context.getFileProvider()->deleteRegularFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""));
         throw;
     }
 }
@@ -199,7 +199,7 @@ void DatabaseTiFlash::removeTable(const Context & context, const String & table_
         // will be removed.
         String table_metadata_path = getTableMetadataPath(table_name);
         FAIL_POINT_TRIGGER_EXCEPTION(exception_drop_table_during_remove_meta);
-        context.getFileProvider()->deleteFile(table_metadata_path, EncryptionPath(table_metadata_path, ""));
+        context.getFileProvider()->deleteRegularFile(table_metadata_path, EncryptionPath(table_metadata_path, ""));
     }
     catch (...)
     {
@@ -267,7 +267,7 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
         statement = getTableDefinitionFromCreateQuery(ast);
 
         {
-            WriteBufferFromFileProvider out(context.getFileProvider(), new_tbl_meta_file_tmp, EncryptionPath(new_tbl_meta_file, ""),
+            WriteBufferFromFileProvider out(context.getFileProvider(), new_tbl_meta_file_tmp, EncryptionPath(new_tbl_meta_file_tmp, ""),
                 statement.size(), O_WRONLY | O_CREAT | O_EXCL);
             writeString(statement, out);
             out.next();
@@ -284,7 +284,7 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
         }
         catch (...)
         {
-            context.getFileProvider()->deleteFile(new_tbl_meta_file_tmp, EncryptionPath(new_tbl_meta_file_tmp, ""));
+            context.getFileProvider()->deleteRegularFile(new_tbl_meta_file_tmp, EncryptionPath(new_tbl_meta_file_tmp, ""));
             throw;
         }
 
@@ -296,7 +296,7 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
             // If process crash before removing old table meta file, we will continue or rollback this
             // rename command next time `loadTables` is called. See `loadTables` and
             // `DatabaseLoading::startupTables` for more details.
-            Poco::File{old_tbl_meta_file}.remove(); // Then remove old meta file
+            context.getFileProvider()->deleteRegularFile(old_tbl_meta_file, EncryptionPath(old_tbl_meta_file, ""));// Then remove old meta file
         }
     }
 
@@ -345,7 +345,7 @@ void DatabaseTiFlash::alterTable(
     statement = getTableDefinitionFromCreateQuery(ast);
 
     {
-        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, EncryptionPath(table_metadata_path, ""),
+        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""),
             statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
@@ -362,7 +362,7 @@ void DatabaseTiFlash::alterTable(
     }
     catch (...)
     {
-        context.getFileProvider()->deleteFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""));
+        context.getFileProvider()->deleteRegularFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""));
         throw;
     }
 }
@@ -439,17 +439,18 @@ void DatabaseTiFlash::shutdown()
 }
 
 
-void DatabaseTiFlash::drop()
+void DatabaseTiFlash::drop(const Context & context)
 {
     // Remove metadata dir for this database
     if (auto dir = Poco::File(getMetadataPath()); dir.exists())
     {
-        dir.remove(false);
+        context.getFileProvider()->deleteDirectory(getMetadataPath(), false, false);
     }
-    // Removd meta file for this database
+    // Remove meta file for this database
     if (auto meta_file = Poco::File(getDatabaseMetadataPath(getMetadataPath())); meta_file.exists())
     {
-        meta_file.remove();
+        context.getFileProvider()->deleteRegularFile(getDatabaseMetadataPath(getMetadataPath()),
+                EncryptionPath(getDatabaseMetadataPath(getMetadataPath()), ""));
     }
 }
 
