@@ -10,12 +10,18 @@ class FlashConfig:
         self.conf_file_path = file_path
         self.conf_toml = toml.load(self.conf_file_path, _dict=dict)
         self.pd_addrs = util.compute_addr_list(self.conf_toml['raft']['pd_addr'])
-        self.http_port = self.conf_toml['http_port']
+        if 'http_port' in self.conf_toml:
+            self.http_port = self.conf_toml['http_port']
+        else:
+            self.http_port = self.conf_toml['https_port']
         tmp_path = self.conf_toml['tmp_path']
 
         p = self.conf_toml['flash']
         service_addr = p['service_addr']
         host, port = [e.strip() for e in service_addr.split(':')]
+        if host == '0.0.0.0':
+            proxy_toml = toml.load(p['proxy']['config'], _dict=dict)
+            host = [e.strip() for e in proxy_toml['server']['engine-addr'].split(':')][0]
         self.service_addr = '{}:{}'.format(host, port)
         self.http_addr = '{}:{}'.format(host, self.http_port)
         self.tidb_status_addr = util.compute_addr_list(p['tidb_status_addr'])
@@ -26,6 +32,14 @@ class FlashConfig:
         self.update_rule_interval = int(flash_cluster['update_rule_interval'])
         self.log_path = flash_cluster.get('log', '{}/flash_cluster_manager.log'.format(tmp_path))
 
+        self.enable_tls = False
+        if 'security' in self.conf_toml:
+            security = self.conf_toml['security']
+            if 'ca_path' in security:
+                self.ca_path = security['ca_path']
+                self.key_path = security['key_path']
+                self.cert_path = security['cert_path']
+                self.enable_tls = True
 
 
 def main():

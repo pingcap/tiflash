@@ -6,18 +6,114 @@
 #include <Common/TiFlashMetrics.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/Context.h>
+#include <Poco/Crypto/X509Certificate.h>
+#include <Poco/Net/Context.h>
+#include <Poco/Net/HTTPRequestHandler.h>
+#include <Poco/Net/HTTPRequestHandlerFactory.h>
+#include <Poco/Net/HTTPServerRequest.h>
+#include <Poco/Net/HTTPServerResponse.h>
+#include <Poco/Net/SecureServerSocket.h>
 #include <daemon/BaseDaemon.h>
+#include <prometheus/collectable.h>
 #include <prometheus/exposer.h>
 #include <prometheus/gauge.h>
+#include <prometheus/text_serializer.h>
 
 
 namespace DB
 {
 
+class MetricHandler : public Poco::Net::HTTPRequestHandler
+{
+
+public:
+    MetricHandler(const std::weak_ptr<prometheus::Collectable> & collectable_) : collectable(collectable_) {}
+
+    ~MetricHandler() {}
+
+    void handleRequest(Poco::Net::HTTPServerRequest &, Poco::Net::HTTPServerResponse & response) override
+    {
+        auto metrics = CollectMetrics();
+        auto serializer = std::unique_ptr<prometheus::Serializer>{new prometheus::TextSerializer()};
+        String body = serializer->Serialize(metrics);
+        response.sendBuffer(body.data(), body.size());
+    }
+
+private:
+    std::vector<prometheus::MetricFamily> CollectMetrics() const
+    {
+        auto collected_metrics = std::vector<prometheus::MetricFamily>{};
+
+        auto collect = collectable.lock();
+        if (collect)
+        {
+            auto && metrics = collect->Collect();
+            collected_metrics.insert(
+                collected_metrics.end(), std::make_move_iterator(metrics.begin()), std::make_move_iterator(metrics.end()));
+        }
+        return collected_metrics;
+    }
+
+    std::weak_ptr<prometheus::Collectable> collectable;
+};
+
+class MetricHandlerFactory : public Poco::Net::HTTPRequestHandlerFactory
+{
+
+public:
+    MetricHandlerFactory(const std::weak_ptr<prometheus::Collectable> & collectable_) : collectable(collectable_) {}
+
+    ~MetricHandlerFactory() {}
+
+    Poco::Net::HTTPRequestHandler * createRequestHandler(const Poco::Net::HTTPServerRequest & request) override
+    {
+        String uri = request.getURI();
+        if (request.getMethod() == Poco::Net::HTTPRequest::HTTP_GET || request.getMethod() == Poco::Net::HTTPRequest::HTTP_HEAD)
+        {
+            if (uri == "/metrics")
+            {
+                return new MetricHandler(collectable);
+            }
+        }
+        return nullptr;
+    }
+
+private:
+    std::weak_ptr<prometheus::Collectable> collectable;
+};
+
+std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
+    const TiFlashSecurityConfig & security_config, const std::weak_ptr<prometheus::Collectable> & collectable, const String & metrics_port)
+{
+    Poco::Net::Context::Ptr context = new Poco::Net::Context(
+        Poco::Net::Context::TLSV1_2_SERVER_USE, security_config.key_path, security_config.cert_path, security_config.ca_path);
+
+    std::function<bool(const Poco::Crypto::X509Certificate &)> check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
+        if (security_config.allowed_common_names.empty())
+        {
+            return true;
+        }
+        return security_config.allowed_common_names.count(cert.commonName()) > 0;
+    };
+
+    context->setAdhocVerification(check_common_name);
+
+    Poco::Net::SecureServerSocket socket(context);
+
+    Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams;
+
+    Poco::Net::SocketAddress addr("0.0.0.0", std::stoi(metrics_port));
+    socket.bind(addr, true);
+    socket.listen();
+    auto server = std::make_shared<Poco::Net::HTTPServer>(new MetricHandlerFactory(collectable), socket, http_params);
+    return server;
+}
+
 constexpr long MILLISECOND = 1000;
 constexpr long INIT_DELAY = 5;
 
-MetricsPrometheus::MetricsPrometheus(Context & context, const AsynchronousMetrics & async_metrics_)
+MetricsPrometheus::MetricsPrometheus(
+    Context & context, const AsynchronousMetrics & async_metrics_, const TiFlashSecurityConfig & security_config)
     : timer(), tiflash_metrics(context.getTiFlashMetrics()), async_metrics(async_metrics_), log(&Logger::get("Prometheus"))
 {
     auto & conf = context.getConfigRef();
@@ -72,9 +168,18 @@ MetricsPrometheus::MetricsPrometheus(Context & context, const AsynchronousMetric
     if (conf.hasOption(status_metrics_port))
     {
         auto metrics_port = conf.getString(status_metrics_port);
-        exposer = std::make_shared<prometheus::Exposer>(metrics_port);
-        exposer->RegisterCollectable(tiflash_metrics->registry);
-        LOG_INFO(log, "Enable prometheus pull mode; Metrics Port = " << metrics_port);
+        if (security_config.has_tls_config)
+        {
+            server = getHTTPServer(security_config, tiflash_metrics->registry, metrics_port);
+            server->start();
+            LOG_INFO(log, "Enable prometheus secure pull mode; Metrics Port = " << metrics_port);
+        }
+        else
+        {
+            exposer = std::make_shared<prometheus::Exposer>(metrics_port);
+            exposer->RegisterCollectable(tiflash_metrics->registry);
+            LOG_INFO(log, "Enable prometheus pull mode; Metrics Port = " << metrics_port);
+        }
     }
     else
     {
