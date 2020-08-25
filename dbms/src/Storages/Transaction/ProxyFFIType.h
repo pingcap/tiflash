@@ -2,7 +2,9 @@
 
 #include <Storages/Transaction/ColumnFamily.h>
 
+#include <atomic>
 #include <cstdint>
+#include <cstring>
 #include <string>
 
 namespace DB
@@ -128,6 +130,10 @@ struct FileEncryptionInfo
         }
     }
 
+    FileEncryptionInfo(const FileEncryptionRes & res_, const EncryptionMethod & method_,
+            TiFlashRawString key_, TiFlashRawString iv_, TiFlashRawString erro_msg_)
+            :res{res_}, method{method_}, key{key_}, iv{iv_}, erro_msg{erro_msg_}
+    {}
     FileEncryptionInfo(const FileEncryptionInfo &) = delete;
     FileEncryptionInfo(FileEncryptionInfo && src)
     {

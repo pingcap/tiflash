@@ -10,12 +10,15 @@
 #include <Common/TiFlashException.h>
 #include <common/logger_useful.h>
 
+#include <Encryption/FileProvider.h>
 #include <IO/WriteHelpers.h>
 
 #ifndef __APPLE__
 #include <fcntl.h>
 #endif
 
+#include <Encryption/RandomAccessFile.h>
+#include <Encryption/WritableFile.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Poco/File.h>
 #include <ext/scope_guard.h>
@@ -103,11 +106,11 @@ inline void touchFile(const std::string & path)
         throw Exception("Touch file failed: " + path);
 }
 
-void syncFile(int fd, const std::string & path);
+void syncFile(WritableFilePtr & file);
 
-void writeFile(int fd, UInt64 offset, const char * data, size_t to_write, const std::string & path);
+void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const std::string & path);
 
-void readFile(int fd, const off_t offset, const char * buf, size_t expected_bytes, const std::string & path);
+void readFile(RandomAccessFilePtr & file, const off_t offset, const char * buf, size_t expected_bytes);
 
 /// Write and advance sizeof(T) bytes.
 template <typename T>
@@ -127,37 +130,6 @@ inline T get(std::conditional_t<advance, char *&, const char *> pos)
         pos += sizeof(T);
     return v;
 }
-
-template <typename C, typename T = typename C::value_type>
-std::unique_ptr<C> readValuesFromFile(const std::string & path, Allocator<false> & allocator)
-{
-    Poco::File file(path);
-    if (!file.exists())
-        return {};
-
-    size_t file_size = file.getSize();
-    int    file_fd   = openFile<true>(path);
-    SCOPE_EXIT({ ::close(file_fd); });
-    char * data = (char *)allocator.alloc(file_size);
-    SCOPE_EXIT({ allocator.free(data, file_size); });
-    char * pos = data;
-
-    readFile(file_fd, 0, data, file_size, path);
-
-    auto               size   = get<UInt64>(pos);
-    std::unique_ptr<C> values = std::make_unique<C>();
-    for (size_t i = 0; i < size; ++i)
-    {
-        T v = get<T>(pos);
-        values->push_back(v);
-    }
-
-    if (unlikely(pos != data + file_size))
-        throw DB::TiFlashException("pos not match", Errors::PageStorage::FileSizeNotMatch);
-
-    return values;
-}
-
 } // namespace PageUtil
 
 } // namespace DB
