@@ -123,7 +123,7 @@ private:
     HandleID getHandleID() const;
 
 private:
-    const HandleID handle;
+    HandleID handle;
 };
 
 } // namespace DB
