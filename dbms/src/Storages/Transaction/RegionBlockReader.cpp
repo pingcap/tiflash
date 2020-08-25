@@ -493,8 +493,9 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                 pk_column_ids.emplace_back(readed_primary_key_column_ids[i]);
             }
         }
-        func(*delmark_col, *version_col, pk_column_ids, visible_column_to_read_lut, column_lut, column_map, data_list, start_ts,
-            column_names_to_read.size() > MustHaveColCnt, table_info, force_decode, scan_filter);
+        if (!func(*delmark_col, *version_col, pk_column_ids, visible_column_to_read_lut, column_lut, column_map, data_list, start_ts,
+                column_names_to_read.size() > MustHaveColCnt, table_info, force_decode, scan_filter))
+            return std::make_tuple<Block, bool>({}, false);
     }
 
     Block block;
