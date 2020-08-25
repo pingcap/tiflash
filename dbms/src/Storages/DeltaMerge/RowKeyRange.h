@@ -193,21 +193,31 @@ struct RowKeyColumnContainer
     const ColumnString::Offsets * string_offsets;
     const PaddedPODArray<Int64> * int_data;
     bool                          is_common_handle;
-    RowKeyColumnContainer(const ColumnPtr & column_, bool is_common_handle_) : column(column_), is_common_handle(is_common_handle_)
+    bool                          is_constant_column;
+    RowKeyColumnContainer(const ColumnPtr & column_, bool is_common_handle_)
+        : column(column_), is_common_handle(is_common_handle_), is_constant_column(column->isColumnConst())
     {
+        ColumnPtr non_const_column_ptr = column;
+        if (unlikely(is_constant_column))
+        {
+            non_const_column_ptr = checkAndGetColumn<ColumnConst>(column.get())->getDataColumnPtr();
+        }
         if (is_common_handle)
         {
-            const auto & column_string = *checkAndGetColumn<ColumnString>(&*column);
+            const auto & column_string = *checkAndGetColumn<ColumnString>(non_const_column_ptr.get());
             string_data                = &column_string.getChars();
             string_offsets             = &column_string.getOffsets();
         }
         else
         {
-            int_data = &toColumnVectorData<Int64>(column);
+            int_data = &toColumnVectorData<Int64>(non_const_column_ptr);
         }
     }
     RowKeyValue getRowKeyValue(size_t index) const
     {
+        // todo check index out of bound error
+        if (unlikely(is_constant_column))
+            index = 0;
         if (is_common_handle)
         {
             size_t prev_offset = index == 0 ? 0 : (*string_offsets)[index - 1];
