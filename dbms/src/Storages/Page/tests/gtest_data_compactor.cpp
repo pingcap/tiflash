@@ -24,13 +24,14 @@ try
     CHECK_TESTS_WITH_DATA_ENABLED;
 
     PageStorage::Config config;
-    config.num_write_slots = 2;
+    config.num_write_slots              = 2;
+    const FileProviderPtr file_provider = TiFlashTestEnv::getContext().getFileProvider();
 #if 1
     const String test_path = TiFlashTestEnv::findTestDataPath("page_storage_compactor_migrate")[0];
-    PageStorage  storage("data_compact_test", test_path, config);
+    PageStorage  storage("data_compact_test", test_path, config, file_provider);
 #else
     const String test_path = TiFlashTestEnv::getTemporaryPath() + "/data_compactor_test";
-    PageStorage  storage("data_compact_test", test_path, config);
+    PageStorage  storage("data_compact_test", test_path, config, file_provider);
     storage.restore();
     // Created by these write batches:
     {
@@ -90,7 +91,7 @@ try
     auto                           valid_pages = DataCompactor<MockSnapshotPtr>::collectValidPagesInPageFile(snapshot);
     ASSERT_EQ(valid_pages.size(), 2UL);
 
-    auto candidates             = PageStorage::listAllPageFiles(test_path, storage.page_file_log);
+    auto candidates             = PageStorage::listAllPageFiles(test_path, file_provider, storage.page_file_log);
     auto [edits, bytes_written] = compactor.migratePages(snapshot, valid_pages, candidates, 0);
     std::ignore                 = bytes_written;
     ASSERT_EQ(edits.size(), 3UL); // 1, 2, 6
@@ -111,7 +112,7 @@ try
 
     {
         // Try to recover from disk
-        PageStorage ps("data_compact_test", test_path, config);
+        PageStorage ps("data_compact_test", test_path, config, file_provider);
         ps.restore();
         PageEntry entry = ps.getEntry(1);
         EXPECT_EQ(entry.fileIdLevel(), target_id_lvl);
