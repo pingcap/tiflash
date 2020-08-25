@@ -15,7 +15,7 @@ std::string getUTCBuildTime() { return TIFLASH_UTC_BUILD_TIME; }
 
 void outputDetail(std::ostream & os)
 {
-    os << getName() << " " << getVersion() << std::endl
+    os << getName() << std::endl
        << "Release Version: " << getReleaseVersion() << std::endl
        << "Edition:         " << getEdition() << std::endl
        << "Git Commit Hash: " << getGitHash() << std::endl
