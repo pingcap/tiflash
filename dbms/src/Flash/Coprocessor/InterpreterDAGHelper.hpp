@@ -28,7 +28,7 @@ RegionException::RegionReadStatus GetRegionReadStatus(
 
 std::tuple<std::optional<std::unordered_map<RegionID, const RegionInfo &>>, RegionException::RegionReadStatus> //
 MakeRegionQueryInfos(const std::unordered_map<RegionID, RegionInfo> & dag_region_infos,
-    const std::unordered_set<RegionID> & region_force_retry, TMTContext & tmt, MvccQueryInfo & mvcc_info, TableID)
+    const std::unordered_set<RegionID> & region_force_retry, TMTContext & tmt, MvccQueryInfo & mvcc_info, TableID table_id)
 {
     mvcc_info.regions_query_info.clear();
     std::unordered_map<RegionID, const RegionInfo &> region_need_retry;
@@ -61,6 +61,14 @@ MakeRegionQueryInfos(const std::unordered_map<RegionID, RegionInfo> & dag_region
             info.range_in_table = region_range->rawKeys();
             for (const auto & p : r.key_ranges)
             {
+                TableID table_id_in_range = -1;
+                if (!computeMappedTableID(*p.first, table_id_in_range) || table_id_in_range != table_id)
+                {
+                    throw TiFlashException("Income key ranges is illegal for region: " + std::to_string(r.region_id)
+                            + ", table id in key range is " + std::to_string(table_id_in_range) + ", table id in region is "
+                            + std::to_string(table_id),
+                        Errors::Coprocessor::BadRequest);
+                }
                 if (p.first->compare(*info.range_in_table.first) < 0 || p.second->compare(*info.range_in_table.second) > 0)
                     throw TiFlashException(
                         "Income key ranges is illegal for region: " + std::to_string(r.region_id), Errors::Coprocessor::BadRequest);

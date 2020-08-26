@@ -16,22 +16,6 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-namespace
-{
-inline DB::HandleID getRangeEndID(const DB::TiKVHandle::Handle<HandleID> & end)
-{
-    switch (end.type)
-    {
-        case DB::TiKVHandle::HandleIDType::NORMAL:
-            return end.handle_id;
-        case DB::TiKVHandle::HandleIDType::MAX:
-            return DB::DM::HandleRange::MAX;
-        default:
-            throw Exception("Unknown TiKVHandle type: " + end.toString(), ErrorCodes::LOGICAL_ERROR);
-    }
-}
-} // namespace
-
 inline DM::RowKeyRanges getQueryRanges(
     const DB::MvccQueryInfo::RegionsQueryInfo & regions, TableID table_id, bool is_common_handle, size_t rowkey_column_size)
 {
