@@ -19,8 +19,8 @@ class RegionPersister final : private boost::noncopyable
 {
 public:
     RegionPersister(
-        const std::string & storage_path, const RegionManager & region_manager_, const stable::PageStorage::Config & config = {})
-        : page_storage("RegionPersister", storage_path, config), region_manager(region_manager_), log(&Logger::get("RegionPersister"))
+        const std::string & storage_path, const RegionManager & region_manager_, const FileProviderPtr & file_provider, const stable::PageStorage::Config & config = {})
+        : page_storage("RegionPersister", storage_path, config, file_provider), region_manager(region_manager_), log(&Logger::get("RegionPersister"))
     {}
 
     void drop(RegionID region_id, const RegionTaskLock &);
