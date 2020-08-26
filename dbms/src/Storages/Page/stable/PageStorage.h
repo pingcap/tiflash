@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Encryption/FileProvider.h>
 #include <Storages/Page/stable/Page.h>
 #include <Storages/Page/stable/PageDefines.h>
 #include <Storages/Page/stable/PageFile.h>
@@ -78,7 +79,7 @@ public:
         = std::function<void(const PathAndIdsVec & pengding_external_pages, const std::set<PageId> & valid_normal_pages)>;
 
 public:
-    PageStorage(String name, const String & storage_path, const Config & config_);
+    PageStorage(String name, const String & storage_path, const Config & config_, const FileProviderPtr & file_provider_);
 
     PageId getMaxId();
 
@@ -103,9 +104,9 @@ public:
     void registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover);
 
     static std::set<PageFile, PageFile::Comparator>
-    listAllPageFiles(const String & storage_path, Poco::Logger * page_file_log, ListPageFilesOption option = ListPageFilesOption());
+    listAllPageFiles(const String & storage_path, const FileProviderPtr & file_provider, Poco::Logger * page_file_log, ListPageFilesOption option = ListPageFilesOption());
 
-    static std::optional<PageFile> tryGetCheckpoint(const String & storage_path, Poco::Logger * page_file_log, bool remove_old = false);
+    static std::optional<PageFile> tryGetCheckpoint(const String & storage_path, const FileProviderPtr & file_provider, Poco::Logger * page_file_log, bool remove_old = false);
 
 private:
     PageFile::Writer & getWriter();
@@ -140,6 +141,8 @@ private:
     String storage_name; // Identify between different Storage
     String storage_path;
     Config config;
+
+    FileProviderPtr file_provider;
 
     PageFile  write_file;
     WriterPtr write_file_writer;
