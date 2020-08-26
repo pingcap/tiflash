@@ -841,7 +841,7 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
     {
         PageEntriesEdit legacy_edit; // All page entries in `merge_files`
         // No need to sync after each write. Do sync before closing is enough.
-        auto gc_file_writer = gc_file.createWriter(/* sync_on_write= */ false, false);
+        auto gc_file_writer = gc_file.createWriter(/* sync_on_write= */ false, true);
 
         for (const auto & file_id_level : merge_files)
         {
