@@ -379,16 +379,23 @@ Field decodeUnknownColumnV2(const Field & unknown, const ColumnInfo & column_inf
 
 void encodeRowV1(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, std::stringstream & ss)
 {
-    if (table_info.columns.size() != fields.size() + table_info.pk_is_handle)
+    size_t column_in_key = 0;
+    if (table_info.pk_is_handle)
+        column_in_key = 1;
+    else if (table_info.is_common_handle)
+        column_in_key = table_info.getPrimaryIndexInfo().idx_cols.size();
+    if (table_info.columns.size() != fields.size() + column_in_key)
         throw Exception(std::string("Encoding row has ") + std::to_string(table_info.columns.size()) + " columns but "
                 + std::to_string(fields.size() + table_info.pk_is_handle) + " values: ",
             ErrorCodes::LOGICAL_ERROR);
 
-    for (size_t i = 0; i < fields.size(); i++)
+    size_t index = 0;
+    for (auto & column_info : table_info.columns)
     {
-        const TiDB::ColumnInfo & column_info = table_info.columns[i];
+        if ((table_info.pk_is_handle || table_info.is_common_handle) && column_info.hasPriKeyFlag())
+            continue;
         EncodeDatum(Field(column_info.id), TiDB::CodecFlagInt, ss);
-        EncodeDatum(fields[i], column_info.getCodecFlag(), ss);
+        EncodeDatum(fields[index++], column_info.getCodecFlag(), ss);
     }
 }
 
@@ -398,7 +405,12 @@ struct RowEncoderV2
 
     void encode(std::stringstream & ss) &&
     {
-        if (table_info.columns.size() != fields.size() + table_info.pk_is_handle)
+        size_t column_in_key = 0;
+        if (table_info.pk_is_handle)
+            column_in_key = 1;
+        else if (table_info.is_common_handle)
+            column_in_key = table_info.getPrimaryIndexInfo().idx_cols.size();
+        if (table_info.columns.size() != fields.size() + column_in_key)
             throw Exception(std::string("Encoding row has ") + std::to_string(table_info.columns.size()) + " columns but "
                     + std::to_string(fields.size() + table_info.pk_is_handle) + " values: ",
                 ErrorCodes::LOGICAL_ERROR);
@@ -411,7 +423,7 @@ struct RowEncoderV2
         {
             const auto & column_info = table_info.columns[i_col];
             const auto & field = fields[i_val];
-            if (table_info.pk_is_handle && column_info.hasPriKeyFlag())
+            if ((table_info.pk_is_handle || table_info.is_common_handle) && column_info.hasPriKeyFlag())
                 continue;
             if (column_info.id > std::numeric_limits<typename RowV2::Types<false>::ColumnIDType>::max())
                 is_big = true;
