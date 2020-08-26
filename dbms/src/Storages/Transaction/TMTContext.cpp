@@ -16,7 +16,7 @@ TMTContext::TMTContext(Context & context_, const std::vector<std::string> & addr
     const std::unordered_set<std::string> & ignore_databases_, const std::string & kvstore_path, ::TiDB::StorageEngine engine_,
     bool disable_bg_flush_, const pingcap::ClusterConfig & cluster_config)
     : context(context_),
-      kvstore(std::make_shared<KVStore>(kvstore_path)),
+      kvstore(std::make_shared<KVStore>(kvstore_path, context.getFileProvider())),
       region_table(context),
       background_service(nullptr),
       cluster(addrs.size() == 0 ? std::make_shared<pingcap::kv::Cluster>() : std::make_shared<pingcap::kv::Cluster>(addrs, cluster_config)),
