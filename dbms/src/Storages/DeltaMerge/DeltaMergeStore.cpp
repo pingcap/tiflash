@@ -380,7 +380,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
                          EXTRA_HANDLE_COLUMN_TYPE->createColumn());
         FunctionToInt64::create(db_context)->execute(block, {handle_pos}, block.columns() - 1);
     }
-    const auto bytes = to_write.bytes();
+    const auto bytes = block.bytes();
 
     {
         // Sort by handle & version in ascending order.
