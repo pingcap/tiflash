@@ -266,9 +266,12 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
         }
         statement = getTableDefinitionFromCreateQuery(ast);
 
+        bool use_target_encrypt_info = context.getFileProvider()->isFileEncrypted(EncryptionPath(new_tbl_meta_file, ""));
         {
-            WriteBufferFromFileProvider out(context.getFileProvider(), new_tbl_meta_file_tmp, EncryptionPath(new_tbl_meta_file_tmp, ""),
-                statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+            EncryptionPath encryption_path = use_target_encrypt_info ? EncryptionPath(new_tbl_meta_file, "") : EncryptionPath(new_tbl_meta_file_tmp, "");
+            bool create_new_encryption_info = !use_target_encrypt_info && statement.size();
+            WriteBufferFromFileProvider out(context.getFileProvider(), new_tbl_meta_file_tmp, encryption_path,
+                create_new_encryption_info, O_WRONLY | O_CREAT | O_EXCL);
             writeString(statement, out);
             out.next();
             if (context.getSettingsRef().fsync_metadata)
@@ -279,12 +282,22 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
         try
         {
             /// rename atomically replaces the old file with the new one.
-            context.getFileProvider()->renameFile(new_tbl_meta_file_tmp, EncryptionPath(new_tbl_meta_file_tmp, ""),
-                new_tbl_meta_file, EncryptionPath(new_tbl_meta_file, ""));
+            if (use_target_encrypt_info)
+            {
+                Poco::File(new_tbl_meta_file_tmp).renameTo(new_tbl_meta_file);
+            }
+            else
+            {
+                context.getFileProvider()->renameFile(new_tbl_meta_file_tmp, EncryptionPath(new_tbl_meta_file_tmp, ""),
+                    new_tbl_meta_file, EncryptionPath(new_tbl_meta_file, ""));
+            }
         }
         catch (...)
         {
-            context.getFileProvider()->deleteRegularFile(new_tbl_meta_file_tmp, EncryptionPath(new_tbl_meta_file_tmp, ""));
+            if (!use_target_encrypt_info)
+            {
+                context.getFileProvider()->deleteRegularFile(new_tbl_meta_file_tmp, EncryptionPath(new_tbl_meta_file_tmp, ""));
+            }
             throw;
         }
 
