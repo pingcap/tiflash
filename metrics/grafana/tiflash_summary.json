@@ -3719,12 +3719,7 @@
           "points": false,
           "renderer": "flot",
           "repeatedByRow": true,
-          "seriesOverrides": [
-            {
-              "alias": "/bytes/",
-              "yaxis": 2
-            }
-          ],
+          "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
           "steppedLine": false,
@@ -3732,34 +3727,18 @@
             {
               "expr": "sum(tiflash_storage_throughput_bytes{instance=~\"$instance\", type=\"write\"})",
               "format": "time_series",
-              "hide": true,
+              "hide": false,
               "intervalFactor": 1,
-              "legendFormat": "bytes_write",
+              "legendFormat": "write",
               "refId": "B"
             },
             {
               "expr": "sum(tiflash_storage_throughput_bytes{instance=~\"$instance\", type!=\"write\"})",
               "format": "time_series",
-              "hide": true,
+              "hide": false,
               "intervalFactor": 1,
-              "legendFormat": "bytes_delta_management",
+              "legendFormat": "delta_management",
               "refId": "A"
-            },
-            {
-              "expr": "sum(tiflash_storage_throughput_rows{instance=~\"$instance\", type=\"write\"})",
-              "format": "time_series",
-              "hide": false,
-              "intervalFactor": 1,
-              "legendFormat": "rows_write",
-              "refId": "D"
-            },
-            {
-              "expr": "sum(tiflash_storage_throughput_rows{instance=~\"$instance\", type!=\"write\"})",
-              "format": "time_series",
-              "hide": false,
-              "intervalFactor": 1,
-              "legendFormat": "rows_delta_management",
-              "refId": "E"
             }
           ],
           "thresholds": [],
@@ -3782,7 +3761,7 @@
           },
           "yaxes": [
             {
-              "format": "short",
+              "format": "bytes",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -3790,7 +3769,7 @@
               "show": true
             },
             {
-              "format": "bytes",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
