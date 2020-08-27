@@ -357,9 +357,12 @@ void DatabaseTiFlash::alterTable(
 
     statement = getTableDefinitionFromCreateQuery(ast);
 
+    bool use_target_encrypt_info = context.getFileProvider()->isFileEncrypted(EncryptionPath(table_metadata_path, ""));
     {
-        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""),
-            statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+        EncryptionPath encryption_path = use_target_encrypt_info ? EncryptionPath(table_metadata_path, "") : EncryptionPath(table_metadata_tmp_path, "");
+        bool create_new_encryption_info = !use_target_encrypt_info && statement.size();
+        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, encryption_path,
+            create_new_encryption_info, O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
         if (context.getSettingsRef().fsync_metadata)
@@ -370,12 +373,23 @@ void DatabaseTiFlash::alterTable(
     try
     {
         /// rename atomically replaces the old file with the new one.
-        context.getFileProvider()->renameFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""),
-                table_metadata_path, EncryptionPath(table_metadata_path, ""));
+        if (use_target_encrypt_info)
+        {
+            Poco::File(table_metadata_tmp_path).renameTo(table_metadata_path);
+        }
+        else
+        {
+            context.getFileProvider()->renameFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""),
+                                                  table_metadata_path, EncryptionPath(table_metadata_path, ""));
+        }
     }
     catch (...)
     {
-        context.getFileProvider()->deleteRegularFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""));
+        if (!use_target_encrypt_info)
+        {
+            context.getFileProvider()->deleteRegularFile(table_metadata_tmp_path,
+                                                         EncryptionPath(table_metadata_tmp_path, ""));
+        }
         throw;
     }
 }
