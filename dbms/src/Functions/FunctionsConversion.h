@@ -1326,6 +1326,10 @@ public:
         const auto & timezone_info = context.getTimezoneInfo();
         const auto * datelut = timezone_info.timezone;
         const auto decimal_col = checkAndGetColumn<ColumnDecimal<T>>(input_col.get());
+        if (!decimal_col)
+        {
+            throw Exception("Invalid data type of input_col: " + input_col->getName());
+        }
         const typename ColumnDecimal<T>::Container & vec_from = decimal_col->getData();
         Int64 scale_divisor_64 = 1;
         Int64 scale_round_divisor_64 = 1;
@@ -1408,7 +1412,16 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
     {
         const auto & input_column = block.getByPosition(arguments[0]).column;
-        const auto & decimal_column = input_column->isColumnNullable() ? dynamic_cast<const ColumnNullable &>(*input_column).getNestedColumnPtr() : input_column;
+        ColumnPtr decimal_column = input_column;
+        if (decimal_column->isColumnConst())
+        {
+            decimal_column->convertToFullColumnIfConst();
+            decimal_column = dynamic_cast<const ColumnConst &>(*input_column).getDataColumnPtr();
+        }
+        if (decimal_column->isColumnNullable())
+        {
+            decimal_column = dynamic_cast<const ColumnNullable &>(*decimal_column).getNestedColumnPtr();
+        }
         size_t rows = decimal_column->size();
 
 
