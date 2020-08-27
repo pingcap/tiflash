@@ -266,6 +266,11 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
         }
         statement = getTableDefinitionFromCreateQuery(ast);
 
+        // 1. Assume the case that we need to rename the file `t_31.sql.tmp` to `t_31.sql`,
+        // and t_31.sql already exists and is a encrypted file.
+        // 2. The implementation in this function assume that the rename operation is atomic.
+        // 3. If we create new encryption info for `t_31.sql.tmp`,
+        // then we cannot rename the encryption info and the file in an atomic operation.
         bool use_target_encrypt_info = context.getFileProvider()->isFileEncrypted(EncryptionPath(new_tbl_meta_file, ""));
         {
             EncryptionPath encryption_path = use_target_encrypt_info ? EncryptionPath(new_tbl_meta_file, "") : EncryptionPath(new_tbl_meta_file_tmp, "");
@@ -357,6 +362,7 @@ void DatabaseTiFlash::alterTable(
 
     statement = getTableDefinitionFromCreateQuery(ast);
 
+    // refer to the comment in `renameTable`
     bool use_target_encrypt_info = context.getFileProvider()->isFileEncrypted(EncryptionPath(table_metadata_path, ""));
     {
         EncryptionPath encryption_path = use_target_encrypt_info ? EncryptionPath(table_metadata_path, "") : EncryptionPath(table_metadata_tmp_path, "");
