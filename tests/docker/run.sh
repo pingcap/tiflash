@@ -2,6 +2,16 @@
 
 set -xe
 
+# TAG: tiflash hash, default to `master`
+# XYZ_BRANCH: pd/tikv/tidb hash, default to `master`
+# BRANCH: hash short cut, default to `master`
+
+if [ -n "$BRANCH" ]; then
+  [ -z "$PD_BRANCH" ] && PD_BRANCH="$BRANCH"
+  [ -z "$TIKV_BRANCH" ] && TIKV_BRANCH="$BRANCH"
+  [ -z "$TIDB_BRANCH" ] && TIDB_BRANCH="$BRANCH"
+fi
+
 # Stop all docker instances if exist.
 # tiflash-dt && tiflash-tmt share the same name "tiflash0", we just need one here
 docker-compose -f gtest.yaml -f cluster.yaml -f cluster_new_collation.yaml -f tiflash-dt.yaml -f mock-test-dt.yaml down
