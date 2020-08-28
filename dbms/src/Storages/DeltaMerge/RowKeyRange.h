@@ -189,9 +189,9 @@ inline const RowKeyValueWithOwnString & min(const RowKeyValueWithOwnString & a, 
 struct RowKeyColumnContainer
 {
     const ColumnPtr &             column;
-    const ColumnString::Chars_t * string_data;
-    const ColumnString::Offsets * string_offsets;
-    const PaddedPODArray<Int64> * int_data;
+    const ColumnString::Chars_t * string_data    = nullptr;
+    const ColumnString::Offsets * string_offsets = nullptr;
+    const PaddedPODArray<Int64> * int_data       = nullptr;
     bool                          is_common_handle;
     bool                          is_constant_column;
     RowKeyColumnContainer(const ColumnPtr & column_, bool is_common_handle_)
