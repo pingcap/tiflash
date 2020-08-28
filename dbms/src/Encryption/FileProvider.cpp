@@ -37,12 +37,7 @@ WritableFilePtr FileProvider::newWritableFile(const String & file_path_, const E
     else if (!create_new_encryption_info_)
     {
         auto encryption_info = key_manager->getFile(encryption_path_.full_path);
-        if (unlikely(encryption_info.method == EncryptionMethod::Unknown))
-        {
-            throw DB::TiFlashException(
-                "Cannot get encryption info for file: " + encryption_path_.full_path, Errors::Encryption::Internal);
-        }
-        if (encryption_info.method != EncryptionMethod::Plaintext)
+        if (encryption_info.method != EncryptionMethod::Unknown && encryption_info.method != EncryptionMethod::Plaintext && )
         {
             file = std::make_shared<EncryptedWritableFile>(file, AESCTRCipherStream::createCipherStream(encryption_info, encryption_path_));
         }
