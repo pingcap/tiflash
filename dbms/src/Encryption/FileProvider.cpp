@@ -29,21 +29,21 @@ WritableFilePtr FileProvider::newWritableFile(const String & file_path_, const E
     bool create_new_encryption_info_, int flags, mode_t mode) const
 {
     WritableFilePtr file = std::make_shared<PosixWritableFile>(file_path_, create_new_file_, flags, mode);
-    if (encryption_enabled)
+    if (encryption_enabled && create_new_encryption_info_)
     {
-        if (create_new_encryption_info_)
+        auto encryption_info = key_manager->newFile(encryption_path_.full_path);
+        file = std::make_shared<EncryptedWritableFile>(file, AESCTRCipherStream::createCipherStream(encryption_info, encryption_path_));
+    }
+    else if (!create_new_encryption_info_)
+    {
+        auto encryption_info = key_manager->getFile(encryption_path_.full_path);
+        if (unlikely(encryption_info.method == EncryptionMethod::Unknown))
         {
-            auto encryption_info = key_manager->newFile(encryption_path_.full_path);
-            file = std::make_shared<EncryptedWritableFile>(file, AESCTRCipherStream::createCipherStream(encryption_info, encryption_path_));
+            throw DB::TiFlashException(
+                "Cannot get encryption info for file: " + encryption_path_.full_path, Errors::Encryption::Internal);
         }
-        else
+        if (encryption_info.method != EncryptionMethod::Plaintext)
         {
-            auto encryption_info = key_manager->getFile(encryption_path_.full_path);
-            if (unlikely(encryption_info.method == EncryptionMethod::Plaintext))
-            {
-                throw DB::TiFlashException(
-                    "Cannot get encryption info for file: " + encryption_path_.full_path, Errors::Encryption::Internal);
-            }
             file = std::make_shared<EncryptedWritableFile>(file, AESCTRCipherStream::createCipherStream(encryption_info, encryption_path_));
         }
     }
