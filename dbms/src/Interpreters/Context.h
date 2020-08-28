@@ -16,8 +16,10 @@
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/TimezoneInfo.h>
 #include <IO/CompressionSettings.h>
+#include <Encryption/FileProvider.h>
 #include <pingcap/Config.h>
 #include <Storages/PartPathSelector.h>
+#include <Storages/Transaction/ProxyFFIType.h>
 #include <Storages/Transaction/StorageEngineType.h>
 
 
@@ -169,7 +171,7 @@ public:
     void setTemporaryPath(const String & path);
     void setFlagsPath(const String & path);
     void setUserFilesPath(const String & path);
-    void setExtraPaths(const std::vector<String> & extra_paths, PathCapacityMetricsPtr global_capacity);
+    void setExtraPaths(const std::vector<String> & extra_paths, PathCapacityMetricsPtr global_capacity, FileProviderPtr file_provider);
 
     using ConfigurationPtr = Poco::AutoPtr<Poco::Util::AbstractConfiguration>;
 
@@ -397,6 +399,9 @@ public:
 
     void initializeTiFlashMetrics();
     TiFlashMetricsPtr getTiFlashMetrics() const;
+
+    void initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption);
+    FileProviderPtr getFileProvider() const;
 
     Clusters & getClusters() const;
     std::shared_ptr<Cluster> getCluster(const std::string & cluster_name) const;

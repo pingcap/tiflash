@@ -920,7 +920,7 @@ void DAGQueryBlockInterpreter::executeAggregation(Pipeline & pipeline, const Exp
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.streams.size() > 1)
     {
-        pipeline.firstStream() = std::make_shared<ParallelAggregatingBlockInputStream>(pipeline.streams, nullptr, params, true, max_streams,
+        pipeline.firstStream() = std::make_shared<ParallelAggregatingBlockInputStream>(pipeline.streams, nullptr, params, context.getFileProvider(), true, max_streams,
             settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
                                                                 : static_cast<size_t>(settings.max_threads));
 
@@ -928,7 +928,7 @@ void DAGQueryBlockInterpreter::executeAggregation(Pipeline & pipeline, const Exp
     }
     else
     {
-        pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(pipeline.firstStream(), params, true);
+        pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(pipeline.firstStream(), params, context.getFileProvider(), true);
     }
     // add cast
 }

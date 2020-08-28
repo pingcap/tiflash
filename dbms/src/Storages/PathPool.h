@@ -26,8 +26,8 @@ public:
 
     PathPool() = default;
 
-    PathPool(const std::vector<String> & paths_, PathCapacityMetricsPtr global_capacity_)
-        : global_capacity{std::move(global_capacity_)}, log{&Logger::get("PathPool")}
+    PathPool(const std::vector<String> & paths_, PathCapacityMetricsPtr global_capacity_, FileProviderPtr file_provider_)
+        : global_capacity{std::move(global_capacity_)}, file_provider{std::move(file_provider_)}, log{&Logger::get("PathPool")}
     {
         for (auto & path : paths_)
         {
@@ -40,11 +40,12 @@ public:
 
 private:
     PathPool(const std::vector<String> & paths_, const String & database_, const String & table_, bool path_need_database_name_,
-        PathCapacityMetricsPtr global_capacity_)
+        PathCapacityMetricsPtr global_capacity_, FileProviderPtr file_provider_)
         : database(database_),
           table(table_),
           path_need_database_name{path_need_database_name_},
           global_capacity{std::move(global_capacity_)},
+          file_provider{std::move(file_provider_)},
           log{&Logger::get("PathPool")}
     {
         for (auto & path : paths_)
@@ -57,7 +58,7 @@ private:
     }
 
 public:
-    PathPool(const PathPool & path_pool) : global_capacity{path_pool.global_capacity}
+    PathPool(const PathPool & path_pool) : global_capacity{path_pool.global_capacity}, file_provider{path_pool.file_provider}
     {
         path_infos.clear();
         path_map = path_pool.path_map;
@@ -83,6 +84,7 @@ public:
         table = path_pool.table;
         path_need_database_name = path_pool.path_need_database_name;
         global_capacity = path_pool.global_capacity;
+        file_provider = path_pool.file_provider;
         log = path_pool.log;
         return *this;
     }
@@ -96,7 +98,7 @@ public:
         {
             paths_.emplace_back(path_info.path);
         }
-        return PathPool(paths_, database_, table_, path_need_database_name_, global_capacity);
+        return PathPool(paths_, database_, table_, path_need_database_name_, global_capacity, file_provider);
     }
 
     void rename(const String & new_database, const String & new_table, bool clean_rename)
@@ -120,6 +122,10 @@ public:
         }
         else
         {
+            if (unlikely(file_provider->isEncryptionEnabled()))
+            {
+                throw Exception("Encryption is only supported when using clean_rename");
+            }
             // Note: changing these path is not atomic, we may lost data if process is crash here.
 
             std::lock_guard<std::mutex> lock{mutex};
@@ -157,7 +163,7 @@ public:
             {
                 Poco::File dir(path_info.path);
                 if (dir.exists())
-                    dir.remove(recursive);
+                    file_provider->deleteDirectory(dir.path(), false, recursive);
 
                 // update global used size
                 global_capacity->freeUsedSize(path_info.path, path_info.total_size);
@@ -305,6 +311,8 @@ private:
     bool path_need_database_name = false;
 
     PathCapacityMetricsPtr global_capacity;
+
+    FileProviderPtr file_provider;
 
     Poco::Logger * log;
 };
