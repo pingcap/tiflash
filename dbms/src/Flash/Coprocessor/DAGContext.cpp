@@ -50,8 +50,7 @@ void DAGContext::handleTruncateError(const String & msg)
     // todo record warnings
     if (!(flags & Flag::IGNORE_TRUNCATE || flags & Flag::TRUNCATE_AS_WARNING))
     {
-        // throw Exception("Truncate error " + msg, ErrorCodes::TRUNCATE_ERROR);
-        warnings.push_back(std::make_pair(1292, msg));
+        throw Exception("Truncate error " + msg, ErrorCodes::TRUNCATE_ERROR);
     }
 }
 
@@ -60,8 +59,7 @@ void DAGContext::handleOverflowError(const String & msg)
     // todo record warnings
     if (!(flags & Flag::OVERFLOW_AS_WARNING))
     {
-        // throw Exception("Overflow error " + msg, ErrorCodes::OVERFLOW_ERROR);
-        warnings.push_back(std::make_pair(1264, msg));
+        throw Exception("Overflow error " + msg, ErrorCodes::OVERFLOW_ERROR);
     }
 }
 
@@ -73,8 +71,7 @@ void DAGContext::handleDivisionByZero(const String & msg)
             return;
         if (strictSqlMode(sql_mode) && !(flags & Flag::DIVIDED_BY_ZERO_AS_WARNING))
         {
-            // throw Exception("divided by zero " + msg, ErrorCodes::DIVIDED_BY_ZERO);
-            warnings.push_back(std::make_pair(1365, "Division by 0: " + msg));
+            throw Exception("divided by zero " + msg, ErrorCodes::DIVIDED_BY_ZERO);
         }
     }
     // todo record warnings
@@ -84,8 +81,7 @@ void DAGContext::handleInvalidTime(const String & msg)
 {
     if (strictSqlMode(sql_mode) && (flags & Flag::IN_INSERT_STMT || flags & Flag::IN_UPDATE_OR_DELETE_STMT))
     {
-        // throw Exception("invalid time error" + msg, ErrorCodes::INVALID_TIME);
-        warnings.push_back(std::make_pair(1292, msg));
+        throw Exception("invalid time error" + msg, ErrorCodes::INVALID_TIME);
     }
 }
 
