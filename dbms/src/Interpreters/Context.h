@@ -19,7 +19,6 @@
 #include <Encryption/FileProvider.h>
 #include <pingcap/Config.h>
 #include <Storages/PartPathSelector.h>
-#include <Storages/Transaction/ProxyFFIType.h>
 #include <Storages/Transaction/StorageEngineType.h>
 
 
