@@ -40,7 +40,7 @@ enum class TiFlashApplyRes : uint32_t;
 class KVStore final : private boost::noncopyable
 {
 public:
-    KVStore(const std::string & data_dir);
+    KVStore(const std::string & data_dir, const FileProviderPtr & file_provider);
     void restore(const IndexReaderCreateFunc & index_reader_create);
     RegionPtr getRegion(const RegionID region_id) const;
 
