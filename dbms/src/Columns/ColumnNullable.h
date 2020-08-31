@@ -72,6 +72,7 @@ public:
     void adjustPermutationWithNullDirection(bool reverse, size_t limit, int null_direction_hint, Permutation & res) const;
     void reserve(size_t n) override;
     size_t byteSize() const override;
+    size_t byteSize(size_t offset, size_t limit) const override;
     size_t allocatedBytes() const override;
     ColumnPtr replicate(const Offsets & replicate_offsets) const override;
     void updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator>, String &) const override;
