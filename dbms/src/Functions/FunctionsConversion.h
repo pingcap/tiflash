@@ -1337,6 +1337,11 @@ public:
         }
 
         auto handle_func = [&](const T & decimal, size_t index) {
+            if (null_res[index])
+            {
+                datetime_res[index] = 0;
+                continue;
+            }
             if (decimal.value < 0)
             {
                 null_res[index] = 1;
