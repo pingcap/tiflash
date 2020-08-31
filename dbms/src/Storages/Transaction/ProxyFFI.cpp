@@ -1,7 +1,6 @@
 #include <Encryption/AESCTRCipherStream.h>
 #include <Interpreters/Context.h>
 #include <Storages/PathCapacityMetrics.h>
-#include <Storages/Transaction/FileEncryption.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFIType.h>
 #include <Storages/Transaction/Region.h>

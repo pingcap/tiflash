@@ -2,9 +2,6 @@
 
 set -ueo pipefail
 
-echo "just for test"
-exit 1
-
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 SRCPATH=${1:-$(cd $SCRIPTPATH/../..; pwd -P)}
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
