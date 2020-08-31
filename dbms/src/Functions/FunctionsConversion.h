@@ -1340,7 +1340,7 @@ public:
             if (null_res[index])
             {
                 datetime_res[index] = 0;
-                continue;
+                return;
             }
             if (decimal.value < 0)
             {
