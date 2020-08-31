@@ -1,7 +1,8 @@
 #pragma once
 
 #include <Encryption/EncryptionPath.h>
-#include <Storages/Transaction/ProxyFFIType.h>
+#include <Storages/Transaction/FileEncryption.h>
+
 #include <cstddef>
 #include <memory>
 #include <string>
