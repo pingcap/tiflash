@@ -188,6 +188,11 @@ public:
         return data.size() * sizeof(data[0]);
     }
 
+    size_t byteSize(size_t /*offset*/, size_t limit) const override
+    {
+        return limit * sizeof(data[0]);
+    }
+
     size_t allocatedBytes() const override
     {
         return data.allocated_bytes();
