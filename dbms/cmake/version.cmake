@@ -65,7 +65,7 @@ execute_process(
   )
 
 execute_process(
-  COMMAND date -u "+%Y-%m-%d %I:%M:%S"
+  COMMAND date -u "+%Y-%m-%d %H:%M:%S"
   OUTPUT_VARIABLE TIFLASH_UTC_BUILD_TIME
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
