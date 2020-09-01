@@ -157,6 +157,7 @@ SnapshotPtr StableValueSpace::createSnapshot()
     auto snap                = std::make_shared<Snapshot>();
     snap->id                 = id;
     snap->valid_rows         = valid_rows;
+    snap->valid_bytes        = valid_bytes;
     snap->stable             = this->shared_from_this();
     snap->is_common_handle   = is_common_handle;
     snap->rowkey_column_size = rowkey_column_size;

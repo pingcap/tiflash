@@ -6,6 +6,7 @@
 #include <Storages/DeltaMerge/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Index/MinMax.h>
+#include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
@@ -36,6 +37,9 @@ struct SegmentSnapshot : private boost::noncopyable
     StableSnapshotPtr stable;
 
     SegmentSnapshot(const DeltaSnapshotPtr & delta_, const StableSnapshotPtr & stable_) : delta(delta_), stable(stable_) {}
+
+    UInt64 getBytes() { return delta->getBytes() + stable->getBytes(); }
+    UInt64 getRows() { return delta->getRows() + stable->getRows(); }
 };
 
 /// A segment contains many rows of a table. A table is split into segments by consecutive ranges.
@@ -192,10 +196,7 @@ public:
     }
     bool hasAbandoned() { return delta->hasAbandoned(); }
 
-    void drop(const FileProviderPtr & file_provider)
-    {
-        stable->drop(file_provider);
-    }
+    void drop(const FileProviderPtr & file_provider) { stable->drop(file_provider); }
 
 private:
     ReadInfo getReadInfo(const DMContext &          dm_context,

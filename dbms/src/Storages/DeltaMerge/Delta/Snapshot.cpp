@@ -53,6 +53,7 @@ SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool is_u
     snap->rowkey_column_size = rowkey_column_size;
     snap->storage_snap       = std::make_shared<StorageSnapshot>(context.storage_pool, true);
     snap->rows               = rows;
+    snap->bytes              = bytes;
     snap->deletes            = deletes;
     snap->packs.reserve(packs.size());
 

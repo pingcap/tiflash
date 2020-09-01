@@ -56,12 +56,15 @@ public:
 
         PageId id;
         UInt64 valid_rows;
+        UInt64 valid_bytes;
+
         bool   is_common_handle;
         size_t rowkey_column_size;
 
         PageId getId() { return id; }
 
         size_t getRows() { return valid_rows; }
+        size_t getBytes() { return valid_bytes; }
 
         const DMFiles & getDMFiles() { return stable->getDMFiles(); }
 

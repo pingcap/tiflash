@@ -2,7 +2,7 @@
 
 #include <Encryption/BlockAccessCipherStream.h>
 #include <IO/Endian.h>
-#include <Storages/Transaction/ProxyFFIType.h>
+#include <Storages/Transaction/FileEncryption.h>
 #include <openssl/aes.h>
 #include <openssl/evp.h>
 #include <openssl/md5.h>
