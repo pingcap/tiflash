@@ -1,7 +1,8 @@
 #pragma once
 
 #include <Core/Types.h>
-#include <IO/ReadBufferFromFile.h>
+#include <Encryption/FileProvider.h>
+#include <Encryption/ReadBufferFromFileProvider.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/ColumnStat.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
@@ -53,13 +54,13 @@ public:
     using PackStats = PaddedPODArray<PackStat>;
 
     static DMFilePtr create(UInt64 file_id, const String & parent_path);
-    static DMFilePtr restore(UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta = true);
+    static DMFilePtr restore(const FileProviderPtr & file_provider, UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta = true);
 
     static std::set<UInt64> listAllInPath(const String & parent_path, bool can_gc);
 
     bool canGC();
     void enableGC();
-    void remove();
+    void remove(const FileProviderPtr & file_provider);
 
     UInt64 fileId() const { return file_id; }
     UInt64 refId() const { return ref_id; }
@@ -71,6 +72,28 @@ public:
     String colDataPath(const String & file_name_base) const { return path() + "/" + file_name_base + ".dat"; }
     String colIndexPath(const String & file_name_base) const { return path() + "/" + file_name_base + ".idx"; }
     String colMarkPath(const String & file_name_base) const { return path() + "/" + file_name_base + ".mrk"; }
+
+    String         encryptionBasePath() const { return parent_path + "/dmf_" + DB::toString(file_id); }
+    EncryptionPath encryptionDataPath(const String & file_name_base) const
+    {
+        return EncryptionPath(encryptionBasePath(), file_name_base + ".dat");
+    }
+    EncryptionPath encryptionIndexPath(const String & file_name_base) const
+    {
+        return EncryptionPath(encryptionBasePath(), file_name_base + ".idx");
+    }
+    EncryptionPath encryptionMarkPath(const String & file_name_base) const
+    {
+        return EncryptionPath(encryptionBasePath(), file_name_base + ".mrk");
+    }
+    EncryptionPath encryptionMetaPath() const
+    {
+        return EncryptionPath(encryptionBasePath(), "meta.txt");
+    }
+    EncryptionPath encryptionPackStatPath() const
+    {
+        return EncryptionPath(encryptionBasePath(), "pack");
+    }
 
     size_t getRows() const
     {
@@ -125,15 +148,15 @@ private:
     {
     }
 
-    void writeMeta();
-    void readMeta();
+    void writeMeta(const FileProviderPtr & file_provider);
+    void readMeta(const FileProviderPtr & file_provider);
 
-    void upgradeMetaIfNeed(DMFileVersion ver);
+    void upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileVersion ver);
 
     void addPack(const PackStat & pack_stat) { pack_stats.push_back(pack_stat); }
     void setStatus(Status status_) { status = status_; }
 
-    void finalize();
+    void finalize(const FileProviderPtr & file_provider);
 
 private:
     UInt64 file_id;
@@ -151,9 +174,9 @@ private:
     friend class DMFileReader;
 };
 
-inline ReadBufferFromFile openForRead(const String & path)
+inline ReadBufferFromFileProvider openForRead(const FileProviderPtr & file_provider, const String & path, const EncryptionPath & encryption_path)
 {
-    return ReadBufferFromFile(path, std::min(static_cast<Poco::File::FileSize>(DBMS_DEFAULT_BUFFER_SIZE), Poco::File(path).getSize()));
+    return ReadBufferFromFileProvider(file_provider, path, encryption_path, std::min(static_cast<Poco::File::FileSize>(DBMS_DEFAULT_BUFFER_SIZE), Poco::File(path).getSize()));
 }
 
 } // namespace DM

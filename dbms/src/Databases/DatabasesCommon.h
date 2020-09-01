@@ -44,9 +44,9 @@ std::pair<String, StoragePtr> createTableFromDefinition(
 /// Some helper functions for loading database metadata.
 namespace DatabaseLoading
 {
-ASTPtr getQueryFromMetadata(const String & metadata_path, bool throw_on_error = true);
+ASTPtr getQueryFromMetadata(const Context & context, const String & metadata_path, bool throw_on_error = true);
 
-ASTPtr getCreateQueryFromMetadata(const String & metadata_path, const String & database, bool throw_on_error);
+ASTPtr getCreateQueryFromMetadata(const Context & context, const String & metadata_path, const String & database, bool throw_on_error);
 
 std::vector<String> listSQLFilenames(const String & database_dir, Poco::Logger * log);
 

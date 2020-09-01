@@ -1,8 +1,11 @@
 #pragma once
 
 #include <Storages/Transaction/ColumnFamily.h>
+#include <Storages/Transaction/FileEncryption.h>
 
+#include <atomic>
 #include <cstdint>
+#include <cstring>
 #include <string>
 
 namespace DB
@@ -83,71 +86,12 @@ struct FsStats
     FsStats() { memset(this, 0, sizeof(*this)); }
 };
 
-enum class FileEncryptionRes : uint8_t
-{
-    Disabled = 0,
-    Ok,
-    Error,
-};
-
-enum class EncryptionMethod : uint8_t
-{
-    Unknown = 0,
-    Plaintext = 1,
-    Aes128Ctr = 2,
-    Aes192Ctr = 3,
-    Aes256Ctr = 4,
-};
-
-struct FileEncryptionInfo
-{
-    FileEncryptionRes res;
-    EncryptionMethod method;
-    TiFlashRawString key;
-    TiFlashRawString iv;
-    TiFlashRawString erro_msg;
-
-    ~FileEncryptionInfo()
-    {
-        if (key)
-        {
-            delete key;
-            key = nullptr;
-        }
-        if (iv)
-        {
-            delete iv;
-            iv = nullptr;
-        }
-        if (erro_msg)
-        {
-            delete erro_msg;
-            erro_msg = nullptr;
-        }
-    }
-
-    FileEncryptionInfo(const FileEncryptionInfo &) = delete;
-    FileEncryptionInfo(FileEncryptionInfo && src)
-    {
-        memcpy(this, &src, sizeof(src));
-        memset(&src, 0, sizeof(src));
-    }
-    FileEncryptionInfo & operator=(FileEncryptionInfo && src)
-    {
-        if (this == &src)
-            return *this;
-        this->~FileEncryptionInfo();
-        memcpy(this, &src, sizeof(src));
-        memset(&src, 0, sizeof(src));
-        return *this;
-    }
-};
-
 struct TiFlashRaftProxyHelper
 {
 public:
     bool checkServiceStopped() const;
     bool checkEncryptionEnabled() const;
+    EncryptionMethod getEncryptionMethod() const;
     FileEncryptionInfo getFile(std::string_view) const;
     FileEncryptionInfo newFile(std::string_view) const;
     FileEncryptionInfo deleteFile(std::string_view) const;
@@ -157,7 +101,8 @@ public:
 private:
     TiFlashRaftProxyPtr proxy_ptr;
     uint8_t (*fn_handle_check_service_stopped)(TiFlashRaftProxyPtr);
-    uint8_t (*fn_handle_enable_encryption)(TiFlashRaftProxyPtr);
+    uint8_t (*fn_is_encryption_enabled)(TiFlashRaftProxyPtr);
+    EncryptionMethod (*fn_encryption_method)(TiFlashRaftProxyPtr);
     FileEncryptionInfo (*fn_handle_get_file)(TiFlashRaftProxyPtr, BaseBuffView);
     FileEncryptionInfo (*fn_handle_new_file)(TiFlashRaftProxyPtr, BaseBuffView);
     FileEncryptionInfo (*fn_handle_delete_file)(TiFlashRaftProxyPtr, BaseBuffView);
@@ -170,6 +115,14 @@ enum class TiFlashStatus : uint8_t
     IDLE = 0,
     Running,
     Stopped,
+};
+
+struct CppStrWithView
+{
+    TiFlashRawString inner{nullptr};
+    BaseBuffView view;
+
+    CppStrWithView(std::string && v) : inner(new std::string(std::move(v))), view(*inner) {}
 };
 
 struct TiFlashServerHelper
@@ -192,6 +145,8 @@ struct TiFlashServerHelper
     void * (*fn_pre_handle_snapshot)(TiFlashServer *, BaseBuffView, uint64_t, SnapshotViewArray, uint64_t, uint64_t);
     void (*fn_apply_pre_handled_snapshot)(TiFlashServer *, void *);
     void (*fn_gc_pre_handled_snapshot)(TiFlashServer *, void *);
+    CppStrWithView (*fn_handle_get_table_sync_status)(TiFlashServer *, uint64_t);
+    void (*gc_cpp_string)(TiFlashServer *, TiFlashRawString);
 };
 
 void run_tiflash_proxy_ffi(int argc, const char ** argv, const TiFlashServerHelper *);
@@ -219,4 +174,7 @@ void * PreHandleSnapshot(
     TiFlashServer * server, BaseBuffView region_buff, uint64_t peer_id, SnapshotViewArray snaps, uint64_t index, uint64_t term);
 void ApplyPreHandledSnapshot(TiFlashServer * server, void * res);
 void GcPreHandledSnapshot(TiFlashServer * server, void * res);
+CppStrWithView HandleGetTableSyncStatus(TiFlashServer *, uint64_t);
+void GcCppString(TiFlashServer *, TiFlashRawString);
+
 } // namespace DB

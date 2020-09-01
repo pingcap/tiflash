@@ -4,9 +4,9 @@
 #include <DataStreams/MarkInCompressedFile.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <IO/HashingWriteBuffer.h>
-#include <IO/WriteBufferFromFile.h>
+#include <Encryption/WriteBufferFromFileProvider.h>
+#include <Encryption/createWriteBufferFromFileBaseByFileProvider.h>
 #include <IO/WriteBufferFromOStream.h>
-#include <IO/createWriteBufferFromFileBase.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 
@@ -27,13 +27,20 @@ public:
                const DataTypePtr & type,
                CompressionSettings compression_settings,
                size_t              max_compress_block_size,
+               FileProviderPtr &   file_provider,
                bool                do_index)
-            : plain_file(createWriteBufferFromFileBase(dmfile->colDataPath(file_base_name), 0, 0, max_compress_block_size)),
+            : plain_file(createWriteBufferFromFileBaseByFileProvider(file_provider,
+                                                       dmfile->colDataPath(file_base_name),
+                                                       dmfile->encryptionDataPath(file_base_name),
+                                                       false,
+                                                       0,
+                                                       0,
+                                                       max_compress_block_size)),
               plain_hashing(*plain_file),
               compressed_buf(plain_hashing, compression_settings),
               original_hashing(compressed_buf),
               minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr),
-              mark_file(dmfile->colMarkPath(file_base_name))
+              mark_file(file_provider, dmfile->colMarkPath(file_base_name), dmfile->encryptionMarkPath(file_base_name), false)
         {
         }
 
@@ -61,7 +68,7 @@ public:
         HashingWriteBuffer         original_hashing;
 
         MinMaxIndexPtr      minmaxes;
-        WriteBufferFromFile mark_file;
+        WriteBufferFromFileProvider mark_file;
     };
     using StreamPtr     = std::unique_ptr<Stream>;
     using ColumnStreams = std::map<String, StreamPtr>;
@@ -72,6 +79,7 @@ public:
                  size_t                      min_compress_block_size_,
                  size_t                      max_compress_block_size_,
                  const CompressionSettings & compression_settings_,
+                 const FileProviderPtr &     file_provider_,
                  bool                        wal_mode_ = false);
 
     void write(const Block & block, size_t not_clean_rows);
@@ -95,7 +103,10 @@ private:
     bool                wal_mode;
 
     ColumnStreams       column_streams;
-    WriteBufferFromFile pack_stat_file;
+
+    WriteBufferFromFileProvider pack_stat_file;
+
+    FileProviderPtr file_provider;
 };
 
 } // namespace DM

@@ -1,6 +1,6 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <IO/ReadHelpers.h>
-#include <IO/WriteBufferFromFile.h>
+#include <Encryption/WriteBufferFromFileProvider.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
@@ -42,28 +42,29 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path)
     return new_dmfile;
 }
 
-DMFilePtr DMFile::restore(UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta)
+DMFilePtr DMFile::restore(const FileProviderPtr & file_provider, UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta)
 {
     DMFilePtr dmfile(new DMFile(file_id, ref_id, parent_path, Status::READABLE, &Logger::get("DMFile")));
     if (read_meta)
-        dmfile->readMeta();
+        dmfile->readMeta(file_provider);
     return dmfile;
 }
 
-void DMFile::writeMeta()
+void DMFile::writeMeta(const FileProviderPtr & file_provider)
 {
-    String meta_path = metaPath();
+    String meta_path     = metaPath();
     String tmp_meta_path = meta_path + ".tmp";
-    WriteBufferFromFile buf(tmp_meta_path, 4096);
+
+    WriteBufferFromFileProvider buf(file_provider, tmp_meta_path, encryptionMetaPath(), false, 4096);
     writeString("DTFile format: ", buf);
     writeIntText(static_cast<std::underlying_type_t<DMFileVersion>>(DMFileVersion::CURRENT_VERSION), buf);
     writeString("\n", buf);
     writeText(column_stats, CURRENT_VERSION, buf);
-    
+
     Poco::File(tmp_meta_path).renameTo(meta_path);
 }
 
-void DMFile::upgradeMetaIfNeed(DMFileVersion ver)
+void DMFile::upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileVersion ver)
 {
     if (unlikely(ver == DMFileVersion::VERSION_BASE))
     {
@@ -88,15 +89,15 @@ void DMFile::upgradeMetaIfNeed(DMFileVersion ver)
                 {});
         }
         // Update ColumnStat in meta.
-        writeMeta();
+        writeMeta(file_provider);
     }
 }
 
-void DMFile::readMeta()
+void DMFile::readMeta(const FileProviderPtr & file_provider)
 {
     DMFileVersion ver; // Binary version
     {
-        auto buf = openForRead(metaPath());
+        auto buf = openForRead(file_provider, metaPath(), encryptionMetaPath());
         assertString("DTFile format: ", buf);
         {
             std::underlying_type_t<DMFileVersion> ver_int;
@@ -106,7 +107,7 @@ void DMFile::readMeta()
         assertString("\n", buf);
         readText(column_stats, ver, buf);
 
-        upgradeMetaIfNeed(ver);
+        upgradeMetaIfNeed(file_provider, ver);
     }
 
     {
@@ -114,14 +115,14 @@ void DMFile::readMeta()
         Poco::File pack_stat_file(pack_stat_path);
         size_t     packs = pack_stat_file.getSize() / sizeof(PackStat);
         pack_stats.resize(packs);
-        auto buf = openForRead(pack_stat_path);
+        auto buf = openForRead(file_provider, pack_stat_path, encryptionPackStatPath());
         buf.read((char *)pack_stats.data(), sizeof(PackStat) * packs);
     }
 }
 
-void DMFile::finalize()
+void DMFile::finalize(const FileProviderPtr & file_provider)
 {
-    writeMeta();
+    writeMeta(file_provider);
     if (status != Status::WRITING)
         throw Exception("Expected WRITING status, now " + statusString(status));
     Poco::File old_file(path());
@@ -132,7 +133,6 @@ void DMFile::finalize()
     Poco::File file(new_path);
     if (file.exists())
         file.remove(true);
-
     old_file.renameTo(new_path);
 }
 
@@ -183,11 +183,9 @@ void DMFile::enableGC()
         ngc_file.remove();
 }
 
-void DMFile::remove()
+void DMFile::remove(const FileProviderPtr & file_provider)
 {
-    Poco::File file(path());
-    if (file.exists())
-        file.remove(true);
+    file_provider->deleteDirectory(path(), true, true);
 }
 
 

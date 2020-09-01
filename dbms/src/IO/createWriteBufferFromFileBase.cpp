@@ -15,12 +15,10 @@ namespace ProfileEvents
 namespace DB
 {
 
-#if defined(__APPLE__) || defined(__FreeBSD__) || defined(_MSC_VER)
 namespace ErrorCodes
 {
-        extern const int NOT_IMPLEMENTED;
+    extern const int NOT_IMPLEMENTED;
 }
-#endif
 
 WriteBufferFromFileBase * createWriteBufferFromFileBase(const std::string & filename_, size_t estimated_size,
         size_t aio_threshold, size_t buffer_size_, int flags_, mode_t mode, char * existing_memory_,

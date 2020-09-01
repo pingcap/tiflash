@@ -8,6 +8,7 @@
 #include <Storages/Page/gc/DataCompactor.h>
 #include <Storages/Page/gc/LegacyCompactor.h>
 #include <Storages/Page/gc/restoreFromCheckpoints.h>
+#include <Storages/Page/mvcc/utils.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <common/logger_useful.h>
 
@@ -53,7 +54,14 @@ String PageStorage::StatisticsInfo::toString() const
     return ss.str();
 }
 
-PageFileSet PageStorage::listAllPageFiles(const String & storage_path, Poco::Logger * page_file_log, const ListPageFilesOption & option)
+bool PageStorage::StatisticsInfo::equals(const StatisticsInfo & rhs)
+{
+    return puts == rhs.puts && refs == rhs.refs && deletes == rhs.deletes && upserts == rhs.upserts;
+}
+PageFileSet PageStorage::listAllPageFiles(const String &              storage_path,
+                                          const FileProviderPtr &     file_provider,
+                                          Poco::Logger *              page_file_log,
+                                          const ListPageFilesOption & option)
 {
     // collect all pages from `storage_path` and recover to `PageFile` objects
     Poco::File folder(storage_path);
@@ -76,7 +84,7 @@ PageFileSet PageStorage::listAllPageFiles(const String & storage_path, Poco::Log
         if (name == PageStorage::ARCHIVE_SUBDIR)
             continue;
 
-        auto [page_file, page_file_type] = PageFile::recover(storage_path, name, page_file_log);
+        auto [page_file, page_file_type] = PageFile::recover(storage_path, file_provider, name, page_file_log);
         if (page_file_type == PageFile::Type::Formal)
             page_files.insert(page_file);
         else if (page_file_type == PageFile::Type::Legacy)
@@ -94,7 +102,11 @@ PageFileSet PageStorage::listAllPageFiles(const String & storage_path, Poco::Log
             // For Temp and Invalid
             if (option.remove_tmp_files)
             {
-                // Remove temporary file.
+                if (page_file_type == PageFile::Type::Temp)
+                {
+                    page_file.deleteEncryptionInfo();
+                }
+                // Remove temp and invalid file.
                 Poco::File file(storage_path + "/" + name);
                 file.remove(true);
             }
@@ -104,11 +116,16 @@ PageFileSet PageStorage::listAllPageFiles(const String & storage_path, Poco::Log
     return page_files;
 }
 
-PageStorage::PageStorage(
-    String name, const String & storage_path_, const Config & config_, TiFlashMetricsPtr metrics_, PathCapacityMetricsPtr global_capacity_)
+PageStorage::PageStorage(String                  name,
+                         const String &          storage_path_,
+                         const Config &          config_,
+                         const FileProviderPtr & file_provider_,
+                         TiFlashMetricsPtr       metrics_,
+                         PathCapacityMetricsPtr  global_capacity_)
     : storage_name(std::move(name)),
       storage_path(storage_path_),
       config(config_),
+      file_provider(file_provider_),
       write_files(std::max(1UL, config.num_write_slots)),
       page_file_log(&Poco::Logger::get("PageFile")),
       log(&Poco::Logger::get("PageStorage")),
@@ -118,6 +135,11 @@ PageStorage::PageStorage(
 {
     // at least 1 write slots
     config.num_write_slots = std::max(1UL, config.num_write_slots);
+}
+
+static inline bool isPageFileSizeFitsWritable(const PageFile & pf, const PageStorage::Config & config)
+{
+    return pf.getDataFileAppendPos() < config.file_roll_size && pf.getMetaFileAppendPos() < config.file_meta_roll_size;
 }
 
 void PageStorage::restore()
@@ -132,7 +154,7 @@ void PageStorage::restore()
 #endif
     opt.ignore_legacy      = false;
     opt.ignore_checkpoint  = false;
-    PageFileSet page_files = PageStorage::listAllPageFiles(storage_path, page_file_log, opt);
+    PageFileSet page_files = PageStorage::listAllPageFiles(storage_path, file_provider, page_file_log, opt);
 
     /// Restore current version from both formal and legacy page files
 
@@ -223,15 +245,37 @@ void PageStorage::restore()
         removePageFilesIf(page_files, [&page_files_to_remove](const PageFile & pf) -> bool { return page_files_to_remove.count(pf) > 0; });
     }
 
-    // TODO: reuse some page_files
     // fill write_files
+    bool has_reusable_pageFile = false;
+    PageFileId max_file_id = 0;
     size_t total_recover_bytes = 0;
-    for (auto & page_file : page_files)
     {
-        total_recover_bytes += page_file.getDiskSize();
-        // We need to keep a PageFile with largest FileID in write_files
-        if (page_file.getLevel() == 0)
-            write_files[0] = page_file;
+        size_t next_write_fill_idx = 0;
+        for (auto & page_file : page_files)
+        {
+            total_recover_bytes += page_file.getDiskSize();
+            // Try best to reuse writable page files
+            if (page_file.getLevel() == 0 && page_file.getType() == PageFile::Type::Formal
+                && isPageFileSizeFitsWritable(page_file, config) && page_file.reusableForWrite())
+            {
+                write_files[next_write_fill_idx] = page_file;
+                next_write_fill_idx              = (next_write_fill_idx + 1) % write_files.size();
+                has_reusable_pageFile = true;
+            }
+            if (page_file.getFileId() > max_file_id)
+            {
+                max_file_id = page_file.getFileId();
+            }
+        }
+    }
+    if (!has_reusable_pageFile)
+    {
+        auto page_file
+            = PageFile::newPageFile(max_file_id + 1, 0, storage_path, file_provider, PageFile::Type::Formal, page_file_log);
+        page_file.createEncryptionInfo();
+        LOG_DEBUG(log,
+                storage_name << " No PageFile can be reused for write, create new PageFile_" + DB::toString(max_file_id + 1) + "_0 for write");
+        write_files[0] = page_file;
     }
     if (global_capacity)
         global_capacity->addUsedSize(storage_path, total_recover_bytes);
@@ -297,20 +341,20 @@ PageStorage::WriterPtr PageStorage::getWriter(PageFile & page_file)
     WriterPtr write_file_writer;
 
     bool is_writable = page_file.isValid() && page_file.getType() == PageFile::Type::Formal //
-        && page_file.getDataFileAppendPos() < config.file_roll_size                         //
-        && page_file.getMetaFileAppendPos() < config.file_meta_roll_size;
+        && isPageFileSizeFitsWritable(page_file, config);
     if (is_writable)
     {
-        write_file_writer = page_file.createWriter(config.sync_on_write);
+        write_file_writer = page_file.createWriter(config.sync_on_write, false);
     }
     else
     {
         PageFileIdAndLevel max_writing_id_lvl{0, 0};
         for (const auto & pf : write_files)
             max_writing_id_lvl = std::max(max_writing_id_lvl, pf.fileIdLevel());
-        page_file = PageFile::newPageFile(max_writing_id_lvl.first + 1, 0, storage_path, PageFile::Type::Formal, page_file_log);
+        page_file
+            = PageFile::newPageFile(max_writing_id_lvl.first + 1, 0, storage_path, file_provider, PageFile::Type::Formal, page_file_log);
         LOG_DEBUG(log, storage_name << " create new PageFile_" + DB::toString(max_writing_id_lvl.first + 1) + "_0 for write.");
-        write_file_writer = page_file.createWriter(config.sync_on_write);
+        write_file_writer = page_file.createWriter(config.sync_on_write, true);
     }
     return write_file_writer;
 }
@@ -322,8 +366,8 @@ PageStorage::ReaderPtr PageStorage::getReader(const PageFileIdAndLevel & file_id
     auto & pages_reader = open_read_files[file_id_level];
     if (pages_reader == nullptr)
     {
-        auto page_file
-            = PageFile::openPageFileForRead(file_id_level.first, file_id_level.second, storage_path, PageFile::Type::Formal, page_file_log);
+        auto page_file = PageFile::openPageFileForRead(
+            file_id_level.first, file_id_level.second, storage_path, file_provider, PageFile::Type::Formal, page_file_log);
         if (unlikely(!page_file.isExist()))
             throw Exception("Try to create reader for " + page_file.toString() + ", but PageFile is broken, check "
                                 + page_file.folderPath(),
@@ -368,9 +412,7 @@ void PageStorage::write(WriteBatch && wb)
             }
         }
         auto & page_file   = write_files[index];
-        bool   is_writable = page_file.isValid()                        //
-            && page_file.getDataFileAppendPos() < config.file_roll_size //
-            && page_file.getMetaFileAppendPos() < config.file_meta_roll_size;
+        bool   is_writable = page_file.isValid() && isPageFileSizeFitsWritable(page_file, config);
         if (!is_writable)
         {
             file_to_write = nullptr; // reset writer first
@@ -380,8 +422,9 @@ void PageStorage::write(WriteBatch && wb)
             LOG_DEBUG(log,
                       storage_name << " PageFile_" << page_file.getFileId()
                                    << "_0 is full, create new PageFile_" + DB::toString(max_writing_id_lvl.first + 1) + "_0 for write");
-            page_file     = PageFile::newPageFile(max_writing_id_lvl.first + 1, 0, storage_path, PageFile::Type::Formal, page_file_log);
-            file_to_write = page_file.createWriter(config.sync_on_write);
+            page_file = PageFile::newPageFile(
+                max_writing_id_lvl.first + 1, 0, storage_path, file_provider, PageFile::Type::Formal, page_file_log);
+            file_to_write = page_file.createWriter(config.sync_on_write, true);
         }
 
         idle_writers.emplace_back(std::move(file_to_write));
@@ -395,7 +438,10 @@ void PageStorage::write(WriteBatch && wb)
     // persist the invalid ref pair into PageFile.
     versioned_page_entries.apply(edit);
 
-    statistics.mergeEdits(edit);
+    {
+        std::unique_lock lock(write_mutex);
+        statistics.mergeEdits(edit);
+    }
 }
 
 PageStorage::SnapshotPtr PageStorage::getSnapshot()
@@ -613,9 +659,9 @@ void PageStorage::drop()
 
     ListPageFilesOption opt;
     opt.ignore_checkpoint = false;
-    opt.ignore_legacy = false;
-    opt.remove_tmp_files = false;
-    auto   page_files      = PageStorage::listAllPageFiles(storage_path, page_file_log, opt);
+    opt.ignore_legacy     = false;
+    opt.remove_tmp_files  = false;
+    auto page_files       = PageStorage::listAllPageFiles(storage_path, file_provider, page_file_log, opt);
 
     // TODO: count how many bytes in "archive" directory.
     size_t bytes_to_remove = 0;
@@ -623,7 +669,9 @@ void PageStorage::drop()
         bytes_to_remove += page_file.getDiskSize();
 
     if (Poco::File directory(storage_path); directory.exists())
-        directory.remove(true);
+    {
+        file_provider->deleteDirectory(storage_path, false, true);
+    }
 
     global_capacity->freeUsedSize(storage_path, bytes_to_remove);
 
@@ -652,6 +700,13 @@ struct GCDebugInfo
     size_t num_bytes_remove_data = 0;
 };
 
+enum class GCType
+{
+    Normal = 0,
+    Skip,
+    LowWrite,
+};
+
 bool PageStorage::gc()
 {
     // If another thread is running gc, just return;
@@ -664,7 +719,6 @@ bool PageStorage::gc()
         gc_is_running.compare_exchange_strong(is_running, false);
     });
 
-    LOG_TRACE(log, storage_name << " Before gc, " << statistics.toString());
 
     /// Get all pending external pages and PageFiles. Note that we should get external pages before PageFiles.
     PathAndIdsVec external_pages;
@@ -674,10 +728,11 @@ bool PageStorage::gc()
     }
     ListPageFilesOption opt;
     opt.remove_tmp_files = true;
-    auto page_files      = PageStorage::listAllPageFiles(storage_path, page_file_log, opt);
+    auto page_files      = PageStorage::listAllPageFiles(storage_path, file_provider, page_file_log, opt);
 
     std::set<PageFileIdAndLevel> writing_file_id_levels;
     PageFileIdAndLevel           min_writing_file_id_level;
+    StatisticsInfo               statistics_snapshot; // statistics snapshot copy with lock protection
     {
         std::lock_guard<std::mutex> lock(write_mutex);
         for (size_t i = 0; i < write_files.size(); ++i)
@@ -691,7 +746,9 @@ bool PageStorage::gc()
         {
             writer->tryCloseIdleFd(config.open_file_max_idle_time);
         }
+        statistics_snapshot = statistics;
     }
+    LOG_TRACE(log, storage_name << " Before gc, " << statistics_snapshot.toString());
 
     GCDebugInfo debugging_info;
     // Helper function for apply edits and clean up before gc exit.
@@ -716,6 +773,18 @@ bool PageStorage::gc()
                     open_read_files.erase(page_id_and_lvl);
                 }
             }
+
+            // Close idle reader.
+            // Other read threads may take a shared pointer of reader for reading. We can not prevent other readers
+            // by locking at `open_read_files_mutex`. Instead of closing file descriptor, free the shared pointer
+            // of idle readers here. The file descriptor will be closed after all readers done.
+            for (auto iter = open_read_files.begin(); iter != open_read_files.end(); /*empty*/)
+            {
+                if (iter->second->isIdle(config.open_file_max_idle_time))
+                    iter = open_read_files.erase(iter);
+                else
+                    ++iter;
+            }
         }
 
         // Delete obsolete files that are not used by any version, without lock
@@ -735,6 +804,7 @@ bool PageStorage::gc()
         }
     };
 
+    GCType gc_type = GCType::Normal;
     // Ignore page files that maybe writing to.
     {
         PageFileSet removed_page_files;
@@ -745,7 +815,25 @@ bool PageStorage::gc()
             removed_page_files.emplace(pf);
         }
         page_files.swap(removed_page_files);
+
+        /// Strategies to reduce useless GC actions.
         if (page_files.size() < 3)
+        {
+            // If only few page files, running gc is useless.
+            gc_type = GCType::Skip;
+        }
+        else if (last_gc_statistics.equals(statistics_snapshot))
+        {
+            // No write since last gc. Give it a chance for running GC, ensure that we are able to
+            // reclaim disk usage when PageStorage is read-only in extreme cases.
+            if (DB::MVCC::utils::randInt(0, 1000) < config.prob_do_gc_when_write_is_low)
+                gc_type = GCType::LowWrite;
+            else
+                gc_type = GCType::Skip;
+        }
+
+        // Shorcut for early exit GC routine.
+        if (gc_type == GCType::Skip)
         {
             // Apply empty edit and cleanup.
             apply_and_cleanup(PageEntriesEdit{});
@@ -757,7 +845,10 @@ bool PageStorage::gc()
     Stopwatch watch;
     if (metrics)
     {
-        GET_METRIC(metrics, tiflash_storage_page_gc_count, type_exec).Increment();
+        if (gc_type == GCType::LowWrite)
+            GET_METRIC(metrics, tiflash_storage_page_gc_count, type_low_write).Increment();
+        else
+            GET_METRIC(metrics, tiflash_storage_page_gc_count, type_exec).Increment();
     }
     SCOPE_EXIT({
         if (metrics)
@@ -801,6 +892,9 @@ bool PageStorage::gc()
 
     apply_and_cleanup(std::move(gc_file_entries_edit));
 
+    // Simply copy without any locks, it should be fine since we only use it to skip useless GC routine when this PageStorage is cold.
+    last_gc_statistics = statistics_snapshot;
+
     LOG_INFO(log,
              storage_name << " GC exit within " << DB::toString(watch.elapsedSeconds(), 2) << " sec. PageFiles from [" //
                           << debugging_info.min_file_id.first << "," << debugging_info.min_file_id.second              //
@@ -830,7 +924,10 @@ void PageStorage::archivePageFiles(const PageFileSet & page_files)
         auto       dest = archive_path.toString() + "/" + path.getFileName();
         Poco::File file(path);
         if (file.exists())
+        {
             file.moveTo(dest);
+            page_file.deleteEncryptionInfo();
+        }
     }
     LOG_INFO(log, storage_name << " archive " + DB::toString(page_files.size()) + " files to " + archive_path.toString());
 }

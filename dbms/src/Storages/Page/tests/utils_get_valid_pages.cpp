@@ -1,3 +1,4 @@
+#include <Encryption/MockKeyManager.h>
 #include <Storages/Page/PageStorage.h>
 
 #define private public
@@ -86,13 +87,15 @@ try
         debugging_recover_stop_sequence = strtoull(argv[3], nullptr, 10);
         LOG_TRACE(&Poco::Logger::get("root"), "debug early stop sequence set to: " << debugging_recover_stop_sequence);
     }
+    DB::KeyManagerPtr key_manager = std::make_shared<DB::MockKeyManager>(false);
+    DB::FileProviderPtr file_provider = std::make_shared<DB::FileProvider>(key_manager, false);
 
     // Do not remove any files.
     DB::PageStorage::ListPageFilesOption options;
     options.remove_tmp_files  = false;
     options.ignore_legacy     = false;
     options.ignore_checkpoint = false;
-    auto page_files           = DB::PageStorage::listAllPageFiles(path, &Poco::Logger::get("root"), options);
+    auto page_files           = DB::PageStorage::listAllPageFiles(path, file_provider, &Poco::Logger::get("root"), options);
 
     switch (mode)
     {
@@ -108,7 +111,7 @@ try
         return 0;
     }
 
-    DB::PageStorage storage("DebugUtils", path, {});
+    DB::PageStorage storage("DebugUtils", path, {}, file_provider);
     storage.restore();
     switch (mode)
     {
@@ -211,9 +214,9 @@ void list_all_capacity(const DB::PageFileSet & page_files, DB::PageStorage & sto
 
     auto snapshot = storage.getSnapshot();
 
-    DB::DataCompactor::ValidPages file_valid_pages;
+    DB::DataCompactor<DB::PageStorage::SnapshotPtr>::ValidPages file_valid_pages;
     {
-        DB::DataCompactor compactor(storage);
+        DB::DataCompactor<DB::PageStorage::SnapshotPtr> compactor(storage);
         file_valid_pages = compactor.collectValidPagesInPageFile(snapshot);
     }
 

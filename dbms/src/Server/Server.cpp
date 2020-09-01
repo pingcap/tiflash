@@ -13,11 +13,15 @@
 #include <Common/getFQDNOrHostName.h>
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
+#include <Encryption/DataKeyManager.h>
+#include <Encryption/FileProvider.h>
+#include <Encryption/MockKeyManager.h>
 #include <Flash/DiagnosticsService.h>
 #include <Flash/FlashService.h>
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
 #include <IO/ReadHelpers.h>
+#include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/DDLWorker.h>
 #include <Interpreters/IDAsPathUpgrader.h>
@@ -138,6 +142,7 @@ struct TiFlashProxyConfig
 
 const std::string TiFlashProxyConfig::config_prefix = "flash.proxy";
 
+
 struct TiFlashRaftConfig
 {
     const std::string learner_key = "engine";
@@ -238,6 +243,17 @@ TiFlashRaftConfig::TiFlashRaftConfig(const std::string & path, Poco::Util::Layer
     }
 }
 
+pingcap::ClusterConfig getClusterConfig(const TiFlashSecurityConfig & security_config, const TiFlashRaftConfig & raft_config)
+{
+    pingcap::ClusterConfig config;
+    config.learner_key = raft_config.learner_key;
+    config.learner_value = raft_config.learner_value;
+    config.ca_path = security_config.ca_path;
+    config.cert_path = security_config.cert_path;
+    config.key_path = security_config.key_path;
+    return config;
+}
+
 Logger * grpc_log = nullptr;
 
 void printGRPCLog(gpr_log_func_args * args)
@@ -273,7 +289,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     TiFlashServerHelper helper{
         // a special number, also defined in proxy
         .magic_number = 0x13579BDF,
-        .version = 9,
+        .version = 11,
         .inner = &tiflash_instance_wrap,
         .fn_gen_cpp_string = GenCppRawString,
         .fn_handle_write_raft_cmd = HandleWriteRaftCmd,
@@ -288,6 +304,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         .fn_pre_handle_snapshot = PreHandleSnapshot,
         .fn_apply_pre_handled_snapshot = ApplyPreHandledSnapshot,
         .fn_gc_pre_handled_snapshot = GcPreHandledSnapshot,
+        .fn_handle_get_table_sync_status = HandleGetTableSyncStatus,
+        .gc_cpp_string = GcCppString,
     };
 
     auto proxy_runner = std::thread([&proxy_conf, &log, &helper]() {
@@ -305,7 +323,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
         LOG_INFO(log, "tiflash proxy is initialized");
         if (tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled())
-            LOG_INFO(log, "encryption is enabled");
+        {
+            auto method = tiflash_instance_wrap.proxy_helper->getEncryptionMethod();
+            LOG_INFO(log, "encryption is enabled, method is " << IntoEncryptionMethodName(method));
+        }
         else
             LOG_INFO(log, "encryption is disabled");
     }
@@ -337,6 +358,24 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context = std::make_unique<Context>(Context::createGlobal());
     global_context->setGlobalContext(*global_context);
     global_context->setApplicationType(Context::ApplicationType::SERVER);
+
+    /// Init File Provider
+    if (proxy_conf.is_proxy_runnable)
+    {
+        bool enable_encryption = tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled();
+        if (enable_encryption)
+        {
+            auto method = tiflash_instance_wrap.proxy_helper->getEncryptionMethod();
+            enable_encryption = (method != EncryptionMethod::Plaintext);
+        }
+        KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(&tiflash_instance_wrap);
+        global_context->initializeFileProvider(key_manager, enable_encryption);
+    }
+    else
+    {
+        KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
+        global_context->initializeFileProvider(key_manager, false);
+    }
 
     bool has_zookeeper = config().has("zookeeper");
 
@@ -395,9 +434,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         p += "/data";
 
     if (path_realtime_mode && all_normal_path.size() > 1)
-        global_context->setExtraPaths(std::vector<String>(extra_paths.begin() + 1, extra_paths.end()), global_context->getPathCapacity());
+        global_context->setExtraPaths(std::vector<String>(extra_paths.begin() + 1, extra_paths.end()),
+            global_context->getPathCapacity(),
+            global_context->getFileProvider());
     else
-        global_context->setExtraPaths(extra_paths, global_context->getPathCapacity());
+        global_context->setExtraPaths(extra_paths, global_context->getPathCapacity(), global_context->getFileProvider());
 
     const std::string path = all_normal_path[0];
     TiFlashRaftConfig raft_config(path, config(), log);
@@ -406,6 +447,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::string default_database = config().getString("default_database", raft_config.pd_addrs.empty() ? "default" : "system");
     global_context->setPath(path);
     global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
+
+    security_config = TiFlashSecurityConfig(config(), log);
 
     /// Create directories for 'path' and for default database, if not exist.
     for (const String & candidate_path : global_context->getPartPathSelector().getAllPath())
@@ -470,7 +513,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             if (it->isFile() && startsWith(it.name(), "tmp"))
             {
                 LOG_DEBUG(log, "Removing old temporary file " << it->path());
-                it->remove();
+                global_context->getFileProvider()->deleteRegularFile(it->path(), EncryptionPath(it->path(), ""));
             }
         }
     }
@@ -604,13 +647,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         LOG_DEBUG(log, "Default storage engine: " << static_cast<Int64>(raft_config.engine));
         /// create TMTContext
+        auto cluster_config = getClusterConfig(security_config, raft_config);
         global_context->createTMTContext(raft_config.pd_addrs,
-            raft_config.learner_key,
-            raft_config.learner_value,
             raft_config.ignore_databases,
             raft_config.kvstore_path,
             raft_config.engine,
-            raft_config.disable_bg_flush);
+            raft_config.disable_bg_flush,
+            cluster_config);
         global_context->getTMTContext().reloadConfig(config());
     }
 
@@ -673,12 +716,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         /// initialize TMTContext
         global_context->getTMTContext().restore();
-        if (proxy_conf.is_proxy_runnable)
-        {
-            tiflash_instance_wrap.tmt = &global_context->getTMTContext();
-            LOG_INFO(log, "let tiflash proxy start all services");
-            tiflash_instance_wrap.status = TiFlashStatus::Running;
-        }
     }
 
     /// Then, startup grpc server to serve raft and/or flash services.
@@ -687,7 +724,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::unique_ptr<grpc::Server> flash_grpc_server = nullptr;
     {
         grpc::ServerBuilder builder;
-        builder.AddListeningPort(raft_config.flash_server_addr, grpc::InsecureServerCredentials());
+        if (security_config.has_tls_config)
+        {
+            grpc::SslServerCredentialsOptions server_cred(GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY);
+            auto options = security_config.ReadAndCacheSecurityInfo();
+            server_cred.pem_root_certs = options.pem_root_certs;
+            server_cred.pem_key_cert_pairs.push_back(
+                grpc::SslServerCredentialsOptions::PemKeyCertPair{options.pem_private_key, options.pem_cert_chain});
+            builder.AddListeningPort(raft_config.flash_server_addr, grpc::SslServerCredentials(server_cred));
+        }
+        else
+        {
+            builder.AddListeningPort(raft_config.flash_server_addr, grpc::InsecureServerCredentials());
+        }
 
         /// Init and register flash service.
         flash_service = std::make_unique<FlashService>(*this);
@@ -806,6 +855,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 /// HTTP
                 if (config().has("http_port"))
                 {
+                    if (security_config.has_tls_config)
+                    {
+                        throw Exception("tls config is set but https_port is not set ", ErrorCodes::INVALID_CONFIG_PARAMETER);
+                    }
                     Poco::Net::ServerSocket socket;
                     auto address = socket_bind_listen(socket, listen_host, config().getInt("http_port"));
                     socket.setReceiveTimeout(settings.http_receive_timeout);
@@ -820,9 +873,17 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 if (config().has("https_port"))
                 {
 #if Poco_NetSSL_FOUND
+                    if (!security_config.has_tls_config)
+                    {
+                        LOG_ERROR(log, "https_port is set but tls config is not set");
+                    }
+                    Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
+                        security_config.key_path,
+                        security_config.cert_path,
+                        security_config.ca_path);
                     std::call_once(ssl_init_once, SSLInit);
 
-                    Poco::Net::SecureServerSocket socket;
+                    Poco::Net::SecureServerSocket socket(context);
                     auto address = socket_bind_listen(socket, listen_host, config().getInt("https_port"), /* secure = */ true);
                     socket.setReceiveTimeout(settings.http_receive_timeout);
                     socket.setSendTimeout(settings.http_send_timeout);
@@ -839,6 +900,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 /// TCP
                 if (config().has("tcp_port"))
                 {
+                    if (security_config.has_tls_config)
+                    {
+                        LOG_ERROR(log, "tls config is set but tcp_port_secure is not set.");
+                    }
                     std::call_once(ssl_init_once, SSLInit);
                     Poco::Net::ServerSocket socket;
                     auto address = socket_bind_listen(socket, listen_host, config().getInt("tcp_port"));
@@ -849,12 +914,20 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
                     LOG_INFO(log, "Listening tcp: " + address.toString());
                 }
+                else if (security_config.has_tls_config)
+                {
+                    LOG_INFO(log, "tcp_port is closed because tls config is set");
+                }
 
                 /// TCP with SSL
-                if (config().has("tcp_port_secure"))
+                if (config().has("tcp_port_secure") && !security_config.has_tls_config)
                 {
 #if Poco_NetSSL_FOUND
-                    Poco::Net::SecureServerSocket socket;
+                    Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
+                        security_config.key_path,
+                        security_config.cert_path,
+                        security_config.ca_path);
+                    Poco::Net::SecureServerSocket socket(context);
                     auto address = socket_bind_listen(socket, listen_host, config().getInt("tcp_port_secure"), /* secure = */ true);
                     socket.setReceiveTimeout(settings.receive_timeout);
                     socket.setSendTimeout(settings.send_timeout);
@@ -866,13 +939,17 @@ int Server::main(const std::vector<std::string> & /*args*/)
                         ErrorCodes::SUPPORT_IS_DISABLED};
 #endif
                 }
+                else if (security_config.has_tls_config)
+                {
+                    LOG_INFO(log, "tcp_port is closed because tls config is set");
+                }
 
                 /// At least one of TCP and HTTP servers must be created.
                 if (servers.empty())
                     throw Exception("No 'tcp_port' and 'http_port' is specified in configuration file.", ErrorCodes::NO_ELEMENTS_IN_CONFIG);
 
                 /// Interserver IO HTTP
-                if (config().has("interserver_http_port"))
+                if (config().has("interserver_http_port") && !security_config.has_tls_config)
                 {
                     Poco::Net::ServerSocket socket;
                     auto address = socket_bind_listen(socket, listen_host, config().getInt("interserver_http_port"));
@@ -882,6 +959,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
                         new InterserverIOHTTPHandlerFactory(*this, "InterserverIOHTTPHandler-factory"), server_pool, socket, http_params));
 
                     LOG_INFO(log, "Listening interserver http: " + address.toString());
+                }
+                else if (security_config.has_tls_config)
+                {
+                    LOG_INFO(log, "internal http port is closed because tls config is set");
                 }
             }
             catch (const Poco::Net::NetException & e)
@@ -989,10 +1070,17 @@ int Server::main(const std::vector<std::string> & /*args*/)
             metrics_transmitters.emplace_back(std::make_unique<MetricsTransmitter>(*global_context, async_metrics, graphite_key));
         }
 
-        auto metrics_prometheus = std::make_unique<MetricsPrometheus>(*global_context, async_metrics);
+        auto metrics_prometheus = std::make_unique<MetricsPrometheus>(*global_context, async_metrics, security_config);
 
         SessionCleaner session_cleaner(*global_context);
         ClusterManagerService cluster_manager_service(*global_context, config_path);
+
+        if (proxy_conf.is_proxy_runnable)
+        {
+            tiflash_instance_wrap.tmt = &global_context->getTMTContext();
+            LOG_INFO(log, "let tiflash proxy start all services");
+            tiflash_instance_wrap.status = TiFlashStatus::Running;
+        }
 
         waitForTerminationRequest();
 
