@@ -32,7 +32,17 @@ extern const Event DMAppendDeltaCommitDisk;
 extern const Event DMAppendDeltaCommitDiskNS;
 extern const Event DMAppendDeltaCleanUp;
 extern const Event DMAppendDeltaCleanUpNS;
+
 } // namespace ProfileEvents
+
+namespace CurrentMetrics
+{
+extern const Metric DT_DeltaMerge;
+extern const Metric DT_SegmentSplit;
+extern const Metric DT_SegmentMerge;
+extern const Metric DT_DeltaMergeTotalBytes;
+extern const Metric DT_DeltaMergeTotalRows;
+} // namespace CurrentMetrics
 
 namespace DB
 {
@@ -208,7 +218,8 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
                     continue;
 
                 // Note that ref_id is useless here.
-                auto dmfile = DMFile::restore(global_context.getFileProvider(), id, /* ref_id= */ 0, path + "/" + STABLE_FOLDER_NAME, false);
+                auto dmfile
+                    = DMFile::restore(global_context.getFileProvider(), id, /* ref_id= */ 0, path + "/" + STABLE_FOLDER_NAME, false);
                 if (dmfile->canGC())
                 {
                     extra_paths.removeDMFile(dmfile->fileId());
@@ -351,7 +362,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
 
     EventRecorder write_block_recorder(ProfileEvents::DMWriteBlock, ProfileEvents::DMWriteBlockNS);
 
-    const size_t rows = to_write.rows();
+    const auto rows = to_write.rows();
     if (rows == 0)
         return;
 
@@ -369,6 +380,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
                          EXTRA_HANDLE_COLUMN_TYPE->createColumn());
         FunctionToInt64::create(db_context)->execute(block, {handle_pos}, block.columns() - 1);
     }
+    const auto bytes = block.bytes();
 
     {
         // Sort by handle & version in ascending order.
@@ -464,6 +476,9 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
 
         offset += limit;
     }
+
+    GET_METRIC(dm_context->metrics, tiflash_storage_throughput_bytes, type_write).Increment(bytes);
+    GET_METRIC(dm_context->metrics, tiflash_storage_throughput_rows, type_write).Increment(rows);
 
     if (db_settings.dt_flush_after_write)
     {
@@ -842,12 +857,12 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
 
 size_t forceMergeDeltaRows(const DMContextPtr & dm_context)
 {
-    return dm_context->segment_limit_rows;
+    return dm_context->db_context.getSettingsRef().dt_segment_force_merge_delta_rows;
 }
 
-size_t forceMergeDeltaDeletes(const DMContextPtr &)
+size_t forceMergeDeltaDeletes(const DMContextPtr & dm_context)
 {
-    return 5;
+    return dm_context->db_context.getSettingsRef().dt_segment_force_merge_delta_deletes;
 }
 
 void DeltaMergeStore::waitForWrite(const DMContextPtr & dm_context, const SegmentPtr & segment)
@@ -856,6 +871,10 @@ void DeltaMergeStore::waitForWrite(const DMContextPtr & dm_context, const Segmen
     size_t delta_rows       = segment->getDelta()->getRows();
     if (delta_rows < forceMergeDeltaRows(dm_context))
         return;
+
+    Stopwatch watch;
+    SCOPE_EXIT(
+        { GET_METRIC(dm_context->metrics, tiflash_storage_write_stall_duration_seconds, type_write).Observe(watch.elapsedSeconds()); });
 
     size_t sleep_step = 1;
     size_t sleep_ms   = (double)delta_rows / delta_limit_rows * sleep_step;
@@ -916,8 +935,8 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     bool should_background_merge_delta = (delta_check_rows >= delta_limit_rows //
                                           && delta_rows - delta_last_try_merge_delta_rows >= delta_cache_limit_rows)
         || delta_deletes >= 2;
-    bool should_foreground_merge_delta
-        = delta_check_rows >= forceMergeDeltaRows(dm_context) || delta_deletes >= forceMergeDeltaDeletes(dm_context);
+    bool should_foreground_merge_delta_by_rows    = delta_check_rows >= forceMergeDeltaRows(dm_context);
+    bool should_foreground_merge_delta_by_deletes = delta_deletes >= forceMergeDeltaDeletes(dm_context);
 
     bool should_split = segment_rows >= segment_limit_rows * 2 && delta_rows - delta_last_try_split_rows >= delta_cache_limit_rows;
     bool should_merge = segment_rows < segment_limit_rows / 3;
@@ -991,9 +1010,22 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     SegmentPtr merge_sibling;
 
     auto try_fg_merge_delta = [&]() -> SegmentPtr {
-        if (should_foreground_merge_delta)
+        if (should_foreground_merge_delta_by_rows || should_foreground_merge_delta_by_deletes)
         {
             delta_last_try_merge_delta_rows = delta_rows;
+
+            assert(thread_type == ThreadType::Write);
+
+            Stopwatch watch;
+            SCOPE_EXIT({
+                if (should_foreground_merge_delta_by_rows)
+                    GET_METRIC(dm_context->metrics, tiflash_storage_write_stall_duration_seconds, type_write)
+                        .Observe(watch.elapsedSeconds());
+                if (should_foreground_merge_delta_by_deletes)
+                    GET_METRIC(dm_context->metrics, tiflash_storage_write_stall_duration_seconds, type_delete_range)
+                        .Observe(watch.elapsedSeconds());
+            });
+
             return segmentMergeDelta(*dm_context, segment, true);
         }
         return {};
@@ -1193,6 +1225,13 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     }
 
     // Not counting the early give up action.
+    auto delta_bytes = (Int64)segment_snap->delta->getBytes();
+    auto delta_rows  = (Int64)segment_snap->delta->getRows();
+
+    size_t duplicated_bytes = 0;
+    size_t duplicated_rows  = 0;
+
+    CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_SegmentSplit};
     GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_seg_split).Increment();
     Stopwatch watch_seg_split;
     SCOPE_EXIT({
@@ -1242,10 +1281,26 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
             new_right->check(dm_context, "After split right");
         }
 
+        duplicated_bytes = new_left->getDelta()->getBytes();
+        duplicated_rows  = new_right->getDelta()->getBytes();
+
         LOG_DEBUG(log, "Apply split done. Segment [" << segment->segmentId() << "]");
     }
 
     wbs.writeRemoves();
+
+    if (!split_info.is_logical)
+    {
+        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_bytes, type_split).Increment(delta_bytes);
+        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_rows, type_split).Increment(delta_rows);
+    }
+    else
+    {
+        // For logical split, delta is duplicated into two segments. And will be merged into stable twice later. So we need to decrease it here.
+        // Otherwise the final total delta merge bytes is greater than bytes written into.
+        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_bytes, type_split).Decrement(duplicated_bytes);
+        GET_METRIC(dm_context.metrics, tiflash_storage_throughput_rows, type_split).Decrement(duplicated_rows);
+    }
 
     if constexpr (DM_RUN_CHECK)
         check(dm_context.db_context);
@@ -1285,6 +1340,10 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
     }
 
     // Not counting the early give up action.
+    auto delta_bytes = (Int64)left_snap->delta->getBytes() + right_snap->getBytes();
+    auto delta_rows  = (Int64)left_snap->delta->getRows() + right_snap->getRows();
+
+    CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_SegmentMerge};
     GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_seg_merge).Increment();
     Stopwatch watch_seg_merge;
     SCOPE_EXIT({
@@ -1338,6 +1397,9 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
 
     wbs.writeRemoves();
 
+    GET_METRIC(dm_context.metrics, tiflash_storage_throughput_bytes, type_merge).Increment(delta_bytes);
+    GET_METRIC(dm_context.metrics, tiflash_storage_throughput_rows, type_merge).Increment(delta_rows);
+
     if constexpr (DM_RUN_CHECK)
         check(dm_context.db_context);
 }
@@ -1368,7 +1430,14 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
     }
 
     // Not counting the early give up action.
-    GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_delta_merge).Increment();
+    auto delta_bytes = (Int64)segment_snap->delta->getBytes();
+    auto delta_rows  = (Int64)segment_snap->delta->getRows();
+
+    CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_DeltaMerge};
+    CurrentMetrics::Increment cur_dm_total_bytes{CurrentMetrics::DT_DeltaMergeTotalBytes, (Int64)segment_snap->getBytes()};
+    CurrentMetrics::Increment cur_dm_total_rows{CurrentMetrics::DT_DeltaMergeTotalRows, (Int64)segment_snap->getRows()};
+
+
     Stopwatch watch_delta_merge;
     SCOPE_EXIT({
         GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_delta_merge)
@@ -1420,6 +1489,9 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
     }
 
     wbs.writeRemoves();
+
+    GET_METRIC(dm_context.metrics, tiflash_storage_throughput_bytes, type_delta_merge).Increment(delta_bytes);
+    GET_METRIC(dm_context.metrics, tiflash_storage_throughput_rows, type_delta_merge).Increment(delta_rows);
 
     if constexpr (DM_RUN_CHECK)
         check(dm_context.db_context);

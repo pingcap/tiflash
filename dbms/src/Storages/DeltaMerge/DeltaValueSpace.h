@@ -139,6 +139,7 @@ public:
 
         Packs  packs;
         size_t rows;
+        size_t bytes;
         size_t deletes;
 
         ColumnDefines       column_defines;
@@ -152,6 +153,7 @@ public:
 
         size_t getPackCount() const { return packs.size(); }
         size_t getRows() const { return rows; }
+        size_t getBytes() const { return bytes; }
         size_t getDeletes() const { return deletes; }
 
         void                prepare(const DMContext & context, const ColumnDefines & column_defines_);
