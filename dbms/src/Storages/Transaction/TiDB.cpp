@@ -27,6 +27,10 @@ using DB::DecimalField;
 using DB::Field;
 using DB::SchemaNameMapper;
 
+////////////////////////
+////// ColumnInfo //////
+////////////////////////
+
 ColumnInfo::ColumnInfo(Poco::JSON::Object::Ptr json) { deserialize(json); }
 
 
@@ -264,8 +268,11 @@ try
     json->set("state", static_cast<Int32>(state));
     json->set("comment", comment);
 
+#ifndef NDEBUG
+    // Check stringify in Debug mode
     std::stringstream str;
     json->stringify(str);
+#endif
 
     return json;
 }
@@ -316,6 +323,10 @@ catch (const Poco::Exception & e)
         std::string(__PRETTY_FUNCTION__) + ": Parse TiDB schema JSON failed (ColumnInfo): " + e.displayText(), DB::Exception(e));
 }
 
+///////////////////////////
+////// PartitionInfo //////
+///////////////////////////
+
 PartitionDefinition::PartitionDefinition(Poco::JSON::Object::Ptr json) { deserialize(json); }
 
 Poco::JSON::Object::Ptr PartitionDefinition::getJSONObject() const
@@ -329,8 +340,11 @@ try
     json->set("name", name_json);
     json->set("comment", comment);
 
+#ifndef NDEBUG
+    // Check stringify in Debug mode
     std::stringstream str;
     json->stringify(str);
+#endif
 
     return json;
 }
@@ -375,8 +389,11 @@ try
 
     json->set("definitions", def_arr);
 
+#ifndef NDEBUG
+    // Check stringify in Debug mode
     std::stringstream str;
     json->stringify(str);
+#endif
 
     return json;
 }
@@ -409,57 +426,44 @@ catch (const Poco::Exception & e)
         std::string(__PRETTY_FUNCTION__) + ": Parse TiDB schema JSON failed (PartitionInfo): " + e.displayText(), DB::Exception(e));
 }
 
-TableInfo::TableInfo(const String & table_info_json) { deserialize(table_info_json); }
+////////////////////////////////
+////// TiFlashReplicaInfo //////
+////////////////////////////////
 
-String TableInfo::serialize() const
+Poco::JSON::Object::Ptr TiFlashReplicaInfo::getJSONObject() const
 try
 {
-    std::stringstream buf;
-
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
-    json->set("id", id);
-    Poco::JSON::Object::Ptr name_json = new Poco::JSON::Object();
-    name_json->set("O", name);
-    name_json->set("L", name);
-    json->set("name", name_json);
+    json->set("Count", count);
 
-    Poco::JSON::Array::Ptr cols_arr = new Poco::JSON::Array();
-    for (auto & col_info : columns)
-    {
-        auto col_obj = col_info.getJSONObject();
-        cols_arr->add(col_obj);
-    }
+#ifndef NDEBUG
+    // Check stringify in Debug mode
+    std::stringstream str;
+    json->stringify(str);
+#endif
 
-    json->set("cols", cols_arr);
-    json->set("state", static_cast<Int32>(state));
-    json->set("pk_is_handle", pk_is_handle);
-    json->set("comment", comment);
-    json->set("update_timestamp", update_timestamp);
-    if (is_partition_table)
-    {
-        json->set("belonging_table_id", belonging_table_id);
-        json->set("partition", partition.getJSONObject());
-        if (belonging_table_id != DB::InvalidTableID)
-        {
-            json->set("is_partition_sub_table", true);
-        }
-    }
-    else
-    {
-        json->set("partition", Poco::Dynamic::Var());
-    }
+    return json;
+}
+catch (const Poco::Exception & e)
+{
+    throw DB::Exception(std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (TiFlashReplicaInfo): " + e.displayText(),
+        DB::Exception(e));
+}
 
-    json->set("schema_version", schema_version);
-
-    json->stringify(buf);
-
-    return buf.str();
+void TiFlashReplicaInfo::deserialize(Poco::JSON::Object::Ptr & json)
+try
+{
+    count = json->getValue<UInt64>("Count");
 }
 catch (const Poco::Exception & e)
 {
     throw DB::Exception(
-        std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (TableInfo): " + e.displayText(), DB::Exception(e));
+        String(__PRETTY_FUNCTION__) + ": Parse TiDB schema JSON failed (TiFlashReplicaInfo): " + e.displayText(), DB::Exception(e));
 }
+
+////////////////////
+////// DBInfo //////
+////////////////////
 
 String DBInfo::serialize() const
 try
@@ -507,6 +511,71 @@ catch (const Poco::Exception & e)
         DB::Exception(e));
 }
 
+///////////////////////
+////// TableInfo //////
+///////////////////////
+
+TableInfo::TableInfo(const String & table_info_json) { deserialize(table_info_json); }
+
+String TableInfo::serialize() const
+try
+{
+    std::stringstream buf;
+
+    Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
+    json->set("id", id);
+    Poco::JSON::Object::Ptr name_json = new Poco::JSON::Object();
+    name_json->set("O", name);
+    name_json->set("L", name);
+    json->set("name", name_json);
+
+    Poco::JSON::Array::Ptr cols_arr = new Poco::JSON::Array();
+    for (auto & col_info : columns)
+    {
+        auto col_obj = col_info.getJSONObject();
+        cols_arr->add(col_obj);
+    }
+
+
+
+    json->set("cols", cols_arr);
+    json->set("state", static_cast<Int32>(state));
+    json->set("pk_is_handle", pk_is_handle);
+    json->set("comment", comment);
+    json->set("update_timestamp", update_timestamp);
+    if (is_partition_table)
+    {
+        json->set("belonging_table_id", belonging_table_id);
+        if (belonging_table_id != DB::InvalidTableID)
+        {
+            json->set("is_partition_sub_table", true);
+            json->set("partition", Poco::Dynamic::Var());
+        }
+        else
+        {
+            // only record partition info in LogicalPartitionTable
+            json->set("partition", partition.getJSONObject());
+        }
+    }
+    else
+    {
+        json->set("partition", Poco::Dynamic::Var());
+    }
+
+    json->set("schema_version", schema_version);
+
+    json->set("tiflash_replica", replica_info.getJSONObject());
+
+    json->stringify(buf);
+
+    return buf.str();
+}
+catch (const Poco::Exception & e)
+{
+    throw DB::Exception(
+        std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (TableInfo): " + e.displayText(), DB::Exception(e));
+}
+
 void TableInfo::deserialize(const String & json_str)
 try
 {
@@ -517,7 +586,6 @@ try
     }
 
     Poco::JSON::Parser parser;
-
     Poco::Dynamic::Var result = parser.parse(json_str);
 
     auto obj = result.extract<Poco::JSON::Object::Ptr>();
@@ -541,12 +609,13 @@ try
     comment = obj->getValue<String>("comment");
     update_timestamp = obj->getValue<Timestamp>("update_timestamp");
     auto partition_obj = obj->getObject("partition");
-    is_partition_table = !partition_obj.isNull();
+    is_partition_table = obj->has("belonging_table_id") || !partition_obj.isNull();
     if (is_partition_table)
     {
         if (obj->has("belonging_table_id"))
             belonging_table_id = obj->getValue<TableID>("belonging_table_id");
-        partition.deserialize(partition_obj);
+        if (!partition_obj.isNull())
+            partition.deserialize(partition_obj);
     }
     if (obj->has("schema_version"))
     {
@@ -559,6 +628,13 @@ try
     if (obj->has("sequence") && !obj->getObject("sequence").isNull())
     {
         is_sequence = true;
+    }
+    if (obj->has("tiflash_replica"))
+    {
+        if (auto replica_obj = obj->getObject("tiflash_replica"); !replica_obj.isNull())
+        {
+            replica_info.deserialize(replica_obj);
+        }
     }
 }
 catch (const Poco::Exception & e)
