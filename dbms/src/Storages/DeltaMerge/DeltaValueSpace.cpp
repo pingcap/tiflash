@@ -242,7 +242,7 @@ PackPtr DeltaValueSpace::writePack(DMContext & context, const Block & block, siz
 {
     auto pack       = std::make_shared<Pack>();
     pack->rows      = limit;
-    pack->bytes     = block.bytes() * ((double)limit / block.rows());
+    pack->bytes     = block.bytes(offset, limit);
     pack->data_page = writePackData(context, block, offset, limit, wbs);
     pack->setSchema(std::make_shared<Block>(block.cloneEmpty()));
     pack->appendable = false;
@@ -322,7 +322,7 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
         }
     };
 
-    size_t append_bytes = block.bytes() * ((double)limit / block.rows());
+    size_t append_bytes = block.bytes(offset, limit);
     if (mutable_pack)
     {
         // Merge into last pack.
