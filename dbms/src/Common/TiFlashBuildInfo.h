@@ -14,6 +14,7 @@ std::string getEdition();
 std::string getGitHash();
 std::string getGitBranch();
 std::string getUTCBuildTime();
+std::string getBuildType();
 
 void outputDetail(std::ostream & os);
 } // namespace TiFlashBuildInfo
