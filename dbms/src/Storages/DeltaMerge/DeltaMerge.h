@@ -69,11 +69,11 @@ private:
     // How many times `read` is called.
     size_t num_read = 0;
 
-    RowKeyRange all_range;
-    RowKeyValue last_value;
-    UInt64      last_version         = 0;
-    size_t      last_handle_pos      = 0;
-    size_t      last_handle_read_num = 0;
+    RowKeyValueWithOwnString last_value_with_own_string;
+    RowKeyValue              last_value;
+    UInt64                   last_version         = 0;
+    size_t                   last_handle_pos      = 0;
+    size_t                   last_handle_read_num = 0;
 
 public:
     DeltaMergeBlockInputStream(const SkippableBlockInputStreamPtr & stable_input_stream_,
@@ -109,8 +109,9 @@ public:
         {
             use_stable_rows = delta_index_it.getSid();
         }
-        all_range  = RowKeyRange::newAll(is_common_handle, rowkey_column_size);
-        last_value = all_range.getStart();
+        auto all_range             = RowKeyRange::newAll(is_common_handle, rowkey_column_size);
+        last_value_with_own_string = all_range.getStart().toRowKeyValueWithOwnString();
+        last_value                 = last_value_with_own_string.toRowKeyValue();
     }
 
     String getName() const override { return "DeltaMerge"; }
@@ -194,6 +195,10 @@ private:
                 last_handle_pos      = i;
                 last_handle_read_num = num_read;
             }
+            /// last_value is based on block, when block is released, it will
+            /// become meaningless, so need to update last_value here
+            last_value_with_own_string = last_value.toRowKeyValueWithOwnString();
+            last_value                 = last_value_with_own_string.toRowKeyValue();
         }
     }
 
