@@ -12,7 +12,6 @@ std::string getEdition() { return TIFLASH_EDITION; }
 std::string getGitHash() { return TIFLASH_GIT_HASH; }
 std::string getGitBranch() { return TIFLASH_GIT_BRANCH; }
 std::string getUTCBuildTime() { return TIFLASH_UTC_BUILD_TIME; }
-std::string getBuildType() { return TIFLASH_BUILD_TYPE; }
 
 void outputDetail(std::ostream & os)
 {
@@ -21,7 +20,6 @@ void outputDetail(std::ostream & os)
        << "Edition:         " << getEdition() << std::endl
        << "Git Commit Hash: " << getGitHash() << std::endl
        << "Git Branch:      " << getGitBranch() << std::endl
-       << "UTC Build Time:  " << getUTCBuildTime() << std::endl
-       << "Profile:         " << getBuildType() << std::endl;
+       << "UTC Build Time:  " << getUTCBuildTime() << std::endl;
 }
 } // namespace TiFlashBuildInfo
