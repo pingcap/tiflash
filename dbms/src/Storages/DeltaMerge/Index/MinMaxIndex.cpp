@@ -94,6 +94,11 @@ std::pair<Int64, Int64> MinMaxIndex::getIntMinMax(size_t pack_index)
     return {minmaxes->getInt(pack_index * 2), minmaxes->getInt(pack_index * 2 + 1)};
 }
 
+std::pair<StringRef, StringRef> MinMaxIndex::getStringMinMax(size_t pack_index)
+{
+    return {minmaxes->getDataAt(pack_index * 2), minmaxes->getDataAt(pack_index * 2 + 1)};
+}
+
 std::pair<UInt64, UInt64> MinMaxIndex::getUInt64MinMax(size_t pack_index)
 {
     return {minmaxes->get64(pack_index * 2), minmaxes->get64(pack_index * 2 + 1)};

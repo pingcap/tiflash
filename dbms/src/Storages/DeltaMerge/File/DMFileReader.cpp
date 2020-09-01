@@ -127,6 +127,7 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
       pack_filter(dmfile_, index_cache_, hash_salt_, rowkey_range_, filter_, read_packs_, file_provider_),
       handle_res(pack_filter.getHandleRes()),
       use_packs(pack_filter.getUsePacks()),
+      is_common_handle(rowkey_range_.is_common_handle),
       skip_packs_by_column(read_columns.size(), 0),
       hash_salt(hash_salt_),
       mark_cache(mark_cache_),
@@ -243,8 +244,16 @@ Block DMFileReader::read()
             if (cd.id == EXTRA_HANDLE_COLUMN_ID)
             {
                 // Return the first row's handle
-                Handle min_handle = pack_filter.getMinHandle(start_pack_id);
-                column            = cd.type->createColumnConst(read_rows, Field(min_handle));
+                if (is_common_handle)
+                {
+                    StringRef min_handle = pack_filter.getMinStringHandle(start_pack_id);
+                    column = cd.type->createColumnConst(read_rows, Field(min_handle.data, min_handle.size));
+                }
+                else
+                {
+                    Handle min_handle = pack_filter.getMinHandle(start_pack_id);
+                    column = cd.type->createColumnConst(read_rows, Field(min_handle));
+                }
             }
             else if (cd.id == VERSION_COLUMN_ID)
             {

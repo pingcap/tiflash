@@ -84,6 +84,8 @@ private:
     const std::vector<RSResult> & handle_res; // alias of handle_res in pack_filter
     const std::vector<UInt8> &    use_packs;  // alias of use_packs in pack_filter
 
+    bool is_common_handle;
+
     std::vector<size_t> skip_packs_by_column;
 
     /// Caches

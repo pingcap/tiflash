@@ -130,6 +130,14 @@ public:
         return minmax_index->getIntMinMax(pack_id).first;
     }
 
+    StringRef getMinStringHandle(size_t pack_id)
+    {
+        if (!param.indexes.count(EXTRA_HANDLE_COLUMN_ID))
+            loadIndex(EXTRA_HANDLE_COLUMN_ID);
+        auto & minmax_index = param.indexes.find(EXTRA_HANDLE_COLUMN_ID)->second.minmax;
+        return minmax_index->getStringMinMax(pack_id).first;
+    }
+
     UInt64 getMaxVersion(size_t pack_id)
     {
         if (!param.indexes.count(VERSION_COLUMN_ID))
