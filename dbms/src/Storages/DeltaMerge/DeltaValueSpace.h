@@ -143,6 +143,8 @@ public:
         size_t bytes;
         size_t deletes;
 
+        /// Those members below are not part of the Snapshot, they are used by the reader of this Snapshot.
+
         ColumnDefines       column_defines;
         std::vector<size_t> pack_rows;
         std::vector<size_t> pack_rows_end; // Speed up pack search.
@@ -154,6 +156,8 @@ public:
         size_t rowkey_column_size;
 
         ~Snapshot();
+
+        const Packs & getPacks() const { return packs; }
 
         size_t getPackCount() const { return packs.size(); }
         size_t getRows() const { return rows; }

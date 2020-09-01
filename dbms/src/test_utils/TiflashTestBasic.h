@@ -1,8 +1,8 @@
 #pragma once
 
-#include <Encryption/MockKeyManager.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/IDataType.h>
+#include <Encryption/MockKeyManager.h>
 #include <Interpreters/Context.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/File.h>
@@ -113,11 +113,13 @@ public:
         throw Exception("Can not find testdata with name[" + name + "]");
     }
 
-    static Context & getContext(const DB::Settings & settings = DB::Settings(), const std::vector<String> testdata_path = {})
+    static Context & getContext(const DB::Settings & settings = DB::Settings(), std::vector<String> testdata_path = {})
     {
         static Context context = DB::Context::createGlobal();
         // Load `testdata_path` as path if it is set.
         const String root_path = testdata_path.empty() ? getTemporaryPath() : testdata_path[0];
+        if (testdata_path.empty())
+            testdata_path.push_back(root_path);
         context.setPath(root_path);
         context.setGlobalContext(context);
         try
