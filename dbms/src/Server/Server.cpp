@@ -13,14 +13,14 @@
 #include <Common/getFQDNOrHostName.h>
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
+#include <Encryption/DataKeyManager.h>
+#include <Encryption/FileProvider.h>
+#include <Encryption/MockKeyManager.h>
 #include <Flash/DiagnosticsService.h>
 #include <Flash/FlashService.h>
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
 #include <IO/ReadHelpers.h>
-#include <Encryption/DataKeyManager.h>
-#include <Encryption/MockKeyManager.h>
-#include <Encryption/FileProvider.h>
 #include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/DDLWorker.h>
@@ -434,7 +434,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         p += "/data";
 
     if (path_realtime_mode && all_normal_path.size() > 1)
-        global_context->setExtraPaths(std::vector<String>(extra_paths.begin() + 1, extra_paths.end()), global_context->getPathCapacity(), global_context->getFileProvider());
+        global_context->setExtraPaths(std::vector<String>(extra_paths.begin() + 1, extra_paths.end()),
+            global_context->getPathCapacity(),
+            global_context->getFileProvider());
     else
         global_context->setExtraPaths(extra_paths, global_context->getPathCapacity(), global_context->getFileProvider());
 

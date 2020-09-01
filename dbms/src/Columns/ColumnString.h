@@ -62,6 +62,14 @@ public:
         return chars.size() + offsets.size() * sizeof(offsets[0]);
     }
 
+    size_t byteSize(size_t offset, size_t limit) const override
+    {
+        if (limit == 0)
+            return 0;
+        auto char_size = offsets[offset + limit - 1] - (offset == 0 ? 0 : offsets[offset - 1]);
+        return char_size + limit * sizeof(offsets[0]);
+    }
+
     size_t allocatedBytes() const override
     {
         return chars.allocated_bytes() + offsets.allocated_bytes();
