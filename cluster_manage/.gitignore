@@ -1,3 +1,4 @@
 /dist/
 *.spec
 version.py
+/tikv_util/.eggs/
