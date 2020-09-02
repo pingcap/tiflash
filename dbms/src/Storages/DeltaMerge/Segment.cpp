@@ -293,7 +293,8 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
         }
         else if (dm_context.read_stable_only)
         {
-            stream = segment_snap->stable->getInputStream(dm_context, read_info.read_columns, read_range, filter, max_version, false);
+            stream = segment_snap->stable->getInputStream(
+                dm_context, read_info.read_columns, read_range, filter, max_version, expected_block_size, false);
         }
         else if (segment_snap->delta->rows == 0 && segment_snap->delta->deletes == 0 //
                  && !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID)              //
@@ -301,7 +302,8 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
                  && !hasColumn(columns_to_read, TAG_COLUMN_ID))
         {
             // No delta, let's try some optimizations.
-            stream = segment_snap->stable->getInputStream(dm_context, read_info.read_columns, read_range, filter, max_version, true);
+            stream = segment_snap->stable->getInputStream(
+                dm_context, read_info.read_columns, read_range, filter, max_version, expected_block_size, true);
         }
         else
         {
@@ -365,7 +367,9 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &     dm_context,
 BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &          dm_context,
                                                const ColumnDefines &      columns_to_read,
                                                const SegmentSnapshotPtr & segment_snap,
-                                               bool                       do_range_filter)
+
+                                               bool   do_range_filter,
+                                               size_t expected_block_size)
 {
     ColumnDefines new_columns_to_read;
 
@@ -386,8 +390,8 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &          dm_con
 
     BlockInputStreamPtr delta_stream = segment_snap->delta->prepareForStream(dm_context, new_columns_to_read);
 
-    BlockInputStreamPtr stable_stream
-        = segment_snap->stable->getInputStream(dm_context, new_columns_to_read, range, EMPTY_FILTER, MAX_UINT64, false);
+    BlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
+        dm_context, new_columns_to_read, range, EMPTY_FILTER, MAX_UINT64, expected_block_size, false);
 
     if (do_range_filter)
     {
@@ -1117,7 +1121,7 @@ SkippableBlockInputStreamPtr Segment::getPlacedStream(const DMContext &         
                                                       UInt64                    max_version)
 {
     SkippableBlockInputStreamPtr stable_input_stream
-        = stable_snap->getInputStream(dm_context, read_columns, handle_range, filter, max_version, false);
+        = stable_snap->getInputStream(dm_context, read_columns, handle_range, filter, max_version, expected_block_size, false);
     return std::make_shared<DeltaMergeBlockInputStream<DeltaSnapshot, IndexIterator, skippable_place>>( //
         stable_input_stream,
         delta_snap,
