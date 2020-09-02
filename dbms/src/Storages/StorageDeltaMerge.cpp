@@ -22,6 +22,7 @@
 #include <Storages/MutableSupport.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
+#include <Storages/StorageDeltaMergePriKeyException.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/SchemaNameMapper.h>
@@ -79,7 +80,7 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
     auto all_columns = getColumns().getAllPhysical();
     ColumnDefines table_column_defines; // column defines used in DeltaMergeStore
     ColumnDefine handle_column_define;
-    for (auto & col : all_columns)
+    for (const auto & col : all_columns)
     {
         ColumnDefine column_define(0, col.name, col.type);
         if (table_info_)
@@ -135,12 +136,43 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
 
     if (unlikely(handle_column_define.name.empty()))
     {
+        // If users deploy a cluster with TiFlash node with version v4.0.0~v4.0.3, and rename primary key column. They will 
+        // run into here.
+        // For v4.0.x, there is only one column that could be the primary key ("_tidb_rowid" or int64-like column) in TiFlash. 
+        // It is safe for us to take the primary key column name from TiDB table info to correct the primary key of the
+        // create table statement.
+        // Here we throw a PriKeyNameNotMatchException, caller (`DatabaseLoading::loadTable`) is responsible for correcting 
+        // the statement and retry.
+        if (pks.size() == 1 && table_info_)
+        {
+            std::vector<String> actual_pri_keys;
+            for (const auto & col : table_info_->get().columns)
+            {
+                if (col.hasPriKeyFlag())
+                {
+                    actual_pri_keys.emplace_back(col.name);
+                }
+            }
+            if (actual_pri_keys.size() == 1)
+            {
+                throw PriKeyNameNotMatchException(String(*pks.begin()), String(actual_pri_keys[0]));
+            }
+            // fallover
+        }
+
+        // Unknown bug, throw an exception.
         std::stringstream ss;
         ss << "[";
         for (const auto & k : pks)
             ss << k << ",";
         ss << "]";
-        throw Exception("Can not create table without primary key. pks:" + ss.str());
+        std::stringstream columns_stream;
+        columns_stream << "[";
+        for (const auto & col : all_columns)
+            columns_stream << col.name << ",";
+        columns_stream << "]";
+        throw Exception("Can not create table without primary key. Primary keys should be:" + ss.str()
+            + ", but only these columns are found:" + columns_stream.str());
     }
     assert(!table_column_defines.empty());
     store = std::make_shared<DeltaMergeStore>(global_context, path, data_path_contains_database_name, db_name_, table_name_,

@@ -1,17 +1,18 @@
-#include <sstream>
-
 #include <Common/Stopwatch.h>
-#include <common/ThreadPool.h>
-#include <Poco/DirectoryIterator.h>
-#include <Parsers/parseQuery.h>
-#include <Parsers/ParserCreateQuery.h>
-#include <Parsers/ASTCreateQuery.h>
-#include <Parsers/formatAST.h>
+#include <Databases/DatabasesCommon.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
+#include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ParserCreateQuery.h>
+#include <Parsers/formatAST.h>
+#include <Parsers/parseQuery.h>
+#include <Poco/DirectoryIterator.h>
+#include <Storages/StorageDeltaMergePriKeyException.h>
 #include <Storages/StorageFactory.h>
-#include <Databases/DatabasesCommon.h>
+#include <common/ThreadPool.h>
+
+#include <sstream>
 
 
 namespace DB
@@ -19,15 +20,15 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int EMPTY_LIST_OF_COLUMNS_PASSED;
-    extern const int TABLE_ALREADY_EXISTS;
-    extern const int UNKNOWN_TABLE;
-    extern const int LOGICAL_ERROR;
-    extern const int INCORRECT_FILE_NAME;
-    extern const int CANNOT_CREATE_TABLE_FROM_METADATA;
-    extern const int SYNTAX_ERROR;
-    extern const int TIDB_TABLE_ALREADY_EXISTS;
-}
+extern const int EMPTY_LIST_OF_COLUMNS_PASSED;
+extern const int TABLE_ALREADY_EXISTS;
+extern const int UNKNOWN_TABLE;
+extern const int LOGICAL_ERROR;
+extern const int INCORRECT_FILE_NAME;
+extern const int CANNOT_CREATE_TABLE_FROM_METADATA;
+extern const int SYNTAX_ERROR;
+extern const int TIDB_TABLE_ALREADY_EXISTS;
+} // namespace ErrorCodes
 
 
 String getTableDefinitionFromCreateQuery(const ASTPtr & query)
@@ -110,17 +111,13 @@ std::pair<String, StoragePtr> createTableFromDefinition(const String & definitio
 }
 
 
-bool DatabaseWithOwnTablesBase::isTableExist(
-    const Context & /*context*/,
-    const String & table_name) const
+bool DatabaseWithOwnTablesBase::isTableExist(const Context & /*context*/, const String & table_name) const
 {
     std::lock_guard<std::mutex> lock(mutex);
     return tables.find(table_name) != tables.end();
 }
 
-StoragePtr DatabaseWithOwnTablesBase::tryGetTable(
-    const Context & /*context*/,
-    const String & table_name) const
+StoragePtr DatabaseWithOwnTablesBase::tryGetTable(const Context & /*context*/, const String & table_name) const
 {
     std::lock_guard<std::mutex> lock(mutex);
     auto it = tables.find(table_name);
@@ -174,7 +171,7 @@ void DatabaseWithOwnTablesBase::shutdown()
         tables_snapshot = tables;
     }
 
-    for (const auto & kv: tables_snapshot)
+    for (const auto & kv : tables_snapshot)
     {
         kv.second->shutdown();
     }
@@ -189,7 +186,7 @@ DatabaseWithOwnTablesBase::~DatabaseWithOwnTablesBase()
     {
         shutdown();
     }
-    catch(...)
+    catch (...)
     {
         tryLogCurrentException(__PRETTY_FUNCTION__);
     }
@@ -302,8 +299,19 @@ void loadTable(Context & context,
     {
         String table_name;
         StoragePtr table;
-        std::tie(table_name, table) = createTableFromDefinition(
-            s, database_name, database_data_path, database_engine, context, has_force_restore_data_flag, "in file " + table_metadata_path);
+        try
+        {
+            std::tie(table_name, table) = createTableFromDefinition(s, database_name, database_data_path, database_engine, context,
+                has_force_restore_data_flag, "in file " + table_metadata_path);
+        }
+        catch (const PriKeyNameNotMatchException & pri_key_ex)
+        {
+            // Replace the primary key and update statement in `table_metadata_path`. The correct statement will be return.
+            const String statement = fixCreateStatementWithPriKeyNotMatchException(context, s, table_metadata_path, pri_key_ex, log);
+            // Then try to load with correct statement.
+            std::tie(table_name, table) = createTableFromDefinition(statement, database_name, database_data_path, database_engine, context,
+                has_force_restore_data_flag, "in file " + table_metadata_path);
+        }
         database.attachTable(table_name, table);
     }
     catch (const Exception & e)
@@ -370,7 +378,7 @@ void startupTables(IDatabase & database, const String & db_name, Tables & tables
                     // means that we may crashed in the middle of renaming tables. We clean the meta file
                     // for those storages by `cleanupTables`.
                     // - If the storage is the outdated one after renaming, remove it is right.
-                    // - If the storage should be the target table, remove it means we "rollback" the 
+                    // - If the storage should be the target table, remove it means we "rollback" the
                     //   rename action. And the table will be renamed by TiDBSchemaSyncer later.
                     std::lock_guard lock(failed_tables_mutex);
                     tables_failed_to_startup.emplace(it->first, it->second);
