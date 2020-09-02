@@ -881,6 +881,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
                         security_config.key_path,
                         security_config.cert_path,
                         security_config.ca_path);
+                    std::function<bool(const Poco::Crypto::X509Certificate &)> check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
+                        if (security_config.allowed_common_names.empty())
+                        {
+                            return true;
+                        }
+                        return security_config.allowed_common_names.count(cert.commonName()) > 0;
+                    };
+                    context->setAdhocVerification(check_common_name);
                     std::call_once(ssl_init_once, SSLInit);
 
                     Poco::Net::SecureServerSocket socket(context);
