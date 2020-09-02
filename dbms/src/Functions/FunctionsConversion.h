@@ -1296,6 +1296,7 @@ public:
     bool isVariadic() const override { return true; }
     size_t getNumberOfArguments() const override { return 0; }
     bool isInjective(const Block &) override { return true; }
+    bool useDefaultImplementationForConstants() const override { return true; }
     bool useDefaultImplementationForNulls() const override { return false; }
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
@@ -1318,14 +1319,13 @@ public:
     /// converted to 230000
     static constexpr int scale_multiplier[] = {1000000,100000,10000,1000,100,10,1};
 
-    template<typename T>
+    template <typename T>
     void decimalToMyDatetime(const ColumnPtr & input_col, ColumnUInt64::Container & datetime_res, ColumnUInt8::Container & null_res,
-            UInt32 scale, Int256 & scale_divisor, Int256 & scale_round_divisor)
+        UInt32 scale, Int256 & scale_divisor, Int256 & scale_round_divisor)
     {
         const auto & timezone_info = context.getTimezoneInfo();
         const auto * datelut = timezone_info.timezone;
-        const auto decimal_col = checkAndGetColumn<ColumnDecimal<T>>(input_col.get());
-        const typename ColumnDecimal<T>::Container & vec_from = decimal_col->getData();
+
         Int64 scale_divisor_64 = 1;
         Int64 scale_round_divisor_64 = 1;
         bool scale_divisor_fit_64 = false;
@@ -1335,19 +1335,18 @@ public:
             scale_round_divisor_64 = static_cast<Int64>(scale_round_divisor);
             scale_divisor_fit_64 = true;
         }
-        for (size_t i = 0; i < decimal_col->size(); i++)
-        {
-            if (null_res[i])
+
+        auto handle_func = [&](const T & decimal, size_t index) {
+            if (null_res[index])
             {
-                datetime_res[i] = 0;
-                continue;
+                datetime_res[index] = 0;
+                return;
             }
-            const auto & decimal = vec_from[i];
             if (decimal.value < 0)
             {
-                null_res[i] = 1;
-                datetime_res[i] = 0;
-                continue;
+                null_res[index] = 1;
+                datetime_res[index] = 0;
+                return;
             }
             Int64 integer_part;
             Int64 fsp_part = 0;
@@ -1386,9 +1385,9 @@ public:
             }
             if (integer_part > std::numeric_limits<Int32>::max() || integer_part < 0)
             {
-                null_res[i] = 1;
-                datetime_res[i] = 0;
-                continue;
+                null_res[index] = 1;
+                datetime_res[index] = 0;
+                return;
             }
 
             if (timezone_info.timezone_offset != 0)
@@ -1403,16 +1402,44 @@ public:
                     throw Exception("Unsupported timestamp value , TiFlash only support timestamp after 1970-01-01 00:00:00 UTC)");
             }
             MyDateTime result(datelut->toYear(integer_part), datelut->toMonth(integer_part), datelut->toDayOfMonth(integer_part),
-                                  datelut->toHour(integer_part), datelut->toMinute(integer_part), datelut->toSecond(integer_part), fsp_part);
-            null_res[i] = 0;
-            datetime_res[i] = result.toPackedUInt();
+                datelut->toHour(integer_part), datelut->toMinute(integer_part), datelut->toSecond(integer_part), fsp_part);
+            null_res[index] = 0;
+            datetime_res[index] = result.toPackedUInt();
+        };
+
+        if (auto decimal_col = checkAndGetColumn<ColumnDecimal<T>>(input_col.get()))
+        {
+            const typename ColumnDecimal<T>::Container & vec_from = decimal_col->getData();
+
+            for (size_t i = 0; i < decimal_col->size(); i++)
+            {
+                const auto & decimal = vec_from[i];
+                handle_func(decimal, i);
+            }
+        }
+        else if (auto const_decimal_col = checkAndGetColumn<ColumnConst>(input_col.get()))
+        {
+            const auto decimal_value = const_decimal_col->getValue<T>();
+
+            for (size_t i = 0; i < decimal_col->size(); i++)
+            {
+                handle_func(decimal_value, i);
+            }
+        }
+        else
+        {
+            throw Exception("Invalid data type of input_col: " + input_col->getName());
         }
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
     {
         const auto & input_column = block.getByPosition(arguments[0]).column;
-        const auto & decimal_column = input_column->isColumnNullable() ? dynamic_cast<const ColumnNullable &>(*input_column).getNestedColumnPtr() : input_column;
+        ColumnPtr decimal_column = input_column;
+        if (decimal_column->isColumnNullable())
+        {
+            decimal_column = dynamic_cast<const ColumnNullable &>(*decimal_column).getNestedColumnPtr();
+        }
         size_t rows = decimal_column->size();
 
 
