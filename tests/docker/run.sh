@@ -26,7 +26,7 @@ docker-compose -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /
 docker-compose -f cluster.yaml -f tiflash-dt.yaml down
 rm -rf ./data ./log
 
-[[ "$TIDB_CI" -eq 1 ]] && exit
+[[ "$TIDB_CI_ONLY" -eq 1 ]] && exit
 #################################### TIDB-CI ONLY ####################################
 
 
