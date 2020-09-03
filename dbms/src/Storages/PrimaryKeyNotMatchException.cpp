@@ -8,7 +8,7 @@
 #include <Parsers/parseQuery.h>
 #include <Poco/File.h>
 #include <Poco/Logger.h>
-#include <Storages/StorageDeltaMergePriKeyException.h>
+#include <Storages/PrimaryKeyNotMatchException.h>
 #include <common/logger_useful.h>
 
 #include <vector>
@@ -16,13 +16,8 @@
 namespace DB
 {
 
-namespace ErrorCodes
-{
-extern const int LOGICAL_ERROR;
-}
-
 String fixCreateStatementWithPriKeyNotMatchException( //
-    Context & context, const String old_definition, const String & table_metadata_path, const PriKeyNameNotMatchException & ex,
+    Context & context, const String old_definition, const String & table_metadata_path, const PrimaryKeyNotMatchException & ex,
     Poco::Logger * log)
 {
     LOG_WARNING(
