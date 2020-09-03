@@ -20,9 +20,9 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/MutableSupport.h>
+#include <Storages/PrimaryKeyNotMatchException.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
-#include <Storages/StorageDeltaMergePriKeyException.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/SchemaNameMapper.h>
@@ -136,12 +136,12 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
 
     if (unlikely(handle_column_define.name.empty()))
     {
-        // If users deploy a cluster with TiFlash node with version v4.0.0~v4.0.3, and rename primary key column. They will 
+        // If users deploy a cluster with TiFlash node with version v4.0.0~v4.0.3, and rename primary key column. They will
         // run into here.
-        // For v4.0.x, there is only one column that could be the primary key ("_tidb_rowid" or int64-like column) in TiFlash. 
+        // For v4.0.x, there is only one column that could be the primary key ("_tidb_rowid" or int64-like column) in TiFlash.
         // It is safe for us to take the primary key column name from TiDB table info to correct the primary key of the
         // create table statement.
-        // Here we throw a PriKeyNameNotMatchException, caller (`DatabaseLoading::loadTable`) is responsible for correcting 
+        // Here we throw a PrimaryKeyNotMatchException, caller (`DatabaseLoading::loadTable`) is responsible for correcting
         // the statement and retry.
         if (pks.size() == 1 && table_info_)
         {
@@ -155,7 +155,7 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
             }
             if (actual_pri_keys.size() == 1)
             {
-                throw PriKeyNameNotMatchException(String(*pks.begin()), String(actual_pri_keys[0]));
+                throw PrimaryKeyNotMatchException(*pks.begin(), actual_pri_keys[0]);
             }
             // fallover
         }

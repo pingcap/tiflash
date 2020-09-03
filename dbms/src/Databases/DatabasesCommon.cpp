@@ -8,7 +8,7 @@
 #include <Parsers/formatAST.h>
 #include <Parsers/parseQuery.h>
 #include <Poco/DirectoryIterator.h>
-#include <Storages/StorageDeltaMergePriKeyException.h>
+#include <Storages/PrimaryKeyNotMatchException.h>
 #include <Storages/StorageFactory.h>
 #include <common/ThreadPool.h>
 
@@ -304,7 +304,7 @@ void loadTable(Context & context,
             std::tie(table_name, table) = createTableFromDefinition(s, database_name, database_data_path, database_engine, context,
                 has_force_restore_data_flag, "in file " + table_metadata_path);
         }
-        catch (const PriKeyNameNotMatchException & pri_key_ex)
+        catch (const PrimaryKeyNotMatchException & pri_key_ex)
         {
             // Replace the primary key and update statement in `table_metadata_path`. The correct statement will be return.
             const String statement = fixCreateStatementWithPriKeyNotMatchException(context, s, table_metadata_path, pri_key_ex, log);
