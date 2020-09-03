@@ -312,7 +312,7 @@ std::unique_ptr<ITiDBCollator> ITiDBCollator::getCollator(const std::string & na
     auto it = collator_name_map.find(Poco::toLower(name));
     if (it == collator_name_map.end())
     {
-        return ITiDBCollator::getCollator(ITiDBCollator::UTF8MB4_BIN);
+        return nullptr;
     }
     return ITiDBCollator::getCollator(it->second);
 }
