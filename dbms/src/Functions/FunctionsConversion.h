@@ -1337,6 +1337,11 @@ public:
         }
         for (size_t i = 0; i < decimal_col->size(); i++)
         {
+            if (null_res[i])
+            {
+                datetime_res[i] = 0;
+                continue;
+            }
             const auto & decimal = vec_from[i];
             if (decimal.value < 0)
             {
