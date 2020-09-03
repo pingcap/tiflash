@@ -71,7 +71,10 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std
             conditions.push_back(&condition);
     }
     const Settings & settings = context.getSettingsRef();
-    max_streams = settings.max_threads;
+    if (dag.isBatchCop())
+        max_streams = settings.max_threads;
+    else
+        max_streams = 1;
     if (max_streams > 1)
     {
         max_streams *= settings.max_streams_to_max_threads_ratio;
