@@ -108,8 +108,8 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
 
         std::stringstream ss;
         ss << "put region #" << region_id << ", range["
-           << ToHex(region->getRange()->rawKeys().first->data() + 11, region->getRange()->rawKeys().first->size() - 11) << ", "
-           << ToHex(region->getRange()->rawKeys().second->data() + 11, region->getRange()->rawKeys().second->size() - 11) << ")"
+           << RecordKVFormat::DecodedTiKVKeyToHexWithoutTableID(*region->getRange()->rawKeys().first) << ", "
+           << RecordKVFormat::DecodedTiKVKeyToHexWithoutTableID(*region->getRange()->rawKeys().second) << ")"
            << " to table #" << table_id << " with kvstore.onSnapshot";
         output(ss.str());
     }
@@ -193,8 +193,8 @@ void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvo
         region = RegionBench::createRegion(table_info, region_id, start_keys, end_keys);
     }
     auto & rawkeys = region->getRange()->rawKeys();
-    auto start_string = ToHex(rawkeys.first->data() + 11, rawkeys.first->size() - 11);
-    auto end_string = ToHex(rawkeys.second->data() + 11, rawkeys.second->size() - 11);
+    auto start_string = RecordKVFormat::DecodedTiKVKeyToHexWithoutTableID(*rawkeys.first);
+    auto end_string = RecordKVFormat::DecodedTiKVKeyToHexWithoutTableID(*rawkeys.second);
 
     auto args_begin = args.begin() + 3 + handle_column_size * 2;
     auto args_end = args.end();
@@ -325,8 +325,8 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
         std::move(region_info), peer_id, SnapshotViewArray(), MockTiKV::instance().getRaftIndex(region_id), RAFT_INIT_LOG_TERM, tmt);
 
     std::stringstream ss;
-    ss << "put region #" << region_id << ", range[" << ToHex(start_decoded_key.data() + 11, start_decoded_key.size() - 11) << ", "
-       << ToHex(end_decoded_key.data() + 11, end_decoded_key.size() - 11) << ")"
+    ss << "put region #" << region_id << ", range[" << RecordKVFormat::DecodedTiKVKeyToHexWithoutTableID(start_decoded_key) << ", "
+       << RecordKVFormat::DecodedTiKVKeyToHexWithoutTableID(end_decoded_key) << ")"
        << " to table #" << table_id << " with raft commands";
     output(ss.str());
 }
@@ -419,8 +419,8 @@ void dbgFuncDumpAllRegion(Context & context, TableID table_id, bool ignore_none,
             if (*rawkeys.first >= *rawkeys.second)
                 ss << " [none], ";
             else
-                ss << " ranges: [" << ToHex(rawkeys.first->data() + 11, rawkeys.first->size() - 11) << ", "
-                   << ToHex(rawkeys.second->data() + 11, rawkeys.second->size() - 11) << "), ";
+                ss << " ranges: [" << RecordKVFormat::DecodedTiKVKeyToHexWithoutTableID(*rawkeys.first) << ", "
+                   << RecordKVFormat::DecodedTiKVKeyToHexWithoutTableID(*rawkeys.second) << "), ";
         }
         ss << "state: " << raft_serverpb::PeerState_Name(region->peerState());
         if (auto s = region->dataInfo(); s.size() > 2)

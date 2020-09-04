@@ -319,6 +319,11 @@ inline TiKVValue encodeWriteCfValue(UInt8 write_type, Timestamp ts, const String
 
 inline TiKVValue encodeWriteCfValue(UInt8 write_type, Timestamp ts) { return internalEncodeWriteCfValue(write_type, ts, nullptr); }
 
+inline std::string DecodedTiKVKeyToHexWithoutTableID(const DecodedTiKVKey & decoded_key)
+{
+    return ToHex(decoded_key.data() + RAW_KEY_NO_HANDLE_SIZE, decoded_key.size() - RAW_KEY_NO_HANDLE_SIZE);
+}
+
 } // namespace RecordKVFormat
 
 } // namespace DB
