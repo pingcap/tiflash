@@ -6,9 +6,9 @@ set -xe
 # XYZ_BRANCH: pd/tikv/tidb hash, default to `master`
 # BRANCH:     hash short cut, default to `master`
 if [ -n "$BRANCH" ]; then
-  [ -z "$PD_BRANCH" ] && PD_BRANCH="$BRANCH"
-  [ -z "$TIKV_BRANCH" ] && TIKV_BRANCH="$BRANCH"
-  [ -z "$TIDB_BRANCH" ] && TIDB_BRANCH="$BRANCH"
+  [ -z "$PD_BRANCH" ] && export PD_BRANCH="$BRANCH"
+  [ -z "$TIKV_BRANCH" ] && export TIKV_BRANCH="$BRANCH"
+  [ -z "$TIDB_BRANCH" ] && export TIDB_BRANCH="$BRANCH"
 fi
 
 
