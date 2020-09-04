@@ -16,7 +16,7 @@ std::string getProfile() { return TIFLASH_PROFILE; }
 
 void outputDetail(std::ostream & os)
 {
-    os << getName() << " " << getVersion() << std::endl
+    os << getName() << std::endl
        << "Release Version: " << getReleaseVersion() << std::endl
        << "Edition:         " << getEdition() << std::endl
        << "Git Commit Hash: " << getGitHash() << std::endl
