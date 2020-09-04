@@ -113,8 +113,10 @@ void RegionRaftCommandDelegate::execChangePeer(
     const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term)
 {
     LOG_INFO(log,
-        toString(false) << " execute change peer cmd: "
-                        << (request.has_change_peer_v2() ? request.change_peer_v2().DebugString() : request.change_peer().DebugString()));
+        toString(false) << " execute change peer cmd {"
+                        << (request.has_change_peer_v2() ? request.change_peer_v2().ShortDebugString()
+                                                         : request.change_peer().ShortDebugString())
+                        << "}");
     meta.makeRaftCommandDelegate().execChangePeer(request, response, index, term);
     LOG_INFO(log, "After execute change peer cmd, current region info: "; getDebugString(oss_internal_rare));
 }

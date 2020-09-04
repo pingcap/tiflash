@@ -252,8 +252,8 @@ RegionMergeResult MetaRaftCommandDelegate::checkBeforeCommitMerge(
 static void CheckRegionForMergeCmd(const raft_cmdpb::AdminResponse & response, const RegionState & region_state)
 {
     if (response.has_split() && !(response.split().left() == region_state.getRegion()))
-        throw Exception(std::string(__PRETTY_FUNCTION__) + ": current region:\n" + region_state.getRegion().DebugString() + "\nexpect:\n"
-                + response.split().left().DebugString() + "\nshould not happen",
+        throw Exception(std::string(__PRETTY_FUNCTION__) + ": current region:\n" + region_state.getRegion().ShortDebugString()
+                + "\nexpect:\n" + response.split().left().ShortDebugString() + "\nshould not happen",
             ErrorCodes::LOGICAL_ERROR);
 }
 
@@ -324,6 +324,9 @@ void MetaRaftCommandDelegate::execPrepareMerge(
 
 bool RegionMeta::doCheckPeerRemoved() const
 {
+    if (region_state.getRegion().peers().empty())
+        throw Exception(std::string(__PRETTY_FUNCTION__) + ": got empty peers, should not happen", ErrorCodes::LOGICAL_ERROR);
+
     for (const auto & region_peer : region_state.getRegion().peers())
     {
         if (region_peer.id() == peer.id())
