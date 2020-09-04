@@ -27,14 +27,17 @@ enum class EncryptionMethod : uint8_t
 
 const char * IntoEncryptionMethodName(EncryptionMethod);
 
-struct FileEncryptionInfo
+struct FileEncryptionInfoRaw
 {
     FileEncryptionRes res;
     EncryptionMethod method;
     TiFlashRawString key;
     TiFlashRawString iv;
     TiFlashRawString erro_msg;
+};
 
+struct FileEncryptionInfo : FileEncryptionInfoRaw
+{
     ~FileEncryptionInfo()
     {
         if (key)
@@ -54,12 +57,13 @@ struct FileEncryptionInfo
         }
     }
 
+    FileEncryptionInfo(const FileEncryptionInfoRaw & src) : FileEncryptionInfoRaw{src} {}
     FileEncryptionInfo(const FileEncryptionRes & res_,
         const EncryptionMethod & method_,
         TiFlashRawString key_,
         TiFlashRawString iv_,
         TiFlashRawString erro_msg_)
-        : res{res_}, method{method_}, key{key_}, iv{iv_}, erro_msg{erro_msg_}
+        : FileEncryptionInfoRaw{res_, method_, key_, iv_, erro_msg_}
     {}
     FileEncryptionInfo(const FileEncryptionInfo &) = delete;
     FileEncryptionInfo(FileEncryptionInfo && src)

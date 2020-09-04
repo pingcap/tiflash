@@ -1,7 +1,7 @@
-#include <Common/config.h>
-#include <Common/config_version.h>
 #if USE_RDKAFKA
 
+#include <Common/config.h>
+#include <Common/config_version.h>
 #include <thread>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/split.hpp>
