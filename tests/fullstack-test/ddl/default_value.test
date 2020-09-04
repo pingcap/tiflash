@@ -49,3 +49,21 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select hex(b1), hex(b2
 | 0       | 0       | 10203   | 10203   | 10203   | 10203   | 10203   |
 | 0       | 0       | 10203   | 10203   | 10203   | 10203   | 10203   |
 +---------+---------+---------+---------+---------+---------+---------+
+
+mysql> alter table test.t drop column b1;
+mysql> alter table test.t drop column b2;
+mysql> alter table test.t drop column b3;
+mysql> alter table test.t drop column b4;
+mysql> alter table test.t drop column b5;
+mysql> alter table test.t drop column b6;
+mysql> alter table test.t drop column b7;
+
+mysql> alter table test.t add column e enum('Critical','Major','Minor','URGENT','High','Medium','Low','Unprioritized') COLLATE utf8mb4_0900_ai_ci DEFAULT 'Unprioritized';
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_storage(tiflash[t]) */ * from test.t;
++------+---------------+
+| a    | e             |
++------+---------------+
+|    1 | Unprioritized |
+|    1 | Unprioritized |
++------+---------------+
