@@ -62,9 +62,6 @@ if (ARCH_LINUX)
     set (CXX11_ABI "ENABLE" CACHE STRING "Use C++11 ABI: DEFAULT, ENABLE, DISABLE")
 endif ()
 
-option (TEST_COVERAGE "Enables flags for test coverage" OFF)
-option (ENABLE_TESTS "Enables tests" ${NOT_MSVC})
-
 option (USE_STATIC_LIBRARIES "Set to FALSE to use shared libraries" ON)
 option (MAKE_STATIC_LIBRARIES "Set to FALSE to make shared libraries" ${USE_STATIC_LIBRARIES})
 if (NOT MAKE_STATIC_LIBRARIES)
@@ -213,17 +210,6 @@ if (USE_INCLUDE_WHAT_YOU_USE)
     endif()
 endif ()
 
-# Flags for test coverage
-if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
-    include(CodeCoverage)
-    set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fprofile-arcs -ftest-coverage -DIS_DEBUG")
-endif ()
-
-if (ENABLE_TESTS)
-    message (STATUS "Tests are enabled")
-    enable_testing()
-endif ()
-
 # when installing to /usr - place configs to /etc but for /usr/local place to /usr/local/etc
 if (CMAKE_INSTALL_PREFIX STREQUAL "/usr")
     set (CLICKHOUSE_ETC_DIR "/etc")
@@ -246,6 +232,7 @@ message (STATUS "Building for: ${CMAKE_SYSTEM} ${CMAKE_SYSTEM_PROCESSOR} ${CMAKE
 
 include(GNUInstallDirs)
 
+# openssl, zlib before poco
 include (cmake/find_ssl.cmake)
 if (NOT OPENSSL_FOUND)
     message (FATAL_ERROR "Need openssl for build. debian tip: sudo apt install libssl-dev")
@@ -254,18 +241,22 @@ endif ()
 include (cmake/lib_name.cmake)
 include (cmake/find_icu4c.cmake)
 include (cmake/find_boost.cmake)
-# openssl, zlib before poco
 
 # Clickhouse wants to use internal zlib (contrib/zlib-ng) to speed up by default. But it will conflict with `find_package(ZLIB REQUIRED)` from cmake.
 # If `ENABLE_RDKAFKA` is true, librdkafka will fix the conflict by using the standard one.
 # librdkafka is useless for tiflash, need to set `USE_INTERNAL_ZLIB_LIBRARY` and `ENABLE_RDKAFKA` to OFF.
 set (ENABLE_RDKAFKA OFF CACHE BOOL "" FORCE)
 set (USE_INTERNAL_ZLIB_LIBRARY OFF CACHE BOOL "" FORCE)
+option (ENABLE_ODBC "Set to ON to link odbc libraries if exists" OFF)
+option (ENABLE_CAPNP "Set to ON to link capnp" OFF)
+option (ENABLE_MONGODB "Enable MongoDB" OFF)
+option (ENABLE_CPPUNIT "Enable CppUnit" OFF)
+option (POCO_ENABLE_MONGODB "Enable MongoDB in Poco" OFF)
+option (ENABLE_MYSQL_STOAGE "Set to ON to enable mysql storage" OFF)
+message(STATUS "feature odbc: ${ENABLE_ODBC} capnp: ${ENABLE_CAPNP} mysql-storage: ${ENABLE_MYSQL_STOAGE} ")
 
 include (cmake/find_zlib.cmake)
 include (cmake/find_zstd.cmake)
-option (ENABLE_ODBC "Set to ON to link odbc libraries if exists" OFF)
-message(STATUS "enalbe odbc: ${ENABLE_ODBC}")
 if (ENABLE_ODBC)
     include (cmake/find_ltdl.cmake) # for odbc
     if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/contrib/poco/cmake/FindODBC.cmake)
@@ -282,8 +273,12 @@ include (cmake/find_rt.cmake)
 include (cmake/find_execinfo.cmake)
 include (cmake/find_readline_edit.cmake)
 include (cmake/find_re2.cmake)
-include (cmake/find_rdkafka.cmake)
-include (cmake/find_capnp.cmake)
+if (ENABLE_RDKAFKA)
+    include (cmake/find_rdkafka.cmake)
+endif()
+if (ENABLE_CAPNP)
+    include (cmake/find_capnp.cmake)
+endif()
 include (cmake/find_llvm.cmake)
 include (cmake/find_grpc.cmake)
 include (cmake/find_kvproto.cmake)
@@ -302,7 +297,9 @@ find_contrib_lib(double-conversion)
 include (libs/libcommon/cmake/find_gperftools.cmake)
 include (libs/libcommon/cmake/find_jemalloc.cmake)
 include (libs/libcommon/cmake/find_cctz.cmake)
-include (libs/libmysqlxx/cmake/find_mysqlclient.cmake)
+if (ENABLE_MYSQL_STOAGE)
+    include (libs/libmysqlxx/cmake/find_mysqlclient.cmake)
+endif()
 include (libs/libdaemon/cmake/find_unwind.cmake)
 
 include (cmake/print_flags.cmake)
@@ -314,6 +311,21 @@ if (EXISTS ${CLICKHOUSE_PRIVATE_DIR})
 endif ()
 
 add_subdirectory (contrib)
+
+option (TEST_COVERAGE "Enables flags for test coverage" OFF)
+option (ENABLE_TESTS "Enables tests" ${NOT_MSVC})
+
+# Flags for test coverage
+if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+    include(CodeCoverage)
+    set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fprofile-arcs -ftest-coverage -DIS_DEBUG")
+endif ()
+
+if (ENABLE_TESTS)
+    message (STATUS "Tests are enabled")
+    enable_testing()
+endif ()
+
 add_subdirectory (libs)
 add_subdirectory (utils)
 add_subdirectory (dbms)
