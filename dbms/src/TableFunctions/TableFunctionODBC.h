@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Common/config.h>
 #if Poco_SQLODBC_FOUND || Poco_DataODBC_FOUND
+#include <Common/config.h>
 
 #include <TableFunctions/ITableFunction.h>
 
