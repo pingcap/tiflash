@@ -18,6 +18,7 @@ def get_region_count_by_table(store_list, table_id):
     for store in store_list:
         try:
             res = util.curl_http('{}/tiflash/sync-status/{}'.format(store.tiflash_status_address, table_id))
+            util.check_status_code(res)
             checker.add(res.content)
         except Exception as e:
             err.append(e)
