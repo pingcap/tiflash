@@ -101,9 +101,11 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
             {
                 region_status = status;
                 LOG_WARNING(log,
-                    "Check memory cache, region " << region_id << ", version " << region_to_query.version << ", handle range ["
-                                                  << *region_to_query.range_in_table.first << ", " << *region_to_query.range_in_table.second
-                                                  << ") , status " << RegionException::RegionReadStatusString(status));
+                    "Check memory cache, region "
+                        << region_id << ", version " << region_to_query.version << ", handle range ["
+                        << RecordKVFormat::DecodedTiKVKeyToHexWithoutTableID(*region_to_query.range_in_table.first) << ", "
+                        << RecordKVFormat::DecodedTiKVKeyToHexWithoutTableID(*region_to_query.range_in_table.second) << ") , status "
+                        << RegionException::RegionReadStatusString(status));
                 return;
             }
 
@@ -150,10 +152,11 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
                 if (status != RegionException::RegionReadStatus::OK)
                 {
                     LOG_WARNING(log,
-                        "Check memory cache, region " << region_id << ", version " << region_to_query.version << ", handle range ["
-                                                      << *region_to_query.range_in_table.first << ", "
-                                                      << *region_to_query.range_in_table.second << ") , status "
-                                                      << RegionException::RegionReadStatusString(status));
+                        "Check memory cache, region "
+                            << region_id << ", version " << region_to_query.version << ", handle range ["
+                            << RecordKVFormat::DecodedTiKVKeyToHexWithoutTableID(*region_to_query.range_in_table.first) << ", "
+                            << RecordKVFormat::DecodedTiKVKeyToHexWithoutTableID(*region_to_query.range_in_table.second) << ") , status "
+                            << RegionException::RegionReadStatusString(status));
                     region_status = status;
                 }
             }
@@ -209,10 +212,11 @@ void validateQueryInfo(
         if (status != RegionException::RegionReadStatus::OK)
         {
             LOG_WARNING(log,
-                "Check after read from Storage, region " << region_query_info.region_id << ", version " << region_query_info.version //
-                                                         << ", handle range [" << *region_query_info.range_in_table.first << ", "
-                                                         << *region_query_info.range_in_table.second << "), status "
-                                                         << RegionException::RegionReadStatusString(status));
+                "Check after read from Storage, region "
+                    << region_query_info.region_id << ", version " << region_query_info.version //
+                    << ", handle range [" << RecordKVFormat::DecodedTiKVKeyToHexWithoutTableID(*region_query_info.range_in_table.first)
+                    << ", " << RecordKVFormat::DecodedTiKVKeyToHexWithoutTableID(*region_query_info.range_in_table.second) << "), status "
+                    << RegionException::RegionReadStatusString(status));
             // throw region exception and let TiDB retry
             throwRetryRegion(regions_query_info, status);
         }
