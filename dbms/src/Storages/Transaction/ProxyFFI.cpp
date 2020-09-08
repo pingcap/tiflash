@@ -1,3 +1,4 @@
+#include <Common/CurrentMetrics.h>
 #include <Interpreters/Context.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/Transaction/KVStore.h>
@@ -5,6 +6,11 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <sys/statvfs.h>
+
+namespace CurrentMetrics
+{
+extern const Metric RaftNumSnapshotsPendingApply;
+}
 
 namespace DB
 {
@@ -170,6 +176,7 @@ void * PreHandleSnapshot(
         metapb::Region region;
         region.ParseFromArray(region_buff.data, (int)region_buff.len);
         auto & kvstore = server->tmt->getKVStore();
+        CurrentMetrics::add(CurrentMetrics::RaftNumSnapshotsPendingApply);
         auto new_region = kvstore->preHandleSnapshot(std::move(region), peer_id, snaps, index, term, *server->tmt);
         auto res = new PreHandleSnapshotRes{new_region};
         return res;
@@ -200,6 +207,7 @@ void GcPreHandledSnapshot(TiFlashServer *, void * res)
 {
     PreHandleSnapshotRes * snap = reinterpret_cast<PreHandleSnapshotRes *>(res);
     delete snap;
+    CurrentMetrics::sub(CurrentMetrics::RaftNumSnapshotsPendingApply);
 }
 
 void GcCppString(TiFlashServer *, TiFlashRawString s) { delete s; }

@@ -182,7 +182,8 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
 
     auto end_time = Clock::now();
     LOG_DEBUG(log,
-        "[Learner Read] wait index cost " << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() << " ms");
+        "[Learner Read] wait index cost " << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count()
+                                          << " ms, regions_num=" << num_regions << ", concurrency=" << concurrent_num);
 
     return regions_snapshot;
 }
