@@ -137,7 +137,7 @@ TEST(ConvertColumnType_test, CastNumeric)
 
 TEST(ConvertColumnType_test, CastNullableToNotNull)
 {
-    const Strings to_types = {"Int16", "Int32", "Int64"};
+    const Strings to_types = {"Int8", "Int16", "Int32", "Int64"};
 
     DataTypePtr      disk_data_type = typeFromString("Nullable(Int8)");
     MutableColumnPtr disk_col       = disk_data_type->createColumn();
@@ -148,10 +148,11 @@ TEST(ConvertColumnType_test, CastNullableToNotNull)
     for (const String & to_type : to_types)
     {
         ColumnDefine read_define(0, "c", typeFromString(to_type));
-        auto         memory_column = convertColumnByColumnDefineIfNeed(disk_data_type, disk_col->getPtr(), read_define);
+        read_define.default_value = Field(Int64(99));
+        auto memory_column        = convertColumnByColumnDefineIfNeed(disk_data_type, disk_col->getPtr(), read_define);
 
         Int64 val1 = memory_column->getInt(0);
-        ASSERT_EQ(val1, 0); // "NULL" value is cast to 0
+        ASSERT_EQ(val1, 99); // "NULL" value is cast to default value
         Int64 val2 = memory_column->getInt(1);
         ASSERT_EQ(val2, 127L);
         Int64 val3 = memory_column->getUInt(2);
@@ -161,7 +162,7 @@ TEST(ConvertColumnType_test, CastNullableToNotNull)
 
 TEST(ConvertColumnType_test, CastNullableToNotNullWithNonZeroDefaultValue)
 {
-    const Strings to_types = {"Int16", "Int32", "Int64"};
+    const Strings to_types = {"Int8", "Int16", "Int32", "Int64"};
 
     DataTypePtr      disk_data_type = typeFromString("Nullable(Int8)");
     MutableColumnPtr disk_col       = disk_data_type->createColumn();
