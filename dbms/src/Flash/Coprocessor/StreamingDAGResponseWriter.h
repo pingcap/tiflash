@@ -29,7 +29,7 @@ public:
 
 private:
     void addJob();
-    ThreadPool::Job encodeJob(std::vector<Block> blocks, tipb::SelectResponse response, StreamWriterPtr stream_writer) const;
+    ThreadPool::Job encodeJob(std::vector<Block> & blocks, tipb::SelectResponse & response, StreamWriterPtr stream_writer) const;
 
     StreamWriterPtr writer;
     std::vector<Block> blocks;

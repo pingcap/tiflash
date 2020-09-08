@@ -26,7 +26,7 @@ void StreamingDAGResponseWriter::addJob()
 {
     tipb::SelectResponse response;
     addExecuteSummaries(response);
-    thread_pool.schedule(encodeJob(blocks, std::move(response), writer));
+    thread_pool.schedule(encodeJob(blocks, response, writer));
     blocks.clear();
     rows_in_blocks = 0;
 }
@@ -42,9 +42,9 @@ void StreamingDAGResponseWriter::finishWrite()
 }
 
 ThreadPool::Job StreamingDAGResponseWriter::encodeJob(
-    std::vector<Block> input_blocks, tipb::SelectResponse response, StreamWriterPtr stream_writer) const
+    std::vector<Block> & input_blocks, tipb::SelectResponse & response, StreamWriterPtr stream_writer) const
 {
-    return [&]() {
+    return [this, input_blocks, response, stream_writer]() mutable {
         std::unique_ptr<ChunkCodecStream> chunk_codec_stream = nullptr;
         if (encode_type == tipb::EncodeType::TypeDefault)
         {

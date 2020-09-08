@@ -1353,6 +1353,7 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     }
     LOG_INFO(log,
         "execution stream size for query block(before aggregation) " << query_block.qb_column_prefix << " is " << pipeline.streams.size());
+    dag.getDAGContext().final_concurency = pipeline.streams.size();
     if (res.need_aggregate)
     {
         // execute aggregation
