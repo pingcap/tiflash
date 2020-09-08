@@ -1,6 +1,7 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
+
 #include <ext/scope_guard.h>
 
 #include "region_helper.h"
@@ -89,7 +90,6 @@ int main(int, char **)
             raft_serverpb::RaftApplyState apply_state;
 
             peer.set_id(6666);
-            peer.set_is_learner(true);
             peer.set_store_id(6667);
 
             {

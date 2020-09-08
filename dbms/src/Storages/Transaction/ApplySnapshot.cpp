@@ -132,8 +132,6 @@ static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 peer_
     {
         if (peer.id() == peer_id)
         {
-            if (!peer.is_learner())
-                throw Exception(std::string(__PRETTY_FUNCTION__) + ": peer is not learner, should not happen", ErrorCodes::LOGICAL_ERROR);
             return peer;
         }
     }
