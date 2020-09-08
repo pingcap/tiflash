@@ -145,7 +145,7 @@ skip_raw_test="$4"
 debug="$5"
 continue_on_error="$6"
 dbc="$7"
-verbose="$8"
+verbose="${verbose:-8}"
 
 source ./_env.sh
 

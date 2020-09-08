@@ -33,11 +33,10 @@ using namespace DB;
     } while (0)
 
 
-inline metapb::Peer createPeer(UInt64 id, bool is_learner)
+inline metapb::Peer createPeer(UInt64 id, bool)
 {
     metapb::Peer peer;
     peer.set_id(id);
-    peer.set_is_learner(is_learner);
     return peer;
 }
 
