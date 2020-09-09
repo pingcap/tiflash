@@ -184,6 +184,7 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DM
                                                                         const RowKeyRange &   rowkey_range,
                                                                         const RSOperatorPtr & filter,
                                                                         UInt64                max_data_version,
+                                                                        size_t                expected_block_size,
                                                                         bool                  enable_clean_read)
 {
     LOG_DEBUG(log, __FUNCTION__ << " max_data_version: " << max_data_version << ", enable_clean_read: " << enable_clean_read);
@@ -201,7 +202,8 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DM
             rowkey_range,
             filter,
             column_caches[i],
-            IdSetPtr{}));
+            IdSetPtr{},
+            expected_block_size));
     }
     return std::make_shared<ConcatSkippableBlockInputStream>(streams);
 }
