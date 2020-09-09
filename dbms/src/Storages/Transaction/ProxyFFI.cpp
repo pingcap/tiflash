@@ -1,3 +1,4 @@
+#include <Common/CurrentMetrics.h>
 #include <Encryption/AESCTRCipherStream.h>
 #include <Interpreters/Context.h>
 #include <Storages/PathCapacityMetrics.h>
@@ -6,6 +7,11 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <sys/statvfs.h>
+
+namespace CurrentMetrics
+{
+extern const Metric RaftNumSnapshotsPendingApply;
+}
 
 namespace DB
 {
@@ -162,6 +168,11 @@ FileEncryptionInfo TiFlashRaftProxyHelper::renameFile(std::string_view src, std:
 
 struct PreHandledTiKVSnapshot
 {
+    ~PreHandledTiKVSnapshot() { CurrentMetrics::sub(CurrentMetrics::RaftNumSnapshotsPendingApply); }
+    PreHandledTiKVSnapshot(const RegionPtr & region_) : region(region_)
+    {
+        CurrentMetrics::add(CurrentMetrics::RaftNumSnapshotsPendingApply);
+    }
     RegionPtr region;
 };
 
