@@ -142,6 +142,16 @@ static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 peer_
 RegionPtr KVStore::preHandleSnapshot(
     metapb::Region && region, UInt64 peer_id, const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt)
 {
+    {
+        decltype(bg_gc_region_data)::value_type tmp;
+        std::lock_guard<std::mutex> lock(bg_gc_region_data_mutex);
+        if (!bg_gc_region_data.empty())
+        {
+            tmp.swap(bg_gc_region_data.back());
+            bg_gc_region_data.pop_back();
+        }
+    }
+
     auto start_time = Clock::now();
 
     auto meta = ({
