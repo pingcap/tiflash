@@ -112,11 +112,13 @@ RegionPtr Region::splitInto(RegionMeta && meta)
 void RegionRaftCommandDelegate::execChangePeer(
     const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term)
 {
-    const auto & change_peer_request = request.change_peer();
-
-    LOG_INFO(log, toString(false) << " execute change peer type: " << eraftpb::ConfChangeType_Name(change_peer_request.change_type()));
-
+    LOG_INFO(log,
+        toString(false) << " execute change peer cmd {"
+                        << (request.has_change_peer_v2() ? request.change_peer_v2().ShortDebugString()
+                                                         : request.change_peer().ShortDebugString())
+                        << "}");
     meta.makeRaftCommandDelegate().execChangePeer(request, response, index, term);
+    LOG_INFO(log, "After execute change peer cmd, current region info: "; getDebugString(oss_internal_rare));
 }
 
 static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 store_id)
@@ -499,8 +501,6 @@ void Region::assignRegion(Region && new_region)
     meta.assignRegionMeta(std::move(new_region.meta));
     meta.notifyAll();
 }
-
-bool Region::isPeerRemoved() const { return meta.isPeerRemoved(); }
 
 void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const Timestamp safe_point)
 {
