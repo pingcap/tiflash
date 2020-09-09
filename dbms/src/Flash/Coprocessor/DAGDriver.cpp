@@ -86,9 +86,9 @@ try
     if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streams.in.get()))
     {
         LOG_DEBUG(log,
-            __PRETTY_FUNCTION__ << ": dag request " << (batch ? "with " : "without ")
-                                << "encode cost: " << p_stream->getProfileInfo().execution_time / (double)1000000000 << " seconds, produce "
-                                << p_stream->getProfileInfo().rows << " rows, " << p_stream->getProfileInfo().bytes << " bytes.");
+            __PRETTY_FUNCTION__ << ": dag request with encode cost: " << p_stream->getProfileInfo().execution_time / (double)1000000000
+                                << " seconds, produce " << p_stream->getProfileInfo().rows << " rows, " << p_stream->getProfileInfo().bytes
+                                << " bytes.");
 
         if constexpr (!batch)
         {
