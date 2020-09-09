@@ -233,4 +233,6 @@ private:
         const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
 };
 
+RegionPtr GenRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term, TMTContext & tmt);
+
 } // namespace DB
