@@ -75,6 +75,7 @@ public:
                                                     const HandleRange &   handle_range,
                                                     const RSOperatorPtr & filter,
                                                     UInt64                max_data_version,
+                                                    size_t                expected_block_size,
                                                     bool                  enable_clean_read);
 
     private:
