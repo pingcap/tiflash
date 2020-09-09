@@ -1,3 +1,5 @@
+#include <Common/TiFlashMetrics.h>
+#include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/PDTiKVClient.h>
 #include <Storages/Transaction/ProxyFFIType.h>
@@ -686,12 +688,14 @@ TiFlashApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 in
     return TiFlashApplyRes::None;
 }
 
-void Region::handleIngestSST(const SnapshotViewArray snaps, UInt64 index, UInt64 term)
+void Region::handleIngestSST(const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt)
 {
     if (index <= appliedIndex())
         return;
 
     {
+        auto & ctx = tmt.getContext();
+
         std::unique_lock<std::shared_mutex> lock(mutex);
         std::lock_guard<std::mutex> predecode_lock(predecode_mutex);
 
@@ -708,6 +712,8 @@ void Region::handleIngestSST(const SnapshotViewArray snaps, UInt64 index, UInt64
                 auto & v = snapshot.vals[n];
                 doInsert(snapshot.cf, TiKVKey(k.data, k.len), TiKVValue(v.data, v.len));
             }
+            // Note that number of keys in different cf will be aggregated into one metrics
+            GET_METRIC(ctx.getTiFlashMetrics(), tiflash_raft_process_keys, type_ingest_sst).Increment(snapshot.len);
         }
         meta.setApplied(index, term);
     }
