@@ -8,7 +8,7 @@
 #include <common/logger_useful.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
-#include <Flash/Coprocessor/NormalDAGResponseWriter.h>
+#include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <tipb/select.pb.h>
 
 #pragma GCC diagnostic pop

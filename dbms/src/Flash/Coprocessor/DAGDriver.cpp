@@ -6,6 +6,7 @@
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
+#include <Flash/Coprocessor/NormalDAGResponseWriter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/executeQuery.h>
