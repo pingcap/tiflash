@@ -31,6 +31,10 @@ export tidb_db="test"
 # TiDB default table
 export tidb_table="t"
 
+# Whether run scripts with verbose output
+export verbose="false"
+# export verbose="true"
+
 # Setup running env vars
 source ../../_vars.sh
 setup_dylib_path
