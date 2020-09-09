@@ -290,24 +290,21 @@ void convertColumnByColumnDefine(const DataTypePtr &  disk_type,
     read_define_not_null.type = read_type_not_null;
     if (disk_type_not_null->equals(*read_type_not_null))
     {
-        // just change from nullable -> not null / not null -> nullable
-        memory_col_not_null->insertRangeFrom(*disk_col_not_null, rows_offset, rows_limit);
-
         if (null_map)
         {
-            /// We are applying cast from nullable to not null, scan to fill "NULL" with default value
-
+            /// Applying cast from nullable -> not null, scan to fill "NULL" with default value
             for (size_t i = 0; i < rows_limit; ++i)
             {
                 if (unlikely(null_map->getInt(i) != 0))
-                {
-                    // `from_col[i]` is "NULL", fill `to_col[rows_offset + i]` with default value
-                    // TiDB/MySQL don't support this, should not call here.
-                    throw Exception("Reading mismatch data type pack. Cast from " + disk_type->getName() + " to " + read_type->getName()
-                                        + " with \"NULL\" value is NOT supported!",
-                                    ErrorCodes::NOT_IMPLEMENTED);
-                }
+                    memory_col_not_null->insert(read_define.default_value);
+                else
+                    memory_col_not_null->insertFrom(*disk_col_not_null, i);
             }
+        }
+        else
+        {
+            /// Applying cast from not null -> nullable, simply copy from origin column
+            memory_col_not_null->insertRangeFrom(*disk_col_not_null, rows_offset, rows_limit);
         }
     }
     else if (!castNonNullNumericColumn(

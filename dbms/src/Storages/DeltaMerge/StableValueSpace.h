@@ -51,10 +51,12 @@ public:
 
         PageId id;
         UInt64 valid_rows;
+        UInt64 valid_bytes;
 
         PageId getId() { return id; }
 
         size_t getRows() { return valid_rows; }
+        size_t getBytes() { return valid_bytes; }
 
         const DMFiles & getDMFiles() { return stable->getDMFiles(); }
 
@@ -73,6 +75,7 @@ public:
                                                     const HandleRange &   handle_range,
                                                     const RSOperatorPtr & filter,
                                                     UInt64                max_data_version,
+                                                    size_t                expected_block_size,
                                                     bool                  enable_clean_read);
 
     private:

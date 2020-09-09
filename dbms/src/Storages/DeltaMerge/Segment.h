@@ -36,6 +36,9 @@ struct SegmentSnapshot : private boost::noncopyable
     StableSnapshotPtr stable;
 
     SegmentSnapshot(const DeltaSnapshotPtr & delta_, const StableSnapshotPtr & stable_) : delta(delta_), stable(stable_) {}
+
+    UInt64 getBytes() { return delta->getBytes() + stable->getBytes(); }
+    UInt64 getRows() { return delta->getRows() + stable->getRows(); }
 };
 
 /// A segment contains many rows of a table. A table is split into segments by consecutive ranges.
@@ -118,7 +121,8 @@ public:
     BlockInputStreamPtr getInputStreamRaw(const DMContext &          dm_context,
                                           const ColumnDefines &      columns_to_read,
                                           const SegmentSnapshotPtr & segment_snap,
-                                          bool                       do_range_filter);
+                                          bool                       do_range_filter,
+                                          size_t                     expected_block_size = DEFAULT_BLOCK_SIZE);
 
     BlockInputStreamPtr getInputStreamRaw(const DMContext & dm_context, const ColumnDefines & columns_to_read);
 
@@ -191,10 +195,7 @@ public:
     }
     bool hasAbandoned() { return delta->hasAbandoned(); }
 
-    void drop(const FileProviderPtr & file_provider)
-    {
-        stable->drop(file_provider);
-    }
+    void drop(const FileProviderPtr & file_provider) { stable->drop(file_provider); }
 
 private:
     ReadInfo getReadInfo(const DMContext &          dm_context,
