@@ -11,8 +11,6 @@
 #include <Flash/Coprocessor/NormalDAGResponseWriter.h>
 #include <tipb/select.pb.h>
 
-#include "DAGResponseWriter.h"
-
 #pragma GCC diagnostic pop
 
 namespace DB
