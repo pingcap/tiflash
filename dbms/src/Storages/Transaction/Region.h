@@ -165,7 +165,7 @@ public:
 
     TableID getMappedTableID() const;
     TiFlashApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt);
-    void handleIngestSST(const SnapshotViewArray snaps, UInt64 index, UInt64 term);
+    void handleIngestSST(const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt);
 
     UInt64 getSnapshotEventFlag() const { return snapshot_event_flag; }
 
