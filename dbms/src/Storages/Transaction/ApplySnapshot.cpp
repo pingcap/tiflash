@@ -190,9 +190,10 @@ RegionPtr KVStore::preHandleSnapshot(
             }
 
             ss << "[cf: " << CFToName(snapshot.cf) << ", kv size: " << snapshot.len << "],";
+            // Note that number of keys in different cf will be aggregated into one metrics
+            GET_METRIC(ctx.getTiFlashMetrics(), tiflash_raft_process_keys, type_apply_snapshot).Increment(snapshot.len);
         }
         new_region->tryPreDecodeTiKVValue(tmt);
-        GET_METRIC(ctx.getTiFlashMetrics(), tiflash_raft_process_keys, type_apply_snapshot).Increment(snaps.len);
         ss << " cost " << watch.elapsedMilliseconds() << "ms";
         LOG_INFO(log, ss.str());
     }
@@ -256,8 +257,7 @@ TiFlashApplyRes KVStore::handleIngestSST(UInt64 region_id, const SnapshotViewArr
 
     // try to flush remain data in memory.
     func_try_flush();
-    region->handleIngestSST(snaps, index, term);
-    GET_METRIC(ctx.getTiFlashMetrics(), tiflash_raft_process_keys, type_ingest_sst).Increment(snaps.len);
+    region->handleIngestSST(snaps, index, term, tmt);
     region->tryPreDecodeTiKVValue(tmt);
     func_try_flush();
 
