@@ -53,6 +53,7 @@
     M(DT_PlaceIndexUpdate) \
     M(DT_DeltaMergeTotalBytes) \
     M(DT_DeltaMergeTotalRows) \
+    M(RaftNumSnapshotsPendingApply) \
 
 
 namespace CurrentMetrics
