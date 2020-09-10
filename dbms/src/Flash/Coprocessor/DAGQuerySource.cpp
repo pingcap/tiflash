@@ -21,7 +21,6 @@ DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, co
       dag_context(dag_context_),
       regions(regions_),
       dag_request(dag_request_),
-      metrics(context.getTiFlashMetrics()),
       is_batch_cop(is_batch_cop_)
 {
     if (dag_request.has_root_executor())
