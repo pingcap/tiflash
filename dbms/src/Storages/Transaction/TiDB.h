@@ -337,6 +337,7 @@ struct TableInfo
     std::vector<IndexInfo> index_infos;
     SchemaState state = StateNone;
     bool pk_is_handle = false;
+    /// when is_common_handle = true, it means this table is a clustered index table
     bool is_common_handle = false;
     String comment;
     Timestamp update_timestamp = 0;

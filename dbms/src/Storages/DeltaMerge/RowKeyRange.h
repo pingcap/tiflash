@@ -32,6 +32,8 @@ struct RowKeyValueWithOwnString;
 
 struct RowKeyValue
 {
+    /// when is_common_handle = true, it means the table has clustered index, the rowkey value is a string
+    /// when is_common_handle = false, it means the table has int/uint handle, the rowkey value is a int/uint
     bool is_common_handle;
     /// data in RowKeyValue can be nullptr if is_common_handle is false
     const char * data;
