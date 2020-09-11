@@ -78,8 +78,6 @@ protected:
 
     const tipb::DAGRequest & dag_request;
 
-    TiFlashMetricsPtr metrics;
-
     std::vector<tipb::FieldType> result_field_types;
     tipb::EncodeType encode_type;
     std::shared_ptr<DAGQueryBlock> root_query_block;
