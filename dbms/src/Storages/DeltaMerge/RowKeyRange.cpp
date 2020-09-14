@@ -20,9 +20,9 @@ String getIntHandleMaxKey()
     return ss.str();
 }
 
-const RowKeyValue int_handle_min_key = RowKeyValue(false, std::make_shared<String>(getIntHandleMinKey()), int_handle_min);
-const RowKeyValue int_handle_max_key = RowKeyValue(false, std::make_shared<String>(getIntHandleMaxKey()), int_handle_max);
-const RowKeyValue empty_string_ptr   = RowKeyValue(true, std::make_shared<String>(""), 0);
+const RowKeyValue RowKeyValue::INT_HANDLE_MIN_KEY = RowKeyValue(false, std::make_shared<String>(getIntHandleMinKey()), int_handle_min);
+const RowKeyValue RowKeyValue::INT_HANDLE_MAX_KEY = RowKeyValue(false, std::make_shared<String>(getIntHandleMaxKey()), int_handle_max);
+const RowKeyValue RowKeyValue::EMPTY_STRING_KEY   = RowKeyValue(true, std::make_shared<String>(""), 0);
 
 RowKeyValue RowKeyValueRef::toRowKeyValue() const
 {

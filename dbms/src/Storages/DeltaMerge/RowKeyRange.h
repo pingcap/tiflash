@@ -90,11 +90,11 @@ struct RowKeyValue
     bool           is_common_handle;
     HandleValuePtr value;
     Int64          int_value;
-};
 
-extern const RowKeyValue int_handle_min_key;
-extern const RowKeyValue int_handle_max_key;
-extern const RowKeyValue empty_string_ptr;
+    static const RowKeyValue INT_HANDLE_MIN_KEY;
+    static const RowKeyValue INT_HANDLE_MAX_KEY;
+    static const RowKeyValue EMPTY_STRING_KEY;
+};
 
 inline int compare(const RowKeyValueRef & a, const RowKeyValueRef & b)
 {
@@ -106,14 +106,16 @@ inline int compare(const RowKeyValueRef & a, const RowKeyValueRef & b)
     {
         if (a.int_value != b.int_value)
             return a.int_value > b.int_value ? 1 : -1;
-        if likely (a.int_value != int_handle_max_key.int_value || (a.data == nullptr && b.data == nullptr))
+        if likely (a.int_value != RowKeyValue::INT_HANDLE_MAX_KEY.int_value || (a.data == nullptr && b.data == nullptr))
             return 0;
         bool a_inf = false;
         bool b_inf = false;
         if (a.data != nullptr)
-            a_inf = compare(a.data, a.size, int_handle_max_key.value->data(), int_handle_max_key.value->size()) == 0;
+            a_inf = compare(a.data, a.size, RowKeyValue::INT_HANDLE_MAX_KEY.value->data(), RowKeyValue::INT_HANDLE_MAX_KEY.value->size())
+                == 0;
         if (b.data != nullptr)
-            b_inf = compare(b.data, b.size, int_handle_max_key.value->data(), int_handle_max_key.value->size()) == 0;
+            b_inf = compare(b.data, b.size, RowKeyValue::INT_HANDLE_MAX_KEY.value->data(), RowKeyValue::INT_HANDLE_MAX_KEY.value->size())
+                == 0;
         if (a_inf ^ b_inf)
         {
             return a_inf ? 1 : -1;
@@ -191,10 +193,10 @@ inline const RowKeyValue & min(const RowKeyValue & a, const RowKeyValue & b)
 
 struct RowKeyColumnContainer
 {
-    const ColumnPtr &             column;
-    bool                          is_common_handle;
-    bool                          is_constant_column;
-    
+    const ColumnPtr & column;
+    bool              is_common_handle;
+    bool              is_constant_column;
+
     /// The following members are simply references to values in 'column', for faster access.
     const ColumnString::Chars_t * string_data    = nullptr;
     const ColumnString::Offsets * string_offsets = nullptr;
@@ -305,8 +307,8 @@ struct RowKeyRange
             }
             else
             {
-                min = std::make_shared<String>(prefix + *int_handle_min_key.value);
-                max = std::make_shared<String>(prefix + *int_handle_max_key.value);
+                min = std::make_shared<String>(prefix + *RowKeyValue::INT_HANDLE_MIN_KEY.value);
+                max = std::make_shared<String>(prefix + *RowKeyValue::INT_HANDLE_MAX_KEY.value);
             }
         }
     };
@@ -323,7 +325,9 @@ struct RowKeyRange
     {
     }
 
-    RowKeyRange() : is_common_handle(true), start(empty_string_ptr), end(empty_string_ptr), rowkey_column_size(0) {}
+    RowKeyRange() : is_common_handle(true), start(RowKeyValue::EMPTY_STRING_KEY), end(RowKeyValue::EMPTY_STRING_KEY), rowkey_column_size(0)
+    {
+    }
 
     void swap(RowKeyRange & other)
     {
@@ -342,7 +346,7 @@ struct RowKeyRange
         }
         else
         {
-            return RowKeyRange(start_value.toRowKeyValue(), int_handle_max_key, is_common_handle, rowkey_column_size);
+            return RowKeyRange(start_value.toRowKeyValue(), RowKeyValue::INT_HANDLE_MAX_KEY, is_common_handle, rowkey_column_size);
         }
     }
 
@@ -355,7 +359,7 @@ struct RowKeyRange
         }
         else
         {
-            return RowKeyRange(int_handle_min_key, end_value.toRowKeyValue(), is_common_handle, rowkey_column_size);
+            return RowKeyRange(RowKeyValue::INT_HANDLE_MIN_KEY, end_value.toRowKeyValue(), is_common_handle, rowkey_column_size);
         }
     }
 
@@ -368,7 +372,7 @@ struct RowKeyRange
         }
         else
         {
-            return RowKeyRange(int_handle_min_key, int_handle_max_key, is_common_handle, rowkey_column_size);
+            return RowKeyRange(RowKeyValue::INT_HANDLE_MIN_KEY, RowKeyValue::INT_HANDLE_MAX_KEY, is_common_handle, rowkey_column_size);
         }
     }
 
@@ -381,7 +385,7 @@ struct RowKeyRange
         }
         else
         {
-            return RowKeyRange(int_handle_max_key, int_handle_min_key, is_common_handle, rowkey_column_size);
+            return RowKeyRange(RowKeyValue::INT_HANDLE_MAX_KEY, RowKeyValue::INT_HANDLE_MIN_KEY, is_common_handle, rowkey_column_size);
         }
     }
 
@@ -423,8 +427,9 @@ struct RowKeyRange
         }
         else
         {
-            return start.int_value == int_handle_min_key.int_value && end.int_value == int_handle_max_key.int_value
-                && end.value->compare(*int_handle_max_key.value) >= 0;
+            return start.int_value == RowKeyValue::INT_HANDLE_MIN_KEY.int_value
+                && end.int_value == RowKeyValue::INT_HANDLE_MAX_KEY.int_value
+                && end.value->compare(*RowKeyValue::INT_HANDLE_MAX_KEY.value) >= 0;
         }
     }
 
@@ -441,7 +446,8 @@ struct RowKeyRange
         }
         else
         {
-            return end.int_value == int_handle_max_key.int_value && end.value->compare(*int_handle_max_key.value) >= 0;
+            return end.int_value == RowKeyValue::INT_HANDLE_MAX_KEY.int_value
+                && end.value->compare(*RowKeyValue::INT_HANDLE_MAX_KEY.value) >= 0;
         }
     }
 
@@ -459,7 +465,7 @@ struct RowKeyRange
         }
         else
         {
-            return start.int_value == int_handle_min_key.int_value;
+            return start.int_value == RowKeyValue::INT_HANDLE_MIN_KEY.int_value;
         }
     }
 
@@ -536,7 +542,7 @@ struct RowKeyRange
     {
         if (handle_range.all())
         {
-            return RowKeyRange(int_handle_min_key, int_handle_max_key, false, 1);
+            return RowKeyRange(RowKeyValue::INT_HANDLE_MIN_KEY, RowKeyValue::INT_HANDLE_MAX_KEY, false, 1);
         }
         std::stringstream ss;
         DB::EncodeInt64(handle_range.start, ss);
@@ -575,7 +581,7 @@ struct RowKeyRange
                 if (is_common_handle)
                     start_value = common_handle_min_max.min;
                 else
-                    start_value = int_handle_min_key;
+                    start_value = RowKeyValue::INT_HANDLE_MIN_KEY;
             }
             else
             {
@@ -588,7 +594,7 @@ struct RowKeyRange
                 if (is_common_handle)
                     end_value = common_handle_min_max.max;
                 else
-                    end_value = int_handle_max_key;
+                    end_value = RowKeyValue::INT_HANDLE_MAX_KEY;
             }
             else
                 end_value
