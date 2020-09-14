@@ -114,7 +114,7 @@ inline int compare(const RowKeyValueRef & a, const RowKeyValueRef & b)
             a_inf = compare(a.data, a.size, int_handle_max_key.value->data(), int_handle_max_key.value->size()) == 0;
         if (b.data != nullptr)
             b_inf = compare(b.data, b.size, int_handle_max_key.value->data(), int_handle_max_key.value->size()) == 0;
-        if (a_inf ^ b_inf)
+        if (a_inf != b_inf)
         {
             return a_inf ? 1 : -1;
         }
