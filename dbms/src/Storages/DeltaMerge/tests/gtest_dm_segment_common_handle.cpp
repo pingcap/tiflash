@@ -595,7 +595,7 @@ try
 
     {
         // Read after deletion
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
         in->readPrefix();
         while (Block block = in->read())
         {
@@ -866,7 +866,7 @@ try
 
         {
             // Read after writing
-            auto   in            = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+            auto   in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
             size_t num_rows_read = 0;
             in->readPrefix();
             while (Block block = in->read())
