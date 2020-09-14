@@ -320,7 +320,7 @@ struct RowKeyRange
     {
     }
 
-    RowKeyRange() : is_common_handle(false), start(empty_string_ptr), end(empty_string_ptr), rowkey_column_size(0) {}
+    RowKeyRange() : is_common_handle(true), start(empty_string_ptr), end(empty_string_ptr), rowkey_column_size(0) {}
 
     void swap(RowKeyRange & other)
     {
