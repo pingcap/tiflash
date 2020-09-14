@@ -289,14 +289,14 @@ public:
             ss << TiDB::CodecFlagInt;
             EncodeInt64(start, ss);
         }
-        RowKeyValueWithOwnString start_key = RowKeyValueWithOwnString(true, std::make_shared<String>(ss.str()));
+        RowKeyValue start_key = RowKeyValue(true, std::make_shared<String>(ss.str()));
         ss.str("");
         for (size_t i = 0; i < rowkey_column_size; i++)
         {
             ss << TiDB::CodecFlagInt;
             EncodeInt64(end, ss);
         }
-        RowKeyValueWithOwnString end_key = RowKeyValueWithOwnString(true, std::make_shared<String>(ss.str()));
+        RowKeyValue end_key = RowKeyValue(true, std::make_shared<String>(ss.str()));
         return RowKeyRange(start_key, end_key, true, rowkey_column_size);
     }
 };

@@ -421,10 +421,10 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
 
     while (offset != rows)
     {
-        RowKeyValue  start_key = rowkey_column.getRowKeyValue(offset);
-        WriteBatches wbs(storage_pool);
-        PackPtr      write_pack;
-        RowKeyRange  write_range;
+        RowKeyValueRef start_key = rowkey_column.getRowKeyValue(offset);
+        WriteBatches   wbs(storage_pool);
+        PackPtr        write_pack;
+        RowKeyRange    write_range;
 
         // Keep trying until succeeded.
         while (true)
@@ -1514,9 +1514,9 @@ void DeltaMergeStore::check(const Context & /*db_context*/)
 {
     std::shared_lock lock(read_write_mutex);
 
-    UInt64      next_segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
-    RowKeyRange last_range      = RowKeyRange::newAll(is_common_handle, rowkey_column_size);
-    RowKeyValue last_end        = last_range.getStart();
+    UInt64         next_segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
+    RowKeyRange    last_range      = RowKeyRange::newAll(is_common_handle, rowkey_column_size);
+    RowKeyValueRef last_end        = last_range.getStart();
     for (const auto & [end, segment] : segments)
     {
         (void)end;

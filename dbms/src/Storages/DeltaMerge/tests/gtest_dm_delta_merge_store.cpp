@@ -1962,14 +1962,14 @@ try
         DB::EncodeInt64(Int64(0), ss);
         ss << TiDB::CodecFlagInt;
         DB::EncodeInt64(Int64(0), ss);
-        RowKeyValueWithOwnString start(true, std::make_shared<String>(ss.str()));
+        RowKeyValue start(true, std::make_shared<String>(ss.str()));
         ss.str("");
         ss << TiDB::CodecFlagInt;
         DB::EncodeInt64(Int64(num_deleted_rows), ss);
         ss << TiDB::CodecFlagInt;
         DB::EncodeInt64(Int64(num_deleted_rows), ss);
-        RowKeyValueWithOwnString end(true, std::make_shared<String>(ss.str()));
-        RowKeyRange              range(start, end, true, 2);
+        RowKeyValue end(true, std::make_shared<String>(ss.str()));
+        RowKeyRange range(start, end, true, 2);
         store->deleteRange(*context, context->getSettingsRef(), range);
     }
     // Read after deletion

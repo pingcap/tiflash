@@ -39,14 +39,12 @@ void MinMaxIndex::addPack(const IColumn & column, const ColumnVector<UInt8> * de
 
     const IColumn & updated_column = *column_ptr;
     auto [min_index, max_index]    = details::minmax(updated_column, del_mark, 0, updated_column.size());
-    size_t min_xx                  = min_index;
-    size_t max_xx                  = max_index;
     if (min_index != NONE_EXIST)
     {
         has_null_marks->push_back(has_null);
         has_value_marks->push_back(1);
-        minmaxes->insertFrom(updated_column, min_xx);
-        minmaxes->insertFrom(updated_column, max_xx);
+        minmaxes->insertFrom(updated_column, min_index);
+        minmaxes->insertFrom(updated_column, max_index);
     }
     else
     {

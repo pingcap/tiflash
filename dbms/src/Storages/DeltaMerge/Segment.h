@@ -64,8 +64,8 @@ public:
 
     struct SplitInfo
     {
-        bool                     is_logical;
-        RowKeyValueWithOwnString split_point;
+        bool        is_logical;
+        RowKeyValue split_point;
 
         StableValueSpacePtr my_stable;
         StableValueSpacePtr other_stable;
@@ -222,14 +222,13 @@ private:
                                                         UInt64                    max_version = MAX_UINT64);
 
     /// Merge delta & stable, and then take the middle one.
-    RowKeyValueWithOwnString
-    getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, const SegmentSnapshotPtr & segment_snap) const;
+    RowKeyValue getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, const SegmentSnapshotPtr & segment_snap) const;
     /// Only look up in the stable vs.
-    RowKeyValueWithOwnString getSplitPointFast(DMContext & dm_context, const StableSnapshotPtr & stable_snap) const;
+    RowKeyValue getSplitPointFast(DMContext & dm_context, const StableSnapshotPtr & stable_snap) const;
 
     SplitInfo prepareSplitLogical(DMContext &                dm_context, //
                                   const SegmentSnapshotPtr & segment_snap,
-                                  RowKeyValueWithOwnString & split_point,
+                                  RowKeyValue &              split_point,
                                   WriteBatches &             wbs) const;
     SplitInfo prepareSplitPhysical(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs) const;
 

@@ -15,7 +15,7 @@ namespace DB::DM
 {
 using RowKeyColumns    = ColumnDefines;
 using RowKeyColumnsPtr = std::shared_ptr<RowKeyColumns>;
-using StringPtr        = std::shared_ptr<String>;
+using HandleValuePtr   = std::shared_ptr<String>;
 
 struct RowKeyRange;
 String rangeToString(const RowKeyRange & range);
@@ -28,9 +28,10 @@ inline int compare(const char * a, size_t a_size, const char * b, size_t b_size)
     return a_size == b_size ? 0 : a_size > b_size ? 1 : -1;
 }
 
-struct RowKeyValueWithOwnString;
+struct RowKeyValue;
 
-struct RowKeyValue
+/// A reference to RowKeyValue, normally the real data value is stored in a column.
+struct RowKeyValueRef
 {
     /// when is_common_handle = true, it means the table has clustered index, the rowkey value is a string
     /// when is_common_handle = false, it means the table has int/uint handle, the rowkey value is a int/uint
@@ -45,17 +46,17 @@ struct RowKeyValue
             return ToHex(data, size);
         return std::to_string(int_value);
     }
-    RowKeyValueWithOwnString toRowKeyValueWithOwnString() const;
+    RowKeyValue toRowKeyValue() const;
 };
 
-struct RowKeyValueWithOwnString
+struct RowKeyValue
 {
-    RowKeyValueWithOwnString() = default;
-    RowKeyValueWithOwnString(bool is_common_handle_, StringPtr value_, Int64 int_value_)
+    RowKeyValue() = default;
+    RowKeyValue(bool is_common_handle_, HandleValuePtr value_, Int64 int_value_)
         : is_common_handle(is_common_handle_), value(value_), int_value(int_value_)
     {
     }
-    RowKeyValueWithOwnString(bool is_common_handle_, StringPtr value_) : is_common_handle(is_common_handle_), value(value_)
+    RowKeyValue(bool is_common_handle_, HandleValuePtr value_) : is_common_handle(is_common_handle_), value(value_)
     {
         if (is_common_handle)
             int_value = 0;
@@ -65,7 +66,7 @@ struct RowKeyValueWithOwnString
             int_value     = DB::DecodeInt64(cursor, *value);
         }
     }
-    explicit RowKeyValueWithOwnString(const RowKeyValue & rowkey_value)
+    explicit RowKeyValue(const RowKeyValueRef & rowkey_value)
     {
         is_common_handle = rowkey_value.is_common_handle;
         if (is_common_handle)
@@ -84,18 +85,18 @@ struct RowKeyValueWithOwnString
             return ToHex(value->data(), value->size());
         return std::to_string(int_value);
     }
-    RowKeyValue toRowKeyValue() const { return RowKeyValue{is_common_handle, value->data(), value->size(), int_value}; }
+    RowKeyValueRef toRowKeyValueRef() const { return RowKeyValueRef{is_common_handle, value->data(), value->size(), int_value}; }
 
-    bool      is_common_handle;
-    StringPtr value;
-    Int64     int_value;
+    bool           is_common_handle;
+    HandleValuePtr value;
+    Int64          int_value;
 };
 
-extern const RowKeyValueWithOwnString int_handle_min_key;
-extern const RowKeyValueWithOwnString int_handle_max_key;
-extern const RowKeyValueWithOwnString empty_string_ptr;
+extern const RowKeyValue int_handle_min_key;
+extern const RowKeyValue int_handle_max_key;
+extern const RowKeyValue empty_string_ptr;
 
-inline int compare(const RowKeyValue & a, const RowKeyValue & b)
+inline int compare(const RowKeyValueRef & a, const RowKeyValueRef & b)
 {
     if (a.is_common_handle)
     {
@@ -124,66 +125,66 @@ inline int compare(const RowKeyValue & a, const RowKeyValue & b)
     }
 }
 
-inline int compare(const StringRef & a, const RowKeyValue & b)
+inline int compare(const StringRef & a, const RowKeyValueRef & b)
 {
-    RowKeyValue r_a{true, a.data, a.size, 0};
+    RowKeyValueRef r_a{true, a.data, a.size, 0};
     return compare(r_a, b);
 }
 
-inline int compare(const RowKeyValue & a, const StringRef & b)
+inline int compare(const RowKeyValueRef & a, const StringRef & b)
 {
-    RowKeyValue r_b{true, b.data, b.size, 0};
+    RowKeyValueRef r_b{true, b.data, b.size, 0};
     return compare(a, r_b);
 }
 
-inline bool operator<(const RowKeyValue & a, const RowKeyValue & b)
+inline bool operator<(const RowKeyValueRef & a, const RowKeyValueRef & b)
 {
     return compare(a, b) < 0;
 }
 
-inline bool operator<(const StringRef & a, const RowKeyValue & b)
+inline bool operator<(const StringRef & a, const RowKeyValueRef & b)
 {
     return compare(a, b) < 0;
 }
 
-inline bool operator<(const RowKeyValue & a, const StringRef & b)
+inline bool operator<(const RowKeyValueRef & a, const StringRef & b)
 {
     return compare(a, b) < 0;
 }
 
-inline int compare(Int64 a, const RowKeyValue & b)
+inline int compare(Int64 a, const RowKeyValueRef & b)
 {
-    RowKeyValue r_a{false, nullptr, 0, a};
+    RowKeyValueRef r_a{false, nullptr, 0, a};
     return compare(r_a, b);
 }
 
-inline int compare(const RowKeyValue & a, Int64 b)
+inline int compare(const RowKeyValueRef & a, Int64 b)
 {
-    RowKeyValue r_b{false, nullptr, 0, b};
+    RowKeyValueRef r_b{false, nullptr, 0, b};
     return compare(a, r_b);
 }
 
-inline bool operator<(const RowKeyValue & a, Int64 b)
+inline bool operator<(const RowKeyValueRef & a, Int64 b)
 {
     return compare(a, b) < 0;
 }
 
-inline bool operator<(Int64 a, const RowKeyValue & b)
+inline bool operator<(Int64 a, const RowKeyValueRef & b)
 {
     return compare(a, b) < 0;
 }
 
-inline const RowKeyValue & max(const RowKeyValue & a, const RowKeyValue & b)
+inline const RowKeyValueRef & max(const RowKeyValueRef & a, const RowKeyValueRef & b)
 {
     return compare(a, b) >= 0 ? a : b;
 }
 
-inline const RowKeyValueWithOwnString & max(const RowKeyValueWithOwnString & a, const RowKeyValueWithOwnString & b)
+inline const RowKeyValue & max(const RowKeyValue & a, const RowKeyValue & b)
 {
     return a.value->compare(*b.value) >= 0 ? a : b;
 }
 
-inline const RowKeyValueWithOwnString & min(const RowKeyValueWithOwnString & a, const RowKeyValueWithOwnString & b)
+inline const RowKeyValue & min(const RowKeyValue & a, const RowKeyValue & b)
 {
     return a.value->compare(*b.value) < 0 ? a : b;
 }
@@ -215,7 +216,7 @@ struct RowKeyColumnContainer
             int_data = &toColumnVectorData<Int64>(non_const_column_ptr);
         }
     }
-    RowKeyValue getRowKeyValue(size_t index) const
+    RowKeyValueRef getRowKeyValue(size_t index) const
     {
         // todo check index out of bound error
         if (unlikely(is_constant_column))
@@ -223,15 +224,15 @@ struct RowKeyColumnContainer
         if (is_common_handle)
         {
             size_t prev_offset = index == 0 ? 0 : (*string_offsets)[index - 1];
-            return RowKeyValue{is_common_handle,
-                               reinterpret_cast<const char *>(&(*string_data)[prev_offset]),
-                               (*string_offsets)[index] - prev_offset - 1,
-                               0};
+            return RowKeyValueRef{is_common_handle,
+                                  reinterpret_cast<const char *>(&(*string_data)[prev_offset]),
+                                  (*string_offsets)[index] - prev_offset - 1,
+                                  0};
         }
         else
         {
             Int64 int_value = (*int_data)[index];
-            return RowKeyValue{is_common_handle, nullptr, 0, int_value};
+            return RowKeyValueRef{is_common_handle, nullptr, 0, int_value};
         }
     }
 };
@@ -239,7 +240,7 @@ struct RowKeyColumnContainer
 namespace
 {
 // https://en.cppreference.com/w/cpp/algorithm/lower_bound
-size_t lowerBound(const RowKeyColumnContainer & rowkey_column, size_t first, size_t last, const RowKeyValue & value)
+size_t lowerBound(const RowKeyColumnContainer & rowkey_column, size_t first, size_t last, const RowKeyValueRef & value)
 {
     size_t count = last - first;
     while (count > 0)
@@ -263,14 +264,14 @@ struct RowKeyRange
     // todo use template to refine is_common_handle
     bool is_common_handle;
     /// start and end in RowKeyRange are always meaningful
-    RowKeyValueWithOwnString start;
-    RowKeyValueWithOwnString end;
-    size_t                   rowkey_column_size;
+    RowKeyValue start;
+    RowKeyValue end;
+    size_t      rowkey_column_size;
 
     struct CommonHandleRangeMinMax
     {
-        RowKeyValueWithOwnString min;
-        RowKeyValueWithOwnString max;
+        RowKeyValue min;
+        RowKeyValue max;
         CommonHandleRangeMinMax(size_t rowkey_column_size)
             : min(true, std::make_shared<String>(rowkey_column_size, TiDB::CodecFlag::CodecFlagBytes), 0),
               max(true, std::make_shared<String>(rowkey_column_size, TiDB::CodecFlag::CodecFlagMax), 0)
@@ -280,8 +281,8 @@ struct RowKeyRange
 
     struct TableRangeMinMax
     {
-        StringPtr min;
-        StringPtr max;
+        HandleValuePtr min;
+        HandleValuePtr max;
 
         TableRangeMinMax(TableID table_id, bool is_common_handle, size_t rowkey_column_size)
         {
@@ -314,10 +315,7 @@ struct RowKeyRange
     static const CommonHandleRangeMinMax &                     getMinMaxData(size_t rowkey_column_size);
     static const TableRangeMinMax & getTableMinMaxData(TableID table_id, bool is_common_handle, size_t rowkey_column_size);
 
-    RowKeyRange(const RowKeyValueWithOwnString & start_,
-                const RowKeyValueWithOwnString & end_,
-                bool                             is_common_handle_,
-                size_t                           rowkey_column_size_)
+    RowKeyRange(const RowKeyValue & start_, const RowKeyValue & end_, bool is_common_handle_, size_t rowkey_column_size_)
         : is_common_handle(is_common_handle_), start(start_), end(end_), rowkey_column_size(rowkey_column_size_)
     {
     }
@@ -332,29 +330,29 @@ struct RowKeyRange
         std::swap(rowkey_column_size, other.rowkey_column_size);
     }
 
-    static RowKeyRange startFrom(const RowKeyValue & start_value, bool is_common_handle, size_t rowkey_column_size)
+    static RowKeyRange startFrom(const RowKeyValueRef & start_value, bool is_common_handle, size_t rowkey_column_size)
     {
         if (is_common_handle)
         {
             const auto & min_max = getMinMaxData(rowkey_column_size);
-            return RowKeyRange(start_value.toRowKeyValueWithOwnString(), min_max.max, is_common_handle, rowkey_column_size);
+            return RowKeyRange(start_value.toRowKeyValue(), min_max.max, is_common_handle, rowkey_column_size);
         }
         else
         {
-            return RowKeyRange(start_value.toRowKeyValueWithOwnString(), int_handle_max_key, is_common_handle, rowkey_column_size);
+            return RowKeyRange(start_value.toRowKeyValue(), int_handle_max_key, is_common_handle, rowkey_column_size);
         }
     }
 
-    static RowKeyRange endWith(const RowKeyValue & end_value, bool is_common_handle, size_t rowkey_column_size)
+    static RowKeyRange endWith(const RowKeyValueRef & end_value, bool is_common_handle, size_t rowkey_column_size)
     {
         if (is_common_handle)
         {
             const auto & min_max = getMinMaxData(rowkey_column_size);
-            return RowKeyRange(min_max.min, end_value.toRowKeyValueWithOwnString(), is_common_handle, rowkey_column_size);
+            return RowKeyRange(min_max.min, end_value.toRowKeyValue(), is_common_handle, rowkey_column_size);
         }
         else
         {
-            return RowKeyRange(int_handle_min_key, end_value.toRowKeyValueWithOwnString(), is_common_handle, rowkey_column_size);
+            return RowKeyRange(int_handle_min_key, end_value.toRowKeyValue(), is_common_handle, rowkey_column_size);
         }
     }
 
@@ -401,8 +399,8 @@ struct RowKeyRange
         readIntBinary(rowkey_column_size, buf);
         readStringBinary(start, buf);
         readStringBinary(end, buf);
-        return RowKeyRange(RowKeyValueWithOwnString(is_common_handle, std::make_shared<String>(start)),
-                           RowKeyValueWithOwnString(is_common_handle, std::make_shared<String>(end)),
+        return RowKeyRange(RowKeyValue(is_common_handle, std::make_shared<String>(start)),
+                           RowKeyValue(is_common_handle, std::make_shared<String>(end)),
                            is_common_handle,
                            rowkey_column_size);
     }
@@ -474,9 +472,9 @@ struct RowKeyRange
         return RowKeyRange(min(start, other.start), max(end, other.end), is_common_handle, rowkey_column_size);
     }
 
-    inline void setStart(const RowKeyValueWithOwnString & value) { start = value; }
+    inline void setStart(const RowKeyValue & value) { start = value; }
 
-    inline void setEnd(const RowKeyValueWithOwnString & value) { end = value; }
+    inline void setEnd(const RowKeyValue & value) { end = value; }
 
     inline bool intersect(const RowKeyRange & other) const
     {
@@ -484,17 +482,20 @@ struct RowKeyRange
     }
 
     // [first, last_include]
-    inline bool include(const RowKeyValue & first, const RowKeyValue & last_include) const { return check(first) && check(last_include); }
+    inline bool include(const RowKeyValueRef & first, const RowKeyValueRef & last_include) const
+    {
+        return check(first) && check(last_include);
+    }
 
-    inline bool checkStart(const RowKeyValue & value) const { return compare(getStart(), value) <= 0; }
+    inline bool checkStart(const RowKeyValueRef & value) const { return compare(getStart(), value) <= 0; }
 
-    inline bool checkEnd(const RowKeyValue & value) const { return compare(value, getEnd()) < 0; }
+    inline bool checkEnd(const RowKeyValueRef & value) const { return compare(value, getEnd()) < 0; }
 
-    inline bool check(const RowKeyValue & value) const { return checkStart(value) && checkEnd(value); }
+    inline bool check(const RowKeyValueRef & value) const { return checkStart(value) && checkEnd(value); }
 
-    inline RowKeyValue getStart() const { return start.toRowKeyValue(); }
+    inline RowKeyValueRef getStart() const { return start.toRowKeyValueRef(); }
 
-    inline RowKeyValue getEnd() const { return end.toRowKeyValue(); }
+    inline RowKeyValueRef getEnd() const { return end.toRowKeyValueRef(); }
 
     inline HandleRange toHandleRange() const
     {
@@ -540,8 +541,8 @@ struct RowKeyRange
         ss.str(std::string());
         DB::EncodeInt64(handle_range.end, ss);
         String end = ss.str();
-        return RowKeyRange(RowKeyValueWithOwnString(false, std::make_shared<String>(start), handle_range.start),
-                           RowKeyValueWithOwnString(false, std::make_shared<String>(end), handle_range.end),
+        return RowKeyRange(RowKeyValue(false, std::make_shared<String>(start), handle_range.start),
+                           RowKeyValue(false, std::make_shared<String>(end), handle_range.end),
                            false,
                            1);
     }
@@ -561,11 +562,11 @@ struct RowKeyRange
     {
         if (likely(table_id_in_raw_key == table_id))
         {
-            auto &                   start_key             = *raw_keys.first;
-            auto &                   end_key               = *raw_keys.second;
-            auto                     table_range_min_max   = getTableMinMaxData(table_id, is_common_handle, rowkey_column_size);
-            auto                     common_handle_min_max = getMinMaxData(rowkey_column_size);
-            RowKeyValueWithOwnString start_value, end_value;
+            auto &      start_key             = *raw_keys.first;
+            auto &      end_key               = *raw_keys.second;
+            auto        table_range_min_max   = getTableMinMaxData(table_id, is_common_handle, rowkey_column_size);
+            auto        common_handle_min_max = getMinMaxData(rowkey_column_size);
+            RowKeyValue start_value, end_value;
             if (start_key.compare(*table_range_min_max.min) <= 0)
             {
                 if (is_common_handle)
@@ -575,7 +576,7 @@ struct RowKeyRange
             }
             else
             {
-                start_value = RowKeyValueWithOwnString(
+                start_value = RowKeyValue(
                     is_common_handle,
                     std::make_shared<std::string>(start_key.begin() + RecordKVFormat::RAW_KEY_NO_HANDLE_SIZE, start_key.end()));
             }
@@ -587,9 +588,9 @@ struct RowKeyRange
                     end_value = int_handle_max_key;
             }
             else
-                end_value = RowKeyValueWithOwnString(
-                    is_common_handle,
-                    std::make_shared<std::string>(end_key.begin() + RecordKVFormat::RAW_KEY_NO_HANDLE_SIZE, end_key.end()));
+                end_value
+                    = RowKeyValue(is_common_handle,
+                                  std::make_shared<std::string>(end_key.begin() + RecordKVFormat::RAW_KEY_NO_HANDLE_SIZE, end_key.end()));
             return RowKeyRange(start_value, end_value, is_common_handle, rowkey_column_size);
         }
         else

@@ -129,7 +129,7 @@ public:
         NotCompress not_compress_columns{};
     };
 
-    using SegmentSortedMap = std::map<RowKeyValue, SegmentPtr, std::less<>>;
+    using SegmentSortedMap = std::map<RowKeyValueRef, SegmentPtr, std::less<>>;
     using SegmentMap       = std::unordered_map<PageId, SegmentPtr>;
 
     enum ThreadType

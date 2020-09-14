@@ -20,23 +20,21 @@ String getIntHandleMaxKey()
     return ss.str();
 }
 
-const RowKeyValueWithOwnString int_handle_min_key
-    = RowKeyValueWithOwnString(false, std::make_shared<String>(getIntHandleMinKey()), int_handle_min);
-const RowKeyValueWithOwnString int_handle_max_key
-    = RowKeyValueWithOwnString(false, std::make_shared<String>(getIntHandleMaxKey()), int_handle_max);
-const RowKeyValueWithOwnString empty_string_ptr = RowKeyValueWithOwnString(true, std::make_shared<String>(""), 0);
+const RowKeyValue int_handle_min_key = RowKeyValue(false, std::make_shared<String>(getIntHandleMinKey()), int_handle_min);
+const RowKeyValue int_handle_max_key = RowKeyValue(false, std::make_shared<String>(getIntHandleMaxKey()), int_handle_max);
+const RowKeyValue empty_string_ptr   = RowKeyValue(true, std::make_shared<String>(""), 0);
 
-RowKeyValueWithOwnString RowKeyValue::toRowKeyValueWithOwnString() const
+RowKeyValue RowKeyValueRef::toRowKeyValue() const
 {
     if (data == nullptr)
     {
         std::stringstream ss;
         DB::EncodeInt64(int_value, ss);
-        return RowKeyValueWithOwnString(is_common_handle, std::make_shared<String>(ss.str()), int_value);
+        return RowKeyValue(is_common_handle, std::make_shared<String>(ss.str()), int_value);
     }
     else
     {
-        return RowKeyValueWithOwnString(is_common_handle, std::make_shared<String>(data, size), int_value);
+        return RowKeyValue(is_common_handle, std::make_shared<String>(data, size), int_value);
     }
 }
 

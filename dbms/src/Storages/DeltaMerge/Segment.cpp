@@ -539,7 +539,7 @@ SegmentPair Segment::split(DMContext & dm_context) const
     return segment_pair;
 }
 
-RowKeyValueWithOwnString Segment::getSplitPointFast(DMContext & dm_context, const StableSnapshotPtr & stable_snap) const
+RowKeyValue Segment::getSplitPointFast(DMContext & dm_context, const StableSnapshotPtr & stable_snap) const
 {
     // FIXME: this method does not consider invalid packs in stable dmfiles.
 
@@ -606,11 +606,10 @@ RowKeyValueWithOwnString Segment::getSplitPointFast(DMContext & dm_context, cons
     stream.readSuffix();
 
     RowKeyColumnContainer rowkey_column(block.getByPosition(0).column, is_common_handle);
-    return RowKeyValueWithOwnString(rowkey_column.getRowKeyValue(read_row_in_pack));
+    return RowKeyValue(rowkey_column.getRowKeyValue(read_row_in_pack));
 }
 
-RowKeyValueWithOwnString
-Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, const SegmentSnapshotPtr & segment_snap) const
+RowKeyValue Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, const SegmentSnapshotPtr & segment_snap) const
 {
     EventRecorder recorder(ProfileEvents::DMSegmentGetSplitPoint, ProfileEvents::DMSegmentGetSplitPointNS);
 
@@ -649,9 +648,9 @@ Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, c
 
     stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stream, rowkey_range, 0);
 
-    size_t                   split_row_index = exact_rows / 2;
-    RowKeyValueWithOwnString split_point;
-    size_t                   count = 0;
+    size_t      split_row_index = exact_rows / 2;
+    RowKeyValue split_point;
+    size_t      count = 0;
 
     stream->readPrefix();
     while (true)
@@ -664,14 +663,14 @@ Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info, c
         {
             size_t                offset_in_block = block.rows() - (count - split_row_index);
             RowKeyColumnContainer rowkey_column(block.getByName(handle.name).column, is_common_handle);
-            split_point = RowKeyValueWithOwnString(rowkey_column.getRowKeyValue(offset_in_block));
+            split_point = RowKeyValue(rowkey_column.getRowKeyValue(offset_in_block));
             break;
         }
     }
     stream->readSuffix();
 
-    if (!rowkey_range.check(split_point.toRowKeyValue()))
-        throw Exception("getSplitPointSlow unexpected split_handle: " + split_point.toRowKeyValue().toString() + ", should be in range "
+    if (!rowkey_range.check(split_point.toRowKeyValueRef()))
+        throw Exception("getSplitPointSlow unexpected split_handle: " + split_point.toRowKeyValueRef().toString() + ", should be in range "
                         + rowkey_range.toString());
 
     return split_point;
@@ -685,9 +684,9 @@ Segment::SplitInfo Segment::prepareSplit(DMContext & dm_context, const SegmentSn
         return prepareSplitPhysical(dm_context, segment_snap, wbs);
     else
     {
-        RowKeyValueWithOwnString split_point     = getSplitPointFast(dm_context, segment_snap->stable);
-        RowKeyValue              split_value     = split_point.toRowKeyValue();
-        bool                     bad_split_point = !rowkey_range.check(split_value) || compare(split_value, rowkey_range.getStart()) == 0;
+        RowKeyValue    split_point     = getSplitPointFast(dm_context, segment_snap->stable);
+        RowKeyValueRef split_value     = split_point.toRowKeyValueRef();
+        bool           bad_split_point = !rowkey_range.check(split_value) || compare(split_value, rowkey_range.getStart()) == 0;
         if (bad_split_point)
         {
             LOG_INFO(log,
@@ -701,7 +700,7 @@ Segment::SplitInfo Segment::prepareSplit(DMContext & dm_context, const SegmentSn
 
 Segment::SplitInfo Segment::prepareSplitLogical(DMContext &                dm_context,
                                                 const SegmentSnapshotPtr & segment_snap,
-                                                RowKeyValueWithOwnString & split_point,
+                                                RowKeyValue &              split_point,
                                                 WriteBatches &             wbs) const
 {
     LOG_INFO(log, "Segment [" << segment_id << "] prepare split logical start");
@@ -1230,10 +1229,10 @@ bool Segment::placeUpsert(const DMContext &         dm_context,
 
     IColumn::Permutation perm;
 
-    auto &      handle       = getExtraHandleColumnDefine(is_common_handle);
-    bool        do_sort      = sortBlockByPk(handle, block, perm);
-    RowKeyValue first_rowkey = RowKeyColumnContainer(block.getByPosition(0).column, is_common_handle).getRowKeyValue(0);
-    RowKeyValue range_start  = relevant_range.getStart();
+    auto &         handle       = getExtraHandleColumnDefine(is_common_handle);
+    bool           do_sort      = sortBlockByPk(handle, block, perm);
+    RowKeyValueRef first_rowkey = RowKeyColumnContainer(block.getByPosition(0).column, is_common_handle).getRowKeyValue(0);
+    RowKeyValueRef range_start  = relevant_range.getStart();
 
     auto place_handle_range = skippable_place ? RowKeyRange::startFrom(max(first_rowkey, range_start), is_common_handle, rowkey_column_size)
                                               : RowKeyRange::newAll(is_common_handle, rowkey_column_size);
@@ -1304,8 +1303,8 @@ bool Segment::placeDelete(const DMContext &         dm_context,
     // Note that we can not do read and place at the same time.
     for (const auto & block : delete_data)
     {
-        RowKeyValue first_rowkey       = RowKeyColumnContainer(block.getByPosition(0).column, is_common_handle).getRowKeyValue(0);
-        auto        place_handle_range = skippable_place ? RowKeyRange::startFrom(first_rowkey, is_common_handle, rowkey_column_size)
+        RowKeyValueRef first_rowkey       = RowKeyColumnContainer(block.getByPosition(0).column, is_common_handle).getRowKeyValue(0);
+        auto           place_handle_range = skippable_place ? RowKeyRange::startFrom(first_rowkey, is_common_handle, rowkey_column_size)
                                                   : RowKeyRange::newAll(is_common_handle, rowkey_column_size);
 
         auto compacted_index = update_delta_tree.getCompactedEntries();

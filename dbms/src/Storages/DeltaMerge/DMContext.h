@@ -43,6 +43,7 @@ struct DMContext : private boost::noncopyable
 
     bool is_common_handle;
 
+    // The number of columns in primary key if is_common_handle = true, otherwise, should always be 1.
     size_t rowkey_column_size;
 
     // The rows of segment.

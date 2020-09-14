@@ -69,11 +69,11 @@ private:
     // How many times `read` is called.
     size_t num_read = 0;
 
-    RowKeyValueWithOwnString last_value_with_own_string;
-    RowKeyValue              last_value;
-    UInt64                   last_version         = 0;
-    size_t                   last_handle_pos      = 0;
-    size_t                   last_handle_read_num = 0;
+    RowKeyValue    last_value_with_own_string;
+    RowKeyValueRef last_value;
+    UInt64         last_version         = 0;
+    size_t         last_handle_pos      = 0;
+    size_t         last_handle_read_num = 0;
 
 public:
     DeltaMergeBlockInputStream(const SkippableBlockInputStreamPtr & stable_input_stream_,
@@ -110,8 +110,8 @@ public:
             use_stable_rows = delta_index_it.getSid();
         }
         auto all_range             = RowKeyRange::newAll(is_common_handle, rowkey_column_size);
-        last_value_with_own_string = all_range.getStart().toRowKeyValueWithOwnString();
-        last_value                 = last_value_with_own_string.toRowKeyValue();
+        last_value_with_own_string = all_range.getStart().toRowKeyValue();
+        last_value                 = last_value_with_own_string.toRowKeyValueRef();
     }
 
     String getName() const override { return "DeltaMerge"; }
@@ -197,8 +197,8 @@ private:
             }
             /// last_value is based on block, when block is released, it will
             /// become meaningless, so need to update last_value here
-            last_value_with_own_string = last_value.toRowKeyValueWithOwnString();
-            last_value                 = last_value_with_own_string.toRowKeyValue();
+            last_value_with_own_string = last_value.toRowKeyValue();
+            last_value                 = last_value_with_own_string.toRowKeyValueRef();
         }
     }
 
