@@ -1666,10 +1666,17 @@ private:
 class FunctionBuilderTiDBCast : public FunctionBuilderImpl
 {
 public:
-    using MonotonicityForRange = FunctionCast::MonotonicityForRange;
+    using MonotonicityForRange = FunctionTiDBCast::MonotonicityForRange;
 
     static constexpr auto name = "tidb_cast";
-    static FunctionBuilderPtr create(const Context & context) { return std::make_shared<FunctionBuilderTiDBCast>(context); }
+    static FunctionBuilderPtr create(const Context & context)
+    {
+        if (!context.getDAGContext())
+        {
+            throw Exception("DAGContext should not be nullptr.", ErrorCodes::LOGICAL_ERROR);
+        }
+        return std::make_shared<FunctionBuilderTiDBCast>(context);
+    }
 
     FunctionBuilderTiDBCast(const Context & context) : context(context) {}
 
