@@ -98,6 +98,8 @@ struct RowKeyValue
 
 inline int compare(const RowKeyValueRef & a, const RowKeyValueRef & b)
 {
+    if (unlikely(a.is_common_handle != b.is_common_handle))
+        throw Exception("Should not reach here, common handle rowkey value compare with non common handle rowkey value");
     if (a.is_common_handle)
     {
         return compare(a.data, a.size, b.data, b.size);
