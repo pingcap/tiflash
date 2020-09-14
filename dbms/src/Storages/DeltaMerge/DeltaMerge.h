@@ -69,8 +69,8 @@ private:
     // How many times `read` is called.
     size_t num_read = 0;
 
-    RowKeyValue    last_value_with_own_string;
-    RowKeyValueRef last_value;
+    RowKeyValue    last_value;
+    RowKeyValueRef last_value_ref;
     UInt64         last_version         = 0;
     size_t         last_handle_pos      = 0;
     size_t         last_handle_read_num = 0;
