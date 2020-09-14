@@ -109,9 +109,9 @@ public:
         {
             use_stable_rows = delta_index_it.getSid();
         }
-        auto all_range             = RowKeyRange::newAll(is_common_handle, rowkey_column_size);
-        last_value_with_own_string = all_range.getStart().toRowKeyValue();
-        last_value                 = last_value_with_own_string.toRowKeyValueRef();
+        auto all_range = RowKeyRange::newAll(is_common_handle, rowkey_column_size);
+        last_value     = all_range.getStart().toRowKeyValue();
+        last_value_ref = last_value.toRowKeyValueRef();
     }
 
     String getName() const override { return "DeltaMerge"; }
@@ -181,24 +181,24 @@ private:
             {
                 auto rowkey_value = rowkey_column.getRowKeyValue(i);
                 auto version      = version_column[i];
-                int  cmp_result   = compare(rowkey_value, last_value);
+                int  cmp_result   = compare(rowkey_value, last_value_ref);
                 if (cmp_result < 0 || (cmp_result == 0 && version < last_version))
                 {
                     throw Exception("DeltaMerge return wrong result, current handle[" + rowkey_value.toString() + "]version["
                                     + DB::toString(version) + "]@read[" + DB::toString(num_read) + "]@pos[" + DB::toString(i)
-                                    + "] is expected >= last_handle[" + last_value.toString() + "]last_version["
+                                    + "] is expected >= last_handle[" + last_value_ref.toString() + "]last_version["
                                     + DB::toString(last_version) + "]@read[" + DB::toString(last_handle_read_num) + "]@pos["
                                     + DB::toString(last_handle_pos) + "]");
                 }
-                last_value           = rowkey_value;
+                last_value_ref       = rowkey_value;
                 last_version         = version;
                 last_handle_pos      = i;
                 last_handle_read_num = num_read;
             }
             /// last_value is based on block, when block is released, it will
             /// become invalid, so need to update last_value here
-            last_value_with_own_string = last_value.toRowKeyValue();
-            last_value                 = last_value_with_own_string.toRowKeyValueRef();
+            last_value     = last_value_ref.toRowKeyValue();
+            last_value_ref = last_value.toRowKeyValueRef();
         }
     }
 
