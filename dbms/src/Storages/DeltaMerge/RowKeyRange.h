@@ -192,11 +192,14 @@ inline const RowKeyValue & min(const RowKeyValue & a, const RowKeyValue & b)
 struct RowKeyColumnContainer
 {
     const ColumnPtr &             column;
+    bool                          is_common_handle;
+    bool                          is_constant_column;
+    
+    /// The following members are simply references to values in 'column', for faster access.
     const ColumnString::Chars_t * string_data    = nullptr;
     const ColumnString::Offsets * string_offsets = nullptr;
     const PaddedPODArray<Int64> * int_data       = nullptr;
-    bool                          is_common_handle;
-    bool                          is_constant_column;
+
     RowKeyColumnContainer(const ColumnPtr & column_, bool is_common_handle_)
         : column(column_), is_common_handle(is_common_handle_), is_constant_column(column->isColumnConst())
     {
