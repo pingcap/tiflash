@@ -196,7 +196,7 @@ private:
                 last_handle_read_num = num_read;
             }
             /// last_value is based on block, when block is released, it will
-            /// become meaningless, so need to update last_value here
+            /// become invalid, so need to update last_value here
             last_value_with_own_string = last_value.toRowKeyValue();
             last_value                 = last_value_with_own_string.toRowKeyValueRef();
         }
