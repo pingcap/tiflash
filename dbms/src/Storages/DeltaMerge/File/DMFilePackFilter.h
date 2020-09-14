@@ -160,32 +160,63 @@ private:
         if (param.indexes.count(col_id))
             return;
 
-        auto       index_path = dmfile->colIndexPath(DMFile::getFileNameBase(col_id));
-        Poco::File index_file(index_path);
-        if (!index_file.exists())
-            return;
-
-        auto & type = dmfile->getColumnStat(col_id).type;
-        auto   load = [&]() {
-            auto index_buf = ReadBufferFromFileProvider(
-                file_provider,
-                index_path,
-                dmfile->encryptionIndexPath(DMFile::getFileNameBase(col_id)),
-                std::min(static_cast<Poco::File::FileSize>(DBMS_DEFAULT_BUFFER_SIZE), Poco::File(index_path).getSize()));
-            return MinMaxIndex::read(*type, index_buf);
-        };
-        MinMaxIndexPtr minmax_index;
-        if (index_cache)
+        if (dmfile->isSingleFileMode())
         {
-            auto key     = MinMaxIndexCache::hash(index_path, hash_salt);
-            minmax_index = index_cache->getOrSet(key, load);
+            auto index_identifier = dmfile->colIndexIdentifier(DMFile::getFileNameBase(col_id));
+            if (!dmfile->isSubFileExists(index_identifier))
+            {
+                return;
+            }
+            auto & type = dmfile->getColumnStat(col_id).type;
+            auto index_file_stat = dmfile->getSubFileStat(index_identifier);
+            auto   load = [&]() {
+                auto index_buf = ReadBufferFromFileProvider(
+                    file_provider,
+                    dmfile->path(),
+                    EncryptionPath(dmfile->path(), ""));
+                index_buf.seek(index_file_stat.offset);
+                return MinMaxIndex::read(*type, index_buf);
+            };
+            MinMaxIndexPtr minmax_index;
+            if (index_cache)
+            {
+                auto key     = MinMaxIndexCache::hash(dmfile->path() + index_identifier, hash_salt);
+                minmax_index = index_cache->getOrSet(key, load);
+            }
+            else
+            {
+                minmax_index = load();
+            }
+            param.indexes.emplace(col_id, RSIndex(type, minmax_index));
         }
         else
         {
-            minmax_index = load();
-        }
+            auto       index_path = dmfile->colIndexPath(DMFile::getFileNameBase(col_id));
+            Poco::File index_file(index_path);
+            if (!index_file.exists())
+                return;
 
-        param.indexes.emplace(col_id, RSIndex(type, minmax_index));
+            auto & type = dmfile->getColumnStat(col_id).type;
+            auto   load = [&]() {
+                auto index_buf = ReadBufferFromFileProvider(
+                    file_provider,
+                    index_path,
+                    dmfile->encryptionIndexPath(DMFile::getFileNameBase(col_id)),
+                    std::min(static_cast<Poco::File::FileSize>(DBMS_DEFAULT_BUFFER_SIZE), Poco::File(index_path).getSize()));
+                return MinMaxIndex::read(*type, index_buf);
+            };
+            MinMaxIndexPtr minmax_index;
+            if (index_cache)
+            {
+                auto key     = MinMaxIndexCache::hash(index_path, hash_salt);
+                minmax_index = index_cache->getOrSet(key, load);
+            }
+            else
+            {
+                minmax_index = load();
+            }
+            param.indexes.emplace(col_id, RSIndex(type, minmax_index));
+        }
     }
 
 private:

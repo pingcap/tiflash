@@ -18,15 +18,24 @@ static constexpr const char * NGC_FILE_NAME = "NGC";
 
 String DMFile::ngcPath() const
 {
-    return path() + "/" + NGC_FILE_NAME;
+    if (mode == Mode::SINGLE_FILE)
+    {
+        return path() + "." + NGC_FILE_NAME;
+    }
+    else
+    {
+        return path() + "/" + NGC_FILE_NAME;
+    }
 }
 
-DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path)
+DMFilePtr DMFile::create(const FileProviderPtr & file_provider, UInt64 file_id, const String & parent_path)
 {
     Logger * log = &Logger::get("DMFile");
     // On create, ref_id is the same as file_id.
     DMFilePtr new_dmfile(new DMFile(file_id, file_id, parent_path, Status::WRITABLE, log));
 
+    Poco::File parent(parent_path);
+    parent.createDirectories();
     auto       path = new_dmfile->path();
     Poco::File file(path);
     if (file.exists())
@@ -34,7 +43,8 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path)
         file.remove(true);
         LOG_WARNING(log, "Existing dmfile, removed :" << path);
     }
-    file.createDirectories();
+    file.createFile();
+    new_dmfile->initialize(file_provider);
 
     // Create a mark file to stop this dmfile from being removed by GC.
     PageUtil::touchFile(new_dmfile->ngcPath());
@@ -45,13 +55,30 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path)
 DMFilePtr DMFile::restore(const FileProviderPtr & file_provider, UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta)
 {
     DMFilePtr dmfile(new DMFile(file_id, ref_id, parent_path, Status::READABLE, &Logger::get("DMFile")));
+    dmfile->initialize(file_provider);
     if (read_meta)
         dmfile->readMeta(file_provider);
     return dmfile;
 }
 
+DMFile::DMFile(UInt64 file_id_, UInt64 ref_id_, const String & parent_path_, DMFile::Status status_, Logger *log_)
+        : file_id(file_id_), ref_id(ref_id_), parent_path(parent_path_), mode(Mode::UNKNOWN), status(status_), log(log_)
+{}
+
+void DMFile::writeMeta(WriteBufferFromFileBase & buffer)
+{
+    size_t meta_offset = buffer.count();
+    writeString("DTFile format: ", buffer);
+    writeIntText(static_cast<std::underlying_type_t<DMFileVersion>>(DMFileVersion::CURRENT_VERSION), buffer);
+    writeString("\n", buffer);
+    writeText(column_stats, CURRENT_VERSION, buffer);
+    size_t meta_size = buffer.count() - meta_offset;
+    addSubFileStat(metaIdentifier(), meta_offset, meta_size);
+}
+
 void DMFile::writeMeta(const FileProviderPtr & file_provider)
 {
+    // FIXME: make sure DMFile mode is Mode::FOLDER
     String meta_path     = metaPath();
     String tmp_meta_path = meta_path + ".tmp";
 
@@ -66,6 +93,7 @@ void DMFile::writeMeta(const FileProviderPtr & file_provider)
 
 void DMFile::upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileVersion ver)
 {
+    // FIXME: make sure DMFile mode is Mode::FOLDER
     if (unlikely(ver == DMFileVersion::VERSION_BASE))
     {
         // Update ColumnStat.serialized_bytes
@@ -96,8 +124,9 @@ void DMFile::upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileVers
 void DMFile::readMeta(const FileProviderPtr & file_provider)
 {
     DMFileVersion ver; // Binary version
+
     {
-        auto buf = openForRead(file_provider, metaPath(), encryptionMetaPath());
+        auto buf = metaReadBuffer(file_provider);
         assertString("DTFile format: ", buf);
         {
             std::underlying_type_t<DMFileVersion> ver_int;
@@ -106,34 +135,60 @@ void DMFile::readMeta(const FileProviderPtr & file_provider)
         }
         assertString("\n", buf);
         readText(column_stats, ver, buf);
-
-        upgradeMetaIfNeed(file_provider, ver);
+        // No need to upgrade meta when mode is Mode::SINGLE_FILE
+        if (mode == Mode::FOLDER)
+        {
+            upgradeMetaIfNeed(file_provider, ver);
+        }
     }
 
     {
-        auto       pack_stat_path = packStatPath();
-        Poco::File pack_stat_file(pack_stat_path);
-        size_t     packs = pack_stat_file.getSize() / sizeof(PackStat);
+        auto pack_stat_size = packStatSize();
+        size_t     packs = pack_stat_size / sizeof(PackStat);
         pack_stats.resize(packs);
-        auto buf = openForRead(file_provider, pack_stat_path, encryptionPackStatPath());
+        auto buf = packStatReadBuffer(file_provider);
         buf.read((char *)pack_stats.data(), sizeof(PackStat) * packs);
     }
 }
 
-void DMFile::finalize(const FileProviderPtr & file_provider)
+void DMFile::finalize(WriteBufferFromFileBase & buffer)
 {
-    writeMeta(file_provider);
+    writeMeta(buffer);
+
+    size_t pack_offset = buffer.count();
+    for (auto & stat : pack_stats)
+    {
+        writePODBinary(stat, buffer);
+    }
+    size_t pack_size = buffer.count() - pack_offset;
+    addSubFileStat(packStatIdentifier(), pack_offset, pack_size);
+
+    UInt64 sub_file_stat_offset = buffer.count();
+    for (auto & iter : sub_file_stats)
+    {
+         writeStringBinary(iter.second.name, buffer);
+         writeIntBinary(iter.second.offset, buffer);
+         writeIntBinary(iter.second.size, buffer);
+    }
+    UInt32 file_num = sub_file_stats.size();
+    writeIntBinary(sub_file_stat_offset, buffer);
+    writeIntBinary(file_num, buffer);
+    buffer.next();
     if (status != Status::WRITING)
         throw Exception("Expected WRITING status, now " + statusString(status));
     Poco::File old_file(path());
+    Poco::File old_ngc_file(ngcPath());
     status = Status::READABLE;
 
     auto new_path = path();
 
     Poco::File file(new_path);
     if (file.exists())
-        file.remove(true);
+        file.remove();
+    Poco::File new_ngc_file(ngcPath());
+    new_ngc_file.createFile();
     old_file.renameTo(new_path);
+    old_ngc_file.remove();
 }
 
 std::set<UInt64> DMFile::listAllInPath(const String & parent_path, bool can_gc)
@@ -159,7 +214,17 @@ std::set<UInt64> DMFile::listAllInPath(const String & parent_path, bool can_gc)
         UInt64 file_id = std::stoull(ss[1]);
         if (can_gc)
         {
-            Poco::File ngc_file(parent_path + "/" + name + "/" + NGC_FILE_NAME);
+            Poco::File file(parent_path + "/" + name);
+            String ngc_path = "";
+            if (file.isFile())
+            {
+                ngc_path = parent_path + "/" + name + "." + NGC_FILE_NAME;
+            }
+            else
+            {
+                ngc_path = parent_path + "/" + name + "/" + NGC_FILE_NAME;
+            }
+            Poco::File ngc_file(ngc_path);
             if (!ngc_file.exists())
                 file_ids.insert(file_id);
         }
@@ -185,9 +250,92 @@ void DMFile::enableGC()
 
 void DMFile::remove(const FileProviderPtr & file_provider)
 {
-    file_provider->deleteDirectory(path(), true, true);
+    if (mode == Mode::SINGLE_FILE)
+    {
+        file_provider->deleteRegularFile(path(), EncryptionPath(encryptionBasePath(), ""));
+    }
+    else
+    {
+        file_provider->deleteDirectory(path(), true, true);
+    }
 }
 
+ReadBufferFromFileProvider DMFile::metaReadBuffer(const FileProviderPtr & file_provider)
+{
+    if (mode == Mode::SINGLE_FILE)
+    {
+        ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
+        auto meta_offset = sub_file_stats[metaIdentifier()].offset;
+        buf.seek(meta_offset);
+        return buf;
+    }
+    else
+    {
+        return openForRead(file_provider, metaPath(), encryptionMetaPath());
+    }
+}
+
+ReadBufferFromFileProvider DMFile::packStatReadBuffer(const FileProviderPtr & file_provider)
+{
+    if (mode == Mode::SINGLE_FILE)
+    {
+        ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
+        auto pack_stat_offset = sub_file_stats[packStatIdentifier()].offset;
+        buf.seek(pack_stat_offset);
+        return buf;
+    }
+    else
+    {
+        return openForRead(file_provider, packStatPath(), encryptionPackStatPath());
+    }
+}
+
+size_t DMFile::packStatSize()
+{
+    if (mode == Mode::SINGLE_FILE)
+    {
+        return sub_file_stats[packStatIdentifier()].size;
+    }
+    else
+    {
+        auto       pack_stat_path = packStatPath();
+        Poco::File pack_stat_file(pack_stat_path);
+        return pack_stat_file.getSize();
+    }
+}
+
+void DMFile::initialize(const FileProviderPtr & file_provider)
+{
+    Poco::File file(path());
+    if (file.isFile())
+    {
+        mode = Mode::SINGLE_FILE;
+        if (status == Status::READABLE)
+        {
+            // initialize object state related to read file
+            UInt64 sub_file_stats_offset;
+            UInt32 sub_file_num;
+            ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
+            buf.seek(file.getSize() - 12, SEEK_SET);
+            DB::readIntBinary(sub_file_stats_offset, buf);
+            DB::readIntBinary(sub_file_num, buf);
+
+            buf.seek(sub_file_stats_offset, SEEK_SET);
+            SubFileStat sub_file_stat;
+            for (UInt32 i = 0; i < sub_file_num; i++)
+            {
+                DB::readStringBinary(sub_file_stat.name, buf);
+                DB::readIntBinary(sub_file_stat.offset, buf);
+                DB::readIntBinary(sub_file_stat.size, buf);
+                sub_file_stats.emplace(sub_file_stat.name, sub_file_stat);
+            }
+        }
+    }
+    else
+    {
+        mode = Mode::FOLDER;
+    }
+}
 
 } // namespace DM
 } // namespace DB

@@ -24,27 +24,58 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
                              Logger *       log)
     : avg_size_hint(reader.dmfile->getColumnStat(col_id).avg_size)
 {
-    const String mark_path = reader.dmfile->colMarkPath(file_name_base);
-    const String data_path = reader.dmfile->colDataPath(file_name_base);
+    if (reader.dmfile->isSingleFileMode())
+    {
+        auto mark_load = [&]() -> MarksInCompressedFilePtr {
+            auto res = std::make_shared<MarksInCompressedFile>(reader.dmfile->getPacks());
+            if (res->empty()) // 0 rows.
+                return res;
+            size_t size = sizeof(MarkInCompressedFile) * reader.dmfile->getPacks();
+            auto file = reader.file_provider->newRandomAccessFile(reader.dmfile->path(), EncryptionPath(reader.dmfile->path(), ""));
+            auto mark_file_stat = reader.dmfile->getSubFileStat(reader.dmfile->colMarkIdentifier(file_name_base));
+            // FIXME: make sure sub_file_stat.size == size
+            PageUtil::readFile(file, mark_file_stat.offset, reinterpret_cast<char *>(res->data()), size);
 
-    auto mark_load = [&]() -> MarksInCompressedFilePtr {
-        auto res = std::make_shared<MarksInCompressedFile>(reader.dmfile->getPacks());
-        if (res->empty()) // 0 rows.
             return res;
-        size_t size = sizeof(MarkInCompressedFile) * reader.dmfile->getPacks();
-        auto file = reader.file_provider->newRandomAccessFile(mark_path, reader.dmfile->encryptionMarkPath(file_name_base));
-
-        PageUtil::readFile(file, 0, reinterpret_cast<char *>(res->data()), size);
-
-        return res;
-    };
-
-    if (reader.mark_cache)
-        marks = reader.mark_cache->getOrSet(MarkCache::hash(mark_path, reader.hash_salt), mark_load);
+        };
+        if (reader.mark_cache)
+            marks = reader.mark_cache->getOrSet(MarkCache::hash(reader.dmfile->path() + reader.dmfile->colMarkIdentifier(file_name_base), reader.hash_salt), mark_load);
+        else
+            marks = mark_load();
+    }
     else
-        marks = mark_load();
+    {
+        const String mark_path = reader.dmfile->colMarkPath(file_name_base);
+        const String data_path = reader.dmfile->colDataPath(file_name_base);
 
-    size_t data_file_size = Poco::File(data_path).getSize();
+        auto mark_load = [&]() -> MarksInCompressedFilePtr {
+            auto res = std::make_shared<MarksInCompressedFile>(reader.dmfile->getPacks());
+            if (res->empty()) // 0 rows.
+                return res;
+            size_t size = sizeof(MarkInCompressedFile) * reader.dmfile->getPacks();
+            auto file = reader.file_provider->newRandomAccessFile(mark_path, reader.dmfile->encryptionMarkPath(file_name_base));
+
+            PageUtil::readFile(file, 0, reinterpret_cast<char *>(res->data()), size);
+
+            return res;
+        };
+
+        if (reader.mark_cache)
+            marks = reader.mark_cache->getOrSet(MarkCache::hash(mark_path, reader.hash_salt), mark_load);
+        else
+            marks = mark_load();
+    }
+    size_t data_file_size = 0;
+    if (reader.dmfile->isSingleFileMode())
+    {
+        auto data_file_stat = reader.dmfile->getSubFileStat(reader.dmfile->colDataIdentifier(file_name_base));
+        data_file_size = data_file_stat.size;
+    }
+    else
+    {
+        const String data_path = reader.dmfile->colDataPath(file_name_base);
+        data_file_size = Poco::File(data_path).getSize();
+    }
     size_t packs          = reader.dmfile->getPacks();
     size_t buffer_size    = 0;
     size_t estimated_size = 0;
@@ -97,8 +128,20 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
         }
     }
 
-    buf = std::make_unique<CompressedReadBufferFromFileProvider>(
-        reader.file_provider, data_path, reader.dmfile->encryptionDataPath(file_name_base), estimated_size, aio_threshold, buffer_size);
+    if (reader.dmfile->isSingleFileMode())
+    {
+        auto data_file_stat = reader.dmfile->getSubFileStat(reader.dmfile->colDataIdentifier(file_name_base));
+        buf = std::make_unique<CompressedReadBufferFromFileProvider>(reader.file_provider, reader.dmfile->path(),
+             EncryptionPath(reader.dmfile->path(), ""), estimated_size, aio_threshold, buffer_size);
+        // FIXME: check CompressedReadBufferFromFileProvider work as expected
+        buf->seek(data_file_stat.offset, 0);
+    }
+    else
+    {
+        const String data_path = reader.dmfile->colDataPath(file_name_base);
+        buf = std::make_unique<CompressedReadBufferFromFileProvider>(reader.file_provider, data_path,
+             reader.dmfile->encryptionDataPath(file_name_base), estimated_size, aio_threshold, buffer_size);
+    }
 }
 
 DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,

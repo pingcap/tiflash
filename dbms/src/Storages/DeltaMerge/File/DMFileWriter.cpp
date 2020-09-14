@@ -12,45 +12,34 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
                            size_t                      min_compress_block_size_,
                            size_t                      max_compress_block_size_,
                            const CompressionSettings & compression_settings_,
-                           const FileProviderPtr &     file_provider_,
-                           bool                        wal_mode_)
+                           const FileProviderPtr &     file_provider_)
     : dmfile(dmfile_),
       write_columns(write_columns_),
       min_compress_block_size(min_compress_block_size_),
       max_compress_block_size(max_compress_block_size_),
       compression_settings(compression_settings_),
-      wal_mode(wal_mode_),
-      // assume pack_stat_file is the first file created inside DMFile
-      // it will create encryption info for the whole DMFile
-      pack_stat_file(file_provider_, dmfile->packStatPath(), dmfile->encryptionPackStatPath(), true),
-      file_provider(file_provider_)
+      file_provider(file_provider_),
+      plain_file(createWriteBufferFromFileBaseByFileProvider(file_provider,
+                                                       dmfile->path(),
+                                                       EncryptionPath(dmfile->path(), ""),
+                                                       true,
+                                                       0,
+                                                       0,
+                                                       max_compress_block_size)),
+      compressed_buf(*plain_file, compression_settings)
 {
     dmfile->setStatus(DMFile::Status::WRITING);
     for (auto & cd : write_columns)
     {
         // TODO: currently we only generate index for Integers, Date, DateTime types, and this should be configurable by user.
         // TODO: If column type is nullable, we won't generate index for it
-        bool do_index = !wal_mode && (cd.type->isInteger() || cd.type->isDateOrDateTime());
-        addStreams(cd.id, cd.type, do_index);
+        if (cd.type->isInteger() || cd.type->isDateOrDateTime())
+        {
+            String column_name = DMFile::getFileNameBase(cd.id, {});
+            minmaxindexs.emplace(column_name, std::make_shared<MinMaxIndex>(*cd.type));
+        }
         dmfile->column_stats.emplace(cd.id, ColumnStat{cd.id, cd.type, /*avg_size=*/0});
     }
-}
-
-void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
-{
-    auto callback = [&](const IDataType::SubstreamPath & substream_path) {
-        String stream_name = DMFile::getFileNameBase(col_id, substream_path);
-        auto   stream      = std::make_unique<Stream>(dmfile, //
-                                               stream_name,
-                                               type,
-                                               compression_settings,
-                                               max_compress_block_size,
-                                               file_provider,
-                                               IDataType::isNullMap(substream_path) ? false : do_index);
-        column_streams.emplace(stream_name, std::move(stream));
-    };
-
-    type->enumerateStreams(callback, {});
 }
 
 void DMFileWriter::write(const Block & block, size_t not_clean_rows)
@@ -63,7 +52,6 @@ void DMFileWriter::write(const Block & block, size_t not_clean_rows)
     for (auto & cd : write_columns)
     {
         auto & col = getByColumnId(block, cd.id).column;
-        writeColumn(cd.id, *cd.type, *col);
 
         if (cd.id == VERSION_COLUMN_ID)
             stat.first_version = col->get64(0);
@@ -71,11 +59,8 @@ void DMFileWriter::write(const Block & block, size_t not_clean_rows)
             stat.first_tag = (UInt8)(col->get64(0));
     }
 
-    writePODBinary(stat, pack_stat_file);
-    if (wal_mode)
-        pack_stat_file.sync();
-
     dmfile->addPack(stat);
+    blocks.emplace_back(block);
 }
 
 void DMFileWriter::finalize()
@@ -85,82 +70,119 @@ void DMFileWriter::finalize()
         finalizeColumn(cd.id, *(cd.type));
     }
 
-    dmfile->finalize(file_provider);
+    dmfile->finalize(*plain_file);
 }
 
-void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColumn & column)
+void DMFileWriter::writeColumn(ColId col_id, const IDataType & type)
 {
-    size_t rows = column.size();
+    MarksInCompressedFile marks{blocks.size()};
+    size_t column_offset_in_file = plain_file->count();
+    MinMaxIndexPtr minmax = nullptr;
+    size_t bytes_written = 0;
+    if (auto iter = minmaxindexs.find(DMFile::getFileNameBase(col_id, {})); iter != minmaxindexs.end())
+    {
+        minmax = iter->second;
+    }
+    for (size_t i = 0; i < blocks.size(); i++)
+    {
+        auto & block = blocks[i];
+        auto & column = getByColumnId(block, col_id).column;
+        size_t rows = column->size();
 
-    type.enumerateStreams(
-        [&](const IDataType::SubstreamPath & substream) {
-            String name   = DMFile::getFileNameBase(col_id, substream);
-            auto & stream = column_streams.at(name);
-            if (stream->minmaxes)
-                stream->minmaxes->addPack(column, nullptr);
+        if (compressed_buf.offset() >= min_compress_block_size)
+        {
+            compressed_buf.next();
+        }
+        auto offset_in_compressed_block = compressed_buf.offset();
+        marks[i] = MarkInCompressedFile{
+            // TODO: make sure this two attribute are correct
+            .offset_in_compressed_file = plain_file->count(),
+            .offset_in_decompressed_block = offset_in_compressed_block
+        };
+        if (type.isNullable())
+        {
+            const DataTypeNullable & nullable_type = static_cast<const DataTypeNullable &>(type);
+            nullable_type.getNestedType()->serializeBinaryBulk(*column, compressed_buf, 0, rows);
+        }
+        else
+        {
+            type.serializeBinaryBulk(*column, compressed_buf, 0, rows);
+        }
+        if (minmax)
+        {
+            minmax->addPack(*column, nullptr);
+        }
+        auto & avg_size = dmfile->column_stats.at(col_id).avg_size;
+        IDataType::updateAvgValueSizeHint(*column, avg_size);
+    }
+    compressed_buf.next();
+    size_t column_size_in_file = plain_file->count() - column_offset_in_file;
+    dmfile->addSubFileStat(DMFile::colDataIdentifier(DMFile::getFileNameBase(col_id, {})), column_offset_in_file, column_size_in_file);
+    bytes_written += column_size_in_file;
 
-            /// There could already be enough data to compress into the new block.
-            if (stream->original_hashing.offset() >= min_compress_block_size)
-                stream->original_hashing.next();
+    size_t mark_offset_in_file = plain_file->count();
+    for (auto mark : marks)
+    {
+        writeIntBinary(mark.offset_in_compressed_file, *plain_file);
+        writeIntBinary(mark.offset_in_decompressed_block, *plain_file);
+    }
+    size_t mark_size_in_file = plain_file->count() - mark_offset_in_file;
+    dmfile->addSubFileStat(DMFile::colMarkIdentifier(DMFile::getFileNameBase(col_id, {})), mark_offset_in_file, mark_size_in_file);
 
-            auto offset_in_compressed_block = stream->original_hashing.offset();
-            if (unlikely(wal_mode && offset_in_compressed_block != 0))
-                throw Exception("Offset in compressed block is expected to be 0, now " + DB::toString(offset_in_compressed_block));
+    if (minmax)
+    {
+        size_t minmax_offset_in_file = plain_file->count();
+        minmax->write(type, *plain_file);
+        size_t minmax_size_in_file = plain_file->count() - minmax_offset_in_file;
+        bytes_written += minmax_size_in_file;
+        dmfile->addSubFileStat(DMFile::colIndexIdentifier(DMFile::getFileNameBase(col_id, {})), minmax_offset_in_file, minmax_size_in_file);
+    }
 
-            writeIntBinary(stream->plain_hashing.count(), stream->mark_file);
-            writeIntBinary(offset_in_compressed_block, stream->mark_file);
-        },
-        {});
+    if (type.isNullable())
+    {
+        MarksInCompressedFile nullmap_marks{blocks.size()};
+        size_t nullmap_offset_in_file = plain_file->count();
+        for (size_t i = 0; i < blocks.size(); i++)
+        {
+            auto & block = blocks[i];
+            auto & column = getByColumnId(block, col_id).column;
+            size_t rows = column->size();
 
-    type.serializeBinaryBulkWithMultipleStreams(column, //
-                                                [&](const IDataType::SubstreamPath & substream) {
-                                                    String stream_name = DMFile::getFileNameBase(col_id, substream);
-                                                    auto & stream      = column_streams.at(stream_name);
-                                                    return &(stream->original_hashing);
-                                                },
-                                                0,
-                                                rows,
-                                                true,
-                                                {});
+            if (compressed_buf.offset() >= min_compress_block_size)
+            {
+                compressed_buf.next();
+            }
+            auto offset_in_compressed_block = compressed_buf.offset();
+            nullmap_marks[i] = MarkInCompressedFile{
+                // TODO: make sure this two attribute are correct
+                .offset_in_compressed_file = plain_file->count(),
+                .offset_in_decompressed_block = offset_in_compressed_block
+            };
+            const ColumnNullable & col = static_cast<const ColumnNullable &>(*column);
+            col.checkConsistency();
+            DataTypeUInt8().serializeBinaryBulk(col.getNullMapColumn(), compressed_buf, 0, rows);
+        }
+        compressed_buf.next();
+        size_t nullmap_size_in_file = plain_file->count() - nullmap_offset_in_file;
+        dmfile->addSubFileStat(DMFile::colDataIdentifier(DMFile::getFileNameBase(col_id, {IDataType::Substream::NullMap})), nullmap_offset_in_file, nullmap_size_in_file);
 
-    type.enumerateStreams(
-        [&](const IDataType::SubstreamPath & substream) {
-            String name   = DMFile::getFileNameBase(col_id, substream);
-            auto & stream = column_streams.at(name);
-            if (wal_mode)
-                stream->flush();
-            else
-                stream->original_hashing.nextIfAtEnd();
-        },
-        {});
+        size_t nullmap_mark_offset_in_file = plain_file->count();
+        for (auto mark : nullmap_marks)
+        {
+            writeIntBinary(mark.offset_in_compressed_file, *plain_file);
+            writeIntBinary(mark.offset_in_decompressed_block, *plain_file);
+        }
+        size_t nullmap_mark_size_in_file = plain_file->count() - nullmap_mark_offset_in_file;
+        dmfile->addSubFileStat(DMFile::colMarkIdentifier(DMFile::getFileNameBase(col_id, {IDataType::Substream::NullMap})), nullmap_mark_size_in_file, nullmap_mark_offset_in_file);
+    }
 
-    auto & avg_size = dmfile->column_stats.at(col_id).avg_size;
-    IDataType::updateAvgValueSizeHint(column, avg_size);
+    // Update column's bytes in disk
+    dmfile->column_stats.at(col_id).serialized_bytes = bytes_written;
 }
 
 void DMFileWriter::finalizeColumn(ColId col_id, const IDataType & type)
 {
-    size_t bytes_written = 0;
-    auto   callback      = [&](const IDataType::SubstreamPath & substream) {
-        String stream_name = DMFile::getFileNameBase(col_id, substream);
-        auto & stream      = column_streams.at(stream_name);
-        stream->flush();
-        bytes_written += stream->getWrittenBytes();
-
-        if (stream->minmaxes)
-        {
-            WriteBufferFromFileProvider buf(
-                file_provider, dmfile->colIndexPath(stream_name), dmfile->encryptionIndexPath(stream_name), false);
-            stream->minmaxes->write(type, buf);
-            buf.sync();
-            bytes_written += buf.getPositionInFile();
-        }
-    };
-
-    type.enumerateStreams(callback, {});
-
-    // Update column's bytes in disk
-    dmfile->column_stats.at(col_id).serialized_bytes = bytes_written;
+    writeColumn(col_id, type);
 }
 
 } // namespace DM
