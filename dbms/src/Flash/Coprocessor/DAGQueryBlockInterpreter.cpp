@@ -71,7 +71,10 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std
             conditions.push_back(&condition);
     }
     const Settings & settings = context.getSettingsRef();
-    max_streams = settings.max_threads;
+    if (dag.isBatchCop())
+        max_streams = settings.max_threads;
+    else
+        max_streams = 1;
     if (max_streams > 1)
     {
         max_streams *= settings.max_streams_to_max_threads_ratio;
@@ -938,8 +941,8 @@ void DAGQueryBlockInterpreter::executeAggregation(Pipeline & pipeline, const Exp
             pipeline.streams.resize(1);
         if (pipeline.stream_with_non_joined_data)
             inputs.push_back(pipeline.stream_with_non_joined_data);
-        pipeline.firstStream()
-            = std::make_shared<AggregatingBlockInputStream>(std::make_shared<ConcatBlockInputStream>(inputs), params, context.getFileProvider(), true);
+        pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(
+            std::make_shared<ConcatBlockInputStream>(inputs), params, context.getFileProvider(), true);
         pipeline.stream_with_non_joined_data = nullptr;
     }
     // add cast

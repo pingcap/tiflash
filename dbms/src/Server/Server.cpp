@@ -13,14 +13,14 @@
 #include <Common/getFQDNOrHostName.h>
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
+#include <Encryption/DataKeyManager.h>
+#include <Encryption/FileProvider.h>
+#include <Encryption/MockKeyManager.h>
 #include <Flash/DiagnosticsService.h>
 #include <Flash/FlashService.h>
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
 #include <IO/ReadHelpers.h>
-#include <Encryption/DataKeyManager.h>
-#include <Encryption/MockKeyManager.h>
-#include <Encryption/FileProvider.h>
 #include <IO/createReadBufferFromFileBase.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/DDLWorker.h>
@@ -359,6 +359,24 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setGlobalContext(*global_context);
     global_context->setApplicationType(Context::ApplicationType::SERVER);
 
+    /// Init File Provider
+    if (proxy_conf.is_proxy_runnable)
+    {
+        bool enable_encryption = tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled();
+        if (enable_encryption)
+        {
+            auto method = tiflash_instance_wrap.proxy_helper->getEncryptionMethod();
+            enable_encryption = (method != EncryptionMethod::Plaintext);
+        }
+        KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(&tiflash_instance_wrap);
+        global_context->initializeFileProvider(key_manager, enable_encryption);
+    }
+    else
+    {
+        KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
+        global_context->initializeFileProvider(key_manager, false);
+    }
+
     bool has_zookeeper = config().has("zookeeper");
 
     std::vector<String> all_fast_path;
@@ -416,9 +434,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         p += "/data";
 
     if (path_realtime_mode && all_normal_path.size() > 1)
-        global_context->setExtraPaths(std::vector<String>(extra_paths.begin() + 1, extra_paths.end()), global_context->getPathCapacity());
+        global_context->setExtraPaths(std::vector<String>(extra_paths.begin() + 1, extra_paths.end()),
+            global_context->getPathCapacity(),
+            global_context->getFileProvider());
     else
-        global_context->setExtraPaths(extra_paths, global_context->getPathCapacity());
+        global_context->setExtraPaths(extra_paths, global_context->getPathCapacity(), global_context->getFileProvider());
 
     const std::string path = all_normal_path[0];
     TiFlashRaftConfig raft_config(path, config(), log);
@@ -493,7 +513,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             if (it->isFile() && startsWith(it.name(), "tmp"))
             {
                 LOG_DEBUG(log, "Removing old temporary file " << it->path());
-                it->remove();
+                global_context->getFileProvider()->deleteRegularFile(it->path(), EncryptionPath(it->path(), ""));
             }
         }
     }
@@ -611,24 +631,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();
-
-    /// Init File Provider
-    if (proxy_conf.is_proxy_runnable)
-    {
-        bool enable_encryption = tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled();
-        if (enable_encryption)
-        {
-            auto method = tiflash_instance_wrap.proxy_helper->getEncryptionMethod();
-            enable_encryption = (method != EncryptionMethod::Plaintext);
-        }
-        KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(&tiflash_instance_wrap);
-        global_context->initializeFileProvider(key_manager, enable_encryption);
-    }
-    else
-    {
-        KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(true);
-        global_context->initializeFileProvider(key_manager, true);
-    }
 
     /// Set path for format schema files
     auto format_schema_path = Poco::File(config().getString("format_schema_path", path + "format_schemas/"));
@@ -878,7 +880,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
                         security_config.key_path,
                         security_config.cert_path,
-                        security_config.ca_path);
+                        security_config.ca_path,
+                        Poco::Net::Context::VerificationMode::VERIFY_STRICT);
+                    std::function<bool(const Poco::Crypto::X509Certificate &)> check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
+                        if (security_config.allowed_common_names.empty())
+                        {
+                            return true;
+                        }
+                        return security_config.allowed_common_names.count(cert.commonName()) > 0;
+                    };
+                    context->setAdhocVerification(check_common_name);
                     std::call_once(ssl_init_once, SSLInit);
 
                     Poco::Net::SecureServerSocket socket(context);

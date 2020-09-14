@@ -1,3 +1,5 @@
+#include <Common/TiFlashMetrics.h>
+#include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/PDTiKVClient.h>
 #include <Storages/Transaction/ProxyFFIType.h>
@@ -112,11 +114,13 @@ RegionPtr Region::splitInto(RegionMeta && meta)
 void RegionRaftCommandDelegate::execChangePeer(
     const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term)
 {
-    const auto & change_peer_request = request.change_peer();
-
-    LOG_INFO(log, toString(false) << " execute change peer type: " << eraftpb::ConfChangeType_Name(change_peer_request.change_type()));
-
+    LOG_INFO(log,
+        toString(false) << " execute change peer cmd {"
+                        << (request.has_change_peer_v2() ? request.change_peer_v2().ShortDebugString()
+                                                         : request.change_peer().ShortDebugString())
+                        << "}");
     meta.makeRaftCommandDelegate().execChangePeer(request, response, index, term);
+    LOG_INFO(log, "After execute change peer cmd, current region info: "; getDebugString(oss_internal_rare));
 }
 
 static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 store_id)
@@ -500,8 +504,6 @@ void Region::assignRegion(Region && new_region)
     meta.notifyAll();
 }
 
-bool Region::isPeerRemoved() const { return meta.isPeerRemoved(); }
-
 void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const Timestamp safe_point)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
@@ -683,12 +685,14 @@ TiFlashApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 in
     return TiFlashApplyRes::None;
 }
 
-void Region::handleIngestSST(const SnapshotViewArray snaps, UInt64 index, UInt64 term)
+void Region::handleIngestSST(const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt)
 {
     if (index <= appliedIndex())
         return;
 
     {
+        auto & ctx = tmt.getContext();
+
         std::unique_lock<std::shared_mutex> lock(mutex);
         std::lock_guard<std::mutex> predecode_lock(predecode_mutex);
 
@@ -705,6 +709,8 @@ void Region::handleIngestSST(const SnapshotViewArray snaps, UInt64 index, UInt64
                 auto & v = snapshot.vals[n];
                 doInsert(snapshot.cf, TiKVKey(k.data, k.len), TiKVValue(v.data, v.len));
             }
+            // Note that number of keys in different cf will be aggregated into one metrics
+            GET_METRIC(ctx.getTiFlashMetrics(), tiflash_raft_process_keys, type_ingest_sst).Increment(snapshot.len);
         }
         meta.setApplied(index, term);
     }

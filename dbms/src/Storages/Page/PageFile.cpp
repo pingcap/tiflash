@@ -399,8 +399,6 @@ void PageFile::MetaMergingReader::moveNext()
 PageFile::Writer::Writer(PageFile & page_file_, bool sync_on_write_, bool create_new_file)
     : page_file(page_file_),
       sync_on_write(sync_on_write_),
-      data_file_path(page_file.dataPath()),
-      meta_file_path(page_file.metaPath()),
       data_file{nullptr},
       meta_file{nullptr},
       last_write_time(Clock::now())
@@ -439,13 +437,13 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
     SCOPE_EXIT({ page_file.free(meta_buf.begin(), meta_buf.size()); });
     SCOPE_EXIT({ page_file.free(data_buf.begin(), data_buf.size()); });
 
-    auto write_buf = [&](WritableFilePtr & file, UInt64 offset, const std::string & path, ByteBuffer buf) {
-        PageUtil::writeFile(file, offset, buf.begin(), buf.size(), path);
+    auto write_buf = [&](WritableFilePtr & file, UInt64 offset, ByteBuffer buf) {
+        PageUtil::writeFile(file, offset, buf.begin(), buf.size());
         if (sync_on_write)
             PageUtil::syncFile(file);
     };
-    write_buf(data_file, page_file.data_file_pos, data_file_path, data_buf);
-    write_buf(meta_file, page_file.meta_file_pos, meta_file_path, meta_buf);
+    write_buf(data_file, page_file.data_file_pos, data_buf);
+    write_buf(meta_file, page_file.meta_file_pos, meta_buf);
 
     page_file.data_file_pos += data_buf.size();
     page_file.meta_file_pos += meta_buf.size();
@@ -897,7 +895,7 @@ size_t PageFile::removeDataIfExists() const
     if (auto data_file = Poco::File(dataPath()); data_file.exists())
     {
         bytes_removed = data_file.getSize();
-        file_provider->deleteFile(dataPath(), dataEncryptionPath());
+        file_provider->deleteRegularFile(dataPath(), dataEncryptionPath());
     }
     return bytes_removed;
 }
@@ -909,8 +907,8 @@ void PageFile::destroy() const
     if (file.exists())
     {
         // remove meta first, then remove data
-        file_provider->deleteFile(metaPath(), metaEncryptionPath());
-        file_provider->deleteFile(dataPath(), dataEncryptionPath());
+        file_provider->deleteRegularFile(metaPath(), metaEncryptionPath());
+        file_provider->deleteRegularFile(dataPath(), dataEncryptionPath());
 
         // drop dir
         file.remove(true);

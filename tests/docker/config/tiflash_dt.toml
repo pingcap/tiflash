@@ -16,7 +16,7 @@ http_port = 8123
 interserver_http_port = 9009
 [flash]
 	tidb_status_addr = "tidb0:10080"
-	service_addr = "tiflash0:3930"
+	service_addr = "0.0.0.0:3930"
 	[flash.flash_cluster]
 		refresh_interval = 20
 		update_rule_interval = 1

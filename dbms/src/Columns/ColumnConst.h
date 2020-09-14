@@ -155,6 +155,11 @@ public:
         return data->byteSize() + sizeof(s);
     }
 
+    size_t byteSize(size_t /*offset*/, size_t /*limit*/) const override
+    {
+        return byteSize();
+    }
+
     size_t allocatedBytes() const override
     {
         return data->allocatedBytes() + sizeof(s);

@@ -154,10 +154,11 @@ using SnapshotPtr = std::shared_ptr<Snapshot>;
 
 SnapshotPtr StableValueSpace::createSnapshot()
 {
-    auto snap        = std::make_shared<Snapshot>();
-    snap->id         = id;
-    snap->valid_rows = valid_rows;
-    snap->stable     = this->shared_from_this();
+    auto snap         = std::make_shared<Snapshot>();
+    snap->id          = id;
+    snap->valid_rows  = valid_rows;
+    snap->valid_bytes = valid_bytes;
+    snap->stable      = this->shared_from_this();
 
     for (size_t i = 0; i < files.size(); i++)
     {
@@ -168,11 +169,20 @@ SnapshotPtr StableValueSpace::createSnapshot()
     return snap;
 }
 
+void StableValueSpace::drop(const FileProviderPtr & file_provider)
+{
+    for (auto & file : files)
+    {
+        file->remove(file_provider);
+    }
+}
+
 SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DMContext &     context, //
                                                                         const ColumnDefines & read_columns,
                                                                         const HandleRange &   handle_range,
                                                                         const RSOperatorPtr & filter,
                                                                         UInt64                max_data_version,
+                                                                        size_t                expected_block_size,
                                                                         bool                  enable_clean_read)
 {
     LOG_DEBUG(log, __FUNCTION__ << " max_data_version: " << max_data_version << ", enable_clean_read: " << enable_clean_read);
@@ -190,7 +200,8 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DM
             handle_range,
             filter,
             column_caches[i],
-            IdSetPtr{}));
+            IdSetPtr{},
+            expected_block_size));
     }
     return std::make_shared<ConcatSkippableBlockInputStream>(streams);
 }

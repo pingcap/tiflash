@@ -19,7 +19,6 @@
 #include <Encryption/FileProvider.h>
 #include <pingcap/Config.h>
 #include <Storages/PartPathSelector.h>
-#include <Storages/Transaction/ProxyFFIType.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Flash/Coprocessor/DAGContext.h>
 
@@ -174,7 +173,7 @@ public:
     void setTemporaryPath(const String & path);
     void setFlagsPath(const String & path);
     void setUserFilesPath(const String & path);
-    void setExtraPaths(const std::vector<String> & extra_paths, PathCapacityMetricsPtr global_capacity);
+    void setExtraPaths(const std::vector<String> & extra_paths, PathCapacityMetricsPtr global_capacity, FileProviderPtr file_provider);
 
     using ConfigurationPtr = Poco::AutoPtr<Poco::Util::AbstractConfiguration>;
 

@@ -53,9 +53,6 @@ public:
         PageFile & page_file;
         bool       sync_on_write;
 
-        String data_file_path;
-        String meta_file_path;
-
         WritableFilePtr data_file;
         WritableFilePtr meta_file;
 

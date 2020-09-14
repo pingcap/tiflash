@@ -45,6 +45,15 @@
     M(StoreSizeCapacity) \
     M(StoreSizeAvailable) \
     M(StoreSizeUsed) \
+    M(DT_DeltaMerge) \
+    M(DT_DeltaCompact) \
+    M(DT_DeltaFlush) \
+    M(DT_SegmentSplit) \
+    M(DT_SegmentMerge) \
+    M(DT_PlaceIndexUpdate) \
+    M(DT_DeltaMergeTotalBytes) \
+    M(DT_DeltaMergeTotalRows) \
+    M(RaftNumSnapshotsPendingApply) \
 
 
 namespace CurrentMetrics

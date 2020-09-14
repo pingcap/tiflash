@@ -29,35 +29,75 @@ WritableFilePtr FileProvider::newWritableFile(const String & file_path_, const E
     bool create_new_encryption_info_, int flags, mode_t mode) const
 {
     WritableFilePtr file = std::make_shared<PosixWritableFile>(file_path_, create_new_file_, flags, mode);
-    if (encryption_enabled)
+    if (encryption_enabled && create_new_encryption_info_)
     {
-        if (create_new_encryption_info_)
+        auto encryption_info = key_manager->newFile(encryption_path_.full_path);
+        file = std::make_shared<EncryptedWritableFile>(file, AESCTRCipherStream::createCipherStream(encryption_info, encryption_path_));
+    }
+    else if (!create_new_encryption_info_)
+    {
+        auto encryption_info = key_manager->getFile(encryption_path_.full_path);
+        if (encryption_info.method != EncryptionMethod::Unknown && encryption_info.method != EncryptionMethod::Plaintext)
         {
-            auto encryption_info = key_manager->newFile(encryption_path_.full_path);
-            file = std::make_shared<EncryptedWritableFile>(file, AESCTRCipherStream::createCipherStream(encryption_info, encryption_path_));
-        }
-        else
-        {
-            auto encryption_info = key_manager->getFile(encryption_path_.full_path);
-            if (unlikely(encryption_info.method == EncryptionMethod::Plaintext))
-            {
-                throw DB::TiFlashException(
-                    "Cannot get encryption info for file: " + encryption_path_.full_path, Errors::Encryption::Internal);
-            }
             file = std::make_shared<EncryptedWritableFile>(file, AESCTRCipherStream::createCipherStream(encryption_info, encryption_path_));
         }
     }
     return file;
 }
 
-void FileProvider::deleteFile(const String & file_path_, const EncryptionPath & encryption_path_, bool recursive) const
+void FileProvider::deleteDirectory(const String & dir_path_, bool dir_path_as_encryption_path, bool recursive) const
+{
+    Poco::File dir_file(dir_path_);
+    if (dir_file.exists())
+    {
+        if (dir_path_as_encryption_path)
+        {
+            key_manager->deleteFile(dir_path_);
+            dir_file.remove(recursive);
+        }
+        else if (recursive)
+        {
+            std::vector<Poco::File> files;
+            dir_file.list(files);
+            for (auto & file : files)
+            {
+                if (file.isFile())
+                {
+                    key_manager->deleteFile(file.path());
+                }
+                else if (file.isDirectory())
+                {
+                    deleteDirectory(file.path(), false, recursive);
+                }
+                else
+                {
+                    throw DB::TiFlashException(
+                            "Unknown file type: " + file.path(), Errors::Encryption::Internal);
+                }
+            }
+            dir_file.remove(recursive);
+        }
+        else
+        {
+            // recursive must be false here
+            dir_file.remove(false);
+        }
+    }
+}
+
+void FileProvider::deleteRegularFile(const String & file_path_, const EncryptionPath & encryption_path_) const
 {
     Poco::File data_file(file_path_);
     if (data_file.exists())
     {
-        data_file.remove(recursive);
+        if (unlikely(!data_file.isFile()))
+        {
+            throw DB::TiFlashException(
+                    "File: " + data_file.path() + " is not a regular file", Errors::Encryption::Internal);
+        }
+        key_manager->deleteFile(encryption_path_.full_path);
+        data_file.remove(false);
     }
-    key_manager->deleteFile(encryption_path_.full_path);
 }
 
 void FileProvider::createEncryptionInfo(const EncryptionPath & encryption_path_) const
