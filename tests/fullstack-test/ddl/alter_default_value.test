@@ -15,8 +15,8 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_s
 +------+------+
 | a    | b    |
 +------+------+
-|    1 | 2000 |
-|    1 | 2000 |
+|    1 | 0000 |
+|    1 | 0000 |
 +------+------+
 
 mysql> alter table test.t add column c year not null;
@@ -24,8 +24,8 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_s
 +------+------+------+
 | a    | b    | c    |
 +------+------+------+
-|    1 | 2000 | 2000 |
-|    1 | 2000 | 2000 |
+|    1 | 0000 | 0000 |
+|    1 | 0000 | 0000 |
 +------+------+------+
 
 mysql> alter table test.t drop column b;
