@@ -62,9 +62,16 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
     if (primary_expr_ast_->children.empty())
         throw Exception("No primary key");
 
+    is_common_handle = false;
+    pk_is_handle = false;
     // save schema from TiDB
     if (table_info_)
+    {
         tidb_table_info = table_info_->get();
+        is_common_handle = tidb_table_info.is_common_handle;
+        pk_is_handle = tidb_table_info.pk_is_handle;
+    }
+
 
     std::unordered_set<String> pks;
     for (size_t i = 0; i < primary_expr_ast_->children.size(); ++i)
@@ -80,6 +87,10 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
     auto all_columns = getColumns().getAllPhysical();
     ColumnDefines table_column_defines; // column defines used in DeltaMergeStore
     ColumnDefine handle_column_define;
+    /// rowkey_column_defines is the columns used to generate rowkey in TiDB
+    /// if is_common_handle = true || pk_is_handle = true, it is the primary keys in TiDB table's definition
+    /// otherwise, it is _tidb_rowid
+    ColumnDefines rowkey_column_defines;
     for (const auto & col : all_columns)
     {
         ColumnDefine column_define(0, col.name, col.type);
@@ -93,6 +104,10 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
 
             if (column != columns.end())
                 column_define.default_value = column->defaultValueToField();
+            if (column_define.id != TiDBPkColumnID && table_info_->get().getColumnInfo(column_define.id).hasPriKeyFlag())
+            {
+                rowkey_column_defines.push_back(column_define);
+            }
         }
         else
         {
@@ -103,12 +118,15 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
 
         if (pks.count(col.name))
         {
-            if (!col.type->isValueRepresentedByInteger())
-                throw Exception("pk column " + col.name + " is not representable by integer");
+            if (!is_common_handle)
+            {
+                if (!col.type->isValueRepresentedByInteger())
+                    throw Exception("pk column " + col.name + " is not representable by integer");
 
-            pks_combined_bytes += col.type->getSizeOfValueInMemory();
-            if (pks_combined_bytes > sizeof(Handle))
-                throw Exception("pk columns exceeds size limit :" + DB::toString(sizeof(Handle)));
+                pks_combined_bytes += col.type->getSizeOfValueInMemory();
+                if (pks_combined_bytes > sizeof(Handle))
+                    throw Exception("pk columns exceeds size limit :" + DB::toString(sizeof(Handle)));
+            }
 
             if (pks.size() == 1)
                 handle_column_define = column_define;
@@ -124,12 +142,14 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
 
     if (pks.size() > 1)
     {
+        if (unlikely(is_common_handle))
+            throw Exception("Should not reach here: common handle with pk size > 1", ErrorCodes::LOGICAL_ERROR);
         handle_column_define.id = EXTRA_HANDLE_COLUMN_ID;
         handle_column_define.name = EXTRA_HANDLE_COLUMN_NAME;
-        handle_column_define.type = EXTRA_HANDLE_COLUMN_TYPE;
+        handle_column_define.type = EXTRA_HANDLE_COLUMN_INT_TYPE;
 
         hidden_columns.emplace_back(EXTRA_HANDLE_COLUMN_NAME);
-        new_columns.materialized.emplace_back(EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_TYPE);
+        new_columns.materialized.emplace_back(EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_INT_TYPE);
     }
 
     setColumns(new_columns);
@@ -143,7 +163,7 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
         // create table statement.
         // Here we throw a PrimaryKeyNotMatchException, caller (`DatabaseLoading::loadTable`) is responsible for correcting
         // the statement and retry.
-        if (pks.size() == 1 && table_info_)
+        if (pks.size() == 1 && table_info_ && !is_common_handle)
         {
             std::vector<String> actual_pri_keys;
             for (const auto & col : table_info_->get().columns)
@@ -175,8 +195,16 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
             + ", but only these columns are found:" + columns_stream.str());
     }
     assert(!table_column_defines.empty());
+
+    if (!(is_common_handle || pk_is_handle))
+    {
+        rowkey_column_defines.clear();
+        rowkey_column_defines.push_back(handle_column_define);
+    }
+    rowkey_column_size = rowkey_column_defines.size();
     store = std::make_shared<DeltaMergeStore>(global_context, path, data_path_contains_database_name, db_name_, table_name_,
-        std::move(table_column_defines), std::move(handle_column_define), DeltaMergeStore::Settings());
+        std::move(table_column_defines), std::move(handle_column_define), is_common_handle, rowkey_column_size,
+        DeltaMergeStore::Settings());
 }
 
 void StorageDeltaMerge::drop()
@@ -224,7 +252,8 @@ Block StorageDeltaMerge::buildInsertBlock(bool is_import, bool is_delete, const 
             appendIntoHandleColumn(handle_data, pk_column_types[c], pk_columns[c]);
         }
 
-        addColumnToBlock(block, EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_TYPE, std::move(handle_column));
+        addColumnToBlock(block, EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_NAME,
+            is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE, std::move(handle_column));
     }
 
     // add version column
@@ -487,20 +516,22 @@ BlockInputStreams StorageDeltaMerge::read( //
                 if (!region.required_handle_ranges.empty())
                 {
                     for (const auto & range : region.required_handle_ranges)
-                        ss << region.region_id << "[" << range.first.toString() << "," << range.second.toString() << "),";
+                        ss << region.region_id << "[" << RecordKVFormat::DecodedTiKVKeyToHexWithoutTableID(*range.first) << ","
+                           << RecordKVFormat::DecodedTiKVKeyToHexWithoutTableID(*range.second) << "),";
                 }
                 else
                 {
                     /// only used for test cases
                     const auto & range = region.range_in_table;
-                    ss << region.region_id << "[" << range.first.toString() << "," << range.second.toString() << "),";
+                    ss << region.region_id << "[" << RecordKVFormat::DecodedTiKVKeyToHexWithoutTableID(*range.first) << ","
+                       << RecordKVFormat::DecodedTiKVKeyToHexWithoutTableID(*range.second) << "),";
                 }
             }
             str_query_ranges = ss.str();
             LOG_TRACE(log, "reading ranges: orig, " << str_query_ranges);
         }
 
-        HandleRanges ranges = getQueryRanges(mvcc_query_info.regions_query_info);
+        RowKeyRanges ranges = getQueryRanges(mvcc_query_info.regions_query_info, tidb_table_info.id, is_common_handle, rowkey_column_size);
 
         if (log->trace())
         {
@@ -551,7 +582,6 @@ BlockInputStreams StorageDeltaMerge::read( //
         else
             LOG_DEBUG(log, "Rough set filter is disabled.");
 
-
         auto streams = store->read(context, context.getSettingsRef(), columns_to_read, ranges, num_streams,
             /*max_version=*/mvcc_query_info.read_tso, rs_operator, max_block_size, parseSegmentSet(select_query.segment_expression_list));
 
@@ -564,25 +594,25 @@ BlockInputStreams StorageDeltaMerge::read( //
 
 void StorageDeltaMerge::checkStatus(const Context & context) { store->check(context); }
 
-void StorageDeltaMerge::flushCache(const Context & context, const DM::HandleRange & range_to_flush)
+void StorageDeltaMerge::flushCache(const Context & context, const DM::RowKeyRange & range_to_flush)
 {
     store->flushCache(context, range_to_flush);
 }
 
 void StorageDeltaMerge::mergeDelta(const Context & context) { store->mergeDeltaAll(context); }
 
-void StorageDeltaMerge::deleteRange(const DM::HandleRange & range_to_delete, const Settings & settings)
+void StorageDeltaMerge::deleteRange(const DM::RowKeyRange & range_to_delete, const Settings & settings)
 {
     auto metrics = global_context.getTiFlashMetrics();
     GET_METRIC(metrics, tiflash_storage_command_count, type_delete_range).Increment();
     return store->deleteRange(global_context, settings, range_to_delete);
 }
 
-size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM::HandleRange & range)
+size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM::RowKeyRange & range)
 {
     size_t rows = 0;
 
-    ColumnDefines to_read{getExtraHandleColumnDefine()};
+    ColumnDefines to_read{getExtraHandleColumnDefine(store->isCommonHandle())};
     auto stream = store->read(context, context.getSettingsRef(), to_read, {range}, 1, MAX_UINT64, EMPTY_FILTER)[0];
     stream->readPrefix();
     Block block;
@@ -593,26 +623,27 @@ size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM
     return rows;
 }
 
-DM::HandleRange getRange(DM::DeltaMergeStorePtr & store, const Context & context, size_t total_rows, size_t delete_rows)
+DM::RowKeyRange getRange(DM::DeltaMergeStorePtr & store, const Context & context, size_t total_rows, size_t delete_rows)
 {
     auto start_index = rand() % (total_rows - delete_rows + 1);
 
-    DM::HandleRange range = DM::HandleRange::newAll();
+    DM::RowKeyRange range = DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize());
     {
-        ColumnDefines to_read{getExtraHandleColumnDefine()};
-        auto stream = store->read(context, context.getSettingsRef(), to_read, {DM::HandleRange::newAll()}, 1, MAX_UINT64, EMPTY_FILTER)[0];
+        ColumnDefines to_read{getExtraHandleColumnDefine(store->isCommonHandle())};
+        auto stream = store->read(context, context.getSettingsRef(), to_read,
+            {DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())}, 1, MAX_UINT64, EMPTY_FILTER)[0];
         stream->readPrefix();
         Block block;
         size_t index = 0;
         while ((block = stream->read()))
         {
-            auto & data = toColumnVectorData<Handle>(block.getByPosition(0).column);
-            for (size_t i = 0; i < data.size(); ++i)
+            auto data = RowKeyColumnContainer(block.getByPosition(0).column, store->isCommonHandle());
+            for (size_t i = 0; i < data.column->size(); ++i)
             {
                 if (index == start_index)
-                    range.start = data[i];
+                    range.setStart(data.getRowKeyValue(i).toRowKeyValue());
                 if (index == start_index + delete_rows)
-                    range.end = data[i];
+                    range.setEnd(data.getRowKeyValue(i).toRowKeyValue());
                 ++index;
             }
         }
@@ -624,7 +655,7 @@ DM::HandleRange getRange(DM::DeltaMergeStorePtr & store, const Context & context
 
 void StorageDeltaMerge::deleteRows(const Context & context, size_t delete_rows)
 {
-    size_t total_rows = getRows(store, context, DM::HandleRange::newAll());
+    size_t total_rows = getRows(store, context, DM::RowKeyRange::newAll(is_common_handle, rowkey_column_size));
     delete_rows = std::min(total_rows, delete_rows);
     auto delete_range = getRange(store, context, total_rows, delete_rows);
     size_t actual_delete_rows = getRows(store, context, delete_range);
@@ -633,7 +664,7 @@ void StorageDeltaMerge::deleteRows(const Context & context, size_t delete_rows)
 
     store->deleteRange(context, context.getSettingsRef(), delete_range);
 
-    size_t after_delete_rows = getRows(store, context, DM::HandleRange::newAll());
+    size_t after_delete_rows = getRows(store, context, DM::RowKeyRange::newAll(is_common_handle, rowkey_column_size));
     if (after_delete_rows != total_rows - delete_rows)
         LOG_ERROR(log, "Rows after delete range not match, expected: " << (total_rows - delete_rows) << ", got: " << after_delete_rows);
 }
@@ -812,7 +843,7 @@ void StorageDeltaMerge::rename(
             ErrorCodes::DIRECTORY_ALREADY_EXISTS};
 
     // flush store and then reset store to new path
-    store->flushCache(global_context);
+    store->flushCache(global_context, RowKeyRange::newAll(is_common_handle, rowkey_column_size));
     ColumnDefines table_column_defines = store->getTableColumns();
     ColumnDefine handle_column_define = store->getHandle();
     DeltaMergeStore::Settings settings = store->getSettings();
@@ -827,7 +858,7 @@ void StorageDeltaMerge::rename(
     // generate a new store
     store = std::make_shared<DeltaMergeStore>(global_context,                          //
         new_path, data_path_contains_database_name, new_database_name, new_table_name, //
-        std::move(table_column_defines), std::move(handle_column_define), settings);
+        std::move(table_column_defines), std::move(handle_column_define), rowkey_column_size, is_common_handle, settings);
 
     path = new_path;
 }

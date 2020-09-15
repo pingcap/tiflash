@@ -2,7 +2,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/Pack.h>
 #include <Storages/DeltaMerge/DeltaValueSpace.h>
-#include <Storages/DeltaMerge/HandleFilter.h>
+#include <Storages/DeltaMerge/RowKeyFilter.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 
@@ -46,13 +46,15 @@ SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool is_u
     if (abandoned.load(std::memory_order_relaxed))
         return {};
 
-    auto snap          = std::make_shared<Snapshot>();
-    snap->is_update    = is_update;
-    snap->delta        = this->shared_from_this();
-    snap->storage_snap = std::make_shared<StorageSnapshot>(context.storage_pool, true);
-    snap->rows         = rows;
-    snap->bytes        = bytes;
-    snap->deletes      = deletes;
+    auto snap                = std::make_shared<Snapshot>();
+    snap->is_update          = is_update;
+    snap->delta              = this->shared_from_this();
+    snap->is_common_handle   = is_common_handle;
+    snap->rowkey_column_size = rowkey_column_size;
+    snap->storage_snap       = std::make_shared<StorageSnapshot>(context.storage_pool, true);
+    snap->rows               = rows;
+    snap->bytes              = bytes;
+    snap->deletes            = deletes;
     snap->packs.reserve(packs.size());
 
     snap->shared_delta_index = delta_index;
@@ -211,7 +213,7 @@ const Columns & DeltaValueSpace::Snapshot::getColumnsOfPack(size_t pack_index, s
     return columns;
 }
 
-size_t DeltaValueSpace::Snapshot::read(const HandleRange & range, MutableColumns & output_columns, size_t offset, size_t limit)
+size_t DeltaValueSpace::Snapshot::read(const RowKeyRange & range, MutableColumns & output_columns, size_t offset, size_t limit)
 {
     auto start = std::min(offset, rows);
     auto end   = std::min(offset + limit, rows);
@@ -233,11 +235,11 @@ size_t DeltaValueSpace::Snapshot::read(const HandleRange & range, MutableColumns
             continue;
 
         // TODO: this get the full columns of pack, which may cause unnecessary copying
-        auto & columns         = getColumnsOfPack(pack_index, output_columns.size());
-        auto & handle_col_data = toColumnVectorData<Handle>(columns[0]); // TODO: Magic number of fixed position of pk
+        auto & columns       = getColumnsOfPack(pack_index, output_columns.size());
+        auto   rowkey_column = RowKeyColumnContainer(columns[0], is_common_handle);
         if (rows_in_pack_limit == 1)
         {
-            if (range.check(handle_col_data[rows_start_in_pack]))
+            if (range.check(rowkey_column.getRowKeyValue(rows_start_in_pack)))
             {
                 for (size_t col_index = 0; col_index < output_columns.size(); ++col_index)
                     output_columns[col_index]->insertFrom(*columns[col_index], rows_start_in_pack);
@@ -248,7 +250,7 @@ size_t DeltaValueSpace::Snapshot::read(const HandleRange & range, MutableColumns
         else
         {
             auto [actual_offset, actual_limit]
-                = HandleFilter::getPosRangeOfSorted(range, handle_col_data, rows_start_in_pack, rows_in_pack_limit);
+                = RowKeyFilter::getPosRangeOfSorted(range, columns[0], rows_start_in_pack, rows_in_pack_limit);
 
             for (size_t col_index = 0; col_index < output_columns.size(); ++col_index)
                 output_columns[col_index]->insertRangeFrom(*columns[col_index], actual_offset, actual_limit);
@@ -264,7 +266,7 @@ Block DeltaValueSpace::Snapshot::read(size_t col_num, size_t offset, size_t limi
     MutableColumns columns;
     for (size_t i = 0; i < col_num; ++i)
         columns.push_back(column_defines[i].type->createColumn());
-    auto actually_read = read(HandleRange::newAll(), columns, offset, limit);
+    auto actually_read = read(RowKeyRange::newAll(is_common_handle, rowkey_column_size), columns, offset, limit);
     if (unlikely(actually_read != limit))
         throw Exception("Expected read " + DB::toString(limit) + " rows, but got " + DB::toString(actually_read));
     Block block;
@@ -312,7 +314,8 @@ BlockOrDeletes DeltaValueSpace::Snapshot::getMergeBlocks(size_t rows_begin, size
             if (block_rows_end != block_rows_start)
             {
                 /// TODO: Here we hard code the first two columns: handle and version
-                res.emplace_back(read(2, block_rows_start, block_rows_end - block_rows_start));
+                res.emplace_back(read(2, block_rows_start, block_rows_end - block_rows_start),
+                                 RowKeyRange::newNone(is_common_handle, rowkey_column_size));
             }
 
             if (pack.isDeleteRange())
@@ -328,8 +331,8 @@ BlockOrDeletes DeltaValueSpace::Snapshot::getMergeBlocks(size_t rows_begin, size
 
 bool DeltaValueSpace::Snapshot::shouldPlace(const DMContext &   context,
                                             DeltaIndexPtr       my_delta_index,
-                                            const HandleRange & segment_range,
-                                            const HandleRange & relevant_range,
+                                            const RowKeyRange & segment_range,
+                                            const RowKeyRange & relevant_range,
                                             UInt64              max_version)
 {
     auto [placed_rows, placed_delete_ranges] = my_delta_index->getPlacedStatus();
@@ -351,12 +354,12 @@ bool DeltaValueSpace::Snapshot::shouldPlace(const DMContext &   context,
         size_t rows_end_in_pack   = pack_rows[pack_index];
 
         auto & columns          = getColumnsOfPack(pack_index, /* handle and version */ 2);
-        auto & handle_col_data  = toColumnVectorData<Handle>(columns[0]);
+        auto   rowkey_column    = RowKeyColumnContainer(columns[0], is_common_handle);
         auto & version_col_data = toColumnVectorData<UInt64>(columns[1]);
 
         for (auto i = rows_start_in_pack; i < rows_end_in_pack; ++i)
         {
-            if (version_col_data[i] <= max_version && relevant_range.check(handle_col_data[i]))
+            if (version_col_data[i] <= max_version && relevant_range.check(rowkey_column.getRowKeyValue(i)))
                 return true;
         }
     }

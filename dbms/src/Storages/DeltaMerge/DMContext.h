@@ -41,6 +41,11 @@ struct DMContext : private boost::noncopyable
 
     const NotCompress & not_compress; // Not used currently.
 
+    bool is_common_handle;
+
+    // The number of columns in primary key if is_common_handle = true, otherwise, should always be 1.
+    size_t rowkey_column_size;
+
     // The rows of segment.
     const size_t segment_limit_rows;
     // The threshold of delta.
@@ -65,6 +70,8 @@ struct DMContext : private boost::noncopyable
               const ColumnDefinesPtr & store_columns_,
               const DB::Timestamp      min_version_,
               const NotCompress &      not_compress_,
+              bool                     is_common_handle_,
+              size_t                   rowkey_column_size_,
               const DB::Settings &     settings)
         : db_context(db_context_),
           metrics(db_context.getTiFlashMetrics()),
@@ -75,6 +82,8 @@ struct DMContext : private boost::noncopyable
           store_columns(store_columns_),
           min_version(min_version_),
           not_compress(not_compress_),
+          is_common_handle(is_common_handle_),
+          rowkey_column_size(rowkey_column_size_),
           segment_limit_rows(settings.dt_segment_limit_rows),
           delta_limit_rows(settings.dt_segment_delta_limit_rows),
           delta_cache_limit_rows(settings.dt_segment_delta_cache_limit_rows),

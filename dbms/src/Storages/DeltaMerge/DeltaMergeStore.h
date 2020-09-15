@@ -6,8 +6,8 @@
 #include <Interpreters/Context.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/StoragePool.h>
-#include <Storages/DeltaMerge/PKRange.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TiDB.h>
@@ -34,7 +34,7 @@ static const PageId DELTA_MERGE_FIRST_SEGMENT_ID = 1;
 struct SegmentStat
 {
     UInt64      segment_id;
-    HandleRange range;
+    RowKeyRange range;
 
     UInt64 rows          = 0;
     UInt64 size          = 0;
@@ -129,7 +129,7 @@ public:
         NotCompress not_compress_columns{};
     };
 
-    using SegmentSortedMap = std::map<PKRange::End, SegmentPtr, std::less<>>;
+    using SegmentSortedMap = std::map<RowKeyValueRef, SegmentPtr, std::less<>>;
     using SegmentMap       = std::unordered_map<PageId, SegmentPtr>;
 
     enum ThreadType
@@ -234,6 +234,8 @@ public:
                     const String &        tbl_name,
                     const ColumnDefines & columns,
                     const ColumnDefine &  handle,
+                    bool                  is_common_handle_,
+                    size_t                rowkey_column_size_,
                     const Settings &      settings_);
     ~DeltaMergeStore();
 
@@ -252,7 +254,7 @@ public:
     void write(const Context & db_context, const DB::Settings & db_settings, const Block & block);
 
     // Deprated
-    void deleteRange(const Context & db_context, const DB::Settings & db_settings, const HandleRange & delete_range);
+    void deleteRange(const Context & db_context, const DB::Settings & db_settings, const RowKeyRange & delete_range);
 
     BlockInputStreams readRaw(const Context &       db_context,
                               const DB::Settings &  db_settings,
@@ -264,7 +266,7 @@ public:
     BlockInputStreams read(const Context &       db_context,
                            const DB::Settings &  db_settings,
                            const ColumnDefines & columns_to_read,
-                           const HandleRanges &  sorted_ranges,
+                           const RowKeyRanges &  sorted_ranges,
                            size_t                num_streams,
                            UInt64                max_version,
                            const RSOperatorPtr & filter,
@@ -272,19 +274,19 @@ public:
                            const SegmentIdSet &  read_segments       = {});
 
     /// Force flush all data to disk.
-    void flushCache(const Context & context, const HandleRange & range = HandleRange::newAll())
+    void flushCache(const Context & context, const RowKeyRange & range)
     {
         auto dm_context = newDMContext(context, context.getSettingsRef());
         flushCache(dm_context, range);
     }
 
-    void flushCache(const DMContextPtr & dm_context, const HandleRange & range);
+    void flushCache(const DMContextPtr & dm_context, const RowKeyRange & range);
 
     /// Do merge delta for all segments. Only used for debug.
     void mergeDeltaAll(const Context & context);
 
     /// Compact fregment packs into bigger one.
-    void compact(const Context & context, const HandleRange & range = HandleRange::newAll());
+    void compact(const Context & context, const RowKeyRange & range);
 
     /// Apply `commands` on `table_columns`
     void applyAlters(const AlterCommands &         commands, //
@@ -302,6 +304,8 @@ public:
     void                check(const Context & db_context);
     DeltaMergeStoreStat getStat();
     SegmentStats        getSegmentStats();
+    bool                isCommonHandle() const { return is_common_handle; }
+    size_t              getRowKeyColumnSize() const { return rowkey_column_size; }
 
 private:
     DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings);
@@ -333,7 +337,8 @@ private:
     String db_name;
     String table_name;
 
-    PrimaryKeyPtr pk;
+    bool   is_common_handle;
+    size_t rowkey_column_size;
 
     ColumnDefines original_table_columns;
     BlockPtr      original_table_header; // Used to speed up getHeader()

@@ -42,13 +42,22 @@ protected:
         store   = reload();
     }
 
-    DeltaMergeStorePtr reload(const ColumnDefinesPtr & pre_define_columns = {})
+    DeltaMergeStorePtr
+    reload(const ColumnDefinesPtr & pre_define_columns = {}, bool is_common_handle = false, size_t rowkey_column_size = 1)
     {
-        auto         cols                 = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;
+        auto         cols                 = (!pre_define_columns) ? DMTestEnv::getDefaultColumns(is_common_handle) : pre_define_columns;
         ColumnDefine handle_column_define = (*cols)[0];
 
-        DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(
-            *context, path, false, "test", name, *cols, handle_column_define, DeltaMergeStore::Settings());
+        DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(*context,
+                                                                 path,
+                                                                 false,
+                                                                 "test",
+                                                                 name,
+                                                                 *cols,
+                                                                 handle_column_define,
+                                                                 is_common_handle,
+                                                                 rowkey_column_size,
+                                                                 DeltaMergeStore::Settings());
         return s;
     }
 
@@ -75,7 +84,7 @@ try
         auto & h = store->getHandle();
         ASSERT_EQ(h.name, EXTRA_HANDLE_COLUMN_NAME);
         ASSERT_EQ(h.id, EXTRA_HANDLE_COLUMN_ID);
-        ASSERT_TRUE(h.type->equals(*EXTRA_HANDLE_COLUMN_TYPE));
+        ASSERT_TRUE(h.type->equals(*EXTRA_HANDLE_COLUMN_INT_TYPE));
     }
     {
         // check column structure of store
@@ -188,7 +197,7 @@ try
         BlockInputStreamPtr in      = store->read(*context,
                                              context->getSettingsRef(),
                                              columns,
-                                             {HandleRange::newAll()},
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
@@ -279,7 +288,7 @@ try
         BlockInputStreamPtr in            = store->read(*context,
                                              context->getSettingsRef(),
                                              columns,
-                                             {HandleRange::newAll()},
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
@@ -307,7 +316,7 @@ try
     const size_t num_deleted_rows = 64;
     {
         HandleRange range(0, num_deleted_rows);
-        store->deleteRange(*context, context->getSettingsRef(), range);
+        store->deleteRange(*context, context->getSettingsRef(), RowKeyRange::fromHandleRange(range));
     }
     // Read after deletion
     {
@@ -315,7 +324,7 @@ try
         BlockInputStreamPtr in            = store->read(*context,
                                              context->getSettingsRef(),
                                              columns,
-                                             {HandleRange::newAll()},
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
@@ -357,7 +366,7 @@ try
         store->write(*context, context->getSettingsRef(), block2);
         store->write(*context, context->getSettingsRef(), block3);
 
-        store->flushCache(*context);
+        store->flushCache(*context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
     }
 
     {
@@ -365,7 +374,7 @@ try
         BlockInputStreamPtr in            = store->read(*context,
                                              context->getSettingsRef(),
                                              columns,
-                                             {HandleRange::newAll()},
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
@@ -403,10 +412,10 @@ try
         store->write(*context, context->getSettingsRef(), block2);
         store->write(*context, context->getSettingsRef(), block3);
 
-        store->flushCache(*context);
+        store->flushCache(*context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
     }
 
-    store->compact(*context);
+    store->compact(*context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
 
     // Read without version
     {
@@ -414,7 +423,7 @@ try
         BlockInputStreamPtr in            = store->read(*context,
                                              context->getSettingsRef(),
                                              columns,
-                                             {HandleRange::newAll()},
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
@@ -444,7 +453,7 @@ try
         BlockInputStreamPtr in            = store->read(*context,
                                              context->getSettingsRef(),
                                              columns,
-                                             {HandleRange::newAll()},
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
                                              /* max_version= */ UInt64(1),
                                              EMPTY_FILTER,
@@ -498,7 +507,7 @@ try
         BlockInputStreamPtr in            = store->read(*context,
                                              settings,
                                              columns,
-                                             {HandleRange::newAll()},
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
@@ -536,7 +545,7 @@ try
         BlockInputStreamPtr in            = store->read(*context,
                                              settings,
                                              columns,
-                                             {HandleRange::newAll()},
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
@@ -594,7 +603,7 @@ try
         BlockInputStreams ins     = store->read(*context,
                                             context->getSettingsRef(),
                                             columns,
-                                            {HandleRange::newAll()},
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
@@ -616,7 +625,7 @@ try
         BlockInputStreams ins     = store->read(*context,
                                             context->getSettingsRef(),
                                             columns,
-                                            {HandleRange::newAll()},
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso2,
                                             EMPTY_FILTER,
@@ -638,7 +647,7 @@ try
         BlockInputStreams ins     = store->read(*context,
                                             context->getSettingsRef(),
                                             columns,
-                                            {HandleRange::newAll()},
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
@@ -660,7 +669,7 @@ try
         BlockInputStreams ins     = store->read(*context,
                                             context->getSettingsRef(),
                                             columns,
-                                            {HandleRange::newAll()},
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso1 - 1,
                                             EMPTY_FILTER,
@@ -701,7 +710,7 @@ try
                 false);
 
             store->write(*context, settings, block);
-            store->flushCache(*context);
+            store->flushCache(*context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
             num_rows_write_in_total += num_rows_per_write;
         }
 
@@ -718,7 +727,7 @@ try
                                                 context->getSettingsRef(),
                                                 //                                                settings,
                                                 columns,
-                                                {HandleRange::newAll()},
+                                                {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                                 /* num_streams= */ 1,
                                                 /* max_version= */ std::numeric_limits<UInt64>::max(),
                                                 EMPTY_FILTER,
@@ -833,7 +842,7 @@ try
         BlockInputStreams ins     = store->read(*context,
                                             context->getSettingsRef(),
                                             columns,
-                                            {HandleRange::newAll()},
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
@@ -946,7 +955,7 @@ try
         BlockInputStreams ins     = store->read(*context,
                                             context->getSettingsRef(),
                                             columns,
-                                            {HandleRange::newAll()},
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
@@ -1040,7 +1049,7 @@ try
         BlockInputStreams ins     = store->read(*context,
                                             context->getSettingsRef(),
                                             columns,
-                                            {HandleRange::newAll()},
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
@@ -1141,7 +1150,7 @@ try
         auto in = store->read(*context,
                               context->getSettingsRef(),
                               store->getTableColumns(),
-                              {HandleRange::newAll()},
+                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
@@ -1217,7 +1226,7 @@ try
         auto in = store->read(*context,
                               context->getSettingsRef(),
                               store->getTableColumns(),
-                              {HandleRange::newAll()},
+                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
@@ -1312,7 +1321,7 @@ try
         BlockInputStreams ins     = store->read(*context,
                                             context->getSettingsRef(),
                                             columns,
-                                            {HandleRange::newAll()},
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
@@ -1438,7 +1447,7 @@ try
         BlockInputStreams ins     = store->read(*context,
                                             context->getSettingsRef(),
                                             columns,
-                                            {HandleRange::newAll()},
+                                            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
@@ -1492,7 +1501,7 @@ try
             BlockInputStreams ins     = store->read(*context,
                                                 context->getSettingsRef(),
                                                 columns,
-                                                {HandleRange::newAll()},
+                                                {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                                 /* num_streams= */ 1,
                                                 /* max_version= */ std::numeric_limits<UInt64>::max(),
                                                 EMPTY_FILTER,
@@ -1531,6 +1540,469 @@ try
             in->readSuffix();
             ASSERT_EQ(num_rows_read, num_rows_write * 2);
         }
+    }
+}
+CATCH
+
+TEST_F(DeltaMergeStore_test, CreateWithCommonHandle)
+try
+{
+    auto table_column_defines = DMTestEnv::getDefaultColumns(true);
+    cleanUp();
+    store = reload(table_column_defines, true, 2);
+    {
+        // check handle column of store
+        auto & h = store->getHandle();
+        ASSERT_EQ(h.name, EXTRA_HANDLE_COLUMN_NAME);
+        ASSERT_EQ(h.id, EXTRA_HANDLE_COLUMN_ID);
+        ASSERT_TRUE(h.type->equals(*EXTRA_HANDLE_COLUMN_STRING_TYPE));
+    }
+    {
+        // check column structure of store
+        auto & cols = store->getTableColumns();
+        // version & tag column added
+        ASSERT_EQ(cols.size(), 3UL);
+    }
+}
+CATCH
+
+TEST_F(DeltaMergeStore_test, SimpleWriteReadCommonHandle)
+try
+{
+    const ColumnDefine col_str_define(2, "col2", std::make_shared<DataTypeString>());
+    const ColumnDefine col_i8_define(3, "i8", std::make_shared<DataTypeInt8>());
+    size_t             rowkey_column_size = 2;
+    {
+        auto table_column_defines = DMTestEnv::getDefaultColumns(true);
+        table_column_defines->emplace_back(col_str_define);
+        table_column_defines->emplace_back(col_i8_define);
+
+        cleanUp();
+        store = reload(table_column_defines, true, rowkey_column_size);
+    }
+
+    {
+        // check column structure
+        const auto & cols = store->getTableColumns();
+        ASSERT_EQ(cols.size(), 5UL);
+        const auto & str_col = cols[3];
+        ASSERT_EQ(str_col.name, col_str_define.name);
+        ASSERT_EQ(str_col.id, col_str_define.id);
+        ASSERT_TRUE(str_col.type->equals(*col_str_define.type));
+        const auto & i8_col = cols[4];
+        ASSERT_EQ(i8_col.name, col_i8_define.name);
+        ASSERT_EQ(i8_col.id, col_i8_define.id);
+        ASSERT_TRUE(i8_col.type->equals(*col_i8_define.type));
+    }
+
+    const size_t num_rows_write = 128;
+    {
+        // write to store
+        Block block;
+        {
+            block = DMTestEnv::prepareSimpleWriteBlock(0,
+                                                       num_rows_write,
+                                                       false,
+                                                       2,
+                                                       EXTRA_HANDLE_COLUMN_NAME,
+                                                       EXTRA_HANDLE_COLUMN_ID,
+                                                       EXTRA_HANDLE_COLUMN_STRING_TYPE,
+                                                       true,
+                                                       rowkey_column_size);
+            // Add a column of col2:String for test
+            ColumnWithTypeAndName col2({}, col_str_define.type, col_str_define.name, col_str_define.id);
+            {
+                IColumn::MutablePtr m_col2 = col2.type->createColumn();
+                for (size_t i = 0; i < num_rows_write; i++)
+                {
+                    String s = DB::toString(i);
+                    Field  field(s.c_str(), s.size());
+                    m_col2->insert(field);
+                }
+                col2.column = std::move(m_col2);
+            }
+            block.insert(std::move(col2));
+
+            // Add a column of i8:Int8 for test
+            ColumnWithTypeAndName i8({}, col_i8_define.type, col_i8_define.name, col_i8_define.id);
+            {
+                IColumn::MutablePtr m_i8 = i8.type->createColumn();
+                for (size_t i = 0; i < num_rows_write; i++)
+                {
+                    Int64 num = i * (i % 2 == 0 ? -1 : 1);
+                    m_i8->insert(Field(num));
+                }
+                i8.column = std::move(m_i8);
+            }
+            block.insert(std::move(i8));
+        }
+        store->write(*context, context->getSettingsRef(), block);
+    }
+
+    {
+        // TODO read data from more than one block
+        // TODO read data from mutli streams
+        // TODO read partial columns from store
+        // TODO read data of max_version
+
+        // read all columns from store
+        const auto &        columns = store->getTableColumns();
+        BlockInputStreamPtr in      = store->read(*context,
+                                             context->getSettingsRef(),
+                                             columns,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
+                                             /* expected_block_size= */ 1024)[0];
+
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                {
+                    if (iter.name == DMTestEnv::pk_name)
+                    {
+                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
+                    }
+                    else if (iter.name == col_str_define.name)
+                    {
+                        //printf("%s:%s\n", col_str_define.name.c_str(), c->getDataAt(i).data);
+                        EXPECT_EQ(c->getDataAt(i), DB::toString(i));
+                    }
+                    else if (iter.name == col_i8_define.name)
+                    {
+                        //printf("%s:%lld\n", col_i8_define.name.c_str(), c->getInt(i));
+                        Int64 num = i * (i % 2 == 0 ? -1 : 1);
+                        EXPECT_EQ(c->getInt(i), num);
+                    }
+                }
+            }
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+
+    {
+        // test readRaw
+        const auto &        columns = store->getTableColumns();
+        BlockInputStreamPtr in      = store->readRaw(*context, context->getSettingsRef(), columns, 1)[0];
+
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                {
+                    if (iter.name == DMTestEnv::pk_name)
+                    {
+                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
+                    }
+                    else if (iter.name == col_str_define.name)
+                    {
+                        EXPECT_EQ(c->getDataAt(i), DB::toString(i));
+                    }
+                    else if (iter.name == col_i8_define.name)
+                    {
+                        Int64 num = i * (i % 2 == 0 ? -1 : 1);
+                        EXPECT_EQ(c->getInt(i), num);
+                    }
+                }
+            }
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+}
+CATCH
+
+TEST_F(DeltaMergeStore_test, WriteMultipleBlockWithCommonHandle)
+try
+{
+    const size_t num_write_rows       = 32;
+    const size_t rowkey_column_size   = 2;
+    auto         table_column_defines = DMTestEnv::getDefaultColumns(true);
+
+    {
+        cleanUp();
+        store = reload(table_column_defines, true, rowkey_column_size);
+    }
+
+    // Test write multi blocks without overlap
+    {
+        Block block1 = DMTestEnv::prepareSimpleWriteBlock(0,
+                                                          1 * num_write_rows,
+                                                          false,
+                                                          2,
+                                                          EXTRA_HANDLE_COLUMN_NAME,
+                                                          EXTRA_HANDLE_COLUMN_ID,
+                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
+                                                          true,
+                                                          rowkey_column_size);
+        Block block2 = DMTestEnv::prepareSimpleWriteBlock(1 * num_write_rows,
+                                                          2 * num_write_rows,
+                                                          false,
+                                                          2,
+                                                          EXTRA_HANDLE_COLUMN_NAME,
+                                                          EXTRA_HANDLE_COLUMN_ID,
+                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
+                                                          true,
+                                                          rowkey_column_size);
+        Block block3 = DMTestEnv::prepareSimpleWriteBlock(2 * num_write_rows,
+                                                          3 * num_write_rows,
+                                                          false,
+                                                          2,
+                                                          EXTRA_HANDLE_COLUMN_NAME,
+                                                          EXTRA_HANDLE_COLUMN_ID,
+                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
+                                                          true,
+                                                          rowkey_column_size);
+        store->write(*context, context->getSettingsRef(), block1);
+        store->write(*context, context->getSettingsRef(), block2);
+        store->write(*context, context->getSettingsRef(), block3);
+
+        store->flushCache(*context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+    }
+
+    {
+        const auto &        columns       = store->getTableColumns();
+        BlockInputStreamPtr in            = store->read(*context,
+                                             context->getSettingsRef(),
+                                             columns,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
+                                             /* expected_block_size= */ 1024)[0];
+        size_t              num_rows_read = 0;
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                {
+                    if (iter.name == DMTestEnv::pk_name)
+                    {
+                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
+                    }
+                }
+            }
+        }
+
+        ASSERT_EQ(num_rows_read, 3 * num_write_rows);
+    }
+
+    store = reload(table_column_defines, true, rowkey_column_size);
+
+    // Test write multi blocks with overlap
+    {
+        UInt64 tso1   = 1;
+        UInt64 tso2   = 100;
+        Block  block1 = DMTestEnv::prepareSimpleWriteBlock(0,
+                                                          1 * num_write_rows,
+                                                          false,
+                                                          tso1,
+                                                          EXTRA_HANDLE_COLUMN_NAME,
+                                                          EXTRA_HANDLE_COLUMN_ID,
+                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
+                                                          true,
+                                                          rowkey_column_size);
+        Block  block2 = DMTestEnv::prepareSimpleWriteBlock(1 * num_write_rows,
+                                                          2 * num_write_rows,
+                                                          false,
+                                                          tso1,
+                                                          EXTRA_HANDLE_COLUMN_NAME,
+                                                          EXTRA_HANDLE_COLUMN_ID,
+                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
+                                                          true,
+                                                          rowkey_column_size);
+        Block  block3 = DMTestEnv::prepareSimpleWriteBlock(num_write_rows / 2,
+                                                          num_write_rows / 2 + num_write_rows,
+                                                          false,
+                                                          tso2,
+                                                          EXTRA_HANDLE_COLUMN_NAME,
+                                                          EXTRA_HANDLE_COLUMN_ID,
+                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
+                                                          true,
+                                                          rowkey_column_size);
+        store->write(*context, context->getSettingsRef(), block1);
+        store->write(*context, context->getSettingsRef(), block2);
+        store->write(*context, context->getSettingsRef(), block3);
+
+        store->flushCache(*context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+    }
+
+    store->compact(*context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+
+    // Read without version
+    {
+        const auto &        columns       = store->getTableColumns();
+        BlockInputStreamPtr in            = store->read(*context,
+                                             context->getSettingsRef(),
+                                             columns,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
+                                             /* expected_block_size= */ 1024)[0];
+        size_t              num_rows_read = 0;
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                {
+                    if (iter.name == DMTestEnv::pk_name)
+                    {
+                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
+                    }
+                }
+            }
+        }
+
+        ASSERT_EQ(num_rows_read, 3 * num_write_rows);
+    }
+    // Read with version
+    {
+        const auto &        columns       = store->getTableColumns();
+        BlockInputStreamPtr in            = store->read(*context,
+                                             context->getSettingsRef(),
+                                             columns,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ UInt64(1),
+                                             EMPTY_FILTER,
+                                             /* expected_block_size= */ 1024)[0];
+        size_t              num_rows_read = 0;
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                {
+                    if (iter.name == DMTestEnv::pk_name)
+                    {
+                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
+                    }
+                }
+            }
+        }
+
+        ASSERT_EQ(num_rows_read, 2 * num_write_rows);
+    }
+}
+CATCH
+
+TEST_F(DeltaMergeStore_test, DeleteReadWithCommonHandle)
+try
+{
+    const size_t num_rows_write     = 128;
+    size_t       rowkey_column_size = 2;
+    {
+        // Create a block with sequential Int64 handle in range [0, 128)
+        auto table_column_difines = DMTestEnv::getDefaultColumns(true);
+
+        cleanUp();
+        store = reload(table_column_difines, true, rowkey_column_size);
+
+        Block block = DMTestEnv::prepareSimpleWriteBlock(
+            0, 128, false, 2, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_STRING_TYPE, true, rowkey_column_size);
+        store->write(*context, context->getSettingsRef(), block);
+    }
+    // Test Reading first
+    {
+        const auto &        columns       = store->getTableColumns();
+        BlockInputStreamPtr in            = store->read(*context,
+                                             context->getSettingsRef(),
+                                             columns,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
+                                             /* expected_block_size= */ 1024)[0];
+        size_t              num_rows_read = 0;
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                {
+                    if (iter.name == DMTestEnv::pk_name)
+                    {
+                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
+                    }
+                }
+            }
+        }
+
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+    // Delete range [0, 64)
+    const size_t num_deleted_rows = 64;
+    {
+        std::stringstream ss;
+        ss << TiDB::CodecFlagInt;
+        DB::EncodeInt64(Int64(0), ss);
+        ss << TiDB::CodecFlagInt;
+        DB::EncodeInt64(Int64(0), ss);
+        RowKeyValue start(true, std::make_shared<String>(ss.str()));
+        ss.str("");
+        ss << TiDB::CodecFlagInt;
+        DB::EncodeInt64(Int64(num_deleted_rows), ss);
+        ss << TiDB::CodecFlagInt;
+        DB::EncodeInt64(Int64(num_deleted_rows), ss);
+        RowKeyValue end(true, std::make_shared<String>(ss.str()));
+        RowKeyRange range(start, end, true, 2);
+        store->deleteRange(*context, context->getSettingsRef(), range);
+    }
+    // Read after deletion
+    {
+        const auto &        columns       = store->getTableColumns();
+        BlockInputStreamPtr in            = store->read(*context,
+                                             context->getSettingsRef(),
+                                             columns,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
+                                             /* expected_block_size= */ 1024)[0];
+        size_t              num_rows_read = 0;
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                {
+                    if (iter.name == DMTestEnv::pk_name)
+                    {
+                        // Range after deletion is [64, 128)
+                        DMTestEnv::verifyClusteredIndexValue(
+                            c->operator[](i).get<String>(), i + Int64(num_deleted_rows), rowkey_column_size);
+                    }
+                }
+            }
+        }
+
+        ASSERT_EQ(num_rows_read, num_rows_write - num_deleted_rows);
     }
 }
 CATCH
