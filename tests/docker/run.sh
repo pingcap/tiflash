@@ -14,7 +14,7 @@ fi
 
 # Stop all docker instances if exist.
 # tiflash-dt && tiflash-tmt share the same name "tiflash0", we just need one here
-docker-compose -f gtest.yaml -f cluster.yaml -f cluster_new_collation.yaml -f tiflash-dt.yaml -f mock-test-dt.yaml down
+docker-compose -f gtest.yaml -f cluster.yaml -f cluster_new_collation.yaml -f cluster_clustered_index.yaml -f tiflash-dt.yaml -f mock-test-dt.yaml down
 rm -rf ./data ./log
 
 
@@ -40,7 +40,7 @@ rm -rf ./data ./log
 # run fullstack-tests (for engine DeltaTree)
 docker-compose -f cluster.yaml -f tiflash-dt.yaml up -d
 sleep 20
-docker-compose -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test true && ./run-test.sh fullstack-test-dt'
+docker-compose -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test true && ./run-test.sh fullstack-test-dt && ./run-test.sh clustered_index_fullstack'
 docker-compose -f cluster.yaml -f tiflash-dt.yaml down
 rm -rf ./data ./log
 
@@ -76,4 +76,11 @@ docker-compose -f cluster_new_collation.yaml -f tiflash-dt.yaml up -d
 sleep 20
 docker-compose -f cluster_new_collation.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh new_collation_fullstack'
 docker-compose -f cluster_new_collation.yaml -f tiflash-dt.yaml down
+rm -rf ./data ./log
+
+# run clustered index tests 
+docker-compose -f cluster_clustered_index.yaml -f tiflash-dt.yaml up -d
+sleep 20
+docker-compose -f cluster_clustered_index.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh clustered_index_fullstack'
+docker-compose -f cluster_clustered_index.yaml -f tiflash-dt.yaml down
 rm -rf ./data ./log

@@ -50,7 +50,8 @@ void writeRegionDataToStorage(Context & context, const RegionPtr & region, Regio
             storage->getColumns().getNamesOfPhysical(),
             data_list_read,
             std::numeric_limits<Timestamp>::max(),
-            force_decode);
+            force_decode,
+            nullptr);
         if (!ok)
             return false;
         region_decode_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
@@ -120,7 +121,7 @@ std::pair<RegionDataReadInfoList, RegionException::RegionReadStatus> resolveLock
     const std::unordered_set<UInt64> * bypass_lock_ts,
     RegionVersion region_version,
     RegionVersion conf_version,
-    DB::HandleRange<HandleID> & handle_range,
+    std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & range,
     bool resolve_locks,
     bool need_data_value)
 {
@@ -142,7 +143,14 @@ std::pair<RegionDataReadInfoList, RegionException::RegionReadStatus> resolveLock
             if (version != region_version || conf_ver != conf_version)
                 return {{}, RegionException::VERSION_ERROR};
 
-            handle_range = key_range->getHandleRangeByTable(table_id);
+            // todo check table id
+            TableID mapped_table_id;
+            if (!computeMappedTableID(*key_range->rawKeys().first, mapped_table_id) || mapped_table_id != table_id)
+                throw Exception("Should not happen, region not belong to table: table id in region is " + std::to_string(mapped_table_id)
+                        + ", expected table id is " + std::to_string(table_id),
+                    ErrorCodes::LOGICAL_ERROR);
+
+            range = key_range->rawKeys();
         }
 
         /// Deal with locks.
@@ -231,7 +239,7 @@ std::tuple<Block, RegionException::RegionReadStatus> RegionTable::readBlockByReg
     bool resolve_locks,
     Timestamp start_ts,
     const std::unordered_set<UInt64> * bypass_lock_ts,
-    DB::HandleRange<HandleID> & handle_range,
+    std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & range,
     RegionScanFilterPtr scan_filter)
 {
     if (!region)
@@ -240,7 +248,7 @@ std::tuple<Block, RegionException::RegionReadStatus> RegionTable::readBlockByReg
     // Tiny optimization for queries that need only handle, tso, delmark.
     bool need_value = column_names_to_read.size() != 3;
     auto [data_list_read, read_status] = resolveLocksAndReadRegionData(
-        table_info.id, region, start_ts, bypass_lock_ts, region_version, conf_version, handle_range, resolve_locks, need_value);
+        table_info.id, region, start_ts, bypass_lock_ts, region_version, conf_version, range, resolve_locks, need_value);
     if (read_status != RegionException::OK)
         return {Block(), read_status};
 
@@ -265,7 +273,7 @@ RegionException::RegionReadStatus RegionTable::resolveLocksAndWriteRegion(TMTCon
     const std::unordered_set<UInt64> * bypass_lock_ts,
     RegionVersion region_version,
     RegionVersion conf_version,
-    DB::HandleRange<HandleID> & handle_range,
+    std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & range,
     Logger * log)
 {
     auto [data_list_read, read_status] = resolveLocksAndReadRegionData(table_id,
@@ -274,7 +282,7 @@ RegionException::RegionReadStatus RegionTable::resolveLocksAndWriteRegion(TMTCon
         bypass_lock_ts,
         region_version,
         conf_version,
-        handle_range,
+        range,
         /* resolve_locks */ true,
         /* need_data_value */ true);
     if (read_status != RegionException::OK)

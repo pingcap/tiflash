@@ -114,7 +114,7 @@ private:
 };
 
 tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version,
-    UInt64 region_conf_version, Timestamp start_ts, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges);
+    UInt64 region_conf_version, Timestamp start_ts, std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & key_ranges);
 BlockInputStreamPtr outputDAGResponse(Context & context, const DAGSchema & schema, const tipb::SelectResponse & dag_response);
 
 
@@ -189,10 +189,10 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
             throw Exception("No such region", ErrorCodes::BAD_ARGUMENTS);
     }
 
-    auto handle_range = region->getHandleRangeByTable(table_id);
-    std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
-    DecodedTiKVKey start_key = RecordKVFormat::genRawKey(table_id, handle_range.first.handle_id);
-    DecodedTiKVKey end_key = RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id);
+    auto handle_range = getHandleRangeByTable(region->getRange()->rawKeys(), table_id);
+    std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges;
+    DecodedTiKVKeyPtr start_key = std::make_shared<DecodedTiKVKey>(RecordKVFormat::genRawKey(table_id, handle_range.first.handle_id));
+    DecodedTiKVKeyPtr end_key = std::make_shared<DecodedTiKVKey>(RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id));
     key_ranges.emplace_back(std::make_pair(std::move(start_key), std::move(end_key)));
     tipb::SelectResponse dag_response
         = executeDAGRequest(context, dag_request, region->id(), region->version(), region->confVer(), start_ts, key_ranges);
@@ -227,10 +227,10 @@ BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
     std::ignore = table_id;
 
     RegionPtr region = context.getTMTContext().getKVStore()->getRegion(region_id);
-    auto handle_range = region->getHandleRangeByTable(table_id);
-    std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
-    DecodedTiKVKey start_key = RecordKVFormat::genRawKey(table_id, handle_range.first.handle_id);
-    DecodedTiKVKey end_key = RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id);
+    auto handle_range = getHandleRangeByTable(region->getRange()->rawKeys(), table_id);
+    std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges;
+    DecodedTiKVKeyPtr start_key = std::make_shared<DecodedTiKVKey>(RecordKVFormat::genRawKey(table_id, handle_range.first.handle_id));
+    DecodedTiKVKeyPtr end_key = std::make_shared<DecodedTiKVKey>(RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id));
     key_ranges.emplace_back(std::make_pair(std::move(start_key), std::move(end_key)));
     tipb::SelectResponse dag_response
         = executeDAGRequest(context, dag_request, region_id, region->version(), region->confVer(), start_ts, key_ranges);
@@ -790,7 +790,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest, MakeResOutputStream> compileQue
 }
 
 tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version,
-    UInt64 region_conf_version, Timestamp start_ts, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges)
+    UInt64 region_conf_version, Timestamp start_ts, std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & key_ranges)
 {
     static Logger * log = &Logger::get("MockDAG");
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());

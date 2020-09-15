@@ -103,16 +103,5 @@ inline String toString(const HandleRanges & ranges)
     return s;
 }
 
-inline HandleRange mergeRanges(const HandleRanges & ranges)
-{
-    HandleRange range(HandleRange::MAX, HandleRange::MIN);
-    for (auto & r : ranges)
-    {
-        range.start = std::min(range.start, r.start);
-        range.end   = std::max(range.end, r.end);
-    }
-    return range;
-}
-
 } // namespace DM
 } // namespace DB

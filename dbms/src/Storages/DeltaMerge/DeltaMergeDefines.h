@@ -6,9 +6,9 @@
 #include <Core/NamesAndTypes.h>
 #include <Core/Types.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <Storages/DeltaMerge/Range.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Types.h>
-#include <Storages/DeltaMerge/Range.h>
 
 #include <limits>
 #include <memory>
@@ -98,14 +98,26 @@ static const UInt64 INITIAL_EPOCH = 0;
 #define VERSION_COLUMN_ID ::DB::VersionColumnID
 #define TAG_COLUMN_ID ::DB::DelMarkColumnID
 
-#define EXTRA_HANDLE_COLUMN_TYPE ::DB::MutableSupport::tidb_pk_column_type
+#define EXTRA_HANDLE_COLUMN_INT_TYPE ::DB::MutableSupport::tidb_pk_column_int_type
+#define EXTRA_HANDLE_COLUMN_STRING_TYPE ::DB::MutableSupport::tidb_pk_column_string_type
 #define VERSION_COLUMN_TYPE ::DB::MutableSupport::version_column_type
 #define TAG_COLUMN_TYPE ::DB::MutableSupport::delmark_column_type
 
-inline const ColumnDefine & getExtraHandleColumnDefine()
+inline const ColumnDefine & getExtraIntHandleColumnDefine()
 {
-    static ColumnDefine EXTRA_HANDLE_COLUMN_DEFINE_{EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_TYPE};
+    static ColumnDefine EXTRA_HANDLE_COLUMN_DEFINE_{EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_INT_TYPE};
     return EXTRA_HANDLE_COLUMN_DEFINE_;
+}
+inline const ColumnDefine & getExtraStringHandleColumnDefine()
+{
+    static ColumnDefine EXTRA_HANDLE_COLUMN_DEFINE_{EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_STRING_TYPE};
+    return EXTRA_HANDLE_COLUMN_DEFINE_;
+}
+inline const ColumnDefine & getExtraHandleColumnDefine(bool is_common_handle)
+{
+    if (is_common_handle)
+        return getExtraStringHandleColumnDefine();
+    return getExtraIntHandleColumnDefine();
 }
 inline const ColumnDefine & getVersionColumnDefine()
 {

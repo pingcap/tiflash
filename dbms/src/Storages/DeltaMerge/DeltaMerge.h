@@ -8,7 +8,7 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
-#include <Storages/DeltaMerge/HandleFilter.h>
+#include <Storages/DeltaMerge/RowKeyFilter.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
 namespace DB
@@ -45,7 +45,9 @@ private:
     IndexIterator      delta_index_it;
     IndexIterator      delta_index_end;
 
-    HandleRange handle_range;
+    RowKeyRange rowkey_range;
+    bool        is_common_handle;
+    size_t      rowkey_column_size;
 
     size_t max_block_size;
 
@@ -67,29 +69,32 @@ private:
     // How many times `read` is called.
     size_t num_read = 0;
 
-    Handle last_handle          = N_INF_HANDLE;
-    UInt64 last_version         = 0;
-    size_t last_handle_pos      = 0;
-    size_t last_handle_read_num = 0;
+    RowKeyValue    last_value;
+    RowKeyValueRef last_value_ref;
+    UInt64         last_version         = 0;
+    size_t         last_handle_pos      = 0;
+    size_t         last_handle_read_num = 0;
 
 public:
     DeltaMergeBlockInputStream(const SkippableBlockInputStreamPtr & stable_input_stream_,
                                DeltaValueSpacePtr &                 delta_value_space_,
                                const IndexIterator &                delta_index_start_,
                                const IndexIterator &                delta_index_end_,
-                               const HandleRange                    handle_range_,
+                               const RowKeyRange                    rowkey_range_,
                                size_t                               max_block_size_)
         : stable_input_stream(stable_input_stream_),
           delta_value_space(delta_value_space_),
           delta_index_it(delta_index_start_),
           delta_index_end(delta_index_end_),
-          handle_range(handle_range_),
+          rowkey_range(rowkey_range_),
+          is_common_handle(rowkey_range.is_common_handle),
+          rowkey_column_size(rowkey_range.rowkey_column_size),
           max_block_size(max_block_size_)
     {
         if constexpr (skippable_place)
         {
-            if (handle_range.end != HandleRange::MAX)
-                throw Exception("The end of handle range should be MAX in skippable_place mode");
+            if (!rowkey_range.isEndInfinite())
+                throw Exception("The end of rowkey range should be +Inf in skippable_place mode");
         }
 
         header      = stable_input_stream->getHeader();
@@ -104,6 +109,9 @@ public:
         {
             use_stable_rows = delta_index_it.getSid();
         }
+        auto all_range = RowKeyRange::newAll(is_common_handle, rowkey_column_size);
+        last_value     = all_range.getStart().toRowKeyValue();
+        last_value_ref = last_value.toRowKeyValueRef();
     }
 
     String getName() const override { return "DeltaMerge"; }
@@ -167,25 +175,30 @@ private:
 
             ++num_read;
 
-            auto & handle_column  = toColumnVectorData<Handle>(block.getByPosition(0).column);
+            auto   rowkey_column  = RowKeyColumnContainer(block.getByPosition(0).column, is_common_handle);
             auto & version_column = toColumnVectorData<UInt64>(block.getByPosition(1).column);
-            for (size_t i = 0; i < handle_column.size(); ++i)
+            for (size_t i = 0; i < rowkey_column.column->size(); ++i)
             {
-                auto handle  = handle_column[i];
-                auto version = version_column[i];
-                if (handle < last_handle || (handle == last_handle && version < last_version))
+                auto rowkey_value = rowkey_column.getRowKeyValue(i);
+                auto version      = version_column[i];
+                int  cmp_result   = compare(rowkey_value, last_value_ref);
+                if (cmp_result < 0 || (cmp_result == 0 && version < last_version))
                 {
-                    throw Exception("DeltaMerge return wrong result, current handle[" + DB::toString(handle) + "]version["
+                    throw Exception("DeltaMerge return wrong result, current handle[" + rowkey_value.toString() + "]version["
                                     + DB::toString(version) + "]@read[" + DB::toString(num_read) + "]@pos[" + DB::toString(i)
-                                    + "] is expected >= last_handle[" + DB::toString(last_handle) + "]last_version["
+                                    + "] is expected >= last_handle[" + last_value_ref.toString() + "]last_version["
                                     + DB::toString(last_version) + "]@read[" + DB::toString(last_handle_read_num) + "]@pos["
                                     + DB::toString(last_handle_pos) + "]");
                 }
-                last_handle          = handle;
+                last_value_ref       = rowkey_value;
                 last_version         = version;
                 last_handle_pos      = i;
                 last_handle_read_num = num_read;
             }
+            /// last_value is based on block, when block is released, it will
+            /// become invalid, so need to update last_value here
+            last_value     = last_value_ref.toRowKeyValue();
+            last_value_ref = last_value.toRowKeyValueRef();
         }
     }
 
@@ -418,7 +431,7 @@ private:
         auto offset      = cur_stable_block_pos;
         auto limit       = copy_rows;
 
-        auto [final_offset, final_limit] = HandleFilter::getPosRangeOfSorted(handle_range, cur_stable_block_columns[0], offset, limit);
+        auto [final_offset, final_limit] = RowKeyFilter::getPosRangeOfSorted(rowkey_range, cur_stable_block_columns[0], offset, limit);
 
         if constexpr (skippable_place)
         {
@@ -463,7 +476,7 @@ private:
                 output_columns[column_id]->reserve(max_block_size);
         }
 
-        auto actual_write = delta_value_space->read(handle_range, output_columns, use_delta_offset, write_rows);
+        auto actual_write = delta_value_space->read(rowkey_range, output_columns, use_delta_offset, write_rows);
 
         if constexpr (skippable_place)
         {

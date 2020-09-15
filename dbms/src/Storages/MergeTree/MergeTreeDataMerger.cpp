@@ -686,7 +686,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
                 [&](const RegionTable::InternalRegions & regions) {
                     ranges.reserve(regions.size());
                     for (const auto & region : regions)
-                        ranges.push_back(region.second.range_in_table);
+                        ranges.push_back(getHandleRangeByTable(region.second.range_in_table, data.table_info->id));
                 });
 
             if (pk_is_uint64)

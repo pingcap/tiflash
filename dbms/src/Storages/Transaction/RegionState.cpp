@@ -73,27 +73,24 @@ bool computeMappedTableID(const DecodedTiKVKey & key, TableID & table_id)
 
 RegionRangeKeys::RegionRangeKeys(TiKVKey && start_key, TiKVKey && end_key)
     : ori(RegionRangeKeys::makeComparableKeys(std::move(start_key), std::move(end_key))),
-      raw(ori.first.key.empty() ? DecodedTiKVKey() : RecordKVFormat::decodeTiKVKey(ori.first.key),
-          ori.second.key.empty() ? DecodedTiKVKey() : RecordKVFormat::decodeTiKVKey(ori.second.key))
+      raw(std::make_shared<DecodedTiKVKey>(ori.first.key.empty() ? DecodedTiKVKey() : RecordKVFormat::decodeTiKVKey(ori.first.key)),
+          std::make_shared<DecodedTiKVKey>(ori.second.key.empty() ? DecodedTiKVKey() : RecordKVFormat::decodeTiKVKey(ori.second.key)))
 {
-    if (!computeMappedTableID(raw.first, mapped_table_id) || ori.first.compare(ori.second) >= 0)
+    if (!computeMappedTableID(*raw.first, mapped_table_id) || ori.first.compare(ori.second) >= 0)
     {
         throw Exception(
             "Illegal region range, should not happen, start key: " + ori.first.key.toHex() + ", end key: " + ori.second.key.toHex(),
             ErrorCodes::LOGICAL_ERROR);
     }
-    mapped_handle_range = TiKVRange::getHandleRangeByTable(rawKeys().first, rawKeys().second, mapped_table_id);
 }
 
 TableID RegionRangeKeys::getMappedTableID() const { return mapped_table_id; }
 
-const std::pair<DecodedTiKVKey, DecodedTiKVKey> & RegionRangeKeys::rawKeys() const { return raw; }
+const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & RegionRangeKeys::rawKeys() const { return raw; }
 
-HandleRange<HandleID> RegionRangeKeys::getHandleRangeByTable(const TableID table_id) const
+HandleRange<HandleID> getHandleRangeByTable(const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & rawKeys, TableID table_id)
 {
-    if (table_id == mapped_table_id)
-        return mapped_handle_range;
-    return TiKVRange::getHandleRangeByTable(rawKeys().first, rawKeys().second, table_id);
+    return TiKVRange::getHandleRangeByTable(*rawKeys.first, *rawKeys.second, table_id);
 }
 
 const RegionRangeKeys::RegionRange & RegionRangeKeys::comparableKeys() const { return ori; }

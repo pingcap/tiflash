@@ -19,14 +19,15 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-class RegionScanFilter {
+class RegionScanFilter
+{
     bool is_full_range_scan;
     std::vector<HandleRange<Int64>> int64_ranges;
     std::vector<HandleRange<UInt64>> uint64_ranges;
 
     bool isValidHandle(UInt64 handle)
     {
-        for(const auto & range : uint64_ranges)
+        for (const auto & range : uint64_ranges)
         {
             if (handle >= range.first && handle < range.second)
             {
@@ -37,7 +38,7 @@ class RegionScanFilter {
     }
     bool isValidHandle(Int64 handle)
     {
-        for(const auto & range : int64_ranges)
+        for (const auto & range : int64_ranges)
         {
             if (handle >= range.first && handle < range.second)
             {
@@ -46,21 +47,15 @@ class RegionScanFilter {
         }
         return false;
     }
+
 public:
-    RegionScanFilter(bool is_full_range_scan_, std::vector<HandleRange<Int64>> int64_ranges_, std::vector<HandleRange<UInt64>> uint64_ranges_)
-    : is_full_range_scan(is_full_range_scan_), int64_ranges(std::move(int64_ranges_)), uint64_ranges(std::move(uint64_ranges_)) {}
-    bool filter(UInt64 handle)
-    {
-        return !is_full_range_scan && !isValidHandle(handle);
-    }
-    bool filter(Int64 handle)
-    {
-        return !is_full_range_scan && !isValidHandle(handle);
-    }
-    bool isFullRangeScan()
-    {
-        return is_full_range_scan;
-    }
+    RegionScanFilter(
+        bool is_full_range_scan_, std::vector<HandleRange<Int64>> int64_ranges_, std::vector<HandleRange<UInt64>> uint64_ranges_)
+        : is_full_range_scan(is_full_range_scan_), int64_ranges(std::move(int64_ranges_)), uint64_ranges(std::move(uint64_ranges_))
+    {}
+    bool filter(UInt64 handle) { return !is_full_range_scan && !isValidHandle(handle); }
+    bool filter(Int64 handle) { return !is_full_range_scan && !isValidHandle(handle); }
+    bool isFullRangeScan() { return is_full_range_scan; }
     const std::vector<HandleRange<UInt64>> & getUInt64Ranges() { return uint64_ranges; }
     const std::vector<HandleRange<Int64>> & getInt64Ranges() { return int64_ranges; }
 };
@@ -85,6 +80,6 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
     RegionDataReadInfoList & data_list,
     Timestamp start_ts,
     bool force_decode,
-    RegionScanFilterPtr scan_filter = nullptr);
+    RegionScanFilterPtr scan_filter);
 
 } // namespace DB
