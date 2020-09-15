@@ -37,7 +37,8 @@ MakeRegionQueryInfos(const std::unordered_map<RegionID, RegionInfo> & dag_region
     {
         if (r.key_ranges.empty())
         {
-            throw TiFlashException("Income key ranges is empty for region: " + std::to_string(r.region_id), Errors::Coprocessor::BadRequest);
+            throw TiFlashException(
+                "Income key ranges is empty for region: " + std::to_string(r.region_id), Errors::Coprocessor::BadRequest);
         }
         if (region_force_retry.count(id))
         {
@@ -57,18 +58,22 @@ MakeRegionQueryInfos(const std::unordered_map<RegionID, RegionInfo> & dag_region
             info.region_id = id;
             info.version = r.region_version;
             info.conf_version = r.region_conf_version;
-            info.range_in_table = region_range->getHandleRangeByTable(table_id);
+            info.range_in_table = region_range->rawKeys();
             for (const auto & p : r.key_ranges)
             {
-                TiKVRange::Handle start = TiKVRange::getRangeHandle<true>(p.first, table_id);
-                TiKVRange::Handle end = TiKVRange::getRangeHandle<false>(p.second, table_id);
-                auto range = std::make_pair(start, end);
-                if (range.first < info.range_in_table.first || range.second > info.range_in_table.second)
+                TableID table_id_in_range = -1;
+                if (!computeMappedTableID(*p.first, table_id_in_range) || table_id_in_range != table_id)
+                {
+                    throw TiFlashException("Income key ranges is illegal for region: " + std::to_string(r.region_id)
+                            + ", table id in key range is " + std::to_string(table_id_in_range) + ", table id in region is "
+                            + std::to_string(table_id),
+                        Errors::Coprocessor::BadRequest);
+                }
+                if (p.first->compare(*info.range_in_table.first) < 0 || p.second->compare(*info.range_in_table.second) > 0)
                     throw TiFlashException(
                         "Income key ranges is illegal for region: " + std::to_string(r.region_id), Errors::Coprocessor::BadRequest);
-
-                info.required_handle_ranges.emplace_back(range);
             }
+            info.required_handle_ranges = r.key_ranges;
             info.bypass_lock_ts = r.bypass_lock_ts;
         }
         mvcc_info.regions_query_info.emplace_back(std::move(info));

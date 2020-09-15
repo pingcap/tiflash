@@ -108,7 +108,7 @@ struct RawTiDBPK : std::shared_ptr<const std::string>
     bool operator!=(const RawTiDBPK & y) const { return !((*this) == y); }
     bool operator<(const RawTiDBPK & y) const { return (**this) < (*y); }
 
-    RawTiDBPK(const Base & o) : Base(o), handle(getHandleID()) {}
+    RawTiDBPK(const Base & o) : Base(o), handle(o->size() == 8 ? getHandleID() : 0) {}
 
     std::string toHex() const
     {
@@ -123,7 +123,7 @@ private:
     HandleID getHandleID() const;
 
 private:
-    const HandleID handle;
+    HandleID handle;
 };
 
 } // namespace DB

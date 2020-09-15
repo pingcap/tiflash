@@ -1,17 +1,14 @@
 #pragma once
 
-#include <type_traits>
-
 #include <Common/Exception.h>
-
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/IBlockOutputStream.h>
+#include <Interpreters/sortBlock.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
-
-#include <Interpreters/sortBlock.h>
-
 #include <common/logger_useful.h>
+
+#include <type_traits>
 
 
 namespace DB
@@ -201,14 +198,14 @@ struct RidGenerator
 template <bool use_row_id_ref, class DeltaTree>
 bool placeInsert(const SkippableBlockInputStreamPtr & stable, //
                  const Block &                        delta_block,
-                 const HandleRange &                  range,
+                 const RowKeyRange &                  range,
                  DeltaTree &                          delta_tree,
                  size_t                               delta_value_space_offset,
                  const IColumn::Permutation &         row_id_ref,
                  const SortDescription &              sort)
 {
     auto rows            = delta_block.rows();
-    auto [offset, limit] = HandleFilter::getPosRangeOfSorted(range, delta_block.getByPosition(0).column, 0, rows);
+    auto [offset, limit] = RowKeyFilter::getPosRangeOfSorted(range, delta_block.getByPosition(0).column, 0, rows);
     if (!limit)
         return rows == limit;
 
@@ -240,12 +237,12 @@ bool placeInsert(const SkippableBlockInputStreamPtr & stable, //
 template <class DeltaTree>
 bool placeDelete(const SkippableBlockInputStreamPtr & stable, //
                  const Block &                        delta_block,
-                 const HandleRange &                  range,
+                 const RowKeyRange &                  range,
                  DeltaTree &                          delta_tree,
                  const SortDescription &              sort)
 {
     auto rows            = delta_block.rows();
-    auto [offset, limit] = HandleFilter::getPosRangeOfSorted(range, delta_block.getByPosition(0).column, 0, rows);
+    auto [offset, limit] = RowKeyFilter::getPosRangeOfSorted(range, delta_block.getByPosition(0).column, 0, rows);
     if (!limit)
         return rows == limit;
 

@@ -9,6 +9,7 @@ enum TMTPKType
 {
     INT64,
     UINT64,
+    STRING,
     UNSPECIFIED,
 };
 

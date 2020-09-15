@@ -10,6 +10,8 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageDefines.h>
 
+#include "RowKeyRange.h"
+
 namespace DB
 {
 namespace DM
@@ -31,12 +33,11 @@ static std::atomic_uint64_t NEXT_PACK_ID{0};
 
 struct BlockOrDelete
 {
-    BlockOrDelete() = default;
-    BlockOrDelete(Block && block_) : block(block_) {}
-    BlockOrDelete(const HandleRange & delete_range_) : delete_range(delete_range_) {}
+    BlockOrDelete(Block && block_, const RowKeyRange & delete_range_) : block(block_), delete_range(delete_range_) {}
+    BlockOrDelete(const RowKeyRange & delete_range_) : delete_range(delete_range_) {}
 
     Block       block;
-    HandleRange delete_range;
+    RowKeyRange delete_range;
 };
 using BlockOrDeletes = std::vector<BlockOrDelete>;
 
@@ -65,7 +66,7 @@ public:
         UInt64      rows  = 0;
         UInt64      bytes = 0;
         BlockPtr    schema;
-        HandleRange delete_range;
+        RowKeyRange delete_range;
         PageId      data_page = 0;
 
         /// The members below are not serialized.
@@ -149,6 +150,9 @@ public:
         // The data of packs when reading.
         std::vector<Columns> packs_data;
 
+        bool   is_common_handle;
+        size_t rowkey_column_size;
+
         ~Snapshot();
 
         size_t getPackCount() const { return packs.size(); }
@@ -167,12 +171,12 @@ public:
         BlockOrDeletes getMergeBlocks(size_t rows_begin, size_t deletes_begin, size_t rows_end, size_t deletes_end);
 
         Block  read(size_t pack_index);
-        size_t read(const HandleRange & range, MutableColumns & output_columns, size_t offset, size_t limit);
+        size_t read(const RowKeyRange & range, MutableColumns & output_columns, size_t offset, size_t limit);
 
         bool shouldPlace(const DMContext &   context,
                          DeltaIndexPtr       my_delta_index,
-                         const HandleRange & segment_range,
-                         const HandleRange & relevant_range,
+                         const RowKeyRange & segment_range,
+                         const RowKeyRange & relevant_range,
                          UInt64              max_version);
 
     private:
@@ -207,6 +211,9 @@ private:
 
     DeltaIndexPtr delta_index;
 
+    bool   is_common_handle;
+    size_t rowkey_column_size;
+
     // Protects the operations in this instance.
     mutable std::mutex mutex;
 
@@ -220,7 +227,7 @@ private:
     void checkNewPacks(const Packs & new_packs);
 
 public:
-    explicit DeltaValueSpace(PageId id_, const Packs & packs_ = {});
+    DeltaValueSpace(PageId id_, bool is_common_handle_, size_t rowkey_column_size_, const Packs & packs_ = {});
 
     String simpleInfo() const { return "Delta [" + DB::toString(id) + "]"; }
     String info() const
@@ -262,7 +269,7 @@ public:
     ///   Otherwise, throw an exception.
     ///
     /// Note that this method is expected to be called by some one who already have lock on this instance.
-    Packs checkHeadAndCloneTail(DMContext & context, const HandleRange & target_range, const Packs & head_packs, WriteBatches & wbs) const;
+    Packs checkHeadAndCloneTail(DMContext & context, const RowKeyRange & target_range, const Packs & head_packs, WriteBatches & wbs) const;
 
     PageId getId() const { return id; }
 
@@ -324,7 +331,7 @@ public:
 
     bool appendToCache(DMContext & context, const Block & block, size_t offset, size_t limit);
 
-    bool appendDeleteRange(DMContext & context, const HandleRange & delete_range);
+    bool appendDeleteRange(DMContext & context, const RowKeyRange & delete_range);
 
     /// Flush the data of packs which haven't write to disk yet, and also save the metadata of packs.
     bool flush(DMContext & context);

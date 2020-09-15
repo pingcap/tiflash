@@ -36,7 +36,7 @@ void MockTiDBTable::dbgFuncMockTiDBTable(Context & context, const ASTs & args, D
 
     auto schema_str = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     String handle_pk_name = "";
-    if (args.size() == 4)
+    if (args.size() >= 4)
         handle_pk_name = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
 
     ASTPtr columns_ast;
