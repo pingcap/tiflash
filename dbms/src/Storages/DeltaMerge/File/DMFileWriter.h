@@ -2,10 +2,10 @@
 
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/MarkInCompressedFile.h>
-#include <IO/CompressedWriteBuffer.h>
-#include <IO/HashingWriteBuffer.h>
 #include <Encryption/WriteBufferFromFileProvider.h>
 #include <Encryption/createWriteBufferFromFileBaseByFileProvider.h>
+#include <IO/CompressedWriteBuffer.h>
+#include <IO/HashingWriteBuffer.h>
 #include <IO/WriteBufferFromOStream.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>

@@ -67,8 +67,7 @@ public:
     struct SubFileStat
     {
         SubFileStat() = default;
-        SubFileStat(const String & name_, UInt64 offset_, UInt64 size_)
-            : name{name_}, offset{offset_}, size{size_} {}
+        SubFileStat(const String & name_, UInt64 offset_, UInt64 size_) : name{name_}, offset{offset_}, size{size_} {}
         String name;
         UInt64 offset;
         UInt64 size;
@@ -79,6 +78,7 @@ public:
     {
         UInt64 sub_file_stat_offset;
         UInt32 sub_file_num;
+
         DMSingleFileFormatVersion file_format_version;
     };
 
@@ -184,15 +184,9 @@ public:
         sub_file_stats.emplace(name, SubFileStat{name, offset, size});
     }
 
-    SubFileStat getSubFileStat(const String & name)
-    {
-        return sub_file_stats[name];
-    }
+    SubFileStat getSubFileStat(const String & name) { return sub_file_stats[name]; }
 
-    bool isSubFileExists(const String & name)
-    {
-        return sub_file_stats.find(name) != sub_file_stats.end();
-    }
+    bool isSubFileExists(const String & name) { return sub_file_stats.find(name) != sub_file_stats.end(); }
 
     bool isSingleFileMode() { return mode == Mode::SINGLE_FILE; }
     bool isFolderMode() { return mode == Mode::FOLDER; }

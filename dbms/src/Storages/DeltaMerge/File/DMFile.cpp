@@ -1,6 +1,6 @@
 #include <Common/StringUtils/StringUtils.h>
-#include <IO/ReadHelpers.h>
 #include <Encryption/WriteBufferFromFileProvider.h>
+#include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
@@ -157,8 +157,8 @@ void DMFile::readMeta(const FileProviderPtr & file_provider)
     }
 
     {
-        auto pack_stat_size = packStatSize();
-        size_t     packs = pack_stat_size / sizeof(PackStat);
+        auto   pack_stat_size = packStatSize();
+        size_t packs          = pack_stat_size / sizeof(PackStat);
         pack_stats.resize(packs);
         auto buf = packStatReadBuffer(file_provider);
         buf.read((char *)pack_stats.data(), sizeof(PackStat) * packs);
@@ -173,7 +173,7 @@ void DMFile::initialize(const FileProviderPtr & file_provider)
         mode = Mode::SINGLE_FILE;
         if (status == Status::READABLE)
         {
-            Footer footer;
+            Footer                     footer;
             ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
             buf.seek(file.getSize() - sizeof(footer), SEEK_SET);
             // ignore footer.file_format_version
@@ -205,13 +205,13 @@ void DMFile::finalize(WriteBufferFromFileBase & buffer)
 
     Footer footer;
     footer.sub_file_stat_offset = buffer.count();
-    footer.sub_file_num = sub_file_stats.size();
-    footer.file_format_version = DMSingleFileFormatVersion::SINGLE_FILE_VERSION_BASE;
+    footer.sub_file_num         = sub_file_stats.size();
+    footer.file_format_version  = DMSingleFileFormatVersion::SINGLE_FILE_VERSION_BASE;
     for (auto & iter : sub_file_stats)
     {
-         writeStringBinary(iter.second.name, buffer);
-         writeIntBinary(iter.second.offset, buffer);
-         writeIntBinary(iter.second.size, buffer);
+        writeStringBinary(iter.second.name, buffer);
+        writeIntBinary(iter.second.offset, buffer);
+        writeIntBinary(iter.second.size, buffer);
     }
     writeIntBinary(footer.sub_file_stat_offset, buffer);
     writeIntBinary(footer.sub_file_num, buffer);
@@ -223,7 +223,7 @@ void DMFile::finalize(WriteBufferFromFileBase & buffer)
     Poco::File old_ngc_file(ngcPath());
     status = Status::READABLE;
 
-    auto new_path = path();
+    auto       new_path = path();
     Poco::File file(new_path);
     if (file.exists())
         file.remove();
@@ -257,7 +257,7 @@ std::set<UInt64> DMFile::listAllInPath(const String & parent_path, bool can_gc)
         if (can_gc)
         {
             Poco::File file(parent_path + "/" + name);
-            String ngc_path = "";
+            String     ngc_path = "";
             if (file.isFile())
             {
                 ngc_path = parent_path + "/" + name + "." + NGC_FILE_NAME;
@@ -307,6 +307,7 @@ ReadBufferFromFileProvider DMFile::metaReadBuffer(const FileProviderPtr & file_p
     if (mode == Mode::SINGLE_FILE)
     {
         ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
+
         auto meta_offset = sub_file_stats[metaIdentifier()].offset;
         buf.seek(meta_offset);
         return buf;
@@ -322,6 +323,7 @@ ReadBufferFromFileProvider DMFile::packStatReadBuffer(const FileProviderPtr & fi
     if (mode == Mode::SINGLE_FILE)
     {
         ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
+
         auto pack_stat_offset = sub_file_stats[packStatIdentifier()].offset;
         buf.seek(pack_stat_offset);
         return buf;

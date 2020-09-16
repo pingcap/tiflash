@@ -20,13 +20,8 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
       max_compress_block_size(max_compress_block_size_),
       compression_settings(compression_settings_),
       file_provider(file_provider_),
-      plain_file(createWriteBufferFromFileBaseByFileProvider(file_provider,
-                                                       dmfile->path(),
-                                                       EncryptionPath(dmfile->path(), ""),
-                                                       true,
-                                                       0,
-                                                       0,
-                                                       max_compress_block_size)),
+      plain_file(createWriteBufferFromFileBaseByFileProvider(
+          file_provider, dmfile->path(), EncryptionPath(dmfile->path(), ""), true, 0, 0, max_compress_block_size)),
       compressed_buf(*plain_file, compression_settings)
 {
     dmfile->setStatus(DMFile::Status::WRITING);
@@ -79,15 +74,15 @@ void DMFileWriter::finalize()
 void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 {
     size_t bytes_written = 0;
-    auto callback = [&](const IDataType::SubstreamPath & substream_path) {
+    auto   callback      = [&](const IDataType::SubstreamPath & substream_path) {
         String stream_name = DMFile::getFileNameBase(col_id, substream_path);
         if (unlikely(substream_path.size() > 1))
         {
             throw DB::TiFlashException("Substream_path shouldn't be more than one.", Errors::DeltaTree::Internal);
         }
         MarksInCompressedFile marks{blocks.size()};
-        size_t column_offset_in_file = plain_file->count();
-        MinMaxIndexPtr minmax_index = nullptr;
+        size_t                column_offset_in_file = plain_file->count();
+        MinMaxIndexPtr        minmax_index          = nullptr;
         if (auto iter = minmax_indexs.find(DMFile::getFileNameBase(col_id, {})); iter != minmax_indexs.end())
         {
             minmax_index = iter->second;
@@ -96,19 +91,17 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
         // write column data
         for (size_t i = 0; i < blocks.size(); i++)
         {
-            auto & block = blocks[i];
+            auto & block  = blocks[i];
             auto & column = getByColumnId(block, col_id).column;
-            size_t rows = column->size();
+            size_t rows   = column->size();
             if (compressed_buf.offset() >= min_compress_block_size)
             {
                 compressed_buf.next();
             }
             auto offset_in_compressed_block = compressed_buf.offset();
-            marks[i] = MarkInCompressedFile{
-                // FIXME: make sure this two attribute are correct
-                .offset_in_compressed_file   = plain_file->count(),
-                .offset_in_decompressed_block = offset_in_compressed_block
-            };
+
+            marks[i] = MarkInCompressedFile{.offset_in_compressed_file    = plain_file->count(),
+                                            .offset_in_decompressed_block = offset_in_compressed_block};
 
             if (substream_path.empty())
             {
@@ -122,7 +115,8 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
             {
                 if (unlikely(!type->isNullable()))
                 {
-                    throw DB::TiFlashException("Type shouldn be nullable when substream_path's type is NullMap.", Errors::DeltaTree::Internal);
+                    throw DB::TiFlashException("Type shouldn be nullable when substream_path's type is NullMap.",
+                                               Errors::DeltaTree::Internal);
                 }
                 const ColumnNullable & col = static_cast<const ColumnNullable &>(*column);
                 col.checkConsistency();
@@ -132,15 +126,17 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
             {
                 if (unlikely(!type->isNullable()))
                 {
-                    throw DB::TiFlashException("Type shouldn be nullable when substream_path's type is NullableElements.", Errors::DeltaTree::Internal);
+                    throw DB::TiFlashException("Type shouldn be nullable when substream_path's type is NullableElements.",
+                                               Errors::DeltaTree::Internal);
                 }
                 const DataTypeNullable & nullable_type = static_cast<const DataTypeNullable &>(*type);
-                const ColumnNullable & col = static_cast<const ColumnNullable &>(*column);
+                const ColumnNullable &   col           = static_cast<const ColumnNullable &>(*column);
                 nullable_type.getNestedType()->serializeBinaryBulk(col.getNestedColumn(), compressed_buf, 0, rows);
             }
             else
             {
-                throw DB::TiFlashException("Unknown type of substream_path: " + std::to_string(substream_path[0].type), Errors::DeltaTree::Internal);
+                throw DB::TiFlashException("Unknown type of substream_path: " + std::to_string(substream_path[0].type),
+                                           Errors::DeltaTree::Internal);
             }
 
             if (minmax_index)

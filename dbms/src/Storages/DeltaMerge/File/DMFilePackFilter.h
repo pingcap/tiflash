@@ -184,16 +184,15 @@ private:
         }
 
         auto & type = dmfile->getColumnStat(col_id).type;
+
         MinMaxIndexPtr minmax_index;
         if (dmfile->isSingleFileMode())
         {
             auto index_identifier = dmfile->colIndexIdentifier(DMFile::getFileNameBase(col_id));
-            auto index_file_stat = dmfile->getSubFileStat(index_identifier);
+            auto index_file_stat  = dmfile->getSubFileStat(index_identifier);
+
             auto load = [&]() {
-                auto index_buf = ReadBufferFromFileProvider(
-                    file_provider,
-                    dmfile->path(),
-                    EncryptionPath(dmfile->path(), ""));
+                auto index_buf = ReadBufferFromFileProvider(file_provider, dmfile->path(), EncryptionPath(dmfile->path(), ""));
                 index_buf.seek(index_file_stat.offset);
                 return MinMaxIndex::read(*type, index_buf);
             };
@@ -210,6 +209,7 @@ private:
         else
         {
             auto index_path = dmfile->colIndexPath(DMFile::getFileNameBase(col_id));
+
             auto load = [&]() {
                 auto index_buf = ReadBufferFromFileProvider(
                     file_provider,
