@@ -16,107 +16,81 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-namespace
+inline DM::RowKeyRanges getQueryRanges(
+    const DB::MvccQueryInfo::RegionsQueryInfo & regions, TableID table_id, bool is_common_handle, size_t rowkey_column_size)
 {
-inline DB::HandleID getRangeEndID(const DB::TiKVHandle::Handle<HandleID> & end)
-{
-    switch (end.type)
-    {
-        case DB::TiKVHandle::HandleIDType::NORMAL:
-            return end.handle_id;
-        case DB::TiKVHandle::HandleIDType::MAX:
-            return DB::DM::HandleRange::MAX;
-        default:
-            throw Exception("Unknown TiKVHandle type: " + end.toString(), ErrorCodes::LOGICAL_ERROR);
-    }
-}
-} // namespace
-
-inline DM::HandleRange toDMHandleRange(const HandleRange<HandleID> & range)
-{
-    return DM::HandleRange{range.first.handle_id, getRangeEndID(range.second)};
-}
-
-inline DM::HandleRanges getQueryRanges(const DB::MvccQueryInfo::RegionsQueryInfo & regions)
-{
-    std::vector<HandleRange<HandleID>> handle_ranges;
+    // todo check table id in DecodedTiKVKey???
+    DM::RowKeyRanges handle_ranges;
     for (const auto & region_info : regions)
     {
         if (!region_info.required_handle_ranges.empty())
         {
             for (const auto & handle_range : region_info.required_handle_ranges)
-                handle_ranges.push_back(handle_range);
+                handle_ranges.push_back(
+                    DM::RowKeyRange::fromRegionRange(handle_range, table_id, table_id, is_common_handle, rowkey_column_size));
         }
         else
         {
             /// only used for test cases
-            handle_ranges.push_back(region_info.range_in_table);
+            handle_ranges.push_back(
+                DM::RowKeyRange::fromRegionRange(region_info.range_in_table, table_id, table_id, is_common_handle, rowkey_column_size));
         }
     }
-    DM::HandleRanges ranges;
     if (handle_ranges.empty())
     {
         // Just for test cases
-        ranges.emplace_back(DB::DM::HandleRange::newAll());
-        return ranges;
+        handle_ranges.emplace_back(DB::DM::RowKeyRange::newAll(is_common_handle, rowkey_column_size));
+        return handle_ranges;
     }
     else if (handle_ranges.size() == 1)
     {
         // Shortcut for only one region info
-        const auto & range_in_table = handle_ranges[0];
-        ranges.emplace_back(toDMHandleRange(range_in_table));
-        return ranges;
+        return handle_ranges;
     }
 
+    DM::RowKeyRanges ranges;
     // Init index with [0, n)
     // http: //www.cplusplus.com/reference/numeric/iota/
     std::vector<size_t> sort_index(handle_ranges.size());
     std::iota(sort_index.begin(), sort_index.end(), 0);
 
     std::sort(sort_index.begin(), sort_index.end(), //
-        [&handle_ranges](const size_t lhs, const size_t rhs) { return handle_ranges[lhs] < handle_ranges[rhs]; });
+        [&handle_ranges](const size_t lhs, const size_t rhs) {
+            int first_result = handle_ranges[lhs].start.value->compare(*handle_ranges[rhs].start.value);
+            if (likely(first_result != 0))
+                return first_result < 0;
+            return handle_ranges[lhs].end.value->compare(*handle_ranges[rhs].end.value) < 0;
+        });
 
     ranges.reserve(handle_ranges.size());
 
-    DM::HandleRange current;
-    for (size_t i = 0; i < handle_ranges.size(); ++i)
+    DM::RowKeyRange current = handle_ranges[sort_index[0]];
+    for (size_t i = 1; i < handle_ranges.size(); ++i)
     {
         const size_t region_idx = sort_index[i];
         const auto & handle_range = handle_ranges[region_idx];
 
-        if (handle_range.first.type == DB::TiKVHandle::HandleIDType::MAX)
+        if (handle_range.none())
         {
-            // Ignore [Max, Max)
-            if (handle_range.second.type == DB::TiKVHandle::HandleIDType::MAX)
-                continue;
-            else
-                throw Exception(
-                    "Can not merge invalid region range: [" + handle_range.first.toString() + "," + handle_range.second.toString() + ")",
-                    ErrorCodes::LOGICAL_ERROR);
+            continue;
         }
 
-        if (i == 0)
-        {
-            current.start = handle_range.first.handle_id;
-            current.end = getRangeEndID(handle_range.second);
-        }
-        else if (current.end == handle_range.first.handle_id)
+        if (*current.end.value == *handle_range.start.value)
         {
             // concat this range_in_table to current
-            current.end = getRangeEndID(handle_range.second);
+            current.end = handle_range.end;
         }
-        else if (current.end < handle_range.first.handle_id)
+        else if (current.end.value->compare(*handle_range.start.value) < 0)
         {
             ranges.emplace_back(current);
-
             // start a new range
-            current.start = handle_range.first.handle_id;
-            current.end = getRangeEndID(handle_range.second);
+            current.start = handle_range.start;
+            current.end = handle_range.end;
         }
         else
         {
-            throw Exception("Overlap region range between " + current.toString() + " and [" //
-                + handle_range.first.toString() + "," + handle_range.second.toString() + ")");
+            throw Exception("Overlap region range between " + current.start.toString() + "," + current.end.toString() + " and [" //
+                + handle_range.start.toString() + "," + handle_range.end.toString() + ")");
         }
     }
     ranges.emplace_back(current);

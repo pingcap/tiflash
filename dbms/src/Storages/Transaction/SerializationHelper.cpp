@@ -7,7 +7,7 @@ size_t writeBinary2(const metapb::Peer & peer, WriteBuffer & buf)
 {
     writeIntBinary((UInt64)peer.id(), buf);
     writeIntBinary((UInt64)peer.store_id(), buf);
-    writeBinary(peer.is_learner(), buf);
+    writeIntBinary((UInt8)peer.role(), buf);
     return sizeof(UInt64) + sizeof(UInt64) + sizeof(bool);
 }
 
@@ -16,7 +16,7 @@ metapb::Peer readPeer(ReadBuffer & buf)
     metapb::Peer peer;
     peer.set_id(readBinary2<UInt64>(buf));
     peer.set_store_id(readBinary2<UInt64>(buf));
-    peer.set_is_learner(readBinary2<bool>(buf));
+    peer.set_role(static_cast<metapb::PeerRole>(readBinary2<UInt8>(buf)));
     return peer;
 }
 
@@ -125,7 +125,7 @@ raft_serverpb::RaftApplyState readApplyState(ReadBuffer & buf)
 
 bool operator==(const metapb::Peer & peer1, const metapb::Peer & peer2)
 {
-    return peer1.id() == peer2.id() && peer1.store_id() == peer2.store_id() && peer1.is_learner() == peer2.is_learner();
+    return peer1.id() == peer2.id() && peer1.store_id() == peer2.store_id() && peer1.role() == peer2.role();
 }
 
 bool operator==(const metapb::Region & region1, const metapb::Region & region2)

@@ -518,6 +518,133 @@ catch (const Poco::Exception & e)
 }
 
 ///////////////////////
+/// IndexColumnInfo ///
+///////////////////////
+
+IndexColumnInfo::IndexColumnInfo(Poco::JSON::Object::Ptr json) { deserialize(json); }
+
+Poco::JSON::Object::Ptr IndexColumnInfo::getJSONObject() const
+try
+{
+    Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
+
+    Poco::JSON::Object::Ptr name_json = new Poco::JSON::Object();
+    name_json->set("O", name);
+    name_json->set("L", name);
+    json->set("name", name_json);
+    json->set("offset", offset);
+    json->set("length", length);
+
+#ifndef NDEBUG
+    std::stringstream str;
+    json->stringify(str);
+#endif
+
+    return json;
+}
+catch (const Poco::Exception & e)
+{
+    throw DB::Exception(
+        std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (IndexColumnInfo): " + e.displayText(), DB::Exception(e));
+}
+
+void IndexColumnInfo::deserialize(Poco::JSON::Object::Ptr json)
+try
+{
+    name = json->getObject("name")->getValue<String>("L");
+    offset = json->getValue<Int32>("offset");
+    length = json->getValue<Int32>("length");
+}
+catch (const Poco::Exception & e)
+{
+    throw DB::Exception(
+        std::string(__PRETTY_FUNCTION__) + ": Parse TiDB schema JSON failed (IndexColumnInfo): " + e.displayText(), DB::Exception(e));
+}
+
+///////////////////////
+////// IndexInfo //////
+///////////////////////
+
+IndexInfo::IndexInfo(Poco::JSON::Object::Ptr json) { deserialize(json); }
+Poco::JSON::Object::Ptr IndexInfo::getJSONObject() const
+try
+{
+    Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
+
+    json->set("id", id);
+
+    Poco::JSON::Object::Ptr idx_name_json = new Poco::JSON::Object();
+    idx_name_json->set("O", idx_name);
+    idx_name_json->set("L", idx_name);
+    json->set("idx_name", idx_name_json);
+
+    Poco::JSON::Object::Ptr tbl_name_json = new Poco::JSON::Object();
+    tbl_name_json->set("O", tbl_name);
+    tbl_name_json->set("L", tbl_name);
+    json->set("tbl_name", tbl_name_json);
+
+    Poco::JSON::Array::Ptr cols_array = new Poco::JSON::Array();
+    for (auto & col : idx_cols)
+    {
+        auto col_obj = col.getJSONObject();
+        cols_array->add(col_obj);
+    }
+    json->set("idx_cols", cols_array);
+    json->set("state", static_cast<Int32>(state));
+    json->set("index_type", index_type);
+    json->set("is_unique", is_unique);
+    json->set("is_primary", is_primary);
+    json->set("is_invisible", is_invisible);
+    json->set("is_global", is_global);
+
+#ifndef NDEBUG
+    std::stringstream str;
+    json->stringify(str);
+#endif
+
+    return json;
+}
+catch (const Poco::Exception & e)
+{
+    throw DB::Exception(
+        std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (IndexInfo): " + e.displayText(), DB::Exception(e));
+}
+
+void IndexInfo::deserialize(Poco::JSON::Object::Ptr json)
+try
+{
+    id = json->getValue<Int64>("id");
+    idx_name = json->getObject("idx_name")->getValue<String>("L");
+    tbl_name = json->getObject("tbl_name")->getValue<String>("L");
+
+    auto cols_array = json->getArray("idx_cols");
+    idx_cols.clear();
+    if (!cols_array.isNull())
+    {
+        for (size_t i = 0; i < cols_array->size(); i++)
+        {
+            auto col_json = cols_array->getObject(i);
+            IndexColumnInfo column_info(col_json);
+            idx_cols.emplace_back(column_info);
+        }
+    }
+
+    state = static_cast<SchemaState>(json->getValue<Int32>("state"));
+    index_type = json->getValue<Int32>("index_type");
+    is_unique = json->getValue<bool>("is_unique");
+    is_primary = json->getValue<bool>("is_primary");
+    if (json->has("is_invisible"))
+        is_invisible = json->getValue<bool>("is_invisible");
+    if (json->has("is_global"))
+        is_global = json->getValue<bool>("is_global");
+}
+catch (const Poco::Exception & e)
+{
+    throw DB::Exception(
+        std::string(__PRETTY_FUNCTION__) + ": Deserialize TiDB schema JSON failed (IndexInfo): " + e.displayText(), DB::Exception(e));
+}
+
+///////////////////////
 ////// TableInfo //////
 ///////////////////////
 
@@ -543,8 +670,16 @@ try
     }
 
     json->set("cols", cols_arr);
+    Poco::JSON::Array::Ptr index_arr = new Poco::JSON::Array();
+    for (auto & index_info : index_infos)
+    {
+        auto index_info_obj = index_info.getJSONObject();
+        index_arr->add(index_info_obj);
+    }
+    json->set("index_info", index_arr);
     json->set("state", static_cast<Int32>(state));
     json->set("pk_is_handle", pk_is_handle);
+    json->set("is_common_handle", is_common_handle);
     json->set("comment", comment);
     json->set("update_timestamp", update_timestamp);
     if (is_partition_table)
@@ -608,8 +743,25 @@ try
         }
     }
 
+    auto index_arr = obj->getArray("index_info");
+    index_infos.clear();
+    if (!index_arr.isNull())
+    {
+        for (size_t i = 0; i < index_arr->size(); i++)
+        {
+            auto index_info_json = index_arr->getObject(i);
+            IndexInfo index_info(index_info_json);
+            if (index_info.is_primary)
+                index_infos.emplace_back(index_info);
+        }
+    }
+
     state = static_cast<SchemaState>(obj->getValue<Int32>("state"));
     pk_is_handle = obj->getValue<bool>("pk_is_handle");
+    if (obj->has("is_common_handle"))
+        is_common_handle = obj->getValue<bool>("is_common_handle");
+    if (!is_common_handle)
+        index_infos.clear();
     comment = obj->getValue<String>("comment");
     update_timestamp = obj->getValue<Timestamp>("update_timestamp");
     auto partition_obj = obj->getObject("partition");
@@ -639,6 +791,11 @@ try
         {
             replica_info.deserialize(replica_obj);
         }
+    }
+    if (is_common_handle && index_infos.size() != 1)
+    {
+        throw DB::Exception(std::string(__PRETTY_FUNCTION__)
+            + ": Parse TiDB schema JSON failed (TableInfo): clustered index without primary key info, json: " + json_str);
     }
 }
 catch (const Poco::Exception & e)

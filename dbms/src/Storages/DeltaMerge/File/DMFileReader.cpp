@@ -56,7 +56,7 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
             if (res->empty()) // 0 rows.
                 return res;
             size_t size = sizeof(MarkInCompressedFile) * reader.dmfile->getPacks();
-            auto file = reader.file_provider->newRandomAccessFile(mark_path, reader.dmfile->encryptionMarkPath(file_name_base));
+            auto file   = reader.file_provider->newRandomAccessFile(mark_path, reader.dmfile->encryptionMarkPath(file_name_base));
 
             PageUtil::readFile(file, 0, reinterpret_cast<char *>(res->data()), size);
 
@@ -152,7 +152,7 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
                            bool   enable_clean_read_,
                            UInt64 max_read_version_,
                            // filters
-                           const HandleRange &   handle_range_,
+                           const RowKeyRange &   rowkey_range_,
                            const RSOperatorPtr & filter_,
                            const IdSetPtr &      read_packs_,
                            // caches
@@ -169,9 +169,10 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
       read_columns(read_columns_),
       enable_clean_read(enable_clean_read_),
       max_read_version(max_read_version_),
-      pack_filter(dmfile_, index_cache_, hash_salt_, handle_range_, filter_, read_packs_, file_provider_),
+      pack_filter(dmfile_, index_cache_, hash_salt_, rowkey_range_, filter_, read_packs_, file_provider_),
       handle_res(pack_filter.getHandleRes()),
       use_packs(pack_filter.getUsePacks()),
+      is_common_handle(rowkey_range_.is_common_handle),
       skip_packs_by_column(read_columns.size(), 0),
       hash_salt(hash_salt_),
       mark_cache(mark_cache_),
@@ -288,8 +289,16 @@ Block DMFileReader::read()
             if (cd.id == EXTRA_HANDLE_COLUMN_ID)
             {
                 // Return the first row's handle
-                Handle min_handle = pack_filter.getMinHandle(start_pack_id);
-                column            = cd.type->createColumnConst(read_rows, Field(min_handle));
+                if (is_common_handle)
+                {
+                    StringRef min_handle = pack_filter.getMinStringHandle(start_pack_id);
+                    column = cd.type->createColumnConst(read_rows, Field(min_handle.data, min_handle.size));
+                }
+                else
+                {
+                    Handle min_handle = pack_filter.getMinHandle(start_pack_id);
+                    column = cd.type->createColumnConst(read_rows, Field(min_handle));
+                }
             }
             else if (cd.id == VERSION_COLUMN_ID)
             {

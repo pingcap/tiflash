@@ -20,7 +20,9 @@ extern const int LOGICAL_ERROR;
 }
 
 KVStore::KVStore(const std::string & data_dir, const FileProviderPtr & file_provider)
-    : region_persister(data_dir, region_manager, file_provider), raft_cmd_res(std::make_unique<RaftCommandResult>()), log(&Logger::get("KVStore"))
+    : region_persister(data_dir, region_manager, file_provider),
+      raft_cmd_res(std::make_unique<RaftCommandResult>()),
+      log(&Logger::get("KVStore"))
 {}
 
 void KVStore::restore(const IndexReaderCreateFunc & index_reader_create)
@@ -92,7 +94,6 @@ void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
     if (tmt.isBgFlushDisabled())
     {
         auto table_id = region.getMappedTableID();
-        auto handle_range = region.getHandleRangeByTable(table_id);
         auto storage = tmt.getStorages().get(table_id);
         if (storage == nullptr)
         {
@@ -101,7 +102,7 @@ void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
                     + " with table id: " + DB::toString(table_id) + ", ignored");
             return;
         }
-        storage->flushCache(tmt.getContext(), handle_range);
+        storage->flushCache(tmt.getContext(), region);
     }
 }
 
@@ -173,8 +174,8 @@ void KVStore::tryPersist(const RegionID region_id)
 
 void KVStore::gcRegionCache(Seconds gc_persist_period)
 {
-    decltype(bg_gc_region_data) tmp;
     {
+        decltype(bg_gc_region_data) tmp;
         std::lock_guard<std::mutex> lock(bg_gc_region_data_mutex);
         tmp.swap(bg_gc_region_data);
     }

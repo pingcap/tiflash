@@ -4,9 +4,11 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
 #include <Storages/IStorage.h>
+#include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TiKVHandle.h>
 #include <Storages/Transaction/Types.h>
+
 namespace TiDB
 {
 struct TableInfo;
@@ -40,7 +42,7 @@ public:
 
     virtual void flushCache(const Context & /*context*/) {}
 
-    virtual void flushCache(const Context & /*context*/, const DB::HandleRange<HandleID> & /* range_to_flush */) {}
+    virtual void flushCache(const Context & /*context*/, const Region & /* region */) {}
 
     virtual BlockInputStreamPtr status() { return {}; }
 
@@ -113,6 +115,10 @@ public:
     }
 
     virtual SortDescription getPrimarySortDescription() const = 0;
+
+    virtual bool isCommonHandle() const { return false; }
+
+    virtual size_t getRowKeyColumnSize() const { return 1; }
 
 private:
     virtual DataTypePtr getPKTypeImpl() const = 0;

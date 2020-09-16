@@ -15,22 +15,20 @@ extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
 DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, const std::unordered_map<RegionID, RegionInfo> & regions_,
-    const tipb::DAGRequest & dag_request_, ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_, const bool is_batch_cop_)
-    : writer(std::make_shared<StreamWriter>(writer_)),
-      context(context_),
+    const tipb::DAGRequest & dag_request_, const bool is_batch_cop_)
+    : context(context_),
       dag_context(dag_context_),
       regions(regions_),
       dag_request(dag_request_),
-      metrics(context.getTiFlashMetrics()),
       is_batch_cop(is_batch_cop_)
 {
     if (dag_request.has_root_executor())
     {
-        root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request.root_executor());
+        root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request.root_executor(), context.getTiFlashMetrics());
     }
     else
     {
-        root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request.executors());
+        root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request.executors(), context.getTiFlashMetrics());
     }
     root_query_block->collectAllPossibleChildrenJoinSubqueryAlias(dag_context.qb_id_to_join_alias_map);
     for (Int32 i : dag_request.output_offsets())

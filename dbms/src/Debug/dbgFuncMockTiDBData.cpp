@@ -40,7 +40,10 @@ void dbgInsertRow(Context & context, const ASTs & args, DBGInvoker::Printer outp
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
     RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
-    HandleID handle_id = (HandleID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[3]).value);
+    auto & handle_field = typeid_cast<const ASTLiteral &>(*args[3]).value;
+    HandleID handle_id = 0;
+    if (handle_field.getType() == Field::Types::Int64 || handle_field.getType() == Field::Types::UInt64)
+        handle_id = (HandleID)safeGet<UInt64>(handle_field);
 
     MockTiDB::TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
     RegionBench::insert(table->table_info, region_id, handle_id, args.begin() + 4, args.end(), context);
@@ -60,7 +63,10 @@ void dbgInsertRowFull(Context & context, const ASTs & args, DBGInvoker::Printer 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
     RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
-    HandleID handle_id = (HandleID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[3]).value);
+    auto & handle_field = typeid_cast<const ASTLiteral &>(*args[3]).value;
+    HandleID handle_id = 0;
+    if (handle_field.getType() == Field::Types::Int64 || handle_field.getType() == Field::Types::UInt64)
+        handle_id = (HandleID)safeGet<UInt64>(handle_field);
     Timestamp tso = (Timestamp)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[4]).value);
     UInt8 del = (UInt8)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[5]).value);
 

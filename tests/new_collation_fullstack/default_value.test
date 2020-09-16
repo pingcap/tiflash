@@ -12,8 +12,8 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_s
 +------+------+
 | a    | b    |
 +------+------+
-|    1 | 2000 |
-|    1 | 2000 |
+|    1 | 0000 |
+|    1 | 0000 |
 +------+------+
 
 mysql> alter table test.t add column b1 enum('ab','cd','ef') charset utf8mb4 collate utf8mb4_general_ci default 'EF';

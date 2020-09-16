@@ -79,11 +79,13 @@ mysql> alter table test.t add year_3 YEAR NULL DEFAULT '01'
 mysql> alter table test.t add year_4 YEAR NULL DEFAULT '70' 
 mysql> alter table test.t add year_5 YEAR NULL DEFAULT '00' 
 ## for tiflash, the value of year_a is un-stable(FLASH-1030)
-#mysql> alter table test.t add year_a YEAR NOT NULL
+mysql> alter table test.t add year_a YEAR NOT NULL
 
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
-+------+--------+--------+--------+--------+--------+--------+
-| a    | year_0 | year_1 | year_2 | year_3 | year_4 | year_5 |
-+------+--------+--------+--------+--------+--------+--------+
-|    1 |   1901 |   2155 |   0000 |   2001 |   1970 |   2000 |
-+------+--------+--------+--------+--------+--------+--------+
++------+--------+--------+--------+--------+--------+--------+--------+
+| a    | year_0 | year_1 | year_2 | year_3 | year_4 | year_5 | year_a |
++------+--------+--------+--------+--------+--------+--------+--------+
+|    1 |   1901 |   2155 |   0000 |   2001 |   1970 |   2000 |   0000 |
++------+--------+--------+--------+--------+--------+--------+--------+
+
+mysql> drop table if exists test.t

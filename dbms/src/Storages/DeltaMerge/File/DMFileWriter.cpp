@@ -34,7 +34,9 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
     {
         // TODO: currently we only generate index for Integers, Date, DateTime types, and this should be configurable by user.
         // TODO: If column type is nullable, we won't generate index for it
-        if (cd.type->isInteger() || cd.type->isDateOrDateTime())
+        /// for handle column always generate index
+        bool do_index = cd.id == EXTRA_HANDLE_COLUMN_ID || cd.type->isInteger() || cd.type->isDateOrDateTime();
+        if (do_index)
         {
             String column_name = DMFile::getFileNameBase(cd.id, {});
             minmax_indexs.emplace(column_name, std::make_shared<MinMaxIndex>(*cd.type));

@@ -1,3 +1,4 @@
+#include <Common/TiFlashMetrics.h>
 #include <Core/TMTPKType.h>
 #include <Interpreters/Context.h>
 #include <Storages/StorageDeltaMerge.h>
@@ -10,6 +11,8 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionDataMover.h>
 #include <Storages/Transaction/TMTContext.h>
+
+#include <ext/scope_guard.h>
 
 namespace DB
 {
@@ -81,12 +84,14 @@ void KVStore::tryApplySnapshot(RegionPtr new_region, Context & context)
         auto table_id = new_region->getMappedTableID();
         if (auto storage = tmt.getStorages().get(table_id); storage)
         {
-            const auto handle_range = new_region->getHandleRangeByTable(table_id);
             switch (storage->engineType())
             {
                 case TiDB::StorageEngine::TMT:
                 {
+                    if (storage->getTableInfo().is_common_handle)
+                        throw Exception("TMT table does not support clustered index", ErrorCodes::NOT_IMPLEMENTED);
                     HandleMap handle_map;
+                    const auto handle_range = getHandleRangeByTable(new_region->getRange()->rawKeys(), table_id);
 
                     auto table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
 
@@ -112,8 +117,9 @@ void KVStore::tryApplySnapshot(RegionPtr new_region, Context & context)
                     auto table_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
                     // In StorageDeltaMerge, we use deleteRange to remove old data
                     auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-                    DM::HandleRange dm_handle_range = toDMHandleRange(handle_range);
-                    dm_storage->deleteRange(dm_handle_range, context.getSettingsRef());
+                    dm_storage->deleteRange(DM::RowKeyRange::fromRegionRange(new_region->getRange(), table_id, storage->isCommonHandle(),
+                                                storage->getRowKeyColumnSize()),
+                        context.getSettingsRef());
                     break;
                 }
                 default:
@@ -132,8 +138,6 @@ static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 peer_
     {
         if (peer.id() == peer_id)
         {
-            if (!peer.is_learner())
-                throw Exception(std::string(__PRETTY_FUNCTION__) + ": peer is not learner, should not happen", ErrorCodes::LOGICAL_ERROR);
             return peer;
         }
     }
@@ -144,7 +148,22 @@ static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 peer_
 RegionPtr KVStore::preHandleSnapshot(
     metapb::Region && region, UInt64 peer_id, const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt)
 {
-    auto start_time = Clock::now();
+    {
+        decltype(bg_gc_region_data)::value_type tmp;
+        std::lock_guard<std::mutex> lock(bg_gc_region_data_mutex);
+        if (!bg_gc_region_data.empty())
+        {
+            tmp.swap(bg_gc_region_data.back());
+            bg_gc_region_data.pop_back();
+        }
+    }
+
+    Stopwatch watch;
+    auto & ctx = tmt.getContext();
+    SCOPE_EXIT({
+        GET_METRIC(ctx.getTiFlashMetrics(), tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode)
+            .Observe(watch.elapsedSeconds());
+    });
 
     auto meta = ({
         auto peer = findPeer(region, peer_id);
@@ -174,10 +193,11 @@ RegionPtr KVStore::preHandleSnapshot(
             }
 
             ss << "[cf: " << CFToName(snapshot.cf) << ", kv size: " << snapshot.len << "],";
+            // Note that number of keys in different cf will be aggregated into one metrics
+            GET_METRIC(ctx.getTiFlashMetrics(), tiflash_raft_process_keys, type_apply_snapshot).Increment(snapshot.len);
         }
         new_region->tryPreDecodeTiKVValue(tmt);
-        auto time_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
-        ss << " cost " << time_cost << "ms";
+        ss << " cost " << watch.elapsedMilliseconds() << "ms";
         LOG_INFO(log, ss.str());
     }
     return new_region;
@@ -186,6 +206,13 @@ RegionPtr KVStore::preHandleSnapshot(
 void KVStore::handleApplySnapshot(RegionPtr new_region, TMTContext & tmt)
 {
     LOG_INFO(log, "Try to apply snapshot: " << new_region->toString(true));
+
+    Stopwatch watch;
+    SCOPE_EXIT({
+        auto & ctx = tmt.getContext();
+        GET_METRIC(ctx.getTiFlashMetrics(), tiflash_raft_command_duration_seconds, type_apply_snapshot_flush)
+            .Observe(watch.elapsedSeconds());
+    });
 
     tryApplySnapshot(new_region, tmt.getContext());
 
@@ -203,8 +230,12 @@ TiFlashApplyRes KVStore::handleIngestSST(UInt64 region_id, const SnapshotViewArr
 {
     auto region_task_lock = region_manager.genRegionTaskLock(region_id);
 
-    const RegionPtr region = getRegion(region_id);
+    Stopwatch watch;
+    auto & ctx = tmt.getContext();
+    SCOPE_EXIT(
+        { GET_METRIC(ctx.getTiFlashMetrics(), tiflash_raft_command_duration_seconds, type_ingest_sst).Observe(watch.elapsedSeconds()); });
 
+    const RegionPtr region = getRegion(region_id);
     if (region == nullptr)
     {
         LOG_WARNING(log, __PRETTY_FUNCTION__ << ": [region " << region_id << "] is not found, might be removed already");
@@ -229,7 +260,7 @@ TiFlashApplyRes KVStore::handleIngestSST(UInt64 region_id, const SnapshotViewArr
 
     // try to flush remain data in memory.
     func_try_flush();
-    region->handleIngestSST(snaps, index, term);
+    region->handleIngestSST(snaps, index, term, tmt);
     region->tryPreDecodeTiKVValue(tmt);
     func_try_flush();
 

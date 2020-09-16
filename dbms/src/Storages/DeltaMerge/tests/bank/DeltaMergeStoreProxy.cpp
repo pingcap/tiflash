@@ -1,3 +1,4 @@
+#include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/tests/bank/DeltaMergeStoreProxy.h>
 
 namespace DB
@@ -39,7 +40,7 @@ UInt64 DeltaMergeStoreProxy::selectBalance(UInt64 id, UInt64 tso)
     BlockInputStreamPtr in      = store->read(*context,
                                          context->getSettingsRef(),
                                          columns,
-                                         {HandleRange::newAll()},
+                                         {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                          /* num_streams= */ 1,
                                          /* max_version= */ tso,
                                          EMPTY_FILTER,
@@ -91,7 +92,7 @@ UInt64 DeltaMergeStoreProxy::sumBalance(UInt64 begin, UInt64 end, UInt64 tso)
     BlockInputStreamPtr in      = store->read(*context,
                                          context->getSettingsRef(),
                                          columns,
-                                         {HandleRange::newAll()},
+                                         {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                          /* num_streams= */ 1,
                                          /* max_version= */ tso,
                                          EMPTY_FILTER,

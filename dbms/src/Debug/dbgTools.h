@@ -1,6 +1,8 @@
 #pragma once
 
 #include <Parsers/IAST.h>
+#include <Storages/Transaction/TiDB.h>
+
 #include <optional>
 
 namespace TiDB
@@ -23,6 +25,9 @@ RegionPtr createRegion(TableID table_id, RegionID region_id, const HandleID & st
 
 Regions createRegions(TableID table_id, size_t region_num, size_t key_num_each_region, HandleID handle_begin, RegionID new_region_id_begin);
 
+RegionPtr createRegion(
+    const TiDB::TableInfo & table_info, RegionID region_id, std::vector<Field> & start_keys, std::vector<Field> & end_keys);
+
 void encodeRow(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, std::stringstream & ss);
 
 void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID handle_id, ASTs::const_iterator begin,
@@ -35,5 +40,7 @@ void remove(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
 
 Int64 concurrentRangeOperate(
     const TiDB::TableInfo & table_info, HandleID start_handle, HandleID end_handle, Context & context, Int64 magic_num, bool del);
+
+Field convertField(const TiDB::ColumnInfo & column_info, const Field & field);
 
 } // namespace DB::RegionBench
