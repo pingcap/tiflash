@@ -6,8 +6,8 @@
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
-#include <Flash/Coprocessor/NormalDAGResponseWriter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
+#include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/KVStore.h>
@@ -79,7 +79,7 @@ try
     BlockOutputStreamPtr dag_output_stream = nullptr;
     if constexpr (!batch)
     {
-        NormalDAGResponseWriter response_writer(dag_response, context.getSettings().dag_records_per_chunk, dag.getEncodeType(),
+        UnaryDAGResponseWriter response_writer(dag_response, context.getSettings().dag_records_per_chunk, dag.getEncodeType(),
             dag.getResultFieldTypes(), dag_context, collect_exec_summary, dag_request.has_root_executor());
         dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), response_writer);
         copyData(*streams.in, *dag_output_stream);

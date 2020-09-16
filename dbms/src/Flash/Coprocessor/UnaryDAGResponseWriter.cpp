@@ -2,7 +2,7 @@
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
-#include <Flash/Coprocessor/NormalDAGResponseWriter.h>
+#include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
 
 namespace DB
 {
@@ -13,7 +13,7 @@ extern const int UNSUPPORTED_PARAMETER;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-NormalDAGResponseWriter::NormalDAGResponseWriter(tipb::SelectResponse * dag_response_, Int64 records_per_chunk_,
+UnaryDAGResponseWriter::UnaryDAGResponseWriter(tipb::SelectResponse * dag_response_, Int64 records_per_chunk_,
     tipb::EncodeType encode_type_, std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_,
     bool collect_execute_summary_, bool return_executor_id_)
     : DAGResponseWriter(records_per_chunk_, encode_type_, result_field_types_, dag_context_, collect_execute_summary_, return_executor_id_),
@@ -35,7 +35,7 @@ NormalDAGResponseWriter::NormalDAGResponseWriter(tipb::SelectResponse * dag_resp
     current_records_num = 0;
 }
 
-void NormalDAGResponseWriter::encodeChunkToDAGResponse()
+void UnaryDAGResponseWriter::encodeChunkToDAGResponse()
 {
     auto dag_chunk = dag_response->add_chunks();
     dag_chunk->set_rows_data(chunk_codec_stream->getString());
@@ -43,7 +43,7 @@ void NormalDAGResponseWriter::encodeChunkToDAGResponse()
     current_records_num = 0;
 }
 
-void NormalDAGResponseWriter::finishWrite()
+void UnaryDAGResponseWriter::finishWrite()
 {
     if (current_records_num > 0)
     {
@@ -52,7 +52,7 @@ void NormalDAGResponseWriter::finishWrite()
     addExecuteSummaries(*dag_response);
 }
 
-void NormalDAGResponseWriter::write(const Block & block)
+void UnaryDAGResponseWriter::write(const Block & block)
 {
     if (block.columns() != result_field_types.size())
         throw TiFlashException("Output column size mismatch with field type size", Errors::Coprocessor::Internal);

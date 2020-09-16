@@ -28,8 +28,8 @@ public:
     void finishWrite() override;
 
 private:
-    void addJob();
-    ThreadPool::Job encodeJob(std::vector<Block> & blocks, tipb::SelectResponse & response, StreamWriterPtr stream_writer) const;
+    void ScheduleEncodeTask();
+    ThreadPool::Job getEncodeTask(std::vector<Block> & input_blocks, tipb::SelectResponse & response, StreamWriterPtr stream_writer) const;
 
     StreamWriterPtr writer;
     std::vector<Block> blocks;
