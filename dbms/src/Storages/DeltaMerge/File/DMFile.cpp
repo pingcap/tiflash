@@ -173,6 +173,7 @@ void DMFile::finalize(WriteBufferFromFileBase & buffer)
     UInt32 file_num = sub_file_stats.size();
     writeIntBinary(sub_file_stat_offset, buffer);
     writeIntBinary(file_num, buffer);
+    writeIntBinary(static_cast<std::underlying_type_t<DMSingleFileFormatVersion>>(DMSingleFileFormatVersion::SingleFile_VERSION_BASE), buffer);
     buffer.next();
     if (status != Status::WRITING)
         throw Exception("Expected WRITING status, now " + statusString(status));
@@ -316,7 +317,7 @@ void DMFile::initialize(const FileProviderPtr & file_provider)
             UInt64 sub_file_stats_offset;
             UInt32 sub_file_num;
             ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
-            buf.seek(file.getSize() - 12, SEEK_SET);
+            buf.seek(file.getSize() - 16, SEEK_SET);
             DB::readIntBinary(sub_file_stats_offset, buf);
             DB::readIntBinary(sub_file_num, buf);
 

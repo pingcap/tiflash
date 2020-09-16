@@ -34,8 +34,7 @@ public:
     void finalize();
 
 private:
-    void writeColumn(ColId col_id, const IDataType & type);
-    void finalizeColumn(ColId col_id, const IDataType & type);
+    void finalizeColumn(ColId col_id, DataTypePtr type);
 
 private:
     DMFilePtr           dmfile;
@@ -44,7 +43,7 @@ private:
     size_t              max_compress_block_size;
     CompressionSettings compression_settings;
 
-    ColumnMinMaxIndexs minmaxindexs;
+    ColumnMinMaxIndexs minmax_indexs;
 
     using Blocks = std::vector<Block>;
     Blocks blocks;

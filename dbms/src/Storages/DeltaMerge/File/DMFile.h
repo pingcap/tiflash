@@ -35,6 +35,11 @@ public:
         READABLE,
     };
 
+    enum DMSingleFileFormatVersion : int
+    {
+        SingleFile_VERSION_BASE = 0,
+    };
+
     static String statusString(Status status)
     {
         switch (status)
