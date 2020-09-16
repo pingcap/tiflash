@@ -22,11 +22,11 @@ StreamingDAGResponseWriter::StreamingDAGResponseWriter(StreamWriterPtr writer_, 
     rows_in_blocks = 0;
 }
 
-void StreamingDAGResponseWriter::addJob()
+void StreamingDAGResponseWriter::ScheduleEncodeTask()
 {
     tipb::SelectResponse response;
     addExecuteSummaries(response);
-    thread_pool.schedule(encodeJob(blocks, response, writer));
+    thread_pool.schedule(getEncodeTask(blocks, response, writer));
     blocks.clear();
     rows_in_blocks = 0;
 }
@@ -35,15 +35,16 @@ void StreamingDAGResponseWriter::finishWrite()
 {
     if (rows_in_blocks > 0)
     {
-        addJob();
+        ScheduleEncodeTask();
     }
     // wait all job finishes.
     thread_pool.wait();
 }
 
-ThreadPool::Job StreamingDAGResponseWriter::encodeJob(
+ThreadPool::Job StreamingDAGResponseWriter::getEncodeTask(
     std::vector<Block> & input_blocks, tipb::SelectResponse & response, StreamWriterPtr stream_writer) const
 {
+    /// todo find a way to avoid copying input_blocks
     return [this, input_blocks, response, stream_writer]() mutable {
         std::unique_ptr<ChunkCodecStream> chunk_codec_stream = nullptr;
         if (encode_type == tipb::EncodeType::TypeDefault)
@@ -117,7 +118,7 @@ void StreamingDAGResponseWriter::write(const Block & block)
     blocks.push_back(block);
     if ((Int64)rows_in_blocks > records_per_chunk)
     {
-        addJob();
+        ScheduleEncodeTask();
     }
 }
 

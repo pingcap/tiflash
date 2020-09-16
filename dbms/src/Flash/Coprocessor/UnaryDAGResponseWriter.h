@@ -16,10 +16,10 @@ namespace DB
 {
 
 /// Serializes the stream of blocks in TiDB DAG response format.
-class NormalDAGResponseWriter : public DAGResponseWriter
+class UnaryDAGResponseWriter : public DAGResponseWriter
 {
 public:
-    NormalDAGResponseWriter(tipb::SelectResponse * response_, Int64 records_per_chunk_, tipb::EncodeType encodeType_,
+    UnaryDAGResponseWriter(tipb::SelectResponse * response_, Int64 records_per_chunk_, tipb::EncodeType encodeType_,
         std::vector<tipb::FieldType> result_field_types, DAGContext & dag_context_, bool collect_execute_summary_,
         bool return_executor_id_);
 
