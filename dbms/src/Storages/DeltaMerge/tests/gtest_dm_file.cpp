@@ -28,7 +28,7 @@ public:
 
         auto settings  = DB::Settings();
         storage_pool   = std::make_unique<StoragePool>("test.t1", path, DMTestEnv::getContext(), settings);
-        dm_file        = DMFile::create(0, path);
+        dm_file        = DMFile::create(DB::tests::TiFlashTestEnv::getContext().getFileProvider(), 0, path);
         db_context     = std::make_unique<Context>(DMTestEnv::getContext(settings));
         table_columns_ = std::make_shared<ColumnDefines>();
         column_cache_  = std::make_shared<ColumnCache>();
@@ -759,7 +759,7 @@ public:
 
         auto settings  = DB::Settings();
         storage_pool   = std::make_unique<StoragePool>("test.t1", path, DMTestEnv::getContext(), settings);
-        dm_file        = DMFile::create(0, path);
+        dm_file        = DMFile::create(DB::tests::TiFlashTestEnv::getContext().getFileProvider(), 0, path);
         db_context     = std::make_unique<Context>(DMTestEnv::getContext(settings));
         table_columns_ = std::make_shared<ColumnDefines>();
         column_cache_  = std::make_shared<ColumnCache>();
