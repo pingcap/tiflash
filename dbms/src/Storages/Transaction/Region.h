@@ -132,7 +132,7 @@ public:
         return region1.meta == region2.meta && region1.data == region2.data;
     }
 
-    ReadIndexResult learnerRead();
+    ReadIndexResult learnerRead(UInt64 start_ts);
 
     /// If server is terminating, return true (read logic should throw NOT_FOUND exception and let upper layer retry other store).
     TerminateWaitIndex waitIndex(UInt64 index, const std::atomic_bool & terminated);

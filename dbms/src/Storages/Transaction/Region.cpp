@@ -297,6 +297,7 @@ void RegionRaftCommandDelegate::handleAdminRaftCmd(const raft_cmdpb::AdminReques
     switch (type)
     {
         case raft_cmdpb::AdminCmdType::ChangePeer:
+        case raft_cmdpb::AdminCmdType::ChangePeerV2:
         {
             execChangePeer(request, response, index, term);
             result.type = RaftCommandResult::Type::ChangePeer;
@@ -465,10 +466,14 @@ std::string Region::toString(bool dump_status) const { return meta.toString(dump
 
 ImutRegionRangePtr Region::getRange() const { return meta.getRange(); }
 
-ReadIndexResult Region::learnerRead()
+ReadIndexResult Region::learnerRead(UInt64 start_ts)
 {
     if (index_reader != nullptr)
-        return index_reader->getReadIndex(meta.getRegionVerID());
+    {
+        auto [version, conf_ver, range] = dumpVersionRange();
+
+        return index_reader->getReadIndex({id(), conf_ver, version}, *range->rawKeys().first, *range->rawKeys().second, start_ts);
+    }
     return {};
 }
 

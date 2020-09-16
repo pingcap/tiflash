@@ -160,9 +160,7 @@ std::pair<RegionDataReadInfoList, RegionException::RegionReadStatus> resolveLock
             if (LockInfoPtr lock_info = scanner.getLockInfo(RegionLockReadQuery{.read_tso = start_ts, .bypass_lock_ts = bypass_lock_ts});
                 lock_info)
             {
-                LockInfos lock_infos;
-                lock_infos.emplace_back(std::move(lock_info));
-                throw LockException(region->id(), std::move(lock_infos));
+                throw LockException(region->id(), std::move(lock_info));
             }
         }
 

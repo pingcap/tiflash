@@ -118,31 +118,23 @@ RegionDataReadInfo RegionData::readDataByWriteIt(const ConstWriteCFIter & write_
 
 LockInfoPtr RegionData::getLockInfo(const RegionLockReadQuery & query) const
 {
-    enum LockType : UInt8
-    {
-        Put = 'P',
-        Delete = 'D',
-        Lock = 'L',
-        Pessimistic = 'S',
-    };
-
     for (const auto & [pk, value] : lock_cf.getData())
     {
         std::ignore = pk;
 
-        const auto & [tikv_key, tikv_val, decoded_val, decoded_key] = value;
-        const auto & [lock_type, primary, ts, ttl, min_commit_ts] = decoded_val;
+        const auto & [tikv_key, tikv_val, lock_info_ptr] = value;
         std::ignore = tikv_key;
         std::ignore = tikv_val;
+        auto & lock_info = *lock_info_ptr;
 
-        if (ts > query.read_tso || lock_type == Lock || lock_type == Pessimistic)
+        if (lock_info.lock_version() > query.read_tso || lock_info.lock_type() == kvrpcpb::Op::Lock
+            || lock_info.lock_type() == kvrpcpb::Op::PessimisticLock)
             continue;
-        if (min_commit_ts > query.read_tso)
+        if (lock_info.min_commit_ts() > query.read_tso)
             continue;
-        if (query.bypass_lock_ts && query.bypass_lock_ts->count(ts))
+        if (query.bypass_lock_ts && query.bypass_lock_ts->count(lock_info.lock_version()))
             continue;
-
-        return std::make_unique<LockInfo>(LockInfo{primary, ts, *decoded_key, ttl});
+        return lock_info_ptr;
     }
 
     return nullptr;

@@ -479,7 +479,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
                     /// Blocking learner read. Note that learner read must be performed ahead of data read,
                     /// otherwise the desired index will be blocked by the lock of data read.
-                    auto read_index_result = region->learnerRead();
+                    auto read_index_result = region->learnerRead(mvcc_query_info.read_tso);
                     GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_read_index_duration_seconds)
                         .Observe(read_index_watch.elapsedSeconds());
 

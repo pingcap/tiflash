@@ -98,11 +98,7 @@ grpc::Status CoprocessorHandler::execute()
             log, __PRETTY_FUNCTION__ << ": LockException: region " << cop_request->context().region_id() << ", message: " << e.message());
         cop_response->Clear();
         GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_error, reason_meet_lock).Increment();
-        kvrpcpb::LockInfo * lock_info = cop_response->mutable_locked();
-        lock_info->set_key(e.lock_infos[0]->key);
-        lock_info->set_primary_lock(e.lock_infos[0]->primary_lock);
-        lock_info->set_lock_ttl(e.lock_infos[0]->lock_ttl);
-        lock_info->set_lock_version(e.lock_infos[0]->lock_version);
+        *cop_response->mutable_locked() = *e.lock_info;
         // return ok so TiDB has the chance to see the LockException
         return grpc::Status::OK;
     }
