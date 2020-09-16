@@ -36,6 +36,7 @@ DMFilePtr DMFile::create(const FileProviderPtr & file_provider, UInt64 file_id, 
 
     Poco::File parent(parent_path);
     parent.createDirectories();
+
     auto       path = new_dmfile->path();
     Poco::File file(path);
     if (file.exists())
@@ -43,7 +44,7 @@ DMFilePtr DMFile::create(const FileProviderPtr & file_provider, UInt64 file_id, 
         file.remove(true);
         LOG_WARNING(log, "Existing dmfile, removed :" << path);
     }
-    file.createFile();
+    PageUtil::touchFile(new_dmfile->path());
     new_dmfile->initialize(file_provider);
 
     // Create a mark file to stop this dmfile from being removed by GC.
@@ -61,10 +62,6 @@ DMFilePtr DMFile::restore(const FileProviderPtr & file_provider, UInt64 file_id,
     return dmfile;
 }
 
-DMFile::DMFile(UInt64 file_id_, UInt64 ref_id_, const String & parent_path_, DMFile::Status status_, Logger *log_)
-        : file_id(file_id_), ref_id(ref_id_), parent_path(parent_path_), mode(Mode::UNKNOWN), status(status_), log(log_)
-{}
-
 void DMFile::writeMeta(WriteBufferFromFileBase & buffer)
 {
     size_t meta_offset = buffer.count();
@@ -76,9 +73,23 @@ void DMFile::writeMeta(WriteBufferFromFileBase & buffer)
     addSubFileStat(metaIdentifier(), meta_offset, meta_size);
 }
 
+void DMFile::writePack(WriteBufferFromFileBase & buffer)
+{
+    size_t pack_offset = buffer.count();
+    for (auto & stat : pack_stats)
+    {
+        writePODBinary(stat, buffer);
+    }
+    size_t pack_size = buffer.count() - pack_offset;
+    addSubFileStat(packStatIdentifier(), pack_offset, pack_size);
+}
+
 void DMFile::writeMeta(const FileProviderPtr & file_provider)
 {
-    // FIXME: make sure DMFile mode is Mode::FOLDER
+    if (unlikely(mode != Mode::FOLDER))
+    {
+        throw DB::TiFlashException("writeMeta is only expected to be called when mode is FOLDER.", Errors::DeltaTree::Internal);
+    }
     String meta_path     = metaPath();
     String tmp_meta_path = meta_path + ".tmp";
 
@@ -93,7 +104,10 @@ void DMFile::writeMeta(const FileProviderPtr & file_provider)
 
 void DMFile::upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileVersion ver)
 {
-    // FIXME: make sure DMFile mode is Mode::FOLDER
+    if (unlikely(mode != Mode::FOLDER))
+    {
+        throw DB::TiFlashException("UpgradeMetaIfNeed is only expected to be called when mode is FOLDER.", Errors::DeltaTree::Internal);
+    }
     if (unlikely(ver == DMFileVersion::VERSION_BASE))
     {
         // Update ColumnStat.serialized_bytes
@@ -154,26 +168,21 @@ void DMFile::readMeta(const FileProviderPtr & file_provider)
 void DMFile::finalize(WriteBufferFromFileBase & buffer)
 {
     writeMeta(buffer);
+    writePack(buffer);
 
-    size_t pack_offset = buffer.count();
-    for (auto & stat : pack_stats)
-    {
-        writePODBinary(stat, buffer);
-    }
-    size_t pack_size = buffer.count() - pack_offset;
-    addSubFileStat(packStatIdentifier(), pack_offset, pack_size);
-
-    UInt64 sub_file_stat_offset = buffer.count();
+    Footer footer;
+    footer.sub_file_stat_offset = buffer.count();
+    footer.sub_file_num = sub_file_stats.size();
+    footer.file_format_version = DMSingleFileFormatVersion::SINGLE_FILE_VERSION_BASE;
     for (auto & iter : sub_file_stats)
     {
          writeStringBinary(iter.second.name, buffer);
          writeIntBinary(iter.second.offset, buffer);
          writeIntBinary(iter.second.size, buffer);
     }
-    UInt32 file_num = sub_file_stats.size();
-    writeIntBinary(sub_file_stat_offset, buffer);
-    writeIntBinary(file_num, buffer);
-    writeIntBinary(static_cast<std::underlying_type_t<DMSingleFileFormatVersion>>(DMSingleFileFormatVersion::SingleFile_VERSION_BASE), buffer);
+    writeIntBinary(footer.sub_file_stat_offset, buffer);
+    writeIntBinary(footer.sub_file_num, buffer);
+    writeIntBinary(static_cast<std::underlying_type_t<DMSingleFileFormatVersion>>(footer.file_format_version), buffer);
     buffer.next();
     if (status != Status::WRITING)
         throw Exception("Expected WRITING status, now " + statusString(status));
@@ -182,7 +191,6 @@ void DMFile::finalize(WriteBufferFromFileBase & buffer)
     status = Status::READABLE;
 
     auto new_path = path();
-
     Poco::File file(new_path);
     if (file.exists())
         file.remove();
@@ -313,10 +321,11 @@ void DMFile::initialize(const FileProviderPtr & file_provider)
         mode = Mode::SINGLE_FILE;
         if (status == Status::READABLE)
         {
-            // initialize object state related to read file
+            // initialize sub file state
             UInt64 sub_file_stats_offset;
             UInt32 sub_file_num;
             ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
+            // FIXME: remove use of magic number 16
             buf.seek(file.getSize() - 16, SEEK_SET);
             DB::readIntBinary(sub_file_stats_offset, buf);
             DB::readIntBinary(sub_file_num, buf);

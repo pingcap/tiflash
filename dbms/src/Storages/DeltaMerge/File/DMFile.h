@@ -37,7 +37,7 @@ public:
 
     enum DMSingleFileFormatVersion : int
     {
-        SingleFile_VERSION_BASE = 0,
+        SINGLE_FILE_VERSION_BASE = 0,
     };
 
     static String statusString(Status status)
@@ -67,7 +67,6 @@ public:
     struct SubFileStat
     {
         SubFileStat() = default;
-
         SubFileStat(const String & name_, UInt64 offset_, UInt64 size_)
             : name{name_}, offset{offset_}, size{size_} {}
         String name;
@@ -75,6 +74,13 @@ public:
         UInt64 size;
     };
     using SubFileStats = std::unordered_map<String, SubFileStat>;
+
+    struct Footer
+    {
+        UInt64 sub_file_stat_offset;
+        UInt32 sub_file_num;
+        DMSingleFileFormatVersion file_format_version;
+    };
 
     using PackStats = PaddedPODArray<PackStat>;
 
@@ -194,9 +200,13 @@ public:
     bool isFolderMode() { return mode == Mode::FOLDER; }
 
 private:
-    DMFile(UInt64 file_id_, UInt64 ref_id_, const String & parent_path_, Status status_, Logger * log_);
+    DMFile(UInt64 file_id_, UInt64 ref_id_, const String & parent_path_, DMFile::Status status_, Logger *log_)
+        : file_id(file_id_), ref_id(ref_id_), parent_path(parent_path_), mode(Mode::UNKNOWN), status(status_), log(log_)
+    {
+    }
 
     void writeMeta(WriteBufferFromFileBase & buffer);
+    void writePack(WriteBufferFromFileBase & buffer);
 
     void writeMeta(const FileProviderPtr & file_provider);
     void readMeta(const FileProviderPtr & file_provider);
