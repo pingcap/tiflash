@@ -4,6 +4,7 @@
 #pragma GCC diagnostic pop
 
 #include <Common/TiFlashException.h>
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/DAGQueryBlock.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 
@@ -63,7 +64,7 @@ void collectOutPutFieldTypesFromAgg(std::vector<tipb::FieldType> & field_type, c
 
 /// construct DAGQueryBlock from a tree struct based executors, which is the
 /// format after supporting join in dag request
-DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_)
+DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_, TiFlashMetricsPtr metrics)
     : id(id_), root(&root_), qb_column_prefix("__QB_" + std::to_string(id_) + "_"), qb_join_subquery_alias(qb_column_prefix + "join")
 {
     const tipb::Executor * current = root;
@@ -72,23 +73,27 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_)
         switch (current->tp())
         {
             case tipb::ExecType::TypeSelection:
+                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_sel).Increment();
                 assignOrThrowException(&selection, current, SEL_NAME);
                 selection_name = current->executor_id();
                 current = &current->selection().child();
                 break;
             case tipb::ExecType::TypeAggregation:
             case tipb::ExecType::TypeStreamAgg:
+                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_agg).Increment();
                 assignOrThrowException(&aggregation, current, AGG_NAME);
                 aggregation_name = current->executor_id();
                 collectOutPutFieldTypesFromAgg(output_field_types, current->aggregation());
                 current = &current->aggregation().child();
                 break;
             case tipb::ExecType::TypeLimit:
+                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_limit).Increment();
                 assignOrThrowException(&limitOrTopN, current, LIMIT_NAME);
                 limitOrTopN_name = current->executor_id();
                 current = &current->limit().child();
                 break;
             case tipb::ExecType::TypeTopN:
+                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_topn).Increment();
                 assignOrThrowException(&limitOrTopN, current, TOPN_NAME);
                 limitOrTopN_name = current->executor_id();
                 current = &current->topn().child();
@@ -109,15 +114,20 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_)
     {
         if (source->join().children_size() != 2)
             throw TiFlashException("Join executor children size not equal to 2", Errors::Coprocessor::BadRequest);
-        children.push_back(std::make_shared<DAGQueryBlock>(id * 2, source->join().children(0)));
-        children.push_back(std::make_shared<DAGQueryBlock>(id * 2 + 1, source->join().children(1)));
+        GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_join).Increment();
+        children.push_back(std::make_shared<DAGQueryBlock>(id * 2, source->join().children(0), metrics));
+        children.push_back(std::make_shared<DAGQueryBlock>(id * 2 + 1, source->join().children(1), metrics));
+    }
+    else
+    {
+        GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_ts).Increment();
     }
     fillOutputFieldTypes();
 }
 
 /// construct DAGQueryBlock from a list struct based executors, which is the
 /// format before supporting join in dag request
-DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrField<tipb::Executor> & executors)
+DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrField<tipb::Executor> & executors, TiFlashMetricsPtr metrics)
     : id(id_), root(nullptr), qb_column_prefix("__QB_" + std::to_string(id_) + "_"), qb_join_subquery_alias(qb_column_prefix + "join")
 {
     for (int i = (int)executors.size() - 1; i >= 0; i--)
@@ -125,6 +135,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
         switch (executors[i].tp())
         {
             case tipb::ExecType::TypeTableScan:
+                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_ts).Increment();
                 assignOrThrowException(&source, &executors[i], SOURCE_NAME);
                 /// use index as the prefix for executor name so when we sort by
                 /// the executor name, it will result in the same order as it is
@@ -133,25 +144,30 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
                 source_name = std::to_string(i) + "_tablescan";
                 break;
             case tipb::ExecType::TypeSelection:
+                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_sel).Increment();
                 assignOrThrowException(&selection, &executors[i], SEL_NAME);
                 selection_name = std::to_string(i) + "_selection";
                 break;
             case tipb::ExecType::TypeStreamAgg:
             case tipb::ExecType::TypeAggregation:
+                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_agg).Increment();
                 assignOrThrowException(&aggregation, &executors[i], AGG_NAME);
                 aggregation_name = std::to_string(i) + "_aggregation";
                 collectOutPutFieldTypesFromAgg(output_field_types, executors[i].aggregation());
                 break;
             case tipb::ExecType::TypeTopN:
+                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_topn).Increment();
                 assignOrThrowException(&limitOrTopN, &executors[i], TOPN_NAME);
                 limitOrTopN_name = std::to_string(i) + "_limitOrTopN";
                 break;
             case tipb::ExecType::TypeLimit:
+                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_limit).Increment();
                 assignOrThrowException(&limitOrTopN, &executors[i], LIMIT_NAME);
                 limitOrTopN_name = std::to_string(i) + "_limitOrTopN";
                 break;
             default:
-                throw TiFlashException("Unsupported executor in DAG request: " + executors[i].DebugString(), Errors::Coprocessor::Unimplemented);
+                throw TiFlashException(
+                    "Unsupported executor in DAG request: " + executors[i].DebugString(), Errors::Coprocessor::Unimplemented);
         }
     }
     fillOutputFieldTypes();

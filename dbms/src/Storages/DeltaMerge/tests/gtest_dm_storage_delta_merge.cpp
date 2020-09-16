@@ -164,80 +164,147 @@ TEST(StorageDeltaMerge_internal_test, GetMergedQueryRanges)
 {
     MvccQueryInfo::RegionsQueryInfo regions;
     RegionQueryInfo                 region;
-    region.range_in_table = std::make_pair(100, 200);
+    region.range_in_table = GET_REGION_RANGE(100, 200, 1);
     regions.emplace_back(region);
-    region.range_in_table = std::make_pair(200, 250);
+    region.range_in_table = GET_REGION_RANGE(200, 250, 1);
     regions.emplace_back(region);
-    region.range_in_table = std::make_pair(300, 400);
+    region.range_in_table = GET_REGION_RANGE(300, 400, 1);
     regions.emplace_back(region);
-    region.range_in_table = std::make_pair(425, 475);
+    region.range_in_table = GET_REGION_RANGE(425, 475, 1);
     regions.emplace_back(region);
 
-    auto ranges = ::DB::getQueryRanges(regions);
+    auto ranges = ::DB::getQueryRanges(regions, 1, false, 1);
     ASSERT_EQ(ranges.size(), 3UL);
-    ASSERT_RANGE_EQ(ranges[0], ::DB::DM::HandleRange(100, 250));
-    ASSERT_RANGE_EQ(ranges[1], ::DB::DM::HandleRange(300, 400));
-    ASSERT_RANGE_EQ(ranges[2], ::DB::DM::HandleRange(425, 475));
+    ASSERT_RANGE_EQ(ranges[0].toHandleRange(), ::DB::DM::HandleRange(100, 250));
+    ASSERT_RANGE_EQ(ranges[1].toHandleRange(), ::DB::DM::HandleRange(300, 400));
+    ASSERT_RANGE_EQ(ranges[2].toHandleRange(), ::DB::DM::HandleRange(425, 475));
+}
+
+TEST(StorageDeltaMerge_internal_test, GetMergedQueryRangesCommonHandle)
+{
+    MvccQueryInfo::RegionsQueryInfo regions;
+    RegionQueryInfo                 region;
+    region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(100, 200, 2).toRegionRange(1);
+    regions.emplace_back(region);
+    region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(200, 250, 2).toRegionRange(1);
+    regions.emplace_back(region);
+    region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(300, 400, 2).toRegionRange(1);
+    regions.emplace_back(region);
+    region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(425, 475, 2).toRegionRange(1);
+    regions.emplace_back(region);
+
+    auto ranges = ::DB::getQueryRanges(regions, 1, true, 2);
+    ASSERT_EQ(ranges.size(), 3UL);
+    ASSERT_ROWKEY_RANGE_EQ(ranges[0], DMTestEnv::getRowKeyRangeForClusteredIndex(100, 250, 2));
+    ASSERT_ROWKEY_RANGE_EQ(ranges[1], DMTestEnv::getRowKeyRangeForClusteredIndex(300, 400, 2));
+    ASSERT_ROWKEY_RANGE_EQ(ranges[2], DMTestEnv::getRowKeyRangeForClusteredIndex(425, 475, 2));
 }
 
 TEST(StorageDeltaMerge_internal_test, MergedUnsortedQueryRanges)
 {
     MvccQueryInfo::RegionsQueryInfo regions;
     RegionQueryInfo                 region;
-    region.range_in_table = std::make_pair(2360148, 2456148);
+    region.range_in_table = GET_REGION_RANGE(2360148, 2456148, 1);
     regions.emplace_back(region);
-    region.range_in_table = std::make_pair(1961680, 2057680);
+    region.range_in_table = GET_REGION_RANGE(1961680, 2057680, 1);
     regions.emplace_back(region);
-    region.range_in_table = std::make_pair(2264148, 2360148);
+    region.range_in_table = GET_REGION_RANGE(2264148, 2360148, 1);
     regions.emplace_back(region);
-    region.range_in_table = std::make_pair(2057680, 2153680);
+    region.range_in_table = GET_REGION_RANGE(2057680, 2153680, 1);
     regions.emplace_back(region);
-    region.range_in_table = std::make_pair(2153680, 2264148);
+    region.range_in_table = GET_REGION_RANGE(2153680, 2264148, 1);
     regions.emplace_back(region);
-    region.range_in_table = std::make_pair(2552148, 2662532);
+    region.range_in_table = GET_REGION_RANGE(2552148, 2662532, 1);
     regions.emplace_back(region);
-    region.range_in_table = std::make_pair(2758532, 2854532);
+    region.range_in_table = GET_REGION_RANGE(2758532, 2854532, 1);
     regions.emplace_back(region);
-    region.range_in_table = std::make_pair(2854532, 2950532);
+    region.range_in_table = GET_REGION_RANGE(2854532, 2950532, 1);
     regions.emplace_back(region);
-    region.range_in_table = std::make_pair(2456148, 2552148);
+    region.range_in_table = GET_REGION_RANGE(2456148, 2552148, 1);
     regions.emplace_back(region);
-    region.range_in_table = std::make_pair(2662532, 2758532);
+    region.range_in_table = GET_REGION_RANGE(2662532, 2758532, 1);
     regions.emplace_back(region);
 
-    auto ranges = ::DB::getQueryRanges(regions);
+    auto ranges = ::DB::getQueryRanges(regions, 1, false, 1);
     ASSERT_EQ(ranges.size(), 1UL);
-    ASSERT_RANGE_EQ(ranges[0], DB::DM::HandleRange(1961680, 2950532));
+    ASSERT_RANGE_EQ(ranges[0].toHandleRange(), DB::DM::HandleRange(1961680, 2950532));
+}
+
+TEST(StorageDeltaMerge_internal_test, MergedUnsortedQueryRangesCommonHandle)
+{
+    MvccQueryInfo::RegionsQueryInfo regions;
+    RegionQueryInfo                 region;
+    region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(2360148, 2456148, 2).toRegionRange(1);
+    regions.emplace_back(region);
+    region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(1961680, 2057680, 2).toRegionRange(1);
+    regions.emplace_back(region);
+    region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(2264148, 2360148, 2).toRegionRange(1);
+    regions.emplace_back(region);
+    region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(2057680, 2153680, 2).toRegionRange(1);
+    regions.emplace_back(region);
+    region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(2153680, 2264148, 2).toRegionRange(1);
+    regions.emplace_back(region);
+    region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(2552148, 2662532, 2).toRegionRange(1);
+    regions.emplace_back(region);
+    region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(2758532, 2854532, 2).toRegionRange(1);
+    regions.emplace_back(region);
+    region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(2854532, 2950532, 2).toRegionRange(1);
+    regions.emplace_back(region);
+    region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(2456148, 2552148, 2).toRegionRange(1);
+    regions.emplace_back(region);
+    region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(2662532, 2758532, 2).toRegionRange(1);
+    regions.emplace_back(region);
+
+    auto ranges = ::DB::getQueryRanges(regions, 1, true, 2);
+    ASSERT_EQ(ranges.size(), 1UL);
+    ASSERT_ROWKEY_RANGE_EQ(ranges[0], DMTestEnv::getRowKeyRangeForClusteredIndex(1961680, 2950532, 2));
 }
 
 TEST(StorageDeltaMerge_internal_test, GetFullQueryRanges)
 {
     MvccQueryInfo::RegionsQueryInfo regions;
     RegionQueryInfo                 region;
-    region.range_in_table = {TiKVHandle::Handle<HandleID>::normal_min, TiKVHandle::Handle<HandleID>::max};
+    region.range_in_table = GET_REGION_RANGE(std::numeric_limits<HandleID>::min(), std::numeric_limits<HandleID>::max(), 1);
     regions.emplace_back(region);
 
-    auto ranges = ::DB::getQueryRanges(regions);
+    auto ranges = ::DB::getQueryRanges(regions, 1, false, 1);
     ASSERT_EQ(ranges.size(), 1UL);
     const auto full_range = ::DB::DM::HandleRange::newAll();
-    ASSERT_RANGE_EQ(ranges[0], full_range);
+    ASSERT_RANGE_EQ(ranges[0].toHandleRange(), full_range);
 }
 
 TEST(StorageDeltaMerge_internal_test, OverlapQueryRanges)
 {
     MvccQueryInfo::RegionsQueryInfo regions;
     RegionQueryInfo                 region;
-    region.range_in_table = std::make_pair(100, 200);
+    region.range_in_table = GET_REGION_RANGE(100, 200, 1);
     regions.emplace_back(region);
-    region.range_in_table = std::make_pair(150, 250);
+    region.range_in_table = GET_REGION_RANGE(150, 250, 1);
     regions.emplace_back(region);
-    region.range_in_table = std::make_pair(300, 400);
+    region.range_in_table = GET_REGION_RANGE(300, 400, 1);
     regions.emplace_back(region);
-    region.range_in_table = std::make_pair(425, 475);
+    region.range_in_table = GET_REGION_RANGE(425, 475, 1);
     regions.emplace_back(region);
 
     // Overlaped ranges throw exception
-    ASSERT_ANY_THROW(auto ranges = ::DB::getQueryRanges(regions));
+    ASSERT_ANY_THROW(auto ranges = ::DB::getQueryRanges(regions, 1, false, 1));
+}
+
+TEST(StorageDeltaMerge_internal_test, OverlapQueryRangesCommonHandle)
+{
+    MvccQueryInfo::RegionsQueryInfo regions;
+    RegionQueryInfo                 region;
+    region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(100, 200, 2).toRegionRange(1);
+    regions.emplace_back(region);
+    region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(150, 250, 2).toRegionRange(1);
+    regions.emplace_back(region);
+    region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(300, 400, 2).toRegionRange(1);
+    regions.emplace_back(region);
+    region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(425, 475, 2).toRegionRange(1);
+    regions.emplace_back(region);
+
+    // Overlaped ranges throw exception
+    ASSERT_ANY_THROW(auto ranges = ::DB::getQueryRanges(regions, 1, true, 2));
 }
 
 TEST(StorageDeltaMerge_internal_test, WeirdRange)
@@ -245,16 +312,35 @@ TEST(StorageDeltaMerge_internal_test, WeirdRange)
     // [100, 200), [200, MAX), [MAX, MAX)
     MvccQueryInfo::RegionsQueryInfo regions;
     RegionQueryInfo                 region;
-    region.range_in_table = DB::HandleRange<DB::HandleID>{100, 200};
+    region.range_in_table = GET_REGION_RANGE(100, 200, 1);
     regions.emplace_back(region);
-    region.range_in_table = DB::HandleRange<DB::HandleID>{DB::TiKVRange::Handle::max, DB::TiKVRange::Handle::max};
+    region.range_in_table = GET_REGION_RANGE(std::numeric_limits<HandleID>::max(), std::numeric_limits<HandleID>::max(), 1);
     regions.emplace_back(region);
-    region.range_in_table = DB::HandleRange<DB::HandleID>{200, TiKVRange::Handle::max};
+    region.range_in_table = GET_REGION_RANGE(200, std::numeric_limits<HandleID>::max(), 1);
     regions.emplace_back(region);
 
-    auto ranges = ::DB::getQueryRanges(regions);
+    auto ranges = ::DB::getQueryRanges(regions, 1, false, 1);
     ASSERT_EQ(ranges.size(), 1UL);
-    ASSERT_RANGE_EQ(ranges[0], DB::DM::HandleRange(100, DB::DM::HandleRange::MAX));
+    ASSERT_RANGE_EQ(ranges[0].toHandleRange(), DB::DM::HandleRange(100, DB::DM::HandleRange::MAX));
+}
+
+TEST(StorageDeltaMerge_internal_test, WeirdRangeCommonHandle)
+{
+    // [100, 200), [200, MAX), [MAX, MAX)
+    MvccQueryInfo::RegionsQueryInfo regions;
+    RegionQueryInfo                 region;
+    region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(100, 200, 2).toRegionRange(1);
+    regions.emplace_back(region);
+    region.range_in_table
+        = DMTestEnv::getRowKeyRangeForClusteredIndex(std::numeric_limits<HandleID>::max(), std::numeric_limits<HandleID>::max(), 2)
+              .toRegionRange(1);
+    regions.emplace_back(region);
+    region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(200, std::numeric_limits<HandleID>::max(), 2).toRegionRange(1);
+    regions.emplace_back(region);
+
+    auto ranges = ::DB::getQueryRanges(regions, 1, true, 2);
+    ASSERT_EQ(ranges.size(), 1UL);
+    ASSERT_ROWKEY_RANGE_EQ(ranges[0], DMTestEnv::getRowKeyRangeForClusteredIndex(100, DB::DM::HandleRange::MAX, 2));
 }
 
 } // namespace tests

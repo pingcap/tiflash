@@ -41,7 +41,8 @@ RegionTable::InternalRegion & RegionTable::insertRegion(Table & table, const Reg
 {
     auto & table_regions = table.regions;
     // Insert table mapping.
-    auto [it, ok] = table_regions.emplace(region_id, InternalRegion(region_id, region_range_keys.getHandleRangeByTable(table.table_id)));
+    // todo check if region_range_keys.mapped_table_id == table.table_id ??
+    auto [it, ok] = table_regions.emplace(region_id, InternalRegion(region_id, region_range_keys.rawKeys()));
     if (!ok)
         throw Exception(
             std::string(__PRETTY_FUNCTION__) + ": insert duplicate internal region " + DB::toString(region_id), ErrorCodes::LOGICAL_ERROR);
@@ -72,7 +73,7 @@ void RegionTable::shrinkRegionRange(const Region & region)
 {
     std::lock_guard<std::mutex> lock(mutex);
     auto & internal_region = getOrInsertRegion(region);
-    internal_region.range_in_table = region.getHandleRangeByTable(region.getMappedTableID());
+    internal_region.range_in_table = region.getRange()->rawKeys();
     internal_region.cache_bytes = region.dataSize();
     if (internal_region.cache_bytes)
         dirty_regions.insert(internal_region.region_id);
@@ -223,7 +224,8 @@ namespace
 {
 /// Remove obsolete data for table after data of `handle_range` is removed from this TiFlash node.
 /// Note that this function will try to acquire lock by `IStorage->lockStructure` with will_modify_data = true
-void removeObsoleteDataInStorage(Context * const context, const TableID table_id, const HandleRange<HandleID> & handle_range)
+void removeObsoleteDataInStorage(
+    Context * const context, const TableID table_id, const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & handle_range)
 {
     TMTContext & tmt = context->getTMTContext();
     auto storage = tmt.getStorages().get(table_id);
@@ -242,9 +244,10 @@ void removeObsoleteDataInStorage(Context * const context, const TableID table_id
             return;
 
         /// Now we assume that these won't block for long time.
-        auto dm_handle_range = toDMHandleRange(handle_range);
-        dm_storage->deleteRange(dm_handle_range, context->getSettingsRef());
-        dm_storage->flushCache(*context, dm_handle_range); // flush to disk
+        auto rowkey_range
+            = DM::RowKeyRange::fromRegionRange(handle_range, table_id, table_id, storage->isCommonHandle(), storage->getRowKeyColumnSize());
+        dm_storage->deleteRange(rowkey_range, context->getSettingsRef());
+        dm_storage->flushCache(*context, rowkey_range); // flush to disk
     }
     catch (DB::Exception & e)
     {
@@ -258,7 +261,7 @@ void removeObsoleteDataInStorage(Context * const context, const TableID table_id
 void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const RegionTaskLock &)
 {
     TableID table_id = 0;
-    HandleRange<HandleID> handle_range;
+    std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> handle_range;
 
     {
         /// We need to protect `regions` and `table` under mutex lock
@@ -479,7 +482,7 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
     std::lock_guard<std::mutex> lock(mutex);
 
     auto table_id = region_range_keys.getMappedTableID();
-    auto new_handle_range = region_range_keys.getHandleRangeByTable(table_id);
+    auto new_handle_range = region_range_keys.rawKeys();
 
     if (auto it = regions.find(region_id); it != regions.end())
     {
@@ -489,15 +492,19 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
                 ErrorCodes::LOGICAL_ERROR);
 
         InternalRegion & internal_region = doGetInternalRegion(table_id, region_id);
-        if (internal_region.range_in_table.first <= new_handle_range.first
-            && internal_region.range_in_table.second >= new_handle_range.second)
+        if (*(internal_region.range_in_table.first) <= *(new_handle_range.first)
+            && *(internal_region.range_in_table.second) >= *(new_handle_range.second))
         {
             LOG_INFO(log, __FUNCTION__ << ": table " << table_id << ", internal region " << region_id << " has larger range");
         }
         else
         {
-            internal_region.range_in_table.first = std::min(new_handle_range.first, internal_region.range_in_table.first);
-            internal_region.range_in_table.second = std::max(new_handle_range.second, internal_region.range_in_table.second);
+            internal_region.range_in_table.first = *new_handle_range.first < *internal_region.range_in_table.first
+                ? new_handle_range.first
+                : internal_region.range_in_table.first;
+            internal_region.range_in_table.second = *new_handle_range.second > *internal_region.range_in_table.second
+                ? new_handle_range.second
+                : internal_region.range_in_table.second;
         }
     }
     else

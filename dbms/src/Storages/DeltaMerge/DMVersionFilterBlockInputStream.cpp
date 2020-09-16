@@ -69,12 +69,12 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
 
             {
                 UInt8 * filter_pos      = filter.data();
-                auto *  handle_pos      = const_cast<Handle *>(handle_col_data->data());
-                auto *  next_handle_pos = handle_pos + 1;
+                size_t  handle_pos      = 0;
+                size_t  next_handle_pos = handle_pos + 1;
                 for (size_t i = 0; i < batch_rows; ++i)
                 {
-                    (*filter_pos) |= (*handle_pos) != (*(next_handle_pos));
-
+                    (*filter_pos)
+                        |= compare(rowkey_column->getRowKeyValue(handle_pos), rowkey_column->getRowKeyValue(next_handle_pos)) != 0;
                     ++filter_pos;
                     ++handle_pos;
                     ++next_handle_pos;
@@ -111,12 +111,11 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
 
             {
                 UInt8 * filter_pos      = filter.data();
-                auto *  handle_pos      = const_cast<Handle *>(handle_col_data->data());
-                auto *  next_handle_pos = handle_pos + 1;
+                size_t  handle_pos      = 0;
+                size_t  next_handle_pos = handle_pos + 1;
                 for (size_t i = 0; i < batch_rows; ++i)
                 {
-                    (*filter_pos) = (*handle_pos) != (*(next_handle_pos));
-
+                    (*filter_pos) = compare(rowkey_column->getRowKeyValue(handle_pos), rowkey_column->getRowKeyValue(next_handle_pos)) != 0;
                     ++filter_pos;
                     ++handle_pos;
                     ++next_handle_pos;
@@ -165,12 +164,12 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
 
             {
                 UInt8 * not_clean_pos   = not_clean.data();
-                auto *  handle_pos      = const_cast<Handle *>(handle_col_data->data());
-                auto *  next_handle_pos = handle_pos + 1;
+                size_t  handle_pos      = 0;
+                size_t  next_handle_pos = handle_pos + 1;
                 for (size_t i = 0; i < batch_rows; ++i)
                 {
-                    (*not_clean_pos) = (*handle_pos) == (*(next_handle_pos));
-
+                    (*not_clean_pos)
+                        = compare(rowkey_column->getRowKeyValue(handle_pos), rowkey_column->getRowKeyValue(next_handle_pos)) == 0;
                     ++not_clean_pos;
                     ++handle_pos;
                     ++next_handle_pos;
@@ -211,7 +210,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
 
         {
             // Now let's handle the last row of current block.
-            auto cur_handle  = (*handle_col_data)[rows - 1];
+            auto cur_handle  = rowkey_column->getRowKeyValue(rows - 1);
             auto cur_version = (*version_col_data)[rows - 1];
             auto deleted     = (*delete_col_data)[rows - 1];
             if (!initNextBlock())
@@ -233,18 +232,18 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
             }
             else
             {
-                auto next_handle  = (*handle_col_data)[0];
+                auto next_handle  = rowkey_column->getRowKeyValue(0);
                 auto next_version = (*version_col_data)[0];
                 if constexpr (MODE == DM_VERSION_FILTER_MODE_MVCC)
                 {
-                    filter[rows - 1]
-                        = !deleted && cur_version <= version_limit && (cur_handle != next_handle || next_version > version_limit);
+                    filter[rows - 1] = !deleted && cur_version <= version_limit
+                        && (compare(cur_handle, next_handle) != 0 || next_version > version_limit);
                 }
                 else if (MODE == DM_VERSION_FILTER_MODE_COMPACT)
                 {
-                    filter[rows - 1]
-                        = cur_version >= version_limit || ((cur_handle != next_handle || next_version > version_limit) && !deleted);
-                    not_clean[rows - 1] = filter[rows - 1] && (cur_handle == next_handle || deleted);
+                    filter[rows - 1] = cur_version >= version_limit
+                        || ((compare(cur_handle, next_handle) != 0 || next_version > version_limit) && !deleted);
+                    not_clean[rows - 1] = filter[rows - 1] && (compare(cur_handle, next_handle) == 0 || deleted);
                 }
                 else
                 {

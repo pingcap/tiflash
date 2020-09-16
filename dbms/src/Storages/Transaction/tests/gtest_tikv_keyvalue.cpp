@@ -274,10 +274,10 @@ TEST(TiKVKeyValue_test, PortedTests)
         RegionRangeKeys range(RecordKVFormat::genKey(1, 2, 3), RecordKVFormat::genKey(2, 4, 100));
         ASSERT_TRUE(RecordKVFormat::getTs(range.comparableKeys().first.key) == 3);
         ASSERT_TRUE(RecordKVFormat::getTs(range.comparableKeys().second.key) == 100);
-        ASSERT_TRUE(RecordKVFormat::getTableId(range.rawKeys().first) == 1);
-        ASSERT_TRUE(RecordKVFormat::getTableId(range.rawKeys().second) == 2);
-        ASSERT_TRUE(RecordKVFormat::getHandle(range.rawKeys().first) == 2);
-        ASSERT_TRUE(RecordKVFormat::getHandle(range.rawKeys().second) == 4);
+        ASSERT_TRUE(RecordKVFormat::getTableId(*range.rawKeys().first) == 1);
+        ASSERT_TRUE(RecordKVFormat::getTableId(*range.rawKeys().second) == 2);
+        ASSERT_TRUE(RecordKVFormat::getHandle(*range.rawKeys().first) == 2);
+        ASSERT_TRUE(RecordKVFormat::getHandle(*range.rawKeys().second) == 4);
 
         ASSERT_TRUE(range.comparableKeys().first.state == TiKVRangeKey::NORMAL);
         ASSERT_TRUE(range.comparableKeys().second.state == TiKVRangeKey::NORMAL);
@@ -331,7 +331,7 @@ HandleRange<HandleID> parseTestCase(std::vector<std::vector<u_char>> && seq)
     for (const auto ch : seq[1])
         end_key_s += ch;
     RegionRangeKeys range{RecordKVFormat::encodeAsTiKVKey(start_key_s), RecordKVFormat::encodeAsTiKVKey(end_key_s)};
-    return range.getHandleRangeByTable(45);
+    return getHandleRangeByTable(range.rawKeys(), 45);
 }
 
 HandleRange<HandleID> parseTestCase2(std::vector<std::vector<u_char>> && seq)
@@ -342,7 +342,7 @@ HandleRange<HandleID> parseTestCase2(std::vector<std::vector<u_char>> && seq)
     for (const auto ch : seq[1])
         end_key_s += ch;
     RegionRangeKeys range{TiKVKey::copyFrom(start_key_s), TiKVKey::copyFrom(end_key_s)};
-    return range.getHandleRangeByTable(45);
+    return getHandleRangeByTable(range.rawKeys(), 45);
 }
 
 std::string rangeToString(const HandleRange<HandleID> & r)

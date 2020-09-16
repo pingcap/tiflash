@@ -13,7 +13,7 @@ namespace DM
 
 const Int64 StableValueSpace::CURRENT_VERSION = 1;
 
-void StableValueSpace::setFiles(const DMFiles & files_, DMContext * dm_context, HandleRange range)
+void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & range, DMContext * dm_context)
 {
     UInt64 rows  = 0;
     UInt64 bytes = 0;
@@ -60,7 +60,7 @@ void StableValueSpace::saveMeta(WriteBatch & meta_wb)
 
 StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
 {
-    auto stable = std::make_shared<StableValueSpace>(id);
+    auto stable = std::make_shared<StableValueSpace>(id, context.is_common_handle, context.rowkey_column_size);
 
     Page                 page = context.storage_pool.meta().read(id);
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
@@ -154,11 +154,13 @@ using SnapshotPtr = std::shared_ptr<Snapshot>;
 
 SnapshotPtr StableValueSpace::createSnapshot()
 {
-    auto snap         = std::make_shared<Snapshot>();
-    snap->id          = id;
-    snap->valid_rows  = valid_rows;
-    snap->valid_bytes = valid_bytes;
-    snap->stable      = this->shared_from_this();
+    auto snap                = std::make_shared<Snapshot>();
+    snap->id                 = id;
+    snap->valid_rows         = valid_rows;
+    snap->valid_bytes        = valid_bytes;
+    snap->stable             = this->shared_from_this();
+    snap->is_common_handle   = is_common_handle;
+    snap->rowkey_column_size = rowkey_column_size;
 
     for (size_t i = 0; i < files.size(); i++)
     {
@@ -179,7 +181,7 @@ void StableValueSpace::drop(const FileProviderPtr & file_provider)
 
 SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DMContext &     context, //
                                                                         const ColumnDefines & read_columns,
-                                                                        const HandleRange &   handle_range,
+                                                                        const RowKeyRange &   rowkey_range,
                                                                         const RSOperatorPtr & filter,
                                                                         UInt64                max_data_version,
                                                                         size_t                expected_block_size,
@@ -197,7 +199,7 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DM
             context.hash_salt,
             stable->files[i],
             read_columns,
-            handle_range,
+            rowkey_range,
             filter,
             column_caches[i],
             IdSetPtr{},
