@@ -164,12 +164,23 @@ private:
         {
             auto index_identifier = dmfile->colIndexIdentifier(DMFile::getFileNameBase(col_id));
             if (!dmfile->isSubFileExists(index_identifier))
-            {
                 return;
-            }
-            auto & type = dmfile->getColumnStat(col_id).type;
+        }
+        else
+        {
+            auto       index_path = dmfile->colIndexPath(DMFile::getFileNameBase(col_id));
+            Poco::File index_file(index_path);
+            if (!index_file.exists())
+                return;
+        }
+
+        auto & type = dmfile->getColumnStat(col_id).type;
+        MinMaxIndexPtr minmax_index;
+        if (dmfile->isSingleFileMode())
+        {
+            auto index_identifier = dmfile->colIndexIdentifier(DMFile::getFileNameBase(col_id));
             auto index_file_stat = dmfile->getSubFileStat(index_identifier);
-            auto   load = [&]() {
+            auto load = [&]() {
                 auto index_buf = ReadBufferFromFileProvider(
                     file_provider,
                     dmfile->path(),
@@ -177,7 +188,6 @@ private:
                 index_buf.seek(index_file_stat.offset);
                 return MinMaxIndex::read(*type, index_buf);
             };
-            MinMaxIndexPtr minmax_index;
             if (index_cache)
             {
                 auto key     = MinMaxIndexCache::hash(dmfile->path() + index_identifier, hash_salt);
@@ -187,17 +197,11 @@ private:
             {
                 minmax_index = load();
             }
-            param.indexes.emplace(col_id, RSIndex(type, minmax_index));
         }
         else
         {
-            auto       index_path = dmfile->colIndexPath(DMFile::getFileNameBase(col_id));
-            Poco::File index_file(index_path);
-            if (!index_file.exists())
-                return;
-
-            auto & type = dmfile->getColumnStat(col_id).type;
-            auto   load = [&]() {
+            auto index_path = dmfile->colIndexPath(DMFile::getFileNameBase(col_id));
+            auto load = [&]() {
                 auto index_buf = ReadBufferFromFileProvider(
                     file_provider,
                     index_path,
@@ -205,7 +209,6 @@ private:
                     std::min(static_cast<Poco::File::FileSize>(DBMS_DEFAULT_BUFFER_SIZE), Poco::File(index_path).getSize()));
                 return MinMaxIndex::read(*type, index_buf);
             };
-            MinMaxIndexPtr minmax_index;
             if (index_cache)
             {
                 auto key     = MinMaxIndexCache::hash(index_path, hash_salt);
@@ -215,8 +218,8 @@ private:
             {
                 minmax_index = load();
             }
-            param.indexes.emplace(col_id, RSIndex(type, minmax_index));
         }
+        param.indexes.emplace(col_id, RSIndex(type, minmax_index));
     }
 
 private:

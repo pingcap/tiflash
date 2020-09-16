@@ -165,6 +165,39 @@ void DMFile::readMeta(const FileProviderPtr & file_provider)
     }
 }
 
+void DMFile::initialize(const FileProviderPtr & file_provider)
+{
+    Poco::File file(path());
+    if (file.isFile())
+    {
+        mode = Mode::SINGLE_FILE;
+        if (status == Status::READABLE)
+        {
+            Footer footer;
+            ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
+            buf.seek(file.getSize() - sizeof(footer), SEEK_SET);
+            // ignore footer.file_format_version
+            DB::readIntBinary(footer.sub_file_stat_offset, buf);
+            DB::readIntBinary(footer.sub_file_num, buf);
+
+            // initialize sub file state
+            buf.seek(footer.sub_file_stat_offset, SEEK_SET);
+            SubFileStat sub_file_stat;
+            for (UInt32 i = 0; i < footer.sub_file_num; i++)
+            {
+                DB::readStringBinary(sub_file_stat.name, buf);
+                DB::readIntBinary(sub_file_stat.offset, buf);
+                DB::readIntBinary(sub_file_stat.size, buf);
+                sub_file_stats.emplace(sub_file_stat.name, sub_file_stat);
+            }
+        }
+    }
+    else
+    {
+        mode = Mode::FOLDER;
+    }
+}
+
 void DMFile::finalize(WriteBufferFromFileBase & buffer)
 {
     writeMeta(buffer);
@@ -310,40 +343,6 @@ size_t DMFile::packStatSize()
         auto       pack_stat_path = packStatPath();
         Poco::File pack_stat_file(pack_stat_path);
         return pack_stat_file.getSize();
-    }
-}
-
-void DMFile::initialize(const FileProviderPtr & file_provider)
-{
-    Poco::File file(path());
-    if (file.isFile())
-    {
-        mode = Mode::SINGLE_FILE;
-        if (status == Status::READABLE)
-        {
-            // initialize sub file state
-            UInt64 sub_file_stats_offset;
-            UInt32 sub_file_num;
-            ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
-            // FIXME: remove use of magic number 16
-            buf.seek(file.getSize() - 16, SEEK_SET);
-            DB::readIntBinary(sub_file_stats_offset, buf);
-            DB::readIntBinary(sub_file_num, buf);
-
-            buf.seek(sub_file_stats_offset, SEEK_SET);
-            SubFileStat sub_file_stat;
-            for (UInt32 i = 0; i < sub_file_num; i++)
-            {
-                DB::readStringBinary(sub_file_stat.name, buf);
-                DB::readIntBinary(sub_file_stat.offset, buf);
-                DB::readIntBinary(sub_file_stat.size, buf);
-                sub_file_stats.emplace(sub_file_stat.name, sub_file_stat);
-            }
-        }
-    }
-    else
-    {
-        mode = Mode::FOLDER;
     }
 }
 

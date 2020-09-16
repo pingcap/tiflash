@@ -24,6 +24,7 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
                              Logger *       log)
     : avg_size_hint(reader.dmfile->getColumnStat(col_id).avg_size)
 {
+    // load mark data
     if (reader.dmfile->isSingleFileMode())
     {
         auto mark_load = [&]() -> MarksInCompressedFilePtr {
@@ -33,7 +34,10 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
             size_t size = sizeof(MarkInCompressedFile) * reader.dmfile->getPacks();
             auto file = reader.file_provider->newRandomAccessFile(reader.dmfile->path(), EncryptionPath(reader.dmfile->path(), ""));
             auto mark_file_stat = reader.dmfile->getSubFileStat(reader.dmfile->colMarkIdentifier(file_name_base));
-            // FIXME: make sure sub_file_stat.size == size
+            if (unlikely(mark_file_stat.size != size))
+            {
+                throw DB::TiFlashException("Bad DMFile format, expect mark file content size: " + std::to_string(size) + " vs. actual: " + std::to_string(mark_file_stat.size), Errors::DeltaTree::Internal);
+            }
             PageUtil::readFile(file, mark_file_stat.offset, reinterpret_cast<char *>(res->data()), size);
 
             return res;
@@ -46,7 +50,6 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
     else
     {
         const String mark_path = reader.dmfile->colMarkPath(file_name_base);
-        const String data_path = reader.dmfile->colDataPath(file_name_base);
 
         auto mark_load = [&]() -> MarksInCompressedFilePtr {
             auto res = std::make_shared<MarksInCompressedFile>(reader.dmfile->getPacks());
@@ -133,7 +136,6 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
         auto data_file_stat = reader.dmfile->getSubFileStat(reader.dmfile->colDataIdentifier(file_name_base));
         buf = std::make_unique<CompressedReadBufferFromFileProvider>(reader.file_provider, reader.dmfile->path(),
              EncryptionPath(reader.dmfile->path(), ""), estimated_size, aio_threshold, buffer_size);
-        // FIXME: check CompressedReadBufferFromFileProvider work as expected
         buf->seek(data_file_stat.offset, 0);
     }
     else
