@@ -15,9 +15,8 @@ extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
 DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, const std::unordered_map<RegionID, RegionInfo> & regions_,
-    const tipb::DAGRequest & dag_request_, ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_, const bool is_batch_cop_)
-    : writer(std::make_shared<StreamWriter>(writer_)),
-      context(context_),
+    const tipb::DAGRequest & dag_request_, const bool is_batch_cop_)
+    : context(context_),
       dag_context(dag_context_),
       regions(regions_),
       dag_request(dag_request_),
