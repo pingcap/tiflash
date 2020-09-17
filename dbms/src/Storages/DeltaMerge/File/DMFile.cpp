@@ -137,22 +137,19 @@ void DMFile::upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileVers
 
 void DMFile::readMeta(const FileProviderPtr & file_provider)
 {
-    DMFileVersion ver; // Binary version
-
     {
-        auto buf = metaReadBuffer(file_provider);
-        assertString("DTFile format: ", buf);
+        if (mode == Mode::SINGLE_FILE)
         {
-            std::underlying_type_t<DMFileVersion> ver_int;
-            DB::readText(ver_int, buf);
-            ver = static_cast<DMFileVersion>(ver_int);
+            ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
+
+            auto meta_offset = sub_file_stats[metaIdentifier()].offset;
+            buf.seek(meta_offset);
+            readMetaFromReadBuffer(file_provider, buf);
         }
-        assertString("\n", buf);
-        readText(column_stats, ver, buf);
-        // No need to upgrade meta when mode is Mode::SINGLE_FILE
-        if (mode == Mode::FOLDER)
+        else
         {
-            upgradeMetaIfNeed(file_provider, ver);
+            auto buf = openForRead(file_provider, metaPath(), encryptionMetaPath());
+            readMetaFromReadBuffer(file_provider, buf);
         }
     }
 
@@ -160,8 +157,37 @@ void DMFile::readMeta(const FileProviderPtr & file_provider)
         auto   pack_stat_size = packStatSize();
         size_t packs          = pack_stat_size / sizeof(PackStat);
         pack_stats.resize(packs);
-        auto buf = packStatReadBuffer(file_provider);
-        buf.read((char *)pack_stats.data(), sizeof(PackStat) * packs);
+        if (mode == Mode::SINGLE_FILE)
+        {
+            ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
+
+            auto pack_stat_offset = sub_file_stats[packStatIdentifier()].offset;
+            buf.seek(pack_stat_offset);
+            buf.read((char *)pack_stats.data(), sizeof(PackStat) * packs);
+        }
+        else
+        {
+            auto buf = openForRead(file_provider, packStatPath(), encryptionPackStatPath());
+            buf.read((char *)pack_stats.data(), sizeof(PackStat) * packs);
+        }
+    }
+}
+
+void DMFile::readMetaFromReadBuffer(const FileProviderPtr & file_provider, ReadBufferFromFileProvider & buffer)
+{
+    DMFileVersion ver; // Binary version
+    assertString("DTFile format: ", buffer);
+    {
+        std::underlying_type_t<DMFileVersion> ver_int;
+        DB::readText(ver_int, buffer);
+        ver = static_cast<DMFileVersion>(ver_int);
+    }
+    assertString("\n", buffer);
+    readText(column_stats, ver, buffer);
+    // No need to upgrade meta when mode is Mode::SINGLE_FILE
+    if (mode == Mode::FOLDER)
+    {
+        upgradeMetaIfNeed(file_provider, ver);
     }
 }
 
@@ -299,38 +325,6 @@ void DMFile::remove(const FileProviderPtr & file_provider)
     else
     {
         file_provider->deleteDirectory(path(), true, true);
-    }
-}
-
-ReadBufferFromFileProvider DMFile::metaReadBuffer(const FileProviderPtr & file_provider)
-{
-    if (mode == Mode::SINGLE_FILE)
-    {
-        ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
-
-        auto meta_offset = sub_file_stats[metaIdentifier()].offset;
-        buf.seek(meta_offset);
-        return buf;
-    }
-    else
-    {
-        return openForRead(file_provider, metaPath(), encryptionMetaPath());
-    }
-}
-
-ReadBufferFromFileProvider DMFile::packStatReadBuffer(const FileProviderPtr & file_provider)
-{
-    if (mode == Mode::SINGLE_FILE)
-    {
-        ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
-
-        auto pack_stat_offset = sub_file_stats[packStatIdentifier()].offset;
-        buf.seek(pack_stat_offset);
-        return buf;
-    }
-    else
-    {
-        return openForRead(file_provider, packStatPath(), encryptionPackStatPath());
     }
 }
 

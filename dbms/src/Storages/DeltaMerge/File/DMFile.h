@@ -202,6 +202,7 @@ private:
 
     void writeMeta(const FileProviderPtr & file_provider);
     void readMeta(const FileProviderPtr & file_provider);
+    void readMetaFromReadBuffer(const FileProviderPtr & file_provider, ReadBufferFromFileProvider & buffer);
 
     void upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileVersion ver);
 
@@ -211,9 +212,6 @@ private:
     void initialize(const FileProviderPtr & file_provider);
 
     void finalize(WriteBufferFromFileBase & buffer);
-
-    ReadBufferFromFileProvider metaReadBuffer(const FileProviderPtr & file_provider);
-    ReadBufferFromFileProvider packStatReadBuffer(const FileProviderPtr & file_provider);
 
     size_t packStatSize();
 
