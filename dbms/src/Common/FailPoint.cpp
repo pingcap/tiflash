@@ -32,6 +32,7 @@ APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M)
 #undef M
 } // namespace FailPoints
 
+#ifdef FIU_ENABLE
 class FailPointChannel : private boost::noncopyable
 {
 public:
@@ -93,5 +94,16 @@ void FailPointHelper::wait(const String & fail_point_name)
         ptr->wait();
     }
 }
+#else
+class FailPointChannel
+{
+};
+
+void FailPointHelper::enableFailPoint(const String & fail_point_name) {}
+
+void FailPointHelper::disableFailPoint(const String & fail_point_name) {}
+
+void FailPointHelper::wait(const String & fail_point_name) {}
+#endif
 
 } // namespace DB
