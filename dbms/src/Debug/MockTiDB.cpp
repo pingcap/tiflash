@@ -11,8 +11,10 @@
 #include <Interpreters/Context.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
+#include <Poco/StringTokenizer.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
 
 namespace DB
@@ -163,7 +165,12 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
     table_info.id = table_id_allocator++;
     table_info.name = table_name;
     table_info.pk_is_handle = false;
+    table_info.is_common_handle = false;
 
+    bool has_pk = false;
+    bool has_non_int_pk = false;
+    Poco::StringTokenizer string_tokens(handle_pk_name, ",");
+    std::unordered_map<String, size_t> pk_column_pos_map;
     int i = 1;
     for (auto & column : columns.getAllPhysical())
     {
@@ -172,13 +179,46 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
         if (it != columns.defaults.end())
             default_value = getDefaultValue(it->second.expression);
         table_info.columns.emplace_back(reverseGetColumnInfo(column, i++, default_value, true));
-        if (handle_pk_name == column.name)
+        for (auto sit = string_tokens.begin(); sit != string_tokens.end(); sit++)
         {
-            if (!column.type->isInteger() && !column.type->isUnsignedInteger())
-                throw Exception("MockTiDB pk column must be integer or unsigned integer type", ErrorCodes::LOGICAL_ERROR);
-            table_info.columns.back().setPriKeyFlag();
-            table_info.pk_is_handle = true;
+            // todo support prefix index
+            if (*sit == column.name)
+            {
+                has_pk = true;
+                if (!column.type->isInteger() && !column.type->isUnsignedInteger())
+                    has_non_int_pk = true;
+                table_info.columns.back().setPriKeyFlag();
+                pk_column_pos_map[*sit] = i - 2;
+                break;
+            }
         }
+    }
+
+    if (has_pk)
+    {
+        if (string_tokens.count() > 1 || has_non_int_pk)
+        {
+            table_info.is_common_handle = true;
+            // construct IndexInfo
+            table_info.index_infos.resize(1);
+            TiDB::IndexInfo & index_info = table_info.index_infos[0];
+            index_info.id = 1;
+            index_info.is_primary = true;
+            index_info.idx_name = "PRIMARY";
+            index_info.tbl_name = table_info.name;
+            index_info.is_unique = true;
+            index_info.index_type = 1;
+            index_info.idx_cols.resize(string_tokens.count());
+            for (size_t index = 0; index < string_tokens.count(); index++)
+            {
+                String & name = string_tokens[index];
+                index_info.idx_cols[index].name = name;
+                index_info.idx_cols[index].offset = pk_column_pos_map[name];
+                index_info.idx_cols[index].length = -1;
+            }
+        }
+        else
+            table_info.pk_is_handle = true;
     }
 
     table_info.comment = "Mocked.";

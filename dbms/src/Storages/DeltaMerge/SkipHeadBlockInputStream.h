@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Storages/DeltaMerge/HandleFilter.h>
 #include <Storages/DeltaMerge/Range.h>
+#include <Storages/DeltaMerge/RowKeyFilter.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
 namespace DB
@@ -11,11 +11,11 @@ namespace DM
 class SkipHeadBlockInputStream : public SkippableBlockInputStream
 {
 public:
-    SkipHeadBlockInputStream(const SkippableBlockInputStreamPtr & input_, HandleRange handle_range_, size_t handle_col_pos_)
-        : input(input_), handle_range(handle_range_), handle_col_pos(handle_col_pos_)
+    SkipHeadBlockInputStream(const SkippableBlockInputStreamPtr & input_, RowKeyRange rowkey_range_, size_t handle_col_pos_)
+        : input(input_), rowkey_range(rowkey_range_), handle_col_pos(handle_col_pos_)
     {
-        if (handle_range.end != HandleRange::MAX)
-            throw Exception("The end of handle range should be MAX for SkipHeadBlockInputStream");
+        if (rowkey_range.isEndInfinite())
+            throw Exception("The end of rowkey range should be +Inf for SkipHeadBlockInputStream");
 
         children.push_back(input);
     }
@@ -36,14 +36,14 @@ public:
         while ((block = children.back()->read()))
         {
             auto rows            = block.rows();
-            auto [offset, limit] = HandleFilter::getPosRangeOfSorted(handle_range, block.getByPosition(handle_col_pos).column, 0, rows);
+            auto [offset, limit] = RowKeyFilter::getPosRangeOfSorted(rowkey_range, block.getByPosition(handle_col_pos).column, 0, rows);
             if (unlikely(offset + limit != rows))
                 throw Exception("Logical error!");
 
             skip_rows += offset;
             if (limit)
             {
-                sk_first_block = HandleFilter::cutBlock(std::move(block), offset, limit);
+                sk_first_block = RowKeyFilter::cutBlock(std::move(block), offset, limit);
                 break;
             }
         }
@@ -67,7 +67,7 @@ public:
 private:
     SkippableBlockInputStreamPtr input;
 
-    HandleRange handle_range;
+    RowKeyRange rowkey_range;
     size_t      handle_col_pos;
 
     size_t sk_call_status = 0; // 0: initial, 1: called once by getSkippedRows

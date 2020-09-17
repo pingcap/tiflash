@@ -6,6 +6,8 @@
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
+#include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
+#include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/KVStore.h>
@@ -59,35 +61,43 @@ template <bool batch>
 void DAGDriver<batch>::execute()
 try
 {
+    auto start_time = Clock::now();
     DAGContext dag_context(dag_request);
     context.setDAGContext(&dag_context);
-    DAGQuerySource dag(context, regions, dag_request, writer, batch);
+    DAGQuerySource dag(context, regions, dag_request, batch);
 
     BlockIO streams = executeQuery(dag, context, internal, QueryProcessingStage::Complete);
     if (!streams.in || streams.out)
         // Only query is allowed, so streams.in must not be null and streams.out must be null
         throw TiFlashException("DAG is not query.", Errors::Coprocessor::Internal);
 
+    auto end_time = Clock::now();
+    Int64 compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
+    dag_context.compile_time_ns = compile_time_ns;
+    LOG_DEBUG(log, "Compile dag request cost " << compile_time_ns / 1000000 << " ms");
+
+    bool collect_exec_summary = dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries();
+    BlockOutputStreamPtr dag_output_stream = nullptr;
     if constexpr (!batch)
     {
-        bool collect_exec_summary = dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries();
-        BlockOutputStreamPtr dag_output_stream
-            = std::make_shared<DAGBlockOutputStream>(dag_response, context.getSettings().dag_records_per_chunk, dag.getEncodeType(),
-                dag.getResultFieldTypes(), streams.in->getHeader(), dag_context, collect_exec_summary, dag_request.has_root_executor());
+        UnaryDAGResponseWriter response_writer(dag_response, context.getSettings().dag_records_per_chunk, dag.getEncodeType(),
+            dag.getResultFieldTypes(), dag_context, collect_exec_summary, dag_request.has_root_executor());
+        dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), response_writer);
         copyData(*streams.in, *dag_output_stream);
     }
     else
     {
-        streams.in->readPrefix();
-        while (streams.in->read())
-            ;
-        streams.in->readSuffix();
+        auto streaming_writer = std::make_shared<StreamWriter>(writer);
+        StreamingDAGResponseWriter response_writer(streaming_writer, context.getSettings().dag_records_per_chunk, dag.getEncodeType(),
+            dag.getResultFieldTypes(), dag_context, collect_exec_summary, dag_request.has_root_executor());
+        dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), response_writer);
+        copyData(*streams.in, *dag_output_stream);
     }
 
     if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streams.in.get()))
     {
         LOG_DEBUG(log,
-            __PRETTY_FUNCTION__ << ": dag request with encode cost: " << p_stream->getProfileInfo().execution_time / (double)1000000000
+            __PRETTY_FUNCTION__ << ": dag request without encode cost: " << p_stream->getProfileInfo().execution_time / (double)1000000000
                                 << " seconds, produce " << p_stream->getProfileInfo().rows << " rows, " << p_stream->getProfileInfo().bytes
                                 << " bytes.");
 
@@ -100,7 +110,6 @@ try
                     Errors::Coprocessor::Internal);
         }
     }
-
 }
 catch (const RegionException & e)
 {

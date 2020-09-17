@@ -33,6 +33,9 @@ public:
     void handleInvalidTime(const String & msg);
     bool shouldClipToZero();
     const std::vector<std::pair<Int32, String>> & getWarnings() const { return warnings; }
+    
+    size_t final_concurency;
+    Int64 compile_time_ns;
 
 private:
     std::map<String, ProfileStreamsInfo> profile_streams_map;

@@ -19,7 +19,7 @@ namespace DB
 {
 namespace DM
 {
-const UInt64 DeltaValueSpace::CURRENT_VERSION = 1;
+const UInt64 DeltaValueSpace::CURRENT_VERSION = 2;
 
 using Snapshot    = DeltaValueSpace::Snapshot;
 using SnapshotPtr = std::shared_ptr<Snapshot>;
@@ -86,8 +86,13 @@ void DeltaValueSpace::checkNewPacks(const Packs & new_packs)
 // Public methods
 // ================================================
 
-DeltaValueSpace::DeltaValueSpace(PageId id_, const Packs & packs_)
-    : id(id_), packs(packs_), delta_index(std::make_shared<DeltaIndex>()), log(&Logger::get("DeltaValueSpace"))
+DeltaValueSpace::DeltaValueSpace(PageId id_, bool is_common_handle_, size_t rowkey_column_size_, const Packs & packs_)
+    : id(id_),
+      packs(packs_),
+      delta_index(std::make_shared<DeltaIndex>()),
+      is_common_handle(is_common_handle_),
+      rowkey_column_size(rowkey_column_size_),
+      log(&Logger::get("DeltaValueSpace"))
 {
     setUp();
 }
@@ -111,7 +116,7 @@ void DeltaValueSpace::saveMeta(WriteBatches & wbs) const
 }
 
 Packs DeltaValueSpace::checkHeadAndCloneTail(DMContext &         context,
-                                             const HandleRange & target_range,
+                                             const RowKeyRange & target_range,
                                              const Packs &       head_packs,
                                              WriteBatches &      wbs) const
 {
@@ -357,7 +362,7 @@ bool DeltaValueSpace::appendToCache(DMContext & context, const Block & block, si
     return true;
 }
 
-bool DeltaValueSpace::appendDeleteRange(DMContext & /*context*/, const HandleRange & delete_range)
+bool DeltaValueSpace::appendDeleteRange(DMContext & /*context*/, const RowKeyRange & delete_range)
 {
     std::scoped_lock lock(mutex);
     if (abandoned.load(std::memory_order_relaxed))

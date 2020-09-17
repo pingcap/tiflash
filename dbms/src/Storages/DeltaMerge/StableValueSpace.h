@@ -2,8 +2,10 @@
 
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/Page/PageStorage.h>
+
 
 namespace DB
 {
@@ -20,12 +22,15 @@ static const String STABLE_FOLDER_NAME = "stable";
 class StableValueSpace : public std::enable_shared_from_this<StableValueSpace>
 {
 public:
-    StableValueSpace(PageId id_) : id(id_), log(&Logger::get("StableValueSpace")) {}
+    StableValueSpace(PageId id_, bool is_common_handle_, size_t rowkey_column_size_)
+        : id(id_), is_common_handle(is_common_handle_), rowkey_column_size(rowkey_column_size_), log(&Logger::get("StableValueSpace"))
+    {
+    }
 
     // Set DMFiles for this value space.
     // If this value space is logical splited, specify `range` and `dm_context` so that we can get more precise
     // bytes and rows.
-    void setFiles(const DMFiles & files_, DMContext * dm_context = nullptr, HandleRange range = HandleRange::newAll());
+    void setFiles(const DMFiles & files_, const RowKeyRange & range, DMContext * dm_context = nullptr);
 
     PageId          getId() { return id; }
     void            saveMeta(WriteBatch & meta_wb);
@@ -53,6 +58,9 @@ public:
         UInt64 valid_rows;
         UInt64 valid_bytes;
 
+        bool   is_common_handle;
+        size_t rowkey_column_size;
+
         PageId getId() { return id; }
 
         size_t getRows() { return valid_rows; }
@@ -72,7 +80,7 @@ public:
 
         SkippableBlockInputStreamPtr getInputStream(const DMContext &     context, //
                                                     const ColumnDefines & read_columns,
-                                                    const HandleRange &   handle_range,
+                                                    const RowKeyRange &   rowkey_range,
                                                     const RSOperatorPtr & filter,
                                                     UInt64                max_data_version,
                                                     size_t                expected_block_size,
@@ -97,6 +105,8 @@ private:
     UInt64  valid_rows;
     UInt64  valid_bytes;
     DMFiles files;
+    bool    is_common_handle;
+    size_t  rowkey_column_size;
 
     Logger * log;
 };

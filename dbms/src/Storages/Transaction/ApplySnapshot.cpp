@@ -84,12 +84,14 @@ void KVStore::tryApplySnapshot(RegionPtr new_region, Context & context)
         auto table_id = new_region->getMappedTableID();
         if (auto storage = tmt.getStorages().get(table_id); storage)
         {
-            const auto handle_range = new_region->getHandleRangeByTable(table_id);
             switch (storage->engineType())
             {
                 case TiDB::StorageEngine::TMT:
                 {
+                    if (storage->getTableInfo().is_common_handle)
+                        throw Exception("TMT table does not support clustered index", ErrorCodes::NOT_IMPLEMENTED);
                     HandleMap handle_map;
+                    const auto handle_range = getHandleRangeByTable(new_region->getRange()->rawKeys(), table_id);
 
                     auto table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
 
@@ -115,8 +117,9 @@ void KVStore::tryApplySnapshot(RegionPtr new_region, Context & context)
                     auto table_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
                     // In StorageDeltaMerge, we use deleteRange to remove old data
                     auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-                    DM::HandleRange dm_handle_range = toDMHandleRange(handle_range);
-                    dm_storage->deleteRange(dm_handle_range, context.getSettingsRef());
+                    dm_storage->deleteRange(DM::RowKeyRange::fromRegionRange(new_region->getRange(), table_id, storage->isCommonHandle(),
+                                                storage->getRowKeyColumnSize()),
+                        context.getSettingsRef());
                     break;
                 }
                 default:

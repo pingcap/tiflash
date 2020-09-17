@@ -78,6 +78,21 @@ inline DecodedTiKVKey genRawKey(const TableID tableId, const HandleID handleId)
 
 inline TiKVKey genKey(const TableID tableId, const HandleID handleId) { return encodeAsTiKVKey(genRawKey(tableId, handleId)); }
 
+inline TiKVKey genKey(const TiDB::TableInfo & table_info, std::vector<Field> keys)
+{
+    std::string key(RecordKVFormat::RAW_KEY_NO_HANDLE_SIZE, 0);
+    memcpy(key.data(), &RecordKVFormat::TABLE_PREFIX, 1);
+    auto big_endian_table_id = encodeInt64(table_info.id);
+    memcpy(key.data() + 1, reinterpret_cast<const char *>(&big_endian_table_id), 8);
+    memcpy(key.data() + 1 + 8, RecordKVFormat::RECORD_PREFIX_SEP, 2);
+    std::stringstream ss;
+    for (size_t i = 0; i < keys.size(); i++)
+    {
+        DB::EncodeDatum(keys[i], table_info.columns[table_info.getPrimaryIndexInfo().idx_cols[i].offset].getCodecFlag(), ss);
+    }
+    return encodeAsTiKVKey(key + ss.str());
+}
+
 inline bool checkKeyPaddingValid(const char * ptr, const UInt8 pad_size)
 {
     UInt64 p = (*reinterpret_cast<const UInt64 *>(ptr)) >> ((ENC_GROUP_SIZE - pad_size) * 8);
@@ -303,6 +318,11 @@ inline TiKVValue encodeWriteCfValue(UInt8 write_type, Timestamp ts, const String
 
 
 inline TiKVValue encodeWriteCfValue(UInt8 write_type, Timestamp ts) { return internalEncodeWriteCfValue(write_type, ts, nullptr); }
+
+inline std::string DecodedTiKVKeyToHexWithoutTableID(const DecodedTiKVKey & decoded_key)
+{
+    return ToHex(decoded_key.data() + RAW_KEY_NO_HANDLE_SIZE, decoded_key.size() - RAW_KEY_NO_HANDLE_SIZE);
+}
 
 } // namespace RecordKVFormat
 

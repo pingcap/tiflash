@@ -8,8 +8,10 @@
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <Storages/RegionQueryInfo.h>
 #include <kvproto/tikvpb.grpc.pb.h>
 #include <tipb/select.pb.h>
+
 #pragma GCC diagnostic pop
 
 namespace DB
@@ -23,10 +25,10 @@ public:
     RegionID region_id;
     UInt64 region_version;
     UInt64 region_conf_version;
-    std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
+    std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges;
     const std::unordered_set<UInt64> * bypass_lock_ts;
 
-    RegionInfo(RegionID id, UInt64 ver, UInt64 conf_ver, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> && key_ranges_,
+    RegionInfo(RegionID id, UInt64 ver, UInt64 conf_ver, std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> && key_ranges_,
         const std::unordered_set<UInt64> * bypass_lock_ts_)
         : region_id(id),
           region_version(ver),
