@@ -214,7 +214,6 @@ void DMFile::initialize(const FileProviderPtr & file_provider)
                 DB::readStringBinary(sub_file_stat.name, buf);
                 DB::readIntBinary(sub_file_stat.offset, buf);
                 DB::readIntBinary(sub_file_stat.size, buf);
-                LOG_DEBUG(log, "sub file: " + sub_file_stat.name + " offset " + std::to_string(sub_file_stat.offset) + " size " + std::to_string(sub_file_stat.size));
                 sub_file_stats.emplace(sub_file_stat.name, sub_file_stat);
             }
         }

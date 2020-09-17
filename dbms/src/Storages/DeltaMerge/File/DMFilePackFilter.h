@@ -194,7 +194,7 @@ private:
             auto load = [&]() {
                 auto index_buf = ReadBufferFromFileProvider(file_provider, dmfile->path(), EncryptionPath(dmfile->path(), ""));
                 index_buf.seek(index_file_stat.offset);
-                return MinMaxIndex::read(*type, index_buf);
+                return MinMaxIndex::read(*type, index_buf, index_file_stat.size);
             };
             if (index_cache)
             {
@@ -216,7 +216,7 @@ private:
                     index_path,
                     dmfile->encryptionIndexPath(DMFile::getFileNameBase(col_id)),
                     std::min(static_cast<Poco::File::FileSize>(DBMS_DEFAULT_BUFFER_SIZE), Poco::File(index_path).getSize()));
-                return MinMaxIndex::read(*type, index_buf);
+                return MinMaxIndex::read(*type, index_buf, Poco::File(index_path).getSize());
             };
             if (index_cache)
             {
