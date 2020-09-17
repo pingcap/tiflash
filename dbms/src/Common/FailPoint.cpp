@@ -1,4 +1,5 @@
 #include <Common/FailPoint.h>
+
 #include <boost/core/noncopyable.hpp>
 #include <condition_variable>
 #include <mutex>
@@ -31,13 +32,6 @@ APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M)
 #undef M
 } // namespace FailPoints
 
-#define FAIL_POINT_ENABLE_WITH_CHANNEL(trigger, name)                                                 \
-    else if (trigger == FailPoints::name)                                                             \
-    {                                                                                                 \
-        fiu_enable(name, 1, nullptr, FIU_ONETIME);                                                    \
-        fail_point_wait_channels.try_emplace(FailPoints::name, std::make_shared<FailPointChannel>()); \
-    }
-
 class FailPointChannel : private boost::noncopyable
 {
 public:
@@ -57,22 +51,24 @@ private:
 
 void FailPointHelper::enableFailPoint(const String & fail_point_name)
 {
-#define M(NAME)                                                \
-    if (fail_point_name == FailPoints::NAME)                   \
-    {                                                          \
-        fiu_enable(FailPoints::NAME, 1, nullptr, FIU_ONETIME); \
-        return;                                                \
+#define M(NAME)                                                                                             \
+    if (fail_point_name == FailPoints::NAME)                                                                \
+    {                                                                                                       \
+        /* FIU_ONETIME -- Only fail once; the point of failure will be automatically disabled afterwards.*/ \
+        fiu_enable(FailPoints::NAME, 1, nullptr, FIU_ONETIME);                                              \
+        return;                                                                                             \
     }
 
     APPLY_FOR_FAILPOINTS(M)
 #undef M
 
-#define M(NAME)                                                                                       \
-    if (fail_point_name == FailPoints::NAME)                                                          \
-    {                                                                                                 \
-        fiu_enable(FailPoints::NAME, 1, nullptr, FIU_ONETIME);                                        \
-        fail_point_wait_channels.try_emplace(FailPoints::NAME, std::make_shared<FailPointChannel>()); \
-        return;                                                                                       \
+#define M(NAME)                                                                                             \
+    if (fail_point_name == FailPoints::NAME)                                                                \
+    {                                                                                                       \
+        /* FIU_ONETIME -- Only fail once; the point of failure will be automatically disabled afterwards.*/ \
+        fiu_enable(FailPoints::NAME, 1, nullptr, FIU_ONETIME);                                              \
+        fail_point_wait_channels.try_emplace(FailPoints::NAME, std::make_shared<FailPointChannel>());       \
+        return;                                                                                             \
     }
 
     APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M)

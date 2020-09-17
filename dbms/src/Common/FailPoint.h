@@ -15,11 +15,12 @@ namespace ErrorCodes
 extern const int FAIL_POINT_ERROR;
 };
 
-// Macros to set failpoint
+/// Macros to set failpoints.
+// When `fail_point` is enabled, throw an exception
 #define FAIL_POINT_TRIGGER_EXCEPTION(fail_point) \
     fiu_do_on(fail_point, throw Exception("Fail point " #fail_point " is triggered.", ErrorCodes::FAIL_POINT_ERROR);)
+// When `fail_point` is enabled, wait till it is disabled
 #define FAIL_POINT_PAUSE(fail_point) fiu_do_on(fail_point, FailPointHelper::wait(fail_point);)
-// #define FAIL_POINT_TRIGGER_REGION_EXCEPTION(fail_point) fiu_do_on(fail_point, throw RegionException(); )
 
 
 class FailPointChannel;
