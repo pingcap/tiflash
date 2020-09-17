@@ -83,7 +83,7 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
         MarksInCompressedFile marks{blocks.size()};
         size_t                column_offset_in_file = plain_file->count();
         MinMaxIndexPtr        minmax_index          = nullptr;
-        if (auto iter = minmax_indexs.find(DMFile::getFileNameBase(col_id, {})); iter != minmax_indexs.end())
+        if (auto iter = minmax_indexs.find(DMFile::getFileNameBase(col_id)); iter != minmax_indexs.end())
         {
             minmax_index = iter->second;
         }

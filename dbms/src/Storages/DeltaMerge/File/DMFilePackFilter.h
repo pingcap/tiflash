@@ -171,7 +171,7 @@ private:
 
         if (dmfile->isSingleFileMode())
         {
-            auto index_identifier = dmfile->colIndexIdentifier(DMFile::getFileNameBase(col_id));
+            auto index_identifier = DMFile::colIndexIdentifier(DMFile::getFileNameBase(col_id));
             if (!dmfile->isSubFileExists(index_identifier))
                 return;
         }
@@ -188,7 +188,7 @@ private:
         MinMaxIndexPtr minmax_index;
         if (dmfile->isSingleFileMode())
         {
-            auto index_identifier = dmfile->colIndexIdentifier(DMFile::getFileNameBase(col_id));
+            auto index_identifier = DMFile::colIndexIdentifier(DMFile::getFileNameBase(col_id));
             auto index_file_stat  = dmfile->getSubFileStat(index_identifier);
 
             auto load = [&]() {
