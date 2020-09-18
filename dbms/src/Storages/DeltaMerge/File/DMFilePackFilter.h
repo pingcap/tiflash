@@ -192,7 +192,7 @@ private:
             auto index_file_stat  = dmfile->getSubFileStat(index_identifier);
 
             auto load = [&]() {
-                auto index_buf = ReadBufferFromFileProvider(file_provider, dmfile->path(), EncryptionPath(dmfile->path(), ""));
+                auto index_buf = ReadBufferFromFileProvider(file_provider, dmfile->path(), EncryptionPath(dmfile->encryptionBasePath(), ""));
                 index_buf.seek(index_file_stat.offset);
                 return MinMaxIndex::read(*type, index_buf, index_file_stat.size);
             };

@@ -32,7 +32,7 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
             if (res->empty()) // 0 rows.
                 return res;
             size_t size = sizeof(MarkInCompressedFile) * reader.dmfile->getPacks();
-            auto   file = reader.file_provider->newRandomAccessFile(reader.dmfile->path(), EncryptionPath(reader.dmfile->path(), ""));
+            auto   file = reader.file_provider->newRandomAccessFile(reader.dmfile->path(), EncryptionPath(reader.dmfile->encryptionBasePath(), ""));
             auto   mark_file_stat = reader.dmfile->getSubFileStat(reader.dmfile->colMarkIdentifier(file_name_base));
             if (unlikely(mark_file_stat.size != size))
             {
@@ -140,7 +140,7 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
 
         buf = std::make_unique<CompressedReadBufferFromFileProvider>(reader.file_provider,
                                                                      reader.dmfile->path(),
-                                                                     EncryptionPath(reader.dmfile->path(), ""),
+                                                                     EncryptionPath(reader.dmfile->encryptionBasePath(), ""),
                                                                      estimated_size,
                                                                      aio_threshold,
                                                                      buffer_size);
