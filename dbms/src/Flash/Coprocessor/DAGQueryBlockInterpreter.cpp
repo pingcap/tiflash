@@ -1,5 +1,5 @@
-#include <Common/TiFlashException.h>
 #include <Common/FailPoint.h>
+#include <Common/TiFlashException.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/CoprocessorBlockInputStream.h>
@@ -240,7 +240,6 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     }
 
     size_t max_block_size = settings.max_block_size;
-    QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
 
     if (query_block.selection)
     {
@@ -260,62 +259,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     bool need_local_read = !query_info.mvcc_query_info->regions_query_info.empty();
     if (need_local_read)
     {
-        // TODO: Note that if storage is (Txn)MergeTree, and any region exception thrown, we won't do retry here.
-        // Now we only support DeltaTree in production environment and don't do any extra check for storage type here.
-        try
-        {
-            pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
-
-            // After getting streams from storage, we need to validate whether regions have changed or not after learner read.
-            // In case the versions of regions have changed, those `streams` may contain different data other than expected.
-            // Like after region merge/split.
-
-            // Inject failpoint to throw RegionException
-            fiu_do_on(FailPoints::region_exception_after_read_from_storage, {
-                const auto & regions_info = query_info.mvcc_query_info->regions_query_info;
-                std::vector<RegionID> region_ids;
-                for (const auto & info : regions_info)
-                    region_ids.push_back(info.region_id);
-                throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
-            });
-            validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
-        }
-        catch (DB::RegionException & e)
-        {
-            /// Recover from region exception when super batch is enable
-            if (dag.isBatchCop())
-            {
-                // clean all streams from local because we are not sure the correctness of those streams
-                pipeline.streams.clear();
-                std::stringstream ss;
-                // push regions to `region_retry` to retry from other tiflash nodes
-                for (const auto & region : query_info.mvcc_query_info->regions_query_info)
-                {
-                    const auto & dag_regions = dag.getRegions();
-                    auto iter = dag_regions.find(region.region_id);
-                    if (likely(iter != dag_regions.end()))
-                    {
-                        region_retry.emplace(iter->first, iter->second);
-                        ss << iter->first << ",";
-                    }
-                }
-                LOG_WARNING(log, "RegionException after read from storage, regions [" << ss.str() << "], message: " << e.message());
-            }
-            else
-            {
-                // Throw an exception for TiDB / TiSpark to retry
-                e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
-                    + "`, table_id: " + DB::toString(table_id) + ")");
-                throw;
-            }
-        }
-        catch (DB::Exception & e)
-        {
-            /// Other unknown exceptions
-            e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
-                + "`, table_id: " + DB::toString(table_id) + ")");
-            throw;
-        }
+        readFromLocalStorage(table_id, required_columns, query_info, max_block_size, learner_read_snapshot, pipeline, region_retry);
     }
 
     // For those regions which are not presented in this tiflash node, we will try to fetch streams by key ranges from other tiflash nodes, only happens in batch cop mode.
@@ -427,6 +371,113 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
                 if (is_ts_column[i])
                     final_project[i].first = analyzer->getCurrentInputColumns()[i].name;
             }
+        }
+    }
+}
+
+void DAGQueryBlockInterpreter::readFromLocalStorage( //
+    const TableID table_id, const Names & required_columns, SelectQueryInfo & query_info, const size_t max_block_size,
+    const LearnerReadSnapshot & learner_read_snapshot, //
+    Pipeline & pipeline, std::unordered_map<RegionID, const RegionInfo &> & region_retry)
+{
+    QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
+    auto & tmt = context.getTMTContext();
+    // TODO: Note that if storage is (Txn)MergeTree, and any region exception thrown, we won't do retry here.
+    // Now we only support DeltaTree in production environment and don't do any extra check for storage type here.
+
+    bool allow_retry = true;
+    while (allow_retry)
+    {
+        try
+        {
+            pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
+
+            // After getting streams from storage, we need to validate whether regions have changed or not after learner read.
+            // In case the versions of regions have changed, those `streams` may contain different data other than expected.
+            // Like after region merge/split.
+
+            // Inject failpoint to throw RegionException
+            fiu_do_on(FailPoints::region_exception_after_read_from_storage, {
+                const auto & regions_info = query_info.mvcc_query_info->regions_query_info;
+                std::vector<RegionID> region_ids;
+                for (const auto & info : regions_info)
+                    region_ids.push_back(info.region_id);
+                throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
+            });
+            validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
+            break;
+        }
+        catch (DB::RegionException & e)
+        {
+            /// Recover from region exception when super batch is enable
+            if (dag.isBatchCop())
+            {
+                // clean all streams from local because we are not sure the correctness of those streams
+                pipeline.streams.clear();
+                const auto & dag_regions = dag.getRegions();
+                std::stringstream ss;
+                if (likely(allow_retry))
+                {
+                    allow_retry = false;
+                    auto & regions_query_info = query_info.mvcc_query_info->regions_query_info;
+                    for (auto iter = regions_query_info.begin(); iter != regions_query_info.end(); /**/)
+                    {
+                        std::sort(e.region_ids.begin(), e.region_ids.end());
+                        auto error_id_iter = std::lower_bound(e.region_ids.begin(), e.region_ids.end(), iter->region_id);
+                        if (*error_id_iter == iter->region_id)
+                        {
+                            // move the error regions info from `query_info.mvcc_query_info->regions_query_info` to `region_retry`
+                            auto region_iter = dag_regions.find(iter->region_id);
+                            if (likely(region_iter != dag_regions.end()))
+                            {
+                                region_retry.emplace(region_iter->first, region_iter->second);
+                                ss << region_iter->first << ",";
+                            }
+                            iter = regions_query_info.erase(iter);
+                        }
+                        else
+                        {
+                            ++iter;
+                        }
+                    }
+                    if (unlikely(regions_query_info.empty()))
+                        break; // no available region in local, break retry loop
+                    LOG_WARNING(log,
+                        "RegionException after read from storage, regions ["
+                            << ss.str() << "], message: " << e.message()
+                            << (regions_query_info.empty() ? "" : ", retry to read from local"));
+                    continue; // continue to retry read from local storage
+                }
+                else
+                {
+                    // push all regions to `region_retry` to retry from other tiflash nodes
+                    for (const auto & region : query_info.mvcc_query_info->regions_query_info)
+                    {
+                        auto iter = dag_regions.find(region.region_id);
+                        if (likely(iter != dag_regions.end()))
+                        {
+                            region_retry.emplace(iter->first, iter->second);
+                            ss << iter->first << ",";
+                        }
+                    }
+                    LOG_WARNING(log, "RegionException after read from storage, regions [" << ss.str() << "], message: " << e.message());
+                    break; // break retry loop
+                }
+            }
+            else
+            {
+                // Throw an exception for TiDB / TiSpark to retry
+                e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
+                    + "`, table_id: " + DB::toString(table_id) + ")");
+                throw;
+            }
+        }
+        catch (DB::Exception & e)
+        {
+            /// Other unknown exceptions
+            e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
+                + "`, table_id: " + DB::toString(table_id) + ")");
+            throw;
         }
     }
 }

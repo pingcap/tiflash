@@ -189,12 +189,14 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
     return regions_snapshot;
 }
 
+/// Ensure regions' info after read.
 void validateQueryInfo(
     const MvccQueryInfo & mvcc_query_info, const LearnerReadSnapshot & regions_snapshot, TMTContext & tmt, Poco::Logger * log)
 {
-    const auto & regions_query_info = mvcc_query_info.regions_query_info;
-    /// Ensure regions' info after read.
-    for (const auto & region_query_info : regions_query_info)
+    std::vector<RegionID> fail_region_ids;
+    RegionException::RegionReadStatus fail_status = RegionException::RegionReadStatus::OK;
+
+    for (const auto & region_query_info : mvcc_query_info.regions_query_info)
     {
         RegionException::RegionReadStatus status = RegionException::RegionReadStatus::OK;
         auto region = tmt.getKVStore()->getRegion(region_query_info.region_id);
@@ -212,15 +214,20 @@ void validateQueryInfo(
 
         if (status != RegionException::RegionReadStatus::OK)
         {
+            fail_region_ids.emplace_back(region_query_info.region_id);
+            fail_status = status;
             LOG_WARNING(log,
                 "Check after read from Storage, region "
                     << region_query_info.region_id << ", version " << region_query_info.version //
                     << ", handle range [" << RecordKVFormat::DecodedTiKVKeyToHexWithoutTableID(*region_query_info.range_in_table.first)
                     << ", " << RecordKVFormat::DecodedTiKVKeyToHexWithoutTableID(*region_query_info.range_in_table.second) << "), status "
                     << RegionException::RegionReadStatusString(status));
-            // throw region exception and let TiDB retry
-            throwRetryRegion(regions_query_info, status);
         }
+    }
+
+    if (!fail_region_ids.empty())
+    {
+        throw RegionException(std::move(fail_region_ids), fail_status);
     }
 }
 
