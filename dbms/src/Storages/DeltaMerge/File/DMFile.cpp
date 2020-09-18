@@ -166,13 +166,12 @@ void DMFile::readMeta(const FileProviderPtr & file_provider)
         {
             ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
 
-            auto pack_stat_file_stat = sub_file_stats[metaIdentifier()];
+            auto pack_stat_file_stat = sub_file_stats[packStatIdentifier()];
             buf.seek(pack_stat_file_stat.offset);
-            size_t pos_in_buf = buf.count();
-            buf.read((char *)pack_stats.data(), sizeof(PackStat) * packs);
-            if (unlikely(buf.count() - pos_in_buf != pack_stat_file_stat.size))
+            auto res = buf.read((char *)pack_stats.data(), sizeof(PackStat) * packs);
+            if (unlikely(res != pack_stat_file_stat.size))
             {
-                throw DB::TiFlashException("Bad file format: expected read pack stat content size: " + std::to_string(pack_stat_file_stat.size) + " vs. actual: " + std::to_string(buf.count() - pos_in_buf), Errors::DeltaTree::Internal);
+                throw DB::TiFlashException("Bad file format: expected read pack stat content size: " + std::to_string(pack_stat_file_stat.size) + " vs. actual: " + std::to_string(buf.count() - res), Errors::DeltaTree::Internal);
             }
         }
         else
