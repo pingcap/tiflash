@@ -36,7 +36,7 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
             auto   mark_file_stat = reader.dmfile->getSubFileStat(reader.dmfile->colMarkIdentifier(file_name_base));
             if (unlikely(mark_file_stat.size != size))
             {
-                throw DB::TiFlashException("Bad DMFile format, expect mark file content size: " + std::to_string(size)
+                throw DB::TiFlashException("Bad DMFile format, expected mark file content size: " + std::to_string(size)
                                                + " vs. actual: " + std::to_string(mark_file_stat.size),
                                            Errors::DeltaTree::Internal);
             }

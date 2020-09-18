@@ -142,9 +142,14 @@ void DMFile::readMeta(const FileProviderPtr & file_provider)
         {
             ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
 
-            auto meta_offset = sub_file_stats[metaIdentifier()].offset;
-            buf.seek(meta_offset);
+            auto meta_file_stat = sub_file_stats[metaIdentifier()];
+            buf.seek(meta_file_stat.offset);
+            size_t pos_in_buf = buf.count();
             readMetaFromReadBuffer(file_provider, buf);
+            if (unlikely(buf.count() - pos_in_buf != meta_file_stat.size))
+            {
+                throw DB::TiFlashException("Bad file format: expected read meta content size: " + std::to_string(meta_file_stat.size) + " vs. actual: " + std::to_string(buf.count() - pos_in_buf), Errors::DeltaTree::Internal);
+            }
         }
         else
         {
@@ -161,9 +166,14 @@ void DMFile::readMeta(const FileProviderPtr & file_provider)
         {
             ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
 
-            auto pack_stat_offset = sub_file_stats[packStatIdentifier()].offset;
-            buf.seek(pack_stat_offset);
+            auto pack_stat_file_stat = sub_file_stats[metaIdentifier()];
+            buf.seek(pack_stat_file_stat.offset);
+            size_t pos_in_buf = buf.count();
             buf.read((char *)pack_stats.data(), sizeof(PackStat) * packs);
+            if (unlikely(buf.count() - pos_in_buf != pack_stat_file_stat.size))
+            {
+                throw DB::TiFlashException("Bad file format: expected read pack stat content size: " + std::to_string(pack_stat_file_stat.size) + " vs. actual: " + std::to_string(buf.count() - pos_in_buf), Errors::DeltaTree::Internal);
+            }
         }
         else
         {

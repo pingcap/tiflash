@@ -91,7 +91,7 @@ MinMaxIndexPtr MinMaxIndex::read(const IDataType & type, ReadBuffer & buf, size_
     size_t bytes_read = buf.count() - buf_pos;
     if (unlikely(bytes_read != limit))
     {
-        throw DB::TiFlashException("Bad file format: expected read data size: " + std::to_string(limit) + " vs. actual: " + std::to_string(bytes_read), Errors::DeltaTree::Internal);
+        throw DB::TiFlashException("Bad file format: expected read index content size: " + std::to_string(limit) + " vs. actual: " + std::to_string(bytes_read), Errors::DeltaTree::Internal);
     }
     return MinMaxIndexPtr(new MinMaxIndex(has_null_marks, has_value_marks, std::move(minmaxes)));
 }
