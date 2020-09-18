@@ -319,8 +319,20 @@ inline TiKVValue encodeWriteCfValue(UInt8 write_type, Timestamp ts, const String
 
 inline TiKVValue encodeWriteCfValue(UInt8 write_type, Timestamp ts) { return internalEncodeWriteCfValue(write_type, ts, nullptr); }
 
-inline std::string DecodedTiKVKeyToHexWithoutTableID(const DecodedTiKVKey & decoded_key)
+template <bool start>
+inline std::string DecodedTiKVKeyToReadableHandleString(const DecodedTiKVKey & decoded_key)
 {
+    if (decoded_key.size() <= RAW_KEY_NO_HANDLE_SIZE)
+    {
+        if constexpr (start)
+        {
+            return "-INF";
+        }
+        else
+        {
+            return "+INF";
+        }
+    }
     return ToHex(decoded_key.data() + RAW_KEY_NO_HANDLE_SIZE, decoded_key.size() - RAW_KEY_NO_HANDLE_SIZE);
 }
 
