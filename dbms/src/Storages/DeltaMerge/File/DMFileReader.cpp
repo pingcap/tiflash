@@ -46,7 +46,7 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
         };
         if (reader.mark_cache)
             marks = reader.mark_cache->getOrSet(
-                MarkCache::hash(reader.dmfile->path() + reader.dmfile->colMarkIdentifier(file_name_base), reader.hash_salt), mark_load);
+                MarkCache::hash(reader.dmfile->path() + "/" + DMFile::colMarkIdentifier(file_name_base), reader.hash_salt), mark_load);
         else
             marks = mark_load();
     }
@@ -72,15 +72,18 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
             marks = mark_load();
     }
     size_t data_file_size = 0;
+    size_t data_file_content_end = 0;
     if (reader.dmfile->isSingleFileMode())
     {
-        auto data_file_stat = reader.dmfile->getSubFileStat(reader.dmfile->colDataIdentifier(file_name_base));
-        data_file_size      = data_file_stat.size;
+        auto data_file_stat   = reader.dmfile->getSubFileStat(reader.dmfile->colDataIdentifier(file_name_base));
+        data_file_size        = data_file_stat.size;
+        data_file_content_end = data_file_stat.offset + data_file_size;
     }
     else
     {
         const String data_path = reader.dmfile->colDataPath(file_name_base);
         data_file_size         = Poco::File(data_path).getSize();
+        data_file_content_end  = data_file_size;
     }
     size_t packs          = reader.dmfile->getPacks();
     size_t buffer_size    = 0;
@@ -109,7 +112,7 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
             }
         }
 
-        size_t range_end_in_file = (end == packs) ? data_file_size : (*marks)[end].offset_in_compressed_file;
+        size_t range_end_in_file = (end == packs) ? data_file_content_end : (*marks)[end].offset_in_compressed_file;
 
         size_t range = range_end_in_file - cur_offset_in_file;
         buffer_size  = std::max(buffer_size, range);
@@ -129,7 +132,7 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
         if (reader.use_packs[i])
         {
             auto start = (*marks)[i].offset_in_compressed_file;
-            auto end   = (i == packs - 1) ? data_file_size : (*marks)[i + 1].offset_in_compressed_file;
+            auto end   = (i == packs - 1) ? data_file_content_end : (*marks)[i + 1].offset_in_compressed_file;
             estimated_size += end - start;
         }
     }

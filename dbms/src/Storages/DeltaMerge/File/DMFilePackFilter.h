@@ -198,7 +198,7 @@ private:
             };
             if (index_cache)
             {
-                auto key     = MinMaxIndexCache::hash(dmfile->path() + index_identifier, hash_salt);
+                auto key     = MinMaxIndexCache::hash(dmfile->path() + "/" + index_identifier, hash_salt);
                 minmax_index = index_cache->getOrSet(key, load);
             }
             else
