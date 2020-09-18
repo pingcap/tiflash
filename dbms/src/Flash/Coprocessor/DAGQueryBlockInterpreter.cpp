@@ -447,7 +447,8 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     // build
     static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> join_type_map{
         {tipb::JoinType::TypeInnerJoin, ASTTableJoin::Kind::Inner}, {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::Left},
-        {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Right}};
+        {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Right}, {tipb::JoinType::TypeSemiJoin, ASTTableJoin::Kind::Inner},
+        {tipb::JoinType::TypeAntiSemiJoin, ASTTableJoin::Kind::Anti}};
     if (input_streams_vec.size() != 2)
     {
         throw TiFlashException("Join query block must have 2 input streams", Errors::BroadcastJoin::Internal);
@@ -457,6 +458,9 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     if (join_type_it == join_type_map.end())
         throw TiFlashException("Unknown join type in dag request", Errors::Coprocessor::BadRequest);
     ASTTableJoin::Kind kind = join_type_it->second;
+    ASTTableJoin::Strictness strictness = ASTTableJoin::Strictness::All;
+    if (join.join_type() == tipb::JoinType::TypeSemiJoin || join.join_type() == tipb::JoinType::TypeAntiSemiJoin)
+        strictness = ASTTableJoin::Strictness::Any;
 
     BlockInputStreams left_streams;
     BlockInputStreams right_streams;
@@ -502,10 +506,20 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
 
     if (!query_block.aggregation)
     {
-        for (auto const & p : input_streams_vec[0][0]->getHeader().getNamesAndTypesList())
-            final_project.emplace_back(p.name, query_block.qb_column_prefix + p.name);
-        for (auto const & p : input_streams_vec[1][0]->getHeader().getNamesAndTypesList())
-            final_project.emplace_back(p.name, query_block.qb_column_prefix + p.name);
+        if (query_block.isRootQueryBlock())
+        {
+            for (auto i : query_block.output_offsets)
+            {
+                if ((size_t)i >= join_output_columns.size())
+                    throw TiFlashException("Output offset index is out of bound", Errors::Coprocessor::BadRequest);
+                final_project.emplace_back(join_output_columns[i].name, "");
+            }
+        }
+        else
+        {
+            for (auto const & p : join_output_columns)
+                final_project.emplace_back(p.name, query_block.qb_column_prefix + p.name);
+        }
     }
 
     DataTypes join_key_types;
@@ -540,8 +554,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
 
     const Settings & settings = context.getSettingsRef();
     JoinPtr joinPtr = std::make_shared<Join>(left_key_names, right_key_names, true,
-        SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode), kind, ASTTableJoin::Strictness::All,
-        collators);
+        SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode), kind, strictness, collators);
     executeUnion(right_pipeline, max_streams);
     right_query.source = right_pipeline.firstStream();
     right_query.join = joinPtr;

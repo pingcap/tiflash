@@ -562,6 +562,25 @@ namespace
         }
     };
 
+    template <typename Map>
+    struct Adder<ASTTableJoin::Kind::Anti, ASTTableJoin::Strictness::Any, Map>
+    {
+        static void addFound(const typename Map::const_iterator & /*it*/, size_t /*num_columns_to_add*/, MutableColumns & /*added_columns*/,
+                             size_t i, IColumn::Filter * filter, IColumn::Offset & /*current_offset*/, IColumn::Offsets * /*offsets*/,
+                             const std::vector<size_t> & /*right_indexes*/)
+        {
+            (*filter)[i] = 0;
+        }
+
+        static void addNotFound(size_t num_columns_to_add, MutableColumns & added_columns,
+                                size_t i, IColumn::Filter * filter, IColumn::Offset & /*current_offset*/, IColumn::Offsets * /*offsets*/)
+        {
+            (*filter)[i] = 1;
+            for (size_t j = 0; j < num_columns_to_add; ++j)
+                added_columns[j]->insertDefault();
+        }
+    };
+
     template <ASTTableJoin::Kind KIND, typename Map>
     struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
     {
@@ -742,7 +761,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
     /// Used with ANY INNER JOIN
     std::unique_ptr<IColumn::Filter> filter;
 
-    if ((kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Right) && strictness == ASTTableJoin::Strictness::Any)
+    if ((kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Anti) && strictness == ASTTableJoin::Strictness::Any)
         filter = std::make_unique<IColumn::Filter>(rows);
 
     /// Used with ALL ... JOIN
@@ -879,6 +898,8 @@ void Join::joinBlock(Block & block) const
         joinBlockImpl<ASTTableJoin::Kind::Left, ASTTableJoin::Strictness::All>(block, maps_all_full);
     else if (kind == ASTTableJoin::Kind::Right && strictness == ASTTableJoin::Strictness::All)
         joinBlockImpl<ASTTableJoin::Kind::Inner, ASTTableJoin::Strictness::All>(block, maps_all_full);
+    else if (kind == ASTTableJoin::Kind::Anti)
+        joinBlockImpl<ASTTableJoin::Kind::Anti, ASTTableJoin::Strictness::Any>(block, maps_any);
     else if (kind == ASTTableJoin::Kind::Cross)
         joinBlockImplCross(block);
     else
