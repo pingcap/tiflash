@@ -21,7 +21,7 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
       compression_settings(compression_settings_),
       file_provider(file_provider_),
       plain_file(createWriteBufferFromFileBaseByFileProvider(
-          file_provider, dmfile->path(), EncryptionPath(dmfile->path(), ""), true, 0, 0, max_compress_block_size)),
+          file_provider, dmfile->path(), EncryptionPath(dmfile->encryptionBasePath(), ""), true, 0, 0, max_compress_block_size)),
       compressed_buf(*plain_file, compression_settings)
 {
     dmfile->setStatus(DMFile::Status::WRITING);
