@@ -106,7 +106,7 @@ void DMFile::upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileVers
 {
     if (unlikely(mode != Mode::FOLDER))
     {
-        throw DB::TiFlashException("UpgradeMetaIfNeed is only expected to be called when mode is FOLDER.", Errors::DeltaTree::Internal);
+        throw DB::TiFlashException("upgradeMetaIfNeed is only expected to be called when mode is FOLDER.", Errors::DeltaTree::Internal);
     }
     if (unlikely(ver == DMFileVersion::VERSION_BASE))
     {
