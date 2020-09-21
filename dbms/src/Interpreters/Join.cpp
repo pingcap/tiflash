@@ -15,6 +15,7 @@
 
 #include <Core/ColumnNumbers.h>
 #include <Common/typeid_cast.h>
+#include <DataTypes/DataTypesNumber.h>
 
 
 namespace DB
@@ -32,12 +33,17 @@ namespace ErrorCodes
 
 Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool use_nulls_,
     const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_,
-    const TiDB::TiDBCollators & collators_)
+    const TiDB::TiDBCollators & collators_, const String & left_filter_column_, const String & right_filter_column_,
+    const String & other_filter_column_, ExpressionActionsPtr other_condition_ptr_)
     : kind(kind_), strictness(strictness_),
     key_names_left(key_names_left_),
     key_names_right(key_names_right_),
     use_nulls(use_nulls_),
     collators(collators_),
+    left_filter_column(left_filter_column_),
+    right_filter_column(right_filter_column_),
+    other_filter_column(other_filter_column_),
+    other_condition_ptr(other_condition_ptr_),
     log(&Logger::get("Join")),
     limits(limits)
 {
@@ -418,6 +424,46 @@ namespace
     }
 }
 
+void recordFilteredRows(const Block & block, const String & filter_column, ColumnPtr & null_map_holder, ConstNullMapPtr & null_map)
+{
+    if (filter_column.empty())
+        return;
+    auto & column = block.getByName(filter_column).column;
+    if (column->isColumnNullable())
+    {
+        const ColumnNullable & column_nullable = static_cast<const ColumnNullable &>(*column);
+        if (!null_map_holder)
+        {
+            null_map_holder = column_nullable.getNullMapColumnPtr();
+        }
+        else
+        {
+            MutableColumnPtr mutable_null_map_holder = (*std::move(null_map_holder)).mutate();
+
+            PaddedPODArray<UInt8> & mutable_null_map = static_cast<ColumnUInt8 &>(*mutable_null_map_holder).getData();
+            const PaddedPODArray<UInt8> & other_null_map = column_nullable.getNullMapData();
+            for (size_t i = 0, size = mutable_null_map.size(); i < size; ++i)
+                mutable_null_map[i] |= other_null_map[i];
+
+            null_map_holder = std::move(mutable_null_map_holder);
+        }
+    }
+
+    if (!null_map_holder)
+    {
+        null_map_holder = ColumnVector<UInt8>::create(column->size(), 0);
+    }
+    MutableColumnPtr mutable_null_map_holder = (*std::move(null_map_holder)).mutate();
+    PaddedPODArray<UInt8> & mutable_null_map = static_cast<ColumnUInt8 &>(*mutable_null_map_holder).getData();
+
+    auto & nested_column = column->isColumnNullable() ? static_cast<const ColumnNullable &>(*column).getNestedColumnPtr() : column;
+    for (size_t i = 0, size = nested_column->size(); i < size; ++i)
+        mutable_null_map[i] |= (!nested_column->getInt(i));
+
+    null_map_holder = std::move(mutable_null_map_holder);
+
+    null_map = &static_cast<const ColumnUInt8 &>(*null_map_holder).getData();
+}
 
 bool Join::insertFromBlock(const Block & block)
 {
@@ -448,6 +494,9 @@ bool Join::insertFromBlock(const Block & block)
     ColumnPtr null_map_holder;
     ConstNullMapPtr null_map{};
     extractNestedColumnsAndNullMap(key_columns, null_map_holder, null_map);
+    /// reuse null_map to record the filtered rows, the rows contains NULL or does not
+    /// match the join filter will not insert to the maps
+    recordFilteredRows(block, right_filter_column, null_map_holder, null_map);
 
     size_t rows = block.rows();
 
@@ -702,6 +751,9 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
     ColumnPtr null_map_holder;
     ConstNullMapPtr null_map{};
     extractNestedColumnsAndNullMap(key_columns, null_map_holder, null_map);
+    /// reuse null_map to record the filtered rows, the rows contains NULL or does not
+    /// match the join filter won't join to anything
+    recordFilteredRows(block, left_filter_column, null_map_holder, null_map);
 
     size_t existing_columns = block.columns();
 

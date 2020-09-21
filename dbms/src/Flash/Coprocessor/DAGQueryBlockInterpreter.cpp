@@ -383,18 +383,36 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     }
 }
 
-void DAGQueryBlockInterpreter::prepareJoinKeys(const google::protobuf::RepeatedPtrField<tipb::Expr> & keys, const DataTypes & key_types,
-    Pipeline & pipeline, Names & key_names, bool left, bool is_right_out_join)
+void DAGQueryBlockInterpreter::prepareJoin(const google::protobuf::RepeatedPtrField<tipb::Expr> & keys, const DataTypes & key_types,
+    Pipeline & pipeline, Names & key_names, const google::protobuf::RepeatedPtrField<tipb::Expr> & filters, bool left,
+    bool is_right_out_join, String & filter_column_name)
 {
     std::vector<NameAndTypePair> source_columns;
     for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
         source_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(std::move(source_columns), context);
     ExpressionActionsChain chain;
-    if (dag_analyzer.appendJoinKey(chain, keys, key_types, key_names, left, is_right_out_join))
+    if (dag_analyzer.appendJoinKeyAndJoinFilters(chain, keys, key_types, key_names, left, is_right_out_join, filters, filter_column_name))
     {
         pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions()); });
     }
+}
+
+ExpressionActionsPtr DAGQueryBlockInterpreter::genJoinOtherConditionAction(
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & other_conditions, std::vector<NameAndTypePair> & source_columns,
+    String & filter_column)
+{
+    if (other_conditions.empty())
+        return nullptr;
+    std::vector<const tipb::Expr *> condition_vector;
+    for (const auto & c : other_conditions)
+    {
+        condition_vector.push_back(&c);
+    }
+    DAGExpressionAnalyzer dag_analyzer(source_columns, context);
+    ExpressionActionsChain chain;
+    dag_analyzer.appendWhere(chain, condition_vector, filter_column);
+    return chain.getLastActions();
 }
 
 /// ClickHouse require join key to be exactly the same type
@@ -542,19 +560,27 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     /// add necessary transformation if the join key is an expression
     Pipeline left_pipeline;
     left_pipeline.streams = left_streams;
-    prepareJoinKeys(join.inner_idx() == 0 ? join.right_join_keys() : join.left_join_keys(), join_key_types, left_pipeline, left_key_names,
-        true, kind == ASTTableJoin::Kind::Right);
+    String left_filter_column_name = "";
+    prepareJoin(join.inner_idx() == 0 ? join.right_join_keys() : join.left_join_keys(), join_key_types, left_pipeline, left_key_names,
+        join.inner_idx() == 0 ? join.right_condition() : join.left_condition(), true, kind == ASTTableJoin::Kind::Right,
+        left_filter_column_name);
     Pipeline right_pipeline;
     right_pipeline.streams = right_streams;
-    prepareJoinKeys(join.inner_idx() == 0 ? join.left_join_keys() : join.right_join_keys(), join_key_types, right_pipeline, right_key_names,
-        false, kind == ASTTableJoin::Kind::Right);
+    String right_filter_column_name = "";
+    prepareJoin(join.inner_idx() == 0 ? join.left_join_keys() : join.right_join_keys(), join_key_types, right_pipeline, right_key_names,
+        join.inner_idx() == 0 ? join.left_condition() : join.right_condition(), false, kind == ASTTableJoin::Kind::Right,
+        right_filter_column_name);
 
     left_streams = left_pipeline.streams;
     right_streams = right_pipeline.streams;
+    String other_filter_column_name = "";
+    ExpressionActionsPtr other_condition_expr
+        = genJoinOtherConditionAction(join.other_condition(), join_output_columns, other_filter_column_name);
 
     const Settings & settings = context.getSettingsRef();
     JoinPtr joinPtr = std::make_shared<Join>(left_key_names, right_key_names, true,
-        SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode), kind, strictness, collators);
+        SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode), kind, strictness, collators,
+        left_filter_column_name, right_filter_column_name, other_filter_column_name, other_condition_expr);
     executeUnion(right_pipeline, max_streams);
     right_query.source = right_pipeline.firstStream();
     right_query.join = joinPtr;
