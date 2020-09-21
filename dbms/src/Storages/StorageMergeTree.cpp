@@ -47,6 +47,11 @@ namespace ErrorCodes
     extern const int FAIL_POINT_ERROR;
 }
 
+namespace FailPoints
+{
+extern const char exception_between_alter_data_and_meta[];
+}
+
 
 StorageMergeTree::StorageMergeTree(const String & path_,
     const String & db_engine_,
@@ -470,7 +475,7 @@ void StorageMergeTree::alterInternal(
 
     // The process of data change and meta change is not atomic, so we must make sure change data firstly
     // and change meta secondly. If server crashes during or after changing data, we must fix the schema after restart.
-    FAIL_POINT_TRIGGER_EXCEPTION(exception_between_alter_data_and_meta);
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_between_alter_data_and_meta);
 
     context.getDatabase(database_name)->alterTable(context, table_name, new_columns, storage_modifier);
     setColumns(std::move(new_columns));
