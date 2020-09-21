@@ -25,6 +25,10 @@ extern const int READONLY;
 extern const int FAIL_POINT_ERROR;
 } // namespace ErrorCodes
 
+namespace FailPoints
+{
+extern const char exception_between_drop_meta_and_data[];
+}
 
 InterpreterDropQuery::InterpreterDropQuery(const ASTPtr & query_ptr_, Context & context_) : query_ptr(query_ptr_), context(context_) {}
 
@@ -145,7 +149,7 @@ BlockIO InterpreterDropQuery::execute()
                     storage->removeFromTMTContext();
             });
 
-            FAIL_POINT_TRIGGER_EXCEPTION(exception_between_drop_meta_and_data);
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_between_drop_meta_and_data);
 
             /// Delete table data
             table.first->drop();
@@ -156,7 +160,8 @@ BlockIO InterpreterDropQuery::execute()
             const String database_data_path = database->getDataPath();
             if (!database_data_path.empty())
             {
-                String table_data_path = database_data_path + (endsWith(database_data_path, "/") ? "" : "/") + escapeForFileName(current_table_name);
+                String table_data_path
+                    = database_data_path + (endsWith(database_data_path, "/") ? "" : "/") + escapeForFileName(current_table_name);
 
                 if (Poco::File(table_data_path).exists())
                 {
