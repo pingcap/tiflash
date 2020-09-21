@@ -485,9 +485,13 @@ void DiagnosticsService::memLoadInfo(std::vector<diagnosticspb::ServerInfoItem> 
     getMemoryInfo(meminfo);
 
     /// TODO: we should check both cgroup quota and MemTotal, then pick the less one
+
+    uint64_t buffers = meminfo.at("Buffers") * KB;
+    uint64_t cached = meminfo.at("Cached") * KB;
+
     uint64_t total_memory = meminfo.at("MemTotal") * KB;
     uint64_t free_memory = meminfo.at("MemFree") * KB;
-    uint64_t used_memory = total_memory - free_memory;
+    uint64_t used_memory = total_memory - free_memory - buffers - cached;
     uint64_t total_swap = meminfo.at("SwapTotal") * KB;
     uint64_t free_swap = meminfo.at("SwapFree") * KB;
     uint64_t used_swap = total_swap - free_swap;
