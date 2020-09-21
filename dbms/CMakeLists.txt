@@ -29,6 +29,10 @@ endif ()
 
 find_package (Threads)
 
+if (ENABLE_TESTS)
+    add_definitions(-DFIU_ENABLE)
+endif()
+
 include_directories (src)
 add_subdirectory (src)
 
@@ -78,6 +82,7 @@ add_headers_only(dbms src/Server)
 
 list (APPEND clickhouse_common_io_sources ${CONFIG_BUILD})
 list (APPEND clickhouse_common_io_headers ${CONFIG_VERSION} ${CONFIG_COMMON})
+list (APPEND clickhouse_common_io_headers ${fiu_include_dirs})
 
 list (APPEND dbms_sources src/Functions/IFunction.cpp src/Functions/FunctionFactory.cpp src/Functions/FunctionHelpers.cpp)
 list (APPEND dbms_headers src/Functions/IFunction.h src/Functions/FunctionFactory.h src/Functions/FunctionHelpers.h)
@@ -157,6 +162,7 @@ target_link_libraries (clickhouse_common_io
     ${EXECINFO_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
     ${CMAKE_DL_LIBS}
+    fiu
     prometheus-cpp::core
     prometheus-cpp::push
     prometheus-cpp::pull
@@ -254,9 +260,6 @@ if (NOT USE_INTERNAL_ZSTD_LIBRARY)
     target_include_directories (dbms BEFORE PRIVATE ${ZSTD_INCLUDE_DIR})
 endif ()
 
-#use libfiu
-target_include_directories(dbms PUBLIC ${fiu_include_dirs})
-
 target_include_directories (dbms PUBLIC ${DBMS_INCLUDE_DIR})
 target_include_directories (clickhouse_common_io PUBLIC ${DBMS_INCLUDE_DIR})
 target_include_directories (clickhouse_common_io PUBLIC ${PCG_RANDOM_INCLUDE_DIR})
@@ -270,8 +273,6 @@ add_subdirectory (tests)
 
 if (ENABLE_TESTS)
     include (${ClickHouse_SOURCE_DIR}/cmake/find_gtest.cmake)
-
-    add_definitions(-DFIU_ENABLE)
 
     if (USE_INTERNAL_GTEST_LIBRARY)
         # Google Test from sources
