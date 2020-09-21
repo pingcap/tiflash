@@ -55,7 +55,8 @@ extern const int NO_COMMON_TYPE;
 
 namespace FailPoints
 {
-extern const char region_exception_after_read_from_storage[];
+extern const char region_exception_after_read_from_storage_some_error[];
+extern const char region_exception_after_read_from_storage_all_error[];
 extern const char pause_after_learner_read[];
 } // namespace FailPoints
 
@@ -385,8 +386,8 @@ void DAGQueryBlockInterpreter::readFromLocalStorage( //
     // TODO: Note that if storage is (Txn)MergeTree, and any region exception thrown, we won't do retry here.
     // Now we only support DeltaTree in production environment and don't do any extra check for storage type here.
 
-    bool allow_retry = true;
-    while (allow_retry)
+    int num_allow_retry = 1;
+    while (true)
     {
         try
         {
@@ -397,7 +398,17 @@ void DAGQueryBlockInterpreter::readFromLocalStorage( //
             // Like after region merge/split.
 
             // Inject failpoint to throw RegionException
-            fiu_do_on(FailPoints::region_exception_after_read_from_storage, {
+            fiu_do_on(FailPoints::region_exception_after_read_from_storage_some_error, {
+                const auto & regions_info = query_info.mvcc_query_info->regions_query_info;
+                std::vector<RegionID> region_ids;
+                for (const auto & info : regions_info)
+                {
+                    if (rand() % 100 > 50)
+                        region_ids.push_back(info.region_id);
+                }
+                throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
+            });
+            fiu_do_on(FailPoints::region_exception_after_read_from_storage_all_error, {
                 const auto & regions_info = query_info.mvcc_query_info->regions_query_info;
                 std::vector<RegionID> region_ids;
                 for (const auto & info : regions_info)
@@ -416,15 +427,19 @@ void DAGQueryBlockInterpreter::readFromLocalStorage( //
                 pipeline.streams.clear();
                 const auto & dag_regions = dag.getRegions();
                 std::stringstream ss;
-                if (likely(allow_retry))
+                // Normally there is only few regions need to retry when super batch is enabled. Retry to read
+                // from local first. However, too many retry in different places may make the whole process
+                // time out of control. We limit the number of retries to 1 now.
+                if (likely(num_allow_retry > 0))
                 {
-                    allow_retry = false;
+                    --num_allow_retry;
+                    // sort e.region_ids so that we can use lower_bound to find the region happens to error or not
+                    std::sort(e.region_ids.begin(), e.region_ids.end());
                     auto & regions_query_info = query_info.mvcc_query_info->regions_query_info;
                     for (auto iter = regions_query_info.begin(); iter != regions_query_info.end(); /**/)
                     {
-                        std::sort(e.region_ids.begin(), e.region_ids.end());
                         auto error_id_iter = std::lower_bound(e.region_ids.begin(), e.region_ids.end(), iter->region_id);
-                        if (*error_id_iter == iter->region_id)
+                        if (error_id_iter != e.region_ids.end() && *error_id_iter == iter->region_id)
                         {
                             // move the error regions info from `query_info.mvcc_query_info->regions_query_info` to `region_retry`
                             auto region_iter = dag_regions.find(iter->region_id);
@@ -440,13 +455,13 @@ void DAGQueryBlockInterpreter::readFromLocalStorage( //
                             ++iter;
                         }
                     }
-                    if (unlikely(regions_query_info.empty()))
-                        break; // no available region in local, break retry loop
                     LOG_WARNING(log,
                         "RegionException after read from storage, regions ["
                             << ss.str() << "], message: " << e.message()
                             << (regions_query_info.empty() ? "" : ", retry to read from local"));
-                    continue; // continue to retry read from local storage
+                    if (unlikely(regions_query_info.empty()))
+                        break; // no available region in local, break retry loop
+                    continue;  // continue to retry read from local storage
                 }
                 else
                 {

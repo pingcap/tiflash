@@ -1,3 +1,4 @@
+# Tests for Region meta changed after read from storage
 mysql> drop table if exists test.t 
 
 >> DBGInvoke __init_fail_point()
@@ -10,8 +11,32 @@ func> wait_table test t
 
 mysql> insert into test.t values (1, 1),(1, 2)
 
-# Region meta changed after read from storage
->> DBGInvoke __enable_fail_point(region_exception_after_read_from_storage)
+# This should retry to read normal Regions in local, and read error Regions from remote
+>> DBGInvoke __enable_fail_point(region_exception_after_read_from_storage_some_error)
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
++---+---+
+| a | b |
++---+---+
+| 1 | 1 |
+| 1 | 2 |
++---+---+
+
+# This should retry to read error Regions from remote
+>> DBGInvoke __enable_fail_point(region_exception_after_read_from_storage_all_error)
+
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
++---+---+
+| a | b |
++---+---+
+| 1 | 1 |
+| 1 | 2 |
++---+---+
+
+
+# This should first retry in local, then retry from remote because of "all error" in the retry
+>> DBGInvoke __enable_fail_point(region_exception_after_read_from_storage_some_error)
+>> DBGInvoke __enable_fail_point(region_exception_after_read_from_storage_all_error)
 
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 +---+---+
@@ -22,4 +47,5 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 +---+---+
 
 mysql> drop table if exists test.t
->> DBGInvoke __disable_fail_point(region_exception_after_read_from_storage)
+>> DBGInvoke __disable_fail_point(region_exception_after_read_from_storage_some_error)
+>> DBGInvoke __disable_fail_point(region_exception_after_read_from_storage_all_error)
