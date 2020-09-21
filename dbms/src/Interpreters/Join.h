@@ -393,6 +393,9 @@ private:
     MapsAnyFull maps_any_full;    /// For ANY RIGHT|FULL JOIN
     MapsAllFull maps_all_full;    /// For ALL RIGHT|FULL JOIN
 
+    /// For right out join
+    RowRefList rows_not_inserted_to_map;
+
     /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
     Arena pool;
 
