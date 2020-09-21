@@ -400,6 +400,11 @@ private:
     MapsAnyFull maps_any_full;    /// For ANY RIGHT|FULL JOIN
     MapsAllFull maps_all_full;    /// For ALL RIGHT|FULL JOIN
 
+    /// For right/full join, including
+    /// 1. Rows with NULL join keys
+    /// 2. Rows that are filtered by right join conditions
+    RowRefList rows_not_inserted_to_map;
+
     /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
     Arena pool;
 

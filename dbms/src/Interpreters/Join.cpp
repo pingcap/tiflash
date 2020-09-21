@@ -371,7 +371,8 @@ namespace
     template <ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map, bool has_null_map>
     void NO_INLINE insertFromBlockImplTypeCase(
         Map & map, size_t rows, const ColumnRawPtrs & key_columns,
-        size_t keys_size, const Sizes & key_sizes, const TiDB::TiDBCollators & collators, Block * stored_block, ConstNullMapPtr null_map, Arena & pool)
+        size_t keys_size, const Sizes & key_sizes, const TiDB::TiDBCollators & collators,
+        Block * stored_block, ConstNullMapPtr null_map, Join::RowRefList * rows_not_inserted_to_map, Arena & pool)
     {
         KeyGetter key_getter(key_columns, collators);
         std::vector<std::string> sort_key_containers;
@@ -380,7 +381,19 @@ namespace
         for (size_t i = 0; i < rows; ++i)
         {
             if (has_null_map && (*null_map)[i])
+            {
+                if (rows_not_inserted_to_map)
+                {
+                    /// for right/full out join, need to record the rows not inserted to map
+                    auto elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
+
+                    elem->next = rows_not_inserted_to_map->next;
+                    rows_not_inserted_to_map->next = elem;
+                    elem->block = stored_block;
+                    elem->row_num = i;
+                }
                 continue;
+            }
 
             auto key = key_getter.getKey(key_columns, keys_size, i, key_sizes, sort_key_containers);
             Inserter<STRICTNESS, Map, KeyGetter>::insert(map, key, stored_block, i, pool);
@@ -391,19 +404,23 @@ namespace
     template <ASTTableJoin::Strictness STRICTNESS, typename KeyGetter, typename Map>
     void insertFromBlockImplType(
         Map & map, size_t rows, const ColumnRawPtrs & key_columns,
-        size_t keys_size, const Sizes & key_sizes, const TiDB::TiDBCollators & collators, Block * stored_block, ConstNullMapPtr null_map, Arena & pool)
+        size_t keys_size, const Sizes & key_sizes, const TiDB::TiDBCollators & collators,
+        Block * stored_block, ConstNullMapPtr null_map, Join::RowRefList * rows_not_inserted_to_map, Arena & pool)
     {
         if (null_map)
-            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, true>(map, rows, key_columns, keys_size, key_sizes, collators, stored_block, null_map, pool);
+            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, true>(map, rows, key_columns, keys_size, key_sizes, collators,
+                    stored_block, null_map, rows_not_inserted_to_map, pool);
         else
-            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, false>(map, rows, key_columns, keys_size, key_sizes, collators, stored_block, null_map, pool);
+            insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, false>(map, rows, key_columns, keys_size, key_sizes, collators,
+                    stored_block, null_map, rows_not_inserted_to_map, pool);
     }
 
 
     template <ASTTableJoin::Strictness STRICTNESS, typename Maps>
     void insertFromBlockImpl(
         Join::Type type, Maps & maps, size_t rows, const ColumnRawPtrs & key_columns,
-        size_t keys_size, const Sizes & key_sizes, const TiDB::TiDBCollators & collators, Block * stored_block, ConstNullMapPtr null_map, Arena & pool)
+        size_t keys_size, const Sizes & key_sizes, const TiDB::TiDBCollators & collators,
+        Block * stored_block, ConstNullMapPtr null_map, Join::RowRefList * rows_not_inserted_to_map, Arena & pool)
     {
         switch (type)
         {
@@ -413,7 +430,8 @@ namespace
         #define M(TYPE) \
             case Join::Type::TYPE: \
                 insertFromBlockImplType<STRICTNESS, typename KeyGetterForType<Join::Type::TYPE>::Type>(\
-                    *maps.TYPE, rows, key_columns, keys_size, key_sizes, collators, stored_block, null_map, pool); \
+                    *maps.TYPE, rows, key_columns, keys_size, key_sizes, collators, stored_block, null_map,\
+                    rows_not_inserted_to_map, pool); \
                     break;
             APPLY_FOR_JOIN_VARIANTS(M)
         #undef M
@@ -550,16 +568,20 @@ bool Join::insertFromBlock(const Block & block)
         if (!getFullness(kind))
         {
             if (strictness == ASTTableJoin::Strictness::Any)
-                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any, rows, key_columns, keys_size, key_sizes, collators, stored_block, null_map, pool);
+                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any, rows, key_columns, keys_size, key_sizes, collators, stored_block, null_map,
+                        nullptr, pool);
             else
-                insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all, rows, key_columns, keys_size, key_sizes, collators, stored_block, null_map, pool);
+                insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all, rows, key_columns, keys_size, key_sizes, collators, stored_block, null_map,
+                        nullptr, pool);
         }
         else
         {
             if (strictness == ASTTableJoin::Strictness::Any)
-                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any_full, rows, key_columns, keys_size, key_sizes, collators, stored_block, null_map, pool);
+                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any_full, rows, key_columns, keys_size, key_sizes, collators, stored_block, null_map,
+                        &rows_not_inserted_to_map, pool);
             else
-                insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all_full, rows, key_columns, keys_size, key_sizes, collators, stored_block, null_map, pool);
+                insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all_full, rows, key_columns, keys_size, key_sizes, collators, stored_block, null_map,
+                        &rows_not_inserted_to_map, pool);
         }
     }
 
@@ -1029,7 +1051,7 @@ class NonJoinedBlockInputStream : public IProfilingBlockInputStream
 {
 public:
     NonJoinedBlockInputStream(const Join & parent_, const Block & left_sample_block, size_t max_block_size_)
-        : parent(parent_), max_block_size(max_block_size_)
+        : parent(parent_), max_block_size(max_block_size_), add_not_mapped_rows(true)
     {
         /** left_sample_block contains keys and "left" columns.
           * result_sample_block - keys, "left" columns, and "right" columns.
@@ -1107,6 +1129,7 @@ protected:
 private:
     const Join & parent;
     size_t max_block_size;
+    bool add_not_mapped_rows;
 
     Block result_sample_block;
     /// Indices of columns in result_sample_block that come from the left-side table (except key columns).
@@ -1196,6 +1219,29 @@ private:
                 ++it;
                 break;
             }
+        }
+
+        if (add_not_mapped_rows)
+        {
+            for (auto *row_ref = parent.rows_not_inserted_to_map.next; row_ref != nullptr;)
+            {
+                rows_added++;
+                for (size_t j = 0; j < num_columns_left; ++j)
+                    columns_left[j]->insertDefault();
+
+                for (size_t j = 0; j < num_columns_right; ++j)
+                    columns_right[j]->insertFrom(*row_ref->block->getByPosition(j).column.get(), row_ref->row_num);
+                if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
+                {
+                    row_ref = nullptr;
+                }
+                else
+                {
+                    row_ref = row_ref->next;
+                }
+            }
+            /// so this is not thread safe
+            add_not_mapped_rows = false;
         }
 
         return rows_added;

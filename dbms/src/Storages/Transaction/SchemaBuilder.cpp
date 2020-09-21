@@ -36,6 +36,14 @@ namespace ErrorCodes
 extern const int DDL_ERROR;
 extern const int SYNTAX_ERROR;
 } // namespace ErrorCodes
+namespace FailPoints
+{
+extern const char exception_after_step_1_in_exchange_partition[];
+extern const char exception_before_step_2_rename_in_exchange_partition[];
+extern const char exception_after_step_2_in_exchange_partition[];
+extern const char exception_before_step_3_rename_in_exchange_partition[];
+extern const char exception_after_step_3_in_exchange_partition[];
+}
 
 bool isReservedDatabase(Context & context, const String & database_name)
 {
@@ -658,7 +666,7 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
     auto orig_table_info = storage->getTableInfo();
     orig_table_info.partition = table_info->partition;
     storage->alterFromTiDB(AlterCommands{}, name_mapper.mapDatabaseName(*pt_db_info), orig_table_info, name_mapper, context);
-    FAIL_POINT_TRIGGER_EXCEPTION(exception_after_step_1_in_exchange_partition);
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_after_step_1_in_exchange_partition);
 
     /// step 2 change non partition table to a partition of the partition table
     storage = tmt_context.getStorages().get(npt_table_id);
@@ -671,11 +679,11 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
     /// partition does not have explicit name, so use default name here
     orig_table_info.name = name_mapper.mapTableName(orig_table_info);
     storage->alterFromTiDB(AlterCommands{}, name_mapper.mapDatabaseName(*npt_db_info), orig_table_info, name_mapper, context);
-    FAIL_POINT_TRIGGER_EXCEPTION(exception_before_step_2_rename_in_exchange_partition);
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_step_2_rename_in_exchange_partition);
 
     if (npt_db_info->id != pt_db_info->id)
         applyRenamePhysicalTable(pt_db_info, orig_table_info, storage);
-    FAIL_POINT_TRIGGER_EXCEPTION(exception_after_step_2_in_exchange_partition);
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_after_step_2_in_exchange_partition);
 
     /// step 3 change partition of the partition table to non partition table
     table_info = getter.getTableInfo(npt_db_info->id, pt_partition_id);
@@ -690,11 +698,11 @@ void SchemaBuilder<Getter, NameMapper>::applyExchangeTablePartition(const Schema
     orig_table_info.is_partition_table = false;
     orig_table_info.name = table_info->name;
     storage->alterFromTiDB(AlterCommands{}, name_mapper.mapDatabaseName(*pt_db_info), orig_table_info, name_mapper, context);
-    FAIL_POINT_TRIGGER_EXCEPTION(exception_before_step_3_rename_in_exchange_partition);
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_step_3_rename_in_exchange_partition);
 
     if (npt_db_info->id != pt_db_info->id)
         applyRenamePhysicalTable(npt_db_info, orig_table_info, storage);
-    FAIL_POINT_TRIGGER_EXCEPTION(exception_after_step_3_in_exchange_partition);
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_after_step_3_in_exchange_partition);
 }
 
 template <typename Getter, typename NameMapper>
