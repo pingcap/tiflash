@@ -87,7 +87,7 @@ try
     else
     {
         auto streaming_writer = std::make_shared<StreamWriter>(writer);
-        StreamingDAGResponseWriter response_writer(streaming_writer, context.getSettings().dag_records_per_chunk, dag.getEncodeType(),
+        StreamingDAGResponseWriter<StreamWriterPtr> response_writer(streaming_writer, context.getSettings().dag_records_per_chunk, dag.getEncodeType(),
             dag.getResultFieldTypes(), dag_context, collect_exec_summary, dag_request.has_root_executor());
         dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), response_writer);
         copyData(*streams.in, *dag_output_stream);

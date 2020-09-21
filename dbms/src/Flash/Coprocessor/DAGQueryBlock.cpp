@@ -24,7 +24,7 @@ using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 
 bool isSourceNode(const tipb::Executor * root)
 {
-    return root->tp() == tipb::ExecType::TypeJoin || root->tp() == tipb::ExecType::TypeTableScan;
+    return root->tp() == tipb::ExecType::TypeJoin || root->tp() == tipb::ExecType::TypeTableScan || root->tp() == tipb::ExecType::TypeExchangeClient;
 }
 
 const static String SOURCE_NAME("source");
@@ -32,6 +32,7 @@ const static String SEL_NAME("selection");
 const static String AGG_NAME("aggregation");
 const static String TOPN_NAME("topN");
 const static String LIMIT_NAME("limit");
+const static String EXCHANGE_SERVER_NAME("exchange_server");
 
 static void assignOrThrowException(const tipb::Executor ** to, const tipb::Executor * from, const String & name)
 {
@@ -97,6 +98,11 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_, TiFlashMe
                 assignOrThrowException(&limitOrTopN, current, TOPN_NAME);
                 limitOrTopN_name = current->executor_id();
                 current = &current->topn().child();
+                break;
+            case tipb::ExecType::TypeExchangeServer:
+                assignOrThrowException(&exchangeServer, current, EXCHANGE_SERVER_NAME);
+                exchangeServer_name = current->executor_id();
+                current = &current->exchange_server().child();
                 break;
             case tipb::ExecType::TypeIndexScan:
                 throw TiFlashException("Unsupported executor in DAG request: " + current->DebugString(), Errors::Coprocessor::Internal);
@@ -183,6 +189,21 @@ void DAGQueryBlock::fillOutputFieldTypes()
                 output_field_types.push_back(field_type);
             for (auto & field_type : children[1]->output_field_types)
                 output_field_types.push_back(field_type);
+        }
+    }
+    else if (source->tp() == tipb::ExecType::TypeExchangeClient)
+    {
+        if (output_field_types.empty())
+        {
+            for (auto & ci : source->exchange_client().field_types())
+            {
+                tipb::FieldType field_type;
+                field_type.set_tp(ci.tp());
+                field_type.set_flag(ci.flag());
+                field_type.set_flen(ci.flen());
+                field_type.set_decimal(ci.decimal());
+                output_field_types.push_back(field_type);
+            }
         }
     }
     else

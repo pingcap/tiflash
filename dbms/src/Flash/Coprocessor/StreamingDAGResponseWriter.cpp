@@ -13,25 +13,29 @@ extern const int UNSUPPORTED_PARAMETER;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-StreamingDAGResponseWriter::StreamingDAGResponseWriter(StreamWriterPtr writer_, Int64 records_per_chunk_, tipb::EncodeType encode_type_,
-    std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_, bool collect_execute_summary_, bool return_executor_id_)
+template <class StreamWriterPtr>
+StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWriterPtr writer_, Int64 records_per_chunk_,
+    tipb::EncodeType encode_type_, std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_,
+    bool collect_execute_summary_, bool return_executor_id_)
     : DAGResponseWriter(records_per_chunk_, encode_type_, result_field_types_, dag_context_, collect_execute_summary_, return_executor_id_),
-      writer(std::move(writer_)),
+      writer(writer_),
       thread_pool(dag_context.final_concurency)
 {
     rows_in_blocks = 0;
 }
 
-void StreamingDAGResponseWriter::ScheduleEncodeTask()
+template <class StreamWriterPtr>
+void StreamingDAGResponseWriter<StreamWriterPtr>::ScheduleEncodeTask()
 {
     tipb::SelectResponse response;
     addExecuteSummaries(response);
-    thread_pool.schedule(getEncodeTask(blocks, response, writer));
+    thread_pool.schedule(getEncodeTask(blocks, response));
     blocks.clear();
     rows_in_blocks = 0;
 }
 
-void StreamingDAGResponseWriter::finishWrite()
+template <class StreamWriterPtr>
+void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
 {
     if (rows_in_blocks > 0)
     {
@@ -41,11 +45,12 @@ void StreamingDAGResponseWriter::finishWrite()
     thread_pool.wait();
 }
 
-ThreadPool::Job StreamingDAGResponseWriter::getEncodeTask(
-    std::vector<Block> & input_blocks, tipb::SelectResponse & response, StreamWriterPtr stream_writer) const
+template <class StreamWriterPtr>
+ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodeTask(
+    std::vector<Block> & input_blocks, tipb::SelectResponse & response) const
 {
     /// todo find a way to avoid copying input_blocks
-    return [this, input_blocks, response, stream_writer]() mutable {
+    return [this, input_blocks, response]() mutable {
         std::unique_ptr<ChunkCodecStream> chunk_codec_stream = nullptr;
         if (encode_type == tipb::EncodeType::TypeDefault)
         {
@@ -101,16 +106,15 @@ ThreadPool::Job StreamingDAGResponseWriter::getEncodeTask(
             chunk_codec_stream->clear();
         }
 
-        std::string dag_data;
-        response.SerializeToString(&dag_data);
+        std::string select_resp;
+        response.SerializeToString(&select_resp);
 
-        ::coprocessor::BatchResponse resp;
-        resp.set_data(dag_data);
-        stream_writer->write(resp);
+        writer->write(select_resp);
     };
 }
 
-void StreamingDAGResponseWriter::write(const Block & block)
+template <class StreamWriterPtr>
+void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
 {
     if (block.columns() != result_field_types.size())
         throw TiFlashException("Output column size mismatch with field type size", Errors::Coprocessor::Internal);
@@ -121,5 +125,8 @@ void StreamingDAGResponseWriter::write(const Block & block)
         ScheduleEncodeTask();
     }
 }
+
+template class StreamingDAGResponseWriter<StreamWriterPtr>;
+template class StreamingDAGResponseWriter<MPPTunnelSetPtr>;
 
 } // namespace DB

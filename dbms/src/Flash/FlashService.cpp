@@ -4,6 +4,8 @@
 #include <Flash/BatchCommandsHandler.h>
 #include <Flash/BatchCoprocessorHandler.h>
 #include <Flash/FlashService.h>
+#include <Flash/Mpp/MPPHandler.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <Interpreters/Context.h>
 #include <Server/IServer.h>
 #include <grpcpp/server_builder.h>
@@ -88,7 +90,55 @@ grpc::Status FlashService::Coprocessor(
     return ret;
 }
 
-grpc::Status FlashService::BatchCommands(
+::grpc::Status FlashService::DispatchMPPTask(::grpc::ServerContext* grpc_context, const ::mpp::DispatchTaskRequest* request, ::mpp::DispatchTaskResponse* response) {
+    if (!security_config.checkGrpcContext(grpc_context))
+    {
+        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
+    }
+    // TODO: Add metric.
+
+    auto [context, status] = createDBContext(grpc_context);
+    if (!status.ok())
+    {
+        return status;
+    }
+
+    MPPHandler mpp_handler(context, *request);
+    return mpp_handler.execute(response);
+}
+
+::grpc::Status FlashService::EstablishMPPConnection(::grpc::ServerContext* grpc_context, const ::mpp::EstablishMPPConnectionRequest* request, ::grpc::ServerWriter< ::mpp::MPPDataPacket>* writer) {
+    if (!security_config.checkGrpcContext(grpc_context))
+    {
+        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
+    }
+    // TODO: Add metric.
+
+    auto [context, status] = createDBContext(grpc_context);
+    if (!status.ok())
+    {
+        return status;
+    }
+
+    auto & tmt_context = context.getTMTContext();
+    MPPTaskManagerPtr task_manager = tmt_context.getMPPTaskManager();
+    MPPTaskPtr server_task = task_manager->findTask(request->server_meta());
+    if (server_task == nullptr) {
+        // TODO: write some errors;
+        return grpc::Status::OK;
+    }
+    MPPTunnelPtr tunnel = server_task->getTunnel(request->client_meta());
+    if (tunnel == nullptr) {
+        // TODO:: return error;
+        return grpc::Status::OK;
+    }
+    tunnel->connect(writer);
+    tunnel->waitForFinish();
+    // TODO: Check if there are errors in task.
+    return grpc::Status::OK;
+}
+
+    grpc::Status FlashService::BatchCommands(
     grpc::ServerContext * grpc_context, grpc::ServerReaderWriter<::tikvpb::BatchCommandsResponse, tikvpb::BatchCommandsRequest> * stream)
 {
     if (!security_config.checkGrpcContext(grpc_context))

@@ -2,6 +2,7 @@
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/CoprocessorBlockInputStream.h>
+#include <DataStreams/ExchangerClientInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/LimitBlockInputStream.h>
@@ -1114,6 +1115,12 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     if (query_block.source->tp() == tipb::ExecType::TypeJoin)
     {
         executeJoin(query_block.source->join(), pipeline, right_query);
+        recordProfileStreams(pipeline, query_block.source_name);
+    }
+    if (query_block.source->tp() == tipb::ExecType::TypeExchangeClient)
+    {
+        pipeline.firstStream() = std::make_shared<ExchangeClientInputStream>(
+            context.getTMTContext(), query_block.source->exchange_client(), dag.getMPPTask()->meta);
         recordProfileStreams(pipeline, query_block.source_name);
     }
     else

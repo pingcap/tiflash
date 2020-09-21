@@ -8,6 +8,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/DAGQueryBlock.h>
+#include <Flash/Mpp/MPPHandler.h>
 #include <Interpreters/IQuerySource.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
@@ -28,10 +29,12 @@ struct StreamWriter
 
     StreamWriter(::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_) : writer(writer_) {}
 
-    void write(const ::coprocessor::BatchResponse & data)
+    void write(const String & dag_data)
     {
+        ::coprocessor::BatchResponse resp;
+        resp.set_data(dag_data);
         std::lock_guard<std::mutex> lk(write_mutex);
-        writer->Write(data);
+        writer->Write(resp);
     }
 };
 
@@ -43,7 +46,7 @@ class DAGQuerySource : public IQuerySource
 {
 public:
     DAGQuerySource(Context & context_, DAGContext & dag_context_, const std::unordered_map<RegionID, RegionInfo> & regions_,
-        const tipb::DAGRequest & dag_request_, const bool is_batch_cop_ = false);
+        const tipb::DAGRequest & dag_request_, const bool is_batch_cop_ = false, MPPTaskPtr mpp_task_ = nullptr);
 
     std::tuple<std::string, ASTPtr> parse(size_t max_query_size) override;
     String str(size_t max_query_size) override;
@@ -61,6 +64,8 @@ public:
     const std::unordered_map<RegionID, RegionInfo> & getRegions() const { return regions; }
 
     bool isBatchCop() const { return is_batch_cop; }
+
+    MPPTaskPtr getMPPTask() const { return mpp_task; }
 
     DAGContext & getDAGContext() const { return dag_context; }
 
@@ -81,6 +86,7 @@ protected:
     ASTPtr ast;
 
     const bool is_batch_cop;
+    MPPTaskPtr mpp_task;
 };
 
 } // namespace DB
