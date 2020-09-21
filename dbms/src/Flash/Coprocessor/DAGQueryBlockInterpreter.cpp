@@ -1,3 +1,4 @@
+#include <Common/FailPoint.h>
 #include <Common/TiFlashException.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/ConcatBlockInputStream.h>
@@ -51,6 +52,13 @@ extern const int UNKNOWN_EXCEPTION;
 extern const int COP_BAD_DAG_REQUEST;
 extern const int NO_COMMON_TYPE;
 } // namespace ErrorCodes
+
+namespace FailPoints
+{
+extern const char region_exception_after_read_from_storage_some_error[];
+extern const char region_exception_after_read_from_storage_all_error[];
+extern const char pause_after_learner_read[];
+} // namespace FailPoints
 
 DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std::vector<BlockInputStreams> & input_streams_vec_,
     const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const tipb::DAGRequest & rqst_, ASTPtr dummy_query_,
@@ -455,7 +463,6 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     }
 
     size_t max_block_size = settings.max_block_size;
-    QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
 
     if (query_block.selection)
     {
@@ -471,28 +478,14 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     query_info.dag_query = std::make_unique<DAGQueryInfo>(conditions, analyzer->getPreparedSets(), analyzer->getCurrentInputColumns());
     query_info.mvcc_query_info = std::move(mvcc_query_info);
 
+    FAIL_POINT_PAUSE(FailPoints::pause_after_learner_read);
     bool need_local_read = !query_info.mvcc_query_info->regions_query_info.empty();
     if (need_local_read)
     {
-        // TODO: Note that if storage is (Txn)MergeTree, and any region exception thrown, we won't do retry here.
-        // Now we only support DeltaTree in production environment and don't do any extra check for storage type here.
-        try
-        {
-            pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
-            // After getting streams from storage, we need to validate whether regions have changed or not after learner read.
-            // In case the versions of regions have changed, those `streams` may contain different data other than expected.
-            // Like after region merge/split.
-            validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
-        }
-        catch (DB::Exception & e)
-        {
-            e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
-                + "`, table_id: " + DB::toString(table_id) + ")");
-            throw;
-        }
+        readFromLocalStorage(table_id, required_columns, query_info, max_block_size, learner_read_snapshot, pipeline, region_retry);
     }
 
-    // For those regions which are not presented in this tiflash node, we will try to fetch streams from other tiflash nodes, only happens in batch cop mode.
+    // For those regions which are not presented in this tiflash node, we will try to fetch streams by key ranges from other tiflash nodes, only happens in batch cop mode.
     if (!region_retry.empty())
     {
         LOG_DEBUG(log, ({
@@ -601,6 +594,127 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
                 if (is_ts_column[i])
                     final_project[i].first = analyzer->getCurrentInputColumns()[i].name;
             }
+        }
+    }
+}
+
+void DAGQueryBlockInterpreter::readFromLocalStorage( //
+    const TableID table_id, const Names & required_columns, SelectQueryInfo & query_info, const size_t max_block_size,
+    const LearnerReadSnapshot & learner_read_snapshot, //
+    Pipeline & pipeline, std::unordered_map<RegionID, const RegionInfo &> & region_retry)
+{
+    QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
+    auto & tmt = context.getTMTContext();
+    // TODO: Note that if storage is (Txn)MergeTree, and any region exception thrown, we won't do retry here.
+    // Now we only support DeltaTree in production environment and don't do any extra check for storage type here.
+
+    int num_allow_retry = 1;
+    while (true)
+    {
+        try
+        {
+            pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
+
+            // After getting streams from storage, we need to validate whether regions have changed or not after learner read.
+            // In case the versions of regions have changed, those `streams` may contain different data other than expected.
+            // Like after region merge/split.
+
+            // Inject failpoint to throw RegionException
+            fiu_do_on(FailPoints::region_exception_after_read_from_storage_some_error, {
+                const auto & regions_info = query_info.mvcc_query_info->regions_query_info;
+                std::vector<RegionID> region_ids;
+                for (const auto & info : regions_info)
+                {
+                    if (rand() % 100 > 50)
+                        region_ids.push_back(info.region_id);
+                }
+                throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
+            });
+            fiu_do_on(FailPoints::region_exception_after_read_from_storage_all_error, {
+                const auto & regions_info = query_info.mvcc_query_info->regions_query_info;
+                std::vector<RegionID> region_ids;
+                for (const auto & info : regions_info)
+                    region_ids.push_back(info.region_id);
+                throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
+            });
+            validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
+            break;
+        }
+        catch (DB::RegionException & e)
+        {
+            /// Recover from region exception when super batch is enable
+            if (dag.isBatchCop())
+            {
+                // clean all streams from local because we are not sure the correctness of those streams
+                pipeline.streams.clear();
+                const auto & dag_regions = dag.getRegions();
+                std::stringstream ss;
+                // Normally there is only few regions need to retry when super batch is enabled. Retry to read
+                // from local first. However, too many retry in different places may make the whole process
+                // time out of control. We limit the number of retries to 1 now.
+                if (likely(num_allow_retry > 0))
+                {
+                    --num_allow_retry;
+                    // sort e.region_ids so that we can use lower_bound to find the region happens to error or not
+                    std::sort(e.region_ids.begin(), e.region_ids.end());
+                    auto & regions_query_info = query_info.mvcc_query_info->regions_query_info;
+                    for (auto iter = regions_query_info.begin(); iter != regions_query_info.end(); /**/)
+                    {
+                        auto error_id_iter = std::lower_bound(e.region_ids.begin(), e.region_ids.end(), iter->region_id);
+                        if (error_id_iter != e.region_ids.end() && *error_id_iter == iter->region_id)
+                        {
+                            // move the error regions info from `query_info.mvcc_query_info->regions_query_info` to `region_retry`
+                            auto region_iter = dag_regions.find(iter->region_id);
+                            if (likely(region_iter != dag_regions.end()))
+                            {
+                                region_retry.emplace(region_iter->first, region_iter->second);
+                                ss << region_iter->first << ",";
+                            }
+                            iter = regions_query_info.erase(iter);
+                        }
+                        else
+                        {
+                            ++iter;
+                        }
+                    }
+                    LOG_WARNING(log,
+                        "RegionException after read from storage, regions ["
+                            << ss.str() << "], message: " << e.message()
+                            << (regions_query_info.empty() ? "" : ", retry to read from local"));
+                    if (unlikely(regions_query_info.empty()))
+                        break; // no available region in local, break retry loop
+                    continue;  // continue to retry read from local storage
+                }
+                else
+                {
+                    // push all regions to `region_retry` to retry from other tiflash nodes
+                    for (const auto & region : query_info.mvcc_query_info->regions_query_info)
+                    {
+                        auto iter = dag_regions.find(region.region_id);
+                        if (likely(iter != dag_regions.end()))
+                        {
+                            region_retry.emplace(iter->first, iter->second);
+                            ss << iter->first << ",";
+                        }
+                    }
+                    LOG_WARNING(log, "RegionException after read from storage, regions [" << ss.str() << "], message: " << e.message());
+                    break; // break retry loop
+                }
+            }
+            else
+            {
+                // Throw an exception for TiDB / TiSpark to retry
+                e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
+                    + "`, table_id: " + DB::toString(table_id) + ")");
+                throw;
+            }
+        }
+        catch (DB::Exception & e)
+        {
+            /// Other unknown exceptions
+            e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
+                + "`, table_id: " + DB::toString(table_id) + ")");
+            throw;
         }
     }
 }

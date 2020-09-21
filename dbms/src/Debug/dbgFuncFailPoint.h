@@ -8,9 +8,13 @@ namespace DB
 struct DbgFailPointFunc
 {
 
-    static void dbgEnableFailPoint(Context & context, const ASTs & args, DBGInvoker::Printer output);
-
+    // Init fail point. must be called if you want to enable / disable failpoints
+    //    DBGInvoke init_fail_point()
     static void dbgInitFailPoint(Context & context, const ASTs & args, DBGInvoker::Printer output);
+
+    // Enable fail point.
+    //    DBGInvoke enable_fail_point(name)
+    static void dbgEnableFailPoint(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
     // Disable fail point.
     // Usage:
