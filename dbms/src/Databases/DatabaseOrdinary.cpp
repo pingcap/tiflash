@@ -34,6 +34,12 @@ namespace ErrorCodes
     extern const int SYNTAX_ERROR;
 }
 
+namespace FailPoints
+{
+extern const char exception_drop_table_during_remove_meta[];
+extern const char exception_between_rename_table_data_and_metadata[];
+}
+
 static constexpr size_t PRINT_MESSAGE_EACH_N_TABLES = 256;
 static constexpr size_t PRINT_MESSAGE_EACH_N_SECONDS = 5;
 static constexpr size_t METADATA_FILE_BUFFER_SIZE = 32768;
@@ -205,7 +211,7 @@ void DatabaseOrdinary::removeTable(
         // If tiflash crash before remove metadata, next time it restart, will
         // full apply schema from TiDB. And the old table's metadata and data
         // will be removed.
-        FAIL_POINT_TRIGGER_EXCEPTION(exception_drop_table_during_remove_meta);
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_drop_table_during_remove_meta);
         Poco::File(table_metadata_path).remove();
     }
     catch (...)
@@ -249,7 +255,7 @@ void DatabaseOrdinary::renameTable(
     }
 
     // TODO: Atomic rename table is not fixed.
-    FAIL_POINT_TRIGGER_EXCEPTION(exception_between_rename_table_data_and_metadata);
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_between_rename_table_data_and_metadata);
 
     ASTPtr ast = DatabaseLoading::getQueryFromMetadata(context, detail::getTableMetadataPath(metadata_path, table_name));
     if (!ast)
