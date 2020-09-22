@@ -62,7 +62,215 @@ DMFilePtr DMFile::restore(const FileProviderPtr & file_provider, UInt64 file_id,
     return dmfile;
 }
 
-void DMFile::writeMeta(WriteBufferFromFileBase & buffer)
+String DMFile::metaPath() const
+{
+    if (isSingleFileMode())
+    {
+        return path();
+    }
+    else
+    {
+        return path() + "/meta.txt";
+    }
+}
+String DMFile::packStatPath() const
+{
+    if (isSingleFileMode())
+    {
+        return path();
+    }
+    else
+    {
+        return path() + "/pack";
+    }
+}
+
+String DMFile::colDataPath(const String & file_name_base) const
+{
+    if (isSingleFileMode())
+    {
+        return path();
+    }
+    else
+    {
+        return path() + "/" + file_name_base + ".dat";
+    }
+}
+
+String DMFile::colIndexPath(const String & file_name_base) const
+{
+    if (isSingleFileMode())
+    {
+        return path();
+    }
+    else
+    {
+        return path() + "/" + file_name_base + ".idx";
+    }
+}
+
+String DMFile::colMarkPath(const String & file_name_base) const
+{
+    if (isSingleFileMode())
+    {
+        return path();
+    }
+    else
+    {
+        return path() + "/" + file_name_base + ".mrk";
+    }
+}
+
+String DMFile::colIndexCacheKey(const String & file_name_base) const
+{
+    if (isSingleFileMode())
+    {
+        return path() + "/" + DMFile::colIndexIdentifier(file_name_base);
+    }
+    else
+    {
+        return colIndexPath(file_name_base);
+    }
+}
+
+String DMFile::colMarkCacheKey(const String & file_name_base) const
+{
+    if (isSingleFileMode())
+    {
+        return path() + "/" + DMFile::colMarkIdentifier(file_name_base);
+    }
+    else
+    {
+        return colMarkPath(file_name_base);
+    }
+}
+
+size_t DMFile::colIndexOffset(const String & file_name_base) const
+{
+    if (isSingleFileMode())
+    {
+        auto index_identifier = DMFile::colIndexIdentifier(file_name_base);
+        return getSubFileStat(index_identifier).offset;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
+size_t DMFile::colMarkOffset(const String & file_name_base) const
+{
+    if (isSingleFileMode())
+    {
+        auto mark_identifier = DMFile::colMarkIdentifier(file_name_base);
+        return getSubFileStat(mark_identifier).offset;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
+size_t DMFile::colIndexSize(const String & file_name_base) const
+{
+    if (isSingleFileMode())
+    {
+        auto index_identifier = DMFile::colIndexIdentifier(file_name_base);
+        return getSubFileStat(index_identifier).size;
+    }
+    else
+    {
+        Poco::File index_file(colIndexPath(file_name_base));
+        return index_file.getSize();
+    }
+}
+
+size_t DMFile::colMarkSize(const String & file_name_base) const
+{
+    if (isSingleFileMode())
+    {
+        auto mark_identifier = DMFile::colMarkIdentifier(file_name_base);
+        return getSubFileStat(mark_identifier).size;
+    }
+    else
+    {
+        Poco::File mark_file(colMarkPath(file_name_base));
+        return mark_file.getSize();
+    }
+}
+
+bool DMFile::isColIndexExist(const ColId & col_id) const
+{
+    if (isSingleFileMode())
+    {
+        const auto & index_identifier = DMFile::colIndexIdentifier(DMFile::getFileNameBase(col_id));
+        return isSubFileExists(index_identifier);
+    }
+    else
+    {
+        auto       index_path = colIndexPath(DMFile::getFileNameBase(col_id));
+        Poco::File index_file(index_path);
+        return     index_file.exists();
+    }
+}
+
+const EncryptionPath DMFile::encryptionDataPath(const String & file_name_base) const
+{
+    if (isSingleFileMode())
+    {
+        return EncryptionPath(encryptionBasePath(), "");
+    }
+    else
+    {
+        return EncryptionPath(encryptionBasePath(), file_name_base + ".dat");
+    }
+}
+const EncryptionPath DMFile::encryptionIndexPath(const String & file_name_base) const
+{
+    if (isSingleFileMode())
+    {
+        return EncryptionPath(encryptionBasePath(), "");
+    }
+    else
+    {
+        return EncryptionPath(encryptionBasePath(), file_name_base + ".idx");
+    }
+}
+const EncryptionPath DMFile::encryptionMarkPath(const String & file_name_base) const
+{
+    if (isSingleFileMode())
+    {
+        return EncryptionPath(encryptionBasePath(), "");
+    }
+    else
+    {
+        return EncryptionPath(encryptionBasePath(), file_name_base + ".mrk");
+    }
+}
+const EncryptionPath DMFile::encryptionMetaPath() const
+{
+    if (isSingleFileMode())
+    {
+        return EncryptionPath(encryptionBasePath(), "");
+    }
+    else
+    {
+        return EncryptionPath(encryptionBasePath(), "meta.txt");
+    }
+}
+const EncryptionPath DMFile::encryptionPackStatPath() const
+{
+    if (isSingleFileMode())
+    {
+        return EncryptionPath(encryptionBasePath(), "");
+    }
+    else
+    {
+        return EncryptionPath(encryptionBasePath(), "pack");
+    }
+}
+
+void DMFile::writeMeta(WriteBuffer & buffer)
 {
     size_t meta_offset = buffer.count();
     writeString("DTFile format: ", buffer);
@@ -70,10 +278,13 @@ void DMFile::writeMeta(WriteBufferFromFileBase & buffer)
     writeString("\n", buffer);
     writeText(column_stats, CURRENT_VERSION, buffer);
     size_t meta_size = buffer.count() - meta_offset;
-    addSubFileStat(metaIdentifier(), meta_offset, meta_size);
+    if (isSingleFileMode())
+    {
+        addSubFileStat(metaIdentifier(), meta_offset, meta_size);
+    }
 }
 
-void DMFile::writePack(WriteBufferFromFileBase & buffer)
+void DMFile::writePack(WriteBuffer & buffer)
 {
     size_t pack_offset = buffer.count();
     for (auto & stat : pack_stats)
@@ -86,7 +297,7 @@ void DMFile::writePack(WriteBufferFromFileBase & buffer)
 
 void DMFile::writeMeta(const FileProviderPtr & file_provider)
 {
-    if (unlikely(mode != Mode::FOLDER))
+    if (unlikely(!isFolderMode()))
     {
         throw DB::TiFlashException("writeMeta is only expected to be called when mode is FOLDER.", Errors::DeltaTree::Internal);
     }
@@ -94,10 +305,7 @@ void DMFile::writeMeta(const FileProviderPtr & file_provider)
     String tmp_meta_path = meta_path + ".tmp";
 
     WriteBufferFromFileProvider buf(file_provider, tmp_meta_path, encryptionMetaPath(), false, 4096);
-    writeString("DTFile format: ", buf);
-    writeIntText(static_cast<std::underlying_type_t<DMFileVersion>>(DMFileVersion::CURRENT_VERSION), buf);
-    writeString("\n", buf);
-    writeText(column_stats, CURRENT_VERSION, buf);
+    writeMeta(buf);
 
     Poco::File(tmp_meta_path).renameTo(meta_path);
 }
@@ -138,23 +346,22 @@ void DMFile::upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileVers
 void DMFile::readMeta(const FileProviderPtr & file_provider)
 {
     {
-        if (mode == Mode::SINGLE_FILE)
-        {
-            ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
+        auto buf = openForRead(file_provider, metaPath(), encryptionMetaPath(), metaSize());
+        buf.seek(metaOffset());
 
-            auto meta_file_stat = sub_file_stats[metaIdentifier()];
-            buf.seek(meta_file_stat.offset);
-            size_t pos_in_buf = buf.count();
-            readMetaFromReadBuffer(file_provider, buf);
-            if (unlikely(buf.count() - pos_in_buf != meta_file_stat.size))
-            {
-                throw DB::TiFlashException("Bad file format: expected read meta content size: " + std::to_string(meta_file_stat.size) + " vs. actual: " + std::to_string(buf.count() - pos_in_buf), Errors::DeltaTree::Internal);
-            }
-        }
-        else
+        DMFileVersion ver; // Binary version
+        assertString("DTFile format: ", buf);
         {
-            auto buf = openForRead(file_provider, metaPath(), encryptionMetaPath());
-            readMetaFromReadBuffer(file_provider, buf);
+            std::underlying_type_t<DMFileVersion> ver_int;
+            DB::readText(ver_int, buf);
+            ver = static_cast<DMFileVersion>(ver_int);
+        }
+        assertString("\n", buf);
+        readText(column_stats, ver, buf);
+        // No need to upgrade meta when mode is Mode::SINGLE_FILE
+        if (mode == Mode::FOLDER)
+        {
+            upgradeMetaIfNeed(file_provider, ver);
         }
     }
 
@@ -162,41 +369,9 @@ void DMFile::readMeta(const FileProviderPtr & file_provider)
         auto   pack_stat_size = packStatSize();
         size_t packs          = pack_stat_size / sizeof(PackStat);
         pack_stats.resize(packs);
-        if (mode == Mode::SINGLE_FILE)
-        {
-            ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
-
-            auto pack_stat_file_stat = sub_file_stats[packStatIdentifier()];
-            buf.seek(pack_stat_file_stat.offset);
-            auto res = buf.read((char *)pack_stats.data(), sizeof(PackStat) * packs);
-            if (unlikely(res != pack_stat_file_stat.size))
-            {
-                throw DB::TiFlashException("Bad file format: expected read pack stat content size: " + std::to_string(pack_stat_file_stat.size) + " vs. actual: " + std::to_string(buf.count() - res), Errors::DeltaTree::Internal);
-            }
-        }
-        else
-        {
-            auto buf = openForRead(file_provider, packStatPath(), encryptionPackStatPath());
-            buf.read((char *)pack_stats.data(), sizeof(PackStat) * packs);
-        }
-    }
-}
-
-void DMFile::readMetaFromReadBuffer(const FileProviderPtr & file_provider, ReadBufferFromFileProvider & buffer)
-{
-    DMFileVersion ver; // Binary version
-    assertString("DTFile format: ", buffer);
-    {
-        std::underlying_type_t<DMFileVersion> ver_int;
-        DB::readText(ver_int, buffer);
-        ver = static_cast<DMFileVersion>(ver_int);
-    }
-    assertString("\n", buffer);
-    readText(column_stats, ver, buffer);
-    // No need to upgrade meta when mode is Mode::SINGLE_FILE
-    if (mode == Mode::FOLDER)
-    {
-        upgradeMetaIfNeed(file_provider, ver);
+        auto buf = openForRead(file_provider, packStatPath(), encryptionPackStatPath(), pack_stat_size);
+        buf.seek(packStatOffset());
+        buf.readStrict((char *)pack_stats.data(), sizeof(PackStat) * packs);
     }
 }
 
@@ -234,7 +409,7 @@ void DMFile::initialize(const FileProviderPtr & file_provider)
     }
 }
 
-void DMFile::finalize(WriteBufferFromFileBase & buffer)
+void DMFile::finalize(WriteBuffer & buffer)
 {
     writeMeta(buffer);
     writePack(buffer);
@@ -338,11 +513,49 @@ void DMFile::remove(const FileProviderPtr & file_provider)
     }
 }
 
-size_t DMFile::packStatSize()
+size_t DMFile::metaOffset() const
 {
     if (mode == Mode::SINGLE_FILE)
     {
-        return sub_file_stats[packStatIdentifier()].size;
+        return getSubFileStat(metaIdentifier()).offset;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
+size_t DMFile::packStatOffset() const
+{
+    if (mode == Mode::SINGLE_FILE)
+    {
+        return getSubFileStat(packStatIdentifier()).offset;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
+size_t DMFile::metaSize() const
+{
+    if (mode == Mode::SINGLE_FILE)
+    {
+        return getSubFileStat(metaIdentifier()).size;
+    }
+    else
+    {
+        auto       meta_path = metaPath();
+        Poco::File meta_file(meta_path);
+        return meta_file.getSize();
+    }
+}
+
+size_t DMFile::packStatSize() const
+{
+    if (mode == Mode::SINGLE_FILE)
+    {
+        return getSubFileStat(packStatIdentifier()).size;
     }
     else
     {

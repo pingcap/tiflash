@@ -25,52 +25,30 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
     : avg_size_hint(reader.dmfile->getColumnStat(col_id).avg_size)
 {
     // load mark data
-    if (reader.dmfile->isSingleFileMode())
-    {
-        auto mark_load = [&]() -> MarksInCompressedFilePtr {
-            auto res = std::make_shared<MarksInCompressedFile>(reader.dmfile->getPacks());
-            if (res->empty()) // 0 rows.
-                return res;
-            size_t size = sizeof(MarkInCompressedFile) * reader.dmfile->getPacks();
-            auto   file = reader.file_provider->newRandomAccessFile(reader.dmfile->path(), EncryptionPath(reader.dmfile->encryptionBasePath(), ""));
-            auto   mark_file_stat = reader.dmfile->getSubFileStat(reader.dmfile->colMarkIdentifier(file_name_base));
-            if (unlikely(mark_file_stat.size != size))
-            {
-                throw DB::TiFlashException("Bad DMFile format, expected mark file content size: " + std::to_string(size)
-                                               + " vs. actual: " + std::to_string(mark_file_stat.size),
-                                           Errors::DeltaTree::Internal);
-            }
-            PageUtil::readFile(file, mark_file_stat.offset, reinterpret_cast<char *>(res->data()), size);
-
+    auto mark_load = [&]() -> MarksInCompressedFilePtr {
+        auto res = std::make_shared<MarksInCompressedFile>(reader.dmfile->getPacks());
+        if (res->empty()) // 0 rows.
             return res;
-        };
-        if (reader.mark_cache)
-            marks = reader.mark_cache->getOrSet(
-                MarkCache::hash(reader.dmfile->path() + "/" + DMFile::colMarkIdentifier(file_name_base), reader.hash_salt), mark_load);
-        else
-            marks = mark_load();
-    }
+        size_t size = sizeof(MarkInCompressedFile) * reader.dmfile->getPacks();
+        auto   file = reader.file_provider->newRandomAccessFile(reader.dmfile->colMarkPath(file_name_base), reader.dmfile->encryptionMarkPath(file_name_base));
+        auto mark_size = reader.dmfile->colMarkSize(file_name_base);
+        auto mark_offset = reader.dmfile->colMarkOffset(file_name_base);
+        if (unlikely(mark_size != size))
+        {
+            throw DB::TiFlashException("Bad DMFile format, expected mark file content size: " + std::to_string(size)
+                                           + " vs. actual: " + std::to_string(mark_size),
+                                       Errors::DeltaTree::Internal);
+        }
+        PageUtil::readFile(file, mark_offset, reinterpret_cast<char *>(res->data()), size);
+
+        return res;
+    };
+    if (reader.mark_cache)
+        marks = reader.mark_cache->getOrSet(
+            MarkCache::hash(reader.dmfile->colMarkCacheKey(file_name_base), reader.hash_salt), mark_load);
     else
-    {
-        const String mark_path = reader.dmfile->colMarkPath(file_name_base);
+        marks = mark_load();
 
-        auto mark_load = [&]() -> MarksInCompressedFilePtr {
-            auto res = std::make_shared<MarksInCompressedFile>(reader.dmfile->getPacks());
-            if (res->empty()) // 0 rows.
-                return res;
-            size_t size = sizeof(MarkInCompressedFile) * reader.dmfile->getPacks();
-            auto   file = reader.file_provider->newRandomAccessFile(mark_path, reader.dmfile->encryptionMarkPath(file_name_base));
-
-            PageUtil::readFile(file, 0, reinterpret_cast<char *>(res->data()), size);
-
-            return res;
-        };
-
-        if (reader.mark_cache)
-            marks = reader.mark_cache->getOrSet(MarkCache::hash(mark_path, reader.hash_salt), mark_load);
-        else
-            marks = mark_load();
-    }
     size_t data_file_size = 0;
     size_t data_file_content_end = 0;
     if (reader.dmfile->isSingleFileMode())

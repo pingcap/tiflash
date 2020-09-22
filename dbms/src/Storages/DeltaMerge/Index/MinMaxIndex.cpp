@@ -69,11 +69,11 @@ void MinMaxIndex::write(const IDataType & type, WriteBuffer & buf)
                                                 {});
 }
 
-MinMaxIndexPtr MinMaxIndex::read(const IDataType & type, ReadBuffer & buf, size_t limit)
+MinMaxIndexPtr MinMaxIndex::read(const IDataType & type, ReadBuffer & buf, size_t size_limit)
 {
     UInt64 size = 0;
     size_t buf_pos = buf.count();
-    if (limit != 0)
+    if (size_limit != 0)
     {
         DB::readIntBinary(size, buf);
     }
@@ -89,9 +89,9 @@ MinMaxIndexPtr MinMaxIndex::read(const IDataType & type, ReadBuffer & buf, size_
                                                   true,
                                                   {});
     size_t bytes_read = buf.count() - buf_pos;
-    if (unlikely(bytes_read != limit))
+    if (unlikely(bytes_read != size_limit))
     {
-        throw DB::TiFlashException("Bad file format: expected read index content size: " + std::to_string(limit) + " vs. actual: " + std::to_string(bytes_read), Errors::DeltaTree::Internal);
+        throw DB::TiFlashException("Bad file format: expected read index content size: " + std::to_string(size_limit) + " vs. actual: " + std::to_string(bytes_read), Errors::DeltaTree::Internal);
     }
     return MinMaxIndexPtr(new MinMaxIndex(has_null_marks, has_value_marks, std::move(minmaxes)));
 }
