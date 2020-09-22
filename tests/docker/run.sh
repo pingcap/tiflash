@@ -2,6 +2,35 @@
 
 set -xe
 
+function wait_env() {
+  local engine="$1"
+  local timeout='60'
+  local failed='true'
+
+  echo "=> wait for env available"
+
+  for (( i = 0; i < "${timeout}"; i++ )); do
+    if [[ -n $(cat ./log/tidb0/tidb.log | grep "server is running MySQL protocol") && \
+          -n $(cat ./log/tiflash_${engine}/server.log | grep "Ready for connections") ]]; then
+        local failed='false'
+        break
+    fi
+
+    if [ $((${i} % 10)) = 0 ] && [ ${i} -ge 10 ]; then
+      echo "   #${i} waiting for env available"
+    fi
+
+    sleep 1
+  done
+
+  if [ "${failed}" == 'true' ]; then
+    echo "   can not set up env" >&2
+    exit 1
+  else
+    echo "   available"
+  fi
+}
+
 # TAG:        tiflash hash, default to `master`
 # XYZ_BRANCH: pd/tikv/tidb hash, default to `master`
 # BRANCH:     hash short cut, default to `master`
@@ -21,7 +50,7 @@ rm -rf ./data ./log
 #################################### TIDB-CI ONLY ####################################
 # run fullstack-tests (for engine DeltaTree)
 docker-compose -f cluster.yaml -f tiflash-dt.yaml up -d
-sleep 20
+wait_env dt
 docker-compose -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/fullstack-test true && ./run-test.sh tidb-ci/fullstack-test-dt'
 docker-compose -f cluster.yaml -f tiflash-dt.yaml down
 rm -rf ./data ./log
@@ -39,7 +68,7 @@ rm -rf ./data ./log
 
 # run fullstack-tests (for engine DeltaTree)
 docker-compose -f cluster.yaml -f tiflash-dt.yaml up -d
-sleep 20
+wait_env dt
 docker-compose -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test true && ./run-test.sh fullstack-test-dt'
 docker-compose -f cluster.yaml -f tiflash-dt.yaml down
 rm -rf ./data ./log
@@ -58,7 +87,7 @@ rm -rf ./data ./log
 
 # run fullstack-tests (for engine TxnMergeTree)
 docker-compose -f cluster.yaml -f tiflash-tmt.yaml up -d
-sleep 20
+wait_env tmt
 docker-compose -f cluster.yaml -f tiflash-tmt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test true'
 docker-compose -f cluster.yaml -f tiflash-tmt.yaml down
 rm -rf ./data ./log
@@ -73,7 +102,7 @@ rm -rf ./data ./log
 
 # run new_collation_fullstack tests
 docker-compose -f cluster_new_collation.yaml -f tiflash-dt.yaml up -d
-sleep 20
+wait_env dt
 docker-compose -f cluster_new_collation.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh new_collation_fullstack'
 docker-compose -f cluster_new_collation.yaml -f tiflash-dt.yaml down
 rm -rf ./data ./log
