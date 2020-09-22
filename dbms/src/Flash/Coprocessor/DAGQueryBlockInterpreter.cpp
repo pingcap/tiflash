@@ -671,20 +671,20 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     left_pipeline.streams = left_streams;
     String left_filter_column_name = "";
     prepareJoin(join.inner_idx() == 0 ? join.right_join_keys() : join.left_join_keys(), join_key_types, left_pipeline, left_key_names,
-        join.inner_idx() == 0 ? join.right_condition() : join.left_condition(), true, kind == ASTTableJoin::Kind::Right,
+        join.inner_idx() == 0 ? join.right_conditions() : join.left_conditions(), true, kind == ASTTableJoin::Kind::Right,
         left_filter_column_name);
     Pipeline right_pipeline;
     right_pipeline.streams = right_streams;
     String right_filter_column_name = "";
     prepareJoin(join.inner_idx() == 0 ? join.left_join_keys() : join.right_join_keys(), join_key_types, right_pipeline, right_key_names,
-        join.inner_idx() == 0 ? join.left_condition() : join.right_condition(), false, kind == ASTTableJoin::Kind::Right,
+        join.inner_idx() == 0 ? join.left_conditions() : join.right_conditions(), false, kind == ASTTableJoin::Kind::Right,
         right_filter_column_name);
 
     left_streams = left_pipeline.streams;
     right_streams = right_pipeline.streams;
     String other_filter_column_name = "";
     ExpressionActionsPtr other_condition_expr
-        = genJoinOtherConditionAction(join.other_condition(), join_output_columns, other_filter_column_name);
+        = genJoinOtherConditionAction(join.other_conditions(), join_output_columns, other_filter_column_name);
 
     const Settings & settings = context.getSettingsRef();
     JoinPtr joinPtr = std::make_shared<Join>(left_key_names, right_key_names, true,
