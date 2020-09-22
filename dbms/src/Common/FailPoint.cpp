@@ -100,11 +100,11 @@ class FailPointChannel
 {
 };
 
-void FailPointHelper::enableFailPoint(const String & fail_point_name) {}
+void FailPointHelper::enableFailPoint(const String &) {}
 
-void FailPointHelper::disableFailPoint(const String & fail_point_name) {}
+void FailPointHelper::disableFailPoint(const String &) {}
 
-void FailPointHelper::wait(const String & fail_point_name) {}
+void FailPointHelper::wait(const String &) {}
 #endif
 
 } // namespace DB
