@@ -108,6 +108,8 @@ ColumnDefinesPtr getStoreColumns(const ColumnDefines & table_columns, bool is_co
 }
 } // namespace
 
+DeltaMergeStore::Settings DeltaMergeStore::EMPTY_SETTINGS = DeltaMergeStore::Settings{.not_compress_columns = NotCompress{}};
+
 DeltaMergeStore::DeltaMergeStore(Context &             db_context,
                                  const String &        path_,
                                  bool                  data_path_contains_database_name,
@@ -683,7 +685,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
                 auto segment_snap = segment->createSnapshot(*dm_context);
                 if (unlikely(!segment_snap))
                     throw Exception("Failed to get segment snap", ErrorCodes::LOGICAL_ERROR);
-                tasks.push(std::make_shared<SegmentReadTask>(segment, segment_snap, RowKeyRanges{segment->getRowKeyRange()}));
+                tasks.push_back(std::make_shared<SegmentReadTask>(segment, segment_snap, RowKeyRanges{segment->getRowKeyRange()}));
             }
         }
     }
@@ -724,60 +726,9 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
 {
     LOG_DEBUG(log, "Read with " << sorted_ranges.size() << " ranges");
 
-    SegmentReadTasks tasks;
-
     auto dm_context = newDMContext(db_context, db_settings);
-    {
-        std::shared_lock lock(read_write_mutex);
 
-        auto range_it = sorted_ranges.begin();
-        auto seg_it   = segments.upper_bound(range_it->getStart());
-
-        if (seg_it == segments.end())
-        {
-            throw Exception("Failed to locate segment begin with start in range: " + range_it->toString(), ErrorCodes::LOGICAL_ERROR);
-        }
-
-        while (range_it != sorted_ranges.end() && seg_it != segments.end())
-        {
-            auto & req_range = *range_it;
-            auto & seg_range = seg_it->second->getRowKeyRange();
-            if (req_range.intersect(seg_range) && (read_segments.empty() || read_segments.count(seg_it->second->segmentId())))
-            {
-                if (tasks.empty() || tasks.back()->segment != seg_it->second)
-                {
-                    auto segment      = seg_it->second;
-                    auto segment_snap = segment->createSnapshot(*dm_context);
-                    if (unlikely(!segment_snap))
-                        throw Exception("Failed to get segment snap", ErrorCodes::LOGICAL_ERROR);
-                    tasks.push(std::make_shared<SegmentReadTask>(segment, segment_snap));
-                }
-
-                tasks.back()->addRange(req_range);
-
-                if (req_range.getEnd() < seg_range.getEnd())
-                {
-                    ++range_it;
-                }
-                else if (seg_range.getEnd() < req_range.getEnd())
-                {
-                    ++seg_it;
-                }
-                else
-                {
-                    ++range_it;
-                    ++seg_it;
-                }
-            }
-            else
-            {
-                if (req_range.getEnd() < seg_range.getStart())
-                    ++range_it;
-                else
-                    ++seg_it;
-            }
-        }
-    }
+    SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, read_segments);
 
     LOG_DEBUG(log, "Read create segment snapshot done");
 
@@ -1764,6 +1715,63 @@ SegmentStats DeltaMergeStore::getSegmentStats()
         stats.push_back(stat);
     }
     return stats;
+}
+
+SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(DMContext & dm_context, const RowKeyRanges & sorted_ranges, const SegmentIdSet &  read_segments)
+{
+    SegmentReadTasks tasks;
+
+    std::shared_lock lock(read_write_mutex);
+
+    auto range_it = sorted_ranges.begin();
+    auto seg_it   = segments.upper_bound(range_it->getStart());
+
+    if (seg_it == segments.end())
+    {
+        throw Exception("Failed to locate segment begin with start in range: " + range_it->toString(), ErrorCodes::LOGICAL_ERROR);
+    }
+
+    while (range_it != sorted_ranges.end() && seg_it != segments.end())
+    {
+        auto & req_range = *range_it;
+        auto & seg_range = seg_it->second->getRowKeyRange();
+        if (req_range.intersect(seg_range) && (read_segments.empty() || read_segments.count(seg_it->second->segmentId())))
+        {
+            if (tasks.empty() || tasks.back()->segment != seg_it->second)
+            {
+                auto segment      = seg_it->second;
+                auto segment_snap = segment->createSnapshot(dm_context);
+                if (unlikely(!segment_snap))
+                    throw Exception("Failed to get segment snap", ErrorCodes::LOGICAL_ERROR);
+                tasks.push_back(std::make_shared<SegmentReadTask>(segment, segment_snap));
+            }
+
+            tasks.back()->addRange(req_range);
+
+            if (req_range.getEnd() < seg_range.getEnd())
+            {
+                ++range_it;
+            }
+            else if (seg_range.getEnd() < req_range.getEnd())
+            {
+                ++seg_it;
+            }
+            else
+            {
+                ++range_it;
+                ++seg_it;
+            }
+        }
+        else
+        {
+            if (req_range.getEnd() < seg_range.getStart())
+                ++range_it;
+            else
+                ++seg_it;
+        }
+    }
+
+    return tasks;
 }
 
 } // namespace DM
