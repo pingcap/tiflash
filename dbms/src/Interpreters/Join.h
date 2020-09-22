@@ -390,6 +390,7 @@ private:
     String right_filter_column;
     String other_filter_column;
     ExpressionActionsPtr other_condition_ptr;
+    ASTTableJoin::Strictness original_strictness;
 
     /** Blocks of "right" table.
       */
@@ -441,6 +442,13 @@ private:
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
     void joinBlockImpl(Block & block, const Maps & maps) const;
+
+    /** Handle non-equal join conditions
+      *
+      * @param block
+      */
+    void handleOtherConditions(Block & block, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate, const std::vector<size_t> & right_table_column) const;
+
 
     void joinBlockImplCross(Block & block) const;
 };

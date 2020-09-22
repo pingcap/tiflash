@@ -76,7 +76,6 @@ struct ASTTableJoin : public IAST
         Unspecified,
         Any,    /// If there are many suitable rows to join, use any from them (also known as unique JOIN).
         All,    /// If there are many suitable rows to join, use all of them and replicate rows of "left" table (usual semantic of JOIN).
-        //Semi,   /// the same as Any, but there are some other non-equal conditions, so can not use Any.
     };
 
     /// Join method.

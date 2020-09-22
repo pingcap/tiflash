@@ -615,11 +615,6 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
         right_streams = input_streams_vec[1];
     }
 
-    if (kind == ASTTableJoin::Kind::Full)
-    {
-        throw TiFlashException("Only Inner/Left/Right join is supported", Errors::Coprocessor::Unimplemented);
-    }
-
     std::vector<NameAndTypePair> join_output_columns;
     for (auto const & p : input_streams_vec[0][0]->getHeader().getNamesAndTypesList())
     {
