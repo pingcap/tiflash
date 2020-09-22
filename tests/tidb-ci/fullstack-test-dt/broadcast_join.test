@@ -207,16 +207,16 @@ mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session 
 | NULL |    12 |
 +------+-------+
 
-# tiflash semi join with other condition 
-mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; set session tidb_opt_cpu_factor=1000000; select * from t1 where not exists (select id from  t2 where t2.value = t1.value and t2.id > t1.id);
+# tiflash anti semi join with other condition 
+mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; set session tidb_opt_cpu_factor=1000000; select * from t1 where not exists (select id from  t2 where t2.value = t1.value and t2.id < t1.id);
 +------+-------+
 | id   | value |
 +------+-------+
 |    1 |     2 |
 |    3 |     4 |
 |    3 |     5 |
+|    3 |     6 |
 |    5 |     6 |
-|    7 |     8 |
 |    9 |    10 |
 | NULL |    11 |
 | NULL |    12 |

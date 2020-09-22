@@ -666,7 +666,7 @@ namespace
     struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
     {
         static void addFound(const typename Map::const_iterator & it, size_t num_columns_to_add, MutableColumns & added_columns,
-            size_t i, IColumn::Filter * /*filter*/, IColumn::Offset & current_offset, IColumn::Offsets * offsets,
+            size_t i, IColumn::Filter * filter, IColumn::Offset & current_offset, IColumn::Offsets * offsets,
             const std::vector<size_t> & right_indexes)
         {
             size_t rows_joined = 0;
@@ -680,10 +680,15 @@ namespace
 
             current_offset += rows_joined;
             (*offsets)[i] = current_offset;
+            if (KIND == ASTTableJoin::Kind::Anti)
+                /// anti join with other condition is very special: if the row is matched during probe stage, we can not throw it
+                /// away because it might failed in other condition, so we add the matched rows to the result, but set (*filter)[i] = 0
+                /// to indicate that the row is matched during probe stage, this will be used in handleOtherConditions
+                (*filter)[i] = 0;
         }
 
         static void addNotFound(size_t num_columns_to_add, MutableColumns & added_columns,
-            size_t i, IColumn::Filter * /*filter*/, IColumn::Offset & current_offset, IColumn::Offsets * offsets)
+            size_t i, IColumn::Filter * filter, IColumn::Offset & current_offset, IColumn::Offsets * offsets)
         {
             if (KIND == ASTTableJoin::Kind::Inner)
             {
@@ -691,6 +696,8 @@ namespace
             }
             else
             {
+                if (KIND == ASTTableJoin::Kind::Anti)
+                    (*filter)[i] = 1;
                 ++current_offset;
                 (*offsets)[i] = current_offset;
 
@@ -769,7 +776,7 @@ namespace
  * @param left_table_columns
  * @param right_table_columns
  */
-void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate, const std::vector<size_t> & right_table_columns) const
+void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter> & anti_filter, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate, const std::vector<size_t> & right_table_columns) const
 {
     other_condition_ptr->execute(block);
     const ColumnVector<UInt8> * filter_column = nullptr;
@@ -782,7 +789,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Offsets
         for (size_t i = 0; i < nullable_column->size(); i++)
         {
             if (nullable_column->isNullAt(i))
-                mutable_nested_column_data[i] = 0;
+                mutable_nested_column_data[i] = kind == ASTTableJoin::Kind::Anti ? 1 : 0;
         }
         filter_column = mutable_nested_column;
     }
@@ -826,7 +833,10 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Offsets
                 has_row_kept = true;
         }
         /// for outer join, at least one row must be kept
-        if (!has_row_kept && kind == ASTTableJoin::Kind::Left)
+        if (kind == ASTTableJoin::Kind::Left && !has_row_kept)
+            row_filter[start] = 1;
+        /// for anti join, if the equal join condition is not matched, it always need to be selected
+        if (kind == ASTTableJoin::Kind::Anti && (*anti_filter)[i])
             row_filter[start] = 1;
         prev_offset = end;
     }
@@ -952,7 +962,8 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
     /// Used with ANY INNER JOIN
     std::unique_ptr<IColumn::Filter> filter;
 
-    if ((kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Anti) && strictness == ASTTableJoin::Strictness::Any)
+    if (((kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Right) && strictness == ASTTableJoin::Strictness::Any)
+    || kind == ASTTableJoin::Kind::Anti)
         filter = std::make_unique<IColumn::Filter>(rows);
 
     /// Used with ALL ... JOIN
@@ -984,7 +995,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
     }
 
     /// If ANY INNER | RIGHT JOIN - filter all the columns except the new ones.
-    if (filter)
+    if (filter && !(kind == ASTTableJoin::Kind::Anti && strictness == ASTTableJoin::Strictness::All))
         for (size_t i = 0; i < existing_columns; ++i)
             block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(*filter, -1);
 
@@ -998,7 +1009,7 @@ void Join::joinBlockImpl(Block & block, const Maps & maps) const
     {
         if (!offsets_to_replicate)
             throw Exception("Should not reach here, the strictness of join with other condition must be ALL");
-        handleOtherConditions(block, offsets_to_replicate, right_table_column_indexes);
+        handleOtherConditions(block, filter, offsets_to_replicate, right_table_column_indexes);
     }
 }
 

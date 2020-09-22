@@ -447,7 +447,7 @@ private:
       *
       * @param block
       */
-    void handleOtherConditions(Block & block, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate, const std::vector<size_t> & right_table_column) const;
+    void handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter> & filter, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate, const std::vector<size_t> & right_table_column) const;
 
 
     void joinBlockImplCross(Block & block) const;
