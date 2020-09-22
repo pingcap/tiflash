@@ -498,8 +498,8 @@ void DAGQueryBlockInterpreter::readFromLocalStorage( //
 }
 
 void DAGQueryBlockInterpreter::prepareJoin(const google::protobuf::RepeatedPtrField<tipb::Expr> & keys, const DataTypes & key_types,
-    Pipeline & pipeline, Names & key_names, const google::protobuf::RepeatedPtrField<tipb::Expr> & filters, bool left,
-    bool is_right_out_join, String & filter_column_name)
+    Pipeline & pipeline, Names & key_names, bool left, bool is_right_out_join,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & filters, String & filter_column_name)
 {
     std::vector<NameAndTypePair> source_columns;
     for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
@@ -670,14 +670,14 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     Pipeline left_pipeline;
     left_pipeline.streams = left_streams;
     String left_filter_column_name = "";
-    prepareJoin(join.inner_idx() == 0 ? join.right_join_keys() : join.left_join_keys(), join_key_types, left_pipeline, left_key_names,
-        join.inner_idx() == 0 ? join.right_conditions() : join.left_conditions(), true, kind == ASTTableJoin::Kind::Right,
+    prepareJoin(join.inner_idx() == 0 ? join.right_join_keys() : join.left_join_keys(), join_key_types, left_pipeline, left_key_names, true,
+        kind == ASTTableJoin::Kind::Right, join.inner_idx() == 0 ? join.right_conditions() : join.left_conditions(),
         left_filter_column_name);
     Pipeline right_pipeline;
     right_pipeline.streams = right_streams;
     String right_filter_column_name = "";
     prepareJoin(join.inner_idx() == 0 ? join.left_join_keys() : join.right_join_keys(), join_key_types, right_pipeline, right_key_names,
-        join.inner_idx() == 0 ? join.left_conditions() : join.right_conditions(), false, kind == ASTTableJoin::Kind::Right,
+        false, kind == ASTTableJoin::Kind::Right, join.inner_idx() == 0 ? join.left_conditions() : join.right_conditions(),
         right_filter_column_name);
 
     left_streams = left_pipeline.streams;

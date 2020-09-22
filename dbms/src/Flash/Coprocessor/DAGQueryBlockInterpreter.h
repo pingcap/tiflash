@@ -95,7 +95,7 @@ private:
     void executeTS(const tipb::TableScan & ts, Pipeline & pipeline);
     void executeJoin(const tipb::Join & join, Pipeline & pipeline, SubqueryForSet & right_query);
     void prepareJoin(const google::protobuf::RepeatedPtrField<tipb::Expr> & keys, const DataTypes & key_types, Pipeline & pipeline,
-        Names & key_names, const google::protobuf::RepeatedPtrField<tipb::Expr> & filters, bool left, bool is_right_out_join,
+        Names & key_names, bool left, bool is_right_out_join, const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
         String & filter_column_name);
     ExpressionActionsPtr genJoinOtherConditionAction(const google::protobuf::RepeatedPtrField<tipb::Expr> & other_conditions,
         std::vector<NameAndTypePair> & source_columns, String & filter_column);
