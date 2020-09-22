@@ -2,6 +2,7 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/Transaction/ColumnFamily.h>
 #include <Storages/Transaction/RegionData.h>
+#include <Storages/Transaction/RegionLockInfo.h>
 
 namespace DB
 {
@@ -12,23 +13,23 @@ HandleID RawTiDBPK::getHandleID() const
     return RecordKVFormat::decodeInt64(RecordKVFormat::read<UInt64>(pk->data()));
 }
 
-void RegionData::insert(ColumnFamilyType cf, TiKVKey && key, const DecodedTiKVKey & raw_key, TiKVValue && value)
+void RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value)
 {
     switch (cf)
     {
         case ColumnFamilyType::Write:
         {
-            cf_data_size += write_cf.insert(std::move(key), std::move(value), raw_key);
+            cf_data_size += write_cf.insert(std::move(key), std::move(value));
             return;
         }
         case ColumnFamilyType::Default:
         {
-            cf_data_size += default_cf.insert(std::move(key), std::move(value), raw_key);
+            cf_data_size += default_cf.insert(std::move(key), std::move(value));
             return;
         }
         case ColumnFamilyType::Lock:
         {
-            lock_cf.insert(std::move(key), std::move(value), raw_key);
+            lock_cf.insert(std::move(key), std::move(value));
             return;
         }
         default:
@@ -36,25 +37,36 @@ void RegionData::insert(ColumnFamilyType cf, TiKVKey && key, const DecodedTiKVKe
     }
 }
 
-void RegionData::removeLockCF(const DecodedTiKVKey & raw_key)
+void RegionData::remove(ColumnFamilyType cf, const TiKVKey & key)
 {
-    auto pk = RecordKVFormat::getRawTiDBPK(raw_key);
-    lock_cf.remove(pk, true);
-}
-
-void RegionData::removeDefaultCF(const TiKVKey & key, const DecodedTiKVKey & raw_key)
-{
-    auto pk = RecordKVFormat::getRawTiDBPK(raw_key);
-    Timestamp ts = RecordKVFormat::getTs(key);
-    cf_data_size -= default_cf.remove(RegionDefaultCFData::Key{pk, ts}, true);
-}
-
-void RegionData::removeWriteCF(const TiKVKey & key, const DecodedTiKVKey & raw_key)
-{
-    auto pk = RecordKVFormat::getRawTiDBPK(raw_key);
-    Timestamp ts = RecordKVFormat::getTs(key);
-
-    cf_data_size -= write_cf.remove(RegionWriteCFData::Key{pk, ts}, true);
+    switch (cf)
+    {
+        case ColumnFamilyType::Write:
+        {
+            auto raw_key = RecordKVFormat::decodeTiKVKey(key);
+            auto pk = RecordKVFormat::getRawTiDBPK(raw_key);
+            Timestamp ts = RecordKVFormat::getTs(key);
+            // removed by gc, may not exist.
+            cf_data_size -= write_cf.remove(RegionWriteCFData::Key{pk, ts}, true);
+            return;
+        }
+        case ColumnFamilyType::Default:
+        {
+            auto raw_key = RecordKVFormat::decodeTiKVKey(key);
+            auto pk = RecordKVFormat::getRawTiDBPK(raw_key);
+            Timestamp ts = RecordKVFormat::getTs(key);
+            // removed by gc, may not exist.
+            cf_data_size -= default_cf.remove(RegionDefaultCFData::Key{pk, ts}, true);
+            return;
+        }
+        case ColumnFamilyType::Lock:
+        {
+            lock_cf.remove(RegionLockCFDataTrait::Key{nullptr, std::string_view(key.data(), key.dataSize())}, true);
+            return;
+        }
+        default:
+            throw Exception(std::string(__PRETTY_FUNCTION__) + " with undefined CF, should not happen", ErrorCodes::LOGICAL_ERROR);
+    }
 }
 
 RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & write_it)
@@ -116,7 +128,7 @@ RegionDataReadInfo RegionData::readDataByWriteIt(const ConstWriteCFIter & write_
     return std::make_tuple(pk, write_type, ts, short_value);
 }
 
-LockInfoPtr RegionData::getLockInfo(const RegionLockReadQuery & query) const
+DecodedLockCFValuePtr RegionData::getLockInfo(const RegionLockReadQuery & query) const
 {
     for (const auto & [pk, value] : lock_cf.getData())
     {
@@ -134,7 +146,7 @@ LockInfoPtr RegionData::getLockInfo(const RegionLockReadQuery & query) const
             continue;
         if (query.bypass_lock_ts && query.bypass_lock_ts->count(lock_info.lock_version))
             continue;
-        return lock_info.intoLockInfo();
+        return lock_info_ptr;
     }
 
     return nullptr;

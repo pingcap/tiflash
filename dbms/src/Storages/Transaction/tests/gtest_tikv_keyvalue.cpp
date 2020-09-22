@@ -58,7 +58,8 @@ TEST(TiKVKeyValue_test, PortedTests)
         std::string shor_value = "value";
         auto lock_value = RecordKVFormat::encodeLockCfValue(
             Region::DelFlag, "primary key", 421321, std::numeric_limits<UInt64>::max(), &shor_value, 66666);
-        auto lock = RecordKVFormat::DecodedLockCFValue("2333333", std::make_shared<TiKVValue>(std::move(lock_value)));
+        auto ori_key = std::make_shared<const TiKVKey>(RecordKVFormat::genKey(1, 88888));
+        auto lock = RecordKVFormat::DecodedLockCFValue(ori_key, std::make_shared<TiKVValue>(std::move(lock_value)));
         {
             auto & lock_info = lock;
             ASSERT_TRUE(kvrpcpb::Op::Del == lock_info.lock_type);
@@ -66,7 +67,7 @@ TEST(TiKVKeyValue_test, PortedTests)
             ASSERT_TRUE(421321 == lock_info.lock_version);
             ASSERT_TRUE(std::numeric_limits<UInt64>::max() == lock_info.lock_ttl);
             ASSERT_TRUE(66666 == lock_info.min_commit_ts);
-            ASSERT_TRUE("2333333" == lock_info.key);
+            ASSERT_TRUE(ori_key == lock_info.key);
         }
         {
             auto lock_info = lock.intoLockInfo();
@@ -75,7 +76,7 @@ TEST(TiKVKeyValue_test, PortedTests)
             ASSERT_TRUE(421321 == lock_info->lock_version());
             ASSERT_TRUE(std::numeric_limits<UInt64>::max() == lock_info->lock_ttl());
             ASSERT_TRUE(66666 == lock_info->min_commit_ts());
-            ASSERT_TRUE("2333333" == lock_info->key());
+            ASSERT_TRUE(RecordKVFormat::decodeTiKVKey(*ori_key) == lock_info->key());
         }
     }
 

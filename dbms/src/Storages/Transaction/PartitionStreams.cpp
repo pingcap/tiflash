@@ -126,6 +126,7 @@ std::pair<RegionDataReadInfoList, RegionException::RegionReadStatus> resolveLock
     bool need_data_value)
 {
     RegionDataReadInfoList data_list_read;
+    DecodedLockCFValuePtr lock_value;
     {
         auto scanner = region->createCommittedScanner();
 
@@ -157,14 +158,12 @@ std::pair<RegionDataReadInfoList, RegionException::RegionReadStatus> resolveLock
         if (resolve_locks)
         {
             /// Check if there are any lock should be resolved, if so, throw LockException.
-            if (LockInfoPtr lock_info = scanner.getLockInfo(RegionLockReadQuery{.read_tso = start_ts, .bypass_lock_ts = bypass_lock_ts});
-                lock_info)
-            {
-                throw LockException(region->id(), std::move(lock_info));
-            }
+            lock_value = scanner.getLockInfo(RegionLockReadQuery{.read_tso = start_ts, .bypass_lock_ts = bypass_lock_ts});
         }
 
+        /// If there is no lock, leave scope of region scanner and raise LockException.
         /// Read raw KVs from region cache.
+        if (!lock_value)
         {
             // Shortcut for empty region.
             if (!scanner.hasNext())
@@ -179,6 +178,10 @@ std::pair<RegionDataReadInfoList, RegionException::RegionReadStatus> resolveLock
             } while (scanner.hasNext());
         }
     }
+
+    if (lock_value)
+        throw LockException(region->id(), lock_value->intoLockInfo());
+
     return {std::move(data_list_read), RegionException::OK};
 }
 

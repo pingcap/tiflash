@@ -31,6 +31,15 @@ RegionDataRes RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value
     return insert(std::move(key), std::move(value), raw_key);
 }
 
+template <>
+RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, TiKVValue && value)
+{
+    Pair kv_pair = RegionLockCFDataTrait::genKVPair(std::move(key), DecodedTiKVKey{}, std::move(value));
+    // according to the process of pessimistic lock, just overwrite.
+    data.insert_or_assign(std::move(kv_pair.first), std::move(kv_pair.second));
+    return 0;
+}
+
 template <typename Trait>
 RegionDataRes RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value, const DecodedTiKVKey & raw_key)
 {
@@ -304,15 +313,6 @@ CFDataPreDecode<Trait> & RegionCFDataBase<Trait>::getCFDataPreDecode()
     return pre_decode;
 }
 
-template <>
-RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(
-    std::pair<RegionLockCFDataTrait::Key, RegionLockCFDataTrait::Value> && kv_pair)
-{
-    // according to the process of pessimistic lock, just overwrite.
-    data.insert_or_assign(std::move(kv_pair.first), std::move(kv_pair.second));
-    return true;
-}
-
 template struct RegionCFDataBase<RegionWriteCFDataTrait>;
 template struct RegionCFDataBase<RegionDefaultCFDataTrait>;
 template struct RegionCFDataBase<RegionLockCFDataTrait>;
@@ -414,7 +414,8 @@ inline void decodeLockCfValue(DecodedLockCFValue & res)
         throw Exception("invalid lock value " + value.toHex(), ErrorCodes::LOGICAL_ERROR);
 }
 
-DecodedLockCFValue::DecodedLockCFValue(const std::string & key_, std::shared_ptr<const TiKVValue> val_) : key(key_), val(std::move(val_))
+DecodedLockCFValue::DecodedLockCFValue(std::shared_ptr<const TiKVKey> key_, std::shared_ptr<const TiKVValue> val_)
+    : key(std::move(key_)), val(std::move(val_))
 {
     decodeLockCfValue(*this);
 }
@@ -429,7 +430,7 @@ void DecodedLockCFValue::intoLockInfo(kvrpcpb::LockInfo & res) const
     res.set_lock_for_update_ts(lock_for_update_ts);
     res.set_txn_size(txn_size);
     res.set_use_async_commit(use_async_commit);
-    res.set_key(key);
+    res.set_key(decodeTiKVKey(*key));
 
     if (use_async_commit)
     {

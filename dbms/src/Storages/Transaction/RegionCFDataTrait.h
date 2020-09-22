@@ -59,17 +59,26 @@ struct RegionDefaultCFDataTrait
 
 struct RegionLockCFDataTrait
 {
-    using DecodedLockCFValue = RecordKVFormat::DecodedLockCFValue;
-    using Key = RawTiDBPK;
-    using Value = std::tuple<std::shared_ptr<const TiKVKey>, std::shared_ptr<const TiKVValue>, std::shared_ptr<const DecodedLockCFValue>>;
-    using Map = std::unordered_map<Key, Value, RawTiDBPK::Hash>;
-
-    static Map::value_type genKVPair(TiKVKey && key_, const DecodedTiKVKey & raw_key, TiKVValue && value_)
+    struct Key
     {
+        std::shared_ptr<const TiKVKey> key;
+        std::string_view view;
+        struct Hash
+        {
+            size_t operator()(const Key & x) const { return std::hash<std::string_view>()(x.view); }
+        };
+        bool operator==(const Key & tar) const { return view == tar.view; }
+    };
+    using DecodedLockCFValue = RecordKVFormat::DecodedLockCFValue;
+    using Value = std::tuple<std::shared_ptr<const TiKVKey>, std::shared_ptr<const TiKVValue>, std::shared_ptr<const DecodedLockCFValue>>;
+    using Map = std::unordered_map<Key, Value, Key::Hash>;
+
+    static Map::value_type genKVPair(TiKVKey && key_, const DecodedTiKVKey &, TiKVValue && value_)
+    {
+        auto key = std::make_shared<const TiKVKey>(std::move(key_));
         auto value = std::make_shared<const TiKVValue>(std::move(value_));
-        RawTiDBPK tidb_pk = RecordKVFormat::getRawTiDBPK(raw_key);
-        return {std::move(tidb_pk),
-            Value{std::make_shared<const TiKVKey>(std::move(key_)), value, std::make_shared<const DecodedLockCFValue>(raw_key, value)}};
+        return {{key, std::string_view(key->data(), key->dataSize())},
+            Value{key, value, std::make_shared<const DecodedLockCFValue>(key, value)}};
     }
 };
 

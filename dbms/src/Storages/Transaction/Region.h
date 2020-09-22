@@ -56,7 +56,7 @@ public:
 
         auto next(bool need_value = true) { return store->readDataByWriteIt(write_map_it++, need_value); }
 
-        LockInfoPtr getLockInfo(const RegionLockReadQuery & query) { return store->getLockInfo(query); }
+        DecodedLockCFValuePtr getLockInfo(const RegionLockReadQuery & query) { return store->getLockInfo(query); }
 
         size_t writeMapSize() const { return write_map_size; }
 
@@ -180,7 +180,7 @@ private:
     RegionDataReadInfo readDataByWriteIt(const RegionData::ConstWriteCFIter & write_it, bool need_value = true) const;
     RegionData::WriteCFIter removeDataByWriteIt(const RegionData::WriteCFIter & write_it);
 
-    LockInfoPtr getLockInfo(const RegionLockReadQuery & query) const;
+    DecodedLockCFValuePtr getLockInfo(const RegionLockReadQuery & query) const;
 
     RegionPtr splitInto(RegionMeta && meta);
     void setPeerState(raft_serverpb::PeerState state);
