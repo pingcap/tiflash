@@ -191,7 +191,24 @@ inline TiKVValue encodeLockCfValue(
     return TiKVValue(res.str());
 }
 
-using DecodedLockCFValue = kvrpcpb::LockInfo;
+struct DecodedLockCFValue : boost::noncopyable
+{
+    DecodedLockCFValue(const std::string & key_, std::shared_ptr<const TiKVValue> val_);
+    std::unique_ptr<kvrpcpb::LockInfo> intoLockInfo() const;
+    void intoLockInfo(kvrpcpb::LockInfo &) const;
+
+    const std::string key;
+    std::shared_ptr<const TiKVValue> val;
+    UInt64 lock_version{0};
+    UInt64 lock_ttl{0};
+    UInt64 txn_size{0};
+    UInt64 lock_for_update_ts{0};
+    kvrpcpb::Op lock_type{kvrpcpb::Op_MIN};
+    bool use_async_commit{0};
+    UInt64 min_commit_ts{0};
+    std::string_view secondaries;
+    std::string_view primary_lock;
+};
 
 template <typename R = Int64>
 inline R readVarInt(const char *& data, size_t & len)
@@ -256,7 +273,7 @@ enum LockType : UInt8
 };
 
 // https://github.com/tikv/tikv/blob/master/components/txn_types/src/lock.rs
-inline void decodeLockCfValue(const TiKVValue & value, DecodedLockCFValue & res, const std::string * decoded_key = nullptr)
+inline void decodeLockCfValue(const TiKVValue & value, DecodedLockCFValue & res)
 {
     const char * data = value.data();
     size_t len = value.dataSize();
@@ -277,20 +294,13 @@ inline void decodeLockCfValue(const TiKVValue & value, DecodedLockCFValue & res,
             lock_type = kvrpcpb::Op::PessimisticLock;
             break;
     }
-    res.set_lock_type(lock_type);
-    res.set_primary_lock(readVarString<String>(data, len));
-    res.set_lock_version(readVarUInt(data, len));
-    res.set_lock_ttl(0);
-    res.set_min_commit_ts(0);
-    res.set_lock_for_update_ts(0);
-    res.set_txn_size(0);
-    res.set_use_async_commit(false);
-    if (decoded_key)
-        res.set_key(*decoded_key);
+    res.lock_type = lock_type;
+    res.primary_lock = readVarString<std::string_view>(data, len);
+    res.lock_version = readVarUInt(data, len);
 
     if (len > 0)
     {
-        res.set_lock_ttl(readVarUInt(data, len));
+        res.lock_ttl = readVarUInt(data, len);
         while (len > 0)
         {
             char flag = readUInt8(data, len);
@@ -307,27 +317,30 @@ inline void decodeLockCfValue(const TiKVValue & value, DecodedLockCFValue & res,
                 };
                 case MIN_COMMIT_TS_PREFIX:
                 {
-                    res.set_min_commit_ts(readUInt64(data, len));
+                    res.min_commit_ts = readUInt64(data, len);
                     break;
                 }
                 case FOR_UPDATE_TS_PREFIX:
                 {
-                    res.set_lock_for_update_ts(readUInt64(data, len));
+                    res.lock_for_update_ts = readUInt64(data, len);
                     break;
                 }
                 case TXN_SIZE_PREFIX:
                 {
-                    res.set_txn_size(readUInt64(data, len));
+                    res.txn_size = readUInt64(data, len);
                     break;
                 }
                 case ASYNC_COMMIT_PREFIX:
                 {
-                    res.set_use_async_commit(true);
+                    res.use_async_commit = true;
+                    auto start = data;
                     UInt64 cnt = readVarUInt(data, len);
                     for (UInt64 i = 0; i < cnt; ++i)
                     {
-                        res.add_secondaries(readVarString<std::string>(data, len));
+                        readVarString<nullptr_t>(data, len);
                     }
+                    auto end = data;
+                    res.secondaries = {start, static_cast<size_t>(end - start)};
                     break;
                 }
                 case ROLLBACK_TS_PREFIX:
@@ -349,13 +362,6 @@ inline void decodeLockCfValue(const TiKVValue & value, DecodedLockCFValue & res,
     }
     if (len != 0)
         throw Exception("invalid lock value " + value.toHex(), ErrorCodes::LOGICAL_ERROR);
-}
-
-inline DecodedLockCFValue decodeLockCfValue(const TiKVValue & value)
-{
-    DecodedLockCFValue res;
-    decodeLockCfValue(value, res);
-    return res;
 }
 
 using DecodedWriteCFValue = std::tuple<UInt8, Timestamp, std::shared_ptr<const TiKVValue>>;

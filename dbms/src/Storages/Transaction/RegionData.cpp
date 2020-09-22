@@ -127,14 +127,14 @@ LockInfoPtr RegionData::getLockInfo(const RegionLockReadQuery & query) const
         std::ignore = tikv_val;
         auto & lock_info = *lock_info_ptr;
 
-        if (lock_info.lock_version() > query.read_tso || lock_info.lock_type() == kvrpcpb::Op::Lock
-            || lock_info.lock_type() == kvrpcpb::Op::PessimisticLock)
+        if (lock_info.lock_version > query.read_tso || lock_info.lock_type == kvrpcpb::Op::Lock
+            || lock_info.lock_type == kvrpcpb::Op::PessimisticLock)
             continue;
-        if (lock_info.min_commit_ts() > query.read_tso)
+        if (lock_info.min_commit_ts > query.read_tso)
             continue;
-        if (query.bypass_lock_ts && query.bypass_lock_ts->count(lock_info.lock_version()))
+        if (query.bypass_lock_ts && query.bypass_lock_ts->count(lock_info.lock_version))
             continue;
-        return lock_info_ptr;
+        return lock_info.intoLockInfo();
     }
 
     return nullptr;

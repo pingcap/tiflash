@@ -64,14 +64,12 @@ struct RegionLockCFDataTrait
     using Value = std::tuple<std::shared_ptr<const TiKVKey>, std::shared_ptr<const TiKVValue>, std::shared_ptr<const DecodedLockCFValue>>;
     using Map = std::unordered_map<Key, Value, RawTiDBPK::Hash>;
 
-    static Map::value_type genKVPair(TiKVKey && key, const DecodedTiKVKey & raw_key, TiKVValue && value)
+    static Map::value_type genKVPair(TiKVKey && key_, const DecodedTiKVKey & raw_key, TiKVValue && value_)
     {
+        auto value = std::make_shared<const TiKVValue>(std::move(value_));
         RawTiDBPK tidb_pk = RecordKVFormat::getRawTiDBPK(raw_key);
-        auto lock_info = std::make_unique<DecodedLockCFValue>();
-        RecordKVFormat::decodeLockCfValue(value, *lock_info, &raw_key);
         return {std::move(tidb_pk),
-            Value{std::make_shared<const TiKVKey>(std::move(key)), std::make_shared<const TiKVValue>(std::move(value)),
-                std::move(lock_info)}};
+            Value{std::make_shared<const TiKVKey>(std::move(key_)), value, std::make_shared<const DecodedLockCFValue>(raw_key, value)}};
     }
 };
 

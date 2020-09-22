@@ -317,4 +317,45 @@ template struct RegionCFDataBase<RegionWriteCFDataTrait>;
 template struct RegionCFDataBase<RegionDefaultCFDataTrait>;
 template struct RegionCFDataBase<RegionLockCFDataTrait>;
 
+
+namespace RecordKVFormat
+{
+
+DecodedLockCFValue::DecodedLockCFValue(const std::string & key_, std::shared_ptr<const TiKVValue> val_) : key(key_), val(std::move(val_))
+{
+    decodeLockCfValue(*val, *this);
+}
+
+void DecodedLockCFValue::intoLockInfo(kvrpcpb::LockInfo & res) const
+{
+    res.set_lock_type(lock_type);
+    res.set_primary_lock(primary_lock.data(), primary_lock.size());
+    res.set_lock_version(lock_version);
+    res.set_lock_ttl(lock_ttl);
+    res.set_min_commit_ts(min_commit_ts);
+    res.set_lock_for_update_ts(lock_for_update_ts);
+    res.set_txn_size(txn_size);
+    res.set_use_async_commit(use_async_commit);
+    res.set_key(key);
+
+    if (use_async_commit)
+    {
+        auto data = secondaries.data();
+        auto len = secondaries.size();
+        UInt64 cnt = readVarUInt(data, len);
+        for (UInt64 i = 0; i < cnt; ++i)
+        {
+            res.add_secondaries(readVarString<std::string>(data, len));
+        }
+    }
+}
+
+std::unique_ptr<kvrpcpb::LockInfo> DecodedLockCFValue::intoLockInfo() const
+{
+    auto res = std::make_unique<kvrpcpb::LockInfo>();
+    intoLockInfo(*res);
+    return res;
+}
+
+} // namespace RecordKVFormat
 } // namespace DB

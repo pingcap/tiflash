@@ -92,13 +92,13 @@ grpc::Status CoprocessorHandler::execute()
         GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_error, reason_internal_error).Increment();
         return recordError(grpc::StatusCode::INTERNAL, e.standardText());
     }
-    catch (const LockException & e)
+    catch (LockException & e)
     {
         LOG_WARNING(
             log, __PRETTY_FUNCTION__ << ": LockException: region " << cop_request->context().region_id() << ", message: " << e.message());
         cop_response->Clear();
         GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_error, reason_meet_lock).Increment();
-        *cop_response->mutable_locked() = *e.lock_info;
+        cop_response->set_allocated_locked(e.lock_info.release());
         // return ok so TiDB has the chance to see the LockException
         return grpc::Status::OK;
     }

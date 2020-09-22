@@ -5,7 +5,7 @@
 
 namespace DB
 {
-using LockInfoPtr = std::shared_ptr<const kvrpcpb::LockInfo>;
+using LockInfoPtr = std::unique_ptr<kvrpcpb::LockInfo>;
 
 // To get lock info from region: read_tso is from cop request, any lock with ts in bypass_lock_ts should be filtered.
 struct RegionLockReadQuery
