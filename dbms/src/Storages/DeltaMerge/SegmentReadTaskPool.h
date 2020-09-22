@@ -9,6 +9,9 @@ namespace DB
 namespace DM
 {
 
+struct DMContext;
+using DMContextPtr = std::shared_ptr<DMContext>;
+
 struct SegmentReadTask
 {
     SegmentPtr         segment;
@@ -28,10 +31,16 @@ struct SegmentReadTask
     }
 
     void addRange(const RowKeyRange & range) { ranges.push_back(range); }
+
+    std::pair<size_t, size_t> getRowsAndBytes()
+    {
+        return {read_snapshot->delta->getRows() + read_snapshot->stable->getRows(),
+                read_snapshot->delta->getBytes() + read_snapshot->stable->getBytes()};
+    }
 };
 
 using SegmentReadTaskPtr = std::shared_ptr<SegmentReadTask>;
-using SegmentReadTasks   = std::queue<SegmentReadTaskPtr>;
+using SegmentReadTasks   = std::list<SegmentReadTaskPtr>;
 using AfterSegmentRead   = std::function<void(const DMContextPtr &, const SegmentPtr &)>;
 
 class SegmentReadTaskPool : private boost::noncopyable
@@ -45,7 +54,7 @@ public:
         if (tasks.empty())
             return {};
         auto task = tasks.front();
-        tasks.pop();
+        tasks.pop_front();
         return task;
     }
 
