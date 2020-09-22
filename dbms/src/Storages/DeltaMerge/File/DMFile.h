@@ -67,8 +67,7 @@ public:
     struct SubFileStat
     {
         SubFileStat() = default;
-        SubFileStat(const String & name_, UInt64 offset_, UInt64 size_) : name{name_}, offset{offset_}, size{size_} {}
-        String name;
+        SubFileStat(UInt64 offset_, UInt64 size_) : offset{offset_}, size{size_} {}
         UInt64 offset;
         UInt64 size;
     };
@@ -181,7 +180,7 @@ public:
 
     void addSubFileStat(const String & name, UInt64 offset, UInt64 size)
     {
-        sub_file_stats.emplace(name, SubFileStat{name, offset, size});
+        sub_file_stats.emplace(name, SubFileStat{offset, size});
     }
 
     SubFileStat getSubFileStat(const String & name) { return sub_file_stats[name]; }

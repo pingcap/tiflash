@@ -220,10 +220,11 @@ void DMFile::initialize(const FileProviderPtr & file_provider)
             SubFileStat sub_file_stat;
             for (UInt32 i = 0; i < footer.sub_file_num; i++)
             {
-                DB::readStringBinary(sub_file_stat.name, buf);
+                String name;
+                DB::readStringBinary(name, buf);
                 DB::readIntBinary(sub_file_stat.offset, buf);
                 DB::readIntBinary(sub_file_stat.size, buf);
-                sub_file_stats.emplace(sub_file_stat.name, sub_file_stat);
+                sub_file_stats.emplace(name, sub_file_stat);
             }
         }
     }
@@ -244,7 +245,7 @@ void DMFile::finalize(WriteBufferFromFileBase & buffer)
     footer.file_format_version  = DMSingleFileFormatVersion::SINGLE_FILE_VERSION_BASE;
     for (auto & iter : sub_file_stats)
     {
-        writeStringBinary(iter.second.name, buffer);
+        writeStringBinary(iter.first, buffer);
         writeIntBinary(iter.second.offset, buffer);
         writeIntBinary(iter.second.size, buffer);
     }
