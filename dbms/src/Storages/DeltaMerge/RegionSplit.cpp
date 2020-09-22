@@ -12,29 +12,33 @@ namespace DB
 namespace DM
 {
 
+constexpr double APPROX_DELTA_THRESHOLD = 0.1;
+
 RowsAndBytes Segment::getRowsAndBytesInRange(DMContext &                dm_context,
                                              const SegmentSnapshotPtr & segment_snap,
                                              const RowKeyRange &        check_range,
                                              bool                       is_exact)
 {
     RowKeyRange real_range = rowkey_range.shrink(check_range);
-    // If there are no delete ranges overlap with check_range, then we simply return the estimated stat of stable.
+    // If there are no delete ranges overlap with check_range, and delta is small
+    // then we simply return the estimated stat of stable.
     // Otherwise, use the exact version.
-    bool   has_delete_range = false;
-    auto & packs            = segment_snap->delta->getPacks();
-    for (auto & pack : packs)
+    if (!is_exact && (segment_snap->delta->getRows() <= segment_snap->stable->getRows() * APPROX_DELTA_THRESHOLD))
     {
-        if (pack->isDeleteRange() && real_range.intersect(pack->delete_range))
-        {
-            has_delete_range = true;
-            break;
-        }
-    }
+        bool has_delete_range = false;
 
-    if (!is_exact && !has_delete_range)
-    {
+        auto & packs = segment_snap->delta->getPacks();
+        for (auto & pack : packs)
+        {
+            if (pack->isDeleteRange() && real_range.intersect(pack->delete_range))
+            {
+                has_delete_range = true;
+                break;
+            }
+        }
         // Only counts data in stable, because delta is expected to be small.
-        return segment_snap->stable->getApproxRowsAndBytes(dm_context, real_range);
+        if (!has_delete_range)
+            return segment_snap->stable->getApproxRowsAndBytes(dm_context, real_range);
     }
 
     // Otherwise, we have to use the (nearly) exact version.
