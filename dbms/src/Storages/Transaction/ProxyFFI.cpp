@@ -1,12 +1,16 @@
 #include <Common/CurrentMetrics.h>
 #include <Encryption/AESCTRCipherStream.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/PathCapacityMetrics.h>
+#include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFIType.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <sys/statvfs.h>
+
+#include <boost/algorithm/string/join.hpp>
 
 namespace CurrentMetrics
 {
@@ -407,41 +411,85 @@ TiFlashSnapshot::~TiFlashSnapshot()
 const std::string TiFlashSnapshot::flag = "this is tiflash snapshot";
 
 GetRegionApproximateSizeKeysRes GetRegionApproximateSizeKeys(
-    TiFlashServer *, uint64_t region_id, BaseBuffView start_key, BaseBuffView end_key)
+    TiFlashServer * server, uint64_t region_id, BaseBuffView start_key, BaseBuffView end_key)
 {
-    std::cerr << "GetRegionApproximateSizeKeys region " << region_id << "\n";
+    std::cerr << __FUNCTION__ << " region " << region_id << "\n";
     (void)start_key;
     (void)end_key;
-    return GetRegionApproximateSizeKeysRes{.ok = 1, .size = 4321, .keys = 1234};
+
+    auto & tmt = *server->tmt;
+    auto region = tmt.getKVStore()->getRegion(region_id);
+    if (!region)
+    {
+        LOG_ERROR(&Logger::get(__PRETTY_FUNCTION__), "Region " << region_id << " not exists");
+        return GetRegionApproximateSizeKeysRes{.ok = 0};
+    }
+    TableID table_id = region->getMappedTableID();
+    auto storage = tmt.getStorages().get(table_id);
+    if (!storage || storage->isTombstone())
+    {
+        LOG_ERROR(&Logger::get(__PRETTY_FUNCTION__), "Table " << table_id << " not exists");
+        return GetRegionApproximateSizeKeysRes{.ok = 0};
+    }
+    if (storage->engineType() != TiDB::StorageEngine::DT)
+    {
+        LOG_ERROR(&Logger::get(__PRETTY_FUNCTION__), "Only DT engine supports region split when region is leader");
+        return GetRegionApproximateSizeKeysRes{.ok = 0};
+    }
+
+    auto dt_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+    auto store = dt_storage->getStore();
+    auto range = DM::RowKeyRange::fromRegionRange(region->getRange(), table_id, store->isCommonHandle(), store->getRowKeyColumnSize());
+
+    auto [rows, bytes] = store->getRowsAndBytesInRange(tmt.getContext(), range, false);
+
+    std::cerr << __FUNCTION__ << "region " << region_id << " has approximate " << rows << "rows and " << bytes << "bytes\n";
+
+    return GetRegionApproximateSizeKeysRes{.ok = 1, .size = bytes, .keys = rows};
 }
 
-SplitKeysRes ScanSplitKeys(TiFlashServer *, uint64_t region_id, BaseBuffView start_key, BaseBuffView end_key, CheckerConfig checker_config)
+SplitKeysRes ScanSplitKeys(
+    TiFlashServer * server, uint64_t region_id, BaseBuffView start_key, BaseBuffView end_key, CheckerConfig checker_config)
 {
     (void)start_key;
     (void)end_key;
 
-    std::cerr << "ScanSplitKeys region " << region_id << "\n";
-    auto tid = RecordKVFormat::getTableId(RecordKVFormat::decodeTiKVKey(TiKVKey(start_key.data, start_key.len)));
-    std::cerr << "table id " << tid << "\n";
+    std::cerr << __FUNCTION__ << " region " << region_id << "\n";
 
-    if (checker_config.batch_split_limit == 0)
+    auto & tmt = *server->tmt;
+    auto region = tmt.getKVStore()->getRegion(region_id);
+    if (!region)
     {
-        std::cerr << "use half size split"
-                  << "\n";
+        LOG_ERROR(&Logger::get(__PRETTY_FUNCTION__), "Region " << region_id << " not exists");
+        return SplitKeysRes{.ok = 0, .size = 0, .keys = 0, .split_keys = SplitKeysWithView({})};
+    }
+    TableID table_id = region->getMappedTableID();
+    auto storage = tmt.getStorages().get(table_id);
+    if (!storage || storage->isTombstone())
+    {
+        LOG_ERROR(&Logger::get(__PRETTY_FUNCTION__), "Table " << table_id << " not exists");
+        return SplitKeysRes{.ok = 0, .size = 0, .keys = 0, .split_keys = SplitKeysWithView({})};
+    }
+    if (storage->engineType() != TiDB::StorageEngine::DT)
+    {
+        LOG_ERROR(&Logger::get(__PRETTY_FUNCTION__), "Only DT engine supports region split when region is leader");
+        return SplitKeysRes{.ok = 0, .size = 0, .keys = 0, .split_keys = SplitKeysWithView({})};
     }
 
-    // if size and keys are 0, do not update size and keys prop in proxy
-    // if split_keys is empty, do not propose split cmd.
+    auto dt_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+    auto store = dt_storage->getStore();
+    auto range = DM::RowKeyRange::fromRegionRange(region->getRange(), table_id, store->isCommonHandle(), store->getRowKeyColumnSize());
 
-    if (false)
-    {
-        // no need to split, but update size and keys prop in proxy,
-        return SplitKeysRes{.ok = 1, .size = 4321, .keys = 1234, .split_keys = SplitKeysWithView({})};
-    }
+    auto res = store->getRegionSplitPoint(tmt.getContext(), range, checker_config.max_size, checker_config.split_size);
 
-    auto middle = RecordKVFormat::genKey(tid, 8888, 66);
-    // split, but do not update size and keys prop.
-    return SplitKeysRes{.ok = 1, .size = 0, .keys = 0, .split_keys = SplitKeysWithView({std::move(middle)})};
+    std::vector<std::string> split_keys;
+    for (auto & p : res.split_points)
+        split_keys.push_back(RecordKVFormat::encodeAsTiKVKey(*p.toRegionKey(table_id)));
+
+    std::cerr << __FUNCTION__ << "region " << region_id << " has exactly " << res.exact_rows << "rows and " << res.exact_bytes
+              << "bytes, decide to split with keys: [" << boost::algorithm::join(split_keys, ", ") << "]";
+
+    return SplitKeysRes{.ok = 1, .size = res.exact_bytes, .keys = res.exact_rows, .split_keys = SplitKeysWithView(std::move(split_keys))};
 }
 
 SplitKeys::~SplitKeys()
