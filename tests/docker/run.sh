@@ -42,7 +42,6 @@ fi
 
 
 # Stop all docker instances if exist.
-# tiflash-dt && tiflash-tmt share the same name "tiflash0", we just need one here
 docker-compose -f gtest.yaml -f cluster.yaml -f cluster_new_collation.yaml -f cluster_clustered_index.yaml -f tiflash-dt.yaml -f mock-test-dt.yaml down
 rm -rf ./data ./log
 
@@ -82,14 +81,6 @@ rm -rf ./data ./log
 docker-compose -f mock-test-dt.yaml up -d
 docker-compose -f mock-test-dt.yaml exec -T tics0 bash -c 'cd /tests ; ./run-test.sh delta-merge-test'
 docker-compose -f mock-test-dt.yaml down
-rm -rf ./data ./log
-
-
-# run fullstack-tests (for engine TxnMergeTree)
-docker-compose -f cluster.yaml -f tiflash-tmt.yaml up -d
-wait_env tmt
-docker-compose -f cluster.yaml -f tiflash-tmt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test true'
-docker-compose -f cluster.yaml -f tiflash-tmt.yaml down
 rm -rf ./data ./log
 
 
