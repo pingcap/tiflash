@@ -39,8 +39,6 @@ struct RegionCFDataBase
     static const TiKVValue & getTiKVValue(const Value & val);
 
     RegionDataRes insert(TiKVKey && key, TiKVValue && value);
-    RegionDataRes insert(std::pair<Key, Value> && kv_pair);
-    RegionDataRes insert(TiKVKey && key, TiKVValue && value, const DecodedTiKVKey & raw_key);
 
     static size_t calcTiKVKeyValueSize(const Value & value);
 
@@ -76,6 +74,8 @@ struct RegionCFDataBase
 private:
     static bool shouldIgnoreInsert(const Value & value);
     static bool shouldIgnoreRemove(const Value & value);
+    RegionDataRes insert(std::pair<Key, Value> && kv_pair);
+    RegionDataRes insert(TiKVKey && key, TiKVValue && value, const DecodedTiKVKey & raw_key);
 
 private:
     Data data;

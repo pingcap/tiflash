@@ -119,8 +119,8 @@ private:
     QueryState state;
 
     CurrentMetrics::Increment metric_increment{CurrentMetrics::TCPConnection};
-    
-    /// It is the name of the server that will be sent to the client. 
+
+    /// It is the name of the server that will be sent to the client.
     String server_display_name;
 
     void runImpl();
@@ -143,7 +143,7 @@ private:
     void sendData(const Block & block);    /// Write a block to the network.
     void sendException(const Exception & e);
     void sendRegionException(const std::vector<UInt64> & region_ids);
-    void sendLockInfos(const LockInfos & lock_infos);
+    void sendLockInfos(const LockInfoPtr & lock_info);
     void sendProgress();
     void sendEndOfStream();
     void sendProfileInfo();

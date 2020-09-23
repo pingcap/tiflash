@@ -30,6 +30,8 @@ static const char SHORT_VALUE_PREFIX = 'v';
 static const char MIN_COMMIT_TS_PREFIX = 'c';
 static const char FOR_UPDATE_TS_PREFIX = 'f';
 static const char TXN_SIZE_PREFIX = 't';
+static const char ASYNC_COMMIT_PREFIX = 'a';
+static const char ROLLBACK_TS_PREFIX = 'r';
 
 static const size_t SHORT_VALUE_MAX_LEN = 64;
 
@@ -165,7 +167,8 @@ inline TiKVKey genKey(TableID tableId, HandleID handleId, Timestamp ts)
     return appendTs(key, ts);
 }
 
-inline TiKVValue internalEncodeLockCfValue(UInt8 lock_type, const String & primary, Timestamp ts, UInt64 ttl, const String * short_value)
+inline TiKVValue encodeLockCfValue(
+    UInt8 lock_type, const String & primary, Timestamp ts, UInt64 ttl, const String * short_value = nullptr, Timestamp min_commit_ts = 0)
 {
     std::stringstream res;
     res.put(lock_type);
@@ -179,96 +182,95 @@ inline TiKVValue internalEncodeLockCfValue(UInt8 lock_type, const String & prima
         res.put(static_cast<char>(short_value->size()));
         res.write(short_value->data(), short_value->size());
     }
+    if (min_commit_ts)
+    {
+        res.put(MIN_COMMIT_TS_PREFIX);
+        auto tmp = encodeUInt64(min_commit_ts);
+        res.write(reinterpret_cast<const char *>(&tmp), sizeof(UInt64));
+    }
     return TiKVValue(res.str());
 }
 
-
-inline TiKVValue encodeLockCfValue(UInt8 lock_type, const String & primary, Timestamp ts, UInt64 ttl, const String & short_value)
+struct DecodedLockCFValue : boost::noncopyable
 {
-    return internalEncodeLockCfValue(lock_type, primary, ts, ttl, &short_value);
-}
+    DecodedLockCFValue(std::shared_ptr<const TiKVKey> key_, std::shared_ptr<const TiKVValue> val_);
+    std::unique_ptr<kvrpcpb::LockInfo> intoLockInfo() const;
+    void intoLockInfo(kvrpcpb::LockInfo &) const;
 
+    std::shared_ptr<const TiKVKey> key;
+    std::shared_ptr<const TiKVValue> val;
+    UInt64 lock_version{0};
+    UInt64 lock_ttl{0};
+    UInt64 txn_size{0};
+    UInt64 lock_for_update_ts{0};
+    kvrpcpb::Op lock_type{kvrpcpb::Op_MIN};
+    bool use_async_commit{0};
+    UInt64 min_commit_ts{0};
+    std::string_view secondaries;
+    std::string_view primary_lock;
+};
 
-inline TiKVValue encodeLockCfValue(UInt8 lock_type, const String & primary, Timestamp ts, UInt64 ttl)
+template <typename R = Int64>
+inline R readVarInt(const char *& data, size_t & len)
 {
-    return internalEncodeLockCfValue(lock_type, primary, ts, ttl, nullptr);
-}
+    static_assert(std::is_same_v<R, UInt64> || std::is_same_v<R, Int64>);
 
-using DecodedLockCFValue = std::tuple<UInt8, String, Timestamp, UInt64, Timestamp>;
-
-inline DecodedLockCFValue decodeLockCfValue(const TiKVValue & value)
-{
-    UInt8 lock_type;
-    String primary;
-    Timestamp ts;
-    UInt64 ttl = 0;
-    Timestamp min_commit_ts = 0;
-
-    const char * data = value.data();
-    size_t len = value.dataSize();
-    lock_type = static_cast<UInt8>(*data);
-    data += 1, len -= 1; //lock type
-    Int64 primary_len = 0;
-    auto cur = TiKV::readVarInt(primary_len, data, len); // primary
-    len -= cur - data, data = cur;
-    primary.append(data, static_cast<size_t>(primary_len));
-    len -= primary_len, data += primary_len;
-    cur = TiKV::readVarUInt(ts, data, len); // ts
-    len -= cur - data, data = cur;
-    if (len > 0)
+    R res = 0;
+    auto cur = data;
+    if constexpr (std::is_same_v<R, UInt64>)
     {
-        cur = TiKV::readVarUInt(ttl, data, len); // ttl
-        len -= cur - data, data = cur;
-        while (len > 0)
-        {
-            char flag = *data;
-            data += 1, len -= 1;
-            switch (flag)
-            {
-                case SHORT_VALUE_PREFIX:
-                {
-                    size_t slen = static_cast<UInt8>(*data);
-                    data += 1, len -= 1;
-                    if (len < slen)
-                        throw Exception("content len shorter than short value len", ErrorCodes::LOGICAL_ERROR);
-                    // no need short value
-                    data += slen, len -= slen;
-                    break;
-                };
-                case MIN_COMMIT_TS_PREFIX:
-                {
-                    min_commit_ts = readBigEndian<UInt64>(data);
-                    data += sizeof(UInt64);
-                    len -= sizeof(UInt64);
-                    break;
-                }
-                case FOR_UPDATE_TS_PREFIX:
-                {
-                    readBigEndian<UInt64>(data);
-                    data += sizeof(UInt64);
-                    len -= sizeof(UInt64);
-                    break;
-                }
-                case TXN_SIZE_PREFIX:
-                {
-                    readBigEndian<UInt64>(data);
-                    data += sizeof(UInt64);
-                    len -= sizeof(UInt64);
-                    break;
-                }
-                default:
-                {
-                    std::string msg = std::string() + "invalid flag " + flag + " in lock value " + value.toHex();
-                    throw Exception(msg, ErrorCodes::LOGICAL_ERROR);
-                }
-            }
-        }
+        cur = TiKV::readVarUInt(res, data, len);
     }
-    if (len != 0)
-        throw Exception("invalid lock value " + value.toHex(), ErrorCodes::LOGICAL_ERROR);
-
-    return std::make_tuple(lock_type, primary, ts, ttl, min_commit_ts);
+    else if constexpr (std::is_same_v<R, Int64>)
+    {
+        cur = TiKV::readVarInt(res, data, len);
+    }
+    len -= cur - data, data = cur;
+    return res;
 }
+
+inline UInt64 readVarUInt(const char *& data, size_t & len) { return readVarInt<UInt64>(data, len); }
+
+inline UInt8 readUInt8(const char *& data, size_t & len)
+{
+    UInt8 res = static_cast<UInt8>(*data);
+    data += sizeof(UInt8), len -= sizeof(UInt8);
+    return res;
+}
+
+inline UInt64 readUInt64(const char *& data, size_t & len)
+{
+    UInt64 res = readBigEndian<UInt64>(data);
+    data += sizeof(UInt64), len -= sizeof(UInt64);
+    return res;
+}
+
+template <typename R>
+inline R readRawString(const char *& data, size_t & len, size_t str_len)
+{
+    R res{};
+    if constexpr (!std::is_same_v<R, nullptr_t>)
+    {
+        res = R(data, str_len);
+    }
+    len -= str_len, data += str_len;
+    return res;
+}
+
+template <typename R>
+inline R readVarString(const char *& data, size_t & len)
+{
+    auto str_len = readVarInt(data, len);
+    return readRawString<R>(data, len, str_len);
+}
+
+enum LockType : UInt8
+{
+    Put = 'P',
+    Delete = 'D',
+    Lock = 'L',
+    Pessimistic = 'S',
+};
 
 using DecodedWriteCFValue = std::tuple<UInt8, Timestamp, std::shared_ptr<const TiKVValue>>;
 
@@ -277,19 +279,16 @@ inline DecodedWriteCFValue decodeWriteCfValue(const TiKVValue & value)
     const char * data = value.data();
     size_t len = value.dataSize();
 
-    auto write_type = static_cast<UInt8>(*data);
-    data += 1, len -= 1; //write type
+    auto write_type = readUInt8(data, len); //write type
 
-    Timestamp ts;
-    const char * res = TiKV::readVarUInt(ts, data, len);
-    len -= res - data, data = res; // ts
+    Timestamp ts = readVarUInt(data, len); // ts
 
     if (len == 0)
         return std::make_tuple(write_type, ts, nullptr);
-    assert(*data == SHORT_VALUE_PREFIX);
-    data += 1, len -= 1;
-    size_t slen = static_cast<UInt8>(*data);
-    data += 1, len -= 1;
+    auto flag = readUInt8(data, len);
+    std::ignore = flag;
+    assert(flag == SHORT_VALUE_PREFIX);
+    size_t slen = readUInt8(data, len);
     if (slen != len)
         throw Exception("content len not equal to short value len", ErrorCodes::LOGICAL_ERROR);
     return std::make_tuple(write_type, ts, std::make_shared<const TiKVValue>(data, len));
