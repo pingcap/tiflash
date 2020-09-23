@@ -91,6 +91,9 @@ grpc::Status FlashService::Coprocessor(
 }
 
 ::grpc::Status FlashService::DispatchMPPTask(::grpc::ServerContext* grpc_context, const ::mpp::DispatchTaskRequest* request, ::mpp::DispatchTaskResponse* response) {
+
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling mpp dispatch request: " << request->DebugString());
+
     if (!security_config.checkGrpcContext(grpc_context))
     {
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
@@ -108,6 +111,9 @@ grpc::Status FlashService::Coprocessor(
 }
 
 ::grpc::Status FlashService::EstablishMPPConnection(::grpc::ServerContext* grpc_context, const ::mpp::EstablishMPPConnectionRequest* request, ::grpc::ServerWriter< ::mpp::MPPDataPacket>* writer) {
+
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling establish mpp connection request: " << request->DebugString());
+
     if (!security_config.checkGrpcContext(grpc_context))
     {
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
@@ -132,7 +138,9 @@ grpc::Status FlashService::Coprocessor(
         // TODO:: return error;
         return grpc::Status::OK;
     }
+    LOG_DEBUG(log, "get tunnel successfully and begin to connect");
     tunnel->connect(writer);
+    LOG_DEBUG(log, "connect tunnel successfully and begin to wait");
     tunnel->waitForFinish();
     // TODO: Check if there are errors in task.
     return grpc::Status::OK;

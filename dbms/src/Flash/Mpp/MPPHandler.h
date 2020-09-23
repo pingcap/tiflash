@@ -1,5 +1,6 @@
 #pragma once
 
+#include <common/logger_useful.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/copyData.h>
@@ -147,6 +148,8 @@ struct MPPTask : private boost::noncopyable
         id.task_id = meta.task_id();
     }
 
+    ~MPPTask() { worker.join(); }
+
     void runImpl(IBlockInputStream & from, IBlockOutputStream & to)
     {
 
@@ -170,6 +173,8 @@ struct MPPTask : private boost::noncopyable
 
         from.readSuffix();
         to.writeSuffix();
+
+        // TODO: Remove this task from task manager.
     }
 
     void run(BlockIO io)
@@ -223,8 +228,10 @@ class MPPHandler
 
     mpp::Error error;
 
+    Logger * log;
+
 public:
-    MPPHandler(Context & context_, const mpp::DispatchTaskRequest & task_request_) : context(context_), task_request(task_request_) {}
+    MPPHandler(Context & context_, const mpp::DispatchTaskRequest & task_request_) : context(context_), task_request(task_request_), log(&Logger::get("MPPHandler")) {}
     grpc::Status execute(mpp::DispatchTaskResponse * response);
 };
 

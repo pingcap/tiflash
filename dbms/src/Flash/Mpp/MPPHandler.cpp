@@ -33,6 +33,7 @@ grpc::Status MPPHandler::execute(mpp::DispatchTaskResponse * response)
         context.getTimezoneInfo().resetByDAGRequest(dag_req);
 
         // register task.
+        LOG_DEBUG(log, "begin to register the task");
         TMTContext & tmt_context = context.getTMTContext();
         auto task_manager = tmt_context.getMPPTaskManager();
         // TODO: tunnel should be added to mpp task.
@@ -58,6 +59,7 @@ grpc::Status MPPHandler::execute(mpp::DispatchTaskResponse * response)
             dag.getEncodeType(), dag.getResultFieldTypes(), dag_context, false, true);
         streams.out = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), response_writer);
 
+        LOG_DEBUG(log, "begin to run the task");
         task->run(streams);
     }
     catch (Exception & e)
