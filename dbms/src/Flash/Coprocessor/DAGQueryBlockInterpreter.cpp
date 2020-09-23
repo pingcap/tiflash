@@ -1117,7 +1117,7 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
         executeJoin(query_block.source->join(), pipeline, right_query);
         recordProfileStreams(pipeline, query_block.source_name);
     }
-    if (query_block.source->tp() == tipb::ExecType::TypeExchangeClient)
+    else if (query_block.source->tp() == tipb::ExecType::TypeExchangeClient)
     {
         pipeline.firstStream() = std::make_shared<ExchangeClientInputStream>(
             context.getTMTContext(), query_block.source->exchange_client(), dag.getMPPTask()->meta);
