@@ -14,8 +14,8 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
                            size_t                      max_compress_block_size_,
                            const CompressionSettings & compression_settings_,
                            const FileProviderPtr &     file_provider_,
-                           bool single_file_mode_,
-                           bool  wal_mode_)
+                           bool                        single_file_mode_,
+                           bool                        wal_mode_)
     : dmfile(dmfile_),
       write_columns(write_columns_),
       min_compress_block_size(min_compress_block_size_),
@@ -23,13 +23,11 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
       compression_settings(compression_settings_),
       // assume pack_stat_file is the first file created inside DMFile
       // it will create encryption info for the whole DMFile
-      pack_stat_file(single_file_mode_ ? nullptr : createWriteBufferFromFileBaseByFileProvider(file_provider_,
-                                                       dmfile->packStatPath(),
-                                                       dmfile->encryptionPackStatPath(),
-                                                       true,
-                                                       0,
-                                                       0,
-                                                       max_compress_block_size)),
+      pack_stat_file(
+          single_file_mode_
+              ? nullptr
+              : createWriteBufferFromFileBaseByFileProvider(
+                  file_provider_, dmfile->packStatPath(), dmfile->encryptionPackStatPath(), true, 0, 0, max_compress_block_size)),
       single_file_stream(nullptr),
       file_provider(file_provider_),
       single_file_mode(single_file_mode_),
@@ -199,7 +197,8 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
             MarksInCompressedFile marks{single_file_stream->blocks.size()};
             size_t                column_offset_in_file = single_file_stream->plain_hashing.count();
             MinMaxIndexPtr        minmax_index          = nullptr;
-            if (auto iter = single_file_stream->minmax_indexs.find(DMFile::getFileNameBase(col_id)); iter != single_file_stream->minmax_indexs.end())
+            if (auto iter = single_file_stream->minmax_indexs.find(DMFile::getFileNameBase(col_id));
+                iter != single_file_stream->minmax_indexs.end())
             {
                 minmax_index = iter->second;
             }
@@ -247,7 +246,8 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                     }
                     const DataTypeNullable & nullable_type = static_cast<const DataTypeNullable &>(*type);
                     const ColumnNullable &   col           = static_cast<const ColumnNullable &>(*column);
-                    nullable_type.getNestedType()->serializeBinaryBulk(col.getNestedColumn(), single_file_stream->original_hashing, 0, rows);
+                    nullable_type.getNestedType()->serializeBinaryBulk(
+                        col.getNestedColumn(), single_file_stream->original_hashing, 0, rows);
                 }
                 else
                 {
@@ -292,7 +292,7 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
     }
     else
     {
-        auto   callback      = [&](const IDataType::SubstreamPath & substream) {
+        auto callback = [&](const IDataType::SubstreamPath & substream) {
             String stream_name = DMFile::getFileNameBase(col_id, substream);
             auto & stream      = column_streams.at(stream_name);
             stream->flush();

@@ -174,15 +174,15 @@ private:
             return;
         }
 
-        auto & type = dmfile->getColumnStat(col_id).type;
+        auto &     type           = dmfile->getColumnStat(col_id).type;
         const auto file_name_base = DMFile::getFileNameBase(col_id);
 
         auto load = [&]() {
-            auto index_buf = ReadBufferFromFileProvider(
-                file_provider,
-                dmfile->colIndexPath(file_name_base),
-                dmfile->encryptionIndexPath(file_name_base),
-                std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), dmfile->colIndexSize(file_name_base)));
+            auto index_buf
+                = ReadBufferFromFileProvider(file_provider,
+                                             dmfile->colIndexPath(file_name_base),
+                                             dmfile->encryptionIndexPath(file_name_base),
+                                             std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), dmfile->colIndexSize(file_name_base)));
             index_buf.seek(dmfile->colIndexOffset(file_name_base));
             return MinMaxIndex::read(*type, index_buf, dmfile->colIndexSize(file_name_base));
         };

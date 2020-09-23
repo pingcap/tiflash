@@ -83,8 +83,10 @@ public:
 
     using PackStats = PaddedPODArray<PackStat>;
 
-    static DMFilePtr create(const FileProviderPtr & file_provider, UInt64 file_id, const String & parent_path, bool single_file_mode = false);
-    static DMFilePtr restore(const FileProviderPtr & file_provider, UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta = true);
+    static DMFilePtr
+    create(const FileProviderPtr & file_provider, UInt64 file_id, const String & parent_path, bool single_file_mode = false);
+    static DMFilePtr
+    restore(const FileProviderPtr & file_provider, UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta = true);
 
     static std::set<UInt64> listAllInPath(const String & parent_path, bool can_gc);
 
@@ -167,7 +169,7 @@ public:
     }
 
 private:
-    DMFile(UInt64 file_id_, UInt64 ref_id_, const String & parent_path_, DMFile::Status status_, Logger *log_)
+    DMFile(UInt64 file_id_, UInt64 ref_id_, const String & parent_path_, DMFile::Status status_, Logger * log_)
         : file_id(file_id_), ref_id(ref_id_), parent_path(parent_path_), mode(Mode::UNKNOWN), status(status_), log(log_)
     {
     }
@@ -197,10 +199,7 @@ private:
     void finalize(const FileProviderPtr & file_provider);
     void finalize(WriteBuffer & buffer);
 
-    void addSubFileStat(const String & name, UInt64 offset, UInt64 size)
-    {
-        sub_file_stats.emplace(name, SubFileStat{offset, size});
-    }
+    void addSubFileStat(const String & name, UInt64 offset, UInt64 size) { sub_file_stats.emplace(name, SubFileStat{offset, size}); }
 
     const SubFileStat & getSubFileStat(const String & name) const { return sub_file_stats.at(name); }
 
@@ -232,9 +231,11 @@ private:
     friend class DMFileReader;
 };
 
-inline ReadBufferFromFileProvider openForRead(const FileProviderPtr & file_provider, const String & path, const EncryptionPath & encryption_path, const size_t & file_size)
+inline ReadBufferFromFileProvider
+openForRead(const FileProviderPtr & file_provider, const String & path, const EncryptionPath & encryption_path, const size_t & file_size)
 {
-    return ReadBufferFromFileProvider(file_provider, path, encryption_path, std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), file_size));
+    return ReadBufferFromFileProvider(
+        file_provider, path, encryption_path, std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), file_size));
 }
 
 } // namespace DM

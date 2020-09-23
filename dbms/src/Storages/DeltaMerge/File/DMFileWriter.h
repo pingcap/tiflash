@@ -30,12 +30,12 @@ public:
                FileProviderPtr &   file_provider,
                bool                do_index)
             : plain_file(createWriteBufferFromFileBaseByFileProvider(file_provider,
-                                                       dmfile->colDataPath(file_base_name),
-                                                       dmfile->encryptionDataPath(file_base_name),
-                                                       false,
-                                                       0,
-                                                       0,
-                                                       max_compress_block_size)),
+                                                                     dmfile->colDataPath(file_base_name),
+                                                                     dmfile->encryptionDataPath(file_base_name),
+                                                                     false,
+                                                                     0,
+                                                                     0,
+                                                                     max_compress_block_size)),
               plain_hashing(*plain_file),
               compressed_buf(plain_hashing, compression_settings),
               original_hashing(compressed_buf),
@@ -67,7 +67,7 @@ public:
         CompressedWriteBuffer      compressed_buf;
         HashingWriteBuffer         original_hashing;
 
-        MinMaxIndexPtr      minmaxes;
+        MinMaxIndexPtr              minmaxes;
         WriteBufferFromFileProvider mark_file;
     };
     using StreamPtr     = std::unique_ptr<Stream>;
@@ -76,16 +76,11 @@ public:
     struct SingleFileStream
     {
         SingleFileStream(const DMFilePtr &   dmfile,
-               CompressionSettings compression_settings,
-               size_t              max_compress_block_size,
-               FileProviderPtr &   file_provider)
-            : plain_file(createWriteBufferFromFileBaseByFileProvider(file_provider,
-                                                             dmfile->path(),
-                                                             EncryptionPath(dmfile->encryptionBasePath(), ""),
-                                                             true,
-                                                             0,
-                                                             0,
-                                                             max_compress_block_size)),
+                         CompressionSettings compression_settings,
+                         size_t              max_compress_block_size,
+                         FileProviderPtr &   file_provider)
+            : plain_file(createWriteBufferFromFileBaseByFileProvider(
+                file_provider, dmfile->path(), EncryptionPath(dmfile->encryptionBasePath(), ""), true, 0, 0, max_compress_block_size)),
               plain_hashing(*plain_file),
               compressed_buf(plain_hashing, compression_settings),
               original_hashing(compressed_buf)
@@ -121,8 +116,8 @@ public:
                  size_t                      max_compress_block_size_,
                  const CompressionSettings & compression_settings_,
                  const FileProviderPtr &     file_provider_,
-                 bool  single_file_mode_ = false,
-                 bool  wal_mode_ = false);
+                 bool                        single_file_mode_ = false,
+                 bool                        wal_mode_         = false);
 
     void write(const Block & block, size_t not_clean_rows);
     void finalize();
@@ -143,15 +138,15 @@ private:
     size_t              max_compress_block_size;
     CompressionSettings compression_settings;
 
-    ColumnStreams       column_streams;
+    ColumnStreams column_streams;
 
     WriteBufferFromFileBasePtr pack_stat_file;
 
     SingleFileStreamPtr single_file_stream;
 
     FileProviderPtr file_provider;
-    bool single_file_mode;
-    bool                wal_mode;
+    bool            single_file_mode;
+    bool            wal_mode;
 };
 
 } // namespace DM

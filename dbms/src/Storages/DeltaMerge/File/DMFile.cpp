@@ -219,7 +219,7 @@ bool DMFile::isColIndexExist(const ColId & col_id) const
     {
         auto       index_path = colIndexPath(DMFile::getFileNameBase(col_id));
         Poco::File index_file(index_path);
-        return     index_file.exists();
+        return index_file.exists();
     }
 }
 
