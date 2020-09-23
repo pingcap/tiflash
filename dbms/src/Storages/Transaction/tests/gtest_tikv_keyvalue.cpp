@@ -55,24 +55,50 @@ TEST(TiKVKeyValue_test, PortedTests)
     }
 
     {
-        auto lock_value
-            = RecordKVFormat::encodeLockCfValue(Region::PutFlag, "primary key", 421321, std::numeric_limits<UInt64>::max(), "value");
-        auto [lock_type, primary, ts, ttl, min_commit_ts] = RecordKVFormat::decodeLockCfValue(lock_value);
-        ASSERT_TRUE(Region::PutFlag == lock_type);
-        ASSERT_TRUE("primary key" == primary);
-        ASSERT_TRUE(421321 == ts);
-        ASSERT_TRUE(std::numeric_limits<UInt64>::max() == ttl);
-        ASSERT_TRUE(0 == min_commit_ts);
-    }
+        std::string shor_value = "value";
+        auto lock_value = RecordKVFormat::encodeLockCfValue(
+            Region::DelFlag, "primary key", 421321, std::numeric_limits<UInt64>::max(), &shor_value, 66666);
+        auto ori_key = std::make_shared<const TiKVKey>(RecordKVFormat::genKey(1, 88888));
+        auto lock = RecordKVFormat::DecodedLockCFValue(ori_key, std::make_shared<TiKVValue>(std::move(lock_value)));
+        {
+            auto & lock_info = lock;
+            ASSERT_TRUE(kvrpcpb::Op::Del == lock_info.lock_type);
+            ASSERT_TRUE("primary key" == lock_info.primary_lock);
+            ASSERT_TRUE(421321 == lock_info.lock_version);
+            ASSERT_TRUE(std::numeric_limits<UInt64>::max() == lock_info.lock_ttl);
+            ASSERT_TRUE(66666 == lock_info.min_commit_ts);
+            ASSERT_TRUE(ori_key == lock_info.key);
+        }
+        {
+            auto lock_info = lock.intoLockInfo();
+            ASSERT_TRUE(kvrpcpb::Op::Del == lock_info->lock_type());
+            ASSERT_TRUE("primary key" == lock_info->primary_lock());
+            ASSERT_TRUE(421321 == lock_info->lock_version());
+            ASSERT_TRUE(std::numeric_limits<UInt64>::max() == lock_info->lock_ttl());
+            ASSERT_TRUE(66666 == lock_info->min_commit_ts());
+            ASSERT_TRUE(RecordKVFormat::decodeTiKVKey(*ori_key) == lock_info->key());
+        }
 
-    {
-        auto lock_value = RecordKVFormat::encodeLockCfValue(Region::PutFlag, "primary key", 421321, std::numeric_limits<UInt64>::max());
-        auto [lock_type, primary, ts, ttl, min_commit_ts] = RecordKVFormat::decodeLockCfValue(lock_value);
-        ASSERT_TRUE(Region::PutFlag == lock_type);
-        ASSERT_TRUE("primary key" == primary);
-        ASSERT_TRUE(421321 == ts);
-        ASSERT_TRUE(std::numeric_limits<UInt64>::max() == ttl);
-        ASSERT_TRUE(0 == min_commit_ts);
+        {
+            RegionLockCFData d;
+            auto k1 = RecordKVFormat::genKey(1, 123);
+            auto k2 = RecordKVFormat::genKey(1, 124);
+            d.insert(TiKVKey::copyFrom(k1),
+                RecordKVFormat::encodeLockCfValue(
+                    Region::PutFlag, "primary key", 8765, std::numeric_limits<UInt64>::max(), nullptr, 66666));
+            d.insert(TiKVKey::copyFrom(k2),
+                RecordKVFormat::encodeLockCfValue(
+                    Region::DelFlag, "primary key", 5678, std::numeric_limits<UInt64>::max(), nullptr, 66666));
+            ASSERT_TRUE(d.getSize() == 2);
+            ASSERT_TRUE(
+                std::get<2>(d.getData().find(RegionLockCFDataTrait::Key{nullptr, std::string_view(k2.data(), k2.dataSize())})->second)
+                    ->lock_version
+                == 5678);
+            d.remove(RegionLockCFDataTrait::Key{nullptr, std::string_view(k1.data(), k1.dataSize())}, true);
+            ASSERT_TRUE(d.getSize() == 1);
+            d.remove(RegionLockCFDataTrait::Key{nullptr, std::string_view(k2.data(), k2.dataSize())}, true);
+            ASSERT_TRUE(d.getSize() == 0);
+        }
     }
 
     {
@@ -81,6 +107,12 @@ TEST(TiKVKeyValue_test, PortedTests)
         ASSERT_TRUE(Region::DelFlag == write_type);
         ASSERT_TRUE(std::numeric_limits<UInt64>::max() == ts);
         ASSERT_TRUE("value" == *short_value);
+        RegionWriteCFData d;
+        d.insert(RecordKVFormat::genKey(1, 2, 3), RecordKVFormat::encodeWriteCfValue(Region::PutFlag, 4, "value"));
+        ASSERT_TRUE(d.getSize() == 1);
+        auto pk = RecordKVFormat::getRawTiDBPK(RecordKVFormat::genRawKey(1, 2));
+        d.remove(RegionWriteCFData::Key{pk, 3});
+        ASSERT_TRUE(d.getSize() == 0);
     }
 
     {
