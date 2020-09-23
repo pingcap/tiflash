@@ -164,8 +164,8 @@ struct TiFlashSnapshot
 struct GetRegionApproximateSizeKeysRes
 {
     uint8_t ok;
-    uint64_t size;
-    uint64_t keys;
+    uint64_t size = 0;
+    uint64_t keys = 0;
 };
 
 struct SplitKeys
