@@ -78,6 +78,27 @@ TEST(TiKVKeyValue_test, PortedTests)
             ASSERT_TRUE(66666 == lock_info->min_commit_ts());
             ASSERT_TRUE(RecordKVFormat::decodeTiKVKey(*ori_key) == lock_info->key());
         }
+
+        {
+            RegionLockCFData d;
+            auto k1 = RecordKVFormat::genKey(1, 123);
+            auto k2 = RecordKVFormat::genKey(1, 124);
+            d.insert(TiKVKey::copyFrom(k1),
+                RecordKVFormat::encodeLockCfValue(
+                    Region::PutFlag, "primary key", 8765, std::numeric_limits<UInt64>::max(), nullptr, 66666));
+            d.insert(TiKVKey::copyFrom(k2),
+                RecordKVFormat::encodeLockCfValue(
+                    Region::DelFlag, "primary key", 5678, std::numeric_limits<UInt64>::max(), nullptr, 66666));
+            ASSERT_TRUE(d.getSize() == 2);
+            ASSERT_TRUE(
+                std::get<2>(d.getData().find(RegionLockCFDataTrait::Key{nullptr, std::string_view(k2.data(), k2.dataSize())})->second)
+                    ->lock_version
+                == 5678);
+            d.remove(RegionLockCFDataTrait::Key{nullptr, std::string_view(k1.data(), k1.dataSize())}, true);
+            ASSERT_TRUE(d.getSize() == 1);
+            d.remove(RegionLockCFDataTrait::Key{nullptr, std::string_view(k2.data(), k2.dataSize())}, true);
+            ASSERT_TRUE(d.getSize() == 0);
+        }
     }
 
     {
@@ -86,6 +107,12 @@ TEST(TiKVKeyValue_test, PortedTests)
         ASSERT_TRUE(Region::DelFlag == write_type);
         ASSERT_TRUE(std::numeric_limits<UInt64>::max() == ts);
         ASSERT_TRUE("value" == *short_value);
+        RegionWriteCFData d;
+        d.insert(RecordKVFormat::genKey(1, 2, 3), RecordKVFormat::encodeWriteCfValue(Region::PutFlag, 4, "value"));
+        ASSERT_TRUE(d.getSize() == 1);
+        auto pk = RecordKVFormat::getRawTiDBPK(RecordKVFormat::genRawKey(1, 2));
+        d.remove(RegionWriteCFData::Key{pk, 3});
+        ASSERT_TRUE(d.getSize() == 0);
     }
 
     {
