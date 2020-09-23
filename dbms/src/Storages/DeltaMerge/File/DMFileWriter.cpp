@@ -14,7 +14,8 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
                            size_t                      max_compress_block_size_,
                            const CompressionSettings & compression_settings_,
                            const FileProviderPtr &     file_provider_,
-                           bool single_file_mode_)
+                           bool single_file_mode_,
+                           bool  wal_mode_)
     : dmfile(dmfile_),
       write_columns(write_columns_),
       min_compress_block_size(min_compress_block_size_),
@@ -31,7 +32,8 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
                                                        max_compress_block_size)),
       single_file_stream(nullptr),
       file_provider(file_provider_),
-      single_file_mode(single_file_mode_)
+      single_file_mode(single_file_mode_),
+      wal_mode(wal_mode_)
 {
     dmfile->setStatus(DMFile::Status::WRITING);
     if (single_file_mode_)
@@ -44,7 +46,7 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
         // TODO: currently we only generate index for Integers, Date, DateTime types, and this should be configurable by user.
         // TODO: If column type is nullable, we won't generate index for it
         /// for handle column always generate index
-        bool do_index = cd.id == EXTRA_HANDLE_COLUMN_ID || cd.type->isInteger() || cd.type->isDateOrDateTime();
+        bool do_index = !wal_mode && (cd.id == EXTRA_HANDLE_COLUMN_ID || cd.type->isInteger() || cd.type->isDateOrDateTime());
 
         if (single_file_mode_)
         {
@@ -108,10 +110,11 @@ void DMFileWriter::write(const Block & block, size_t not_clean_rows)
     else
     {
         writePODBinary(stat, *pack_stat_file);
+        if (wal_mode)
+            pack_stat_file->sync();
     }
 
     dmfile->addPack(stat);
-
 }
 
 void DMFileWriter::finalize()
@@ -124,6 +127,7 @@ void DMFileWriter::finalize()
     if (single_file_mode)
     {
         dmfile->finalize(single_file_stream->plain_hashing);
+        single_file_stream->flush();
     }
     else
     {
@@ -147,6 +151,8 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
                 stream->original_hashing.next();
 
             auto offset_in_compressed_block = stream->original_hashing.offset();
+            if (unlikely(wal_mode && offset_in_compressed_block != 0))
+                throw Exception("Offset in compressed block is expected to be 0, now " + DB::toString(offset_in_compressed_block));
 
             writeIntBinary(stream->plain_hashing.count(), stream->mark_file);
             writeIntBinary(offset_in_compressed_block, stream->mark_file);
@@ -168,7 +174,10 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
         [&](const IDataType::SubstreamPath & substream) {
             String name   = DMFile::getFileNameBase(col_id, substream);
             auto & stream = column_streams.at(name);
-            stream->original_hashing.nextIfAtEnd();
+            if (wal_mode)
+                stream->flush();
+            else
+                stream->original_hashing.nextIfAtEnd();
         },
         {});
 
@@ -181,14 +190,14 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
     size_t bytes_written = 0;
     if (single_file_mode)
     {
-        auto   callback      = [&](const IDataType::SubstreamPath & substream_path) {
+        auto callback = [&](const IDataType::SubstreamPath & substream_path) {
             String stream_name = DMFile::getFileNameBase(col_id, substream_path);
             if (unlikely(substream_path.size() > 1))
             {
                 throw DB::TiFlashException("Substream_path shouldn't be more than one.", Errors::DeltaTree::Internal);
             }
             MarksInCompressedFile marks{single_file_stream->blocks.size()};
-            size_t                column_offset_in_file = single_file_stream->plain_file->count();
+            size_t                column_offset_in_file = single_file_stream->plain_hashing.count();
             MinMaxIndexPtr        minmax_index          = nullptr;
             if (auto iter = single_file_stream->minmax_indexs.find(DMFile::getFileNameBase(col_id)); iter != single_file_stream->minmax_indexs.end())
             {

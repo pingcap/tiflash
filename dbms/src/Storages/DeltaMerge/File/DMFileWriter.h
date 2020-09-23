@@ -92,6 +92,14 @@ public:
         {
         }
 
+        void flush()
+        {
+            plain_hashing.next();
+            plain_file->next();
+
+            plain_file->sync();
+        }
+
         using ColumnMinMaxIndexs = std::map<String, MinMaxIndexPtr>;
         ColumnMinMaxIndexs minmax_indexs;
 
@@ -113,7 +121,8 @@ public:
                  size_t                      max_compress_block_size_,
                  const CompressionSettings & compression_settings_,
                  const FileProviderPtr &     file_provider_,
-                 bool  single_file_mode_ = false);
+                 bool  single_file_mode_ = false,
+                 bool  wal_mode_ = false);
 
     void write(const Block & block, size_t not_clean_rows);
     void finalize();
@@ -142,6 +151,7 @@ private:
 
     FileProviderPtr file_provider;
     bool single_file_mode;
+    bool                wal_mode;
 };
 
 } // namespace DM

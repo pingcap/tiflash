@@ -34,7 +34,7 @@ DMFilePtr DMFile::create(const FileProviderPtr & file_provider, UInt64 file_id, 
     // On create, ref_id is the same as file_id.
     DMFilePtr new_dmfile(new DMFile(file_id, file_id, parent_path, Status::WRITABLE, log));
 
-    if (!single_file_mode)
+    if (single_file_mode)
     {
         Poco::File parent(parent_path);
         parent.createDirectories();
