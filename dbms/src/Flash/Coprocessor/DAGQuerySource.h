@@ -43,8 +43,7 @@ class DAGQuerySource : public IQuerySource
 {
 public:
     DAGQuerySource(Context & context_, DAGContext & dag_context_, const std::unordered_map<RegionID, RegionInfo> & regions_,
-        const tipb::DAGRequest & dag_request_, ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_ = nullptr,
-        const bool is_batch_cop_ = false);
+        const tipb::DAGRequest & dag_request_, const bool is_batch_cop_ = false);
 
     std::tuple<std::string, ASTPtr> parse(size_t max_query_size) override;
     String str(size_t max_query_size) override;
@@ -64,8 +63,6 @@ public:
     bool isBatchCop() const { return is_batch_cop; }
 
     DAGContext & getDAGContext() const { return dag_context; }
-
-    StreamWriterPtr writer;
 
 protected:
     void analyzeDAGEncodeType();

@@ -31,7 +31,7 @@ RegionDataReadInfo Region::readDataByWriteIt(const RegionData::ConstWriteCFIter 
     return data.readDataByWriteIt(write_it, need_value);
 }
 
-LockInfoPtr Region::getLockInfo(const RegionLockReadQuery & query) const { return data.getLockInfo(query); }
+DecodedLockCFValuePtr Region::getLockInfo(const RegionLockReadQuery & query) const { return data.getLockInfo(query); }
 
 void Region::insert(const std::string & cf, TiKVKey && key, TiKVValue && value)
 {
@@ -44,13 +44,7 @@ void Region::insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value)
     return doInsert(type, std::move(key), std::move(value));
 }
 
-void Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value)
-{
-    auto raw_key = RecordKVFormat::decodeTiKVKey(key);
-    doCheckTable(raw_key);
-
-    data.insert(type, std::move(key), raw_key, std::move(value));
-}
+void Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value) { data.insert(type, std::move(key), std::move(value)); }
 
 void Region::doCheckTable(const DB::DecodedTiKVKey & raw_key) const
 {
@@ -68,30 +62,7 @@ void Region::remove(const std::string & cf, const TiKVKey & key)
     doRemove(NameToCF(cf), key);
 }
 
-void Region::doRemove(ColumnFamilyType type, const TiKVKey & key)
-{
-    auto raw_key = RecordKVFormat::decodeTiKVKey(key);
-    doCheckTable(raw_key);
-
-    switch (type)
-    {
-        case ColumnFamilyType::Lock:
-            data.removeLockCF(raw_key);
-            break;
-        case ColumnFamilyType::Default:
-        {
-            // there may be some prewrite data, may not exist, don't throw exception.
-            data.removeDefaultCF(key, raw_key);
-            break;
-        }
-        case ColumnFamilyType::Write:
-        {
-            // removed by gc, may not exist.
-            data.removeWriteCF(key, raw_key);
-            break;
-        }
-    }
-}
+void Region::doRemove(ColumnFamilyType type, const TiKVKey & key) { data.remove(type, key); }
 
 UInt64 Region::appliedIndex() const { return meta.appliedIndex(); }
 
@@ -297,6 +268,7 @@ void RegionRaftCommandDelegate::handleAdminRaftCmd(const raft_cmdpb::AdminReques
     switch (type)
     {
         case raft_cmdpb::AdminCmdType::ChangePeer:
+        case raft_cmdpb::AdminCmdType::ChangePeerV2:
         {
             execChangePeer(request, response, index, term);
             result.type = RaftCommandResult::Type::ChangePeer;
@@ -465,10 +437,14 @@ std::string Region::toString(bool dump_status) const { return meta.toString(dump
 
 ImutRegionRangePtr Region::getRange() const { return meta.getRange(); }
 
-ReadIndexResult Region::learnerRead()
+ReadIndexResult Region::learnerRead(UInt64 start_ts)
 {
     if (index_reader != nullptr)
-        return index_reader->getReadIndex(meta.getRegionVerID());
+    {
+        auto [version, conf_ver, range] = dumpVersionRange();
+
+        return index_reader->getReadIndex({id(), conf_ver, version}, *range->rawKeys().first, *range->rawKeys().second, start_ts);
+    }
     return {};
 }
 
@@ -557,7 +533,7 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const Timestamp 
         TiKVKey commit_key = RecordKVFormat::appendTs(key, ori_ts);
         TiKVValue value = RecordKVFormat::encodeWriteCfValue(DelFlag, 0);
 
-        data.insert(ColumnFamilyType::Write, std::move(commit_key), raw_key, std::move(value));
+        data.insert(ColumnFamilyType::Write, std::move(commit_key), std::move(value));
         ++deleted_gc_cnt;
     }
 
