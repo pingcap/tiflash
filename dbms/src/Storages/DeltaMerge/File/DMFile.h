@@ -83,7 +83,7 @@ public:
 
     using PackStats = PaddedPODArray<PackStat>;
 
-    static DMFilePtr create(const FileProviderPtr & file_provider, UInt64 file_id, const String & parent_path);
+    static DMFilePtr create(const FileProviderPtr & file_provider, UInt64 file_id, const String & parent_path, bool single_file_mode = false);
     static DMFilePtr restore(const FileProviderPtr & file_provider, UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta = true);
 
     static std::set<UInt64> listAllInPath(const String & parent_path, bool can_gc);
@@ -194,6 +194,7 @@ private:
 
     void initialize(const FileProviderPtr & file_provider);
 
+    void finalize(const FileProviderPtr & file_provider);
     void finalize(WriteBuffer & buffer);
 
     void addSubFileStat(const String & name, UInt64 offset, UInt64 size)

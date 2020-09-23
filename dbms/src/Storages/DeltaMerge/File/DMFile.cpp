@@ -28,15 +28,17 @@ String DMFile::ngcPath() const
     }
 }
 
-DMFilePtr DMFile::create(const FileProviderPtr & file_provider, UInt64 file_id, const String & parent_path)
+DMFilePtr DMFile::create(const FileProviderPtr & file_provider, UInt64 file_id, const String & parent_path, bool single_file_mode)
 {
     Logger * log = &Logger::get("DMFile");
     // On create, ref_id is the same as file_id.
     DMFilePtr new_dmfile(new DMFile(file_id, file_id, parent_path, Status::WRITABLE, log));
 
-    Poco::File parent(parent_path);
-    parent.createDirectories();
-
+    if (!single_file_mode)
+    {
+        Poco::File parent(parent_path);
+        parent.createDirectories();
+    }
     auto       path = new_dmfile->path();
     Poco::File file(path);
     if (file.exists())
@@ -44,7 +46,14 @@ DMFilePtr DMFile::create(const FileProviderPtr & file_provider, UInt64 file_id, 
         file.remove(true);
         LOG_WARNING(log, "Existing dmfile, removed :" << path);
     }
-    PageUtil::touchFile(new_dmfile->path());
+    if (single_file_mode)
+    {
+        PageUtil::touchFile(new_dmfile->path());
+    }
+    else
+    {
+        file.createDirectories();
+    }
     new_dmfile->initialize(file_provider);
 
     // Create a mark file to stop this dmfile from being removed by GC.
@@ -225,6 +234,7 @@ const EncryptionPath DMFile::encryptionDataPath(const String & file_name_base) c
         return EncryptionPath(encryptionBasePath(), file_name_base + ".dat");
     }
 }
+
 const EncryptionPath DMFile::encryptionIndexPath(const String & file_name_base) const
 {
     if (isSingleFileMode())
@@ -236,6 +246,7 @@ const EncryptionPath DMFile::encryptionIndexPath(const String & file_name_base) 
         return EncryptionPath(encryptionBasePath(), file_name_base + ".idx");
     }
 }
+
 const EncryptionPath DMFile::encryptionMarkPath(const String & file_name_base) const
 {
     if (isSingleFileMode())
@@ -247,6 +258,7 @@ const EncryptionPath DMFile::encryptionMarkPath(const String & file_name_base) c
         return EncryptionPath(encryptionBasePath(), file_name_base + ".mrk");
     }
 }
+
 const EncryptionPath DMFile::encryptionMetaPath() const
 {
     if (isSingleFileMode())
@@ -258,6 +270,7 @@ const EncryptionPath DMFile::encryptionMetaPath() const
         return EncryptionPath(encryptionBasePath(), "meta.txt");
     }
 }
+
 const EncryptionPath DMFile::encryptionPackStatPath() const
 {
     if (isSingleFileMode())
@@ -407,6 +420,22 @@ void DMFile::initialize(const FileProviderPtr & file_provider)
     {
         mode = Mode::FOLDER;
     }
+}
+
+void DMFile::finalize(const FileProviderPtr & file_provider)
+{
+    writeMeta(file_provider);
+    if (status != Status::WRITING)
+        throw Exception("Expected WRITING status, now " + statusString(status));
+    Poco::File old_file(path());
+    status = Status::READABLE;
+
+    auto new_path = path();
+
+    Poco::File file(new_path);
+    if (file.exists())
+        file.remove(true);
+    old_file.renameTo(new_path);
 }
 
 void DMFile::finalize(WriteBuffer & buffer)
