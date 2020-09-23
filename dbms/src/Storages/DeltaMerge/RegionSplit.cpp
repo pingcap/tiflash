@@ -38,8 +38,11 @@ RowsAndBytes Segment::getRowsAndBytesInRange(DMContext &                dm_conte
     }
 
     // Otherwise, we have to use the (nearly) exact version.
-    Float64 avg_row_bytes = (segment_snap->delta->getBytes() + segment_snap->stable->getBytes())
-        / (segment_snap->delta->getRows() + segment_snap->stable->getRows());
+    auto total_bytes = segment_snap->delta->getBytes() + segment_snap->stable->getBytes();
+    auto total_rows  = segment_snap->delta->getRows() + segment_snap->stable->getRows();
+    if (total_rows == 0)
+        return {0, 0};
+    Float64 avg_row_bytes = total_bytes / total_rows;
 
     auto & handle    = getExtraHandleColumnDefine(is_common_handle);
     auto & version   = getVersionColumnDefine();
