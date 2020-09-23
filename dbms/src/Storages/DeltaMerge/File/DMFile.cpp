@@ -180,6 +180,19 @@ size_t DMFile::colMarkOffset(const String & file_name_base) const
     }
 }
 
+size_t DMFile::colDataOffset(const String & file_name_base) const
+{
+    if (isSingleFileMode())
+    {
+        auto data_identifier = DMFile::colDataIdentifier(file_name_base);
+        return getSubFileStat(data_identifier).offset;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
 size_t DMFile::colIndexSize(const String & file_name_base) const
 {
     if (isSingleFileMode())
@@ -205,6 +218,19 @@ size_t DMFile::colMarkSize(const String & file_name_base) const
     {
         Poco::File mark_file(colMarkPath(file_name_base));
         return mark_file.getSize();
+    }
+}
+
+size_t DMFile::colDataSize(const String & file_name_base) const
+{
+    if (isSingleFileMode())
+    {
+        auto data_identifier = DMFile::colDataIdentifier(file_name_base);
+        return getSubFileStat(data_identifier).offset;
+    }
+    else
+    {
+        return 0;
     }
 }
 

@@ -109,8 +109,10 @@ public:
 
     size_t colIndexOffset(const String & file_name_base) const;
     size_t colMarkOffset(const String & file_name_base) const;
+    size_t colDataOffset(const String & file_name_base) const;
     size_t colIndexSize(const String & file_name_base) const;
     size_t colMarkSize(const String & file_name_base) const;
+    size_t colDataSize(const String & file_name_base) const;
 
     bool isColIndexExist(const ColId & col_id) const;
 
