@@ -29,6 +29,9 @@ struct ReadIndexResult
     UInt64 read_index;
     bool region_unavailable;
     bool region_epoch_not_match;
+    std::unique_ptr<kvrpcpb::LockInfo> lock_info;
+    ReadIndexResult(UInt64 read_index_, bool region_unavailable_, bool region_epoch_not_match_, kvrpcpb::LockInfo * lock_info_ = nullptr);
+    ReadIndexResult() = default;
 };
 
 struct IndexReader
@@ -38,7 +41,8 @@ struct IndexReader
 
     IndexReader(KVClusterPtr cluster_);
 
-    ReadIndexResult getReadIndex(const pingcap::kv::RegionVerID & region_id);
+    ReadIndexResult getReadIndex(
+        const pingcap::kv::RegionVerID & region_id, const std::string & start_key, const std::string & end_key, UInt64 start_ts);
 };
 
 using IndexReaderPtr = std::shared_ptr<IndexReader>;
