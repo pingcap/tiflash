@@ -1,3 +1,4 @@
+#include <Common/TiFlashMetrics.h>
 #include <Core/Block.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTInsertQuery.h>
@@ -22,9 +23,10 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-void writeRegionDataToStorage(Context & context, const RegionPtr & region, RegionDataReadInfoList & data_list_read, Logger * log)
+static void writeRegionDataToStorage(Context & context, const RegionPtr & region, RegionDataReadInfoList & data_list_read, Logger * log)
 {
     const auto & tmt = context.getTMTContext();
+    auto metrics = context.getTiFlashMetrics();
     TableID table_id = region->getMappedTableID();
     UInt64 region_decode_cost = -1, write_part_cost = -1;
 
@@ -44,7 +46,7 @@ void writeRegionDataToStorage(Context & context, const RegionPtr & region, Regio
         auto lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
 
         /// Read region data as block.
-        auto start_time = Clock::now();
+        Stopwatch watch;
         auto [block, ok] = readRegionBlock(storage->getTableInfo(),
             storage->getColumns(),
             storage->getColumns().getNamesOfPhysical(),
@@ -53,10 +55,11 @@ void writeRegionDataToStorage(Context & context, const RegionPtr & region, Regio
             force_decode);
         if (!ok)
             return false;
-        region_decode_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
+        region_decode_cost = watch.elapsedMilliseconds();
+        GET_METRIC(metrics, tiflash_raft_write_data_to_storage_duration_seconds, type_decode).Observe(watch.elapsedSeconds());
 
         /// Write block into storage.
-        start_time = Clock::now();
+        watch.restart();
         // Note: do NOT use typeid_cast, since Storage is multi-inherite and typeid_cast will return nullptr
         switch (storage->engineType())
         {
@@ -87,8 +90,12 @@ void writeRegionDataToStorage(Context & context, const RegionPtr & region, Regio
             default:
                 throw Exception("Unknown StorageEngine: " + toString(static_cast<Int32>(storage->engineType())), ErrorCodes::LOGICAL_ERROR);
         }
-        write_part_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
+        write_part_cost = watch.elapsedMilliseconds();
+        GET_METRIC(metrics, tiflash_raft_write_data_to_storage_duration_seconds, type_write).Observe(watch.elapsedSeconds());
 
+        LOG_TRACE(log,
+            __FUNCTION__ << ": table " << table_id << ", region " << region->id() << ", cost [region decode " << region_decode_cost
+                         << ", write part " << write_part_cost << "] ms");
         return true;
     };
 
@@ -100,6 +107,7 @@ void writeRegionDataToStorage(Context & context, const RegionPtr & region, Regio
 
     /// If first try failed, sync schema and force read then write.
     {
+        GET_METRIC(metrics, tiflash_schema_trigger_count, type_raft_decode).Increment();
         tmt.getSchemaSyncer()->syncSchemas(context);
 
         if (!atomicReadWrite(true))
@@ -108,10 +116,6 @@ void writeRegionDataToStorage(Context & context, const RegionPtr & region, Regio
             throw Exception("Write region " + std::to_string(region->id()) + " to table " + std::to_string(table_id) + " failed",
                 ErrorCodes::LOGICAL_ERROR);
     }
-
-    LOG_TRACE(log,
-        __FUNCTION__ << ": table " << table_id << ", region " << region->id() << ", cost [region decode " << region_decode_cost
-                     << ", write part " << write_part_cost << "] ms");
 }
 
 std::pair<RegionDataReadInfoList, RegionException::RegionReadStatus> resolveLocksAndReadRegionData(const TiDB::TableID table_id,
