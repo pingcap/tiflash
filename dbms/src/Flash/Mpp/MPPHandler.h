@@ -140,7 +140,11 @@ struct MPPTask : private boost::noncopyable
 
     std::map<MPPTaskId, MPPTunnelPtr> tunnel_map;
 
-    MPPTask(const mpp::TaskMeta & meta_)
+    Logger * log;
+
+    Exception err;
+
+    MPPTask(const mpp::TaskMeta & meta_) : log(&Logger::get("task " + std::to_string(id.task_id)))
     {
         meta = meta_;
 
@@ -150,37 +154,43 @@ struct MPPTask : private boost::noncopyable
 
     ~MPPTask() { worker.join(); }
 
-    void runImpl(IBlockInputStream & from, IBlockOutputStream & to)
+    void runImpl(BlockInputStreamPtr from, BlockOutputStreamPtr to)
     {
+    try {
+        LOG_DEBUG(log, "begin read prefix");
+        from->readPrefix();
+        to->writePrefix();
+        LOG_DEBUG(log, "begin read ");
 
-        from.readPrefix();
-        to.writePrefix();
-
-        while (Block block = from.read())
-        {
-            to.write(block);
+        while (Block block = from->read()) {
+            to->write(block);
         }
 
         /// For outputting additional information in some formats.
-        if (IProfilingBlockInputStream * input = dynamic_cast<IProfilingBlockInputStream *>(&from))
-        {
+        if (IProfilingBlockInputStream *input = dynamic_cast<IProfilingBlockInputStream *>(from.get())) {
             if (input->getProfileInfo().hasAppliedLimit())
-                to.setRowsBeforeLimit(input->getProfileInfo().getRowsBeforeLimit());
+                to->setRowsBeforeLimit(input->getProfileInfo().getRowsBeforeLimit());
 
-            to.setTotals(input->getTotals());
-            to.setExtremes(input->getExtremes());
+            to->setTotals(input->getTotals());
+            to->setExtremes(input->getExtremes());
         }
 
-        from.readSuffix();
-        to.writeSuffix();
+        LOG_DEBUG(log, "end read ");
+
+        from->readSuffix();
+        to->writeSuffix();
 
         // TODO: Remove this task from task manager.
+    } catch (Exception & e) {
+        LOG_ERROR(log, "task running meets error " << e.displayText());
+        err = e;
+    }
     }
 
     void run(BlockIO io)
     {
         // TODO: Catch the exception and transfer errors to down stream.
-        worker = std::thread(&MPPTask::runImpl, this, std::ref(*io.in), std::ref(*io.out));
+        worker = std::thread(&MPPTask::runImpl, this, io.in, io.out);
     }
 
     void registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel) { tunnel_map[id] = tunnel; }

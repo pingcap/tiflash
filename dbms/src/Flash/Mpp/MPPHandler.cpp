@@ -64,6 +64,7 @@ grpc::Status MPPHandler::execute(mpp::DispatchTaskResponse * response)
     }
     catch (Exception & e)
     {
+        LOG_DEBUG(log, "dispatch task meet error : " << e.displayText());
         error.set_msg(e.displayText());
         response->set_allocated_error(&error);
     }
