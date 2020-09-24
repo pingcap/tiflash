@@ -28,7 +28,7 @@ public:
     }
 
     // Set DMFiles for this value space.
-    // If this value space is logical splited, specify `range` and `dm_context` so that we can get more precise
+    // If this value space is logical split, specify `range` and `dm_context` so that we can get more precise
     // bytes and rows.
     void setFiles(const DMFiles & files_, const RowKeyRange & range, DMContext * dm_context = nullptr);
 
@@ -85,6 +85,8 @@ public:
                                                     UInt64                max_data_version,
                                                     size_t                expected_block_size,
                                                     bool                  enable_clean_read);
+
+        RowsAndBytes getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range);
 
     private:
         Logger * log;

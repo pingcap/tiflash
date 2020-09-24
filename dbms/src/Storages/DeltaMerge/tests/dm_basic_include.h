@@ -299,8 +299,38 @@ public:
         RowKeyValue end_key = RowKeyValue(true, std::make_shared<String>(ss.str()));
         return RowKeyRange(start_key, end_key, true, rowkey_column_size);
     }
-};
 
+    static Block prepareBlockWithIncreasingPKAndTs(size_t rows, Int64 start_pk, UInt64 start_ts)
+    {
+        Block block;
+        {
+            {
+                auto & col_def = getExtraHandleColumnDefine(false);
+                auto   col     = col_def.type->createColumn();
+                for (size_t i = 0; i < rows; ++i)
+                    col->insert((Int64)(start_pk + i));
+                block.insert(ColumnWithTypeAndName(std::move(col), col_def.type, col_def.name, col_def.id));
+            }
+
+            {
+                auto & col_def = getVersionColumnDefine();
+                auto   col     = col_def.type->createColumn();
+                for (size_t i = 0; i < rows; ++i)
+                    col->insert((UInt64)(start_ts + i));
+                block.insert(ColumnWithTypeAndName(std::move(col), col_def.type, col_def.name, col_def.id));
+            }
+
+            {
+                auto & col_def = getTagColumnDefine();
+                auto   col     = col_def.type->createColumn();
+                for (size_t i = 0; i < rows; ++i)
+                    col->insert((UInt64)0);
+                block.insert(ColumnWithTypeAndName(std::move(col), col_def.type, col_def.name, col_def.id));
+            }
+        }
+        return block;
+    }
+};
 
 } // namespace tests
 } // namespace DM
