@@ -1104,6 +1104,10 @@ void DAGQueryBlockInterpreter::executeRemoteQueryImpl(Pipeline & pipeline,
     }
 }
 
+// To execute a query block, you have to:
+// 1. generate the date stream and push it to pipeline.
+// 2. assign the analyzer
+// 3. construct a final projection, even if it's not necessary. just construct it.
 void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
 {
     if (query_block.isRemoteQuery())
@@ -1126,6 +1130,8 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
         Block block = exchange_client_stream->getHeader();
         for (const auto & col : block.getColumnsWithTypeAndName()) {
             source_columns.emplace_back(NameAndTypePair(col.name, col.type));
+            // TODO: Is there an elegant way to process or omit the projection ?
+            final_project.emplace_back(std::make_pair(col.name, col.name));
         }
         analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
         recordProfileStreams(pipeline, query_block.source_name);
