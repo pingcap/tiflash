@@ -55,9 +55,9 @@ grpc::Status MPPHandler::execute(mpp::DispatchTaskResponse * response)
             task->registerTunnel(MPPTaskId{meta.query_ts(), meta.task_id()}, tunnel);
             tunnel_set->tunnels.emplace_back(tunnel);
         }
-        StreamingDAGResponseWriter<MPPTunnelSetPtr> response_writer(tunnel_set, context.getSettings().dag_records_per_chunk,
+        std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique< StreamingDAGResponseWriter<MPPTunnelSetPtr> > (tunnel_set, context.getSettings().dag_records_per_chunk,
             dag.getEncodeType(), dag.getResultFieldTypes(), dag_context, false, true);
-        streams.out = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), response_writer);
+        streams.out = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
 
         LOG_DEBUG(log, "begin to run the task");
         task->run(streams);
