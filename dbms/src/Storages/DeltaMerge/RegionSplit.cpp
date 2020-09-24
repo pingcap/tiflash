@@ -12,11 +12,10 @@ namespace DB
 namespace DM
 {
 
-<<<<<<< HEAD
-=======
+
 constexpr double APPROX_DELTA_THRESHOLD = 0.1;
 
->>>>>>> master
+
 RowsAndBytes Segment::getRowsAndBytesInRange(DMContext &                dm_context,
                                              const SegmentSnapshotPtr & segment_snap,
                                              const RowKeyRange &        check_range,
