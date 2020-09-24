@@ -67,7 +67,7 @@ public:
 private:
     bool shouldSeek(size_t pack_id);
 
-    void readFromDisk(ColumnDefine & column_define, MutableColumnPtr & column, size_t start_pack_id, size_t read_rows, size_t skip_packs);
+    void readFromDisk(ColumnDefine & column_define, MutableColumnPtr & column, size_t start_pack_id, size_t read_rows, size_t skip_packs, bool force_seek);
 
 private:
     DMFilePtr     dmfile;
@@ -99,6 +99,8 @@ private:
     size_t next_pack_id = 0;
 
     FileProviderPtr file_provider;
+
+    bool single_file_mode;
 
     Logger * log;
 };

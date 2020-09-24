@@ -78,7 +78,7 @@ public:
         SingleFileStream(const DMFilePtr &   dmfile,
                          CompressionSettings compression_settings,
                          size_t              max_compress_block_size,
-                         FileProviderPtr &   file_provider)
+                         const FileProviderPtr &   file_provider)
             : plain_file(createWriteBufferFromFileBaseByFileProvider(
                 file_provider, dmfile->path(), EncryptionPath(dmfile->encryptionBasePath(), ""), true, 0, 0, max_compress_block_size)),
               plain_hashing(*plain_file),
@@ -95,11 +95,15 @@ public:
             plain_file->sync();
         }
 
-        using ColumnMinMaxIndexs = std::map<String, MinMaxIndexPtr>;
+        using ColumnMinMaxIndexs = std::unordered_map<String, MinMaxIndexPtr>;
         ColumnMinMaxIndexs minmax_indexs;
 
-        using Blocks = std::vector<Block>;
-        Blocks blocks;
+        using ColumnDataSizes = std::unordered_map<String, size_t>;
+        ColumnDataSizes column_data_sizes;
+
+        using MarkList = std::vector<MarkInCompressedFile>;
+        using ColumnMarks = std::unordered_map<String, MarkList>;
+        ColumnMarks column_marks;
 
         /// original_hashing -> compressed_buf -> plain_hashing -> plain_file
         WriteBufferFromFileBasePtr plain_file;

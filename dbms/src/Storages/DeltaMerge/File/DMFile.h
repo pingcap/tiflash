@@ -97,22 +97,22 @@ public:
     UInt64 fileId() const { return file_id; }
     UInt64 refId() const { return ref_id; }
     String path() const { return parent_path + (status == Status::READABLE ? "/dmf_" : "/.tmp.dmf_") + DB::toString(file_id); }
-    String metaPath() const;
-    String packStatPath() const;
+    String metaPath() const { return subFilePath(metaIdentifier()); }
+    String packStatPath() const { return subFilePath(packStatIdentifier()); }
     // Do not gc me.
     String ngcPath() const;
-    String colDataPath(const String & file_name_base) const;
-    String colIndexPath(const String & file_name_base) const;
-    String colMarkPath(const String & file_name_base) const;
+    String colDataPath(const String & file_name_base) const { return subFilePath(colDataIdentifier(file_name_base)); }
+    String colIndexPath(const String & file_name_base) const { return subFilePath(colIndexIdentifier(file_name_base)); }
+    String colMarkPath(const String & file_name_base) const { return subFilePath(colMarkIdentifier(file_name_base)); }
+
     String colIndexCacheKey(const String & file_name_base) const;
     String colMarkCacheKey(const String & file_name_base) const;
 
-    size_t colIndexOffset(const String & file_name_base) const;
-    size_t colMarkOffset(const String & file_name_base) const;
-    size_t colDataOffset(const String & file_name_base) const;
-    size_t colIndexSize(const String & file_name_base) const;
-    size_t colMarkSize(const String & file_name_base) const;
-    size_t colDataSize(const String & file_name_base) const;
+    size_t colIndexOffset(const String & file_name_base) const { return subFileOffset(colIndexIdentifier(file_name_base)); }
+    size_t colMarkOffset(const String & file_name_base) const { return subFileOffset(colMarkIdentifier(file_name_base)); }
+    size_t colIndexSize(const String & file_name_base) const { return subFileSize(colIndexIdentifier(file_name_base)); }
+    size_t colMarkSize(const String & file_name_base) const { return subFileSize(colMarkIdentifier(file_name_base)); }
+    size_t colDataSize(const String & file_name_base) const { return subFileSize(colDataIdentifier(file_name_base)); }
 
     bool isColIndexExist(const ColId & col_id) const;
 
@@ -207,11 +207,48 @@ private:
 
     bool isSubFileExists(const String & name) const { return sub_file_stats.find(name) != sub_file_stats.end(); }
 
-    size_t metaOffset() const;
-    size_t packStatOffset() const;
+    const String subFilePath(const String & file_identifier) const
+    {
+        if (mode == Mode::SINGLE_FILE)
+        {
+            return path();
+        }
+        else
+        {
+            return path() + "/" + file_identifier;
+        }
+    }
 
-    size_t metaSize() const;
-    size_t packStatSize() const;
+    size_t subFileOffset(const String & file_identifier) const
+    {
+        if (mode == Mode::SINGLE_FILE)
+        {
+            return getSubFileStat(file_identifier).offset;
+        }
+        else
+        {
+            return 0;
+        }
+    }
+
+    size_t subFileSize(const String & file_identifier) const
+    {
+        if (mode == Mode::SINGLE_FILE)
+        {
+            return getSubFileStat(file_identifier).size;
+        }
+        else
+        {
+            Poco::File sub_file(path() + "/" + file_identifier);
+            return sub_file.getSize();
+        }
+    }
+
+    size_t metaOffset() const { return subFileOffset(metaIdentifier()); }
+    size_t packStatOffset() const { return subFileOffset(packStatIdentifier()); }
+
+    size_t metaSize() const { return subFileSize(metaIdentifier()); }
+    size_t packStatSize() const { return subFileSize(packStatIdentifier()); }
 
 private:
     UInt64 file_id;

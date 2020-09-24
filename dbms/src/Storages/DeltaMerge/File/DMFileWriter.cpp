@@ -28,16 +28,12 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
               ? nullptr
               : createWriteBufferFromFileBaseByFileProvider(
                   file_provider_, dmfile->packStatPath(), dmfile->encryptionPackStatPath(), true, 0, 0, max_compress_block_size)),
-      single_file_stream(nullptr),
+      single_file_stream(!single_file_mode_ ? nullptr : new SingleFileStream(dmfile_, compression_settings_, max_compress_block_size_, file_provider_)),
       file_provider(file_provider_),
       single_file_mode(single_file_mode_),
       wal_mode(wal_mode_)
 {
     dmfile->setStatus(DMFile::Status::WRITING);
-    if (single_file_mode_)
-    {
-        single_file_stream = std::make_shared<SingleFileStream>(dmfile, compression_settings, max_compress_block_size, file_provider);
-    }
 
     for (auto & cd : write_columns)
     {
@@ -53,6 +49,13 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
                 String column_name = DMFile::getFileNameBase(cd.id, {});
                 single_file_stream->minmax_indexs.emplace(column_name, std::make_shared<MinMaxIndex>(*cd.type));
             }
+
+            auto callback = [&](const IDataType::SubstreamPath & substream_path) {
+                String stream_name = DMFile::getFileNameBase(cd.id, substream_path);
+                single_file_stream->column_data_sizes.emplace(stream_name, 0);
+                single_file_stream->column_marks.emplace(stream_name, SingleFileStream::MarkList{});
+            };
+            cd.type->enumerateStreams(callback, {});
         }
         else
         {
@@ -90,10 +93,7 @@ void DMFileWriter::write(const Block & block, size_t not_clean_rows)
     for (auto & cd : write_columns)
     {
         auto & col = getByColumnId(block, cd.id).column;
-        if (!single_file_mode)
-        {
-            writeColumn(cd.id, *cd.type, *col);
-        }
+        writeColumn(cd.id, *cd.type, *col);
 
         if (cd.id == VERSION_COLUMN_ID)
             stat.first_version = col->get64(0);
@@ -101,11 +101,7 @@ void DMFileWriter::write(const Block & block, size_t not_clean_rows)
             stat.first_tag = (UInt8)(col->get64(0));
     }
 
-    if (single_file_mode)
-    {
-        single_file_stream->blocks.emplace_back(block);
-    }
-    else
+    if (!single_file_mode)
     {
         writePODBinary(stat, *pack_stat_file);
         if (wal_mode)
@@ -137,47 +133,118 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
 {
     size_t rows = column.size();
 
-    type.enumerateStreams(
-        [&](const IDataType::SubstreamPath & substream) {
-            String name   = DMFile::getFileNameBase(col_id, substream);
-            auto & stream = column_streams.at(name);
-            if (stream->minmaxes)
-                stream->minmaxes->addPack(column, nullptr);
+    if (single_file_mode)
+    {
+        auto callback = [&](const IDataType::SubstreamPath & substream) {
+            size_t offset_in_compressed_file = single_file_stream->plain_hashing.count();
+            String stream_name = DMFile::getFileNameBase(col_id, substream);
+            if (unlikely(substream.size() > 1))
+            {
+                throw DB::TiFlashException("Substream_path shouldn't be more than one.", Errors::DeltaTree::Internal);
+            }
 
-            /// There could already be enough data to compress into the new block.
-            if (stream->original_hashing.offset() >= min_compress_block_size)
-                stream->original_hashing.next();
+            auto & minmax_indexs = single_file_stream->minmax_indexs;
+            if (minmax_indexs.find(stream_name) != minmax_indexs.end())
+            {
+                minmax_indexs.at(stream_name)->addPack(column, nullptr);
+            }
 
-            auto offset_in_compressed_block = stream->original_hashing.offset();
-            if (unlikely(wal_mode && offset_in_compressed_block != 0))
-                throw Exception("Offset in compressed block is expected to be 0, now " + DB::toString(offset_in_compressed_block));
+            auto offset_in_compressed_block = single_file_stream->original_hashing.offset();
+            if (unlikely(offset_in_compressed_block != 0))
+                throw DB::TiFlashException("Offset in compressed block is always expected to be 0 when single_file_mode is true, now " + DB::toString(offset_in_compressed_block), Errors::DeltaTree::Internal);
 
-            writeIntBinary(stream->plain_hashing.count(), stream->mark_file);
-            writeIntBinary(offset_in_compressed_block, stream->mark_file);
-        },
-        {});
+            single_file_stream->column_marks.at(stream_name).push_back(MarkInCompressedFile{
+                .offset_in_compressed_file = offset_in_compressed_file,
+                .offset_in_decompressed_block = offset_in_compressed_block});
 
-    type.serializeBinaryBulkWithMultipleStreams(column, //
-                                                [&](const IDataType::SubstreamPath & substream) {
-                                                    String stream_name = DMFile::getFileNameBase(col_id, substream);
-                                                    auto & stream      = column_streams.at(stream_name);
-                                                    return &(stream->original_hashing);
-                                                },
-                                                0,
-                                                rows,
-                                                true,
-                                                {});
-
-    type.enumerateStreams(
-        [&](const IDataType::SubstreamPath & substream) {
-            String name   = DMFile::getFileNameBase(col_id, substream);
-            auto & stream = column_streams.at(name);
-            if (wal_mode)
-                stream->flush();
+            // write column data
+            if (substream.empty())
+            {
+                if (unlikely(type.isNullable()))
+                {
+                    throw DB::TiFlashException("Type shouldn't be nullable when substream_path is empty.", Errors::DeltaTree::Internal);
+                }
+                type.serializeBinaryBulk(column, single_file_stream->original_hashing, 0, rows);
+            }
+            else if (substream[0].type == IDataType::Substream::NullMap)
+            {
+                if (unlikely(!type.isNullable()))
+                {
+                    throw DB::TiFlashException("Type shouldn be nullable when substream_path's type is NullMap.",
+                                               Errors::DeltaTree::Internal);
+                }
+                const ColumnNullable & col = static_cast<const ColumnNullable &>(column);
+                col.checkConsistency();
+                DataTypeUInt8().serializeBinaryBulk(col.getNullMapColumn(), single_file_stream->original_hashing, 0, rows);
+            }
+            else if (substream[0].type == IDataType::Substream::NullableElements)
+            {
+                if (unlikely(!type.isNullable()))
+                {
+                    throw DB::TiFlashException("Type shouldn be nullable when substream_path's type is NullableElements.",
+                                               Errors::DeltaTree::Internal);
+                }
+                const DataTypeNullable & nullable_type = static_cast<const DataTypeNullable &>(type);
+                const ColumnNullable &   col           = static_cast<const ColumnNullable &>(column);
+                nullable_type.getNestedType()->serializeBinaryBulk(
+                    col.getNestedColumn(), single_file_stream->original_hashing, 0, rows);
+            }
             else
-                stream->original_hashing.nextIfAtEnd();
-        },
-        {});
+            {
+                throw DB::TiFlashException("Unknown type of substream_path: " + std::to_string(substream[0].type),
+                                           Errors::DeltaTree::Internal);
+            }
+            single_file_stream->original_hashing.next();
+            single_file_stream->compressed_buf.next();
+            size_t column_size_in_file = single_file_stream->plain_hashing.count() - offset_in_compressed_file;
+            single_file_stream->column_data_sizes[stream_name] += column_size_in_file;
+        };
+        type.enumerateStreams(callback, {});
+    }
+    else
+    {
+        type.enumerateStreams(
+            [&](const IDataType::SubstreamPath & substream) {
+                String name   = DMFile::getFileNameBase(col_id, substream);
+                auto & stream = column_streams.at(name);
+                if (stream->minmaxes)
+                    stream->minmaxes->addPack(column, nullptr);
+
+                /// There could already be enough data to compress into the new block.
+                if (stream->original_hashing.offset() >= min_compress_block_size)
+                    stream->original_hashing.next();
+
+                auto offset_in_compressed_block = stream->original_hashing.offset();
+                if (unlikely(wal_mode && offset_in_compressed_block != 0))
+                    throw Exception("Offset in compressed block is expected to be 0, now " + DB::toString(offset_in_compressed_block));
+
+                writeIntBinary(stream->plain_hashing.count(), stream->mark_file);
+                writeIntBinary(offset_in_compressed_block, stream->mark_file);
+            },
+            {});
+
+        type.serializeBinaryBulkWithMultipleStreams(column, //
+                                                    [&](const IDataType::SubstreamPath & substream) {
+                                                        String stream_name = DMFile::getFileNameBase(col_id, substream);
+                                                        auto & stream      = column_streams.at(stream_name);
+                                                        return &(stream->original_hashing);
+                                                    },
+                                                    0,
+                                                    rows,
+                                                    true,
+                                                    {});
+
+        type.enumerateStreams(
+            [&](const IDataType::SubstreamPath & substream) {
+                String name   = DMFile::getFileNameBase(col_id, substream);
+                auto & stream = column_streams.at(name);
+                if (wal_mode)
+                    stream->flush();
+                else
+                    stream->original_hashing.nextIfAtEnd();
+            },
+            {});
+    }
 
     auto & avg_size = dmfile->column_stats.at(col_id).avg_size;
     IDataType::updateAvgValueSizeHint(column, avg_size);
@@ -186,91 +253,18 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
 void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 {
     size_t bytes_written = 0;
+
     if (single_file_mode)
     {
-        auto callback = [&](const IDataType::SubstreamPath & substream_path) {
-            String stream_name = DMFile::getFileNameBase(col_id, substream_path);
-            if (unlikely(substream_path.size() > 1))
-            {
-                throw DB::TiFlashException("Substream_path shouldn't be more than one.", Errors::DeltaTree::Internal);
-            }
-            MarksInCompressedFile marks{single_file_stream->blocks.size()};
-            size_t                column_offset_in_file = single_file_stream->plain_hashing.count();
-            MinMaxIndexPtr        minmax_index          = nullptr;
-            if (auto iter = single_file_stream->minmax_indexs.find(DMFile::getFileNameBase(col_id));
-                iter != single_file_stream->minmax_indexs.end())
-            {
-                minmax_index = iter->second;
-            }
+        auto callback = [&](const IDataType::SubstreamPath & substream) {
+            String stream_name = DMFile::getFileNameBase(col_id, substream);
 
-            // write column data
-            for (size_t i = 0; i < single_file_stream->blocks.size(); i++)
-            {
-                auto & block  = single_file_stream->blocks[i];
-                auto & column = getByColumnId(block, col_id).column;
-                size_t rows   = column->size();
-                if (single_file_stream->original_hashing.offset() >= min_compress_block_size)
-                {
-                    single_file_stream->original_hashing.next();
-                }
-                auto offset_in_compressed_block = single_file_stream->original_hashing.offset();
+            // FIXME: find a better way to store column data size(because offset 0 is invalid here)
+            dmfile->addSubFileStat(DMFile::colDataIdentifier(stream_name), 0, single_file_stream->column_data_sizes.at(stream_name));
 
-                marks[i] = MarkInCompressedFile{.offset_in_compressed_file    = single_file_stream->plain_hashing.count(),
-                                                .offset_in_decompressed_block = offset_in_compressed_block};
-
-                if (substream_path.empty())
-                {
-                    if (unlikely(type->isNullable()))
-                    {
-                        throw DB::TiFlashException("Type shouldn't be nullable when substream_path is empty.", Errors::DeltaTree::Internal);
-                    }
-                    type->serializeBinaryBulk(*column, single_file_stream->original_hashing, 0, rows);
-                }
-                else if (substream_path[0].type == IDataType::Substream::NullMap)
-                {
-                    if (unlikely(!type->isNullable()))
-                    {
-                        throw DB::TiFlashException("Type shouldn be nullable when substream_path's type is NullMap.",
-                                                   Errors::DeltaTree::Internal);
-                    }
-                    const ColumnNullable & col = static_cast<const ColumnNullable &>(*column);
-                    col.checkConsistency();
-                    DataTypeUInt8().serializeBinaryBulk(col.getNullMapColumn(), single_file_stream->original_hashing, 0, rows);
-                }
-                else if (substream_path[0].type == IDataType::Substream::NullableElements)
-                {
-                    if (unlikely(!type->isNullable()))
-                    {
-                        throw DB::TiFlashException("Type shouldn be nullable when substream_path's type is NullableElements.",
-                                                   Errors::DeltaTree::Internal);
-                    }
-                    const DataTypeNullable & nullable_type = static_cast<const DataTypeNullable &>(*type);
-                    const ColumnNullable &   col           = static_cast<const ColumnNullable &>(*column);
-                    nullable_type.getNestedType()->serializeBinaryBulk(
-                        col.getNestedColumn(), single_file_stream->original_hashing, 0, rows);
-                }
-                else
-                {
-                    throw DB::TiFlashException("Unknown type of substream_path: " + std::to_string(substream_path[0].type),
-                                               Errors::DeltaTree::Internal);
-                }
-
-                if (minmax_index)
-                {
-                    minmax_index->addPack(*column, nullptr);
-                }
-                auto & avg_size = dmfile->column_stats.at(col_id).avg_size;
-                IDataType::updateAvgValueSizeHint(*column, avg_size);
-            }
-            single_file_stream->original_hashing.next();
-            single_file_stream->compressed_buf.next();
-            size_t column_size_in_file = single_file_stream->plain_hashing.count() - column_offset_in_file;
-            dmfile->addSubFileStat(DMFile::colDataIdentifier(stream_name), column_offset_in_file, column_size_in_file);
-            bytes_written += column_size_in_file;
-
-            // write mark data
+            // write mark
             size_t mark_offset_in_file = single_file_stream->plain_hashing.count();
-            for (auto mark : marks)
+            for (auto mark : single_file_stream->column_marks.at(stream_name))
             {
                 writeIntBinary(mark.offset_in_compressed_file, single_file_stream->plain_hashing);
                 writeIntBinary(mark.offset_in_decompressed_block, single_file_stream->plain_hashing);
@@ -278,11 +272,12 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
             size_t mark_size_in_file = single_file_stream->plain_hashing.count() - mark_offset_in_file;
             dmfile->addSubFileStat(DMFile::colMarkIdentifier(stream_name), mark_offset_in_file, mark_size_in_file);
 
-            // write minmax_index data if any
-            if (minmax_index)
+            // write minmax
+            auto & minmax_indexs = single_file_stream->minmax_indexs;
+            if (minmax_indexs.find(stream_name) != minmax_indexs.end())
             {
                 size_t minmax_offset_in_file = single_file_stream->plain_hashing.count();
-                minmax_index->write(*type, single_file_stream->plain_hashing);
+                minmax_indexs.at(stream_name)->write(*type, single_file_stream->plain_hashing);
                 size_t minmax_size_in_file = single_file_stream->plain_hashing.count() - minmax_offset_in_file;
                 bytes_written += minmax_size_in_file;
                 dmfile->addSubFileStat(DMFile::colIndexIdentifier(stream_name), minmax_offset_in_file, minmax_size_in_file);

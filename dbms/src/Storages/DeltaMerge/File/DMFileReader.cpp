@@ -49,54 +49,52 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
     else
         marks = mark_load();
 
-    size_t data_file_size        = 0;
-    size_t data_file_content_end = 0;
-    if (reader.dmfile->isSingleFileMode())
+    const String data_path = reader.dmfile->colDataPath(file_name_base);
+    size_t data_file_size  = reader.dmfile->colDataSize(file_name_base);
+    size_t packs           = reader.dmfile->getPacks();
+    size_t buffer_size     = 0;
+    size_t estimated_size  = 0;
+
+    if (reader.single_file_mode)
     {
-        auto data_file_stat   = reader.dmfile->getSubFileStat(reader.dmfile->colDataIdentifier(file_name_base));
-        data_file_size        = data_file_stat.size;
-        data_file_content_end = data_file_stat.offset + data_file_size;
+        // FIXME: fix buffer_size and estimated_size
+        buffer_size = data_file_size;
+        estimated_size = data_file_size;
     }
     else
     {
-        const String data_path = reader.dmfile->colDataPath(file_name_base);
-        data_file_size         = Poco::File(data_path).getSize();
-        data_file_content_end  = data_file_size;
-    }
-    size_t packs          = reader.dmfile->getPacks();
-    size_t buffer_size    = 0;
-    size_t estimated_size = 0;
-    for (size_t i = 0; i < packs;)
-    {
-        if (!reader.use_packs[i])
+        for (size_t i = 0; i < packs;)
         {
-            ++i;
-            continue;
-        }
-        size_t cur_offset_in_file = (*marks)[i].offset_in_compressed_file;
-        size_t end                = i + 1;
-        // First find the end of current available range.
-        while (end < packs && reader.use_packs[end])
-            ++end;
-
-        // Second If the end of range is inside the block, we will need to read it too.
-        if (end < packs)
-        {
-            size_t last_offset_in_file = (*marks)[end].offset_in_compressed_file;
-            if ((*marks)[end].offset_in_decompressed_block > 0)
+            if (!reader.use_packs[i])
             {
-                while (end < packs && (*marks)[end].offset_in_compressed_file == last_offset_in_file)
-                    ++end;
+                ++i;
+                continue;
             }
+            size_t cur_offset_in_file = (*marks)[i].offset_in_compressed_file;
+            size_t end                = i + 1;
+            // First find the end of current available range.
+            while (end < packs && reader.use_packs[end])
+                ++end;
+
+            // Second If the end of range is inside the block, we will need to read it too.
+            if (end < packs)
+            {
+                size_t last_offset_in_file = (*marks)[end].offset_in_compressed_file;
+                if ((*marks)[end].offset_in_decompressed_block > 0)
+                {
+                    while (end < packs && (*marks)[end].offset_in_compressed_file == last_offset_in_file)
+                        ++end;
+                }
+            }
+
+            size_t range_end_in_file = (end == packs) ? data_file_size : (*marks)[end].offset_in_compressed_file;
+
+            size_t range = range_end_in_file - cur_offset_in_file;
+            buffer_size  = std::max(buffer_size, range);
+
+            estimated_size += range;
+            i = end;
         }
-
-        size_t range_end_in_file = (end == packs) ? data_file_content_end : (*marks)[end].offset_in_compressed_file;
-
-        size_t range = range_end_in_file - cur_offset_in_file;
-        buffer_size  = std::max(buffer_size, range);
-
-        estimated_size += range;
-        i = end;
     }
 
     buffer_size = std::min(buffer_size, max_read_buffer_size);
@@ -105,35 +103,12 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
               "file size: " << data_file_size << ", estimated read size: " << estimated_size << ", buffer_size: " << buffer_size
                             << " (aio_threshold: " << aio_threshold << ", max_read_buffer_size: " << max_read_buffer_size << ")");
 
-    for (size_t i = 0; i < packs; ++i)
-    {
-        if (reader.use_packs[i])
-        {
-            auto start = (*marks)[i].offset_in_compressed_file;
-            auto end   = (i == packs - 1) ? data_file_content_end : (*marks)[i + 1].offset_in_compressed_file;
-            estimated_size += end - start;
-        }
-    }
-
-    if (reader.dmfile->isSingleFileMode())
-    {
-        auto data_file_stat = reader.dmfile->getSubFileStat(reader.dmfile->colDataIdentifier(file_name_base));
-
-        buf = std::make_unique<CompressedReadBufferFromFileProvider>(reader.file_provider,
-                                                                     reader.dmfile->path(),
-                                                                     EncryptionPath(reader.dmfile->encryptionBasePath(), ""),
-                                                                     estimated_size,
-                                                                     aio_threshold,
-                                                                     buffer_size);
-        buf->seek(data_file_stat.offset, 0);
-    }
-    else
-    {
-        const String data_path = reader.dmfile->colDataPath(file_name_base);
-
-        buf = std::make_unique<CompressedReadBufferFromFileProvider>(
-            reader.file_provider, data_path, reader.dmfile->encryptionDataPath(file_name_base), estimated_size, aio_threshold, buffer_size);
-    }
+    buf = std::make_unique<CompressedReadBufferFromFileProvider>(reader.file_provider,
+                                                             reader.dmfile->colDataPath(file_name_base),
+                                                             reader.dmfile->encryptionDataPath(file_name_base),
+                                                             estimated_size,
+                                                             aio_threshold,
+                                                             buffer_size);
 }
 
 DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
@@ -170,6 +145,7 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
       column_cache(column_cache_),
       rows_threshold_per_read(rows_threshold_per_read_),
       file_provider(file_provider_),
+      single_file_mode(dmfile_->isSingleFileMode()),
       log(&Logger::get("DMFileReader"))
 {
     if (dmfile->getStatus() != DMFile::Status::READABLE)
@@ -237,14 +213,20 @@ Block DMFileReader::read()
 
     // Find max continuing rows we can read.
     size_t start_pack_id = next_pack_id;
+    // When single_file_mode is true, we can just read one pack every time.
+    // 0 means no limit
+    size_t read_pack_limit = single_file_mode ? 1 : 0;
 
     auto & pack_stats     = dmfile->getPackStats();
     size_t read_rows      = 0;
     size_t not_clean_rows = 0;
 
     RSResult expected_handle_res = handle_res[next_pack_id];
+
     for (; next_pack_id < use_packs.size() && use_packs[next_pack_id] && read_rows < rows_threshold_per_read; ++next_pack_id)
     {
+        if (read_pack_limit != 0 && next_pack_id - start_pack_id >= read_pack_limit)
+            break;
         if (enable_clean_read && handle_res[next_pack_id] != expected_handle_res)
             break;
 
@@ -258,6 +240,11 @@ Block DMFileReader::read()
     Block res;
 
     size_t read_packs = next_pack_id - start_pack_id;
+
+    if (single_file_mode && read_packs != 1)
+    {
+        throw DB::TiFlashException("read_packs must be one when single_file_mode is true.", Errors::DeltaTree::Internal);
+    }
 
     // TODO: this will need better algorithm: we should separate those packs which can and can not do clean read.
     bool do_clean_read = enable_clean_read && expected_handle_res == All && not_clean_rows == 0;
@@ -333,7 +320,7 @@ Block DMFileReader::read()
                             {
                                 rows_count += pack_stats[cursor].rows;
                             }
-                            readFromDisk(cd, column, range.first, rows_count, skip_packs_by_column[i]);
+                            readFromDisk(cd, column, range.first, rows_count, skip_packs_by_column[i], single_file_mode);
                             skip_packs_by_column[i] = 0;
                         }
                         else
@@ -356,7 +343,7 @@ Block DMFileReader::read()
                 {
                     auto data_type = dmfile->getColumnStat(cd.id).type;
                     auto column    = data_type->createColumn();
-                    readFromDisk(cd, column, start_pack_id, read_rows, skip_packs_by_column[i]);
+                    readFromDisk(cd, column, start_pack_id, read_rows, skip_packs_by_column[i], single_file_mode);
                     auto converted_column = convertColumnByColumnDefineIfNeed(data_type, std::move(column), cd);
                     res.insert(ColumnWithTypeAndName{std::move(converted_column), cd.type, cd.name, cd.id});
                     skip_packs_by_column[i] = 0;
@@ -379,13 +366,13 @@ Block DMFileReader::read()
 }
 
 void DMFileReader::readFromDisk(
-    ColumnDefine & column_define, MutableColumnPtr & column, size_t start_pack_id, size_t read_rows, size_t skip_packs)
+    ColumnDefine & column_define, MutableColumnPtr & column, size_t start_pack_id, size_t read_rows, size_t skip_packs, bool force_seek)
 {
     const String stream_name = DMFile::getFileNameBase(column_define.id);
     if (auto iter = column_streams.find(stream_name); iter != column_streams.end())
     {
         auto & top_stream  = iter->second;
-        bool   should_seek = shouldSeek(start_pack_id) || skip_packs > 0;
+        bool   should_seek = force_seek || shouldSeek(start_pack_id) || skip_packs > 0;
 
         auto data_type = dmfile->getColumnStat(column_define.id).type;
         data_type->deserializeBinaryBulkWithMultipleStreams( //
