@@ -1119,8 +1119,15 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeExchangeClient)
     {
-        pipeline.firstStream() = std::make_shared<ExchangeClientInputStream>(
+        auto exchange_client_stream = std::make_shared<ExchangeClientInputStream>(
             context.getTMTContext(), query_block.source->exchange_client(), dag.getMPPTask()->meta);
+        pipeline.streams.push_back(exchange_client_stream);
+        std::vector<NameAndTypePair> source_columns;
+        Block block = exchange_client_stream->getHeader();
+        for (const auto & col : block.getColumnsWithTypeAndName()) {
+            source_columns.emplace_back(NameAndTypePair(col.name, col.type));
+        }
+        analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
         recordProfileStreams(pipeline, query_block.source_name);
     }
     else
