@@ -40,7 +40,9 @@ struct MPPTunnel
 
     ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer;
 
-    MPPTunnel() {}
+    Logger * log;
+
+    MPPTunnel() : log(&Logger::get("tunnel")) {}
 
     ~MPPTunnel()
     {
@@ -52,10 +54,14 @@ struct MPPTunnel
     // TODO: consider to hold a buffer
     void write(const mpp::MPPDataPacket & data)
     {
+
+        LOG_DEBUG(log, "read to write");
         std::unique_lock<std::mutex> lk(mu);
 
         // TODO: consider time constraining
         cv_for_connected.wait(lk, [&]() { return connected; });
+
+        LOG_DEBUG(log, "begin to write");
 
         writer->Write(data);
     }
