@@ -3,6 +3,7 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <common/logger_useful.h>
 
 #include <mutex>
 #include <thread>
@@ -53,37 +54,49 @@ class ExchangeClientInputStream : public IProfilingBlockInputStream
     std::mutex rw_mu;
     std::condition_variable cv;
     std::queue<Block> q;
+    bool finish = false;
+
+    Logger * log;
 
 
     void startAndRead(const String & raw)
     {
-
+        LOG_DEBUG(log, "begin start and read");
         auto server_task = std::make_shared<mpp::TaskMeta>();
         server_task->ParseFromString(raw);
         auto req = std::make_shared<mpp::EstablishMPPConnectionRequest>();
         req->set_allocated_client_meta(&task_meta);
         req->set_allocated_server_meta(server_task.get());
+
         pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> call(req);
         auto stream_resp = context.getCluster()->rpc_client->sendStreamRequest(server_task->address(), call, 0);
         std::shared_ptr<mpp::MPPDataPacket> packet = std::make_shared<mpp::MPPDataPacket>();
+
         while (stream_resp->Read(packet.get()))
         {
             if (packet->has_error())
             {
                 // TODO: Sleep for a while.
+                LOG_DEBUG(log, "meet error " << packet->error().msg());
             }
+
+            LOG_DEBUG(log, "read success");
             tipb::Chunk chunk;
             chunk.ParseFromString(packet->data());
             Block block = CHBlockChunkCodec().decode(chunk, fake_schema);
             std::lock_guard<std::mutex> lk(rw_mu);
             q.push(std::move(block));
             cv.notify_one();
+            LOG_DEBUG(log, "write success");
         }
+        LOG_DEBUG(log, "finish success");
+
+        finish = true;
     }
 
 public:
     ExchangeClientInputStream(TMTContext & context_, const ::tipb::ExchangeClient & exc, const ::mpp::TaskMeta & meta)
-        : context(context_), exchange_client(exc), task_meta(meta)
+        : context(context_), exchange_client(exc), task_meta(meta), log(&Logger::get("exchangeclient"))
     {
 
         // generate sample block
@@ -111,15 +124,21 @@ public:
         int task_size = exchange_client.encoded_task_meta_size();
         for (int i = 0; i < task_size; i++)
         {
-            std::thread t(&ExchangeClientInputStream::startAndRead, this, std::ref(exchange_client.encoded_task_meta(i)));
-            workers.push_back(std::move(t));
+            //     std::thread t(&ExchangeClientInputStream::startAndRead, this, std::ref(exchange_client.encoded_task_meta(i)));
+            //     workers.push_back(std::move(t));
+
+            startAndRead(exchange_client.encoded_task_meta(i)); // TODO: change it to asynchronical
         }
     }
 
     Block readImpl() override
     {
         std::unique_lock<std::mutex> lk(rw_mu);
-        cv.wait(lk, [&] { return q.size() > 0; });
+        cv.wait(lk, [&] { return q.size() > 0 || finish; });
+        if (finish)
+        {
+            return {};
+        }
         Block blk = q.front();
         q.pop();
         return blk;

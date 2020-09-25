@@ -1,10 +1,10 @@
 #pragma once
 
-#include <common/logger_useful.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/copyData.h>
 #include <Interpreters/Context.h>
+#include <common/logger_useful.h>
 
 #include <boost/noncopyable.hpp>
 #include <condition_variable>
@@ -144,7 +144,7 @@ struct MPPTask : private boost::noncopyable
 
     Exception err;
 
-    MPPTask(const mpp::TaskMeta & meta_) : log(&Logger::get("task " + std::to_string(id.task_id)))
+    MPPTask(const mpp::TaskMeta & meta_) : log(&Logger::get("task " + std::to_string(meta_.task_id())))
     {
         meta = meta_;
 
@@ -156,35 +156,40 @@ struct MPPTask : private boost::noncopyable
 
     void runImpl(BlockInputStreamPtr from, BlockOutputStreamPtr to)
     {
-    try {
-        LOG_DEBUG(log, "begin read prefix");
-        from->readPrefix();
-        to->writePrefix();
-        LOG_DEBUG(log, "begin read ");
+        try
+        {
+            LOG_DEBUG(log, "begin read prefix");
+            from->readPrefix();
+            to->writePrefix();
+            LOG_DEBUG(log, "begin read ");
 
-        while (Block block = from->read()) {
-            to->write(block);
+            while (Block block = from->read())
+            {
+                to->write(block);
+            }
+
+            /// For outputting additional information in some formats.
+            if (IProfilingBlockInputStream * input = dynamic_cast<IProfilingBlockInputStream *>(from.get()))
+            {
+                if (input->getProfileInfo().hasAppliedLimit())
+                    to->setRowsBeforeLimit(input->getProfileInfo().getRowsBeforeLimit());
+
+                to->setTotals(input->getTotals());
+                to->setExtremes(input->getExtremes());
+            }
+
+            LOG_DEBUG(log, "end read ");
+
+            from->readSuffix();
+            to->writeSuffix();
+
+            // TODO: Remove this task from task manager.
         }
-
-        /// For outputting additional information in some formats.
-        if (IProfilingBlockInputStream *input = dynamic_cast<IProfilingBlockInputStream *>(from.get())) {
-            if (input->getProfileInfo().hasAppliedLimit())
-                to->setRowsBeforeLimit(input->getProfileInfo().getRowsBeforeLimit());
-
-            to->setTotals(input->getTotals());
-            to->setExtremes(input->getExtremes());
+        catch (Exception & e)
+        {
+            LOG_ERROR(log, "task running meets error " << e.displayText());
+            err = e;
         }
-
-        LOG_DEBUG(log, "end read ");
-
-        from->readSuffix();
-        to->writeSuffix();
-
-        // TODO: Remove this task from task manager.
-    } catch (Exception & e) {
-        LOG_ERROR(log, "task running meets error " << e.displayText());
-        err = e;
-    }
     }
 
     void run(BlockIO io)
@@ -241,7 +246,9 @@ class MPPHandler
     Logger * log;
 
 public:
-    MPPHandler(Context & context_, const mpp::DispatchTaskRequest & task_request_) : context(context_), task_request(task_request_), log(&Logger::get("MPPHandler")) {}
+    MPPHandler(Context & context_, const mpp::DispatchTaskRequest & task_request_)
+        : context(context_), task_request(task_request_), log(&Logger::get("MPPHandler"))
+    {}
     grpc::Status execute(mpp::DispatchTaskResponse * response);
 };
 
