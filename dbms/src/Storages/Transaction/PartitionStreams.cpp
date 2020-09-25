@@ -56,7 +56,8 @@ static void writeRegionDataToStorage(Context & context, const RegionPtr & region
         if (!ok)
             return false;
         region_decode_cost = watch.elapsedMilliseconds();
-        GET_METRIC(metrics, tiflash_raft_write_data_to_storage_duration_seconds, type_decode).Observe(watch.elapsedSeconds());
+        GET_METRIC(metrics, tiflash_raft_write_data_to_storage_duration_seconds, type_decode)
+            .Observe(static_cast<double>(region_decode_cost) / 1000ULL);
 
         /// Write block into storage.
         watch.restart();
@@ -91,7 +92,8 @@ static void writeRegionDataToStorage(Context & context, const RegionPtr & region
                 throw Exception("Unknown StorageEngine: " + toString(static_cast<Int32>(storage->engineType())), ErrorCodes::LOGICAL_ERROR);
         }
         write_part_cost = watch.elapsedMilliseconds();
-        GET_METRIC(metrics, tiflash_raft_write_data_to_storage_duration_seconds, type_write).Observe(watch.elapsedSeconds());
+        GET_METRIC(metrics, tiflash_raft_write_data_to_storage_duration_seconds, type_write)
+            .Observe(static_cast<double>(write_part_cost) / 1000ULL);
 
         LOG_TRACE(log,
             __FUNCTION__ << ": table " << table_id << ", region " << region->id() << ", cost [region decode " << region_decode_cost
