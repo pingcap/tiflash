@@ -61,10 +61,14 @@ void DMFileWriter::write(const Block & block, size_t not_clean_rows)
     stat.not_clean = not_clean_rows;
     stat.bytes     = block.bytes(); // This is bytes of pack data in memory.
 
+    auto & del_mark_column = getByColumnId(block, TAG_COLUMN_ID).column;
+
+    const ColumnVector<UInt8> * del_mark = !del_mark_column ? nullptr : (const ColumnVector<UInt8> *)del_mark_column.get();
+
     for (auto & cd : write_columns)
     {
         auto & col = getByColumnId(block, cd.id).column;
-        writeColumn(cd.id, *cd.type, *col);
+        writeColumn(cd.id, *cd.type, *col, del_mark);
 
         if (cd.id == VERSION_COLUMN_ID)
             stat.first_version = col->get64(0);
@@ -89,7 +93,7 @@ void DMFileWriter::finalize()
     dmfile->finalize(file_provider);
 }
 
-void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColumn & column)
+void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColumn & column, const ColumnVector<UInt8> * del_mark)
 {
     size_t rows = column.size();
 
@@ -98,7 +102,7 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
             String name   = DMFile::getFileNameBase(col_id, substream);
             auto & stream = column_streams.at(name);
             if (stream->minmaxes)
-                stream->minmaxes->addPack(column, nullptr);
+                stream->minmaxes->addPack(column, del_mark);
 
             /// There could already be enough data to compress into the new block.
             if (stream->original_hashing.offset() >= min_compress_block_size)
