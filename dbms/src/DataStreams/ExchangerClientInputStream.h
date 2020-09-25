@@ -58,6 +58,21 @@ class ExchangeClientInputStream : public IProfilingBlockInputStream
 
     Logger * log;
 
+    void decodePacket(const mpp::MPPDataPacket & p) {
+        tipb::SelectResponse resp;
+        resp.ParseFromString(p.data());
+        int chunks_size = resp.chunks_size();
+        if (chunks_size == 0)
+            return;
+        for (int i = 0; i < chunks_size; i++)
+        {
+            const tipb::Chunk & chunk = resp.chunks(i);
+            Block block = CHBlockChunkCodec().decode(chunk, fake_schema);
+            std::lock_guard<std::mutex> lk(rw_mu);
+            q.push(std::move(block));
+            cv.notify_one();
+        }
+    }
 
     void startAndRead(const String & raw)
     {
@@ -77,23 +92,18 @@ class ExchangeClientInputStream : public IProfilingBlockInputStream
 
         LOG_DEBUG(log, "begin wait");
 
-        std::shared_ptr<mpp::MPPDataPacket> packet = std::make_shared<mpp::MPPDataPacket>();
+        mpp::MPPDataPacket packet;
 
-        while (stream_resp->Read(packet.get()))
+        while (stream_resp->Read(&packet))
         {
-            if (packet->has_error())
+            if (packet.has_error())
             {
                 // TODO: Sleep for a while.
-                LOG_DEBUG(log, "meet error " << packet->error().msg());
+                LOG_DEBUG(log, "meet error " << packet.error().msg());
             }
 
             LOG_DEBUG(log, "read success");
-            tipb::Chunk chunk;
-            chunk.ParseFromString(packet->data());
-            Block block = CHBlockChunkCodec().decode(chunk, fake_schema);
-            std::lock_guard<std::mutex> lk(rw_mu);
-            q.push(std::move(block));
-            cv.notify_one();
+            decodePacket(packet);
             LOG_DEBUG(log, "write success");
         }
         LOG_DEBUG(log, "finish success");
