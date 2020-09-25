@@ -101,9 +101,9 @@ public:
         using ColumnDataSizes = std::unordered_map<String, size_t>;
         ColumnDataSizes column_data_sizes;
 
-        using MarkList = std::vector<MarkInCompressedFile>;
-        using ColumnMarks = std::unordered_map<String, MarkList>;
-        ColumnMarks column_marks;
+        using MarkWithSizes = std::vector<MarkWithSizeInCompressedFile>;
+        using ColumnMarkWithSizes = std::unordered_map<String, MarkWithSizes>;
+        ColumnMarkWithSizes column_mark_sizes;
 
         /// original_hashing -> compressed_buf -> plain_hashing -> plain_file
         WriteBufferFromFileBasePtr plain_file;
