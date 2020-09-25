@@ -51,7 +51,7 @@ grpc::Status MPPHandler::execute(mpp::DispatchTaskResponse * response)
         {
             mpp::TaskMeta meta;
             meta.ParseFromString(exchangeServer.encoded_task_meta(i));
-            MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>();
+            MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(meta, task_request.meta());
             task->registerTunnel(MPPTaskId{meta.query_ts(), meta.task_id()}, tunnel);
             tunnel_set->tunnels.emplace_back(tunnel);
         }

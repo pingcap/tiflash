@@ -42,7 +42,8 @@ struct MPPTunnel
 
     Logger * log;
 
-    MPPTunnel() : log(&Logger::get("tunnel")) {}
+    MPPTunnel(const mpp::TaskMeta & client_meta_, const mpp::TaskMeta & server_meta_ ) :
+        log(&Logger::get("tunnel" + std::to_string(server_meta_.task_id()) + "+" + std::to_string(client_meta_.task_id()))) {}
 
     ~MPPTunnel()
     {
@@ -55,7 +56,7 @@ struct MPPTunnel
     void write(const mpp::MPPDataPacket & data)
     {
 
-        LOG_DEBUG(log, "read to write");
+        LOG_DEBUG(log, "ready to write");
         std::unique_lock<std::mutex> lk(mu);
 
         // TODO: consider time constraining
@@ -84,6 +85,7 @@ struct MPPTunnel
             throw Exception("has connected");
         }
         std::lock_guard<std::mutex> lk(mu);
+        LOG_DEBUG(log, "ready to connect");
         connected = true;
         writer = writer_;
 

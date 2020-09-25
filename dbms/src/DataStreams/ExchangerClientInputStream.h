@@ -68,7 +68,7 @@ class ExchangeClientInputStream : public IProfilingBlockInputStream
         req->set_allocated_server_meta(server_task.get());
         LOG_DEBUG(log, "begin start and read : " << req->DebugString());
         pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> call(req);
-        auto stream_resp = context.getCluster()->rpc_client->sendStreamRequest(server_task->address(), call, 0);
+        auto stream_resp = context.getCluster()->rpc_client->sendStreamRequest(server_task->address(), call, 100);
 
         LOG_DEBUG(log, "wait init");
 
