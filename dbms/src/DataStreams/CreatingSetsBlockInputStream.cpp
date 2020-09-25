@@ -121,7 +121,8 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
 
     if (table_out)
         table_out->writePrefix();
-
+    // A question: why righter data streams don't call readPrefix or readSuffix.
+    subquery.source->readPrefix();
     while (Block block = subquery.source->read())
     {
         if (isCancelled())
