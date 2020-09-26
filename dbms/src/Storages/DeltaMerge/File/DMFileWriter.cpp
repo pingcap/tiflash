@@ -42,7 +42,7 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
         /// for handle column always generate index
         bool do_index = !wal_mode && (cd.id == EXTRA_HANDLE_COLUMN_ID || cd.type->isInteger() || cd.type->isDateOrDateTime());
 
-        if (single_file_mode_)
+        if (single_file_mode)
         {
             if (do_index)
             {
