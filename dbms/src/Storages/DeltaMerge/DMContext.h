@@ -57,6 +57,9 @@ struct DMContext : private boost::noncopyable
     // The expected stable pack rows.
     const size_t stable_pack_rows;
 
+    // The number of points to check for calculating region split.
+    const size_t region_split_check_points = 128;
+
     const bool enable_logical_split;
     const bool read_delta_only;
     const bool read_stable_only;

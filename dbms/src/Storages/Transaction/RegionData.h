@@ -3,7 +3,6 @@
 #include <Storages/Transaction/RegionCFDataBase.h>
 #include <Storages/Transaction/RegionCFDataTrait.h>
 #include <Storages/Transaction/RegionDataRead.h>
-#include <Storages/Transaction/RegionLockInfo.h>
 
 namespace DB
 {
@@ -12,7 +11,11 @@ using RegionWriteCFData = RegionCFDataBase<RegionWriteCFDataTrait>;
 using RegionDefaultCFData = RegionCFDataBase<RegionDefaultCFDataTrait>;
 using RegionLockCFData = RegionCFDataBase<RegionLockCFDataTrait>;
 
+using DecodedLockCFValuePtr = std::shared_ptr<const RecordKVFormat::DecodedLockCFValue>;
+
 enum class ColumnFamilyType : uint8_t;
+
+struct RegionLockReadQuery;
 
 class RegionData
 {
@@ -20,17 +23,14 @@ public:
     using WriteCFIter = RegionWriteCFData::Map::iterator;
     using ConstWriteCFIter = RegionWriteCFData::Map::const_iterator;
 
-    void insert(ColumnFamilyType cf, TiKVKey && key, const DecodedTiKVKey & raw_key, TiKVValue && value);
-
-    void removeLockCF(const DecodedTiKVKey & raw_key);
-    void removeDefaultCF(const TiKVKey & key, const DecodedTiKVKey & raw_key);
-    void removeWriteCF(const TiKVKey & key, const DecodedTiKVKey & raw_key);
+    void insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value);
+    void remove(ColumnFamilyType cf, const TiKVKey & key);
 
     WriteCFIter removeDataByWriteIt(const WriteCFIter & write_it);
 
     RegionDataReadInfo readDataByWriteIt(const ConstWriteCFIter & write_it, bool need_value = true) const;
 
-    LockInfoPtr getLockInfo(const RegionLockReadQuery & query) const;
+    DecodedLockCFValuePtr getLockInfo(const RegionLockReadQuery & query) const;
 
     void splitInto(const RegionRange & range, RegionData & new_region_data);
     void mergeFrom(const RegionData & ori_region_data);

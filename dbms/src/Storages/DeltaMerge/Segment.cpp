@@ -367,6 +367,37 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &     dm_context,
     return getInputStream(dm_context, columns_to_read, segment_snap, read_ranges, filter, max_version, expected_block_size);
 }
 
+BlockInputStreamPtr Segment::getInputStreamForDataExport(const DMContext &          dm_context,
+                                                         const ColumnDefines &      columns_to_read,
+                                                         const SegmentSnapshotPtr & segment_snap,
+                                                         const RowKeyRange &        data_range,
+                                                         size_t                     expected_block_size,
+                                                         bool                       reorgnize_block) const
+{
+    auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, {data_range});
+
+    BlockInputStreamPtr data_stream = getPlacedStream(dm_context,
+                                                      read_info.read_columns,
+                                                      data_range,
+                                                      EMPTY_FILTER,
+                                                      segment_snap->stable,
+                                                      segment_snap->delta,
+                                                      read_info.index_begin,
+                                                      read_info.index_end,
+                                                      expected_block_size);
+
+
+    data_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(data_stream, data_range, 0);
+    if (reorgnize_block)
+    {
+        data_stream = std::make_shared<ReorganizeBlockInputStream>(data_stream, EXTRA_HANDLE_COLUMN_NAME);
+    }
+    data_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
+        data_stream, read_info.read_columns, dm_context.min_version, is_common_handle);
+
+    return data_stream;
+}
+
 BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &          dm_context,
                                                const ColumnDefines &      columns_to_read,
                                                const SegmentSnapshotPtr & segment_snap,
@@ -459,23 +490,8 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext & dm_context, const Seg
 
     EventRecorder recorder(ProfileEvents::DMDeltaMerge, ProfileEvents::DMDeltaMergeNS);
 
-    auto read_info
-        = getReadInfo(dm_context, *dm_context.store_columns, segment_snap, {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
-
-    BlockInputStreamPtr data_stream = getPlacedStream(dm_context,
-                                                      read_info.read_columns,
-                                                      rowkey_range,
-                                                      EMPTY_FILTER,
-                                                      segment_snap->stable,
-                                                      segment_snap->delta,
-                                                      read_info.index_begin,
-                                                      read_info.index_end,
-                                                      dm_context.stable_pack_rows);
-
-    data_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(data_stream, rowkey_range, 0);
-    data_stream = std::make_shared<ReorganizeBlockInputStream>(data_stream, EXTRA_HANDLE_COLUMN_NAME);
-    data_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
-        data_stream, read_info.read_columns, dm_context.min_version, is_common_handle);
+    auto data_stream = getInputStreamForDataExport(
+        dm_context, *dm_context.store_columns, segment_snap, rowkey_range, dm_context.stable_pack_rows, /*reorginize_block*/ true);
 
     auto new_stable = createNewStable(dm_context, data_stream, segment_snap->stable->getId(), wbs);
 
@@ -777,6 +793,8 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, const S
 
     {
         // Write my data
+        LOG_DEBUG(log, "Created my placed stream");
+
         BlockInputStreamPtr my_data = getPlacedStream(dm_context,
                                                       read_info.read_columns,
                                                       my_range,
@@ -787,7 +805,6 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, const S
                                                       read_info.index_end,
                                                       dm_context.stable_pack_rows);
 
-        LOG_DEBUG(log, "Created my placed stream");
 
         my_data = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(my_data, my_range, 0);
         my_data = std::make_shared<ReorganizeBlockInputStream>(my_data, EXTRA_HANDLE_COLUMN_NAME);
@@ -801,6 +818,8 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, const S
 
     {
         // Write new segment's data
+        LOG_DEBUG(log, "Created other placed stream");
+
         BlockInputStreamPtr other_data = getPlacedStream(dm_context,
                                                          read_info.read_columns,
                                                          other_range,
@@ -811,7 +830,6 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, const S
                                                          read_info.index_end,
                                                          dm_context.stable_pack_rows);
 
-        LOG_DEBUG(log, "Created other placed stream");
 
         other_data = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(other_data, other_range, 0);
         other_data = std::make_shared<ReorganizeBlockInputStream>(other_data, EXTRA_HANDLE_COLUMN_NAME);

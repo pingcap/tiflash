@@ -18,10 +18,25 @@ std::chrono::time_point<std::chrono::system_clock> PDClientHelper::safe_point_la
 
 IndexReader::IndexReader(KVClusterPtr cluster_) : cluster(cluster_), log(&Logger::get("pingcap.index_read")) {}
 
-ReadIndexResult IndexReader::getReadIndex(const pingcap::kv::RegionVerID & region_id)
+ReadIndexResult::ReadIndexResult(UInt64 read_index_, bool region_unavailable_, bool region_epoch_not_match_, kvrpcpb::LockInfo * lock_info_)
+    : read_index(read_index_),
+      region_unavailable(region_unavailable_),
+      region_epoch_not_match(region_epoch_not_match_),
+      lock_info(lock_info_)
+{}
+
+ReadIndexResult IndexReader::getReadIndex(
+    const pingcap::kv::RegionVerID & region_id, const std::string & start_key, const std::string & end_key, UInt64 start_ts)
 {
     pingcap::kv::Backoffer bo(readIndexMaxBackoff);
     auto request = std::make_shared<kvrpcpb::ReadIndexRequest>();
+    {
+        request->set_start_ts(start_ts);
+        auto key_range = request->add_ranges();
+        key_range->set_start_key(start_key);
+        key_range->set_end_key(end_key);
+    }
+
     int retry_time = 0;
     for (;;)
     {
@@ -52,8 +67,9 @@ ReadIndexResult IndexReader::getReadIndex(const pingcap::kv::RegionVerID & regio
 
         try
         {
-            UInt64 index = region_client.sendReqToRegion(bo, request)->read_index();
-            return {index, false, false};
+            auto resp = region_client.sendReqToRegion(bo, request);
+            UInt64 index = resp->read_index();
+            return {index, false, false, resp->release_locked()};
         }
         catch (pingcap::Exception & e)
         {

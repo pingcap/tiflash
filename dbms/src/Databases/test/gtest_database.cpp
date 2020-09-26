@@ -25,6 +25,11 @@ namespace ErrorCodes
 extern const int SYNTAX_ERROR;
 } // namespace ErrorCodes
 
+namespace FailPoints
+{
+extern const char exception_before_rename_table_old_meta_removed[];
+}
+
 namespace tests
 {
 
@@ -469,7 +474,7 @@ try
 
     const String to_tbl_name = "t_112";
     // Rename table to another database, and mock crash by failed point
-    FailPointHelper::enableFailPoint("exception_before_rename_table_old_meta_removed");
+    FailPointHelper::enableFailPoint(FailPoints::exception_before_rename_table_old_meta_removed);
     ASSERT_THROW(
         typeid_cast<DatabaseTiFlash *>(db.get())->renameTable(ctx, tbl_name, *db2, to_tbl_name, db2_name, to_tbl_name), DB::Exception);
 

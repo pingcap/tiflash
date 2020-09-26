@@ -7,6 +7,7 @@
 #include <Storages/AlterCommands.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/PathPool.h>
@@ -118,6 +119,13 @@ struct DeltaMergeStoreStat
     UInt64 background_tasks_length = 0;
 };
 
+struct RegionSplitRes
+{
+    RowKeyValues split_points;
+    size_t       exact_rows;
+    size_t       exact_bytes;
+};
+
 // It is used to prevent hash conflict of file caches.
 static std::atomic<UInt64> DELTA_MERGE_STORE_HASH_SALT{0};
 
@@ -128,6 +136,7 @@ public:
     {
         NotCompress not_compress_columns{};
     };
+    static Settings EMPTY_SETTINGS;
 
     using SegmentSortedMap = std::map<RowKeyValueRef, SegmentPtr, std::less<>>;
     using SegmentMap       = std::unordered_map<PageId, SegmentPtr>;
@@ -236,7 +245,7 @@ public:
                     const ColumnDefine &  handle,
                     bool                  is_common_handle_,
                     size_t                rowkey_column_size_,
-                    const Settings &      settings_);
+                    const Settings &      settings_ = EMPTY_SETTINGS);
     ~DeltaMergeStore();
 
     void setUpBackgroundTask(const DMContextPtr & dm_context);
@@ -307,6 +316,18 @@ public:
     bool                isCommonHandle() const { return is_common_handle; }
     size_t              getRowKeyColumnSize() const { return rowkey_column_size; }
 
+public:
+    /// Methods mainly used by region split.
+
+    RowsAndBytes getRowsAndBytesInRange(const Context & db_context, const RowKeyRange & check_range, bool is_exact);
+    RowsAndBytes getRowsAndBytesInRange(DMContext & dm_context, const RowKeyRange & check_range, bool is_exact);
+
+    /// Get the split point of region with check_range. Currently only do half split.
+    RegionSplitRes
+    getRegionSplitPoint(const Context & db_context, const RowKeyRange & check_range, size_t max_region_size, size_t split_size);
+
+    RegionSplitRes getRegionSplitPoint(DMContext & dm_context, const RowKeyRange & check_range, size_t max_region_size, size_t split_size);
+
 private:
     DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings);
 
@@ -326,6 +347,9 @@ private:
     bool isSegmentValid(const SegmentPtr & segment);
 
     void restoreExtraPathCapacity();
+
+    SegmentReadTasks
+    getReadTasksByRanges(DMContext & dm_context, const RowKeyRanges & sorted_handle_ranges, const SegmentIdSet & read_segments = {});
 
 private:
     String      path;
