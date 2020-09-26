@@ -203,7 +203,7 @@ private:
     void addPack(const PackStat & pack_stat) { pack_stats.push_back(pack_stat); }
     void setStatus(Status status_) { status = status_; }
 
-    void initializeMode() { mode = Poco::File(path()).isFile() ? Mode::SINGLE_FILE : mode = Mode::FOLDER; }
+    void initializeMode() { mode = Poco::File(path()).isFile() ? Mode::SINGLE_FILE : Mode::FOLDER; }
     void initializeSubFileStatIfNeeded(const FileProviderPtr & file_provider);
 
     void finalize(const FileProviderPtr & file_provider);
