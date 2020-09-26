@@ -136,7 +136,7 @@ public:
 
     String getName() const override { return "ExchangeClient"; }
 
-    void readPrefix() override
+    void readPrefixImpl() override
     {
         int task_size = exchange_client.encoded_task_meta_size();
         for (int i = 0; i < task_size; i++)
@@ -152,7 +152,7 @@ public:
     {
         std::unique_lock<std::mutex> lk(rw_mu);
         cv.wait(lk, [&] { return q.size() > 0 || finish; });
-        if (finish)
+        if (q.empty())
         {
             return {};
         }
