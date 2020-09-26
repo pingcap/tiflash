@@ -242,13 +242,13 @@ void DMFile::upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileVers
 
 void DMFile::readMeta(const FileProviderPtr & file_provider)
 {
-    size_t meta_offset = 0;
-    size_t meta_size = 0;
+    size_t meta_offset      = 0;
+    size_t meta_size        = 0;
     size_t pack_stat_offset = 0;
-    size_t pack_stat_size = 0;
+    size_t pack_stat_size   = 0;
     if (isSingleFileMode())
     {
-        Poco::File file(path());
+        Poco::File                 file(path());
         ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
         buf.seek(file.getSize() - sizeof(Footer), SEEK_SET);
         DB::readIntBinary(meta_offset, buf);
@@ -258,7 +258,7 @@ void DMFile::readMeta(const FileProviderPtr & file_provider)
     }
     else
     {
-        meta_size = Poco::File(metaPath()).getSize();
+        meta_size      = Poco::File(metaPath()).getSize();
         pack_stat_size = Poco::File(packStatPath()).getSize();
     }
 
@@ -283,7 +283,7 @@ void DMFile::readMeta(const FileProviderPtr & file_provider)
     }
 
     {
-        size_t packs          = pack_stat_size / sizeof(PackStat);
+        size_t packs = pack_stat_size / sizeof(PackStat);
         pack_stats.resize(packs);
         auto buf = openForRead(file_provider, packStatPath(), encryptionPackStatPath(), pack_stat_size);
         buf.seek(pack_stat_offset);
@@ -339,11 +339,11 @@ void DMFile::finalize(const FileProviderPtr & file_provider)
 void DMFile::finalize(WriteBuffer & buffer)
 {
     Footer footer;
-    std::tie(footer.meta_pack_info.meta_offset, footer.meta_pack_info.meta_size) = writeMeta(buffer);
+    std::tie(footer.meta_pack_info.meta_offset, footer.meta_pack_info.meta_size)           = writeMeta(buffer);
     std::tie(footer.meta_pack_info.pack_stat_offset, footer.meta_pack_info.pack_stat_size) = writePack(buffer);
-    footer.sub_file_stat_offset = buffer.count();
-    footer.sub_file_num         = sub_file_stats.size();
-    footer.file_format_version  = DMSingleFileFormatVersion::SINGLE_FILE_VERSION_BASE;
+    footer.sub_file_stat_offset                                                            = buffer.count();
+    footer.sub_file_num                                                                    = sub_file_stats.size();
+    footer.file_format_version = DMSingleFileFormatVersion::SINGLE_FILE_VERSION_BASE;
     for (auto & iter : sub_file_stats)
     {
         writeStringBinary(iter.first, buffer);

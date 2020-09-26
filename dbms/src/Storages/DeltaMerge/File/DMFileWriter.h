@@ -75,10 +75,10 @@ public:
 
     struct SingleFileStream
     {
-        SingleFileStream(const DMFilePtr &   dmfile,
-                         CompressionSettings compression_settings,
-                         size_t              max_compress_block_size,
-                         const FileProviderPtr &   file_provider)
+        SingleFileStream(const DMFilePtr &       dmfile,
+                         CompressionSettings     compression_settings,
+                         size_t                  max_compress_block_size,
+                         const FileProviderPtr & file_provider)
             : plain_file(createWriteBufferFromFileBaseByFileProvider(
                 file_provider, dmfile->path(), EncryptionPath(dmfile->encryptionBasePath(), ""), true, 0, 0, max_compress_block_size)),
               plain_hashing(*plain_file),
@@ -101,7 +101,7 @@ public:
         using ColumnDataSizes = std::unordered_map<String, size_t>;
         ColumnDataSizes column_data_sizes;
 
-        using MarkWithSizes = std::vector<MarkWithSizeInCompressedFile>;
+        using MarkWithSizes       = std::vector<MarkWithSizeInCompressedFile>;
         using ColumnMarkWithSizes = std::unordered_map<String, MarkWithSizes>;
         ColumnMarkWithSizes column_mark_sizes;
 

@@ -54,24 +54,25 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
             auto res = std::make_shared<MarksInCompressedFile>(reader.dmfile->getPacks());
             if (res->empty()) // 0 rows.
                 return res;
-            size_t size        = sizeof(MarkInCompressedFile) * reader.dmfile->getPacks();
-            auto   file        = reader.file_provider->newRandomAccessFile(reader.dmfile->colMarkPath(file_name_base),
+            size_t size = sizeof(MarkInCompressedFile) * reader.dmfile->getPacks();
+            auto   file = reader.file_provider->newRandomAccessFile(reader.dmfile->colMarkPath(file_name_base),
                                                                   reader.dmfile->encryptionMarkPath(file_name_base));
             PageUtil::readFile(file, 0, reinterpret_cast<char *>(res->data()), size);
 
             return res;
         };
         if (reader.mark_cache)
-            marks = reader.mark_cache->getOrSet(MarkCache::hash(reader.dmfile->colMarkCacheKey(file_name_base), reader.hash_salt), mark_load);
+            marks
+                = reader.mark_cache->getOrSet(MarkCache::hash(reader.dmfile->colMarkCacheKey(file_name_base), reader.hash_salt), mark_load);
         else
             marks = mark_load();
     }
 
-    const String data_path = reader.dmfile->colDataPath(file_name_base);
-    size_t data_file_size  = reader.dmfile->colDataSize(file_name_base);
-    size_t packs           = reader.dmfile->getPacks();
-    size_t buffer_size     = 0;
-    size_t estimated_size  = 0;
+    const String data_path      = reader.dmfile->colDataPath(file_name_base);
+    size_t       data_file_size = reader.dmfile->colDataSize(file_name_base);
+    size_t       packs          = reader.dmfile->getPacks();
+    size_t       buffer_size    = 0;
+    size_t       estimated_size = 0;
 
     if (reader.single_file_mode)
     {
@@ -128,11 +129,11 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
                             << " (aio_threshold: " << aio_threshold << ", max_read_buffer_size: " << max_read_buffer_size << ")");
 
     buf = std::make_unique<CompressedReadBufferFromFileProvider>(reader.file_provider,
-                                                             reader.dmfile->colDataPath(file_name_base),
-                                                             reader.dmfile->encryptionDataPath(file_name_base),
-                                                             estimated_size,
-                                                             aio_threshold,
-                                                             buffer_size);
+                                                                 reader.dmfile->colDataPath(file_name_base),
+                                                                 reader.dmfile->encryptionDataPath(file_name_base),
+                                                                 estimated_size,
+                                                                 aio_threshold,
+                                                                 buffer_size);
 }
 
 DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,

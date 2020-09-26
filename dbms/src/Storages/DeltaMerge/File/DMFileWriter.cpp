@@ -28,7 +28,8 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
               ? nullptr
               : createWriteBufferFromFileBaseByFileProvider(
                   file_provider_, dmfile->packStatPath(), dmfile->encryptionPackStatPath(), true, 0, 0, max_compress_block_size)),
-      single_file_stream(!single_file_mode_ ? nullptr : new SingleFileStream(dmfile_, compression_settings_, max_compress_block_size_, file_provider_)),
+      single_file_stream(
+          !single_file_mode_ ? nullptr : new SingleFileStream(dmfile_, compression_settings_, max_compress_block_size_, file_provider_)),
       file_provider(file_provider_),
       single_file_mode(single_file_mode_),
       wal_mode(wal_mode_)
@@ -137,7 +138,7 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
     {
         auto callback = [&](const IDataType::SubstreamPath & substream) {
             size_t offset_in_compressed_file = single_file_stream->plain_hashing.count();
-            String stream_name = DMFile::getFileNameBase(col_id, substream);
+            String stream_name               = DMFile::getFileNameBase(col_id, substream);
             if (unlikely(substream.size() > 1))
                 throw DB::TiFlashException("Substream_path shouldn't be more than one.", Errors::DeltaTree::Internal);
 
@@ -149,7 +150,9 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
 
             auto offset_in_compressed_block = single_file_stream->original_hashing.offset();
             if (unlikely(offset_in_compressed_block != 0))
-                throw DB::TiFlashException("Offset in compressed block is always expected to be 0 when single_file_mode is true, now " + DB::toString(offset_in_compressed_block), Errors::DeltaTree::Internal);
+                throw DB::TiFlashException("Offset in compressed block is always expected to be 0 when single_file_mode is true, now "
+                                               + DB::toString(offset_in_compressed_block),
+                                           Errors::DeltaTree::Internal);
 
             // write column data
             if (substream.empty())
@@ -177,8 +180,7 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
 
                 const DataTypeNullable & nullable_type = static_cast<const DataTypeNullable &>(type);
                 const ColumnNullable &   col           = static_cast<const ColumnNullable &>(column);
-                nullable_type.getNestedType()->serializeBinaryBulk(
-                    col.getNestedColumn(), single_file_stream->original_hashing, 0, rows);
+                nullable_type.getNestedType()->serializeBinaryBulk(col.getNestedColumn(), single_file_stream->original_hashing, 0, rows);
             }
             else
             {
@@ -188,11 +190,11 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
             single_file_stream->original_hashing.next();
             single_file_stream->compressed_buf.next();
             size_t mark_size_in_file = single_file_stream->plain_hashing.count() - offset_in_compressed_file;
-            single_file_stream->column_mark_sizes.at(stream_name).push_back(MarkWithSizeInCompressedFile{
-                .mark=MarkInCompressedFile{
-                    .offset_in_compressed_file = offset_in_compressed_file,
-                    .offset_in_decompressed_block = offset_in_compressed_block},
-                .mark_size=mark_size_in_file});
+            single_file_stream->column_mark_sizes.at(stream_name)
+                .push_back(
+                    MarkWithSizeInCompressedFile{.mark      = MarkInCompressedFile{.offset_in_compressed_file    = offset_in_compressed_file,
+                                                                              .offset_in_decompressed_block = offset_in_compressed_block},
+                                                 .mark_size = mark_size_in_file});
             single_file_stream->column_data_sizes[stream_name] += mark_size_in_file;
         };
         type.enumerateStreams(callback, {});
@@ -212,7 +214,9 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
 
                 auto offset_in_compressed_block = stream->original_hashing.offset();
                 if (unlikely(wal_mode && offset_in_compressed_block != 0))
-                    throw DB::TiFlashException("Offset in compressed block is expected to be 0, now " + DB::toString(offset_in_compressed_block), Errors::DeltaTree::Internal);
+                    throw DB::TiFlashException("Offset in compressed block is expected to be 0, now "
+                                                   + DB::toString(offset_in_compressed_block),
+                                               Errors::DeltaTree::Internal);
 
                 writeIntBinary(stream->plain_hashing.count(), stream->mark_file);
                 writeIntBinary(offset_in_compressed_block, stream->mark_file);

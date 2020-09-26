@@ -84,16 +84,15 @@ public:
     struct Footer
     {
         MetaPackInfo meta_pack_info;
-        UInt64 sub_file_stat_offset;
-        UInt32 sub_file_num;
+        UInt64       sub_file_stat_offset;
+        UInt32       sub_file_num;
 
         DMSingleFileFormatVersion file_format_version;
     };
 
     using PackStats = PaddedPODArray<PackStat>;
 
-    static DMFilePtr
-    create(UInt64 file_id, const String & parent_path, bool single_file_mode = false);
+    static DMFilePtr create(UInt64 file_id, const String & parent_path, bool single_file_mode = false);
     static DMFilePtr
     restore(const FileProviderPtr & file_provider, UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta = true);
 
