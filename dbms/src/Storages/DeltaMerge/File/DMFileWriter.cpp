@@ -261,7 +261,7 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 
             // write mark
             size_t mark_offset_in_file = single_file_stream->plain_hashing.count();
-            for (const auto & mark_with_size : single_file_stream->column_mark_sizes.at(stream_name))
+            for (const auto & mark_with_size : single_file_stream->column_mark_with_sizes.at(stream_name))
             {
                 writeIntBinary(mark_with_size.mark.offset_in_compressed_file, single_file_stream->plain_hashing);
                 writeIntBinary(mark_with_size.mark.offset_in_decompressed_block, single_file_stream->plain_hashing);
