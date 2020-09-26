@@ -73,8 +73,17 @@ public:
     };
     using SubFileStats = std::unordered_map<String, SubFileStat>;
 
+    struct MetaPackInfo
+    {
+        UInt64 meta_offset;
+        UInt64 meta_size;
+        UInt64 pack_stat_offset;
+        UInt64 pack_stat_size;
+    };
+
     struct Footer
     {
+        MetaPackInfo meta_pack_info;
         UInt64 sub_file_stat_offset;
         UInt32 sub_file_num;
 
@@ -84,7 +93,7 @@ public:
     using PackStats = PaddedPODArray<PackStat>;
 
     static DMFilePtr
-    create(const FileProviderPtr & file_provider, UInt64 file_id, const String & parent_path, bool single_file_mode = false);
+    create(UInt64 file_id, const String & parent_path, bool single_file_mode = false);
     static DMFilePtr
     restore(const FileProviderPtr & file_provider, UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta = true);
 
@@ -185,8 +194,8 @@ private:
     static String colIndexIdentifier(const String & file_name_base) { return file_name_base + ".idx"; }
     static String colMarkIdentifier(const String & file_name_base) { return file_name_base + ".mrk"; }
 
-    void writeMeta(WriteBuffer & buffer);
-    void writePack(WriteBuffer & buffer);
+    std::tuple<size_t, size_t> writeMeta(WriteBuffer & buffer);
+    std::tuple<size_t, size_t> writePack(WriteBuffer & buffer);
 
     void writeMeta(const FileProviderPtr & file_provider);
     void readMeta(const FileProviderPtr & file_provider);
@@ -196,7 +205,8 @@ private:
     void addPack(const PackStat & pack_stat) { pack_stats.push_back(pack_stat); }
     void setStatus(Status status_) { status = status_; }
 
-    void initialize(const FileProviderPtr & file_provider);
+    void initializeMode() { mode = Poco::File(path()).isFile() ? Mode::SINGLE_FILE : mode = Mode::FOLDER; }
+    void initializeSubFileStatIfNeeded(const FileProviderPtr & file_provider);
 
     void finalize(const FileProviderPtr & file_provider);
     void finalize(WriteBuffer & buffer);
@@ -243,12 +253,6 @@ private:
             return sub_file.getSize();
         }
     }
-
-    size_t metaOffset() const { return subFileOffset(metaIdentifier()); }
-    size_t packStatOffset() const { return subFileOffset(packStatIdentifier()); }
-
-    size_t metaSize() const { return subFileSize(metaIdentifier()); }
-    size_t packStatSize() const { return subFileSize(packStatIdentifier()); }
 
 private:
     UInt64 file_id;

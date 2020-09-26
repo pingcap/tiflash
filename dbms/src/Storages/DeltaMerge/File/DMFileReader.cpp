@@ -176,6 +176,8 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
         throw Exception("DMFile [" + DB::toString(dmfile->fileId())
                         + "] is expected to be in READABLE status, but: " + DMFile::statusString(dmfile->getStatus()));
 
+    dmfile->initializeSubFileStatIfNeeded(file_provider);
+
     for (const auto & cd : read_columns)
     {
         // New inserted column, fill them with default value later
