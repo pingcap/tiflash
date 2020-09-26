@@ -35,7 +35,6 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
       wal_mode(wal_mode_)
 {
     dmfile->setStatus(DMFile::Status::WRITING);
-
     for (auto & cd : write_columns)
     {
         // TODO: currently we only generate index for Integers, Date, DateTime types, and this should be configurable by user.
@@ -54,7 +53,7 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
             auto callback = [&](const IDataType::SubstreamPath & substream_path) {
                 String stream_name = DMFile::getFileNameBase(cd.id, substream_path);
                 single_file_stream->column_data_sizes.emplace(stream_name, 0);
-                single_file_stream->column_mark_sizes.emplace(stream_name, SingleFileStream::MarkWithSizes{});
+                single_file_stream->column_mark_with_sizes.emplace(stream_name, SingleFileStream::MarkWithSizes{});
             };
             cd.type->enumerateStreams(callback, {});
         }
@@ -190,10 +189,8 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
             single_file_stream->original_hashing.next();
             single_file_stream->compressed_buf.next();
             size_t mark_size_in_file = single_file_stream->plain_hashing.count() - offset_in_compressed_file;
-            single_file_stream->column_mark_sizes.at(stream_name)
-                .push_back(
-                    MarkWithSizeInCompressedFile{.mark      = MarkInCompressedFile{.offset_in_compressed_file    = offset_in_compressed_file,
-                                                                              .offset_in_decompressed_block = offset_in_compressed_block},
+            single_file_stream->column_mark_with_sizes.at(stream_name).push_back(MarkWithSizeInCompressedFile{.mark= MarkInCompressedFile{.offset_in_compressed_file = offset_in_compressed_file,
+                                                                                                                                           .offset_in_decompressed_block = offset_in_compressed_block},
                                                  .mark_size = mark_size_in_file});
             single_file_stream->column_data_sizes[stream_name] += mark_size_in_file;
         };

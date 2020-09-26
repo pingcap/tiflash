@@ -249,7 +249,6 @@ Block DMFileReader::read()
     size_t not_clean_rows = 0;
 
     RSResult expected_handle_res = handle_res[next_pack_id];
-
     for (; next_pack_id < use_packs.size() && use_packs[next_pack_id] && read_rows < rows_threshold_per_read; ++next_pack_id)
     {
         if (read_pack_limit != 0 && next_pack_id - start_pack_id >= read_pack_limit)

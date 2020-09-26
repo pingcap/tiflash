@@ -3,7 +3,6 @@
 #include <Core/Types.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
-#include <IO/WriteBufferFromFileBase.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/ColumnStat.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
@@ -218,39 +217,17 @@ private:
 
     const String subFilePath(const String & file_identifier) const
     {
-        if (mode == Mode::SINGLE_FILE)
-        {
-            return path();
-        }
-        else
-        {
-            return path() + "/" + file_identifier;
-        }
+        return isSingleFileMode() ? path() : path() + "/" + file_identifier;
     }
 
     size_t subFileOffset(const String & file_identifier) const
     {
-        if (mode == Mode::SINGLE_FILE)
-        {
-            return getSubFileStat(file_identifier).offset;
-        }
-        else
-        {
-            return 0;
-        }
+        return isSingleFileMode() ? getSubFileStat(file_identifier).offset : 0;
     }
 
     size_t subFileSize(const String & file_identifier) const
     {
-        if (mode == Mode::SINGLE_FILE)
-        {
-            return getSubFileStat(file_identifier).size;
-        }
-        else
-        {
-            Poco::File sub_file(path() + "/" + file_identifier);
-            return sub_file.getSize();
-        }
+        return isSingleFileMode() ? getSubFileStat(file_identifier).size : Poco::File(subFilePath(file_identifier)).getSize();
     }
 
 private:
@@ -258,11 +235,10 @@ private:
     UInt64 ref_id; // It is a reference to file_id, could be the same.
     String parent_path;
 
-    Mode mode;
-
     PackStats   pack_stats;
     ColumnStats column_stats;
 
+    Mode   mode;
     Status status;
 
     SubFileStats sub_file_stats;

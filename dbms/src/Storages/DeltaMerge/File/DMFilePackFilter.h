@@ -170,9 +170,7 @@ private:
             return;
 
         if (!dmfile->isColIndexExist(col_id))
-        {
             return;
-        }
 
         auto &     type           = dmfile->getColumnStat(col_id).type;
         const auto file_name_base = DMFile::getFileNameBase(col_id);

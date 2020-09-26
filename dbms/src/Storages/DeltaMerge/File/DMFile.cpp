@@ -18,14 +18,7 @@ static constexpr const char * NGC_FILE_NAME = "NGC";
 
 String DMFile::ngcPath() const
 {
-    if (mode == Mode::SINGLE_FILE)
-    {
-        return path() + "." + NGC_FILE_NAME;
-    }
-    else
-    {
-        return path() + "/" + NGC_FILE_NAME;
-    }
+    return path() + (isSingleFileMode() ? "." : "/") + NGC_FILE_NAME;
 }
 
 DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single_file_mode)
@@ -48,7 +41,7 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single
     }
     if (single_file_mode)
     {
-        PageUtil::touchFile(new_dmfile->path());
+        PageUtil::touchFile(path);
     }
     else
     {
@@ -112,62 +105,27 @@ bool DMFile::isColIndexExist(const ColId & col_id) const
 
 const EncryptionPath DMFile::encryptionDataPath(const String & file_name_base) const
 {
-    if (isSingleFileMode())
-    {
-        return EncryptionPath(encryptionBasePath(), "");
-    }
-    else
-    {
-        return EncryptionPath(encryptionBasePath(), file_name_base + ".dat");
-    }
+    return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : file_name_base + ".dat");
 }
 
 const EncryptionPath DMFile::encryptionIndexPath(const String & file_name_base) const
 {
-    if (isSingleFileMode())
-    {
-        return EncryptionPath(encryptionBasePath(), "");
-    }
-    else
-    {
-        return EncryptionPath(encryptionBasePath(), file_name_base + ".idx");
-    }
+    return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : file_name_base + ".idx");
 }
 
 const EncryptionPath DMFile::encryptionMarkPath(const String & file_name_base) const
 {
-    if (isSingleFileMode())
-    {
-        return EncryptionPath(encryptionBasePath(), "");
-    }
-    else
-    {
-        return EncryptionPath(encryptionBasePath(), file_name_base + ".mrk");
-    }
+    return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : file_name_base + ".mrk");
 }
 
 const EncryptionPath DMFile::encryptionMetaPath() const
 {
-    if (isSingleFileMode())
-    {
-        return EncryptionPath(encryptionBasePath(), "");
-    }
-    else
-    {
-        return EncryptionPath(encryptionBasePath(), "meta.txt");
-    }
+    return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : "meta.txt");
 }
 
 const EncryptionPath DMFile::encryptionPackStatPath() const
 {
-    if (isSingleFileMode())
-    {
-        return EncryptionPath(encryptionBasePath(), "");
-    }
-    else
-    {
-        return EncryptionPath(encryptionBasePath(), "pack");
-    }
+    return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : "pack");
 }
 
 std::tuple<size_t, size_t> DMFile::writeMeta(WriteBuffer & buffer)
@@ -194,10 +152,6 @@ std::tuple<size_t, size_t> DMFile::writePack(WriteBuffer & buffer)
 
 void DMFile::writeMeta(const FileProviderPtr & file_provider)
 {
-    if (unlikely(!isFolderMode()))
-    {
-        throw DB::TiFlashException("writeMeta is only expected to be called when mode is FOLDER.", Errors::DeltaTree::Internal);
-    }
     String meta_path     = metaPath();
     String tmp_meta_path = meta_path + ".tmp";
 
@@ -398,15 +352,7 @@ std::set<UInt64> DMFile::listAllInPath(const String & parent_path, bool can_gc)
         if (can_gc)
         {
             Poco::File file(parent_path + "/" + name);
-            String     ngc_path = "";
-            if (file.isFile())
-            {
-                ngc_path = parent_path + "/" + name + "." + NGC_FILE_NAME;
-            }
-            else
-            {
-                ngc_path = parent_path + "/" + name + "/" + NGC_FILE_NAME;
-            }
+            String     ngc_path = parent_path + "/" + name + (file.isFile() ? "." : "/") + NGC_FILE_NAME;
             Poco::File ngc_file(ngc_path);
             if (!ngc_file.exists())
                 file_ids.insert(file_id);
@@ -433,7 +379,7 @@ void DMFile::enableGC()
 
 void DMFile::remove(const FileProviderPtr & file_provider)
 {
-    if (mode == Mode::SINGLE_FILE)
+    if (isSingleFileMode())
     {
         file_provider->deleteRegularFile(path(), EncryptionPath(encryptionBasePath(), ""));
     }

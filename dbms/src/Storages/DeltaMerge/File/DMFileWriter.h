@@ -103,7 +103,7 @@ public:
 
         using MarkWithSizes       = std::vector<MarkWithSizeInCompressedFile>;
         using ColumnMarkWithSizes = std::unordered_map<String, MarkWithSizes>;
-        ColumnMarkWithSizes column_mark_sizes;
+        ColumnMarkWithSizes column_mark_with_sizes;
 
         /// original_hashing -> compressed_buf -> plain_hashing -> plain_file
         WriteBufferFromFileBasePtr plain_file;
