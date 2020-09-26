@@ -189,9 +189,10 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
             single_file_stream->original_hashing.next();
             single_file_stream->compressed_buf.next();
             size_t mark_size_in_file = single_file_stream->plain_hashing.count() - offset_in_compressed_file;
-            single_file_stream->column_mark_with_sizes.at(stream_name).push_back(MarkWithSizeInCompressedFile{.mark= MarkInCompressedFile{.offset_in_compressed_file = offset_in_compressed_file,
-                                                                                                                                           .offset_in_decompressed_block = offset_in_compressed_block},
-                                                 .mark_size = mark_size_in_file});
+            single_file_stream->column_mark_with_sizes.at(stream_name)
+                .push_back(MarkWithSizeInCompressedFile{MarkInCompressedFile{.offset_in_compressed_file    = offset_in_compressed_file,
+                                                                             .offset_in_decompressed_block = offset_in_compressed_block},
+                                                        mark_size_in_file});
             single_file_stream->column_data_sizes[stream_name] += mark_size_in_file;
         };
         type.enumerateStreams(callback, {});
