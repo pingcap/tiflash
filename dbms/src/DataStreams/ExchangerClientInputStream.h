@@ -54,7 +54,8 @@ class ExchangeClientInputStream : public IProfilingBlockInputStream
     std::mutex rw_mu;
     std::condition_variable cv;
     std::queue<Block> q;
-    bool finish = false;
+    bool finish ;
+    bool inited ;
 
     Logger * log;
 
@@ -62,6 +63,7 @@ class ExchangeClientInputStream : public IProfilingBlockInputStream
         tipb::SelectResponse resp;
         resp.ParseFromString(p.data());
         int chunks_size = resp.chunks_size();
+        LOG_DEBUG(log, "get chunk size " + std::to_string(chunks_size));
         if (chunks_size == 0)
             return;
         for (int i = 0; i < chunks_size; i++)
@@ -113,7 +115,7 @@ class ExchangeClientInputStream : public IProfilingBlockInputStream
 
 public:
     ExchangeClientInputStream(TMTContext & context_, const ::tipb::ExchangeClient & exc, const ::mpp::TaskMeta & meta)
-        : context(context_), exchange_client(exc), task_meta(meta), log(&Logger::get("exchangeclient"))
+        : context(context_), exchange_client(exc), task_meta(meta), finish(false), inited(false), log(&Logger::get("exchangeclient"))
     {
 
         // generate sample block
@@ -136,7 +138,7 @@ public:
 
     String getName() const override { return "ExchangeClient"; }
 
-    void readPrefixImpl() override
+    void init()
     {
         int task_size = exchange_client.encoded_task_meta_size();
         for (int i = 0; i < task_size; i++)
@@ -146,10 +148,13 @@ public:
 
             startAndRead(exchange_client.encoded_task_meta(i)); // TODO: change it to asynchronical
         }
+        inited = true;
     }
 
     Block readImpl() override
     {
+        if (!inited)
+            init();
         std::unique_lock<std::mutex> lk(rw_mu);
         cv.wait(lk, [&] { return q.size() > 0 || finish; });
         if (q.empty())
@@ -158,6 +163,7 @@ public:
         }
         Block blk = q.front();
         q.pop();
+        LOG_DEBUG(log, "got block");
         return blk;
     }
 };
