@@ -93,11 +93,8 @@ try
         if (exact_rows <= settings.dt_segment_stable_pack_rows.value * 3)
             return;
         auto [approx_rows, approx_bytes] = store->getRowsAndBytesInRange(*context, range, /*is_exact*/ false);
-        if (std::abs((Int64)(approx_rows - exact_rows)) > exact_rows * 0.2)
-        {
-            ASSERT_LE(std::abs((Int64)(approx_rows - exact_rows)), exact_rows * 0.2);
-            ASSERT_LE(std::abs((Int64)(approx_bytes - exact_bytes)), exact_bytes * 0.2);
-        }
+        ASSERT_LE(std::abs((Int64)(approx_rows - exact_rows)), exact_rows * 0.2);
+        ASSERT_LE(std::abs((Int64)(approx_bytes - exact_bytes)), exact_bytes * 0.2);
     };
 
     size_t bytes_per_rows = 8 + 8 + 1;

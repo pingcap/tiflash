@@ -40,4 +40,7 @@ target_link_libraries(dm_test_dmfile dbms gtest_main clickhouse_functions)
 add_executable(dm_test_region EXCLUDE_FROM_ALL gtest_dm_region.cpp)
 target_link_libraries(dm_test_region dbms gtest_main clickhouse_functions)
 
+add_executable(dm_test_minmax_index EXCLUDE_FROM_ALL gtest_dm_minmax_index.cpp)
+target_link_libraries(dm_test_minmax_index dbms gtest_main clickhouse_functions)
+
 add_subdirectory (bank EXCLUDE_FROM_ALL)

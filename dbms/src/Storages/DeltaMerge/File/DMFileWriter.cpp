@@ -61,7 +61,7 @@ void DMFileWriter::write(const Block & block, size_t not_clean_rows)
     stat.not_clean = not_clean_rows;
     stat.bytes     = block.bytes(); // This is bytes of pack data in memory.
 
-    auto & del_mark_column = getByColumnId(block, TAG_COLUMN_ID).column;
+    auto del_mark_column = tryGetByColumnId(block, TAG_COLUMN_ID).column;
 
     const ColumnVector<UInt8> * del_mark = !del_mark_column ? nullptr : (const ColumnVector<UInt8> *)del_mark_column.get();
 

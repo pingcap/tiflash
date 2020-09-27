@@ -45,7 +45,7 @@ inline size_t getPosByColumnId(const Block & block, ColId col_id)
     throw Exception("Column with column id " + DB::toString(col_id) + " not found");
 }
 
-inline const ColumnWithTypeAndName & tryGetByColumnId(const Block & block, ColId col_id)
+inline ColumnWithTypeAndName tryGetByColumnId(const Block & block, ColId col_id)
 {
     for (auto & c : block)
     {
