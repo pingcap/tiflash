@@ -7,6 +7,7 @@
 #pragma GCC diagnostic pop
 
 #include <DataStreams/BlockIO.h>
+#include <Encryption/FileProvider.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
@@ -15,7 +16,6 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/IInterpreter.h>
-#include <Encryption/FileProvider.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/TMTStorages.h>
@@ -27,6 +27,9 @@ namespace DB
 class Context;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
+struct RegionLearnerReadSnapshot;
+using LearnerReadSnapshot = std::unordered_map<RegionID, RegionLearnerReadSnapshot>;
+struct SelectQueryInfo;
 
 struct Pipeline
 {
@@ -100,6 +103,11 @@ private:
     void executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, Names & aggregation_keys,
         TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions);
     void executeFinalProject(Pipeline & pipeline);
+
+    void readFromLocalStorage( //
+        const TableID table_id, const Names & required_columns, SelectQueryInfo & query_info, const size_t max_block_size,
+        const LearnerReadSnapshot & learner_read_snapshot, //
+        Pipeline & pipeline, std::unordered_map<RegionID, const RegionInfo &> & region_retry);
     void getAndLockStorageWithSchemaVersion(TableID table_id, Int64 schema_version);
     SortDescription getSortDescription(std::vector<NameAndTypePair> & order_columns);
     AnalysisResult analyzeExpressions();

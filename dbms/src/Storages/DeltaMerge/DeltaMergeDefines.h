@@ -63,6 +63,8 @@ using Handle = DB::HandleID;
 using ColIds     = std::vector<ColId>;
 using HandlePair = std::pair<Handle, Handle>;
 
+using RowsAndBytes = std::pair<size_t, size_t>;
+
 using OptionTableInfoConstRef = std::optional<std::reference_wrapper<const TiDB::TableInfo>>;
 
 struct ColumnDefine

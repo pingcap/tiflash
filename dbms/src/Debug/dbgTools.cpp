@@ -110,7 +110,7 @@ void addRequestsToRaftCmd(raft_cmdpb::RaftCmdRequest & request, const TiKVKey & 
 
     if (value.dataSize() <= RecordKVFormat::SHORT_VALUE_MAX_LEN)
     {
-        TiKVValue lock_value = RecordKVFormat::encodeLockCfValue(Region::PutFlag, pk, prewrite_ts, 0, value.toString());
+        TiKVValue lock_value = RecordKVFormat::encodeLockCfValue(Region::PutFlag, pk, prewrite_ts, 0);
 
         TiKVValue commit_value = RecordKVFormat::encodeWriteCfValue(Region::PutFlag, prewrite_ts, value.toString());
 

@@ -40,7 +40,8 @@ struct RowKeyValueRef
     const char * data;
     size_t       size;
     Int64        int_value;
-    String       toString() const
+
+    String toString() const
     {
         if (is_common_handle)
             return ToHex(data, size);
@@ -56,6 +57,7 @@ struct RowKeyValue
         : is_common_handle(is_common_handle_), value(value_), int_value(int_value_)
     {
     }
+
     RowKeyValue(bool is_common_handle_, HandleValuePtr value_) : is_common_handle(is_common_handle_), value(value_)
     {
         if (is_common_handle)
@@ -66,6 +68,7 @@ struct RowKeyValue
             int_value     = DB::DecodeInt64(cursor, *value);
         }
     }
+
     explicit RowKeyValue(const RowKeyValueRef & rowkey_value)
     {
         is_common_handle = rowkey_value.is_common_handle;
@@ -79,13 +82,26 @@ struct RowKeyValue
         }
         int_value = rowkey_value.int_value;
     }
+
     String toString() const
     {
         if (is_common_handle)
             return ToHex(value->data(), value->size());
         return std::to_string(int_value);
     }
-    RowKeyValueRef toRowKeyValueRef() const { return RowKeyValueRef{is_common_handle, value->data(), value->size(), int_value}; }
+
+    RowKeyValueRef    toRowKeyValueRef() const { return RowKeyValueRef{is_common_handle, value->data(), value->size(), int_value}; }
+    DecodedTiKVKeyPtr toRegionKey(TableID table_id) const
+    {
+        // FIXME: move this to TiKVRecordFormat.h
+        std::stringstream ss;
+        ss.put('t');
+        EncodeInt64(table_id, ss);
+        ss.put('_');
+        ss.put('r');
+        String prefix = ss.str();
+        return std::make_shared<DecodedTiKVKey>(prefix + *value);
+    }
 
     bool           is_common_handle;
     HandleValuePtr value;
@@ -95,6 +111,8 @@ struct RowKeyValue
     static const RowKeyValue INT_HANDLE_MAX_KEY;
     static const RowKeyValue EMPTY_STRING_KEY;
 };
+
+using RowKeyValues = std::vector<RowKeyValue>;
 
 inline int compare(const RowKeyValueRef & a, const RowKeyValueRef & b)
 {
@@ -108,8 +126,9 @@ inline int compare(const RowKeyValueRef & a, const RowKeyValueRef & b)
     {
         if (a.int_value != b.int_value)
             return a.int_value > b.int_value ? 1 : -1;
-        if likely (a.int_value != RowKeyValue::INT_HANDLE_MAX_KEY.int_value || (a.data == nullptr && b.data == nullptr))
+        if (likely(a.int_value != RowKeyValue::INT_HANDLE_MAX_KEY.int_value || (a.data == nullptr && b.data == nullptr)))
             return 0;
+
         bool a_inf = false;
         bool b_inf = false;
         if (a.data != nullptr)
@@ -517,6 +536,7 @@ struct RowKeyRange
 
     std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> toRegionRange(TableID table_id)
     {
+        // FIXME: move this to TiKVRecordFormat.h
         std::stringstream ss;
         ss.put('t');
         EncodeInt64(table_id, ss);

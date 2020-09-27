@@ -3,6 +3,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LearnerRead.h>
+#include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/ThreadPool.h>
@@ -114,7 +115,7 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
 
             /// Blocking learner read. Note that learner read must be performed ahead of data read,
             /// otherwise the desired index will be blocked by the lock of data read.
-            auto read_index_result = region->learnerRead();
+            auto read_index_result = region->learnerRead(start_ts);
             GET_METRIC(metrics, tiflash_raft_read_index_duration_seconds).Observe(read_index_watch.elapsedSeconds());
             if (read_index_result.region_unavailable)
             {
@@ -125,6 +126,11 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
             else if (read_index_result.region_epoch_not_match)
             {
                 region_status = RegionException::RegionReadStatus::VERSION_ERROR;
+                continue;
+            }
+            else if (read_index_result.lock_info)
+            {
+                throw LockException(region->id(), std::move(read_index_result.lock_info));
                 continue;
             }
             else
@@ -189,12 +195,14 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
     return regions_snapshot;
 }
 
+/// Ensure regions' info after read.
 void validateQueryInfo(
     const MvccQueryInfo & mvcc_query_info, const LearnerReadSnapshot & regions_snapshot, TMTContext & tmt, Poco::Logger * log)
 {
-    const auto & regions_query_info = mvcc_query_info.regions_query_info;
-    /// Ensure regions' info after read.
-    for (const auto & region_query_info : regions_query_info)
+    std::vector<RegionID> fail_region_ids;
+    RegionException::RegionReadStatus fail_status = RegionException::RegionReadStatus::OK;
+
+    for (const auto & region_query_info : mvcc_query_info.regions_query_info)
     {
         RegionException::RegionReadStatus status = RegionException::RegionReadStatus::OK;
         auto region = tmt.getKVStore()->getRegion(region_query_info.region_id);
@@ -212,6 +220,8 @@ void validateQueryInfo(
 
         if (status != RegionException::RegionReadStatus::OK)
         {
+            fail_region_ids.emplace_back(region_query_info.region_id);
+            fail_status = status;
             LOG_WARNING(log,
                 "Check after read from Storage, region "
                     << region_query_info.region_id << ", version " << region_query_info.version //
@@ -219,9 +229,12 @@ void validateQueryInfo(
                     << RecordKVFormat::DecodedTiKVKeyToReadableHandleString<true>(*region_query_info.range_in_table.first) << ", "
                     << RecordKVFormat::DecodedTiKVKeyToReadableHandleString<false>(*region_query_info.range_in_table.second) << "), status "
                     << RegionException::RegionReadStatusString(status));
-            // throw region exception and let TiDB retry
-            throwRetryRegion(regions_query_info, status);
         }
+    }
+
+    if (!fail_region_ids.empty())
+    {
+        throw RegionException(std::move(fail_region_ids), fail_status);
     }
 }
 
