@@ -572,8 +572,10 @@ struct RowKeyRange
         ss.str(std::string());
         DB::EncodeInt64(handle_range.end, ss);
         String end = ss.str();
+        /// when handle_range.end == HandleRange::MAX, according to previous implementation, it should be +Inf
         return RowKeyRange(RowKeyValue(false, std::make_shared<String>(start), handle_range.start),
-                           RowKeyValue(false, std::make_shared<String>(end), handle_range.end),
+                           handle_range.end == HandleRange::MAX ? RowKeyValue::INT_HANDLE_MAX_KEY
+                                                                : RowKeyValue(false, std::make_shared<String>(end), handle_range.end),
                            false,
                            1);
     }
