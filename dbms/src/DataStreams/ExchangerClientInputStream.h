@@ -78,11 +78,11 @@ class ExchangeClientInputStream : public IProfilingBlockInputStream
 
     void startAndRead(const String & raw)
     {
-        auto server_task = std::make_shared<mpp::TaskMeta>();
+        auto server_task = new mpp::TaskMeta();
         server_task->ParseFromString(raw);
         auto req = std::make_shared<mpp::EstablishMPPConnectionRequest>();
-        req->set_allocated_client_meta(&task_meta);
-        req->set_allocated_server_meta(server_task.get());
+        req->set_allocated_client_meta(new mpp::TaskMeta(task_meta));
+        req->set_allocated_server_meta(server_task);
         LOG_DEBUG(log, "begin start and read : " << req->DebugString());
         pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> call(req);
         grpc::ClientContext client_context;
