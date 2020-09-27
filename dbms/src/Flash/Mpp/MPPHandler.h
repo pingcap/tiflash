@@ -42,7 +42,7 @@ struct MPPTunnel
 
     Logger * log;
 
-    MPPTunnel(const mpp::TaskMeta & client_meta_, const mpp::TaskMeta & server_meta_ ) :
+    MPPTunnel(const mpp::TaskMeta & client_meta_, const mpp::TaskMeta & server_meta_ ) : connected(false), finished(false),
         log(&Logger::get("tunnel" + std::to_string(server_meta_.task_id()) + "+" + std::to_string(client_meta_.task_id()))) {}
 
     ~MPPTunnel()
@@ -65,6 +65,8 @@ struct MPPTunnel
         LOG_DEBUG(log, "begin to write");
 
         writer->Write(data);
+
+        LOG_DEBUG(log, "finish write");
     }
 
     // finish the writing.
@@ -173,6 +175,7 @@ struct MPPTask : private boost::noncopyable
 
             while (Block block = from->read())
             {
+                LOG_DEBUG(log, "write block " + std::to_string(block.rows()));
                 to->write(block);
             }
 
