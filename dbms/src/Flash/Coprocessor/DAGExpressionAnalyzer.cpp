@@ -11,6 +11,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsConditional.h>
+#include <Functions/FunctionsTiDBConversion.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Set.h>
 #include <Interpreters/convertFieldToType.h>
@@ -122,15 +123,42 @@ static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr
     return analyzer->applyFunction(is_not_in ? "and" : "or", argument_names, actions, nullptr);
 }
 
+static const String tidb_cast_name = "tidb_cast";
+
+static String buildCastFunctionInternal(DAGExpressionAnalyzer * analyzer, const Names & argument_names, bool in_union,
+    const tipb::FieldType & field_type, ExpressionActionsPtr & actions)
+{
+    String result_name = genFuncString(tidb_cast_name, argument_names);
+    if (actions->getSampleBlock().has(result_name))
+        return result_name;
+
+    FunctionBuilderPtr function_builder = FunctionFactory::instance().get(tidb_cast_name, analyzer->getContext());
+    FunctionBuilderTiDBCast * function_builder_tidb_cast = dynamic_cast<FunctionBuilderTiDBCast *>(function_builder.get());
+    function_builder_tidb_cast->setInUnion(in_union);
+    function_builder_tidb_cast->setTiDBFieldType(field_type);
+
+    const ExpressionAction & apply_function = ExpressionAction::applyFunction(function_builder, argument_names, result_name, nullptr);
+    actions->add(apply_function);
+    return result_name;
+}
+
+/// buildCastFunction build tidb_cast function
 static String buildCastFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
 {
     if (expr.children_size() != 1)
-    {
         throw TiFlashException("Cast function only support one argument", Errors::Coprocessor::BadRequest);
-    }
+    if (!exprHasValidFieldType(expr))
+        throw TiFlashException("CAST function without valid field type", Errors::Coprocessor::BadRequest);
+
     String name = analyzer->getActions(expr.children(0), actions);
-    name = analyzer->appendCastIfNeeded(expr, actions, name, true);
-    return name;
+    DataTypePtr expected_type = getDataTypeByFieldType(expr.field_type());
+
+    tipb::Expr type_expr;
+    constructStringLiteralTiExpr(type_expr, expected_type->getName());
+    auto type_expr_name = analyzer->getActions(type_expr, actions);
+
+    // todo extract in_union from tipb::Expr
+    return buildCastFunctionInternal(analyzer, {name, type_expr_name}, false, expr.field_type(), actions);
 }
 
 static String buildDateAddFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
@@ -195,7 +223,7 @@ static std::unordered_map<String, std::function<String(DAGExpressionAnalyzer *, 
         {"tidbIn", buildInFunction},
         {"tidbNotIn", buildInFunction},
         {"multiIf", buildMultiIfFunction},
-        {"CAST", buildCastFunction},
+        {"tidb_cast", buildCastFunction},
         {"date_add", buildDateAddFunction},
     });
 
@@ -395,7 +423,14 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
     }
     if (org_type->isStringOrFixedString())
     {
-        String num_col_name = applyFunction("toInt64OrNull", {column_name}, actions, nullptr);
+        /// use tidb_cast to make it compatible with TiDB
+        tipb::FieldType field_type;
+        field_type.set_tp(TiDB::TypeLongLong);
+        tipb::Expr type_expr;
+        constructStringLiteralTiExpr(type_expr, "Nullable(Int64)");
+        auto type_expr_name = getActions(type_expr, actions);
+        String num_col_name = buildCastFunctionInternal(this, {column_name, type_expr_name}, false, field_type, actions);
+
         tipb::Expr const_expr;
         constructInt64LiteralTiExpr(const_expr, 0);
         auto const_expr_name = getActions(const_expr, actions);
