@@ -62,8 +62,9 @@ void DAGDriver<batch>::execute()
 try
 {
     auto start_time = Clock::now();
-    DAGContext dag_context;
-    DAGQuerySource dag(context, dag_context, regions, dag_request, batch);
+    DAGContext dag_context(dag_request);
+    context.setDAGContext(&dag_context);
+    DAGQuerySource dag(context, regions, dag_request, batch);
 
     BlockIO streams = executeQuery(dag, context, internal, QueryProcessingStage::Complete);
     if (!streams.in || streams.out)
