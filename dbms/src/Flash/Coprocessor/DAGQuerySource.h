@@ -8,6 +8,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/DAGQueryBlock.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/IQuerySource.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
@@ -42,8 +43,8 @@ using StreamWriterPtr = std::shared_ptr<StreamWriter>;
 class DAGQuerySource : public IQuerySource
 {
 public:
-    DAGQuerySource(Context & context_, DAGContext & dag_context_, const std::unordered_map<RegionID, RegionInfo> & regions_,
-        const tipb::DAGRequest & dag_request_, const bool is_batch_cop_ = false);
+    DAGQuerySource(Context & context_, const std::unordered_map<RegionID, RegionInfo> & regions_, const tipb::DAGRequest & dag_request_,
+        const bool is_batch_cop_ = false);
 
     std::tuple<std::string, ASTPtr> parse(size_t max_query_size) override;
     String str(size_t max_query_size) override;
@@ -62,14 +63,13 @@ public:
 
     bool isBatchCop() const { return is_batch_cop; }
 
-    DAGContext & getDAGContext() const { return dag_context; }
+    DAGContext & getDAGContext() const { return *context.getDAGContext(); }
 
 protected:
     void analyzeDAGEncodeType();
 
 protected:
     Context & context;
-    DAGContext & dag_context;
 
     const std::unordered_map<RegionID, RegionInfo> & regions;
 

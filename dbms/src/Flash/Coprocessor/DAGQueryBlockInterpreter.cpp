@@ -882,7 +882,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     right_query.source = right_pipeline.firstStream();
     right_query.join = joinPtr;
     right_query.join->setSampleBlock(right_query.source->getHeader());
-    dag.getDAGContext().profile_streams_map_for_join_build_side[query_block.qb_join_subquery_alias].push_back(right_query.source);
+    dag.getDAGContext().getProfileStreamsMapForJoinBuildSide()[query_block.qb_join_subquery_alias].push_back(right_query.source);
 
     std::vector<NameAndTypePair> source_columns;
     for (const auto & p : left_streams[0]->getHeader().getNamesAndTypesList())
@@ -1231,13 +1231,13 @@ void DAGQueryBlockInterpreter::executeOrder(Pipeline & pipeline, std::vector<Nam
 
 void DAGQueryBlockInterpreter::recordProfileStreams(Pipeline & pipeline, const String & key)
 {
-    dag.getDAGContext().profile_streams_map[key].qb_id = query_block.id;
+    dag.getDAGContext().getProfileStreamsMap()[key].qb_id = query_block.id;
     for (auto & stream : pipeline.streams)
     {
-        dag.getDAGContext().profile_streams_map[key].input_streams.push_back(stream);
+        dag.getDAGContext().getProfileStreamsMap()[key].input_streams.push_back(stream);
     }
     if (pipeline.stream_with_non_joined_data)
-        dag.getDAGContext().profile_streams_map[key].input_streams.push_back(pipeline.stream_with_non_joined_data);
+        dag.getDAGContext().getProfileStreamsMap()[key].input_streams.push_back(pipeline.stream_with_non_joined_data);
 }
 
 void copyExecutorTreeWithLocalTableScan(
