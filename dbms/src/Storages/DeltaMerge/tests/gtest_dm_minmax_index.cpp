@@ -83,7 +83,7 @@ bool checkMatch(const String &        test_case, //
     auto rows = streams[0]->read().rows();
     streams[0]->readSuffix();
 
-    return rows == 1;
+    return rows != 0;
 }
 
 bool checkMatch(const String & test_case, Context & context, String type, String value, const RSOperatorPtr & filter)
@@ -97,6 +97,7 @@ bool checkMatch(const String & test_case, Context & context, String type, String
 TEST_F(DMMinMaxIndex_test, Basic)
 try
 {
+    // clang-format off
     ASSERT_EQ(true, checkMatch(__FUNCTION__, *context, "Int64", "100", createEqual(attr("Int64"), Field((Int64)100))));
     ASSERT_EQ(false, checkMatch(__FUNCTION__, *context, "Int64", "100", createEqual(attr("Int64"), Field((Int64)101))));
     ASSERT_EQ(true, checkMatch(__FUNCTION__, *context, "Int64", "100", createIn(attr("Int64"), {Field((Int64)100)})));
@@ -122,6 +123,15 @@ try
     ASSERT_EQ(false, checkMatch(__FUNCTION__, *context, "Date", "2020-09-27", createLess(attr("Date"), Field((String) "2020-09-27"), 0)));
     ASSERT_EQ(true, checkMatch(__FUNCTION__, *context, "Date", "2020-09-27", createLessEqual(attr("Date"), Field((String) "2020-09-27"), 0)));
     ASSERT_EQ(false, checkMatch(__FUNCTION__, *context, "Date", "2020-09-27", createLessEqual(attr("Date"), Field((String) "2020-09-26"), 0)));
+
+    /// Currently we don't do filtering for null values. i.e. if a pack contains any null values, then the pack will pass the filter.
+    ASSERT_EQ(true, checkMatch(__FUNCTION__, *context, "Nullable(Int64)", {{"0", "0", "0", "100"}, {"1", "1", "0", "\\N"}}, createEqual(attr("Nullable(Int64)"), Field((Int64)101))));
+    ASSERT_EQ(true, checkMatch(__FUNCTION__, *context, "Nullable(Int64)", {{"0", "0", "0", "100"}, {"1", "1", "0", "\\N"}}, createIn(attr("Nullable(Int64)"), {Field((Int64)101)})));
+    ASSERT_EQ(true, checkMatch(__FUNCTION__, *context, "Nullable(Int64)", {{"0", "0", "0", "100"}, {"1", "1", "0", "\\N"}}, createGreater(attr("Nullable(Int64)"), Field((Int64)100), 0)));
+    ASSERT_EQ(true, checkMatch(__FUNCTION__, *context, "Nullable(Int64)", {{"0", "0", "0", "100"}, {"1", "1", "0", "\\N"}}, createGreaterEqual(attr("Nullable(Int64)"), Field((Int64)101), 0)));
+    ASSERT_EQ(true, checkMatch(__FUNCTION__, *context, "Nullable(Int64)", {{"0", "0", "0", "100"}, {"1", "1", "0", "\\N"}}, createLess(attr("Nullable(Int64)"), Field((Int64)100), 0)));
+    ASSERT_EQ(true, checkMatch(__FUNCTION__, *context, "Nullable(Int64)", {{"0", "0", "0", "100"}, {"1", "1", "0", "\\N"}}, createLessEqual(attr("Nullable(Int64)"), Field((Int64)99), 0)));
+    // clang-format on
 }
 CATCH
 

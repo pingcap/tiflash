@@ -12,7 +12,7 @@ namespace DB
 using CSVTuple = std::vector<String>;
 using CSVTuples = std::vector<CSVTuple>;
 
-Block genBlock(const Block & header, std::vector<std::vector<String>> tuples)
+Block genBlock(const Block & header, const CSVTuples & tuples)
 {
     Block block;
     for (size_t i = 0; i < header.columns(); ++i)
