@@ -163,7 +163,7 @@ public:
     }
 
 private:
-    void loadIndex(const ColId & col_id)
+    void loadIndex(const ColId col_id)
     {
         if (param.indexes.count(col_id))
             return;
