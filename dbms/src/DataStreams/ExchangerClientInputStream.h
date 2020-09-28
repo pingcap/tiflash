@@ -81,9 +81,10 @@ class ExchangeClientInputStream : public IProfilingBlockInputStream
     // Check this error is retryable
     bool canRetry(const mpp::Error & err) { return err.msg().find("can't find") != std::string::npos; }
 
+    // TODO: Try to catch the exception.
     void startAndRead(const String & raw)
     {
-        int max_retry = 3;
+        int max_retry = 15;
         for (int idx = 0; idx < max_retry; idx++)
         {
             auto server_task = new mpp::TaskMeta();
@@ -113,6 +114,7 @@ class ExchangeClientInputStream : public IProfilingBlockInputStream
                     if (canRetry(packet.error()))
                     {
                         needRetry = true;
+                        break;
                     }
                     live_workers--;
                     throw Exception("exchange client meet error");
@@ -124,7 +126,7 @@ class ExchangeClientInputStream : public IProfilingBlockInputStream
             if (needRetry)
             {
                 using namespace std::chrono_literals;
-                std::this_thread::sleep_for(10ms);
+                std::this_thread::sleep_for(100ms);
                 stream_resp->Finish();
                 continue;
             }
