@@ -77,6 +77,7 @@ public:
     String appendTimeZoneCast(const String & tz_col, const String & ts_col, const String & func_name, ExpressionActionsPtr & actions);
     DAGPreparedSets & getPreparedSets() { return prepared_sets; }
     String convertToUInt8(ExpressionActionsPtr & actions, const String & column_name);
+    const Context & getContext() const { return context; }
 };
 
 } // namespace DB

@@ -1291,6 +1291,15 @@ ProcessList::Element * Context::getProcessListElement() const
     return process_list_elem;
 }
 
+void Context::setDAGContext(DAGContext * dag_context_)
+{
+    dag_context = dag_context_;
+}
+
+DAGContext * Context::getDAGContext() const
+{
+    return dag_context;
+}
 
 void Context::setUncompressedCache(size_t max_size_in_bytes)
 {

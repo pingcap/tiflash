@@ -14,10 +14,9 @@ namespace ErrorCodes
 extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
-DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, const std::unordered_map<RegionID, RegionInfo> & regions_,
+DAGQuerySource::DAGQuerySource(Context & context_, const std::unordered_map<RegionID, RegionInfo> & regions_,
     const tipb::DAGRequest & dag_request_, const bool is_batch_cop_)
     : context(context_),
-      dag_context(dag_context_),
       regions(regions_),
       dag_request(dag_request_),
       is_batch_cop(is_batch_cop_)
@@ -30,7 +29,7 @@ DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, co
     {
         root_query_block = std::make_shared<DAGQueryBlock>(1, dag_request.executors(), context.getTiFlashMetrics());
     }
-    root_query_block->collectAllPossibleChildrenJoinSubqueryAlias(dag_context.qb_id_to_join_alias_map);
+    root_query_block->collectAllPossibleChildrenJoinSubqueryAlias(context.getDAGContext()->getQBIdToJoinAliasMap());
     for (Int32 i : dag_request.output_offsets())
         root_query_block->output_offsets.push_back(i);
     if (root_query_block->aggregation != nullptr)

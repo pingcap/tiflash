@@ -37,6 +37,9 @@ struct RowKeyValueRef
     /// when is_common_handle = false, it means the table has int/uint handle, the rowkey value is a int/uint
     bool is_common_handle;
     /// data in RowKeyValue can be nullptr if is_common_handle is false
+    /// generally speaking:
+    /// if the RowKeyValueRef comes from handle column, data is nullptr,
+    /// if the RowKeyValueRef comes from meta data, the data is not nullptr
     const char * data;
     size_t       size;
     Int64        int_value;
@@ -103,7 +106,12 @@ struct RowKeyValue
         return std::make_shared<DecodedTiKVKey>(prefix + *value);
     }
 
-    bool           is_common_handle;
+    bool is_common_handle;
+    /// In case of non common handle, the value field is redundant in most cases, except taht int_value == Int64::max_value,
+    /// because RowKeyValue is an end point of RowKeyRange, assuming that RowKeyRange = [start_value, end_value), since the
+    /// end_value of RowKeyRange is always exclusive, if we want to construct a RowKeyRange that include Int64::max_value,
+    /// just set end_value.int_value to Int64::max_value is not enough, we still need to set end_value.value a carefully
+    /// designed value. You can refer to INT_HANDLE_MAX_KEY for more details
     HandleValuePtr value;
     Int64          int_value;
 
@@ -124,11 +132,14 @@ inline int compare(const RowKeyValueRef & a, const RowKeyValueRef & b)
     }
     else
     {
+        /// in case of non common handle, we can compare the int value directly in most cases
         if (a.int_value != b.int_value)
             return a.int_value > b.int_value ? 1 : -1;
         if (likely(a.int_value != RowKeyValue::INT_HANDLE_MAX_KEY.int_value || (a.data == nullptr && b.data == nullptr)))
             return 0;
 
+        /// if a.int_value == b.int_value == Int64::max_value, we need to further check the data field because even if
+        /// the RowKeyValueRef is bigger that Int64::max_value, the int_value field is Int64::max_value at most.
         bool a_inf = false;
         bool b_inf = false;
         if (a.data != nullptr)
@@ -572,8 +583,10 @@ struct RowKeyRange
         ss.str(std::string());
         DB::EncodeInt64(handle_range.end, ss);
         String end = ss.str();
+        /// when handle_range.end == HandleRange::MAX, according to previous implementation, it should be +Inf
         return RowKeyRange(RowKeyValue(false, std::make_shared<String>(start), handle_range.start),
-                           RowKeyValue(false, std::make_shared<String>(end), handle_range.end),
+                           handle_range.end == HandleRange::MAX ? RowKeyValue::INT_HANDLE_MAX_KEY
+                                                                : RowKeyValue(false, std::make_shared<String>(end), handle_range.end),
                            false,
                            1);
     }

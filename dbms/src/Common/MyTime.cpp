@@ -813,4 +813,95 @@ size_t maxFormattedDateTimeStringLength(const String & format)
     return std::max<size_t>(result, 1);
 }
 
+MyDateTime numberToDateTime(Int64 number)
+{
+    MyDateTime datetime(0);
+
+    auto get_datetime = [](const Int64 & num) {
+        auto ymd = num / 1000000;
+        auto hms = num - ymd * 1000000;
+
+        UInt16 year = ymd / 10000;
+        ymd %= 10000;
+        UInt8 month = ymd / 100;
+        UInt8 day = ymd % 100;
+
+        UInt16 hour = hms / 10000;
+        hms %= 10000;
+        UInt8 minute = hms / 100;
+        UInt8 second = hms % 100;
+
+        return MyDateTime(year, month, day, hour, minute, second, 0);
+    };
+
+    if (number == 0)
+        return datetime;
+
+    // datetime type
+    if (number >= 10000101000000)
+    {
+        return get_datetime(number);
+    }
+
+    // check MMDD
+    if (number < 101)
+    {
+        throw Exception("Cannot convert " + std::to_string(number) + " to Datetime");
+    }
+
+    // check YYMMDD: 2000-2069
+    if (number <= 69 * 10000 + 1231)
+    {
+        number = (number + 200000000) * 1000000;
+        return get_datetime(number);
+    }
+
+    // check YYMMDD
+    if (number <= 991231)
+    {
+        number = (number + 19000000) * 1000000;
+        return get_datetime(number);
+    }
+
+    // check YYYYMMDD
+    if (number <= 10000101)
+    {
+        throw Exception("Cannot convert " + std::to_string(number) + " to Datetime");
+    }
+
+    // check hhmmss
+    if (number <= 99991231)
+    {
+        number = number * 1000000;
+        return get_datetime(number);
+    }
+
+    // check MMDDhhmmss
+    if (number < 101000000)
+    {
+        throw Exception("Cannot convert " + std::to_string(number) + " to Datetime");
+    }
+
+    // check YYMMDDhhmmss: 2000-2069
+    if (number <= 69 * 10000000000 + 1231235959)
+    {
+        number += 20000000000000;
+        return get_datetime(number);
+    }
+
+    // check YYMMDDhhmmss
+    if (number < 70 * 10000000000 + 101000000)
+    {
+        throw Exception("Cannot convert " + std::to_string(number) + " to Datetime");
+    }
+
+    if (number <= 991231235959)
+    {
+        number += 19000000000000;
+        return get_datetime(number);
+    }
+
+    return get_datetime(number);
+}
+
 } // namespace DB
