@@ -264,6 +264,16 @@ std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
     {"bit_not", tipb::ScalarFuncSig::BitNegSig},
     {"notequals", tipb::ScalarFuncSig::NEInt},
     {"like", tipb::ScalarFuncSig::LikeSig},
+    {"cast_int_int", tipb::ScalarFuncSig::CastIntAsInt},
+    {"cast_real_int", tipb::ScalarFuncSig::CastRealAsInt},
+    {"cast_decimal_int", tipb::ScalarFuncSig::CastDecimalAsInt},
+    {"cast_time_int", tipb::ScalarFuncSig::CastTimeAsInt},
+    {"cast_string_int", tipb::ScalarFuncSig::CastStringAsInt},
+    {"cast_int_decimal", tipb::ScalarFuncSig::CastIntAsDecimal},
+    {"cast_real_decimal", tipb::ScalarFuncSig::CastRealAsDecimal},
+    {"cast_decimal_decimal", tipb::ScalarFuncSig::CastDecimalAsDecimal},
+    {"cast_time_decimal", tipb::ScalarFuncSig::CastTimeAsDecimal},
+    {"cast_string_decimal", tipb::ScalarFuncSig::CastStringAsDecimal},
 });
 
 void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::unordered_set<String> & referred_columns,
@@ -476,6 +486,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest, MakeResOutputStream> compileQue
     tipb::DAGRequest dag_request;
     dag_request.set_time_zone_name(properties.tz_name);
     dag_request.set_time_zone_offset(properties.tz_offset);
+    dag_request.set_flags(dag_request.flags() | (1u << 1u /* TRUNCATE_AS_WARNING */) | (1u << 6u /* OVERFLOW_AS_WARNING */));
 
     if (properties.encode_type == "chunk")
         dag_request.set_encode_type(tipb::EncodeType::TypeChunk);
