@@ -556,7 +556,7 @@ TiFlashApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 in
     if (index <= appliedIndex())
     {
         LOG_TRACE(log, toString() << " ignore outdated raft log [term: " << term << ", index: " << index << "]");
-        return TiFlashApplyRes::Persist;
+        return TiFlashApplyRes::None;
     }
 
     const auto handle_by_index_func = [&](auto i) {
