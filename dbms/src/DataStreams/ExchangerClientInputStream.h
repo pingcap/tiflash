@@ -54,12 +54,13 @@ class ExchangeClientInputStream : public IProfilingBlockInputStream
     std::mutex rw_mu;
     std::condition_variable cv;
     std::queue<Block> q;
-    bool finish ;
-    bool inited ;
+    std::atomic_int live_workers;
+    bool inited;
 
     Logger * log;
 
-    void decodePacket(const mpp::MPPDataPacket & p) {
+    void decodePacket(const mpp::MPPDataPacket & p)
+    {
         tipb::SelectResponse resp;
         resp.ParseFromString(p.data());
         int chunks_size = resp.chunks_size();
@@ -90,7 +91,7 @@ class ExchangeClientInputStream : public IProfilingBlockInputStream
 
         LOG_DEBUG(log, "wait init");
 
-        stream_resp -> WaitForInitialMetadata();
+        stream_resp->WaitForInitialMetadata();
 
         LOG_DEBUG(log, "begin wait");
 
@@ -102,20 +103,21 @@ class ExchangeClientInputStream : public IProfilingBlockInputStream
             {
                 // TODO: Sleep for a while.
                 LOG_DEBUG(log, "meet error " << packet.error().msg());
+                live_workers--;
+                throw Exception("exchange client meet error");
             }
 
             LOG_DEBUG(log, "read success");
             decodePacket(packet);
-            LOG_DEBUG(log, "write success");
         }
-        LOG_DEBUG(log, "finish success");
+        LOG_DEBUG(log, "finish worker success");
 
-        finish = true;
+        live_workers--;
     }
 
 public:
     ExchangeClientInputStream(TMTContext & context_, const ::tipb::ExchangeClient & exc, const ::mpp::TaskMeta & meta)
-        : context(context_), exchange_client(exc), task_meta(meta), finish(false), inited(false), log(&Logger::get("exchangeclient"))
+        : context(context_), exchange_client(exc), task_meta(meta), live_workers(0), inited(false), log(&Logger::get("exchangeclient"))
     {
 
         // generate sample block
@@ -143,10 +145,9 @@ public:
         int task_size = exchange_client.encoded_task_meta_size();
         for (int i = 0; i < task_size; i++)
         {
-            //     std::thread t(&ExchangeClientInputStream::startAndRead, this, std::ref(exchange_client.encoded_task_meta(i)));
-            //     workers.push_back(std::move(t));
-
-            startAndRead(exchange_client.encoded_task_meta(i)); // TODO: change it to asynchronical
+            live_workers++;
+            std::thread t(&ExchangeClientInputStream::startAndRead, this, std::ref(exchange_client.encoded_task_meta(i)));
+            workers.push_back(std::move(t));
         }
         inited = true;
     }
@@ -156,14 +157,13 @@ public:
         if (!inited)
             init();
         std::unique_lock<std::mutex> lk(rw_mu);
-        cv.wait(lk, [&] { return q.size() > 0 || finish; });
+        cv.wait(lk, [&] { return q.size() > 0 || live_workers == 0; });
         if (q.empty())
         {
             return {};
         }
         Block blk = q.front();
         q.pop();
-        LOG_DEBUG(log, "got block");
         return blk;
     }
 };
