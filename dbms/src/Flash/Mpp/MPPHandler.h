@@ -42,8 +42,11 @@ struct MPPTunnel
 
     Logger * log;
 
-    MPPTunnel(const mpp::TaskMeta & client_meta_, const mpp::TaskMeta & server_meta_ ) : connected(false), finished(false),
-        log(&Logger::get("tunnel" + std::to_string(server_meta_.task_id()) + "+" + std::to_string(client_meta_.task_id()))) {}
+    MPPTunnel(const mpp::TaskMeta & client_meta_, const mpp::TaskMeta & server_meta_)
+        : connected(false),
+          finished(false),
+          log(&Logger::get("tunnel" + std::to_string(server_meta_.task_id()) + "+" + std::to_string(client_meta_.task_id())))
+    {}
 
     ~MPPTunnel()
     {
@@ -148,7 +151,7 @@ struct MPPTask : private boost::noncopyable
 
     std::thread worker;
 
-    std::map<MPPTaskId, MPPTunnelPtr> tunnel_map;
+    std::map<MPPTaskId, MPPTunnelPtr> tunnel_map; // tunnel should be connected.
 
     Logger * log;
 
@@ -199,7 +202,30 @@ struct MPPTask : private boost::noncopyable
         catch (Exception & e)
         {
             LOG_ERROR(log, "task running meets error " << e.displayText());
-            err = e;
+            writeErrToAllTunnel(e.displayText());
+        }
+        catch (std::exception & e)
+        {
+            LOG_ERROR(log, "task running meets error " << e.what());
+            writeErrToAllTunnel(e.what());
+        }
+        catch (...)
+        {
+            LOG_ERROR(log, "uncover error");
+            writeErrToAllTunnel("unknown error");
+        }
+    }
+
+    void writeErrToAllTunnel(const String & e)
+    {
+        for (auto it : tunnel_map)
+        {
+            mpp::MPPDataPacket data;
+            auto err = new mpp::Error();
+            err->set_msg(e);
+            data.set_allocated_error(err);
+            it.second->write(data);
+            it.second->writeDone();
         }
     }
 

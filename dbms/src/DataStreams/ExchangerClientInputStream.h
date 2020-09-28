@@ -5,6 +5,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
 
+#include <chrono>
 #include <mutex>
 #include <thread>
 
@@ -77,42 +78,61 @@ class ExchangeClientInputStream : public IProfilingBlockInputStream
         }
     }
 
+    // Check this error is retryable
+    bool canRetry(const mpp::Error & err) { return err.msg().find("can't find") != std::string::npos; }
+
     void startAndRead(const String & raw)
     {
-        auto server_task = new mpp::TaskMeta();
-        server_task->ParseFromString(raw);
-        auto req = std::make_shared<mpp::EstablishMPPConnectionRequest>();
-        req->set_allocated_client_meta(new mpp::TaskMeta(task_meta));
-        req->set_allocated_server_meta(server_task);
-        LOG_DEBUG(log, "begin start and read : " << req->DebugString());
-        pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> call(req);
-        grpc::ClientContext client_context;
-        auto stream_resp = context.getCluster()->rpc_client->sendStreamRequest(server_task->address(), &client_context, call);
-
-        LOG_DEBUG(log, "wait init");
-
-        stream_resp->WaitForInitialMetadata();
-
-        LOG_DEBUG(log, "begin wait");
-
-        mpp::MPPDataPacket packet;
-
-        while (stream_resp->Read(&packet))
+        int max_retry = 3;
+        for (int idx = 0; idx < max_retry; idx++)
         {
-            if (packet.has_error())
+            auto server_task = new mpp::TaskMeta();
+            server_task->ParseFromString(raw);
+            auto req = std::make_shared<mpp::EstablishMPPConnectionRequest>();
+            req->set_allocated_client_meta(new mpp::TaskMeta(task_meta));
+            req->set_allocated_server_meta(server_task);
+            LOG_DEBUG(log, "begin start and read : " << req->DebugString());
+            pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> call(req);
+            grpc::ClientContext client_context;
+            auto stream_resp = context.getCluster()->rpc_client->sendStreamRequest(server_task->address(), &client_context, call);
+
+            LOG_DEBUG(log, "wait init");
+
+            stream_resp->WaitForInitialMetadata();
+
+            LOG_DEBUG(log, "begin wait");
+
+            mpp::MPPDataPacket packet;
+
+            bool needRetry = false;
+            while (stream_resp->Read(&packet))
             {
-                // TODO: Sleep for a while.
-                LOG_DEBUG(log, "meet error " << packet.error().msg());
-                live_workers--;
-                throw Exception("exchange client meet error");
+                if (packet.has_error()) // This is the only way that down stream pass an error.
+                {
+                    LOG_DEBUG(log, "meet error " << packet.error().msg());
+                    if (canRetry(packet.error()))
+                    {
+                        needRetry = true;
+                    }
+                    live_workers--;
+                    throw Exception("exchange client meet error");
+                }
+
+                LOG_DEBUG(log, "read success");
+                decodePacket(packet);
+            }
+            if (needRetry)
+            {
+                using namespace std::chrono_literals;
+                std::this_thread::sleep_for(10ms);
+                stream_resp->Finish();
+                continue;
             }
 
-            LOG_DEBUG(log, "read success");
-            decodePacket(packet);
+            live_workers--;
+            LOG_DEBUG(log, "finish worker success");
+            break;
         }
-        LOG_DEBUG(log, "finish worker success");
-
-        live_workers--;
     }
 
 public:

@@ -5,9 +5,9 @@
 #include <Flash/BatchCoprocessorHandler.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/MPPHandler.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <Interpreters/Context.h>
 #include <Server/IServer.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/server_builder.h>
 
 #include <ext/scope_guard.h>
@@ -90,7 +90,9 @@ grpc::Status FlashService::Coprocessor(
     return ret;
 }
 
-::grpc::Status FlashService::DispatchMPPTask(::grpc::ServerContext* grpc_context, const ::mpp::DispatchTaskRequest* request, ::mpp::DispatchTaskResponse* response) {
+::grpc::Status FlashService::DispatchMPPTask(
+    ::grpc::ServerContext * grpc_context, const ::mpp::DispatchTaskRequest * request, ::mpp::DispatchTaskResponse * response)
+{
 
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling mpp dispatch request: " << request->DebugString());
 
@@ -110,7 +112,9 @@ grpc::Status FlashService::Coprocessor(
     return mpp_handler.execute(response);
 }
 
-::grpc::Status FlashService::EstablishMPPConnection(::grpc::ServerContext* grpc_context, const ::mpp::EstablishMPPConnectionRequest* request, ::grpc::ServerWriter< ::mpp::MPPDataPacket>* writer) {
+::grpc::Status FlashService::EstablishMPPConnection(::grpc::ServerContext * grpc_context,
+    const ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer)
+{
 
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling establish mpp connection request: " << request->DebugString());
 
@@ -129,16 +133,25 @@ grpc::Status FlashService::Coprocessor(
     auto & tmt_context = context.getTMTContext();
     MPPTaskManagerPtr task_manager = tmt_context.getMPPTaskManager();
     MPPTaskPtr server_task = task_manager->findTask(request->server_meta());
-    if (server_task == nullptr) {
-        // TODO: write some errors;
+    if (server_task == nullptr)
+    {
+        mpp::MPPDataPacket packet;
+        auto err = new mpp::Error();
+        err->set_msg("can't find task " + request->server_meta().DebugString());
+        packet.set_allocated_error(err);
+        writer->Write(packet);
         return grpc::Status::OK;
     }
     MPPTunnelPtr tunnel = server_task->getTunnel(request->client_meta());
-    if (tunnel == nullptr) {
-        // TODO:: return error;
+    if (tunnel == nullptr)
+    {
+        mpp::MPPDataPacket packet;
+        auto err = new mpp::Error();
+        err->set_msg("can't find tunnel " + request->server_meta().DebugString());
+        packet.set_allocated_error(err);
+        writer->Write(packet);
         return grpc::Status::OK;
     }
-    LOG_DEBUG(log, "get tunnel successfully and begin to connect");
     tunnel->connect(writer);
     LOG_DEBUG(log, "connect tunnel successfully and begin to wait");
     tunnel->waitForFinish();
@@ -146,7 +159,7 @@ grpc::Status FlashService::Coprocessor(
     return grpc::Status::OK;
 }
 
-    grpc::Status FlashService::BatchCommands(
+grpc::Status FlashService::BatchCommands(
     grpc::ServerContext * grpc_context, grpc::ServerReaderWriter<::tikvpb::BatchCommandsResponse, tikvpb::BatchCommandsRequest> * stream)
 {
     if (!security_config.checkGrpcContext(grpc_context))
