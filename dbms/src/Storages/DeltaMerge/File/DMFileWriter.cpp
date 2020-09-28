@@ -182,8 +182,7 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
                 throw DB::TiFlashException("Unknown type of substream_path: " + std::to_string(substream[0].type),
                                            Errors::DeltaTree::Internal);
             }
-            single_file_stream->original_hashing.next();
-            single_file_stream->compressed_buf.next();
+            single_file_stream->flushCompressedData();
             size_t mark_size_in_file = single_file_stream->plain_hashing.count() - offset_in_compressed_file;
             single_file_stream->column_mark_with_sizes.at(stream_name)
                 .push_back(MarkWithSizeInCompressedFile{MarkInCompressedFile{.offset_in_compressed_file    = offset_in_compressed_file,

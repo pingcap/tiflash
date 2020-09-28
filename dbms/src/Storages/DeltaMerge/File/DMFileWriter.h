@@ -87,6 +87,12 @@ public:
         {
         }
 
+        void flushCompressedData()
+        {
+            original_hashing.next();
+            compressed_buf.next();
+        }
+
         void flush()
         {
             plain_hashing.next();
