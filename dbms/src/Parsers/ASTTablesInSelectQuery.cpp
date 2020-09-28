@@ -168,6 +168,9 @@ void ASTTableJoin::formatImplBeforeTable(const FormatSettings & settings, Format
         case Kind::Comma:
             settings.ostr << ",";
             break;
+        case Kind::Anti:
+            settings.ostr << "ANTI JOIN";
+            break;
     }
 
     settings.ostr << (settings.hilite ? hilite_none : "");
