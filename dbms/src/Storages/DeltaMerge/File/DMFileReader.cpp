@@ -186,8 +186,8 @@ DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
             continue;
 
         auto callback = [&](const IDataType::SubstreamPath & substream) {
-            String stream_name = DMFile::getFileNameBase(cd.id, substream);
-            auto   stream      = std::make_unique<Stream>( //
+            const auto stream_name = DMFile::getFileNameBase(cd.id, substream);
+            auto       stream      = std::make_unique<Stream>( //
                 *this,
                 cd.id,
                 stream_name,
@@ -318,7 +318,7 @@ Block DMFileReader::read()
         }
         else
         {
-            const String stream_name = DMFile::getFileNameBase(cd.id);
+            const auto stream_name = DMFile::getFileNameBase(cd.id);
             if (auto iter = column_streams.find(stream_name); iter != column_streams.end())
             {
                 if (enable_column_cache && isCacheableColumn(cd))
@@ -394,7 +394,7 @@ Block DMFileReader::read()
 void DMFileReader::readFromDisk(
     ColumnDefine & column_define, MutableColumnPtr & column, size_t start_pack_id, size_t read_rows, size_t skip_packs, bool force_seek)
 {
-    const String stream_name = DMFile::getFileNameBase(column_define.id);
+    const auto stream_name = DMFile::getFileNameBase(column_define.id);
     if (auto iter = column_streams.find(stream_name); iter != column_streams.end())
     {
         auto & top_stream  = iter->second;
@@ -404,8 +404,8 @@ void DMFileReader::readFromDisk(
         data_type->deserializeBinaryBulkWithMultipleStreams( //
             *column,
             [&](const IDataType::SubstreamPath & substream_path) {
-                String substream_name = DMFile::getFileNameBase(column_define.id, substream_path);
-                auto & sub_stream     = column_streams.at(substream_name);
+                const auto substream_name = DMFile::getFileNameBase(column_define.id, substream_path);
+                auto &     sub_stream     = column_streams.at(substream_name);
 
                 if (should_seek)
                 {

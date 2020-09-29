@@ -44,12 +44,12 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
         {
             if (do_index)
             {
-                String column_name = DMFile::getFileNameBase(cd.id, {});
+                const auto column_name = DMFile::getFileNameBase(cd.id, {});
                 single_file_stream->minmax_indexs.emplace(column_name, std::make_shared<MinMaxIndex>(*cd.type));
             }
 
             auto callback = [&](const IDataType::SubstreamPath & substream_path) {
-                String stream_name = DMFile::getFileNameBase(cd.id, substream_path);
+                const auto stream_name = DMFile::getFileNameBase(cd.id, substream_path);
                 single_file_stream->column_data_sizes.emplace(stream_name, 0);
                 single_file_stream->column_mark_with_sizes.emplace(stream_name, SingleFileStream::MarkWithSizes{});
             };
@@ -66,8 +66,8 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
 void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
 {
     auto callback = [&](const IDataType::SubstreamPath & substream_path) {
-        String stream_name = DMFile::getFileNameBase(col_id, substream_path);
-        auto   stream      = std::make_unique<Stream>(dmfile, //
+        const auto stream_name = DMFile::getFileNameBase(col_id, substream_path);
+        auto       stream      = std::make_unique<Stream>(dmfile, //
                                                stream_name,
                                                type,
                                                compression_settings,
@@ -132,8 +132,8 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
     if (single_file_mode)
     {
         auto callback = [&](const IDataType::SubstreamPath & substream) {
-            size_t offset_in_compressed_file = single_file_stream->plain_hashing.count();
-            String stream_name               = DMFile::getFileNameBase(col_id, substream);
+            size_t     offset_in_compressed_file = single_file_stream->plain_hashing.count();
+            const auto stream_name               = DMFile::getFileNameBase(col_id, substream);
             if (unlikely(substream.size() > 1))
                 throw DB::TiFlashException("Substream_path shouldn't be more than one.", Errors::DeltaTree::Internal);
 
@@ -196,8 +196,8 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
     {
         type.enumerateStreams(
             [&](const IDataType::SubstreamPath & substream) {
-                String name   = DMFile::getFileNameBase(col_id, substream);
-                auto & stream = column_streams.at(name);
+                const auto name   = DMFile::getFileNameBase(col_id, substream);
+                auto &     stream = column_streams.at(name);
                 if (stream->minmaxes)
                     stream->minmaxes->addPack(column, nullptr);
 
@@ -214,8 +214,8 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
 
         type.serializeBinaryBulkWithMultipleStreams(column, //
                                                     [&](const IDataType::SubstreamPath & substream) {
-                                                        String stream_name = DMFile::getFileNameBase(col_id, substream);
-                                                        auto & stream      = column_streams.at(stream_name);
+                                                        const auto stream_name = DMFile::getFileNameBase(col_id, substream);
+                                                        auto &     stream      = column_streams.at(stream_name);
                                                         return &(stream->original_hashing);
                                                     },
                                                     0,
@@ -225,8 +225,8 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
 
         type.enumerateStreams(
             [&](const IDataType::SubstreamPath & substream) {
-                String name   = DMFile::getFileNameBase(col_id, substream);
-                auto & stream = column_streams.at(name);
+                const auto name   = DMFile::getFileNameBase(col_id, substream);
+                auto &     stream = column_streams.at(name);
                 stream->original_hashing.nextIfAtEnd();
             },
             {});
@@ -243,9 +243,9 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
     if (single_file_mode)
     {
         auto callback = [&](const IDataType::SubstreamPath & substream) {
-            String stream_name = DMFile::getFileNameBase(col_id, substream);
+            const auto stream_name = DMFile::getFileNameBase(col_id, substream);
 
-            dmfile->addSubFileStat(DMFile::colDataIdentifier(stream_name), 0, single_file_stream->column_data_sizes.at(stream_name));
+            dmfile->addSubFileStat(DMFile::colDataFileName(stream_name), 0, single_file_stream->column_data_sizes.at(stream_name));
 
             // write mark
             size_t mark_offset_in_file = single_file_stream->plain_hashing.count();
@@ -256,7 +256,7 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                 writeIntBinary(mark_with_size.mark_size, single_file_stream->plain_hashing);
             }
             size_t mark_size_in_file = single_file_stream->plain_hashing.count() - mark_offset_in_file;
-            dmfile->addSubFileStat(DMFile::colMarkIdentifier(stream_name), mark_offset_in_file, mark_size_in_file);
+            dmfile->addSubFileStat(DMFile::colMarkFileName(stream_name), mark_offset_in_file, mark_size_in_file);
 
             // write minmax
             auto & minmax_indexs = single_file_stream->minmax_indexs;
@@ -266,7 +266,7 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                 iter->second->write(*type, single_file_stream->plain_hashing);
                 size_t minmax_size_in_file = single_file_stream->plain_hashing.count() - minmax_offset_in_file;
                 bytes_written += minmax_size_in_file;
-                dmfile->addSubFileStat(DMFile::colIndexIdentifier(stream_name), minmax_offset_in_file, minmax_size_in_file);
+                dmfile->addSubFileStat(DMFile::colIndexFileName(stream_name), minmax_offset_in_file, minmax_size_in_file);
             }
         };
         type->enumerateStreams(callback, {});
@@ -274,8 +274,8 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
     else
     {
         auto callback = [&](const IDataType::SubstreamPath & substream) {
-            String stream_name = DMFile::getFileNameBase(col_id, substream);
-            auto & stream      = column_streams.at(stream_name);
+            const auto stream_name = DMFile::getFileNameBase(col_id, substream);
+            auto &     stream      = column_streams.at(stream_name);
             stream->flush();
             bytes_written += stream->getWrittenBytes();
 

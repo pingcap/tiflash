@@ -22,7 +22,6 @@ class DMFile : private boost::noncopyable
 public:
     enum Mode : int
     {
-        UNKNOWN,
         SINGLE_FILE,
         FOLDER,
     };
@@ -104,29 +103,31 @@ public:
     UInt64 fileId() const { return file_id; }
     UInt64 refId() const { return ref_id; }
     String path() const { return parent_path + (status == Status::READABLE ? "/dmf_" : "/.tmp.dmf_") + DB::toString(file_id); }
-    String metaPath() const { return subFilePath(metaIdentifier()); }
-    String packStatPath() const { return subFilePath(packStatIdentifier()); }
+    String metaPath() const { return subFilePath(metaFileName()); }
+    String packStatPath() const { return subFilePath(packStatFileName()); }
     // Do not gc me.
     String ngcPath() const;
-    String colDataPath(const String & file_name_base) const { return subFilePath(colDataIdentifier(file_name_base)); }
-    String colIndexPath(const String & file_name_base) const { return subFilePath(colIndexIdentifier(file_name_base)); }
-    String colMarkPath(const String & file_name_base) const { return subFilePath(colMarkIdentifier(file_name_base)); }
 
-    String colIndexCacheKey(const String & file_name_base) const;
-    String colMarkCacheKey(const String & file_name_base) const;
+    using FileNameBase = String;
+    String colDataPath(const FileNameBase & file_name_base) const { return subFilePath(colDataFileName(file_name_base)); }
+    String colIndexPath(const FileNameBase & file_name_base) const { return subFilePath(colIndexFileName(file_name_base)); }
+    String colMarkPath(const FileNameBase & file_name_base) const { return subFilePath(colMarkFileName(file_name_base)); }
 
-    size_t colIndexOffset(const String & file_name_base) const { return subFileOffset(colIndexIdentifier(file_name_base)); }
-    size_t colMarkOffset(const String & file_name_base) const { return subFileOffset(colMarkIdentifier(file_name_base)); }
-    size_t colIndexSize(const String & file_name_base) const { return subFileSize(colIndexIdentifier(file_name_base)); }
-    size_t colMarkSize(const String & file_name_base) const { return subFileSize(colMarkIdentifier(file_name_base)); }
-    size_t colDataSize(const String & file_name_base) const { return subFileSize(colDataIdentifier(file_name_base)); }
+    String colIndexCacheKey(const FileNameBase & file_name_base) const;
+    String colMarkCacheKey(const FileNameBase & file_name_base) const;
+
+    size_t colIndexOffset(const FileNameBase & file_name_base) const { return subFileOffset(colIndexFileName(file_name_base)); }
+    size_t colMarkOffset(const FileNameBase & file_name_base) const { return subFileOffset(colMarkFileName(file_name_base)); }
+    size_t colIndexSize(const FileNameBase & file_name_base) const { return subFileSize(colIndexFileName(file_name_base)); }
+    size_t colMarkSize(const FileNameBase & file_name_base) const { return subFileSize(colMarkFileName(file_name_base)); }
+    size_t colDataSize(const FileNameBase & file_name_base) const { return subFileSize(colDataFileName(file_name_base)); }
 
     bool isColIndexExist(const ColId & col_id) const;
 
     const String         encryptionBasePath() const { return parent_path + "/dmf_" + DB::toString(file_id); }
-    const EncryptionPath encryptionDataPath(const String & file_name_base) const;
-    const EncryptionPath encryptionIndexPath(const String & file_name_base) const;
-    const EncryptionPath encryptionMarkPath(const String & file_name_base) const;
+    const EncryptionPath encryptionDataPath(const FileNameBase & file_name_base) const;
+    const EncryptionPath encryptionIndexPath(const FileNameBase & file_name_base) const;
+    const EncryptionPath encryptionMarkPath(const FileNameBase & file_name_base) const;
     const EncryptionPath encryptionMetaPath() const;
     const EncryptionPath encryptionPackStatPath() const;
 
@@ -172,25 +173,25 @@ public:
 
     Status getStatus() const { return status; }
 
-    static String getFileNameBase(ColId col_id, const IDataType::SubstreamPath & substream = {})
+    static FileNameBase getFileNameBase(ColId col_id, const IDataType::SubstreamPath & substream = {})
     {
         return IDataType::getFileNameForStream(DB::toString(col_id), substream);
     }
 
 private:
-    DMFile(UInt64 file_id_, UInt64 ref_id_, const String & parent_path_, DMFile::Status status_, Logger * log_)
-        : file_id(file_id_), ref_id(ref_id_), parent_path(parent_path_), mode(Mode::UNKNOWN), status(status_), log(log_)
+    DMFile(UInt64 file_id_, UInt64 ref_id_, const String & parent_path_, Mode mode_, Status status_, Logger * log_)
+        : file_id(file_id_), ref_id(ref_id_), parent_path(parent_path_), mode(mode_), status(status_), log(log_)
     {
     }
 
     bool isSingleFileMode() const { return mode == Mode::SINGLE_FILE; }
     bool isFolderMode() const { return mode == Mode::FOLDER; }
 
-    static String metaIdentifier() { return "meta.txt"; }
-    static String packStatIdentifier() { return "pack"; }
-    static String colDataIdentifier(const String & file_name_base) { return file_name_base + ".dat"; }
-    static String colIndexIdentifier(const String & file_name_base) { return file_name_base + ".idx"; }
-    static String colMarkIdentifier(const String & file_name_base) { return file_name_base + ".mrk"; }
+    static String metaFileName() { return "meta.txt"; }
+    static String packStatFileName() { return "pack"; }
+    static String colDataFileName(const FileNameBase & file_name_base) { return file_name_base + ".dat"; }
+    static String colIndexFileName(const FileNameBase & file_name_base) { return file_name_base + ".idx"; }
+    static String colMarkFileName(const FileNameBase & file_name_base) { return file_name_base + ".mrk"; }
 
     std::tuple<size_t, size_t> writeMeta(WriteBuffer & buffer);
     std::tuple<size_t, size_t> writePack(WriteBuffer & buffer);
@@ -203,7 +204,6 @@ private:
     void addPack(const PackStat & pack_stat) { pack_stats.push_back(pack_stat); }
     void setStatus(Status status_) { status = status_; }
 
-    void initializeMode() { mode = Poco::File(path()).isFile() ? Mode::SINGLE_FILE : Mode::FOLDER; }
     void initializeSubFileStatIfNeeded(const FileProviderPtr & file_provider);
 
     void finalize(const FileProviderPtr & file_provider);
@@ -215,19 +215,13 @@ private:
 
     bool isSubFileExists(const String & name) const { return sub_file_stats.find(name) != sub_file_stats.end(); }
 
-    const String subFilePath(const String & file_identifier) const
-    {
-        return isSingleFileMode() ? path() : path() + "/" + file_identifier;
-    }
+    const String subFilePath(const String & file_name) const { return isSingleFileMode() ? path() : path() + "/" + file_name; }
 
-    size_t subFileOffset(const String & file_identifier) const
-    {
-        return isSingleFileMode() ? getSubFileStat(file_identifier).offset : 0;
-    }
+    size_t subFileOffset(const String & file_name) const { return isSingleFileMode() ? getSubFileStat(file_name).offset : 0; }
 
-    size_t subFileSize(const String & file_identifier) const
+    size_t subFileSize(const String & file_name) const
     {
-        return isSingleFileMode() ? getSubFileStat(file_identifier).size : Poco::File(subFilePath(file_identifier)).getSize();
+        return isSingleFileMode() ? getSubFileStat(file_name).size : Poco::File(subFilePath(file_name)).getSize();
     }
 
 private:
@@ -241,7 +235,8 @@ private:
     Mode   mode;
     Status status;
 
-    SubFileStats sub_file_stats;
+    mutable std::mutex mutex;
+    SubFileStats       sub_file_stats;
 
     Logger * log;
 

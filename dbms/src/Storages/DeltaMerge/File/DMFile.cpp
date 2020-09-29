@@ -25,13 +25,9 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single
 {
     Logger * log = &Logger::get("DMFile");
     // On create, ref_id is the same as file_id.
-    DMFilePtr new_dmfile(new DMFile(file_id, file_id, parent_path, Status::WRITABLE, log));
+    DMFilePtr new_dmfile(
+        new DMFile(file_id, file_id, parent_path, single_file_mode ? Mode::SINGLE_FILE : Mode::FOLDER, Status::WRITABLE, log));
 
-    if (single_file_mode)
-    {
-        Poco::File parent(parent_path);
-        parent.createDirectories();
-    }
     auto       path = new_dmfile->path();
     Poco::File file(path);
     if (file.exists())
@@ -41,13 +37,14 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single
     }
     if (single_file_mode)
     {
+        Poco::File parent(parent_path);
+        parent.createDirectories();
         PageUtil::touchFile(path);
     }
     else
     {
         file.createDirectories();
     }
-    new_dmfile->initializeMode();
 
     // Create a mark file to stop this dmfile from being removed by GC.
     PageUtil::touchFile(new_dmfile->ngcPath());
@@ -57,18 +54,20 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single
 
 DMFilePtr DMFile::restore(const FileProviderPtr & file_provider, UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta)
 {
-    DMFilePtr dmfile(new DMFile(file_id, ref_id, parent_path, Status::READABLE, &Logger::get("DMFile")));
-    dmfile->initializeMode();
+    String    path             = parent_path + "/dmf_" + DB::toString(file_id);
+    bool      single_file_mode = Poco::File(path).isFile();
+    DMFilePtr dmfile(new DMFile(
+        file_id, ref_id, parent_path, single_file_mode ? Mode::SINGLE_FILE : Mode::FOLDER, Status::READABLE, &Logger::get("DMFile")));
     if (read_meta)
         dmfile->readMeta(file_provider);
     return dmfile;
 }
 
-String DMFile::colIndexCacheKey(const String & file_name_base) const
+String DMFile::colIndexCacheKey(const FileNameBase & file_name_base) const
 {
     if (isSingleFileMode())
     {
-        return path() + "/" + DMFile::colIndexIdentifier(file_name_base);
+        return path() + "/" + DMFile::colIndexFileName(file_name_base);
     }
     else
     {
@@ -76,11 +75,11 @@ String DMFile::colIndexCacheKey(const String & file_name_base) const
     }
 }
 
-String DMFile::colMarkCacheKey(const String & file_name_base) const
+String DMFile::colMarkCacheKey(const FileNameBase & file_name_base) const
 {
     if (isSingleFileMode())
     {
-        return path() + "/" + DMFile::colMarkIdentifier(file_name_base);
+        return path() + "/" + DMFile::colMarkFileName(file_name_base);
     }
     else
     {
@@ -92,7 +91,7 @@ bool DMFile::isColIndexExist(const ColId & col_id) const
 {
     if (isSingleFileMode())
     {
-        const auto & index_identifier = DMFile::colIndexIdentifier(DMFile::getFileNameBase(col_id));
+        const auto & index_identifier = DMFile::colIndexFileName(DMFile::getFileNameBase(col_id));
         return isSubFileExists(index_identifier);
     }
     else
@@ -103,17 +102,17 @@ bool DMFile::isColIndexExist(const ColId & col_id) const
     }
 }
 
-const EncryptionPath DMFile::encryptionDataPath(const String & file_name_base) const
+const EncryptionPath DMFile::encryptionDataPath(const FileNameBase & file_name_base) const
 {
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : file_name_base + ".dat");
 }
 
-const EncryptionPath DMFile::encryptionIndexPath(const String & file_name_base) const
+const EncryptionPath DMFile::encryptionIndexPath(const FileNameBase & file_name_base) const
 {
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : file_name_base + ".idx");
 }
 
-const EncryptionPath DMFile::encryptionMarkPath(const String & file_name_base) const
+const EncryptionPath DMFile::encryptionMarkPath(const FileNameBase & file_name_base) const
 {
     return EncryptionPath(encryptionBasePath(), isSingleFileMode() ? "" : file_name_base + ".mrk");
 }
@@ -247,6 +246,7 @@ void DMFile::readMeta(const FileProviderPtr & file_provider)
 
 void DMFile::initializeSubFileStatIfNeeded(const FileProviderPtr & file_provider)
 {
+    std::unique_lock lock(mutex);
     if (!isSingleFileMode() || !sub_file_stats.empty())
         return;
 
