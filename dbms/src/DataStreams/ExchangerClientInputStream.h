@@ -117,6 +117,7 @@ class ExchangeClientInputStream : public IProfilingBlockInputStream
                         break;
                     }
                     live_workers--;
+                    cv.notify_all();
                     throw Exception("exchange client meet error");
                 }
 
@@ -132,7 +133,8 @@ class ExchangeClientInputStream : public IProfilingBlockInputStream
             }
 
             live_workers--;
-            LOG_DEBUG(log, "finish worker success");
+            cv.notify_all();
+            LOG_DEBUG(log, "finish worker success" << std::to_string(live_workers));
             break;
         }
     }
