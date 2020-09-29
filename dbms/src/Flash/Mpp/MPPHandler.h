@@ -197,6 +197,12 @@ struct MPPTask : private boost::noncopyable
             from->readSuffix();
             to->writeSuffix();
 
+            LOG_DEBUG(log, "end write ");
+
+            finishWrite();
+
+            LOG_DEBUG(log, "finish write ");
+
             // TODO: Remove this task from task manager.
         }
         catch (Exception & e)
@@ -225,6 +231,12 @@ struct MPPTask : private boost::noncopyable
             err->set_msg(e);
             data.set_allocated_error(err);
             it.second->write(data);
+            it.second->writeDone();
+        }
+    }
+
+    void finishWrite() {
+        for (auto it : tunnel_map) {
             it.second->writeDone();
         }
     }
