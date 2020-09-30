@@ -589,11 +589,10 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     auto join_type_it = join_type_map.find(join.join_type());
     if (join_type_it == join_type_map.end())
         throw TiFlashException("Unknown join type in dag request", Errors::Coprocessor::BadRequest);
-    /// tidb_join_kind is the original join kind in TiDB
-    ASTTableJoin::Kind tidb_join_kind = join_type_it->second;
-    ASTTableJoin::Kind kind = tidb_join_kind;
+    ASTTableJoin::Kind kind = join_type_it->second;
     ASTTableJoin::Strictness strictness = ASTTableJoin::Strictness::All;
-    if (join.join_type() == tipb::JoinType::TypeSemiJoin || join.join_type() == tipb::JoinType::TypeAntiSemiJoin)
+    bool is_semi_join = join.join_type() == tipb::JoinType::TypeSemiJoin || join.join_type() == tipb::JoinType::TypeAntiSemiJoin;
+    if (is_semi_join)
         strictness = ASTTableJoin::Strictness::Any;
 
     BlockInputStreams left_streams;
@@ -618,21 +617,28 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     }
 
     std::vector<NameAndTypePair> join_output_columns;
-    bool make_nullable = tidb_join_kind == ASTTableJoin::Kind::Right;
+    std::vector<NameAndTypePair> columns_for_other_join_filter;
+    bool make_nullable = join.join_type() == tipb::JoinType::TypeRightOuterJoin;
     for (auto const & p : input_streams_vec[0][0]->getHeader().getNamesAndTypesList())
     {
         join_output_columns.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
+        columns_for_other_join_filter.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
     }
-    make_nullable = tidb_join_kind == ASTTableJoin::Kind::Left;
+    make_nullable = join.join_type() == tipb::JoinType::TypeLeftOuterJoin;
     for (auto const & p : input_streams_vec[1][0]->getHeader().getNamesAndTypesList())
     {
-        join_output_columns.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
+        if (!is_semi_join)
+            /// for semi join, the columns from right table is ignored
+            join_output_columns.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
+        /// however, for when compiling join's other condition, we still need the columns from right table
+        columns_for_other_join_filter.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
     }
     /// all the columns from right table should be added after join, even for the join key
     NamesAndTypesList columns_added_by_join;
     make_nullable = kind == ASTTableJoin::Kind::Left;
     for (auto const & p : right_streams[0]->getHeader().getNamesAndTypesList())
     {
+        // todo do not add columns in case of semi join
         columns_added_by_join.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
     }
 
@@ -689,7 +695,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     right_streams = right_pipeline.streams;
     String other_filter_column_name = "";
     ExpressionActionsPtr other_condition_expr
-        = genJoinOtherConditionAction(join.other_conditions(), join_output_columns, other_filter_column_name);
+        = genJoinOtherConditionAction(join.other_conditions(), columns_for_other_join_filter, other_filter_column_name);
 
     const Settings & settings = context.getSettingsRef();
     JoinPtr joinPtr = std::make_shared<Join>(left_key_names, right_key_names, true,
