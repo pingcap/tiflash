@@ -589,7 +589,9 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     auto join_type_it = join_type_map.find(join.join_type());
     if (join_type_it == join_type_map.end())
         throw TiFlashException("Unknown join type in dag request", Errors::Coprocessor::BadRequest);
-    ASTTableJoin::Kind kind = join_type_it->second;
+    /// tidb_join_kind is the original join kind in TiDB
+    ASTTableJoin::Kind tidb_join_kind = join_type_it->second;
+    ASTTableJoin::Kind kind = tidb_join_kind;
     ASTTableJoin::Strictness strictness = ASTTableJoin::Strictness::All;
     if (join.join_type() == tipb::JoinType::TypeSemiJoin || join.join_type() == tipb::JoinType::TypeAntiSemiJoin)
         strictness = ASTTableJoin::Strictness::Any;
@@ -616,19 +618,22 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     }
 
     std::vector<NameAndTypePair> join_output_columns;
+    bool make_nullable = tidb_join_kind == ASTTableJoin::Kind::Right;
     for (auto const & p : input_streams_vec[0][0]->getHeader().getNamesAndTypesList())
     {
-        join_output_columns.emplace_back(p.name, p.type);
+        join_output_columns.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
     }
+    make_nullable = tidb_join_kind == ASTTableJoin::Kind::Left;
     for (auto const & p : input_streams_vec[1][0]->getHeader().getNamesAndTypesList())
     {
-        join_output_columns.emplace_back(p.name, p.type);
+        join_output_columns.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
     }
     /// all the columns from right table should be added after join, even for the join key
     NamesAndTypesList columns_added_by_join;
+    make_nullable = kind == ASTTableJoin::Kind::Left;
     for (auto const & p : right_streams[0]->getHeader().getNamesAndTypesList())
     {
-        columns_added_by_join.emplace_back(p.name, p.type);
+        columns_added_by_join.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
     }
 
     if (!query_block.aggregation)
