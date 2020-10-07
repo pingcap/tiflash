@@ -1,3 +1,4 @@
+#include <Common/FailPoint.h>
 #include <Common/TiFlashException.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/ConcatBlockInputStream.h>
@@ -52,6 +53,13 @@ extern const int UNKNOWN_EXCEPTION;
 extern const int COP_BAD_DAG_REQUEST;
 extern const int NO_COMMON_TYPE;
 } // namespace ErrorCodes
+
+namespace FailPoints
+{
+extern const char region_exception_after_read_from_storage_some_error[];
+extern const char region_exception_after_read_from_storage_all_error[];
+extern const char pause_after_learner_read[];
+} // namespace FailPoints
 
 DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std::vector<BlockInputStreams> & input_streams_vec_,
     const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const tipb::DAGRequest & rqst_, ASTPtr dummy_query_,
@@ -234,7 +242,6 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     }
 
     size_t max_block_size = settings.max_block_size;
-    QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
 
     if (query_block.selection)
     {
@@ -250,28 +257,14 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     query_info.dag_query = std::make_unique<DAGQueryInfo>(conditions, analyzer->getPreparedSets(), analyzer->getCurrentInputColumns());
     query_info.mvcc_query_info = std::move(mvcc_query_info);
 
+    FAIL_POINT_PAUSE(FailPoints::pause_after_learner_read);
     bool need_local_read = !query_info.mvcc_query_info->regions_query_info.empty();
     if (need_local_read)
     {
-        // TODO: Note that if storage is (Txn)MergeTree, and any region exception thrown, we won't do retry here.
-        // Now we only support DeltaTree in production environment and don't do any extra check for storage type here.
-        try
-        {
-            pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
-            // After getting streams from storage, we need to validate whether regions have changed or not after learner read.
-            // In case the versions of regions have changed, those `streams` may contain different data other than expected.
-            // Like after region merge/split.
-            validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
-        }
-        catch (DB::Exception & e)
-        {
-            e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
-                + "`, table_id: " + DB::toString(table_id) + ")");
-            throw;
-        }
+        readFromLocalStorage(table_id, required_columns, query_info, max_block_size, learner_read_snapshot, pipeline, region_retry);
     }
 
-    // For those regions which are not presented in this tiflash node, we will try to fetch streams from other tiflash nodes, only happens in batch cop mode.
+    // For those regions which are not presented in this tiflash node, we will try to fetch streams by key ranges from other tiflash nodes, only happens in batch cop mode.
     if (!region_retry.empty())
     {
         LOG_DEBUG(log, ({
@@ -384,18 +377,157 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
     }
 }
 
-void DAGQueryBlockInterpreter::prepareJoinKeys(const google::protobuf::RepeatedPtrField<tipb::Expr> & keys, const DataTypes & key_types,
-    Pipeline & pipeline, Names & key_names, bool left, bool is_right_out_join)
+void DAGQueryBlockInterpreter::readFromLocalStorage( //
+    const TableID table_id, const Names & required_columns, SelectQueryInfo & query_info, const size_t max_block_size,
+    const LearnerReadSnapshot & learner_read_snapshot, //
+    Pipeline & pipeline, std::unordered_map<RegionID, const RegionInfo &> & region_retry)
+{
+    QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
+    auto & tmt = context.getTMTContext();
+    // TODO: Note that if storage is (Txn)MergeTree, and any region exception thrown, we won't do retry here.
+    // Now we only support DeltaTree in production environment and don't do any extra check for storage type here.
+
+    int num_allow_retry = 1;
+    while (true)
+    {
+        try
+        {
+            pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
+
+            // After getting streams from storage, we need to validate whether regions have changed or not after learner read.
+            // In case the versions of regions have changed, those `streams` may contain different data other than expected.
+            // Like after region merge/split.
+
+            // Inject failpoint to throw RegionException
+            fiu_do_on(FailPoints::region_exception_after_read_from_storage_some_error, {
+                const auto & regions_info = query_info.mvcc_query_info->regions_query_info;
+                std::vector<RegionID> region_ids;
+                for (const auto & info : regions_info)
+                {
+                    if (rand() % 100 > 50)
+                        region_ids.push_back(info.region_id);
+                }
+                throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
+            });
+            fiu_do_on(FailPoints::region_exception_after_read_from_storage_all_error, {
+                const auto & regions_info = query_info.mvcc_query_info->regions_query_info;
+                std::vector<RegionID> region_ids;
+                for (const auto & info : regions_info)
+                    region_ids.push_back(info.region_id);
+                throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
+            });
+            validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
+            break;
+        }
+        catch (DB::RegionException & e)
+        {
+            /// Recover from region exception when super batch is enable
+            if (dag.isBatchCop())
+            {
+                // clean all streams from local because we are not sure the correctness of those streams
+                pipeline.streams.clear();
+                const auto & dag_regions = dag.getRegions();
+                std::stringstream ss;
+                // Normally there is only few regions need to retry when super batch is enabled. Retry to read
+                // from local first. However, too many retry in different places may make the whole process
+                // time out of control. We limit the number of retries to 1 now.
+                if (likely(num_allow_retry > 0))
+                {
+                    --num_allow_retry;
+                    // sort e.region_ids so that we can use lower_bound to find the region happens to error or not
+                    std::sort(e.region_ids.begin(), e.region_ids.end());
+                    auto & regions_query_info = query_info.mvcc_query_info->regions_query_info;
+                    for (auto iter = regions_query_info.begin(); iter != regions_query_info.end(); /**/)
+                    {
+                        auto error_id_iter = std::lower_bound(e.region_ids.begin(), e.region_ids.end(), iter->region_id);
+                        if (error_id_iter != e.region_ids.end() && *error_id_iter == iter->region_id)
+                        {
+                            // move the error regions info from `query_info.mvcc_query_info->regions_query_info` to `region_retry`
+                            auto region_iter = dag_regions.find(iter->region_id);
+                            if (likely(region_iter != dag_regions.end()))
+                            {
+                                region_retry.emplace(region_iter->first, region_iter->second);
+                                ss << region_iter->first << ",";
+                            }
+                            iter = regions_query_info.erase(iter);
+                        }
+                        else
+                        {
+                            ++iter;
+                        }
+                    }
+                    LOG_WARNING(log,
+                        "RegionException after read from storage, regions ["
+                            << ss.str() << "], message: " << e.message()
+                            << (regions_query_info.empty() ? "" : ", retry to read from local"));
+                    if (unlikely(regions_query_info.empty()))
+                        break; // no available region in local, break retry loop
+                    continue;  // continue to retry read from local storage
+                }
+                else
+                {
+                    // push all regions to `region_retry` to retry from other tiflash nodes
+                    for (const auto & region : query_info.mvcc_query_info->regions_query_info)
+                    {
+                        auto iter = dag_regions.find(region.region_id);
+                        if (likely(iter != dag_regions.end()))
+                        {
+                            region_retry.emplace(iter->first, iter->second);
+                            ss << iter->first << ",";
+                        }
+                    }
+                    LOG_WARNING(log, "RegionException after read from storage, regions [" << ss.str() << "], message: " << e.message());
+                    break; // break retry loop
+                }
+            }
+            else
+            {
+                // Throw an exception for TiDB / TiSpark to retry
+                e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
+                    + "`, table_id: " + DB::toString(table_id) + ")");
+                throw;
+            }
+        }
+        catch (DB::Exception & e)
+        {
+            /// Other unknown exceptions
+            e.addMessage("(while creating InputStreams from storage `" + storage->getDatabaseName() + "`.`" + storage->getTableName()
+                + "`, table_id: " + DB::toString(table_id) + ")");
+            throw;
+        }
+    }
+}
+
+void DAGQueryBlockInterpreter::prepareJoin(const google::protobuf::RepeatedPtrField<tipb::Expr> & keys, const DataTypes & key_types,
+    Pipeline & pipeline, Names & key_names, bool left, bool is_right_out_join,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & filters, String & filter_column_name)
 {
     std::vector<NameAndTypePair> source_columns;
     for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
         source_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(std::move(source_columns), context);
     ExpressionActionsChain chain;
-    if (dag_analyzer.appendJoinKey(chain, keys, key_types, key_names, left, is_right_out_join))
+    if (dag_analyzer.appendJoinKeyAndJoinFilters(chain, keys, key_types, key_names, left, is_right_out_join, filters, filter_column_name))
     {
         pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions()); });
     }
+}
+
+ExpressionActionsPtr DAGQueryBlockInterpreter::genJoinOtherConditionAction(
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & other_conditions, std::vector<NameAndTypePair> & source_columns,
+    String & filter_column)
+{
+    if (other_conditions.empty())
+        return nullptr;
+    std::vector<const tipb::Expr *> condition_vector;
+    for (const auto & c : other_conditions)
+    {
+        condition_vector.push_back(&c);
+    }
+    DAGExpressionAnalyzer dag_analyzer(source_columns, context);
+    ExpressionActionsChain chain;
+    dag_analyzer.appendWhere(chain, condition_vector, filter_column);
+    return chain.getLastActions();
 }
 
 /// ClickHouse require join key to be exactly the same type
@@ -448,7 +580,8 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     // build
     static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> join_type_map{
         {tipb::JoinType::TypeInnerJoin, ASTTableJoin::Kind::Inner}, {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::Left},
-        {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Right}};
+        {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Right}, {tipb::JoinType::TypeSemiJoin, ASTTableJoin::Kind::Inner},
+        {tipb::JoinType::TypeAntiSemiJoin, ASTTableJoin::Kind::Anti}};
     if (input_streams_vec.size() != 2)
     {
         throw TiFlashException("Join query block must have 2 input streams", Errors::BroadcastJoin::Internal);
@@ -458,6 +591,9 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     if (join_type_it == join_type_map.end())
         throw TiFlashException("Unknown join type in dag request", Errors::Coprocessor::BadRequest);
     ASTTableJoin::Kind kind = join_type_it->second;
+    ASTTableJoin::Strictness strictness = ASTTableJoin::Strictness::All;
+    if (join.join_type() == tipb::JoinType::TypeSemiJoin || join.join_type() == tipb::JoinType::TypeAntiSemiJoin)
+        strictness = ASTTableJoin::Strictness::Any;
 
     BlockInputStreams left_streams;
     BlockInputStreams right_streams;
@@ -480,11 +616,6 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
         right_streams = input_streams_vec[1];
     }
 
-    if (kind == ASTTableJoin::Kind::Full)
-    {
-        throw TiFlashException("Only Inner/Left/Right join is supported", Errors::Coprocessor::Unimplemented);
-    }
-
     std::vector<NameAndTypePair> join_output_columns;
     for (auto const & p : input_streams_vec[0][0]->getHeader().getNamesAndTypesList())
     {
@@ -503,10 +634,20 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
 
     if (!query_block.aggregation)
     {
-        for (auto const & p : input_streams_vec[0][0]->getHeader().getNamesAndTypesList())
-            final_project.emplace_back(p.name, query_block.qb_column_prefix + p.name);
-        for (auto const & p : input_streams_vec[1][0]->getHeader().getNamesAndTypesList())
-            final_project.emplace_back(p.name, query_block.qb_column_prefix + p.name);
+        if (query_block.isRootQueryBlock())
+        {
+            for (auto i : query_block.output_offsets)
+            {
+                if ((size_t)i >= join_output_columns.size())
+                    throw TiFlashException("Output offset index is out of bound", Errors::Coprocessor::BadRequest);
+                final_project.emplace_back(join_output_columns[i].name, "");
+            }
+        }
+        else
+        {
+            for (auto const & p : join_output_columns)
+                final_project.emplace_back(p.name, query_block.qb_column_prefix + p.name);
+        }
     }
 
     DataTypes join_key_types;
@@ -529,25 +670,32 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     /// add necessary transformation if the join key is an expression
     Pipeline left_pipeline;
     left_pipeline.streams = left_streams;
-    prepareJoinKeys(join.inner_idx() == 0 ? join.right_join_keys() : join.left_join_keys(), join_key_types, left_pipeline, left_key_names,
-        true, kind == ASTTableJoin::Kind::Right);
+    String left_filter_column_name = "";
+    prepareJoin(join.inner_idx() == 0 ? join.right_join_keys() : join.left_join_keys(), join_key_types, left_pipeline, left_key_names, true,
+        kind == ASTTableJoin::Kind::Right, join.inner_idx() == 0 ? join.right_conditions() : join.left_conditions(),
+        left_filter_column_name);
     Pipeline right_pipeline;
     right_pipeline.streams = right_streams;
-    prepareJoinKeys(join.inner_idx() == 0 ? join.left_join_keys() : join.right_join_keys(), join_key_types, right_pipeline, right_key_names,
-        false, kind == ASTTableJoin::Kind::Right);
+    String right_filter_column_name = "";
+    prepareJoin(join.inner_idx() == 0 ? join.left_join_keys() : join.right_join_keys(), join_key_types, right_pipeline, right_key_names,
+        false, kind == ASTTableJoin::Kind::Right, join.inner_idx() == 0 ? join.left_conditions() : join.right_conditions(),
+        right_filter_column_name);
 
     left_streams = left_pipeline.streams;
     right_streams = right_pipeline.streams;
+    String other_filter_column_name = "";
+    ExpressionActionsPtr other_condition_expr
+        = genJoinOtherConditionAction(join.other_conditions(), join_output_columns, other_filter_column_name);
 
     const Settings & settings = context.getSettingsRef();
     JoinPtr joinPtr = std::make_shared<Join>(left_key_names, right_key_names, true,
-        SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode), kind, ASTTableJoin::Strictness::All,
-        collators);
+        SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode), kind, strictness, collators,
+        left_filter_column_name, right_filter_column_name, other_filter_column_name, other_condition_expr);
     executeUnion(right_pipeline, max_streams);
     right_query.source = right_pipeline.firstStream();
     right_query.join = joinPtr;
     right_query.join->setSampleBlock(right_query.source->getHeader());
-    dag.getDAGContext().profile_streams_map_for_join_build_side[query_block.qb_join_subquery_alias].push_back(right_query.source);
+    dag.getDAGContext().getProfileStreamsMapForJoinBuildSide()[query_block.qb_join_subquery_alias].push_back(right_query.source);
 
     std::vector<NameAndTypePair> source_columns;
     for (const auto & p : left_streams[0]->getHeader().getNamesAndTypesList())
@@ -897,13 +1045,13 @@ void DAGQueryBlockInterpreter::executeOrder(Pipeline & pipeline, std::vector<Nam
 
 void DAGQueryBlockInterpreter::recordProfileStreams(Pipeline & pipeline, const String & key)
 {
-    dag.getDAGContext().profile_streams_map[key].qb_id = query_block.id;
+    dag.getDAGContext().getProfileStreamsMap()[key].qb_id = query_block.id;
     for (auto & stream : pipeline.streams)
     {
-        dag.getDAGContext().profile_streams_map[key].input_streams.push_back(stream);
+        dag.getDAGContext().getProfileStreamsMap()[key].input_streams.push_back(stream);
     }
     if (pipeline.stream_with_non_joined_data)
-        dag.getDAGContext().profile_streams_map[key].input_streams.push_back(pipeline.stream_with_non_joined_data);
+        dag.getDAGContext().getProfileStreamsMap()[key].input_streams.push_back(pipeline.stream_with_non_joined_data);
 }
 
 void copyExecutorTreeWithLocalTableScan(

@@ -9,6 +9,7 @@
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/DAGQueryBlock.h>
 #include <Flash/Mpp/MPPHandler.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/IQuerySource.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
@@ -45,7 +46,7 @@ using StreamWriterPtr = std::shared_ptr<StreamWriter>;
 class DAGQuerySource : public IQuerySource
 {
 public:
-    DAGQuerySource(Context & context_, DAGContext & dag_context_, const std::unordered_map<RegionID, RegionInfo> & regions_,
+    DAGQuerySource(Context & context_, const std::unordered_map<RegionID, RegionInfo> & regions_,
         const tipb::DAGRequest & dag_request_, const bool is_batch_cop_ = false, MPPTaskPtr mpp_task_ = nullptr);
 
     std::tuple<std::string, ASTPtr> parse(size_t max_query_size) override;
@@ -67,14 +68,13 @@ public:
 
     MPPTaskPtr getMPPTask() const { return mpp_task; }
 
-    DAGContext & getDAGContext() const { return dag_context; }
+    DAGContext & getDAGContext() const { return *context.getDAGContext(); }
 
 protected:
     void analyzeDAGEncodeType();
 
 protected:
     Context & context;
-    DAGContext & dag_context;
 
     const std::unordered_map<RegionID, RegionInfo> & regions;
 

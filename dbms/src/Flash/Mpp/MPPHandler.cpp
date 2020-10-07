@@ -40,8 +40,10 @@ grpc::Status MPPHandler::execute(mpp::DispatchTaskResponse * response)
         MPPTaskPtr task = std::make_shared<MPPTask>(task_request.meta());
         task_manager->registerTask(task);
 
-        DAGContext dag_context;
-        DAGQuerySource dag(context, dag_context, regions, dag_req, true, task);
+        DAGContext dag_context(dag_req);
+        context.setDAGContext(&dag_context);
+
+        DAGQuerySource dag(context, regions, dag_req, true, task);
 
         BlockIO streams = executeQuery(dag, context, false, QueryProcessingStage::Complete);
         // construct writer

@@ -112,8 +112,6 @@ struct MPPTunnelSet
 {
     std::vector<MPPTunnelPtr> tunnels;
 
-    ~MPPTunnelSet() { close(); }
-
     void write(const std::string & data)
     {
         mpp::MPPDataPacket packet;
@@ -130,13 +128,6 @@ struct MPPTunnelSet
         for (auto tunnel : tunnels)
         {
             tunnel->write(packet);
-        }
-    }
-    void close()
-    {
-        for (auto tunnel : tunnels)
-        {
-            tunnel->writeDone();
         }
     }
 };

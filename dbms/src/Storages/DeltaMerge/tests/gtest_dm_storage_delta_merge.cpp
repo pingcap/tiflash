@@ -309,12 +309,10 @@ TEST(StorageDeltaMerge_internal_test, OverlapQueryRangesCommonHandle)
 
 TEST(StorageDeltaMerge_internal_test, WeirdRange)
 {
-    // [100, 200), [200, MAX), [MAX, MAX)
+    // [100, 200), [200, MAX]
     MvccQueryInfo::RegionsQueryInfo regions;
     RegionQueryInfo                 region;
     region.range_in_table = GET_REGION_RANGE(100, 200, 1);
-    regions.emplace_back(region);
-    region.range_in_table = GET_REGION_RANGE(std::numeric_limits<HandleID>::max(), std::numeric_limits<HandleID>::max(), 1);
     regions.emplace_back(region);
     region.range_in_table = GET_REGION_RANGE(200, std::numeric_limits<HandleID>::max(), 1);
     regions.emplace_back(region);

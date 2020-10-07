@@ -27,6 +27,9 @@ namespace DB
 class Context;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
+struct RegionLearnerReadSnapshot;
+using LearnerReadSnapshot = std::unordered_map<RegionID, RegionLearnerReadSnapshot>;
+struct SelectQueryInfo;
 
 struct Pipeline
 {
@@ -92,8 +95,11 @@ private:
     void executeTS(const tipb::TableScan & ts, Pipeline & pipeline);
     void executeExchangeClient(const tipb::TableScan & ts, Pipeline & pipeline);
     void executeJoin(const tipb::Join & join, Pipeline & pipeline, SubqueryForSet & right_query);
-    void prepareJoinKeys(const google::protobuf::RepeatedPtrField<tipb::Expr> & keys, const DataTypes & key_types, Pipeline & pipeline,
-        Names & key_names, bool left, bool is_right_out_join);
+    void prepareJoin(const google::protobuf::RepeatedPtrField<tipb::Expr> & keys, const DataTypes & key_types, Pipeline & pipeline,
+        Names & key_names, bool left, bool is_right_out_join, const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,
+        String & filter_column_name);
+    ExpressionActionsPtr genJoinOtherConditionAction(const google::protobuf::RepeatedPtrField<tipb::Expr> & other_conditions,
+        std::vector<NameAndTypePair> & source_columns, String & filter_column);
     void executeWhere(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column);
     void executeExpression(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr);
     void executeOrder(Pipeline & pipeline, std::vector<NameAndTypePair> & order_columns);
@@ -101,6 +107,11 @@ private:
     void executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, Names & aggregation_keys,
         TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions);
     void executeFinalProject(Pipeline & pipeline);
+
+    void readFromLocalStorage( //
+        const TableID table_id, const Names & required_columns, SelectQueryInfo & query_info, const size_t max_block_size,
+        const LearnerReadSnapshot & learner_read_snapshot, //
+        Pipeline & pipeline, std::unordered_map<RegionID, const RegionInfo &> & region_retry);
     void getAndLockStorageWithSchemaVersion(TableID table_id, Int64 schema_version);
     SortDescription getSortDescription(std::vector<NameAndTypePair> & order_columns);
     AnalysisResult analyzeExpressions();

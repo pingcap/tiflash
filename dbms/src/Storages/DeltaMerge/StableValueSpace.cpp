@@ -208,5 +208,44 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DM
     return std::make_shared<ConcatSkippableBlockInputStream>(streams);
 }
 
+RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range)
+{
+    if (valid_rows == 0)
+        return {0, 0};
+    size_t match_packs       = 0;
+    size_t total_match_rows  = 0;
+    size_t total_match_bytes = 0;
+    for (auto & f : stable->files)
+    {
+        DMFilePackFilter filter(f,
+                                context.db_context.getGlobalContext().getMinMaxIndexCache().get(),
+                                context.hash_salt,
+                                range,
+                                RSOperatorPtr{},
+                                IdSetPtr{},
+                                context.db_context.getFileProvider());
+        auto &           pack_stats = f->getPackStats();
+        auto &           use_packs  = filter.getUsePacks();
+        for (size_t i = 0; i < pack_stats.size(); ++i)
+        {
+            if (use_packs[i])
+            {
+                ++match_packs;
+                total_match_rows += pack_stats[i].rows;
+                total_match_bytes += pack_stats[i].bytes;
+            }
+        }
+    }
+    if (!total_match_rows || !match_packs)
+        return {0, 0};
+    Float64 avg_pack_rows  = total_match_rows / match_packs;
+    Float64 avg_pack_bytes = total_match_bytes / match_packs;
+    // By average, the first and last pack are only half covered by the range.
+    // And if this range only covers one pack, then return the pack's stat.
+    size_t approx_rows  = std::max(avg_pack_rows, total_match_rows - avg_pack_rows / 2);
+    size_t approx_bytes = std::max(avg_pack_bytes, total_match_bytes - avg_pack_bytes / 2);
+    return {approx_rows, approx_bytes};
+}
+
 } // namespace DM
 } // namespace DB

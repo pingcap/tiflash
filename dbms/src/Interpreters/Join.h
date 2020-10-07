@@ -15,6 +15,7 @@
 
 #include <DataStreams/SizeLimits.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Interpreters/ExpressionActions.h>
 
 
 namespace DB
@@ -236,7 +237,8 @@ class Join
 public:
     Join(const Names & key_names_left_, const Names & key_names_right_, bool use_nulls_,
          const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_,
-         const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators);
+         const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators, const String & left_filter_column = "",
+         const String & right_filter_column = "", const String & other_filter_column = "", ExpressionActionsPtr other_condition_ptr = nullptr);
 
     bool empty() { return type == Type::EMPTY; }
 
@@ -384,6 +386,12 @@ private:
     /// collators for the join key
     const TiDB::TiDBCollators collators;
 
+    String left_filter_column;
+    String right_filter_column;
+    String other_filter_column;
+    ExpressionActionsPtr other_condition_ptr;
+    ASTTableJoin::Strictness original_strictness;
+
     /** Blocks of "right" table.
       */
     BlocksList blocks;
@@ -392,6 +400,11 @@ private:
     MapsAll maps_all;            /// For ALL LEFT|INNER JOIN
     MapsAnyFull maps_any_full;    /// For ANY RIGHT|FULL JOIN
     MapsAllFull maps_all_full;    /// For ALL RIGHT|FULL JOIN
+
+    /// For right/full join, including
+    /// 1. Rows with NULL join keys
+    /// 2. Rows that are filtered by right join conditions
+    RowRefList rows_not_inserted_to_map;
 
     /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
     Arena pool;
@@ -429,6 +442,13 @@ private:
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
     void joinBlockImpl(Block & block, const Maps & maps) const;
+
+    /** Handle non-equal join conditions
+      *
+      * @param block
+      */
+    void handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter> & filter, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate, const std::vector<size_t> & right_table_column) const;
+
 
     void joinBlockImplCross(Block & block) const;
 };

@@ -57,6 +57,11 @@ namespace ErrorCodes
     extern const int READONLY;
 }
 
+namespace FailPoints
+{
+extern const char exception_between_create_database_meta_and_directory[];
+}
+
 
 InterpreterCreateQuery::InterpreterCreateQuery(const ASTPtr & query_ptr_, Context & context_)
     : query_ptr(query_ptr_), context(context_)
@@ -141,7 +146,7 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
             context.getFileProvider()->renameFile(metadata_file_tmp_path, EncryptionPath(metadata_file_tmp_path, ""),
                 metadata_file_path, EncryptionPath(metadata_file_path, ""));
 
-        FAIL_POINT_TRIGGER_EXCEPTION(exception_between_create_database_meta_and_directory);
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_between_create_database_meta_and_directory);
         // meta file (not temporary) of database exists means create database success, 
         // we need to create meta directory for it if not exists.
         if (auto db_meta_path = Poco::File(database->getMetadataPath()); !db_meta_path.exists())
