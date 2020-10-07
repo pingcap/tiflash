@@ -198,7 +198,7 @@ struct MPPTask : private boost::noncopyable
         }
         catch (Exception & e)
         {
-            LOG_ERROR(log, "task running meets error " << e.displayText());
+            LOG_ERROR(log, "task running meets error " << e.displayText() << " Stack Trace : " << e.getStackTrace().toString());
             writeErrToAllTunnel(e.displayText());
         }
         catch (std::exception & e)

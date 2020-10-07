@@ -161,7 +161,7 @@ public:
     }
 
     ~ExchangeClientInputStream() {
-        for (auto worker : workers)
+        for (auto & worker : workers)
         {
             worker.join();
         }
