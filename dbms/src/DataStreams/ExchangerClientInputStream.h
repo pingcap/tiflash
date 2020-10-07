@@ -160,6 +160,13 @@ public:
         sample_block = Block(columns);
     }
 
+    ~ExchangeClientInputStream() {
+        for (auto worker : workers)
+        {
+            worker.join();
+        }
+    }
+
     Block getHeader() const override { return sample_block; }
 
     String getName() const override { return "ExchangeClient"; }

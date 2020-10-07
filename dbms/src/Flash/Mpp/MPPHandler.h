@@ -278,7 +278,7 @@ using MPPTaskManagerPtr = std::shared_ptr<MPPTaskManager>;
 
 class MPPHandler
 {
-    Context & context;
+    Context context; // context should not be a reference to assure its life is longer than query.
     const mpp::DispatchTaskRequest & task_request;
 
     mpp::Error error;
