@@ -25,6 +25,9 @@ struct MPPTaskId
     uint64_t start_ts;
     int64_t task_id;
     bool operator<(const MPPTaskId & rhs) const { return start_ts < rhs.start_ts || (start_ts == rhs.start_ts && task_id < rhs.task_id); }
+    String toString() const {
+        return "[" + std::to_string(start_ts) + "," + std::to_string(task_id) + "]";
+    }
 };
 
 
@@ -144,13 +147,11 @@ struct MPPTask : private boost::noncopyable
 
     std::map<MPPTaskId, MPPTunnelPtr> tunnel_map; // tunnel should be connected.
 
-    Context context;
-
     Logger * log;
 
     Exception err;
 
-    MPPTask(const mpp::TaskMeta & meta_, Context context_) : meta(meta_), context(context_), log(&Logger::get("task " + std::to_string(meta_.task_id())))
+    MPPTask(const mpp::TaskMeta & meta_) : meta(meta_), log(&Logger::get("task " + std::to_string(meta_.task_id())))
     {
         id.start_ts = meta.query_ts();
         id.task_id = meta.task_id();
@@ -158,8 +159,10 @@ struct MPPTask : private boost::noncopyable
 
     ~MPPTask() { worker.join(); }
 
-    void runImpl(BlockInputStreamPtr from, BlockOutputStreamPtr to)
+    void runImpl(BlockIO io)
     {
+        auto from = io.in;
+        auto to = io.out;
         try
         {
             LOG_DEBUG(log, "begin read prefix");
@@ -234,8 +237,7 @@ struct MPPTask : private boost::noncopyable
 
     void run(BlockIO io)
     {
-        // TODO: Catch the exception and transfer errors to down stream.
-        worker = std::thread(&MPPTask::runImpl, this, io.in, io.out);
+        worker = std::thread(&MPPTask::runImpl, this, io);
     }
 
     void registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel) { tunnel_map[id] = tunnel; }
@@ -257,9 +259,14 @@ using MPPTaskPtr = std::shared_ptr<MPPTask>;
 // MPPTaskManger holds all running mpp tasks. It's a single instance holden in Context.
 class MPPTaskManager : private boost::noncopyable
 {
+    // TODO: Add lock.
     std::map<MPPTaskId, MPPTaskPtr> task_map;
 
+    Logger * log;
+
 public:
+    MPPTaskManager() : log(&Logger::get("TaskManager")) {}
+
     void registerTask(MPPTaskPtr task) { task_map[task->id] = task; }
 
     MPPTaskPtr findTask(const mpp::TaskMeta & meta) const
@@ -268,9 +275,19 @@ public:
         const auto & it = task_map.find(id);
         if (it == task_map.end())
         {
+            LOG_ERROR(log, "don't find task " << std::to_string(meta.task_id()) << " map have " << toString());
             return nullptr;
         }
         return it->second;
+    }
+
+    String toString() const {
+        String res;
+        for (auto it : task_map)
+        {
+            res += "(" + it.first.toString() + ", ";
+        }
+        return res + ")";
     }
 };
 

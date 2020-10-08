@@ -37,15 +37,15 @@ grpc::Status MPPHandler::execute(mpp::DispatchTaskResponse * response)
         TMTContext & tmt_context = context.getTMTContext();
         auto task_manager = tmt_context.getMPPTaskManager();
         // TODO: tunnel should be added to mpp task.
-        MPPTaskPtr task = std::make_shared<MPPTask>(task_request.meta(), context);
+        MPPTaskPtr task = std::make_shared<MPPTask>(task_request.meta());
         task_manager->registerTask(task);
 
         DAGContext dag_context(dag_req);
-        task->context.setDAGContext(&dag_context);
+        context.setDAGContext(&dag_context);
 
-        DAGQuerySource dag(task->context, regions, dag_req, true, task);
+        DAGQuerySource dag(context, regions, dag_req, true, task);
 
-        BlockIO streams = executeQuery(dag, task->context, false, QueryProcessingStage::Complete);
+        BlockIO streams = executeQuery(dag, context, false, QueryProcessingStage::Complete);
         // construct writer
         MPPTunnelSetPtr tunnel_set = std::make_shared<MPPTunnelSet>();
         const auto & exchangeServer = dag_req.root_executor().exchange_server();
@@ -57,7 +57,7 @@ grpc::Status MPPHandler::execute(mpp::DispatchTaskResponse * response)
             task->registerTunnel(MPPTaskId{meta.query_ts(), meta.task_id()}, tunnel);
             tunnel_set->tunnels.emplace_back(tunnel);
         }
-        std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique< StreamingDAGResponseWriter<MPPTunnelSetPtr> > (tunnel_set, task->context.getSettings().dag_records_per_chunk,
+        std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique< StreamingDAGResponseWriter<MPPTunnelSetPtr> > (tunnel_set, context.getSettings().dag_records_per_chunk,
             dag.getEncodeType(), dag.getResultFieldTypes(), dag_context, false, true);
         streams.out = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
 
