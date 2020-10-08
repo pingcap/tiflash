@@ -144,14 +144,14 @@ struct MPPTask : private boost::noncopyable
 
     std::map<MPPTaskId, MPPTunnelPtr> tunnel_map; // tunnel should be connected.
 
+    Context context;
+
     Logger * log;
 
     Exception err;
 
-    MPPTask(const mpp::TaskMeta & meta_) : log(&Logger::get("task " + std::to_string(meta_.task_id())))
+    MPPTask(const mpp::TaskMeta & meta_, Context context_) : meta(meta_), context(context_), log(&Logger::get("task " + std::to_string(meta_.task_id())))
     {
-        meta = meta_;
-
         id.start_ts = meta.query_ts();
         id.task_id = meta.task_id();
     }
@@ -278,7 +278,7 @@ using MPPTaskManagerPtr = std::shared_ptr<MPPTaskManager>;
 
 class MPPHandler
 {
-    Context context; // context should not be a reference to assure its life is longer than query.
+    Context & context;
     const mpp::DispatchTaskRequest & task_request;
 
     mpp::Error error;
