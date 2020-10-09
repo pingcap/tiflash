@@ -1,5 +1,6 @@
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/ConcatBlockInputStream.h>
+#include <DataStreams/EmptyBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Storages/DeltaMerge/DMContext.h>
@@ -328,12 +329,17 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
         return stream;
     };
 
+    BlockInputStreamPtr stream;
     if (read_ranges.size() == 1)
     {
         LOG_TRACE(log,
                   "Segment [" << DB::toString(segment_id) << "] is read by max_version: " << max_version << ", 1"
                               << " range: " << toString(read_ranges));
-        return create_stream(rowkey_range.shrink(read_ranges[0]));
+        RowKeyRange real_range = rowkey_range.shrink(read_ranges[0]);
+        if (real_range.none())
+            stream = std::make_shared<EmptyBlockInputStream>(toEmptyBlock(read_info.read_columns));
+        else
+            stream = create_stream(rowkey_range.shrink(read_ranges[0]));
     }
     else
     {
@@ -349,8 +355,12 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
                   "Segment [" << DB::toString(segment_id) << "] is read by max_version: " << max_version << ", "
                               << DB::toString(streams.size()) << " ranges: " << toString(read_ranges));
 
-        return std::make_shared<ConcatBlockInputStream>(streams);
+        if (streams.empty())
+            stream = std::make_shared<EmptyBlockInputStream>(toEmptyBlock(read_info.read_columns));
+        else
+            stream = std::make_shared<ConcatBlockInputStream>(streams);
     }
+    return stream;
 }
 
 BlockInputStreamPtr Segment::getInputStream(const DMContext &     dm_context,

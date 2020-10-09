@@ -16,8 +16,11 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-inline DM::RowKeyRanges getQueryRanges(
-    const DB::MvccQueryInfo::RegionsQueryInfo & regions, TableID table_id, bool is_common_handle, size_t rowkey_column_size)
+inline DM::RowKeyRanges getQueryRanges(const DB::MvccQueryInfo::RegionsQueryInfo & regions,
+    TableID table_id,
+    bool is_common_handle,
+    size_t rowkey_column_size,
+    size_t expected_ranges_count = 1)
 {
     // todo check table id in DecodedTiKVKey???
     DM::RowKeyRanges handle_ranges;
@@ -48,54 +51,94 @@ inline DM::RowKeyRanges getQueryRanges(
         return handle_ranges;
     }
 
-    DM::RowKeyRanges ranges;
-    // Init index with [0, n)
-    // http: //www.cplusplus.com/reference/numeric/iota/
-    std::vector<size_t> sort_index(handle_ranges.size());
-    std::iota(sort_index.begin(), sort_index.end(), 0);
+    /// Sort the handle_ranges.
+    std::sort(handle_ranges.begin(), handle_ranges.end(), [](const DM::RowKeyRange & lhs, const DM::RowKeyRange & rhs) {
+        int first_result = lhs.start.value->compare(*rhs.start.value);
+        if (likely(first_result != 0))
+            return first_result < 0;
+        return lhs.end.value->compare(*rhs.end.value) < 0;
+    });
 
-    std::sort(sort_index.begin(), sort_index.end(), //
-        [&handle_ranges](const size_t lhs, const size_t rhs) {
-            int first_result = handle_ranges[lhs].start.value->compare(*handle_ranges[rhs].start.value);
-            if (likely(first_result != 0))
-                return first_result < 0;
-            return handle_ranges[lhs].end.value->compare(*handle_ranges[rhs].end.value) < 0;
-        });
+    // The information about how the original ranges are merged.
+    struct OffsetCount
+    {
+        size_t offset;
+        size_t count;
+    public:
+        OffsetCount(size_t offset_, size_t count_): offset(offset_), count(count_){}
+    };
+    using OffsetCounts = std::vector<OffsetCount>;
+    OffsetCounts merged_stats;
+    merged_stats.reserve(expected_ranges_count);
 
-    ranges.reserve(handle_ranges.size());
-
-    DM::RowKeyRange current = handle_ranges[sort_index[0]];
+    size_t offset = 0;
+    size_t count = 1;
     for (size_t i = 1; i < handle_ranges.size(); ++i)
     {
-        const size_t region_idx = sort_index[i];
-        const auto & handle_range = handle_ranges[region_idx];
-
-        if (handle_range.none())
+        auto & prev = handle_ranges[i - 1];
+        auto & current = handle_ranges[i];
+        auto cmp_res = (*prev.end.value).compare(*current.start.value);
+        if (current.none() || cmp_res == 0)
         {
-            continue;
+            // Merge current range into previous
+            ++count;
         }
-
-        if (*current.end.value == *handle_range.start.value)
+        else if (cmp_res < 0)
         {
-            // concat this range_in_table to current
-            current.end = handle_range.end;
-        }
-        else if (current.end.value->compare(*handle_range.start.value) < 0)
-        {
-            ranges.emplace_back(current);
-            // start a new range
-            current.start = handle_range.start;
-            current.end = handle_range.end;
+            // Cannot merge, let's move on.
+            merged_stats.emplace_back(offset, count);
+            offset = i;
+            count = 1;
         }
         else
         {
-            throw Exception("Overlap region range between " + current.start.toString() + "," + current.end.toString() + " and [" //
-                + handle_range.start.toString() + "," + handle_range.end.toString() + ")");
+            throw Exception("Found overlap ranges: " + prev.toString() + ", " + current.toString());
         }
     }
-    ranges.emplace_back(current);
+    merged_stats.emplace_back(offset, count);
 
-    return ranges;
+    /// Try to make the number of merged_ranges result larger or equal to expected_ranges_count. So that we can do parallelize the read process.
+    if (merged_stats.size() < expected_ranges_count)
+    {
+        // Use a heap to pick the range with largest count, then keep splitting it.
+        // We don't use std::priority_queue here to avoid copying data around.
+        // About heap operations: https://en.cppreference.com/w/cpp/algorithm/make_heap
+        auto cmp = [](const OffsetCount & a, const OffsetCount & b) { return a.count < b.count; };
+        std::make_heap(merged_stats.begin(), merged_stats.end(), cmp);
+
+        // The range with largest count is retrieved by front().
+        while (merged_stats.size() < expected_ranges_count && merged_stats.front().count > 1)
+        {
+            std::pop_heap(merged_stats.begin(), merged_stats.end(), cmp);
+
+            auto top = merged_stats.back();
+            merged_stats.pop_back();
+
+            size_t split_count = top.count / 2;
+
+            merged_stats.emplace_back(top.offset, split_count);
+            std::push_heap(merged_stats.begin(), merged_stats.end(), cmp);
+
+            merged_stats.emplace_back(top.offset + split_count, top.count - split_count);
+            std::push_heap(merged_stats.begin(), merged_stats.end(), cmp);
+        }
+
+        // Sort by offset, so that we can have an increasing order by range's start edge.
+        std::sort(
+            merged_stats.begin(), merged_stats.end(), [](const OffsetCount & a, const OffsetCount & b) { return a.offset < b.offset; });
+    }
+
+    /// Generate merged result.
+    DM::RowKeyRanges merged_ranges;
+    merged_ranges.reserve(merged_stats.size());
+    for (auto stat : merged_stats)
+    {
+        DM::RowKeyRange range(
+            handle_ranges[stat.offset].start, handle_ranges[stat.offset + stat.count - 1].end, is_common_handle, rowkey_column_size);
+        merged_ranges.push_back(range);
+    }
+
+    return merged_ranges;
 }
 
 } // namespace DB

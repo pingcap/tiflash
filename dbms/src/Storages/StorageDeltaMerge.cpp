@@ -531,7 +531,12 @@ BlockInputStreams StorageDeltaMerge::read( //
             LOG_TRACE(log, "reading ranges: orig, " << str_query_ranges);
         }
 
-        RowKeyRanges ranges = getQueryRanges(mvcc_query_info.regions_query_info, tidb_table_info.id, is_common_handle, rowkey_column_size);
+        RowKeyRanges ranges = getQueryRanges(mvcc_query_info.regions_query_info, tidb_table_info.id, is_common_handle, rowkey_column_size,
+            /*expected_ranges_count*/ num_streams);
+
+        LOG_TRACE(log,
+            "Merge ranges: [original ranges: " << mvcc_query_info.regions_query_info.size() << "] [expected ranges: " << num_streams
+                                               << "] [final ranges: " << ranges.size() << "]");
 
         if (log->trace())
         {
