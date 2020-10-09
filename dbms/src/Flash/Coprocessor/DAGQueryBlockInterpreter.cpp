@@ -497,18 +497,36 @@ void DAGQueryBlockInterpreter::readFromLocalStorage( //
     }
 }
 
-void DAGQueryBlockInterpreter::prepareJoinKeys(const google::protobuf::RepeatedPtrField<tipb::Expr> & keys, const DataTypes & key_types,
-    Pipeline & pipeline, Names & key_names, bool left, bool is_right_out_join)
+void DAGQueryBlockInterpreter::prepareJoin(const google::protobuf::RepeatedPtrField<tipb::Expr> & keys, const DataTypes & key_types,
+    Pipeline & pipeline, Names & key_names, bool left, bool is_right_out_join,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & filters, String & filter_column_name)
 {
     std::vector<NameAndTypePair> source_columns;
     for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
         source_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(std::move(source_columns), context);
     ExpressionActionsChain chain;
-    if (dag_analyzer.appendJoinKey(chain, keys, key_types, key_names, left, is_right_out_join))
+    if (dag_analyzer.appendJoinKeyAndJoinFilters(chain, keys, key_types, key_names, left, is_right_out_join, filters, filter_column_name))
     {
         pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions()); });
     }
+}
+
+ExpressionActionsPtr DAGQueryBlockInterpreter::genJoinOtherConditionAction(
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & other_conditions, std::vector<NameAndTypePair> & source_columns,
+    String & filter_column)
+{
+    if (other_conditions.empty())
+        return nullptr;
+    std::vector<const tipb::Expr *> condition_vector;
+    for (const auto & c : other_conditions)
+    {
+        condition_vector.push_back(&c);
+    }
+    DAGExpressionAnalyzer dag_analyzer(source_columns, context);
+    ExpressionActionsChain chain;
+    dag_analyzer.appendWhere(chain, condition_vector, filter_column);
+    return chain.getLastActions();
 }
 
 /// ClickHouse require join key to be exactly the same type
@@ -561,7 +579,8 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     // build
     static const std::unordered_map<tipb::JoinType, ASTTableJoin::Kind> join_type_map{
         {tipb::JoinType::TypeInnerJoin, ASTTableJoin::Kind::Inner}, {tipb::JoinType::TypeLeftOuterJoin, ASTTableJoin::Kind::Left},
-        {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Right}};
+        {tipb::JoinType::TypeRightOuterJoin, ASTTableJoin::Kind::Right}, {tipb::JoinType::TypeSemiJoin, ASTTableJoin::Kind::Inner},
+        {tipb::JoinType::TypeAntiSemiJoin, ASTTableJoin::Kind::Anti}};
     if (input_streams_vec.size() != 2)
     {
         throw TiFlashException("Join query block must have 2 input streams", Errors::BroadcastJoin::Internal);
@@ -571,6 +590,9 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     if (join_type_it == join_type_map.end())
         throw TiFlashException("Unknown join type in dag request", Errors::Coprocessor::BadRequest);
     ASTTableJoin::Kind kind = join_type_it->second;
+    ASTTableJoin::Strictness strictness = ASTTableJoin::Strictness::All;
+    if (join.join_type() == tipb::JoinType::TypeSemiJoin || join.join_type() == tipb::JoinType::TypeAntiSemiJoin)
+        strictness = ASTTableJoin::Strictness::Any;
 
     BlockInputStreams left_streams;
     BlockInputStreams right_streams;
@@ -593,11 +615,6 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
         right_streams = input_streams_vec[1];
     }
 
-    if (kind == ASTTableJoin::Kind::Full)
-    {
-        throw TiFlashException("Only Inner/Left/Right join is supported", Errors::Coprocessor::Unimplemented);
-    }
-
     std::vector<NameAndTypePair> join_output_columns;
     for (auto const & p : input_streams_vec[0][0]->getHeader().getNamesAndTypesList())
     {
@@ -616,10 +633,20 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
 
     if (!query_block.aggregation)
     {
-        for (auto const & p : input_streams_vec[0][0]->getHeader().getNamesAndTypesList())
-            final_project.emplace_back(p.name, query_block.qb_column_prefix + p.name);
-        for (auto const & p : input_streams_vec[1][0]->getHeader().getNamesAndTypesList())
-            final_project.emplace_back(p.name, query_block.qb_column_prefix + p.name);
+        if (query_block.isRootQueryBlock())
+        {
+            for (auto i : query_block.output_offsets)
+            {
+                if ((size_t)i >= join_output_columns.size())
+                    throw TiFlashException("Output offset index is out of bound", Errors::Coprocessor::BadRequest);
+                final_project.emplace_back(join_output_columns[i].name, "");
+            }
+        }
+        else
+        {
+            for (auto const & p : join_output_columns)
+                final_project.emplace_back(p.name, query_block.qb_column_prefix + p.name);
+        }
     }
 
     DataTypes join_key_types;
@@ -642,25 +669,32 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     /// add necessary transformation if the join key is an expression
     Pipeline left_pipeline;
     left_pipeline.streams = left_streams;
-    prepareJoinKeys(join.inner_idx() == 0 ? join.right_join_keys() : join.left_join_keys(), join_key_types, left_pipeline, left_key_names,
-        true, kind == ASTTableJoin::Kind::Right);
+    String left_filter_column_name = "";
+    prepareJoin(join.inner_idx() == 0 ? join.right_join_keys() : join.left_join_keys(), join_key_types, left_pipeline, left_key_names, true,
+        kind == ASTTableJoin::Kind::Right, join.inner_idx() == 0 ? join.right_conditions() : join.left_conditions(),
+        left_filter_column_name);
     Pipeline right_pipeline;
     right_pipeline.streams = right_streams;
-    prepareJoinKeys(join.inner_idx() == 0 ? join.left_join_keys() : join.right_join_keys(), join_key_types, right_pipeline, right_key_names,
-        false, kind == ASTTableJoin::Kind::Right);
+    String right_filter_column_name = "";
+    prepareJoin(join.inner_idx() == 0 ? join.left_join_keys() : join.right_join_keys(), join_key_types, right_pipeline, right_key_names,
+        false, kind == ASTTableJoin::Kind::Right, join.inner_idx() == 0 ? join.left_conditions() : join.right_conditions(),
+        right_filter_column_name);
 
     left_streams = left_pipeline.streams;
     right_streams = right_pipeline.streams;
+    String other_filter_column_name = "";
+    ExpressionActionsPtr other_condition_expr
+        = genJoinOtherConditionAction(join.other_conditions(), join_output_columns, other_filter_column_name);
 
     const Settings & settings = context.getSettingsRef();
     JoinPtr joinPtr = std::make_shared<Join>(left_key_names, right_key_names, true,
-        SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode), kind, ASTTableJoin::Strictness::All,
-        collators);
+        SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode), kind, strictness, collators,
+        left_filter_column_name, right_filter_column_name, other_filter_column_name, other_condition_expr);
     executeUnion(right_pipeline, max_streams);
     right_query.source = right_pipeline.firstStream();
     right_query.join = joinPtr;
     right_query.join->setSampleBlock(right_query.source->getHeader());
-    dag.getDAGContext().profile_streams_map_for_join_build_side[query_block.qb_join_subquery_alias].push_back(right_query.source);
+    dag.getDAGContext().getProfileStreamsMapForJoinBuildSide()[query_block.qb_join_subquery_alias].push_back(right_query.source);
 
     std::vector<NameAndTypePair> source_columns;
     for (const auto & p : left_streams[0]->getHeader().getNamesAndTypesList())
@@ -1010,13 +1044,13 @@ void DAGQueryBlockInterpreter::executeOrder(Pipeline & pipeline, std::vector<Nam
 
 void DAGQueryBlockInterpreter::recordProfileStreams(Pipeline & pipeline, const String & key)
 {
-    dag.getDAGContext().profile_streams_map[key].qb_id = query_block.id;
+    dag.getDAGContext().getProfileStreamsMap()[key].qb_id = query_block.id;
     for (auto & stream : pipeline.streams)
     {
-        dag.getDAGContext().profile_streams_map[key].input_streams.push_back(stream);
+        dag.getDAGContext().getProfileStreamsMap()[key].input_streams.push_back(stream);
     }
     if (pipeline.stream_with_non_joined_data)
-        dag.getDAGContext().profile_streams_map[key].input_streams.push_back(pipeline.stream_with_non_joined_data);
+        dag.getDAGContext().getProfileStreamsMap()[key].input_streams.push_back(pipeline.stream_with_non_joined_data);
 }
 
 void copyExecutorTreeWithLocalTableScan(

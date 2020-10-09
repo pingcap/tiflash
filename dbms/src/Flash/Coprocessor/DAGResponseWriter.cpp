@@ -9,7 +9,7 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response)
     if (!collect_execute_summary)
         return;
     // add ExecutorExecutionSummary info
-    for (auto & p : dag_context.profile_streams_map)
+    for (auto & p : dag_context.getProfileStreamsMap())
     {
         auto * executeSummary = response.add_execution_summaries();
         UInt64 time_processed_ns = 0;
@@ -24,13 +24,13 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response)
                 num_iterations += p_stream->getProfileInfo().blocks;
             }
         }
-        for (auto & join_alias : dag_context.qb_id_to_join_alias_map[p.second.qb_id])
+        for (auto & join_alias : dag_context.getQBIdToJoinAliasMap()[p.second.qb_id])
         {
-            if (dag_context.profile_streams_map_for_join_build_side.find(join_alias)
-                != dag_context.profile_streams_map_for_join_build_side.end())
+            if (dag_context.getProfileStreamsMapForJoinBuildSide().find(join_alias)
+                != dag_context.getProfileStreamsMapForJoinBuildSide().end())
             {
                 UInt64 process_time_for_build = 0;
-                for (auto & join_stream : dag_context.profile_streams_map_for_join_build_side[join_alias])
+                for (auto & join_stream : dag_context.getProfileStreamsMapForJoinBuildSide()[join_alias])
                 {
                     if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(join_stream.get()))
                         process_time_for_build = std::max(process_time_for_build, p_stream->getProfileInfo().execution_time);
@@ -62,7 +62,7 @@ DAGResponseWriter::DAGResponseWriter(Int64 records_per_chunk_, tipb::EncodeType 
       collect_execute_summary(collect_execute_summary_),
       return_executor_id(return_executor_id_)
 {
-    for (auto & p : dag_context.profile_streams_map)
+    for (auto & p : dag_context.getProfileStreamsMap())
     {
         previous_execute_stats[p.first] = std::make_tuple(0, 0, 0);
     }

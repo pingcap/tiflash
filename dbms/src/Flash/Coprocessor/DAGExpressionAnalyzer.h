@@ -39,6 +39,7 @@ private:
 
 public:
     DAGExpressionAnalyzer(std::vector<NameAndTypePair> && source_columns_, const Context & context_);
+    DAGExpressionAnalyzer(std::vector<NameAndTypePair> & source_columns_, const Context & context_);
     void appendWhere(ExpressionActionsChain & chain, const std::vector<const tipb::Expr *> & conditions, String & filter_column_name);
     void appendOrderBy(ExpressionActionsChain & chain, const tipb::TopN & topN, std::vector<NameAndTypePair> & order_columns);
     void appendAggregation(ExpressionActionsChain & chain, const tipb::Aggregation & agg, Names & aggregate_keys,
@@ -70,11 +71,13 @@ public:
         const String & func_name, const Names & arg_names, ExpressionActionsPtr & actions, std::shared_ptr<TiDB::ITiDBCollator> collator);
     Int32 getImplicitCastCount() { return implicit_cast_count; };
     bool appendTimeZoneCastsAfterTS(ExpressionActionsChain & chain, std::vector<bool> is_ts_column, bool keep_UTC_column);
-    bool appendJoinKey(ExpressionActionsChain & chain, const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-        const DataTypes & key_types, Names & key_names, bool left, bool is_right_out_join);
+    bool appendJoinKeyAndJoinFilters(ExpressionActionsChain & chain, const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
+        const DataTypes & key_types, Names & key_names, bool left, bool is_right_out_join,
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & filters, String & filter_column_name);
     String appendTimeZoneCast(const String & tz_col, const String & ts_col, const String & func_name, ExpressionActionsPtr & actions);
     DAGPreparedSets & getPreparedSets() { return prepared_sets; }
     String convertToUInt8(ExpressionActionsPtr & actions, const String & column_name);
+    const Context & getContext() const { return context; }
 };
 
 } // namespace DB
