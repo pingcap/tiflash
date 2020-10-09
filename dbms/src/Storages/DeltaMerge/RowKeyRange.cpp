@@ -5,7 +5,8 @@ namespace DB::DM
 
 const Int64 int_handle_min = std::numeric_limits<HandleID>::min();
 const Int64 int_handle_max = std::numeric_limits<HandleID>::max();
-String      getIntHandleMinKey()
+
+String getIntHandleMinKey()
 {
     std::stringstream ss;
     DB::EncodeInt64(int_handle_min, ss);
