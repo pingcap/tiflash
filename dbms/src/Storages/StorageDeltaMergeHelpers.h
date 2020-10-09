@@ -54,19 +54,16 @@ inline DM::HandleRanges getQueryRanges(
             handle_ranges.push_back(toDMHandleRange(region_info.range_in_table));
         }
     }
-    DM::HandleRanges ranges;
     if (handle_ranges.empty())
     {
         // Just for test cases
-        ranges.emplace_back(DB::DM::HandleRange::newAll());
-        return ranges;
+        handle_ranges.emplace_back(DB::DM::HandleRange::newAll());
+        return handle_ranges;
     }
     else if (handle_ranges.size() == 1)
     {
         // Shortcut for only one region info
-        const auto & range_in_table = handle_ranges[0];
-        ranges.emplace_back(range_in_table);
-        return ranges;
+        return handle_ranges;
     }
 
     /// Sort the handle_ranges.
@@ -155,10 +152,11 @@ inline DM::HandleRanges getQueryRanges(
         merged_ranges.push_back(range);
     }
 
-    LOG_TRACE(log,
-        "Merge ranges: [original ranges: " << handle_ranges.size() << "] [expected ranges: " << expected_ranges_count
-                                           << "] [after merged ranges: " << after_merge_count << "] [final ranges: " << ranges.size()
-                                           << "]");
+    if (log)
+        LOG_TRACE(log,
+            "Merge ranges: [original ranges: " << handle_ranges.size() << "] [expected ranges: " << expected_ranges_count
+                                               << "] [after merged ranges: " << after_merge_count << "] [final ranges: " << merged_ranges.size()
+                                               << "]");
 
     return merged_ranges;
 }
