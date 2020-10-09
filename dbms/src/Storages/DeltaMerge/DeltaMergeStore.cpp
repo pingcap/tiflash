@@ -206,9 +206,10 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
         PageStorage::PathAndIdsVec path_and_ids_vec;
         for (auto & root_path : extra_paths.listPaths())
         {
-            auto & path_and_ids           = path_and_ids_vec.emplace_back();
-            path_and_ids.first            = root_path;
-            auto file_ids_in_current_path = DMFile::listAllInPath(root_path + "/" + STABLE_FOLDER_NAME, /* can_gc= */ true);
+            auto & path_and_ids = path_and_ids_vec.emplace_back();
+            path_and_ids.first  = root_path;
+            auto file_ids_in_current_path
+                = DMFile::listAllInPath(global_context.getFileProvider(), root_path + "/" + STABLE_FOLDER_NAME, /* can_gc= */ true);
             for (auto id : file_ids_in_current_path)
                 path_and_ids.second.insert(id);
         }
@@ -1564,7 +1565,7 @@ void DeltaMergeStore::restoreExtraPathCapacity()
     for (const auto & root_path : extra_paths.listPaths())
     {
         auto parent_path = root_path + "/" + STABLE_FOLDER_NAME;
-        for (auto & file_id : DMFile::listAllInPath(parent_path, false))
+        for (auto & file_id : DMFile::listAllInPath(global_context.getFileProvider(), parent_path, false))
         {
             auto dmfile = DMFile::restore(global_context.getFileProvider(), file_id, /* ref_id= */ 0, parent_path, true);
             extra_paths.addDMFile(file_id, dmfile->getBytesOnDisk(), root_path);
@@ -1717,7 +1718,8 @@ SegmentStats DeltaMergeStore::getSegmentStats()
     return stats;
 }
 
-SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(DMContext & dm_context, const RowKeyRanges & sorted_ranges, const SegmentIdSet &  read_segments)
+SegmentReadTasks
+DeltaMergeStore::getReadTasksByRanges(DMContext & dm_context, const RowKeyRanges & sorted_ranges, const SegmentIdSet & read_segments)
 {
     SegmentReadTasks tasks;
 

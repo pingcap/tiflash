@@ -30,7 +30,7 @@ public:
 
     void createEncryptionInfo(const EncryptionPath & encryption_path_) const;
 
-    void deleteEncryptionInfo(const EncryptionPath & encryption_path_) const;
+    void deleteEncryptionInfo(const EncryptionPath & encryption_path_, bool throw_on_error = true) const;
 
     void linkEncryptionInfo(const EncryptionPath & src_encryption_path_, const EncryptionPath & dst_encryption_path_) const;
 
