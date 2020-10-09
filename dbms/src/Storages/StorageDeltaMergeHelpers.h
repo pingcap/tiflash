@@ -37,20 +37,21 @@ inline DM::HandleRange toDMHandleRange(const HandleRange<HandleID> & range)
     return DM::HandleRange{range.first.handle_id, getRangeEndID(range.second)};
 }
 
-inline DM::HandleRanges getQueryRanges(const DB::MvccQueryInfo::RegionsQueryInfo & regions)
+inline DM::HandleRanges getQueryRanges(
+    const DB::MvccQueryInfo::RegionsQueryInfo & regions, size_t expected_ranges_count = 1, Logger * log = nullptr)
 {
-    std::vector<HandleRange<HandleID>> handle_ranges;
+    DM::HandleRanges handle_ranges;
     for (const auto & region_info : regions)
     {
         if (!region_info.required_handle_ranges.empty())
         {
             for (const auto & handle_range : region_info.required_handle_ranges)
-                handle_ranges.push_back(handle_range);
+                handle_ranges.push_back(toDMHandleRange(handle_range));
         }
         else
         {
             /// only used for test cases
-            handle_ranges.push_back(region_info.range_in_table);
+            handle_ranges.push_back(toDMHandleRange(region_info.range_in_table));
         }
     }
     DM::HandleRanges ranges;
@@ -64,64 +65,102 @@ inline DM::HandleRanges getQueryRanges(const DB::MvccQueryInfo::RegionsQueryInfo
     {
         // Shortcut for only one region info
         const auto & range_in_table = handle_ranges[0];
-        ranges.emplace_back(toDMHandleRange(range_in_table));
+        ranges.emplace_back(range_in_table);
         return ranges;
     }
 
-    // Init index with [0, n)
-    // http: //www.cplusplus.com/reference/numeric/iota/
-    std::vector<size_t> sort_index(handle_ranges.size());
-    std::iota(sort_index.begin(), sort_index.end(), 0);
+    /// Sort the handle_ranges.
+    std::sort(handle_ranges.begin(), handle_ranges.end(), [](const DM::HandleRange & lhs, const DM::HandleRange & rhs) {
+        if (likely(lhs.start != rhs.start))
+            return lhs.start < rhs.start;
+        return lhs.end < rhs.end;
+    });
 
-    std::sort(sort_index.begin(), sort_index.end(), //
-        [&handle_ranges](const size_t lhs, const size_t rhs) { return handle_ranges[lhs] < handle_ranges[rhs]; });
-
-    ranges.reserve(handle_ranges.size());
-
-    DM::HandleRange current;
-    for (size_t i = 0; i < handle_ranges.size(); ++i)
+    // The information about how the original ranges are merged.
+    struct OffsetCount
     {
-        const size_t region_idx = sort_index[i];
-        const auto & handle_range = handle_ranges[region_idx];
+        size_t offset;
+        size_t count;
 
-        if (handle_range.first.type == DB::TiKVHandle::HandleIDType::MAX)
-        {
-            // Ignore [Max, Max)
-            if (handle_range.second.type == DB::TiKVHandle::HandleIDType::MAX)
-                continue;
-            else
-                throw Exception(
-                    "Can not merge invalid region range: [" + handle_range.first.toString() + "," + handle_range.second.toString() + ")",
-                    ErrorCodes::LOGICAL_ERROR);
-        }
+    public:
+        OffsetCount(size_t offset_, size_t count_) : offset(offset_), count(count_) {}
+    };
+    using OffsetCounts = std::vector<OffsetCount>;
+    OffsetCounts merged_stats;
+    merged_stats.reserve(expected_ranges_count);
 
-        if (i == 0)
+    size_t offset = 0;
+    size_t count = 1;
+    for (size_t i = 1; i < handle_ranges.size(); ++i)
+    {
+        auto & prev = handle_ranges[i - 1];
+        auto & current = handle_ranges[i];
+        if (current.none() || prev.end == current.start)
         {
-            current.start = handle_range.first.handle_id;
-            current.end = getRangeEndID(handle_range.second);
+            // Merge current range into previous
+            ++count;
         }
-        else if (current.end == handle_range.first.handle_id)
+        else if (prev.end < current.start)
         {
-            // concat this range_in_table to current
-            current.end = getRangeEndID(handle_range.second);
-        }
-        else if (current.end < handle_range.first.handle_id)
-        {
-            ranges.emplace_back(current);
-
-            // start a new range
-            current.start = handle_range.first.handle_id;
-            current.end = getRangeEndID(handle_range.second);
+            // Cannot merge, let's move on.
+            merged_stats.emplace_back(offset, count);
+            offset = i;
+            count = 1;
         }
         else
         {
-            throw Exception("Overlap region range between " + current.toString() + " and [" //
-                + handle_range.first.toString() + "," + handle_range.second.toString() + ")");
+            throw Exception("Found overlap ranges: " + prev.toString() + ", " + current.toString());
         }
     }
-    ranges.emplace_back(current);
+    merged_stats.emplace_back(offset, count);
 
-    return ranges;
+    size_t after_merge_count = merged_stats.size();
+
+    /// Try to make the number of merged_ranges result larger than expected_ranges_count. So that we can do parallelization.
+    if (merged_stats.size() < expected_ranges_count)
+    {
+        // Use a heap to pick the range with largest count, then keep splitting it.
+        // We don't use std::priority_queue here to avoid copy data around.
+        // About heap operations: https://en.cppreference.com/w/cpp/algorithm/make_heap
+        auto cmp = [](const OffsetCount & a, const OffsetCount & b) { return a.count < b.count; };
+        std::make_heap(merged_stats.begin(), merged_stats.end(), cmp);
+
+        // The range with largest count is retrieved by front().
+        while (merged_stats.size() < expected_ranges_count && merged_stats.front().count > 1)
+        {
+            std::pop_heap(merged_stats.begin(), merged_stats.end(), cmp);
+
+            auto top = merged_stats.back();
+            merged_stats.pop_back();
+
+            size_t split_count = top.count / 2;
+
+            merged_stats.emplace_back(top.offset, split_count);
+            std::push_heap(merged_stats.begin(), merged_stats.end(), cmp);
+
+            merged_stats.emplace_back(top.offset + split_count, top.count - split_count);
+            std::push_heap(merged_stats.begin(), merged_stats.end(), cmp);
+        }
+
+        // Sort by offset, so that we can have an increasing order by range's start.
+        std::sort(
+            merged_stats.begin(), merged_stats.end(), [](const OffsetCount & a, const OffsetCount & b) { return a.offset < b.offset; });
+    }
+
+    DM::HandleRanges merged_ranges;
+    merged_ranges.reserve(merged_stats.size());
+    for (auto stat : merged_stats)
+    {
+        DM::HandleRange range(handle_ranges[stat.offset].start, handle_ranges[stat.offset + stat.count - 1].end);
+        merged_ranges.push_back(range);
+    }
+
+    LOG_TRACE(log,
+        "Merge ranges: [original ranges: " << handle_ranges.size() << "] [expected ranges: " << expected_ranges_count
+                                           << "] [after merged ranges: " << after_merge_count << "] [final ranges: " << ranges.size()
+                                           << "]");
+
+    return merged_ranges;
 }
 
 } // namespace DB
