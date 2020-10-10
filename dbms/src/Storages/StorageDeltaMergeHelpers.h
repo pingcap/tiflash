@@ -113,7 +113,7 @@ inline DM::HandleRanges getQueryRanges(
 
     size_t after_merge_count = merged_stats.size();
 
-    /// Try to make the number of merged_ranges result larger than expected_ranges_count. So that we can do parallelization.
+    /// Try to make the number of merged_ranges result larger or equal to expected_ranges_count. So that we can do parallelization.
     if (merged_stats.size() < expected_ranges_count)
     {
         // Use a heap to pick the range with largest count, then keep splitting it.
