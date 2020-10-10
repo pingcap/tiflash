@@ -20,7 +20,8 @@ inline DM::RowKeyRanges getQueryRanges(const DB::MvccQueryInfo::RegionsQueryInfo
     TableID table_id,
     bool is_common_handle,
     size_t rowkey_column_size,
-    size_t expected_ranges_count = 1)
+    size_t expected_ranges_count = 1,
+    Logger * log = nullptr)
 {
     // todo check table id in DecodedTiKVKey???
     DM::RowKeyRanges handle_ranges;
@@ -64,8 +65,9 @@ inline DM::RowKeyRanges getQueryRanges(const DB::MvccQueryInfo::RegionsQueryInfo
     {
         size_t offset;
         size_t count;
+
     public:
-        OffsetCount(size_t offset_, size_t count_): offset(offset_), count(count_){}
+        OffsetCount(size_t offset_, size_t count_) : offset(offset_), count(count_) {}
     };
     using OffsetCounts = std::vector<OffsetCount>;
     OffsetCounts merged_stats;
@@ -96,6 +98,8 @@ inline DM::RowKeyRanges getQueryRanges(const DB::MvccQueryInfo::RegionsQueryInfo
         }
     }
     merged_stats.emplace_back(offset, count);
+
+    size_t after_merge_count = merged_stats.size();
 
     /// Try to make the number of merged_ranges result larger or equal to expected_ranges_count. So that we can do parallelize the read process.
     if (merged_stats.size() < expected_ranges_count)
@@ -137,6 +141,12 @@ inline DM::RowKeyRanges getQueryRanges(const DB::MvccQueryInfo::RegionsQueryInfo
             handle_ranges[stat.offset].start, handle_ranges[stat.offset + stat.count - 1].end, is_common_handle, rowkey_column_size);
         merged_ranges.push_back(range);
     }
+
+    if (log)
+        LOG_TRACE(log,
+            "Merge ranges: [original ranges: " << handle_ranges.size() << "] [expected ranges: " << expected_ranges_count
+                                               << "] [after merged ranges: " << after_merge_count
+                                               << "] [final ranges: " << merged_ranges.size() << "]");
 
     return merged_ranges;
 }
