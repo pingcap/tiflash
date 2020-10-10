@@ -146,7 +146,7 @@ inline DM::HandleRanges getQueryRanges(
 
     DM::HandleRanges merged_ranges;
     merged_ranges.reserve(merged_stats.size());
-    for (auto stat : merged_stats)
+    for (auto & stat : merged_stats)
     {
         DM::HandleRange range(handle_ranges[stat.offset].start, handle_ranges[stat.offset + stat.count - 1].end);
         merged_ranges.push_back(range);
