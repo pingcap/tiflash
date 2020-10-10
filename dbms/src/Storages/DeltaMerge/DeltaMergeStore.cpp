@@ -287,7 +287,7 @@ void DeltaMergeStore::drop()
     // Remove all background task first
     shutdown();
 
-    LOG_DEBUG(log, "Drop DeltaMerge removing data from filesystem [" << db_name << "." << table_name << "]");
+    LOG_INFO(log, "Drop DeltaMerge removing data from filesystem [" << db_name << "." << table_name << "]");
     storage_pool.drop();
     for (auto & [end, segment] : segments)
     {
@@ -299,7 +299,7 @@ void DeltaMergeStore::drop()
     // Check if path(delta && meta by default) is covered by extra_paths, if not, drop it.
     if (Poco::File dir(path); dir.exists())
         global_context.getFileProvider()->deleteDirectory(path, false, true);
-    LOG_DEBUG(log, "Drop DeltaMerge done [" << db_name << "." << table_name << "]");
+    LOG_INFO(log, "Drop DeltaMerge done [" << db_name << "." << table_name << "]");
 
 #if USE_TCMALLOC
     // Reclaim memory.
