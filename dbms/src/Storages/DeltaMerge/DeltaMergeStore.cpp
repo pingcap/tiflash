@@ -684,7 +684,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
                 auto segment_snap = segment->createSnapshot(*dm_context);
                 if (unlikely(!segment_snap))
                     throw Exception("Failed to get segment snap", ErrorCodes::LOGICAL_ERROR);
-                tasks.push(std::make_shared<SegmentReadTask>(segment, segment_snap, HandleRanges{segment->getRange()}));
+                tasks.push_back(std::make_shared<SegmentReadTask>(segment, segment_snap, HandleRanges{segment->getRange()}));
             }
         }
     }
@@ -725,65 +725,9 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
 {
     LOG_DEBUG(log, "Read with " << sorted_ranges.size() << " ranges");
 
-    SegmentReadTasks tasks;
-
     auto dm_context = newDMContext(db_context, db_settings);
-    {
-        std::shared_lock lock(read_write_mutex);
 
-        auto range_it = sorted_ranges.begin();
-        auto seg_it   = segments.upper_bound(range_it->start);
-
-        if (seg_it == segments.end())
-        {
-            if (range_it->start == P_INF_HANDLE)
-                --seg_it;
-            else
-                throw Exception("Failed to locate segment begin with start: " + DB::toString(range_it->start), ErrorCodes::LOGICAL_ERROR);
-        }
-
-        while (range_it != sorted_ranges.end() && seg_it != segments.end())
-        {
-            auto & req_range = *range_it;
-            auto & seg_range = seg_it->second->getRange();
-            if (req_range.intersect(seg_range) && (read_segments.empty() || read_segments.count(seg_it->second->segmentId())))
-            {
-                if (tasks.empty() || tasks.back()->segment != seg_it->second)
-                {
-                    auto segment      = seg_it->second;
-                    auto segment_snap = segment->createSnapshot(*dm_context);
-                    if (unlikely(!segment_snap))
-                        throw Exception("Failed to get segment snap", ErrorCodes::LOGICAL_ERROR);
-                    tasks.push(std::make_shared<SegmentReadTask>(segment, segment_snap));
-                }
-
-                tasks.back()->addRange(req_range);
-
-                if (req_range.end < seg_range.end)
-                {
-                    ++range_it;
-                }
-                else if (req_range.end > seg_range.end)
-                {
-                    ++seg_it;
-                }
-                else
-                {
-                    ++range_it;
-                    ++seg_it;
-                }
-            }
-            else
-            {
-                if (req_range.end < seg_range.start)
-                    ++range_it;
-                else
-                    ++seg_it;
-            }
-        }
-    }
-
-    LOG_DEBUG(log, "Read create segment snapshot done");
+    SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments);
 
 #if 0
     if (log->trace())
@@ -1742,6 +1686,86 @@ SegmentStats DeltaMergeStore::getSegmentStats()
         stats.push_back(stat);
     }
     return stats;
+}
+
+SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(DMContext &          dm_context,
+                                                       const HandleRanges & sorted_ranges,
+                                                       size_t               expected_tasks_count,
+                                                       const SegmentIdSet & read_segments)
+{
+    SegmentReadTasks tasks;
+
+    std::shared_lock lock(read_write_mutex);
+
+    auto range_it = sorted_ranges.begin();
+    auto seg_it   = segments.upper_bound(range_it->start);
+
+    if (seg_it == segments.end())
+    {
+        if (range_it->start == P_INF_HANDLE)
+            --seg_it;
+        else
+            throw Exception("Failed to locate segment begin with start: " + DB::toString(range_it->start), ErrorCodes::LOGICAL_ERROR);
+    }
+
+    while (range_it != sorted_ranges.end() && seg_it != segments.end())
+    {
+        auto & req_range = *range_it;
+        auto   segment   = seg_it->second;
+
+        auto & seg_range = segment->getRange();
+        if (req_range.intersect(seg_range) && (read_segments.empty() || read_segments.count(seg_it->second->segmentId())))
+        {
+            if (tasks.empty() || tasks.back()->segment != seg_it->second)
+            {
+                auto segment_snap = segment->createSnapshot(dm_context);
+                if (unlikely(!segment_snap))
+                    throw Exception("Failed to get segment snap", ErrorCodes::LOGICAL_ERROR);
+                tasks.push_back(std::make_shared<SegmentReadTask>(segment, segment_snap));
+            }
+
+            tasks.back()->addRange(req_range);
+
+            if (req_range.end < seg_range.end)
+            {
+                ++range_it;
+            }
+            else if (req_range.end > seg_range.end)
+            {
+                ++seg_it;
+            }
+            else
+            {
+                ++range_it;
+                ++seg_it;
+            }
+        }
+        else
+        {
+            if (req_range.end < seg_range.start)
+                ++range_it;
+            else
+                ++seg_it;
+        }
+    }
+
+    /// Try to make task number larger or equal to expected_tasks_count.
+    auto   result_tasks = SegmentReadTask::trySplitReadTasks(tasks, expected_tasks_count);
+    size_t total_tasks = 0, total_ranges = 0;
+    for (auto & task : result_tasks)
+    {
+        /// Merge continuously ranges.
+        task->mergeRanges();
+
+        ++total_tasks;
+        total_ranges += task->ranges.size();
+    }
+
+    LOG_DEBUG(log,
+              __FUNCTION__ << " [sorted_ranges: " << sorted_ranges.size() << "] [tasks before split: " << tasks.size()
+                           << "] [tasks final : " << total_tasks << "] [ranges final: " << total_ranges << "]");
+
+    return result_tasks;
 }
 
 } // namespace DM

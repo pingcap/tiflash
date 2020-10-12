@@ -6,6 +6,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/PathPool.h>
@@ -320,6 +321,11 @@ private:
     bool isSegmentValid(const SegmentPtr & segment);
 
     void restoreExtraPathCapacity();
+
+    SegmentReadTasks getReadTasksByRanges(DMContext &          dm_context,
+                                          const HandleRanges & sorted_ranges,
+                                          size_t               expected_tasks_count,
+                                          const SegmentIdSet & read_segments = {});
 
 private:
     String      path;
