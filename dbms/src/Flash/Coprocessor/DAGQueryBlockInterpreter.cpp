@@ -3,7 +3,7 @@
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/CoprocessorBlockInputStream.h>
-#include <DataStreams/ExchangerClientInputStream.h>
+#include <DataStreams/ExchangeReceiverInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/LimitBlockInputStream.h>
@@ -1269,13 +1269,13 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
         executeJoin(query_block.source->join(), pipeline, right_query);
         recordProfileStreams(pipeline, query_block.source_name);
     }
-    else if (query_block.source->tp() == tipb::ExecType::TypeExchangeClient)
+    else if (query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
-        auto exchange_client_stream = std::make_shared<ExchangeClientInputStream>(
-            context.getTMTContext(), query_block.source->exchange_client(), dag.getMPPTask()->meta);
-        pipeline.streams.push_back(exchange_client_stream);
+        auto exchange_receiver_stream = std::make_shared<ExchangeReceiverInputStream>(
+            context.getTMTContext(), query_block.source->exchange_receiver(), dag.getMPPTask()->meta);
+        pipeline.streams.push_back(exchange_receiver_stream);
         std::vector<NameAndTypePair> source_columns;
-        Block block = exchange_client_stream->getHeader();
+        Block block = exchange_receiver_stream->getHeader();
         for (const auto & col : block.getColumnsWithTypeAndName()) {
             source_columns.emplace_back(NameAndTypePair(col.name, col.type));
             // TODO: Is there an elegant way to process or omit the projection ?

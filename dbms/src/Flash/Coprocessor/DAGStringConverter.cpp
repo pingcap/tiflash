@@ -158,8 +158,8 @@ void DAGStringConverter::buildString(const tipb::Executor & executor, std::strin
             return buildTopNString(executor.topn(), ss);
         case tipb::ExecType::TypeLimit:
             return buildLimitString(executor.limit(), ss);
-        case tipb::ExecType::TypeExchangeClient:
-        case tipb::ExecType::TypeExchangeServer:
+        case tipb::ExecType::TypeExchangeSender:
+        case tipb::ExecType::TypeExchangeReceiver:
             return;
     }
 }

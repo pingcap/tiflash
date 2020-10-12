@@ -72,6 +72,8 @@ void TMTContext::setSchemaSyncer(SchemaSyncerPtr rhs)
 
 pingcap::pd::ClientPtr TMTContext::getPDClient() const { return cluster->pd_client; }
 
+MPPTaskManagerPtr TMTContext::getMPPTaskManager() { return mpp_task_manager; }
+
 IndexReaderPtr TMTContext::createIndexReader() const
 {
     std::lock_guard<std::mutex> lock(mutex);

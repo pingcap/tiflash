@@ -39,14 +39,13 @@ struct RpcTypeTraits<::mpp::EstablishMPPConnectionRequest>
 
 namespace DB
 {
-class ExchangeClientInputStream : public IProfilingBlockInputStream
+class ExchangeReceiverInputStream : public IProfilingBlockInputStream
 {
     TMTContext & context;
 
-    tipb::ExchangeClient exchange_client;
+    tipb::ExchangeReceiver exchange_receiver;
     ::mpp::TaskMeta task_meta;
     std::vector<std::thread> workers;
-
 
     DAGSchema fake_schema;
     Block sample_block;
@@ -57,6 +56,8 @@ class ExchangeClientInputStream : public IProfilingBlockInputStream
     std::queue<Block> q;
     std::atomic_int live_workers;
     bool inited;
+    bool meet_error;
+    Exception err;
 
     Logger * log;
 
@@ -81,27 +82,37 @@ class ExchangeClientInputStream : public IProfilingBlockInputStream
     // Check this error is retryable
     bool canRetry(const mpp::Error & err) { return err.msg().find("can't find") != std::string::npos; }
 
-    // TODO: Try to catch the exception.
     void startAndRead(const String & raw)
+    {
+        try {
+            startAndReadImpl(raw);
+        } catch(Exception & e) {
+            LOG_ERROR(log, "start and read meet error");
+            meet_error = true;
+            err = e;
+        } catch(std::exception & e) {
+            LOG_ERROR(log, "start and read meet error");
+            meet_error = true;
+            err = Exception(e.what());
+        }
+    }
+
+    void startAndReadImpl(const String & raw)
     {
         int max_retry = 15;
         for (int idx = 0; idx < max_retry; idx++)
         {
-            auto server_task = new mpp::TaskMeta();
-            server_task->ParseFromString(raw);
+            auto sender_task = new mpp::TaskMeta();
+            sender_task->ParseFromString(raw);
             auto req = std::make_shared<mpp::EstablishMPPConnectionRequest>();
-            req->set_allocated_client_meta(new mpp::TaskMeta(task_meta));
-            req->set_allocated_server_meta(server_task);
+            req->set_allocated_receiver_meta(new mpp::TaskMeta(task_meta));
+            req->set_allocated_sender_meta(sender_task);
             LOG_DEBUG(log, "begin start and read : " << req->DebugString());
             pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> call(req);
             grpc::ClientContext client_context;
-            auto stream_resp = context.getCluster()->rpc_client->sendStreamRequest(server_task->address(), &client_context, call);
-
-            LOG_DEBUG(log, "wait init");
+            auto stream_resp = context.getCluster()->rpc_client->sendStreamRequest(sender_task->address(), &client_context, call);
 
             stream_resp->WaitForInitialMetadata();
-
-            LOG_DEBUG(log, "begin wait");
 
             mpp::MPPDataPacket packet;
 
@@ -110,7 +121,6 @@ class ExchangeClientInputStream : public IProfilingBlockInputStream
             {
                 if (packet.has_error()) // This is the only way that down stream pass an error.
                 {
-                    LOG_DEBUG(log, "meet error " << packet.error().msg());
                     if (canRetry(packet.error()))
                     {
                         needRetry = true;
@@ -118,7 +128,7 @@ class ExchangeClientInputStream : public IProfilingBlockInputStream
                     }
                     live_workers--;
                     cv.notify_all();
-                    throw Exception("exchange client meet error");
+                    throw Exception("exchange receiver meet error : " + packet.error().msg());
                 }
 
                 LOG_DEBUG(log, "read success");
@@ -135,13 +145,15 @@ class ExchangeClientInputStream : public IProfilingBlockInputStream
             live_workers--;
             cv.notify_all();
             LOG_DEBUG(log, "finish worker success" << std::to_string(live_workers));
-            break;
+            return;
         }
+        // fail
+        throw Exception("cannot build connection after several tries");
     }
 
 public:
-    ExchangeClientInputStream(TMTContext & context_, const ::tipb::ExchangeClient & exc, const ::mpp::TaskMeta & meta)
-        : context(context_), exchange_client(exc), task_meta(meta), live_workers(0), inited(false), log(&Logger::get("exchangeclient"))
+    ExchangeReceiverInputStream(TMTContext & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta)
+        : context(context_), exchange_receiver(exc), task_meta(meta), live_workers(0), inited(false), meet_error(false), log(&Logger::get("exchangereceiver"))
     {
 
         // generate sample block
@@ -149,7 +161,7 @@ public:
 
         for (int i = 0; i < exc.field_types_size(); i++)
         {
-            String name = "exchange_client_" + std::to_string(i);
+            String name = "exchange_receiver_" + std::to_string(i);
             fake_schema.push_back(std::make_pair(name, ColumnInfo()));
 
             auto tp = getDataTypeByFieldType(exc.field_types(i));
@@ -160,7 +172,7 @@ public:
         sample_block = Block(columns);
     }
 
-    ~ExchangeClientInputStream() {
+    ~ExchangeReceiverInputStream() {
         for (auto & worker : workers)
         {
             worker.join();
@@ -169,16 +181,21 @@ public:
 
     Block getHeader() const override { return sample_block; }
 
-    String getName() const override { return "ExchangeClient"; }
+    String getName() const override { return "ExchangeReceiver"; }
 
     void init()
     {
-        int task_size = exchange_client.encoded_task_meta_size();
+        int task_size = exchange_receiver.encoded_task_meta_size();
         for (int i = 0; i < task_size; i++)
         {
             live_workers++;
-            std::thread t(&ExchangeClientInputStream::startAndRead, this, std::ref(exchange_client.encoded_task_meta(i)));
+            std::thread t(&ExchangeReceiverInputStream::startAndRead, this, std::ref(exchange_receiver.encoded_task_meta(i)));
             workers.push_back(std::move(t));
+
+            if (meet_error)
+            {
+                throw err;
+            }
         }
         inited = true;
     }

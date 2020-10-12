@@ -131,23 +131,23 @@ grpc::Status FlashService::Coprocessor(
     }
 
     auto & tmt_context = context.getTMTContext();
-    MPPTaskManagerPtr task_manager = tmt_context.getMPPTaskManager();
-    MPPTaskPtr server_task = task_manager->findTask(request->server_meta());
+    auto task_manager = tmt_context.getMPPTaskManager();
+    MPPTaskPtr server_task = task_manager->findTask(request->sender_meta());
     if (server_task == nullptr)
     {
         mpp::MPPDataPacket packet;
         auto err = new mpp::Error();
-        err->set_msg("can't find task " + request->server_meta().DebugString());
+        err->set_msg("can't find task");
         packet.set_allocated_error(err);
         writer->Write(packet);
         return grpc::Status::OK;
     }
-    MPPTunnelPtr tunnel = server_task->getTunnel(request->client_meta());
+    MPPTunnelPtr tunnel = server_task->getTunnel(request->receiver_meta());
     if (tunnel == nullptr)
     {
         mpp::MPPDataPacket packet;
         auto err = new mpp::Error();
-        err->set_msg("can't find tunnel " + request->server_meta().DebugString());
+        err->set_msg("can't find tunnel");
         packet.set_allocated_error(err);
         writer->Write(packet);
         return grpc::Status::OK;

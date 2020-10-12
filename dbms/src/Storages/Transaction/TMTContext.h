@@ -55,7 +55,7 @@ public:
 
     pingcap::kv::Cluster * getKVCluster() { return cluster.get(); }
 
-    MPPTaskManagerPtr getMPPTaskManager() { return mpp_task_manager; }
+    MPPTaskManagerPtr getMPPTaskManager();
 
     IndexReaderPtr createIndexReader() const;
 

@@ -8,12 +8,80 @@
 namespace DB
 {
 
-grpc::Status MPPHandler::execute(mpp::DispatchTaskResponse * response)
+void MPPTask::unregisterTask()
 {
+    if (manager != nullptr)
+    {
+        LOG_DEBUG(log, "task unregistered");
+        manager->unregisterTask(this);
+    }
+    else
+    {
+        LOG_ERROR(log, "task manager is unset");
+    }
+}
+
+void MPPTask::runImpl(BlockIO io) {
+
+    auto from = io.in;
+    auto to = io.out;
     try
     {
-        tipb::DAGRequest dag_req;
-        dag_req.ParseFromString(task_request.encoded_plan());
+        LOG_DEBUG(log, "begin read prefix");
+        from->readPrefix();
+        to->writePrefix();
+        LOG_DEBUG(log, "begin read ");
+
+        while (Block block = from->read())
+        {
+            LOG_DEBUG(log, "write block " + std::to_string(block.rows()));
+            to->write(block);
+        }
+
+        /// For outputting additional information in some formats.
+        if (IProfilingBlockInputStream * input = dynamic_cast<IProfilingBlockInputStream *>(from.get()))
+        {
+            if (input->getProfileInfo().hasAppliedLimit())
+                to->setRowsBeforeLimit(input->getProfileInfo().getRowsBeforeLimit());
+
+            to->setTotals(input->getTotals());
+            to->setExtremes(input->getExtremes());
+        }
+
+        from->readSuffix();
+        to->writeSuffix();
+
+        LOG_DEBUG(log, "begin write ");
+
+        finishWrite();
+
+        LOG_DEBUG(log, "finish write ");
+    }
+    catch (Exception & e)
+    {
+        LOG_ERROR(log, "task running meets error " << e.displayText() << " Stack Trace : " << e.getStackTrace().toString());
+        writeErrToAllTunnel(e.displayText());
+    }
+    catch (std::exception & e)
+    {
+        LOG_ERROR(log, "task running meets error " << e.what());
+        writeErrToAllTunnel(e.what());
+    }
+    catch (...)
+    {
+        LOG_ERROR(log, "unrecovered error");
+        writeErrToAllTunnel("unrecovered fatal error");
+    }
+    unregisterTask();
+}
+
+
+    grpc::Status MPPHandler::execute(mpp::DispatchTaskResponse * response)
+    {
+        try
+        {
+            tipb::DAGRequest dag_req;
+            dag_req.ParseFromString(task_request.encoded_plan());
         std::unordered_map<RegionID, RegionInfo> regions;
         for (auto & r : task_request.regions())
         {
@@ -26,18 +94,18 @@ grpc::Status MPPHandler::execute(mpp::DispatchTaskResponse * response)
         }
         // set schema ver and start ts.
         auto schema_ver = task_request.schema_ver();
-        auto start_ts = task_request.meta().query_ts();
+        auto start_ts = task_request.meta().start_ts();
 
         context.setSetting("read_tso", start_ts);
         context.setSetting("schema_version", schema_ver);
         context.getTimezoneInfo().resetByDAGRequest(dag_req);
 
         // register task.
-        LOG_DEBUG(log, "begin to register the task");
         TMTContext & tmt_context = context.getTMTContext();
         auto task_manager = tmt_context.getMPPTaskManager();
         // TODO: tunnel should be added to mpp task.
         MPPTaskPtr task = std::make_shared<MPPTask>(task_request.meta());
+        LOG_DEBUG(log, "begin to register the task " << task->id.toString());
         task_manager->registerTask(task);
 
         DAGContext dag_context(dag_req);
@@ -48,32 +116,45 @@ grpc::Status MPPHandler::execute(mpp::DispatchTaskResponse * response)
         BlockIO streams = executeQuery(dag, context, false, QueryProcessingStage::Complete);
         // construct writer
         MPPTunnelSetPtr tunnel_set = std::make_shared<MPPTunnelSet>();
-        const auto & exchangeServer = dag_req.root_executor().exchange_server();
-        for (int i = 0; i < exchangeServer.encoded_task_meta_size(); i++)
+        const auto & exchangeSender = dag_req.root_executor().exchange_sender();
+        for (int i = 0; i < exchangeSender.encoded_task_meta_size(); i++)
         {
+            // exchange sender will register the tunnels and wait receiver to found a connection.
             mpp::TaskMeta meta;
-            meta.ParseFromString(exchangeServer.encoded_task_meta(i));
+            meta.ParseFromString(exchangeSender.encoded_task_meta(i));
             MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(meta, task_request.meta());
-            task->registerTunnel(MPPTaskId{meta.query_ts(), meta.task_id()}, tunnel);
+            LOG_DEBUG(log, "begin to register the tunnel " << tunnel->tunnel_id);
+            task->registerTunnel(MPPTaskId{meta.start_ts(), meta.task_id()}, tunnel);
             tunnel_set->tunnels.emplace_back(tunnel);
         }
+
         std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique< StreamingDAGResponseWriter<MPPTunnelSetPtr> > (tunnel_set, context.getSettings().dag_records_per_chunk,
             dag.getEncodeType(), dag.getResultFieldTypes(), dag_context, false, true);
         streams.out = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
 
-        LOG_DEBUG(log, "begin to run the task");
         task->run(streams);
     }
     catch (Exception & e)
     {
-        LOG_DEBUG(log, "dispatch task meet error : " << e.displayText());
+        mpp::Error error;
+        LOG_ERROR(log, "dispatch task meet error : " << e.displayText());
         error.set_msg(e.displayText());
         response->set_allocated_error(&error);
     }
     catch (std::exception & e)
     {
+        mpp::Error error;
+        LOG_ERROR(log, "dispatch task meet error : " << e.what());
         error.set_msg(e.what());
         response->set_allocated_error(&error);
+    }
+    catch (...)
+    {
+        mpp::Error error;
+        LOG_ERROR(log, "dispatch task meet fatal error");
+        error.set_msg("fatal error");
+        response->set_allocated_error(&error);
+
     }
     return grpc::Status::OK;
 }

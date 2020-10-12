@@ -43,12 +43,16 @@ struct MPPTunnel
 
     ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer;
 
+    // tunnel id is in the format like "tunnel[sender]+[receiver]"
+    String tunnel_id;
+
     Logger * log;
 
-    MPPTunnel(const mpp::TaskMeta & client_meta_, const mpp::TaskMeta & server_meta_)
+    MPPTunnel(const mpp::TaskMeta & receiver_meta_, const mpp::TaskMeta & sender_meta_)
         : connected(false),
           finished(false),
-          log(&Logger::get("tunnel" + std::to_string(server_meta_.task_id()) + "+" + std::to_string(client_meta_.task_id())))
+          tunnel_id("tunnel" + std::to_string(sender_meta_.task_id()) + "+" + std::to_string(receiver_meta_.task_id())),
+          log(&Logger::get(tunnel_id))
     {}
 
     ~MPPTunnel()
@@ -137,15 +141,21 @@ struct MPPTunnelSet
 
 using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
 
+class MPPTaskManager;
+
 struct MPPTask : private boost::noncopyable
 {
     MPPTaskId id;
 
     mpp::TaskMeta meta;
 
+    // worker handles the execution of task.
     std::thread worker;
 
-    std::map<MPPTaskId, MPPTunnelPtr> tunnel_map; // tunnel should be connected.
+    // which targeted task we should send data by which tunnel.
+    std::map<MPPTaskId, MPPTunnelPtr> tunnel_map;
+
+    MPPTaskManager * manager;
 
     Logger * log;
 
@@ -153,68 +163,15 @@ struct MPPTask : private boost::noncopyable
 
     MPPTask(const mpp::TaskMeta & meta_) : meta(meta_), log(&Logger::get("task " + std::to_string(meta_.task_id())))
     {
-        id.start_ts = meta.query_ts();
+        id.start_ts = meta.start_ts();
         id.task_id = meta.task_id();
     }
 
     ~MPPTask() { worker.join(); }
 
-    void runImpl(BlockIO io)
-    {
-        auto from = io.in;
-        auto to = io.out;
-        try
-        {
-            LOG_DEBUG(log, "begin read prefix");
-            from->readPrefix();
-            to->writePrefix();
-            LOG_DEBUG(log, "begin read ");
+    void unregisterTask();
 
-            while (Block block = from->read())
-            {
-                LOG_DEBUG(log, "write block " + std::to_string(block.rows()));
-                to->write(block);
-            }
-
-            /// For outputting additional information in some formats.
-            if (IProfilingBlockInputStream * input = dynamic_cast<IProfilingBlockInputStream *>(from.get()))
-            {
-                if (input->getProfileInfo().hasAppliedLimit())
-                    to->setRowsBeforeLimit(input->getProfileInfo().getRowsBeforeLimit());
-
-                to->setTotals(input->getTotals());
-                to->setExtremes(input->getExtremes());
-            }
-
-            LOG_DEBUG(log, "end read ");
-
-            from->readSuffix();
-            to->writeSuffix();
-
-            LOG_DEBUG(log, "end write ");
-
-            finishWrite();
-
-            LOG_DEBUG(log, "finish write ");
-
-            // TODO: Remove this task from task manager.
-        }
-        catch (Exception & e)
-        {
-            LOG_ERROR(log, "task running meets error " << e.displayText() << " Stack Trace : " << e.getStackTrace().toString());
-            writeErrToAllTunnel(e.displayText());
-        }
-        catch (std::exception & e)
-        {
-            LOG_ERROR(log, "task running meets error " << e.what());
-            writeErrToAllTunnel(e.what());
-        }
-        catch (...)
-        {
-            LOG_ERROR(log, "uncover error");
-            writeErrToAllTunnel("unknown error");
-        }
-    }
+    void runImpl(BlockIO io);
 
     void writeErrToAllTunnel(const String & e)
     {
@@ -244,7 +201,7 @@ struct MPPTask : private boost::noncopyable
 
     MPPTunnelPtr getTunnel(const mpp::TaskMeta & meta)
     {
-        MPPTaskId id{meta.query_ts(), meta.task_id()};
+        MPPTaskId id{meta.start_ts(), meta.task_id()};
         const auto & it = tunnel_map.find(id);
         if (it == tunnel_map.end())
         {
@@ -259,7 +216,8 @@ using MPPTaskPtr = std::shared_ptr<MPPTask>;
 // MPPTaskManger holds all running mpp tasks. It's a single instance holden in Context.
 class MPPTaskManager : private boost::noncopyable
 {
-    // TODO: Add lock.
+    std::mutex mu;
+
     std::map<MPPTaskId, MPPTaskPtr> task_map;
 
     Logger * log;
@@ -267,11 +225,34 @@ class MPPTaskManager : private boost::noncopyable
 public:
     MPPTaskManager() : log(&Logger::get("TaskManager")) {}
 
-    void registerTask(MPPTaskPtr task) { task_map[task->id] = task; }
-
-    MPPTaskPtr findTask(const mpp::TaskMeta & meta) const
+    void registerTask(MPPTaskPtr task)
     {
-        MPPTaskId id{meta.query_ts(), meta.task_id()};
+        std::lock_guard<std::mutex> lock(mu);
+        if (task_map.find(task->id) != task_map.end())
+        {
+            throw Exception("The task " + task->id.toString() + " has been registered");
+        }
+        task_map.emplace(task->id, task);
+        task->manager = this;
+    }
+
+    void unregisterTask(MPPTask* task) {
+        std::lock_guard<std::mutex> lock(mu);
+        auto it = task_map.find(task->id);
+        if (it != task_map.end())
+        {
+            task_map.erase(it);
+        }
+        else
+        {
+            LOG_ERROR(log, "The task " + task->id.toString() + " cannot be found and fail to unregister");
+        }
+    }
+
+    MPPTaskPtr findTask(const mpp::TaskMeta & meta)
+    {
+        std::lock_guard<std::mutex> lock(mu);
+        MPPTaskId id{meta.start_ts(), meta.task_id()};
         const auto & it = task_map.find(id);
         if (it == task_map.end())
         {
@@ -281,7 +262,8 @@ public:
         return it->second;
     }
 
-    String toString() const {
+    String toString() {
+        std::lock_guard<std::mutex> lock(mu);
         String res;
         for (auto it : task_map)
         {
@@ -291,14 +273,10 @@ public:
     }
 };
 
-using MPPTaskManagerPtr = std::shared_ptr<MPPTaskManager>;
-
 class MPPHandler
 {
     Context & context;
     const mpp::DispatchTaskRequest & task_request;
-
-    mpp::Error error;
 
     Logger * log;
 
