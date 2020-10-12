@@ -731,7 +731,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
 
     auto dm_context = newDMContext(db_context, db_settings);
 
-    SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, read_segments);
+    SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments);
 
     LOG_DEBUG(log, "Read create segment snapshot done");
 
@@ -1694,8 +1694,10 @@ SegmentStats DeltaMergeStore::getSegmentStats()
     return stats;
 }
 
-SegmentReadTasks
-DeltaMergeStore::getReadTasksByRanges(DMContext & dm_context, const RowKeyRanges & sorted_ranges, const SegmentIdSet & read_segments)
+SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(DMContext &          dm_context,
+                                                       const RowKeyRanges & sorted_ranges,
+                                                       size_t               expected_tasks_count,
+                                                       const SegmentIdSet & read_segments)
 {
     SegmentReadTasks tasks;
 
@@ -1748,6 +1750,24 @@ DeltaMergeStore::getReadTasksByRanges(DMContext & dm_context, const RowKeyRanges
                 ++seg_it;
         }
     }
+
+    /// Try to make task number larger or equal to expected_tasks_count.
+    auto   result_tasks = SegmentReadTask::trySplitReadTasks(tasks, expected_tasks_count);
+    size_t total_tasks = 0, total_ranges = 0;
+    for (auto & task : result_tasks)
+    {
+        /// Merge continuously ranges.
+        task->mergeRanges();
+
+        ++total_tasks;
+        total_ranges += task->ranges.size();
+    }
+
+    LOG_DEBUG(log,
+              __FUNCTION__ << " [sorted_ranges: " << sorted_ranges.size() << "] [tasks before split: " << tasks.size()
+                           << "] [tasks final : " << total_tasks << "] [ranges final: " << total_ranges << "]");
+
+    return result_tasks;
 
     return tasks;
 }
