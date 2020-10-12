@@ -108,6 +108,7 @@ public:
                 sorted_ranges[stat.offset].start, sorted_ranges[stat.offset + stat.count - 1].end, is_common_handle, rowkey_column_size);
             merged_ranges.push_back(range);
         }
+        return merged_ranges;
     }
 
     size_t currentRangesCount() { return merged_stats.size(); }

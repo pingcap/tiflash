@@ -50,7 +50,7 @@ struct SegmentReadTask
 
     static SegmentReadTasks trySplitReadTasks(const SegmentReadTasks & tasks, size_t expected_size)
     {
-        if (tasks.size() >= expected_size)
+        if (tasks.empty() || tasks.size() >= expected_size)
             return tasks;
 
         // Note that expected_size is normally small(less than 100), so the algorithm complexity here does not matter.
