@@ -38,7 +38,8 @@ inline DM::HandleRange toDMHandleRange(const HandleRange<HandleID> & range)
     return DM::HandleRange{range.first.handle_id, getRangeEndID(range.second)};
 }
 
-inline DM::HandleRanges getDMRanges(const DB::MvccQueryInfo::RegionsQueryInfo & regions)
+inline DM::HandleRanges getQueryRanges(
+    const DB::MvccQueryInfo::RegionsQueryInfo & regions, size_t expected_ranges_count = 1, Logger * log = nullptr)
 {
     DM::HandleRanges ranges;
     for (const auto & region_info : regions)
@@ -60,14 +61,9 @@ inline DM::HandleRanges getDMRanges(const DB::MvccQueryInfo::RegionsQueryInfo & 
         ranges.emplace_back(DB::DM::HandleRange::newAll());
         return ranges;
     }
+    if (ranges.size() == 1)
+        return ranges;
 
-    return ranges;
-}
-
-inline DM::HandleRanges getQueryRanges(
-    const DB::MvccQueryInfo::RegionsQueryInfo & regions, size_t expected_ranges_count = 1, Logger * log = nullptr)
-{
-    auto ranges = getDMRanges(regions);
     DM::sortRangesByStartEdge(ranges);
     return tryMergeRanges(std::move(ranges), expected_ranges_count, log);
 }
