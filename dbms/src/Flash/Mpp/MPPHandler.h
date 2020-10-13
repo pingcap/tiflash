@@ -193,10 +193,21 @@ struct MPPTask : private boost::noncopyable
         worker.detach();
     }
 
-    void registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel) { tunnel_map[id] = tunnel; }
+    std::mutex tunnel_mutex;
+
+    void registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel)
+    {
+        std::lock_guard<std::mutex> lk(tunnel_mutex);
+        if (tunnel_map.find(id) != tunnel_map.end())
+        {
+            throw Exception("the tunnel " + tunnel->tunnel_id + " has been registered");
+        }
+        tunnel_map[id] = tunnel;
+    }
 
     MPPTunnelPtr getTunnel(const mpp::TaskMeta & meta)
     {
+        std::lock_guard<std::mutex> lk(tunnel_mutex);
         MPPTaskId id{meta.start_ts(), meta.task_id()};
         const auto & it = tunnel_map.find(id);
         if (it == tunnel_map.end())

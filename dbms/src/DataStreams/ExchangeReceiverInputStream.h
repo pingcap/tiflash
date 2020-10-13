@@ -90,21 +90,27 @@ class ExchangeReceiverInputStream : public IProfilingBlockInputStream
         }
         catch (Exception & e)
         {
-            LOG_ERROR(log, "start and read meet error");
             meet_error = true;
             err = e;
         }
         catch (std::exception & e)
         {
-            LOG_ERROR(log, "start and read meet error");
             meet_error = true;
             err = Exception(e.what());
         }
+        catch (...)
+        {
+            meet_error = true;
+            err = Exception("fatal error");
+        }
+        live_workers--;
+        cv.notify_all();
     }
 
     void startAndReadImpl(const String & raw)
     {
-        int max_retry = 15;
+        // TODO: Retry backoff.
+        int max_retry = 60;
         for (int idx = 0; idx < max_retry; idx++)
         {
             auto sender_task = new mpp::TaskMeta();
@@ -131,8 +137,6 @@ class ExchangeReceiverInputStream : public IProfilingBlockInputStream
                         needRetry = true;
                         break;
                     }
-                    live_workers--;
-                    cv.notify_all();
                     throw Exception("exchange receiver meet error : " + packet.error().msg());
                 }
 
@@ -142,13 +146,11 @@ class ExchangeReceiverInputStream : public IProfilingBlockInputStream
             if (needRetry)
             {
                 using namespace std::chrono_literals;
-                std::this_thread::sleep_for(100ms);
+                std::this_thread::sleep_for(1s);
                 stream_resp->Finish();
                 continue;
             }
 
-            live_workers--;
-            cv.notify_all();
             LOG_DEBUG(log, "finish worker success" << std::to_string(live_workers));
             return;
         }
@@ -203,11 +205,6 @@ public:
             live_workers++;
             std::thread t(&ExchangeReceiverInputStream::startAndRead, this, std::ref(exchange_receiver.encoded_task_meta(i)));
             workers.push_back(std::move(t));
-
-            if (meet_error)
-            {
-                throw err;
-            }
         }
         inited = true;
     }
@@ -217,7 +214,11 @@ public:
         if (!inited)
             init();
         std::unique_lock<std::mutex> lk(rw_mu);
-        cv.wait(lk, [&] { return q.size() > 0 || live_workers == 0; });
+        cv.wait(lk, [&] { return q.size() > 0 || live_workers == 0 || meet_error; });
+        if (meet_error)
+        {
+            throw err;
+        }
         if (q.empty())
         {
             return {};

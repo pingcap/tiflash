@@ -117,8 +117,7 @@ grpc::Status MPPHandler::execute(mpp::DispatchTaskResponse * response)
 
         DAGQuerySource dag(context, regions, dag_req, true, task);
 
-        BlockIO streams = executeQuery(dag, context, false, QueryProcessingStage::Complete);
-        // construct writer
+        // register tunnels
         MPPTunnelSetPtr tunnel_set = std::make_shared<MPPTunnelSet>();
         const auto & exchangeSender = dag_req.root_executor().exchange_sender();
         for (int i = 0; i < exchangeSender.encoded_task_meta_size(); i++)
@@ -132,6 +131,10 @@ grpc::Status MPPHandler::execute(mpp::DispatchTaskResponse * response)
             tunnel_set->tunnels.emplace_back(tunnel);
         }
 
+        // read index , this may take a long time.
+        BlockIO streams = executeQuery(dag, context, false, QueryProcessingStage::Complete);
+
+        // construct writer
         std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(tunnel_set,
             context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), dag_context, false, true);
         streams.out = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
