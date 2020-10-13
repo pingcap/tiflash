@@ -21,7 +21,8 @@ void MPPTask::unregisterTask()
     }
 }
 
-void MPPTask::runImpl(BlockIO io) {
+void MPPTask::runImpl(BlockIO io)
+{
 
     auto from = io.in;
     auto to = io.out;
@@ -76,12 +77,13 @@ void MPPTask::runImpl(BlockIO io) {
 }
 
 
-    grpc::Status MPPHandler::execute(mpp::DispatchTaskResponse * response)
+grpc::Status MPPHandler::execute(mpp::DispatchTaskResponse * response)
+{
+    Stopwatch stopwatch;
+    try
     {
-        try
-        {
-            tipb::DAGRequest dag_req;
-            dag_req.ParseFromString(task_request.encoded_plan());
+        tipb::DAGRequest dag_req;
+        dag_req.ParseFromString(task_request.encoded_plan());
         std::unordered_map<RegionID, RegionInfo> regions;
         for (auto & r : task_request.regions())
         {
@@ -128,8 +130,8 @@ void MPPTask::runImpl(BlockIO io) {
             tunnel_set->tunnels.emplace_back(tunnel);
         }
 
-        std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique< StreamingDAGResponseWriter<MPPTunnelSetPtr> > (tunnel_set, context.getSettings().dag_records_per_chunk,
-            dag.getEncodeType(), dag.getResultFieldTypes(), dag_context, false, true);
+        std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(tunnel_set,
+            context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), dag_context, false, true);
         streams.out = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
 
         task->run(streams);
@@ -154,8 +156,8 @@ void MPPTask::runImpl(BlockIO io) {
         LOG_ERROR(log, "dispatch task meet fatal error");
         error.set_msg("fatal error");
         response->set_allocated_error(&error);
-
     }
+    LOG_INFO(log, "processing dispatch task is over; the time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms");
     return grpc::Status::OK;
 }
 

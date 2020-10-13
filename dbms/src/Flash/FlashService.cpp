@@ -135,6 +135,7 @@ grpc::Status FlashService::Coprocessor(
     MPPTaskPtr server_task = task_manager->findTask(request->sender_meta());
     if (server_task == nullptr)
     {
+        LOG_DEBUG(log, "can't find task");
         mpp::MPPDataPacket packet;
         auto err = new mpp::Error();
         err->set_msg("can't find task");
@@ -145,6 +146,7 @@ grpc::Status FlashService::Coprocessor(
     MPPTunnelPtr tunnel = server_task->getTunnel(request->receiver_meta());
     if (tunnel == nullptr)
     {
+        LOG_DEBUG(log, "can't find tunnel");
         mpp::MPPDataPacket packet;
         auto err = new mpp::Error();
         err->set_msg("can't find tunnel");

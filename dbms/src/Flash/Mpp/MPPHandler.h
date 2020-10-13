@@ -25,9 +25,7 @@ struct MPPTaskId
     uint64_t start_ts;
     int64_t task_id;
     bool operator<(const MPPTaskId & rhs) const { return start_ts < rhs.start_ts || (start_ts == rhs.start_ts && task_id < rhs.task_id); }
-    String toString() const {
-        return "[" + std::to_string(start_ts) + "," + std::to_string(task_id) + "]";
-    }
+    String toString() const { return "[" + std::to_string(start_ts) + "," + std::to_string(task_id) + "]"; }
 };
 
 
@@ -149,9 +147,6 @@ struct MPPTask : private boost::noncopyable
 
     mpp::TaskMeta meta;
 
-    // worker handles the execution of task.
-    std::thread worker;
-
     // which targeted task we should send data by which tunnel.
     std::map<MPPTaskId, MPPTunnelPtr> tunnel_map;
 
@@ -166,8 +161,6 @@ struct MPPTask : private boost::noncopyable
         id.start_ts = meta.start_ts();
         id.task_id = meta.task_id();
     }
-
-    ~MPPTask() { worker.join(); }
 
     void unregisterTask();
 
@@ -186,15 +179,18 @@ struct MPPTask : private boost::noncopyable
         }
     }
 
-    void finishWrite() {
-        for (auto it : tunnel_map) {
+    void finishWrite()
+    {
+        for (auto it : tunnel_map)
+        {
             it.second->writeDone();
         }
     }
 
     void run(BlockIO io)
     {
-        worker = std::thread(&MPPTask::runImpl, this, io);
+        std::thread worker(&MPPTask::runImpl, this, io);
+        worker.detach();
     }
 
     void registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel) { tunnel_map[id] = tunnel; }
@@ -236,7 +232,8 @@ public:
         task->manager = this;
     }
 
-    void unregisterTask(MPPTask* task) {
+    void unregisterTask(MPPTask * task)
+    {
         std::lock_guard<std::mutex> lock(mu);
         auto it = task_map.find(task->id);
         if (it != task_map.end())
@@ -262,7 +259,8 @@ public:
         return it->second;
     }
 
-    String toString() {
+    String toString()
+    {
         std::lock_guard<std::mutex> lock(mu);
         String res;
         for (auto it : task_map)
