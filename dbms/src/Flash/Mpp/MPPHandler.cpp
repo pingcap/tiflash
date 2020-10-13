@@ -24,11 +24,12 @@ void MPPTask::unregisterTask()
 void MPPTask::runImpl(BlockIO io)
 {
 
+    Stopwatch stopwatch;
+    LOG_INFO(log, "task starts running");
     auto from = io.in;
     auto to = io.out;
     try
     {
-        LOG_DEBUG(log, "begin read prefix");
         from->readPrefix();
         to->writePrefix();
         LOG_DEBUG(log, "begin read ");
@@ -73,6 +74,7 @@ void MPPTask::runImpl(BlockIO io)
         LOG_ERROR(log, "unrecovered error");
         writeErrToAllTunnel("unrecovered fatal error");
     }
+    LOG_INFO(log, "task ends, time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
     unregisterTask();
 }
 
@@ -157,7 +159,7 @@ grpc::Status MPPHandler::execute(mpp::DispatchTaskResponse * response)
         error.set_msg("fatal error");
         response->set_allocated_error(&error);
     }
-    LOG_INFO(log, "processing dispatch task is over; the time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms");
+    LOG_INFO(log, "processing dispatch task " << task_request.DebugString() << " is over; the time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms");
     return grpc::Status::OK;
 }
 

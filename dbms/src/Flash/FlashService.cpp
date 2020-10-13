@@ -154,9 +154,11 @@ grpc::Status FlashService::Coprocessor(
         writer->Write(packet);
         return grpc::Status::OK;
     }
+    Stopwatch stopwatch;
     tunnel->connect(writer);
     LOG_DEBUG(log, "connect tunnel successfully and begin to wait");
     tunnel->waitForFinish();
+    LOG_INFO(log, "connection for " << tunnel->tunnel_id << " cost " << std::string(stopwatch.elapsed()) << " ms.")
     // TODO: Check if there are errors in task.
     return grpc::Status::OK;
 }

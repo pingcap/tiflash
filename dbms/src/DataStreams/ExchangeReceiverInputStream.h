@@ -84,13 +84,18 @@ class ExchangeReceiverInputStream : public IProfilingBlockInputStream
 
     void startAndRead(const String & raw)
     {
-        try {
+        try
+        {
             startAndReadImpl(raw);
-        } catch(Exception & e) {
+        }
+        catch (Exception & e)
+        {
             LOG_ERROR(log, "start and read meet error");
             meet_error = true;
             err = e;
-        } catch(std::exception & e) {
+        }
+        catch (std::exception & e)
+        {
             LOG_ERROR(log, "start and read meet error");
             meet_error = true;
             err = Exception(e.what());
@@ -153,7 +158,13 @@ class ExchangeReceiverInputStream : public IProfilingBlockInputStream
 
 public:
     ExchangeReceiverInputStream(TMTContext & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta)
-        : context(context_), exchange_receiver(exc), task_meta(meta), live_workers(0), inited(false), meet_error(false), log(&Logger::get("exchangereceiver"))
+        : context(context_),
+          exchange_receiver(exc),
+          task_meta(meta),
+          live_workers(0),
+          inited(false),
+          meet_error(false),
+          log(&Logger::get("exchange_receiver"))
     {
 
         // generate sample block
@@ -172,7 +183,8 @@ public:
         sample_block = Block(columns);
     }
 
-    ~ExchangeReceiverInputStream() {
+    ~ExchangeReceiverInputStream()
+    {
         for (auto & worker : workers)
         {
             worker.join();
