@@ -253,7 +253,6 @@ public:
         const auto & it = task_map.find(id);
         if (it == task_map.end())
         {
-            LOG_ERROR(log, "don't find task " << std::to_string(meta.task_id()) << " map have " << toString());
             return nullptr;
         }
         return it->second;
