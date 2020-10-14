@@ -555,10 +555,13 @@ void Context::setUserFilesPath(const String & path)
     shared->user_files_path = path;
 }
 
-void Context::setExtraPaths(const std::vector<String> & extra_paths_, PathCapacityMetricsPtr global_capacity_, FileProviderPtr file_provider)
+void Context::setExtraPaths(const Strings & main_data_paths,
+    const Strings & latest_data_paths,
+    PathCapacityMetricsPtr global_capacity_,
+    FileProviderPtr file_provider_)
 {
     auto lock = getLock();
-    shared->extra_paths = PathPool(extra_paths_, global_capacity_, file_provider);
+    shared->extra_paths = PathPool(main_data_paths, latest_data_paths, global_capacity_, file_provider_);
 }
 
 void Context::setConfig(const ConfigurationPtr & config)

@@ -23,6 +23,8 @@ class TiFlashMetrics;
 using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 class PathCapacityMetrics;
 using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
+class PSPathDelegator;
+using PSPathDelegatorPtr = std::shared_ptr<PSPathDelegator>;
 
 
 /**
@@ -38,7 +40,7 @@ class PageStorage
 public:
     struct Config
     {
-        Config() {}
+        Config() = default;
 
         bool sync_on_write = true;
 
@@ -108,12 +110,11 @@ public:
     };
 
 public:
-    PageStorage(String                 name,
-                const String &         storage_path,
-                const Config &         config_,
+    PageStorage(String                  name,
+                PSPathDelegatorPtr      delegator, //
+                const Config &          config_,
                 const FileProviderPtr & file_provider_,
-                TiFlashMetricsPtr      metrics_         = nullptr,
-                PathCapacityMetricsPtr global_capacity_ = nullptr);
+                TiFlashMetricsPtr       metrics_ = nullptr);
 
     void restore();
 
@@ -149,13 +150,16 @@ public:
 
     FileProviderPtr getFileProvider() const { return file_provider; }
 
-    static PageFileSet listAllPageFiles(const String &              storage_path,
-                                        const FileProviderPtr &     file_provider,
+    static PageFileSet listAllPageFiles(const FileProviderPtr &     file_provider,
+                                        PSPathDelegatorPtr &        delegator,
                                         Poco::Logger *              page_file_log,
                                         const ListPageFilesOption & option = ListPageFilesOption());
 
 private:
-    WriterPtr getWriter(PageFile & page_file);
+    WriterPtr getWriter(PageFile &     page_file,
+                        const String & pf_parent_path_hint = "",
+                        WriterPtr &&   old_writer          = nullptr,
+                        const String & logging_msg         = "");
     ReaderPtr getReader(const PageFileIdAndLevel & file_id_level);
 
     static constexpr const char * ARCHIVE_SUBDIR = "archive";
@@ -173,13 +177,13 @@ private:
     friend class DataCompactor;
 
 private:
-    String storage_name; // Identify between different Storage
-    String storage_path;
-    Config config;
+    String             storage_name; // Identify between different Storage
+    PSPathDelegatorPtr delegator;    // Get paths for storing data
+    Config             config;
 
     FileProviderPtr file_provider;
 
-    std::mutex              write_mutex; // A mutex protect `idle_writers`,`write_files` and `statistics`.
+    std::mutex write_mutex; // A mutex protect `idle_writers`,`write_files` and `statistics`.
 
     std::condition_variable write_mutex_cv;
     std::vector<PageFile>   write_files;
@@ -206,8 +210,6 @@ private:
 
     // For reporting metrics to prometheus
     TiFlashMetricsPtr metrics;
-
-    const PathCapacityMetricsPtr global_capacity;
 };
 
 class PageReader

@@ -19,16 +19,16 @@ class PathCapacityMetrics : private boost::noncopyable
 public:
     PathCapacityMetrics(const std::vector<std::string> & all_paths, const std::vector<size_t> & capacities);
 
-    void addUsedSize(const std::string & file_path, size_t used_bytes);
+    void addUsedSize(std::string_view file_path, size_t used_bytes);
 
-    void freeUsedSize(const std::string & file_path, size_t used_bytes);
+    void freeUsedSize(std::string_view file_path, size_t used_bytes);
 
     FsStats getFsStats() const;
 
 private:
     static constexpr ssize_t INVALID_INDEX = -1;
     // Return the index of the longest prefix matching path in `path_info`
-    ssize_t locatePath(const std::string & file_path) const;
+    ssize_t locatePath(std::string_view file_path) const;
 
 private:
     struct CapacityInfo

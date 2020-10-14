@@ -31,12 +31,12 @@ PathCapacityMetrics::PathCapacityMetrics(const std::vector<std::string> & all_pa
     }
 }
 
-void PathCapacityMetrics::addUsedSize(const std::string & file_path, size_t used_bytes)
+void PathCapacityMetrics::addUsedSize(std::string_view file_path, size_t used_bytes)
 {
     ssize_t path_idx = locatePath(file_path);
     if (path_idx == INVALID_INDEX)
     {
-        LOG_ERROR(log, "Can not locate path in addUsedSize. File: " + file_path);
+        LOG_ERROR(log, "Can not locate path in addUsedSize. File: " + String(file_path));
         return;
     }
 
@@ -44,12 +44,12 @@ void PathCapacityMetrics::addUsedSize(const std::string & file_path, size_t used
     path_infos[path_idx].used_bytes += used_bytes;
 }
 
-void PathCapacityMetrics::freeUsedSize(const std::string & file_path, size_t used_bytes)
+void PathCapacityMetrics::freeUsedSize(std::string_view file_path, size_t used_bytes)
 {
     ssize_t path_idx = locatePath(file_path);
     if (path_idx == INVALID_INDEX)
     {
-        LOG_ERROR(log, "Can not locate path in removeUsedSize. File: " + file_path);
+        LOG_ERROR(log, "Can not locate path in removeUsedSize. File: " + String(file_path));
         return;
     }
 
@@ -109,7 +109,7 @@ FsStats PathCapacityMetrics::getFsStats() const
 }
 
 // Return the index of the longest prefix matching path in `path_info`
-ssize_t PathCapacityMetrics::locatePath(const std::string & file_path) const
+ssize_t PathCapacityMetrics::locatePath(std::string_view file_path) const
 {
     // TODO: maybe build a trie-tree to do this.
     ssize_t max_match_size = 0;

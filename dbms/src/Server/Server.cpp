@@ -377,8 +377,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->initializeFileProvider(key_manager, false);
     }
 
-    bool has_zookeeper = config().has("zookeeper");
 
+    // TODO: remove this configuration left by ClickHouse
     std::vector<String> all_fast_path;
     if (config().has("fast_path"))
     {
@@ -394,6 +394,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             }
         }
     }
+
     std::vector<String> all_normal_path;
     std::vector<size_t> all_capacity;
     if (config().has("capacity"))
@@ -410,7 +411,46 @@ int Server::main(const std::vector<std::string> & /*args*/)
             all_capacity.emplace_back(capacity);
         }
     }
+
+    Strings main_data_paths, latest_data_paths;
+    if (config().has("main_data_path"))
     {
+        auto parse_multiple_paths = [&log](String s, const String & logging_prefix) -> Strings {
+            Poco::trimInPlace(s);
+            Strings res;
+            Poco::StringTokenizer string_tokens(s, ",");
+            for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
+            {
+                res.emplace_back(getCanonicalPath(std::string(*it)));
+                LOG_INFO(log, logging_prefix << " data candidate path: " << std::string(*it));
+            }
+            return res;
+        };
+
+        main_data_paths = parse_multiple_paths(config().getString("main_data_path"), "Main");
+        if (config().has("latest_data_path"))
+            latest_data_paths = parse_multiple_paths(config().getString("latest_data_path"), "Latest");
+        else
+            latest_data_paths = main_data_paths;
+
+        {
+            std::set<String> path_set;
+            for (const auto & s : main_data_paths)
+                path_set.insert(s);
+            for (const auto & s : latest_data_paths)
+                path_set.insert(s);
+            all_normal_path.emplace_back(main_data_paths[0]);
+            path_set.erase(main_data_paths[0]);
+            for (const auto & s : path_set)
+                all_normal_path.emplace_back(s);
+        }
+
+        if (config().has("path"))
+            LOG_WARNING(log, "The configuration \"path\" is ignored when \"main_data_path\" is defined.");
+    }
+    else if (config().has("path"))
+    {
+        LOG_WARNING(log, "The configuration \"path\" is deprecated, use \"main_data_path\" instead.");
 
         String paths = config().getString("path");
         Poco::trimInPlace(paths);
@@ -425,20 +465,33 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 all_capacity.emplace_back(0);
             LOG_DEBUG(log, "Data part candidate path: " << std::string(*it) << ", capacity: " << all_capacity[idx++]);
         }
+
+        // If you set `path_realtime_mode` to `true` and multiple directories are deployed in the path, the latest data is stored in the first directory and older data is stored in the rest directories.
+        bool path_realtime_mode = config().getBool("path_realtime_mode", false);
+        for (size_t i = 0; i < all_normal_path.size(); ++i)
+        {
+            const String p = Poco::Path{all_normal_path[i]}.toString();
+            // Only use the first path for storing latest data
+            if (i == 0)
+                latest_data_paths.emplace_back(p);
+            if (path_realtime_mode)
+            {
+                if (i != 0)
+                    main_data_paths.emplace_back(p);
+            }
+            else
+            {
+                main_data_paths.emplace_back(p);
+            }
+        }
     }
-    global_context->initializePathCapacityMetric(all_normal_path, std::move(all_capacity));
-
-    bool path_realtime_mode = config().getBool("path_realtime_mode", false);
-    std::vector<String> extra_paths(all_normal_path.begin(), all_normal_path.end());
-    for (auto & p : extra_paths)
-        p += "/data";
-
-    if (path_realtime_mode && all_normal_path.size() > 1)
-        global_context->setExtraPaths(std::vector<String>(extra_paths.begin() + 1, extra_paths.end()),
-            global_context->getPathCapacity(),
-            global_context->getFileProvider());
     else
-        global_context->setExtraPaths(extra_paths, global_context->getPathCapacity(), global_context->getFileProvider());
+    {
+        LOG_ERROR(log, "The configuration \"main_data_path\" is not defined.");
+    }
+
+    global_context->initializePathCapacityMetric(all_normal_path, std::move(all_capacity));
+    global_context->setExtraPaths(main_data_paths, latest_data_paths, global_context->getPathCapacity(), global_context->getFileProvider());
 
     const std::string path = all_normal_path[0];
     TiFlashRaftConfig raft_config(path, config(), log);
@@ -642,6 +695,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// After attaching system databases we can initialize system log.
     global_context->initializeSystemLogs();
     /// After the system database is created, attach virtual system tables (in addition to query_log and part_log)
+    bool has_zookeeper = config().has("zookeeper");
     attachSystemTablesServer(*global_context->getDatabase("system"), has_zookeeper);
 
     {

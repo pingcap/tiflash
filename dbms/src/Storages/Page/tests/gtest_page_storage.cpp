@@ -12,6 +12,7 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageFile.h>
 #include <Storages/Page/WriteBatch.h>
+#include <Storages/PathPool.h>
 #include <common/logger_useful.h>
 #include <test_utils/TiflashTestBasic.h>
 
@@ -42,10 +43,14 @@ protected:
     void SetUp() override
     {
         // drop dir if exists
-        Poco::File file(path);
-        if (file.exists())
+        auto & ctx = TiFlashTestEnv::getContext();
+        path_pool  = std::make_unique<StoragePathPool>(ctx.getExtraPaths().withTable("test", "t1", false));
+        for (const auto & p : path_pool->getNormalDelegate("log")->listPaths())
         {
-            file.remove(true);
+            if (Poco::File file(p); file.exists())
+            {
+                file.remove(true);
+            }
         }
         // default test config
         config.file_roll_size               = 512;
@@ -56,16 +61,19 @@ protected:
 
     std::shared_ptr<PageStorage> reopenWithConfig(const PageStorage::Config & config_)
     {
-        auto storage = std::make_shared<PageStorage>("test.t", path, config_, file_provider);
+        auto & ctx       = TiFlashTestEnv::getContext();
+        auto   delegator = path_pool->getNormalDelegate("log");
+        auto   storage   = std::make_shared<PageStorage>("test.t", delegator, config_, file_provider, ctx.getTiFlashMetrics());
         storage->restore();
         return storage;
     }
 
 protected:
-    String                       path;
-    PageStorage::Config          config;
-    std::shared_ptr<PageStorage> storage;
-    const FileProviderPtr        file_provider;
+    String                           path;
+    PageStorage::Config              config;
+    std::shared_ptr<PageStorage>     storage;
+    std::unique_ptr<StoragePathPool> path_pool;
+    const FileProviderPtr            file_provider;
 };
 
 TEST_F(PageStorage_test, WriteRead)
@@ -360,242 +368,6 @@ try
 }
 CATCH
 
-#if 0
-/// TODO: after gc normal page and restore from file, still can find that page
-TEST_F(PageStorage_test, GcMoveNormalPage)
-try
-{
-    const size_t buf_sz = 256;
-    char         c_buff[buf_sz];
-
-    {
-        WriteBatch batch;
-        memset(c_buff, 0xf, buf_sz);
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
-        // Page1, RefPage2 -> 1, RefPage3 -> 2
-        batch.putPage(1, 0, buff, buf_sz);
-        batch.putRefPage(2, 1);
-        batch.putRefPage(3, 2);
-        // DelPage1
-        batch.delPage(1);
-
-        storage->write(std::move(batch));
-    }
-
-    PageFileIdAndLevel        id_and_lvl = {1, 0}; // PageFile{1, 0} is ready to be migrated by gc
-    PageStorage::GcLivesPages livesPages{{id_and_lvl,
-                                          {buf_sz,
-                                           {
-                                               1,
-                                           }}}};
-    PageStorage::GcCandidates candidates{
-        id_and_lvl,
-    };
-    auto                             s0 = storage->getSnapshot();
-    PageStorage::ListPageFilesOption opt;
-    opt.remove_tmp_files       = true;
-    opt.ignore_legacy          = true;
-    opt.ignore_checkpoint      = true;
-    auto            page_files = PageStorage::listAllPageFiles(storage->storage_path, storage->page_file_log, opt);
-    PageEntriesEdit edit       = storage->gcMigratePages(s0, livesPages, candidates, 1);
-    s0.reset();
-    auto [live_files, live_normal_pages] = storage->versioned_page_entries.gcApply(edit);
-    ASSERT_EQ(live_normal_pages.size(), 1UL);
-    ASSERT_GT(live_normal_pages.count(1), 0UL);
-    ASSERT_EQ(live_files.size(), 1UL);
-    ASSERT_EQ(live_files.count(id_and_lvl), 0UL);
-    storage->gcRemoveObsoleteData(page_files, {2, 0}, live_files);
-
-    // reopen PageStorage, RefPage 3 -> 1 is still valid
-    storage = reopenWithConfig(config);
-    auto s1 = storage->getSnapshot();
-
-    auto [is_ref, normal_page_id] = s1->version()->isRefId(3);
-    ASSERT_TRUE(is_ref);
-    ASSERT_EQ(normal_page_id, 1UL);
-
-    std::tie(is_ref, normal_page_id) = s1->version()->isRefId(2);
-    ASSERT_TRUE(is_ref);
-    ASSERT_EQ(normal_page_id, 1UL);
-
-    // Page 1 is deleted.
-    auto entry1 = s1->version()->find(1);
-    ASSERT_FALSE(entry1);
-
-    // Normal page 1 is moved to PageFile_1_1
-    entry1 = s1->version()->findNormalPageEntry(normal_page_id);
-    ASSERT_TRUE(entry1);
-    ASSERT_EQ(entry1->fileIdLevel().first, 1UL);
-    ASSERT_EQ(entry1->fileIdLevel().second, 1UL);
-
-    Page page = storage->read(3, s1);
-    ASSERT_EQ(page.data.size(), buf_sz);
-
-    page = storage->read(2, s1);
-    ASSERT_EQ(page.data.size(), buf_sz);
-}
-CATCH
-
-/// TODO: after gc ref page and restore from file, still can find that page
-TEST_F(PageStorage_test, GcMoveRefPage)
-{
-    const size_t buf_sz = 256;
-    char         c_buff[buf_sz];
-
-    {
-        WriteBatch batch;
-        memset(c_buff, 0xf, buf_sz);
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
-        batch.putPage(1, 0, buff, buf_sz);
-        batch.putRefPage(2, 1);
-        batch.putRefPage(3, 2);
-
-        batch.delPage(2);
-
-        storage->write(std::move(batch));
-    }
-
-    PageFileIdAndLevel        id_and_lvl = {1, 0}; // PageFile{1, 0} is ready to be migrated by gc
-    PageStorage::GcLivesPages livesPages{{id_and_lvl,
-                                          {buf_sz,
-                                           {
-                                               1,
-                                           }}}};
-    PageStorage::GcCandidates candidates{
-        id_and_lvl,
-    };
-    auto            s0   = storage->getSnapshot();
-    PageEntriesEdit edit = storage->gcMigratePages(s0, livesPages, candidates, 2);
-    s0.reset();
-
-    // reopen PageStorage, RefPage 3 -> 1 is still valid
-    storage                       = reopenWithConfig(config);
-    auto s1                       = storage->getSnapshot();
-    auto [is_ref, normal_page_id] = s1->version()->isRefId(3);
-    ASSERT_TRUE(is_ref);
-    ASSERT_EQ(normal_page_id, 1UL);
-}
-
-/// TODO: after gc del meta and restore from file, that page is delelted
-TEST_F(PageStorage_test, GcMovePageDelMeta)
-try
-{
-    const size_t buf_sz = 256;
-    char         c_buff[buf_sz];
-
-    {
-        // Page1 should be written to PageFile{1, 0}
-        WriteBatch batch;
-        memset(c_buff, 0xf, buf_sz);
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
-        batch.putPage(1, 0, buff, buf_sz);
-        buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
-        batch.putPage(2, 0, buff, buf_sz);
-        buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
-        batch.putPage(3, 0, buff, buf_sz);
-
-        storage->write(std::move(batch));
-    }
-
-    {
-        // DelPage1 should be written to PageFile{2, 0}
-        WriteBatch batch;
-        batch.delPage(1);
-
-        storage->write(std::move(batch));
-    }
-
-    PageFileIdAndLevel        id_and_lvl = {2, 0}; // PageFile{2, 0} is ready to be migrated by gc
-    PageStorage::GcLivesPages livesPages{{id_and_lvl, {0, {}}}};
-    PageStorage::GcCandidates candidates{
-        id_and_lvl,
-    };
-    PageStorage::ListPageFilesOption opt;
-    opt.remove_tmp_files       = true;
-    opt.ignore_legacy          = true;
-    opt.ignore_checkpoint      = true;
-    auto            page_files = PageStorage::listAllPageFiles(storage->storage_path, storage->page_file_log, opt);
-    auto            s0         = storage->getSnapshot();
-    PageEntriesEdit edit       = storage->gcMigratePages(s0, livesPages, candidates, 2);
-    s0.reset();
-
-    auto [live_files, live_normal_pages] = storage->versioned_page_entries.gcApply(edit);
-    EXPECT_EQ(live_files.find(id_and_lvl), live_files.end());
-    EXPECT_EQ(live_normal_pages.size(), 2UL);
-    EXPECT_GT(live_normal_pages.count(2), 0UL);
-    EXPECT_GT(live_normal_pages.count(3), 0UL);
-    storage->gcRemoveObsoleteData(/* page_files= */ page_files, /* writing_file_id_level= */ {3, 0}, live_files);
-
-    // reopen PageStorage, Page 1 should be deleted
-    storage = reopenWithConfig(config);
-    auto s1 = storage->getSnapshot();
-    ASSERT_EQ(s1->version()->find(1), std::nullopt);
-}
-CATCH
-
-/// TODO: after gc ref page to ref page and restore from file, that page is still valild
-TEST_F(PageStorage_test, GcMigrateRefPageToRefPage)
-try
-{
-    PageId page_id = 1;
-
-    const size_t buf_sz = 256;
-    char         c_buff[buf_sz];
-
-    {
-        // Page1 should be written to PageFile{1, 0}
-        WriteBatch batch;
-        memset(c_buff, 0xf, buf_sz);
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
-        batch.putPage(page_id, 0, buff, buf_sz);
-        // RefPage2 -> Page1, RefPage3 -> Page1, then del Page1
-        batch.putRefPage(2, page_id);
-        batch.putRefPage(3, page_id);
-        batch.delPage(page_id);
-        // RefPage4 -> 2 -> Page1, RefPage5 -> 3 -> Page 1, then del Page2, Page3
-        batch.putRefPage(4, 2);
-        batch.putRefPage(5, 3);
-        batch.delPage(2);
-        batch.delPage(3);
-
-        storage->write(std::move(batch));
-    }
-
-    PageFileIdAndLevel id_and_lvl = {1, 0}; // PageFile{1, 0} is ready to be migrated by gc
-
-    PageStorage::ListPageFilesOption opt;
-    opt.remove_tmp_files       = true;
-    opt.ignore_legacy          = true;
-    opt.ignore_checkpoint      = true;
-    auto            page_files = PageStorage::listAllPageFiles(storage->storage_path, storage->page_file_log, opt);
-    PageEntriesEdit edit;
-    {
-        // migrate PageFile{1, 0} -> PageFile{1, 1}
-        auto snapshot = storage->getSnapshot();
-
-        PageStorage::GcLivesPages livesPages{{id_and_lvl, {256, {page_id}}}};
-        PageStorage::GcCandidates candidates{id_and_lvl};
-        edit = storage->gcMigratePages(snapshot, livesPages, candidates, 0);
-    }
-
-    {
-        // check that now only PageFile{1, 1} is live and remove PageFile{1, 0}
-        auto [live_files, live_normal_pages] = storage->versioned_page_entries.gcApply(edit);
-        ASSERT_EQ(live_files.size(), 1UL);
-        ASSERT_EQ(*live_files.begin(), PageFileIdAndLevel(1, 1));
-        EXPECT_EQ(live_normal_pages.size(), 1UL);
-        EXPECT_GT(live_normal_pages.count(1), 0UL);
-
-        storage->gcRemoveObsoleteData(page_files, {2, 0}, live_files);
-    }
-
-    // reload to check if there is any exception
-    EXPECT_NO_THROW(storage = reopenWithConfig(config));
-    storage = reopenWithConfig(config);
-}
-CATCH
-#endif
-
 TEST_F(PageStorage_test, ListPageFiles)
 try
 {
@@ -610,7 +382,7 @@ try
         wb.putPage(1, 0, buf, buf_sz);
         storage->write(std::move(wb));
 
-        auto f = PageFile::openPageFileForRead(1, 0, storage->storage_path, file_provider, PageFile::Type::Formal, storage->log);
+        auto f = PageFile::openPageFileForRead(1, 0, storage->delegator->normalPath(), file_provider, PageFile::Type::Formal, storage->log);
         f.setLegacy();
     }
 
@@ -621,7 +393,7 @@ try
         auto buf = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         wb.putPage(1, 0, buf, buf_sz);
 
-        auto f = PageFile::newPageFile(2, 0, storage->storage_path, file_provider, PageFile::Type::Temp, storage->log);
+        auto f = PageFile::newPageFile(2, 0, storage->delegator->normalPath(), file_provider, PageFile::Type::Temp, storage->log);
         {
             auto w = f.createWriter(false, true);
 
@@ -634,7 +406,7 @@ try
     {
         PageStorage::ListPageFilesOption opt;
         opt.ignore_legacy = true;
-        auto page_files   = storage->listAllPageFiles(storage->storage_path, file_provider, storage->log, opt);
+        auto page_files   = storage->listAllPageFiles(file_provider, storage->delegator, storage->log, opt);
         // Legacy should be ignored
         ASSERT_EQ(page_files.size(), 1UL);
         for (auto & page_file : page_files)
@@ -646,7 +418,7 @@ try
     {
         PageStorage::ListPageFilesOption opt;
         opt.ignore_checkpoint = true;
-        auto page_files       = storage->listAllPageFiles(storage->storage_path, file_provider, storage->log, opt);
+        auto page_files       = storage->listAllPageFiles(file_provider, storage->delegator, storage->log, opt);
         // Snapshot should be ignored
         ASSERT_EQ(page_files.size(), 1UL);
         for (auto & page_file : page_files)

@@ -11,6 +11,7 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageFile.h>
 #include <Storages/Page/WriteBatch.h>
+#include <Storages/PathPool.h>
 #include <common/logger_useful.h>
 #include <test_utils/TiflashTestBasic.h>
 
@@ -164,15 +165,17 @@ try
 {
     TiFlashTestEnv::setupLogger();
 
-    const String          path          = TiFlashTestEnv::getTemporaryPath() + "/legacy_compactor_test";
-    const FileProviderPtr file_provider = TiFlashTestEnv::getContext().getFileProvider();
-    PageStorage           storage("compact_test", path, {}, file_provider);
+    auto &                ctx           = TiFlashTestEnv::getContext();
+    const FileProviderPtr file_provider = ctx.getFileProvider();
+    StoragePathPool       spool         = ctx.getExtraPaths().withTable("test", "t", false);
+    auto                  delegator     = spool.getNormalDelegate("meta");
+    PageStorage           storage("compact_test", delegator, PageStorage::Config{}, file_provider);
 
     PageStorage::ListPageFilesOption opt;
     opt.ignore_checkpoint = false;
     opt.ignore_legacy     = false;
     opt.remove_tmp_files  = false;
-    auto page_files       = PageStorage::listAllPageFiles(path, file_provider, storage.page_file_log, opt);
+    auto page_files       = PageStorage::listAllPageFiles(file_provider, delegator, storage.page_file_log, opt);
 
     LegacyCompactor compactor(storage);
     auto && [page_files_left, page_files_compacted, bytes_written] = compactor.tryCompact(std::move(page_files), {});
@@ -181,7 +184,8 @@ try
     ASSERT_EQ(page_files_compacted.size(), 4UL);
 
     // TODO:
-    PageFile page_file = PageFile::openPageFileForRead(7, 0, path, file_provider, PageFile::Type::Checkpoint, storage.page_file_log);
+    PageFile page_file
+        = PageFile::openPageFileForRead(7, 0, delegator->normalPath(), file_provider, PageFile::Type::Checkpoint, storage.page_file_log);
     ASSERT_TRUE(page_file.isExist());
 
     PageStorage::MetaMergingQueue mergine_queue;

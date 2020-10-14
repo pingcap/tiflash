@@ -145,7 +145,7 @@ void FileChecker::load(Map & map) const
     JSON json(out.str());
 
     JSON files = json["yandex"];
-    // warn: loop variable 'name_value' is always a copy because the range of type 'JSON' does not return a reference
+    // Note: loop variable 'name_value' should always be a copy because the return type of iterator of type 'JSON' is not a reference.
     for (const auto name_value : files)
         map[unescapeForFileName(name_value.getName())] = name_value.getValue()["size"].toUInt();
 }
