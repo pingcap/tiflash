@@ -58,12 +58,12 @@ bool checkMatch(const String &        test_case, //
     clean_up();
     SCOPE_EXIT({ clean_up(); });
 
-    RowKeyRange all_range = RowKeyRange::newAll(false, 1);
+    auto all_range = HandleRange::newAll();
 
     ColumnDefine cd(DEFAULT_COL_ID, DEFAULT_COL_NAME, DataTypeFactory::instance().get(type));
 
     ColumnDefines table_columns;
-    table_columns.push_back(getExtraHandleColumnDefine(false));
+    table_columns.push_back(getExtraHandleColumnDefine());
     table_columns.push_back(getVersionColumnDefine());
     table_columns.push_back(getTagColumnDefine());
     table_columns.push_back(cd);
@@ -72,7 +72,7 @@ bool checkMatch(const String &        test_case, //
     Block block  = genBlock(header, block_tuples);
 
     DeltaMergeStorePtr store = std::make_shared<DeltaMergeStore>(
-        context, path, false, "test_database", "test_table", table_columns, getExtraHandleColumnDefine(false), false, 1);
+        context, path, false, "test_database", "test_table", table_columns, getExtraHandleColumnDefine());
 
     store->write(context, context.getSettingsRef(), block);
     store->flushCache(context, all_range);

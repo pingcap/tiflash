@@ -127,6 +127,7 @@ public:
     {
         NotCompress not_compress_columns{};
     };
+    static Settings EMPTY_SETTINGS;
 
     using SegmentSortedMap = std::map<Handle, SegmentPtr>;
     using SegmentMap       = std::unordered_map<PageId, SegmentPtr>;
@@ -233,7 +234,7 @@ public:
                     const String &        tbl_name,
                     const ColumnDefines & columns,
                     const ColumnDefine &  handle,
-                    const Settings &      settings_);
+                    const Settings &      settings_ = EMPTY_SETTINGS);
     ~DeltaMergeStore();
 
     void setUpBackgroundTask(const DMContextPtr & dm_context);

@@ -87,6 +87,8 @@ DeltaMergeStore::BackgroundTask DeltaMergeStore::MergeDeltaTaskPool::nextTask(Lo
 //   DeltaMergeStore
 // ================================================
 
+DeltaMergeStore::Settings DeltaMergeStore::EMPTY_SETTINGS = DeltaMergeStore::Settings{.not_compress_columns = NotCompress{}};
+
 namespace
 {
 // Actually we will always store a column of `_tidb_rowid`, no matter it
