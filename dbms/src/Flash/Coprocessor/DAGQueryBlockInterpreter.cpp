@@ -628,9 +628,9 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     for (auto const & p : input_streams_vec[1][0]->getHeader().getNamesAndTypesList())
     {
         if (!is_semi_join)
-            /// for semi join, the columns from right table is ignored
+            /// for semi join, the columns from right table will be ignored
             join_output_columns.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
-        /// however, for when compiling join's other condition, we still need the columns from right table
+        /// however, when compiling join's other condition, we still need the columns from right table
         columns_for_other_join_filter.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
     }
     /// all the columns from right table should be added after join, even for the join key
@@ -638,7 +638,6 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     make_nullable = kind == ASTTableJoin::Kind::Left;
     for (auto const & p : right_streams[0]->getHeader().getNamesAndTypesList())
     {
-        // todo do not add columns in case of semi join
         columns_added_by_join.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
     }
 
