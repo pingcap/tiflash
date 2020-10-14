@@ -67,7 +67,10 @@ protected:
     Logger * log;
 };
 
-TEST_F(DMRegion_test, GetRowsAndBytes)
+/// TODO: we temperary disable those tests. Because they take too long time to run, and the "check_approx" could fail because it is not accurate.
+/// Those test cases need to improve later.
+
+TEST_F(DMRegion_test, DISABLED_GetRowsAndBytes)
 try
 {
     srand(time(NULL));
@@ -144,7 +147,7 @@ try
 }
 CATCH
 
-TEST_F(DMRegion_test, GetSplitPoint)
+TEST_F(DMRegion_test, DISABLED_GetSplitPoint)
 try
 {
     srand(time(NULL));
