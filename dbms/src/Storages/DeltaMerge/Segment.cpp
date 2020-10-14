@@ -1,3 +1,4 @@
+
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/EmptyBlockInputStream.h>
@@ -339,7 +340,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
         if (real_range.none())
             stream = std::make_shared<EmptyBlockInputStream>(toEmptyBlock(read_info.read_columns));
         else
-            stream = create_stream(rowkey_range.shrink(read_ranges[0]));
+            stream = create_stream(real_range);
     }
     else
     {

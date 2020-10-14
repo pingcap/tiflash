@@ -17,9 +17,6 @@ using SegmentReadTaskPtr = std::shared_ptr<SegmentReadTask>;
 using SegmentReadTasks   = std::list<SegmentReadTaskPtr>;
 using AfterSegmentRead   = std::function<void(const DMContextPtr &, const SegmentPtr &)>;
 
-struct DMContext;
-using DMContextPtr = std::shared_ptr<DMContext>;
-
 struct SegmentReadTask
 {
     SegmentPtr         segment;

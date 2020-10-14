@@ -1753,23 +1753,20 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(DMContext &          dm_c
 
     /// Try to make task number larger or equal to expected_tasks_count.
     auto   result_tasks = SegmentReadTask::trySplitReadTasks(tasks, expected_tasks_count);
-    size_t total_tasks = 0, total_ranges = 0;
+
+    size_t total_ranges = 0;
     for (auto & task : result_tasks)
     {
         /// Merge continuously ranges.
         task->mergeRanges();
-
-        ++total_tasks;
         total_ranges += task->ranges.size();
     }
 
     LOG_DEBUG(log,
               __FUNCTION__ << " [sorted_ranges: " << sorted_ranges.size() << "] [tasks before split: " << tasks.size()
-                           << "] [tasks final : " << total_tasks << "] [ranges final: " << total_ranges << "]");
+                           << "] [tasks final : " << result_tasks.size() << "] [ranges final: " << total_ranges << "]");
 
     return result_tasks;
-
-    return tasks;
 }
 
 } // namespace DM
