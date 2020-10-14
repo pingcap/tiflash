@@ -11,6 +11,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsConditional.h>
+#include <Functions/FunctionsTiDBConversion.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Set.h>
 #include <Interpreters/convertFieldToType.h>
@@ -122,15 +123,42 @@ static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr
     return analyzer->applyFunction(is_not_in ? "and" : "or", argument_names, actions, nullptr);
 }
 
+static const String tidb_cast_name = "tidb_cast";
+
+static String buildCastFunctionInternal(DAGExpressionAnalyzer * analyzer, const Names & argument_names, bool in_union,
+    const tipb::FieldType & field_type, ExpressionActionsPtr & actions)
+{
+    String result_name = genFuncString(tidb_cast_name, argument_names);
+    if (actions->getSampleBlock().has(result_name))
+        return result_name;
+
+    FunctionBuilderPtr function_builder = FunctionFactory::instance().get(tidb_cast_name, analyzer->getContext());
+    FunctionBuilderTiDBCast * function_builder_tidb_cast = dynamic_cast<FunctionBuilderTiDBCast *>(function_builder.get());
+    function_builder_tidb_cast->setInUnion(in_union);
+    function_builder_tidb_cast->setTiDBFieldType(field_type);
+
+    const ExpressionAction & apply_function = ExpressionAction::applyFunction(function_builder, argument_names, result_name, nullptr);
+    actions->add(apply_function);
+    return result_name;
+}
+
+/// buildCastFunction build tidb_cast function
 static String buildCastFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
 {
     if (expr.children_size() != 1)
-    {
         throw TiFlashException("Cast function only support one argument", Errors::Coprocessor::BadRequest);
-    }
+    if (!exprHasValidFieldType(expr))
+        throw TiFlashException("CAST function without valid field type", Errors::Coprocessor::BadRequest);
+
     String name = analyzer->getActions(expr.children(0), actions);
-    name = analyzer->appendCastIfNeeded(expr, actions, name, true);
-    return name;
+    DataTypePtr expected_type = getDataTypeByFieldType(expr.field_type());
+
+    tipb::Expr type_expr;
+    constructStringLiteralTiExpr(type_expr, expected_type->getName());
+    auto type_expr_name = analyzer->getActions(type_expr, actions);
+
+    // todo extract in_union from tipb::Expr
+    return buildCastFunctionInternal(analyzer, {name, type_expr_name}, false, expr.field_type(), actions);
 }
 
 static String buildDateAddFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
@@ -195,12 +223,18 @@ static std::unordered_map<String, std::function<String(DAGExpressionAnalyzer *, 
         {"tidbIn", buildInFunction},
         {"tidbNotIn", buildInFunction},
         {"multiIf", buildMultiIfFunction},
-        {"CAST", buildCastFunction},
+        {"tidb_cast", buildCastFunction},
         {"date_add", buildDateAddFunction},
     });
 
 DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> && source_columns_, const Context & context_)
     : source_columns(std::move(source_columns_)), context(context_), after_agg(false), implicit_cast_count(0)
+{
+    settings = context.getSettings();
+}
+
+DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> & source_columns_, const Context & context_)
+    : source_columns(source_columns_), context(context_), after_agg(false), implicit_cast_count(0)
 {
     settings = context.getSettings();
 }
@@ -395,7 +429,14 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
     }
     if (org_type->isStringOrFixedString())
     {
-        String num_col_name = applyFunction("toInt64OrNull", {column_name}, actions, nullptr);
+        /// use tidb_cast to make it compatible with TiDB
+        tipb::FieldType field_type;
+        field_type.set_tp(TiDB::TypeLongLong);
+        tipb::Expr type_expr;
+        constructStringLiteralTiExpr(type_expr, "Nullable(Int64)");
+        auto type_expr_name = getActions(type_expr, actions);
+        String num_col_name = buildCastFunctionInternal(this, {column_name, type_expr_name}, false, field_type, actions);
+
         tipb::Expr const_expr;
         constructInt64LiteralTiExpr(const_expr, 0);
         auto const_expr_name = getActions(const_expr, actions);
@@ -505,8 +546,9 @@ void DAGExpressionAnalyzer::appendJoin(
     actions->add(ExpressionAction::ordinaryJoin(join_query.join, columns_added_by_join));
 }
 /// return true if some actions is needed
-bool DAGExpressionAnalyzer::appendJoinKey(ExpressionActionsChain & chain, const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-    const DataTypes & key_types, Names & key_names, bool left, bool is_right_out_join)
+bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(ExpressionActionsChain & chain,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & keys, const DataTypes & key_types, Names & key_names, bool left,
+    bool is_right_out_join, const google::protobuf::RepeatedPtrField<tipb::Expr> & filters, String & filter_column_name)
 {
     bool ret = false;
     initChain(chain, getCurrentInputColumns());
@@ -545,8 +587,19 @@ bool DAGExpressionAnalyzer::appendJoinKey(ExpressionActionsChain & chain, const 
         key_names.push_back(key_name);
         ret |= has_actions;
     }
+
+    if (!filters.empty())
+    {
+        ret = true;
+        std::vector<const tipb::Expr *> filter_vector;
+        for (const auto & c : filters)
+        {
+            filter_vector.push_back(&c);
+        }
+        appendWhere(chain, filter_vector, filter_column_name);
+    }
     /// remove useless columns to avoid duplicate columns
-    /// as when compiling the key expression, the origin
+    /// as when compiling the key/filter expression, the origin
     /// streams may be added some columns that have the
     /// same name on left streams and right streams, for
     /// example, if the join condition is something like:
@@ -560,13 +613,15 @@ bool DAGExpressionAnalyzer::appendJoinKey(ExpressionActionsChain & chain, const 
     /// literal expression, the key names should never be
     /// duplicated. In the above example, the final key names should be
     /// something like `add(__qb_2_id, 1)` and `add(__qb_3_id, 1)`
-    if (actions->getSampleBlock().getNames().size() != getCurrentInputColumns().size() + key_names.size())
+    if (ret)
     {
         std::unordered_set<String> needed_columns;
         for (const auto & c : getCurrentInputColumns())
             needed_columns.insert(c.name);
         for (const auto & s : key_names)
             needed_columns.insert(s);
+        if (!filter_column_name.empty())
+            needed_columns.insert(filter_column_name);
 
         const auto & names = actions->getSampleBlock().getNames();
         for (const auto & name : names)

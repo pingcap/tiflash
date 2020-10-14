@@ -18,6 +18,7 @@ void registerFunctionsCoding(FunctionFactory &);
 void registerFunctionsComparison(FunctionFactory &);
 void registerFunctionsConditional(FunctionFactory &);
 void registerFunctionsConversion(FunctionFactory &);
+void registerFunctionsTiDBConversion(FunctionFactory &);
 void registerFunctionsDateTime(FunctionFactory &);
 void registerFunctionsEmbeddedDictionaries(FunctionFactory &);
 void registerFunctionsExternalDictionaries(FunctionFactory &);
@@ -55,6 +56,7 @@ void registerFunctions()
     registerFunctionsComparison(factory);
     registerFunctionsConditional(factory);
     registerFunctionsConversion(factory);
+    registerFunctionsTiDBConversion(factory);
     registerFunctionsDateTime(factory);
     registerFunctionsEmbeddedDictionaries(factory);
     registerFunctionsExternalDictionaries(factory);
