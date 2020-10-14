@@ -21,7 +21,9 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(exception_before_step_3_rename_in_exchange_partition)  \
     M(exception_after_step_3_in_exchange_partition)          \
     M(region_exception_after_read_from_storage_some_error)   \
-    M(region_exception_after_read_from_storage_all_error)
+    M(region_exception_after_read_from_storage_all_error)    \
+    M(exception_before_dmfile_remove_encryption)             \
+    M(exception_before_dmfile_remove_from_disk)
 
 #define APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M) M(pause_after_learner_read)
 
