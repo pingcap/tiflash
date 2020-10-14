@@ -52,7 +52,7 @@ protected:
             return {};
         while (true)
         {
-            if (!cur_stream)
+            while (!cur_stream)
             {
                 auto task = task_pool->nextTask();
                 if (!task)
