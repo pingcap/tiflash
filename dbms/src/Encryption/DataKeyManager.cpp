@@ -26,10 +26,10 @@ FileEncryptionInfo DataKeyManager::newFile(const String & fname)
     return r;
 }
 
-void DataKeyManager::deleteFile(const String & fname)
+void DataKeyManager::deleteFile(const String & fname, bool throw_on_error)
 {
     auto r = tiflash_instance_wrap->proxy_helper->deleteFile(Poco::Path(fname).toString());
-    if (unlikely(r.res != FileEncryptionRes::Ok && r.res != FileEncryptionRes::Disabled))
+    if (unlikely(r.res != FileEncryptionRes::Ok && r.res != FileEncryptionRes::Disabled && throw_on_error))
     {
         throw DB::TiFlashException(
             "Delete encryption info for file: " + fname + " meet error: " + *r.erro_msg, Errors::Encryption::Internal);

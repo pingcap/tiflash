@@ -16,7 +16,9 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(exception_between_create_database_meta_and_directory); \
     M(exception_before_rename_table_old_meta_removed);       \
     M(region_exception_after_read_from_storage_some_error)   \
-    M(region_exception_after_read_from_storage_all_error)
+    M(region_exception_after_read_from_storage_all_error)    \
+    M(exception_before_dmfile_remove_encryption)             \
+    M(exception_before_dmfile_remove_from_disk)
 
 #define APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M) M(pause_after_learner_read)
 
