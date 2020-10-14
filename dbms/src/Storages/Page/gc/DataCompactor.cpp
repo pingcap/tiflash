@@ -1,5 +1,6 @@
 #include <IO/ReadBufferFromMemory.h>
 #include <Storages/Page/gc/DataCompactor.h>
+#include <Storages/PathPool.h>
 
 #ifndef NDEBUG
 #include <Storages/Page/mock/MockUtils.h>
@@ -11,7 +12,7 @@ namespace DB
 template <typename SnapshotPtr>
 DataCompactor<SnapshotPtr>::DataCompactor(const PageStorage & storage)
     : storage_name(storage.storage_name),
-      storage_path(storage.storage_path),
+      delegator(storage.delegator),
       file_provider(storage.getFileProvider()),
       config(storage.config),
       log(storage.log),
@@ -142,7 +143,8 @@ DataCompactor<SnapshotPtr>::migratePages( //
     const PageFileIdAndLevel migrate_file_id{largest_file_id, level + 1};
 
     // In case that those files are hold by snapshot and do migratePages to same PageFile again, we need to check if gc_file is already exist.
-    if (PageFile::isPageFileExist(migrate_file_id, storage_path, file_provider, PageFile::Type::Formal, page_file_log))
+    const String pf_parent_path = delegator->choosePath(migrate_file_id);
+    if (PageFile::isPageFileExist(migrate_file_id, pf_parent_path, file_provider, PageFile::Type::Formal, page_file_log))
     {
         LOG_INFO(log,
                  storage_name << " GC migration to PageFile_" //
@@ -152,10 +154,10 @@ DataCompactor<SnapshotPtr>::migratePages( //
 
     // Create a tmp PageFile for migration
     PageFile gc_file = PageFile::newPageFile(
-        migrate_file_id.first, migrate_file_id.second, storage_path, file_provider, PageFile::Type::Temp, page_file_log);
+        migrate_file_id.first, migrate_file_id.second, pf_parent_path, file_provider, PageFile::Type::Temp, page_file_log);
     LOG_INFO(log,
              storage_name << " GC decide to migrate " << candidates.size() << " files, containing " << migrate_page_count
-                          << " pages to PageFile_" << gc_file.getFileId() << "_" << gc_file.getLevel());
+                          << " pages to PageFile_" << gc_file.getFileId() << "_" << gc_file.getLevel() << ", path " << pf_parent_path);
 
     PageEntriesEdit gc_file_edit;
     size_t          bytes_written = 0;
@@ -281,6 +283,7 @@ DataCompactor<SnapshotPtr>::mergeValidPages( //
     }
 
     // Free gc_file_writer and sync
+    delegator->addPageFileUsedSize(gc_file_id, bytes_written, gc_file.parentPath(), /*need_insert_location*/ true);
     return {std::move(gc_file_edit), bytes_written};
 }
 

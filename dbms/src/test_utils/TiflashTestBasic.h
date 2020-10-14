@@ -1,8 +1,8 @@
 #pragma once
 
-#include <Encryption/MockKeyManager.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/IDataType.h>
+#include <Encryption/MockKeyManager.h>
 #include <Interpreters/Context.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/File.h>
@@ -69,15 +69,15 @@ class TiFlashTestEnv
 public:
     static String getTemporaryPath() { return Poco::Path("./tmp/").absolute().toString(); }
 
-    static std::vector<String> getExtraPaths(const std::vector<String> & testdata_path = {})
+    static std::pair<Strings, Strings> getExtraPaths(const Strings & testdata_path = {})
     {
-        std::vector<String> result;
+        Strings result;
         if (!testdata_path.empty())
             for (const auto & p : testdata_path)
-                result.push_back(p + "/data/");
+                result.push_back(Poco::Path{p}.absolute().toString());
         else
-            result.push_back(getTemporaryPath() + "/data/");
-        return result;
+            result.push_back(Poco::Path{getTemporaryPath()}.absolute().toString());
+        return std::make_pair(result, result);
     }
 
     static void setupLogger(const String & level = "trace")
@@ -113,7 +113,7 @@ public:
         throw Exception("Can not find testdata with name[" + name + "]");
     }
 
-    static Context & getContext(const DB::Settings & settings = DB::Settings(), const std::vector<String> testdata_path = {})
+    static Context & getContext(const DB::Settings & settings = DB::Settings(), std::vector<String> testdata_path = {})
     {
         static Context context = DB::Context::createGlobal();
         // Load `testdata_path` as path if it is set.
@@ -133,16 +133,18 @@ public:
             context.initializeTiFlashMetrics();
             KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
             context.initializeFileProvider(key_manager, false);
-            std::vector<size_t> all_capacity{0};
 
             // FIXME: These paths are only set at the first time
-            context.initializePathCapacityMetric(testdata_path, std::move(all_capacity));
+            if (testdata_path.empty())
+                testdata_path.emplace_back(getTemporaryPath());
+            context.initializePathCapacityMetric(testdata_path, 0);
             context.createTMTContext({}, {"default"}, root_path + "/kvstore", TiDB::StorageEngine::TMT, false);
 
             context.getTMTContext().restore();
         }
         context.getSettingsRef() = settings;
-        context.setExtraPaths(getExtraPaths(testdata_path), context.getPathCapacity(), context.getFileProvider());
+        auto paths = getExtraPaths(testdata_path);
+        context.setExtraPaths(paths.first, paths.second, context.getPathCapacity(), context.getFileProvider());
         return context;
     }
 };

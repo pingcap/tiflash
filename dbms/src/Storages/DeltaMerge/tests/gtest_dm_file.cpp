@@ -39,20 +39,21 @@ public:
     {
         dropFiles();
 
-        auto settings  = DB::Settings();
-        storage_pool   = std::make_unique<StoragePool>("test.t1", parent_path, DMTestEnv::getContext(), settings);
-        dm_file        = DMFile::create(0, parent_path);
-        db_context     = std::make_unique<Context>(DMTestEnv::getContext(settings));
-        table_columns_ = std::make_shared<ColumnDefines>();
-        column_cache_  = std::make_shared<ColumnCache>();
+        auto & ctx      = DMTestEnv::getContext();
+        auto   settings = DB::Settings();
+        path_pool       = std::make_unique<StoragePathPool>(ctx.getExtraPaths().withTable("test", "t1", false));
+        storage_pool    = std::make_unique<StoragePool>("test.t1", *path_pool, ctx, settings);
+        dm_file         = DMFile::create(0, parent_path);
+        db_context      = std::make_unique<Context>(DMTestEnv::getContext(settings));
+        table_columns_  = std::make_shared<ColumnDefines>();
+        column_cache_   = std::make_shared<ColumnCache>();
 
         reload();
     }
 
     void dropFiles()
     {
-        Poco::File file(parent_path);
-        if (file.exists())
+        if (Poco::File file(parent_path); file.exists())
         {
             file.remove(true);
         }
@@ -63,10 +64,11 @@ public:
     {
         *table_columns_ = *cols;
 
+        auto & ctx = DMTestEnv::getContext();
+        *path_pool = ctx.getExtraPaths().withTable("test", "t1", false);
         dm_context = std::make_unique<DMContext>( //
             *db_context,
-            parent_path,
-            db_context->getExtraPaths(),
+            *path_pool,
             *storage_pool,
             /*hash_salt*/ 0,
             table_columns_,
@@ -84,9 +86,10 @@ private:
     std::unique_ptr<Context>   db_context;
     std::unique_ptr<DMContext> dm_context;
     /// all these var live as ref in dm_context
-    std::unique_ptr<StoragePool> storage_pool;
-    ColumnDefinesPtr             table_columns_;
-    DeltaMergeStore::Settings    settings;
+    std::unique_ptr<StoragePathPool> path_pool;
+    std::unique_ptr<StoragePool>     storage_pool;
+    ColumnDefinesPtr                 table_columns_;
+    DeltaMergeStore::Settings        settings;
 
 protected:
     const String   parent_path;

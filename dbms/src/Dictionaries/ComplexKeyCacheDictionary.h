@@ -609,7 +609,7 @@ private:
         const auto now = std::chrono::system_clock::now();
 
         /// Check which ids have not been found and require setting null_value
-        for (const auto key_found_pair : remaining_keys)
+        for (const auto & key_found_pair : remaining_keys)
         {
             if (key_found_pair.second)
             {

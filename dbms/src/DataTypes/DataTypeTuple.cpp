@@ -99,7 +99,7 @@ static inline const IColumn & extractElementColumn(const IColumn & column, size_
 void DataTypeTuple::serializeBinary(const Field & field, WriteBuffer & ostr) const
 {
     const auto & tuple = get<const Tuple &>(field).t;
-    for (const auto & idx_elem : ext::enumerate(elems))
+    for (const auto idx_elem : ext::enumerate(elems))
         idx_elem.second->serializeBinary(tuple[idx_elem.first], ostr);
 }
 
@@ -114,7 +114,7 @@ void DataTypeTuple::deserializeBinary(Field & field, ReadBuffer & istr) const
 
 void DataTypeTuple::serializeBinary(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
 {
-    for (const auto & idx_elem : ext::enumerate(elems))
+    for (const auto idx_elem : ext::enumerate(elems))
         idx_elem.second->serializeBinary(extractElementColumn(column, idx_elem.first), row_num, ostr);
 }
 

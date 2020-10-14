@@ -216,7 +216,7 @@ void tryRemoveDirectory(const String & directory, Poco::Logger * log, bool recur
 
 // This function will tidy up path and compare if them are the same one.
 // For example "/tmp/data/a.sql" is equal to "/tmp//data//a.sql"
-inline bool isSamePath(const String & lhs, const String & rhs) { return Poco::Path{lhs}.toString() == Poco::Path{rhs}.toString(); }
+inline bool isSamePath(const String & lhs, const String & rhs) { return Poco::Path{lhs}.absolute().toString() == Poco::Path{rhs}.absolute().toString(); }
 
 } // namespace
 
