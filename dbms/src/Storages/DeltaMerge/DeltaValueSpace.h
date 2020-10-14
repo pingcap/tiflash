@@ -121,9 +121,12 @@ public:
             return s;
         }
     };
+
+    struct Snapshot;
     using PackPtr      = std::shared_ptr<Pack>;
     using ConstPackPtr = std::shared_ptr<const Pack>;
     using Packs        = std::vector<PackPtr>;
+    using SnapshotPtr  = std::shared_ptr<Snapshot>;
 
     struct Snapshot : public std::enable_shared_from_this<Snapshot>, private boost::noncopyable
     {
@@ -131,8 +134,6 @@ public:
 
         // The delta index of cached.
         DeltaIndexPtr shared_delta_index;
-        // The delta index which we actually use. Could be cloned from shared_delta_index with some updates and compacts.
-        DeltaIndexCompactedPtr compacted_delta_index;
 
         DeltaValueSpacePtr delta;
         StorageSnapshotPtr storage_snap;
@@ -142,12 +143,31 @@ public:
         size_t bytes;
         size_t deletes;
 
+        /// TODO: The members below are not actually snapshots, they should not be here.
+
+        // The delta index which we actually use. Could be cloned from shared_delta_index with some updates and compacts.
+        DeltaIndexCompactedPtr compacted_delta_index;
+
         ColumnDefines       column_defines;
         std::vector<size_t> pack_rows;
         std::vector<size_t> pack_rows_end; // Speed up pack search.
 
         // The data of packs when reading.
         std::vector<Columns> packs_data;
+
+        SnapshotPtr clone()
+        {
+            auto c                = std::make_shared<Snapshot>();
+            c->is_update          = is_update;
+            c->shared_delta_index = shared_delta_index;
+            c->delta              = delta;
+            c->storage_snap       = storage_snap;
+            c->packs              = packs;
+            c->rows               = rows;
+            c->bytes              = bytes;
+            c->deletes            = deletes;
+            return c;
+        }
 
         ~Snapshot();
 
@@ -178,7 +198,6 @@ public:
     private:
         Block read(size_t col_num, size_t offset, size_t limit);
     };
-    using SnapshotPtr = std::shared_ptr<Snapshot>;
 
 private:
     PageId id;

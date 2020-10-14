@@ -242,12 +242,10 @@ TEST(StorageDeltaMerge_internal_test, OverlapQueryRanges)
 
 TEST(StorageDeltaMerge_internal_test, WeirdRange)
 {
-    // [100, 200), [200, MAX), [MAX, MAX)
+    // [100, 200), [200, MAX)
     MvccQueryInfo::RegionsQueryInfo regions;
     RegionQueryInfo                 region;
     region.range_in_table = DB::HandleRange<DB::HandleID>{100, 200};
-    regions.emplace_back(region);
-    region.range_in_table = DB::HandleRange<DB::HandleID>{DB::TiKVRange::Handle::max, DB::TiKVRange::Handle::max};
     regions.emplace_back(region);
     region.range_in_table = DB::HandleRange<DB::HandleID>{200, TiKVRange::Handle::max};
     regions.emplace_back(region);
@@ -256,6 +254,106 @@ TEST(StorageDeltaMerge_internal_test, WeirdRange)
     ASSERT_EQ(ranges.size(), 1UL);
     ASSERT_RANGE_EQ(ranges[0], DB::DM::HandleRange(100, DB::DM::HandleRange::MAX));
 }
+
+TEST(StorageDeltaMerge_internal_test, RangeSplit)
+{
+    {
+        MvccQueryInfo::RegionsQueryInfo regions;
+        RegionQueryInfo                 region;
+        region.range_in_table = std::make_pair(100, 200);
+        regions.emplace_back(region);
+        region.range_in_table = std::make_pair(200, 300);
+        regions.emplace_back(region);
+        region.range_in_table = std::make_pair(300, 400);
+        regions.emplace_back(region);
+        region.range_in_table = std::make_pair(425, 475);
+        regions.emplace_back(region);
+
+        {
+            auto ranges = DB::getQueryRanges(regions, 0);
+            ASSERT_EQ(ranges.size(), 2UL);
+        }
+
+        {
+            auto ranges = DB::getQueryRanges(regions, 1);
+            ASSERT_EQ(ranges.size(), 2UL);
+        }
+
+        {
+            auto ranges = DB::getQueryRanges(regions, 2);
+            ASSERT_EQ(ranges.size(), 2ul);
+        }
+
+        {
+            auto ranges = DB::getQueryRanges(regions, 3);
+            ASSERT_EQ(ranges.size(), 3ul);
+        }
+
+        {
+            auto ranges = DB::getQueryRanges(regions, 4);
+            ASSERT_EQ(ranges.size(), 4ul);
+        }
+
+        {
+            auto ranges = DB::getQueryRanges(regions, 5);
+            ASSERT_EQ(ranges.size(), 4ul);
+        }
+
+        {
+            auto ranges = DB::getQueryRanges(regions, 100);
+            ASSERT_EQ(ranges.size(), 4ul);
+        }
+    }
+
+    {
+        MvccQueryInfo::RegionsQueryInfo regions;
+        RegionQueryInfo                 region;
+        region.range_in_table = std::make_pair(0, 100);
+        regions.emplace_back(region);
+        region.range_in_table = std::make_pair(200, 300);
+        regions.emplace_back(region);
+        region.range_in_table = std::make_pair(300, 400);
+        regions.emplace_back(region);
+        region.range_in_table = std::make_pair(425, 475);
+        regions.emplace_back(region);
+
+        {
+            auto ranges = DB::getQueryRanges(regions, 0);
+            ASSERT_EQ(ranges.size(), 3ul);
+        }
+
+        {
+            auto ranges = DB::getQueryRanges(regions, 1);
+            ASSERT_EQ(ranges.size(), 3ul);
+        }
+
+        {
+            auto ranges = DB::getQueryRanges(regions, 2);
+            ASSERT_EQ(ranges.size(), 3ul);
+        }
+
+        {
+            auto ranges = DB::getQueryRanges(regions, 3);
+            ASSERT_EQ(ranges.size(), 3ul);
+        }
+
+        {
+            auto ranges = DB::getQueryRanges(regions, 4);
+            ASSERT_EQ(ranges.size(), 4ul);
+        }
+
+        {
+            auto ranges = DB::getQueryRanges(regions, 5);
+            ASSERT_EQ(ranges.size(), 4ul);
+        }
+
+        {
+            auto ranges = DB::getQueryRanges(regions, 100);
+            ASSERT_EQ(ranges.size(), 4ul);
+        }
+    }
+}
+
 
 } // namespace tests
 } // namespace DM

@@ -497,10 +497,9 @@ BlockInputStreams StorageDeltaMerge::read( //
                 }
             }
             str_query_ranges = ss.str();
-            LOG_TRACE(log, "reading ranges: orig, " << str_query_ranges);
         }
 
-        HandleRanges ranges = getQueryRanges(mvcc_query_info.regions_query_info);
+        auto ranges = getQueryRanges(mvcc_query_info.regions_query_info, /*expected_ranges_count*/ num_streams, log);
 
         if (log->trace())
         {
@@ -557,6 +556,8 @@ BlockInputStreams StorageDeltaMerge::read( //
 
         /// Ensure read_tso info after read.
         check_read_tso(mvcc_query_info.read_tso);
+
+        LOG_TRACE(log, "[ranges: " << ranges.size() << "] [streams: " << streams.size() << "]");
 
         return streams;
     }
