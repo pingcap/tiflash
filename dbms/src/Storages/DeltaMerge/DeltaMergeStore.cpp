@@ -87,6 +87,8 @@ DeltaMergeStore::BackgroundTask DeltaMergeStore::MergeDeltaTaskPool::nextTask(Lo
 //   DeltaMergeStore
 // ================================================
 
+DeltaMergeStore::Settings DeltaMergeStore::EMPTY_SETTINGS = DeltaMergeStore::Settings{.not_compress_columns = NotCompress{}};
+
 namespace
 {
 // Actually we will always store a column of `_tidb_rowid`, no matter it
@@ -784,32 +786,6 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
     }
 
     LOG_DEBUG(log, "Read create segment snapshot done");
-
-#if 0
-    if (log->trace())
-    {
-        auto ranges_to_string = [](const HandleRanges & ranges) -> String {
-            std::stringstream ss;
-            bool              is_first = true;
-            ss << "[";
-            for (const auto & range : ranges)
-            {
-                if (!is_first)
-                    ss << ",";
-                is_first = false;
-                ss << range.toString();
-            }
-            ss << "]";
-            return ss.str();
-        };
-        for (const auto & task : tasks)
-        {
-            LOG_TRACE(log,
-                      "Read range: " << ranges_to_string(sorted_ranges) << " -> segment: " << task->segment->info()
-                                     << " range: " << ranges_to_string(task->ranges));
-        }
-    }
-#endif
 
     auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
         this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read);
