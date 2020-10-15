@@ -179,7 +179,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols,
-            RowKeyRange::newAll(false, 1),
+            HandleRange::newAll(),
             RSOperatorPtr{},
             column_cache_,
             IdSetPtr{});
@@ -250,7 +250,7 @@ try
             dmContext().hash_salt,
             dm_file,
             *cols,
-            RowKeyRange::newAll(false, 1),
+            HandleRange::newAll(),
             RSOperatorPtr{},
             column_cache_,
             IdSetPtr{});
@@ -513,7 +513,7 @@ try
     }
 
     std::vector<std::pair<DM::RSOperatorPtr, size_t>> filters;
-    DM::RSOperatorPtr              one_part_filter = toRSFilter(i64_cd, HandleRange{0, span_per_part});
+    DM::RSOperatorPtr                                 one_part_filter = toRSFilter(i64_cd, HandleRange{0, span_per_part});
     // <filter, num_rows_should_read>
     filters.emplace_back(one_part_filter, span_per_part); // only first part
     // <filter, num_rows_should_read>
@@ -524,8 +524,8 @@ try
     filters.emplace_back(createOr({one_part_filter, createUnsupported("test", "test", false)}), num_rows_write);
     for (size_t i = 0; i < filters.size(); i++)
     {
-        const auto & filter = filters[i].first;
-        const auto num_rows_should_read = filters[i].second;
+        const auto & filter               = filters[i].first;
+        const auto   num_rows_should_read = filters[i].second;
         // Test read
         auto stream = std::make_shared<DMFileBlockInputStream>( //
             dbContext(),
