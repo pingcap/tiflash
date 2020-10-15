@@ -233,6 +233,12 @@ DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> && sou
     settings = context.getSettings();
 }
 
+DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> & source_columns_, const Context & context_)
+    : source_columns(source_columns_), context(context_), after_agg(false), implicit_cast_count(0)
+{
+    settings = context.getSettings();
+}
+
 void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, const tipb::Aggregation & agg, Names & aggregation_keys,
     TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions, bool group_by_collation_sensitive)
 {
@@ -540,8 +546,9 @@ void DAGExpressionAnalyzer::appendJoin(
     actions->add(ExpressionAction::ordinaryJoin(join_query.join, columns_added_by_join));
 }
 /// return true if some actions is needed
-bool DAGExpressionAnalyzer::appendJoinKey(ExpressionActionsChain & chain, const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-    const DataTypes & key_types, Names & key_names, bool left, bool is_right_out_join)
+bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(ExpressionActionsChain & chain,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & keys, const DataTypes & key_types, Names & key_names, bool left,
+    bool is_right_out_join, const google::protobuf::RepeatedPtrField<tipb::Expr> & filters, String & filter_column_name)
 {
     bool ret = false;
     initChain(chain, getCurrentInputColumns());
@@ -580,8 +587,19 @@ bool DAGExpressionAnalyzer::appendJoinKey(ExpressionActionsChain & chain, const 
         key_names.push_back(key_name);
         ret |= has_actions;
     }
+
+    if (!filters.empty())
+    {
+        ret = true;
+        std::vector<const tipb::Expr *> filter_vector;
+        for (const auto & c : filters)
+        {
+            filter_vector.push_back(&c);
+        }
+        appendWhere(chain, filter_vector, filter_column_name);
+    }
     /// remove useless columns to avoid duplicate columns
-    /// as when compiling the key expression, the origin
+    /// as when compiling the key/filter expression, the origin
     /// streams may be added some columns that have the
     /// same name on left streams and right streams, for
     /// example, if the join condition is something like:
@@ -595,13 +613,15 @@ bool DAGExpressionAnalyzer::appendJoinKey(ExpressionActionsChain & chain, const 
     /// literal expression, the key names should never be
     /// duplicated. In the above example, the final key names should be
     /// something like `add(__qb_2_id, 1)` and `add(__qb_3_id, 1)`
-    if (actions->getSampleBlock().getNames().size() != getCurrentInputColumns().size() + key_names.size())
+    if (ret)
     {
         std::unordered_set<String> needed_columns;
         for (const auto & c : getCurrentInputColumns())
             needed_columns.insert(c.name);
         for (const auto & s : key_names)
             needed_columns.insert(s);
+        if (!filter_column_name.empty())
+            needed_columns.insert(filter_column_name);
 
         const auto & names = actions->getSampleBlock().getNames();
         for (const auto & name : names)

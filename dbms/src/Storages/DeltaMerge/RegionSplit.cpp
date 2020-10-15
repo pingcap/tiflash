@@ -2,7 +2,6 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/HandleFilter.h>
 #include <Storages/DeltaMerge/RowKeyFilter.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
@@ -174,7 +173,7 @@ DeltaMergeStore::getRegionSplitPoint(DMContext & dm_context, const RowKeyRange &
 
     /// Don't split if region is not too big.
     if (exact_rows < max_region_size || check_points.empty())
-        return RegionSplitRes{.split_points = {}, exact_rows, exact_bytes};
+        return RegionSplitRes{.split_points = {}, .exact_rows = exact_rows, .exact_bytes = exact_bytes};
 
     auto split_point = check_points[check_points.size() / 2];
 
@@ -182,7 +181,7 @@ DeltaMergeStore::getRegionSplitPoint(DMContext & dm_context, const RowKeyRange &
               __FUNCTION__ << "check_range:" << check_range.toString() << "] [max_region_size:" << max_region_size
                            << "] [split_size:" << split_size << "] [split_point:" << split_point.toString() << "]");
 
-    return RegionSplitRes{.split_points = {split_point}, exact_rows, exact_bytes};
+    return RegionSplitRes{.split_points = {split_point}, .exact_rows = exact_rows, .exact_bytes = exact_bytes};
 }
 
 } // namespace DM

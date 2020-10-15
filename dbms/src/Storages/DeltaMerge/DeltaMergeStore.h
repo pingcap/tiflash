@@ -348,8 +348,10 @@ private:
 
     void restoreExtraPathCapacity();
 
-    SegmentReadTasks
-    getReadTasksByRanges(DMContext & dm_context, const RowKeyRanges & sorted_handle_ranges, const SegmentIdSet & read_segments = {});
+    SegmentReadTasks getReadTasksByRanges(DMContext &          dm_context,
+                                          const RowKeyRanges & sorted_ranges,
+                                          size_t               expected_tasks_count = 1,
+                                          const SegmentIdSet & read_segments        = {});
 
 private:
     String      path;

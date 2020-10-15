@@ -309,12 +309,10 @@ TEST(StorageDeltaMerge_internal_test, OverlapQueryRangesCommonHandle)
 
 TEST(StorageDeltaMerge_internal_test, WeirdRange)
 {
-    // [100, 200), [200, MAX), [MAX, MAX)
+    // [100, 200), [200, MAX]
     MvccQueryInfo::RegionsQueryInfo regions;
     RegionQueryInfo                 region;
     region.range_in_table = GET_REGION_RANGE(100, 200, 1);
-    regions.emplace_back(region);
-    region.range_in_table = GET_REGION_RANGE(std::numeric_limits<HandleID>::max(), std::numeric_limits<HandleID>::max(), 1);
     regions.emplace_back(region);
     region.range_in_table = GET_REGION_RANGE(200, std::numeric_limits<HandleID>::max(), 1);
     regions.emplace_back(region);
@@ -342,6 +340,106 @@ TEST(StorageDeltaMerge_internal_test, WeirdRangeCommonHandle)
     ASSERT_EQ(ranges.size(), 1UL);
     ASSERT_ROWKEY_RANGE_EQ(ranges[0], DMTestEnv::getRowKeyRangeForClusteredIndex(100, DB::DM::HandleRange::MAX, 2));
 }
+
+TEST(StorageDeltaMerge_internal_test, RangeSplit)
+{
+    {
+        MvccQueryInfo::RegionsQueryInfo regions;
+        RegionQueryInfo                 region;
+        region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(100, 200, 2).toRegionRange(1);
+        regions.emplace_back(region);
+        region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(200, 300, 2).toRegionRange(1);
+        regions.emplace_back(region);
+        region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(300, 400, 2).toRegionRange(1);
+        regions.emplace_back(region);
+        region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(425, 475, 2).toRegionRange(1);
+        regions.emplace_back(region);
+
+        {
+            auto ranges = DB::getQueryRanges(regions, 1, true, 2, 0);
+            ASSERT_EQ(ranges.size(), 2UL);
+        }
+
+        {
+            auto ranges = DB::getQueryRanges(regions, 1, true, 2, 1);
+            ASSERT_EQ(ranges.size(), 2UL);
+        }
+
+        {
+            auto ranges = DB::getQueryRanges(regions, 1, true, 2, 2);
+            ASSERT_EQ(ranges.size(), 2ul);
+        }
+
+        {
+            auto ranges = DB::getQueryRanges(regions, 1, true, 2, 3);
+            ASSERT_EQ(ranges.size(), 3ul);
+        }
+
+        {
+            auto ranges = DB::getQueryRanges(regions, 1, true, 2, 4);
+            ASSERT_EQ(ranges.size(), 4ul);
+        }
+
+        {
+            auto ranges = DB::getQueryRanges(regions, 1, true, 2, 5);
+            ASSERT_EQ(ranges.size(), 4ul);
+        }
+
+        {
+            auto ranges = DB::getQueryRanges(regions, 1, true, 2, 100);
+            ASSERT_EQ(ranges.size(), 4ul);
+        }
+    }
+
+    {
+        MvccQueryInfo::RegionsQueryInfo regions;
+        RegionQueryInfo                 region;
+        region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(0, 100, 2).toRegionRange(1);
+        regions.emplace_back(region);
+        region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(200, 300, 2).toRegionRange(1);
+        regions.emplace_back(region);
+        region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(300, 400, 2).toRegionRange(1);
+        regions.emplace_back(region);
+        region.range_in_table = DMTestEnv::getRowKeyRangeForClusteredIndex(425, 475, 2).toRegionRange(1);
+        regions.emplace_back(region);
+
+        {
+            auto ranges = DB::getQueryRanges(regions, 1, true, 2, 0);
+            ASSERT_EQ(ranges.size(), 3ul);
+        }
+
+        {
+            auto ranges = DB::getQueryRanges(regions, 1, true, 2, 1);
+            ASSERT_EQ(ranges.size(), 3ul);
+        }
+
+        {
+            auto ranges = DB::getQueryRanges(regions, 1, true, 2, 2);
+            ASSERT_EQ(ranges.size(), 3ul);
+        }
+
+        {
+            auto ranges = DB::getQueryRanges(regions, 1, true, 2, 3);
+            ASSERT_EQ(ranges.size(), 3ul);
+        }
+
+        {
+            auto ranges = DB::getQueryRanges(regions, 1, true, 2, 4);
+            ASSERT_EQ(ranges.size(), 4ul);
+        }
+
+        {
+            auto ranges = DB::getQueryRanges(regions, 1, true, 2, 5);
+            ASSERT_EQ(ranges.size(), 4ul);
+        }
+
+        {
+            auto ranges = DB::getQueryRanges(regions, 1, true, 2, 100);
+            ASSERT_EQ(ranges.size(), 4ul);
+        }
+    }
+}
+
 
 } // namespace tests
 } // namespace DM
