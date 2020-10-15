@@ -59,22 +59,6 @@ static_assert(alignof(TiFlashServerHelper) == alignof(void *));
 
 TiFlashApplyRes HandleWriteRaftCmd(const TiFlashServer * server, WriteCmdsView cmds, RaftCmdHeader header)
 {
-    {
-        static const char * Names[] = {
-            "Put",
-            "Del",
-        };
-
-        for (uint64_t i = 0; i < cmds.len; ++i)
-        {
-            std::cerr << Names[static_cast<size_t>(cmds.cmd_types[i])] << " " << CFToName(cmds.cmd_cf[i]) << "\n";
-        }
-        std::cerr << "HandleWriteRaftCmd " << cmds.len << " into region " << header.region_id << "\n";
-        std::memset(&cmds, 0, sizeof(cmds));
-        server->tmt->getKVStore()->handleWriteRaftCmd(cmds, header.region_id, header.index, header.term, *server->tmt);
-        return TiFlashApplyRes::Persist;
-    }
-
     try
     {
         return server->tmt->getKVStore()->handleWriteRaftCmd(cmds, header.region_id, header.index, header.term, *server->tmt);
