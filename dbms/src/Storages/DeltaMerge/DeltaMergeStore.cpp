@@ -1667,8 +1667,10 @@ SegmentStats DeltaMergeStore::getSegmentStats()
     return stats;
 }
 
-SegmentReadTasks
-DeltaMergeStore::getReadTasksByRanges(DMContext & dm_context, const RowKeyRanges & sorted_ranges, const SegmentIdSet & read_segments)
+SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(DMContext &          dm_context,
+                                                       const HandleRanges & sorted_ranges,
+                                                       size_t               expected_tasks_count,
+                                                       const SegmentIdSet & read_segments)
 {
     SegmentReadTasks tasks;
 
