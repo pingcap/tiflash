@@ -82,6 +82,7 @@ public:
         UInt64 pack_stat_size;
     };
 
+    using MagicNumber = UInt64;
     struct Footer
     {
         MetaPackInfo meta_pack_info;
@@ -89,6 +90,7 @@ public:
         UInt32       sub_file_num;
 
         DMSingleFileFormatVersion file_format_version;
+        static const MagicNumber magic_number;
     };
 
     using PackStats = PaddedPODArray<PackStat>;
@@ -97,6 +99,10 @@ public:
 
     static DMFilePtr
     restore(const FileProviderPtr & file_provider, UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta = true);
+
+    // used for create and read from snapshot file
+    static DMFilePtr create(const String & path);
+    static DMFilePtr restore(const FileProviderPtr & file_provider, const String & path);
 
     static std::set<UInt64> listAllInPath(const FileProviderPtr & file_provider, const String & parent_path, bool can_gc);
 
@@ -108,6 +114,7 @@ public:
     UInt64 refId() const { return ref_id; }
 
     String path() const;
+
     String metaPath() const { return subFilePath(metaFileName()); }
     String packStatPath() const { return subFilePath(packStatFileName()); }
 
@@ -184,9 +191,16 @@ public:
         return IDataType::getFileNameForStream(DB::toString(col_id), substream);
     }
 
+    static bool isValidDMFileInSingleFileMode(const FileProviderPtr & file_provider, const String & path);
+
 private:
     DMFile(UInt64 file_id_, UInt64 ref_id_, const String & parent_path_, Mode mode_, Status status_, Logger * log_)
         : file_id(file_id_), ref_id(ref_id_), parent_path(parent_path_), mode(mode_), status(status_), log(log_)
+    {
+    }
+
+    DMFile(const String & path_, Mode mode_, Status status_, Logger * log_)
+        : file_path(path_), mode(mode_), status(status_), log(log_)
     {
     }
 
@@ -237,6 +251,9 @@ private:
 
     PackStats   pack_stats;
     ColumnStats column_stats;
+
+    // used for snapshot file
+    String file_path;
 
     Mode   mode;
     Status status;

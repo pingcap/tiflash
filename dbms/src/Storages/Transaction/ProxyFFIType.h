@@ -1,7 +1,9 @@
 #pragma once
 
+#include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Storages/Transaction/ColumnFamily.h>
 #include <Storages/Transaction/FileEncryption.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 
 #include <atomic>
 #include <cstdint>
@@ -157,6 +159,9 @@ struct SerializeTiFlashSnapshotRes
 
 struct TiFlashSnapshot
 {
+    TiFlashSnapshot(const DM::ColumnDefines & write_columns_) : write_columns{write_columns_} {}
+    Pipeline pipeline;
+    const DM::ColumnDefines & write_columns;
     ~TiFlashSnapshot();
     static const std::string flag;
 };
