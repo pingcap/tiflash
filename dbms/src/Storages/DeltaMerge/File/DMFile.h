@@ -25,6 +25,7 @@ public:
         WRITABLE,
         WRITING,
         READABLE,
+        DROPPED,
     };
 
     static String statusString(Status status)
@@ -37,6 +38,8 @@ public:
             return "WRITING";
         case READABLE:
             return "READABLE";
+        case DROPPED:
+            return "DROPPED";
         default:
             throw Exception("Unexpected status: " + DB::toString((int)status));
         }
@@ -54,9 +57,10 @@ public:
     using PackStats = PaddedPODArray<PackStat>;
 
     static DMFilePtr create(UInt64 file_id, const String & parent_path);
-    static DMFilePtr restore(const FileProviderPtr & file_provider, UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta = true);
+    static DMFilePtr
+    restore(const FileProviderPtr & file_provider, UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta = true);
 
-    static std::set<UInt64> listAllInPath(const String & parent_path, bool can_gc);
+    static std::set<UInt64> listAllInPath(const FileProviderPtr & file_provider, const String & parent_path, bool can_gc);
 
     bool canGC();
     void enableGC();
@@ -64,7 +68,7 @@ public:
 
     UInt64 fileId() const { return file_id; }
     UInt64 refId() const { return ref_id; }
-    String path() const { return parent_path + (status == Status::READABLE ? "/dmf_" : "/.tmp.dmf_") + DB::toString(file_id); }
+    String path() const;
     String metaPath() const { return path() + "/meta.txt"; }
     String packStatPath() const { return path() + "/pack"; }
     // Do not gc me.
@@ -86,14 +90,8 @@ public:
     {
         return EncryptionPath(encryptionBasePath(), file_name_base + ".mrk");
     }
-    EncryptionPath encryptionMetaPath() const
-    {
-        return EncryptionPath(encryptionBasePath(), "meta.txt");
-    }
-    EncryptionPath encryptionPackStatPath() const
-    {
-        return EncryptionPath(encryptionBasePath(), "pack");
-    }
+    EncryptionPath encryptionMetaPath() const { return EncryptionPath(encryptionBasePath(), "meta.txt"); }
+    EncryptionPath encryptionPackStatPath() const { return EncryptionPath(encryptionBasePath(), "pack"); }
 
     size_t getRows() const
     {
@@ -174,9 +172,14 @@ private:
     friend class DMFileReader;
 };
 
-inline ReadBufferFromFileProvider openForRead(const FileProviderPtr & file_provider, const String & path, const EncryptionPath & encryption_path)
+inline ReadBufferFromFileProvider
+openForRead(const FileProviderPtr & file_provider, const String & path, const EncryptionPath & encryption_path)
 {
-    return ReadBufferFromFileProvider(file_provider, path, encryption_path, std::min(static_cast<Poco::File::FileSize>(DBMS_DEFAULT_BUFFER_SIZE), Poco::File(path).getSize()));
+    return ReadBufferFromFileProvider( //
+        file_provider,
+        path,
+        encryption_path,
+        std::min(static_cast<Poco::File::FileSize>(DBMS_DEFAULT_BUFFER_SIZE), Poco::File(path).getSize()));
 }
 
 } // namespace DM

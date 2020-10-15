@@ -41,7 +41,7 @@ public:
     static void SetUpTestCase()
     {
         registerStorages();
-        fiu_init(0);
+        fiu_init(0); // init failpoint
     }
 
     DatabaseTiFlash_test() {}
