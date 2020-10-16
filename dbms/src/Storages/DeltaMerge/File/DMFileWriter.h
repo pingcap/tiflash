@@ -86,7 +86,7 @@ public:
     void finalize();
 
 private:
-    void writeColumn(ColId col_id, const IDataType & type, const IColumn & column);
+    void writeColumn(ColId col_id, const IDataType & type, const IColumn & column, const ColumnVector<UInt8> * del_mark);
     void finalizeColumn(ColId col_id, const IDataType & type);
 
     /// Add streams with specified column id. Since a single column may have more than one Stream,
