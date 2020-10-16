@@ -3,8 +3,10 @@
 #include <Interpreters/Join.h>
 #include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnArray.h>
+#include <Columns/ColumnNullable.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/IFunction.h>
 
@@ -223,7 +225,30 @@ void ExpressionAction::prepare(Block & sample_block)
 
         case JOIN:
         {
-            /// TODO join_use_nulls setting
+            /// in case of coprocessor task, the join is always not null, but if the query comes from
+            /// clickhouse client, the join maybe null, skip updating column type if join is null
+            // todo find a new way to update the column type so the type can always be updated.
+            if (join != nullptr && join->getKind() == ASTTableJoin::Kind::Right && join->useNulls())
+            {
+                /// update the column type for left block
+                std::unordered_set<String> keys;
+                for (auto & n : join->getLeftJoinKeys())
+                {
+                    keys.insert(n);
+                }
+                for (auto & p : sample_block.getColumnsWithTypeAndName())
+                {
+                    if (keys.find(p.name) == keys.end() && !p.type->isNullable())
+                    {
+                        /// for right join, if the column in sample_block is not join key, then
+                        /// convert it's type to nullable
+                        auto & columnWithName = sample_block.getByName(p.name);
+                        columnWithName.type = makeNullable(columnWithName.type);
+                        if (columnWithName.column != nullptr)
+                            columnWithName.column = makeNullable(columnWithName.column);
+                    }
+                }
+            }
 
             for (const auto & col : columns_added_by_join)
                 sample_block.insert(ColumnWithTypeAndName(nullptr, col.type, col.name));
