@@ -789,7 +789,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
         for (size_t i = 0; i < nullable_column->size(); i++)
         {
             if (nullable_column->isNullAt(i))
-                mutable_nested_column_data[i] = kind == ASTTableJoin::Kind::Anti ? 1 : 0;
+                mutable_nested_column_data[i] = 0;
         }
         filter_column = mutable_nested_column;
     }
@@ -822,7 +822,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
             if (original_strictness == ASTTableJoin::Strictness::Any)
             {
                 /// for semi/anti join, at most one row is kept
-                row_filter[x] = !has_row_kept && (kind == ASTTableJoin::Kind::Anti ? !filter[x] : filter[x]);
+                row_filter[x] = !has_row_kept && filter[x];
             }
             else
             {
@@ -835,9 +835,26 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
         /// for outer join, at least one row must be kept
         if (kind == ASTTableJoin::Kind::Left && !has_row_kept)
             row_filter[start] = 1;
-        /// for anti join, if the equal join condition is not matched, it always need to be selected
-        if (kind == ASTTableJoin::Kind::Anti && (*anti_filter)[i])
-            row_filter[start] = 1;
+        if (kind == ASTTableJoin::Kind::Anti)
+        {
+            if ((*anti_filter)[i])
+                /// for anti join, if the equal join condition is not matched, it always need to be selected
+                row_filter[start] = 1;
+            else
+            {
+                if (has_row_kept)
+                {
+                    /// has_row_kept = true means at least one row is joined, in
+                    /// case of anti join, this row should not be returned
+                    for (size_t index = start; index < end; index++)
+                        row_filter[index] = 0;
+                }
+                else
+                {
+                    row_filter[start] = 1;
+                }
+            }
+        }
         prev_offset = end;
     }
     if (kind == ASTTableJoin::Kind::Left)

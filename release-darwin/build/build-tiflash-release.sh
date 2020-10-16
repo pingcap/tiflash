@@ -26,7 +26,7 @@ fi
 
 rm -rf ${SRCPATH}/libs/libtiflash-proxy
 mkdir -p ${SRCPATH}/libs/libtiflash-proxy
-ln -s ${SRCPATH}/contrib/tiflash-proxy/target/debug/libtiflash_proxy.dylib ${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.dylib
+ln -s ${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.dylib ${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.dylib
 
 build_dir="$SRCPATH/release-darwin/build-release"
 rm -rf $build_dir && mkdir -p $build_dir && cd $build_dir
