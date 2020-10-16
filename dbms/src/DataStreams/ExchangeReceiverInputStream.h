@@ -2,6 +2,7 @@
 
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Interpreters/Context.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
 
@@ -42,6 +43,7 @@ namespace DB
 class ExchangeReceiverInputStream : public IProfilingBlockInputStream
 {
     TMTContext & context;
+    std::chrono::seconds timeout;
 
     tipb::ExchangeReceiver exchange_receiver;
     ::mpp::TaskMeta task_meta;
@@ -111,6 +113,7 @@ class ExchangeReceiverInputStream : public IProfilingBlockInputStream
     {
         // TODO: Retry backoff.
         int max_retry = 60;
+        std::chrono::seconds total_wait_time;
         for (int idx = 0; idx < max_retry; idx++)
         {
             auto sender_task = new mpp::TaskMeta();
@@ -145,8 +148,13 @@ class ExchangeReceiverInputStream : public IProfilingBlockInputStream
             }
             if (needRetry)
             {
+                if (timeout.count() > 0 && total_wait_time > timeout)
+                {
+                    break;
+                }
                 using namespace std::chrono_literals;
                 std::this_thread::sleep_for(1s);
+                total_wait_time += 1s;
                 stream_resp->Finish();
                 continue;
             }
@@ -155,12 +163,14 @@ class ExchangeReceiverInputStream : public IProfilingBlockInputStream
             return;
         }
         // fail
-        throw Exception("cannot build connection after several tries");
+        throw Exception(
+            "cannot build connection after several tries, total wait time is " + std::to_string(total_wait_time.count()) + "s.");
     }
 
 public:
-    ExchangeReceiverInputStream(TMTContext & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta)
-        : context(context_),
+    ExchangeReceiverInputStream(Context & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta)
+        : context(context_.getTMTContext()),
+          timeout(context_.getSettings().mpp_task_timeout),
           exchange_receiver(exc),
           task_meta(meta),
           live_workers(0),

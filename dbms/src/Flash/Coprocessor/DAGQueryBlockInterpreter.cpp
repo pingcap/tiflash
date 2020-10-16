@@ -1272,7 +1272,7 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     else if (query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
         auto exchange_receiver_stream = std::make_shared<ExchangeReceiverInputStream>(
-            context.getTMTContext(), query_block.source->exchange_receiver(), dag.getMPPTask()->meta);
+            context, query_block.source->exchange_receiver(), dag.getMPPTask()->meta);
         pipeline.streams.push_back(exchange_receiver_stream);
         std::vector<NameAndTypePair> source_columns;
         Block block = exchange_receiver_stream->getHeader();

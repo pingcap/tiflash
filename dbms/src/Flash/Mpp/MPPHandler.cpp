@@ -103,6 +103,7 @@ grpc::Status MPPHandler::execute(mpp::DispatchTaskResponse * response)
 
         context.setSetting("read_tso", start_ts);
         context.setSetting("schema_version", schema_ver);
+        context.setSetting("mpp_task_timeout", task_request.timeout());
         context.getTimezoneInfo().resetByDAGRequest(dag_req);
 
         // register task.
@@ -121,12 +122,13 @@ grpc::Status MPPHandler::execute(mpp::DispatchTaskResponse * response)
         // register tunnels
         MPPTunnelSetPtr tunnel_set = std::make_shared<MPPTunnelSet>();
         const auto & exchangeSender = dag_req.root_executor().exchange_sender();
+        std::chrono::seconds timeout(task_request.timeout());
         for (int i = 0; i < exchangeSender.encoded_task_meta_size(); i++)
         {
             // exchange sender will register the tunnels and wait receiver to found a connection.
             mpp::TaskMeta meta;
             meta.ParseFromString(exchangeSender.encoded_task_meta(i));
-            MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(meta, task_request.meta());
+            MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(meta, task_request.meta(), timeout);
             LOG_DEBUG(log, "begin to register the tunnel " << tunnel->tunnel_id);
             task->registerTunnel(MPPTaskId{meta.start_ts(), meta.task_id()}, tunnel);
             tunnel_set->tunnels.emplace_back(tunnel);

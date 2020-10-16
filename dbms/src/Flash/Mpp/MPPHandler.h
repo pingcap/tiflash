@@ -41,14 +41,17 @@ struct MPPTunnel
 
     ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer;
 
+    std::chrono::seconds timeout;
+
     // tunnel id is in the format like "tunnel[sender]+[receiver]"
     String tunnel_id;
 
     Logger * log;
 
-    MPPTunnel(const mpp::TaskMeta & receiver_meta_, const mpp::TaskMeta & sender_meta_)
+    MPPTunnel(const mpp::TaskMeta & receiver_meta_, const mpp::TaskMeta & sender_meta_, const std::chrono::seconds timeout_)
         : connected(false),
           finished(false),
+          timeout(timeout_),
           tunnel_id("tunnel" + std::to_string(sender_meta_.task_id()) + "+" + std::to_string(receiver_meta_.task_id())),
           log(&Logger::get(tunnel_id))
     {}
@@ -67,14 +70,25 @@ struct MPPTunnel
         LOG_DEBUG(log, "ready to write");
         std::unique_lock<std::mutex> lk(mu);
 
-        // TODO: consider time constraining
-        cv_for_connected.wait(lk, [&]() { return connected; });
+        if (timeout.count() > 0)
+        {
+            if (cv_for_connected.wait_for(lk, timeout, [&]() { return connected; }))
+            {
+                LOG_DEBUG(log, "begin to write");
 
-        LOG_DEBUG(log, "begin to write");
+                writer->Write(data);
 
-        writer->Write(data);
-
-        LOG_DEBUG(log, "finish write");
+                LOG_DEBUG(log, "finish write");
+            }
+            else
+            {
+                throw Exception(tunnel_id + " is timeout");
+            }
+        }
+        else
+        {
+            cv_for_connected.wait(lk, [&]() { return connected; });
+        }
     }
 
     // finish the writing.
