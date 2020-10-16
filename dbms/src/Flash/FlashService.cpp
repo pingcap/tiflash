@@ -115,7 +115,8 @@ grpc::Status FlashService::Coprocessor(
 ::grpc::Status FlashService::EstablishMPPConnection(::grpc::ServerContext * grpc_context,
     const ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer)
 {
-
+    // Establish a pipe for data transferring. The pipes has registered by the task in advance.
+    // We need to find it out and bind the grpc stream with it.
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling establish mpp connection request: " << request->DebugString());
 
     if (!security_config.checkGrpcContext(grpc_context))
@@ -132,8 +133,8 @@ grpc::Status FlashService::Coprocessor(
 
     auto & tmt_context = context.getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
-    MPPTaskPtr server_task = task_manager->findTask(request->sender_meta());
-    if (server_task == nullptr)
+    MPPTaskPtr sender_task = task_manager->findTask(request->sender_meta());
+    if (sender_task == nullptr)
     {
         LOG_DEBUG(log, "can't find task");
         mpp::MPPDataPacket packet;
@@ -143,7 +144,7 @@ grpc::Status FlashService::Coprocessor(
         writer->Write(packet);
         return grpc::Status::OK;
     }
-    MPPTunnelPtr tunnel = server_task->getTunnel(request->receiver_meta());
+    MPPTunnelPtr tunnel = sender_task->getTunnel(request->receiver_meta());
     if (tunnel == nullptr)
     {
         LOG_DEBUG(log, "can't find tunnel");

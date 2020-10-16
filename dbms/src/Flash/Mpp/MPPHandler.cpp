@@ -21,6 +21,7 @@ void MPPTask::unregisterTask()
     }
 }
 
+// TODO: More specific resources are needed.
 void MPPTask::runImpl(BlockIO io)
 {
 
@@ -78,7 +79,7 @@ void MPPTask::runImpl(BlockIO io)
     unregisterTask();
 }
 
-
+// execute is responsible for making plan , register tasks and tunnels and start the running thread.
 grpc::Status MPPHandler::execute(mpp::DispatchTaskResponse * response)
 {
     Stopwatch stopwatch;
@@ -107,7 +108,7 @@ grpc::Status MPPHandler::execute(mpp::DispatchTaskResponse * response)
         // register task.
         TMTContext & tmt_context = context.getTMTContext();
         auto task_manager = tmt_context.getMPPTaskManager();
-        // TODO: tunnel should be added to mpp task.
+
         MPPTaskPtr task = std::make_shared<MPPTask>(task_request.meta());
         LOG_DEBUG(log, "begin to register the task " << task->id.toString());
         task_manager->registerTask(task);

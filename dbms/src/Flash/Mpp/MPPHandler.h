@@ -117,6 +117,7 @@ struct MPPTunnelSet
 {
     std::vector<MPPTunnelPtr> tunnels;
 
+    // this is a broadcast writting.
     void write(const std::string & data)
     {
         mpp::MPPDataPacket packet;
