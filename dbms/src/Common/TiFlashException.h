@@ -28,7 +28,11 @@ namespace DB
             "This is a critical error which should rarely occur, please contact with developer, \n"                         \
             "better providing information about your cluster(log, topology information etc.).",                             \
             "");)                                                                                                           \
-    C(DeltaTree)                                                                                                            \
+    C(DeltaTree,                                                                                                            \
+        E(Internal, "DeltaTree internal error.",                                                                          \
+                "Please contact with developer, \n"                                                                             \
+                "better providing information about your cluster(log, topology information etc.).",                             \
+                "");)                                                                                                            \
     C(DDL,                                                                                                                  \
         E(MissingTable, "Table information is missing in TiFlash or TiKV.",                                                 \
             "This error will occur when there is difference of schema infomation between TiKV and TiFlash, \n"              \
