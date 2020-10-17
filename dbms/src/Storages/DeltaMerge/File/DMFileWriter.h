@@ -132,8 +132,8 @@ public:
     void finalize();
 
 private:
-    void writeColumn(ColId col_id, const IDataType & type, const IColumn & column);
     void finalizeColumn(ColId col_id, DataTypePtr type);
+    void writeColumn(ColId col_id, const IDataType & type, const IColumn & column, const ColumnVector<UInt8> * del_mark);
 
     /// Add streams with specified column id. Since a single column may have more than one Stream,
     /// for example Nullable column has a NullMap column, we would track them with a mapping

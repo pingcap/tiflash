@@ -1,3 +1,4 @@
+#include <Common/FailPoint.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -9,6 +10,13 @@
 
 namespace DB
 {
+
+namespace FailPoints
+{
+extern const char exception_before_dmfile_remove_encryption[];
+extern const char exception_before_dmfile_remove_from_disk[];
+} // namespace FailPoints
+
 namespace DM
 {
 namespace tests
@@ -20,15 +28,20 @@ using DMFileBlockInputStreamPtr  = std::shared_ptr<DMFileBlockInputStream>;
 class DMFile_Test : public ::testing::Test
 {
 public:
-    DMFile_Test() : path(DB::tests::TiFlashTestEnv::getTemporaryPath() + "/dm_file_tests"), dm_file(nullptr) {}
+    DMFile_Test() : parent_path(DB::tests::TiFlashTestEnv::getTemporaryPath() + "/dm_file_tests"), dm_file(nullptr) {}
+
+    static void SetUpTestCase()
+    {
+        fiu_init(0); // init failpoint
+    }
 
     void SetUp() override
     {
         dropFiles();
 
         auto settings  = DB::Settings();
-        storage_pool   = std::make_unique<StoragePool>("test.t1", path, DMTestEnv::getContext(), settings);
-        dm_file        = DMFile::create(0, path);
+        storage_pool   = std::make_unique<StoragePool>("test.t1", parent_path, DMTestEnv::getContext(), settings);
+        dm_file        = DMFile::create(0, parent_path);
         db_context     = std::make_unique<Context>(DMTestEnv::getContext(settings));
         table_columns_ = std::make_shared<ColumnDefines>();
         column_cache_  = std::make_shared<ColumnCache>();
@@ -38,7 +51,7 @@ public:
 
     void dropFiles()
     {
-        Poco::File file(path);
+        Poco::File file(parent_path);
         if (file.exists())
         {
             file.remove(true);
@@ -52,7 +65,7 @@ public:
 
         dm_context = std::make_unique<DMContext>( //
             *db_context,
-            path,
+            parent_path,
             db_context->getExtraPaths(),
             *storage_pool,
             /*hash_salt*/ 0,
@@ -70,7 +83,6 @@ public:
     Context & dbContext() { return *db_context; }
 
 private:
-    String                     path;
     std::unique_ptr<Context>   db_context;
     std::unique_ptr<DMContext> dm_context;
     /// all these var live as ref in dm_context
@@ -79,6 +91,7 @@ private:
     DeltaMergeStore::Settings    settings;
 
 protected:
+    const String   parent_path;
     DMFilePtr      dm_file;
     ColumnCachePtr column_cache_;
 };
@@ -137,6 +150,148 @@ try
         stream->readSuffix();
         ASSERT_EQ(num_rows_read, num_rows_write);
     }
+}
+CATCH
+
+TEST_F(DMFile_Test, InterruptedDrop_0)
+try
+{
+    auto cols = DMTestEnv::getDefaultColumns();
+
+    const size_t num_rows_write = 128;
+
+    {
+        // Prepare for write
+        Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write / 2, false);
+        Block block2 = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write, false);
+        auto  stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
+        stream->writePrefix();
+        stream->write(block1, 0);
+        stream->write(block2, 0);
+        stream->writeSuffix();
+    }
+
+
+    {
+        // Test read
+        auto stream = std::make_shared<DMFileBlockInputStream>( //
+            dbContext(),
+            std::numeric_limits<UInt64>::max(),
+            false,
+            dmContext().hash_salt,
+            dm_file,
+            *cols,
+            RowKeyRange::newAll(false, 1),
+            RSOperatorPtr{},
+            column_cache_,
+            IdSetPtr{});
+
+        size_t num_rows_read = 0;
+        stream->readPrefix();
+        while (Block in = stream->read())
+        {
+            for (auto itr : in)
+            {
+                auto c = itr.column;
+                if (itr.name == DMTestEnv::pk_name)
+                {
+                    for (size_t i = 0; i < c->size(); i++)
+                    {
+                        EXPECT_EQ(c->getInt(i), Int64(i));
+                        num_rows_read++;
+                    }
+                }
+            }
+        }
+        stream->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+
+    FailPointHelper::enableFailPoint(FailPoints::exception_before_dmfile_remove_encryption);
+    auto file_provider = dbContext().getFileProvider();
+    try
+    {
+        dm_file->remove(file_provider);
+    }
+    catch (DB::Exception & e)
+    {
+        if (e.code() != ErrorCodes::FAIL_POINT_ERROR)
+            throw;
+    }
+
+    auto res = DMFile::listAllInPath(file_provider, parent_path, true);
+    EXPECT_TRUE(res.empty());
+}
+CATCH
+
+TEST_F(DMFile_Test, InterruptedDrop_1)
+try
+{
+    auto cols = DMTestEnv::getDefaultColumns();
+
+    const size_t num_rows_write = 128;
+
+    {
+        // Prepare for write
+        Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write / 2, false);
+        Block block2 = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write, false);
+        auto  stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
+        stream->writePrefix();
+        stream->write(block1, 0);
+        stream->write(block2, 0);
+        stream->writeSuffix();
+    }
+
+
+    {
+        // Test read
+        auto stream = std::make_shared<DMFileBlockInputStream>( //
+            dbContext(),
+            std::numeric_limits<UInt64>::max(),
+            false,
+            dmContext().hash_salt,
+            dm_file,
+            *cols,
+            RowKeyRange::newAll(false, 1),
+            RSOperatorPtr{},
+            column_cache_,
+            IdSetPtr{});
+
+        size_t num_rows_read = 0;
+        stream->readPrefix();
+        while (Block in = stream->read())
+        {
+            for (auto itr : in)
+            {
+                auto c = itr.column;
+                if (itr.name == DMTestEnv::pk_name)
+                {
+                    for (size_t i = 0; i < c->size(); i++)
+                    {
+                        EXPECT_EQ(c->getInt(i), Int64(i));
+                        num_rows_read++;
+                    }
+                }
+            }
+        }
+        stream->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+
+    FailPointHelper::enableFailPoint(FailPoints::exception_before_dmfile_remove_from_disk);
+    auto file_provider = dbContext().getFileProvider();
+    try
+    {
+        dm_file->remove(file_provider);
+    }
+    catch (DB::Exception & e)
+    {
+        if (e.code() != ErrorCodes::FAIL_POINT_ERROR)
+            throw;
+    }
+
+    auto res = DMFile::listAllInPath(file_provider, parent_path, true);
+    EXPECT_TRUE(res.empty());
 }
 CATCH
 

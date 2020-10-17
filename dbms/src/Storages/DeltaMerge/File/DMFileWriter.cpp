@@ -88,10 +88,14 @@ void DMFileWriter::write(const Block & block, size_t not_clean_rows)
     stat.not_clean = not_clean_rows;
     stat.bytes     = block.bytes(); // This is bytes of pack data in memory.
 
+    auto del_mark_column = tryGetByColumnId(block, TAG_COLUMN_ID).column;
+
+    const ColumnVector<UInt8> * del_mark = !del_mark_column ? nullptr : (const ColumnVector<UInt8> *)del_mark_column.get();
+
     for (auto & cd : write_columns)
     {
         auto & col = getByColumnId(block, cd.id).column;
-        writeColumn(cd.id, *cd.type, *col);
+        writeColumn(cd.id, *cd.type, *col, del_mark);
 
         if (cd.id == VERSION_COLUMN_ID)
             stat.first_version = col->get64(0);
@@ -125,7 +129,7 @@ void DMFileWriter::finalize()
     }
 }
 
-void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColumn & column)
+void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColumn & column, const ColumnVector<UInt8> * del_mark)
 {
     size_t rows = column.size();
 
@@ -140,7 +144,7 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
             auto & minmax_indexs = single_file_stream->minmax_indexs;
             if (auto iter = minmax_indexs.find(stream_name); iter != minmax_indexs.end())
             {
-                iter->second->addPack(column, nullptr);
+                iter->second->addPack(column, del_mark);
             }
 
             auto offset_in_compressed_block = single_file_stream->original_hashing.offset();
@@ -199,7 +203,7 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
                 const auto name   = DMFile::getFileNameBase(col_id, substream);
                 auto &     stream = column_streams.at(name);
                 if (stream->minmaxes)
-                    stream->minmaxes->addPack(column, nullptr);
+                    stream->minmaxes->addPack(column, del_mark);
 
                 /// There could already be enough data to compress into the new block.
                 if (stream->original_hashing.offset() >= min_compress_block_size)

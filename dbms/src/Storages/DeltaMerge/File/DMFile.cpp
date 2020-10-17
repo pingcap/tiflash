@@ -1,3 +1,4 @@
+#include <Common/FailPoint.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Encryption/WriteBufferFromFileProvider.h>
 #include <IO/ReadHelpers.h>
@@ -11,10 +12,49 @@
 
 namespace DB
 {
+
+namespace FailPoints
+{
+extern const char exception_before_dmfile_remove_encryption[];
+extern const char exception_before_dmfile_remove_from_disk[];
+}
+
 namespace DM
 {
 
 static constexpr const char * NGC_FILE_NAME = "NGC";
+
+namespace
+{
+constexpr static const char * FOLDER_PREFIX_WRITABLE = ".tmp.dmf_";
+constexpr static const char * FOLDER_PREFIX_READABLE = "dmf_";
+constexpr static const char * FOLDER_PREFIX_DROPPED  = ".del.dmf_";
+
+String getPathByStatus(const String & parent_path, UInt64 file_id, DMFile::Status status)
+{
+    String s = parent_path + "/";
+    switch (status)
+    {
+    case DMFile::Status::READABLE:
+        s += FOLDER_PREFIX_READABLE;
+        break;
+    case DMFile::Status::WRITABLE:
+    case DMFile::Status::WRITING:
+        s += FOLDER_PREFIX_WRITABLE;
+        break;
+    case DMFile::Status::DROPPED:
+        s += FOLDER_PREFIX_DROPPED;
+        break;
+    }
+    s += DB::toString(file_id);
+    return s;
+}
+} // namespace
+
+String DMFile::path() const
+{
+    return getPathByStatus(parent_path, file_id, status);
+}
 
 String DMFile::ngcPath() const
 {
@@ -54,7 +94,7 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single
 
 DMFilePtr DMFile::restore(const FileProviderPtr & file_provider, UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta)
 {
-    String    path             = parent_path + "/dmf_" + DB::toString(file_id);
+    String    path             = parent_path + "/" + FOLDER_PREFIX_READABLE + DB::toString(file_id);
     bool      single_file_mode = Poco::File(path).isFile();
     DMFilePtr dmfile(new DMFile(
         file_id, ref_id, parent_path, single_file_mode ? Mode::SINGLE_FILE : Mode::FOLDER, Status::READABLE, &Logger::get("DMFile")));
@@ -101,6 +141,12 @@ bool DMFile::isColIndexExist(const ColId & col_id) const
         return index_file.exists();
     }
 }
+
+const String DMFile::encryptionBasePath() const
+{
+    return parent_path + "/" + FOLDER_PREFIX_READABLE + DB::toString(file_id);
+}
+
 
 const EncryptionPath DMFile::encryptionDataPath(const FileNameBase & file_name_base) const
 {
@@ -277,10 +323,10 @@ void DMFile::initializeSubFileStatIfNeeded(const FileProviderPtr & file_provider
 void DMFile::finalize(const FileProviderPtr & file_provider)
 {
     writeMeta(file_provider);
-    if (status != Status::WRITING)
+    if (unlikely(status != Status::WRITING))
         throw Exception("Expected WRITING status, now " + statusString(status));
     Poco::File old_file(path());
-    status = Status::READABLE;
+    setStatus(Status::READABLE);
 
     auto new_path = path();
 
@@ -328,7 +374,7 @@ void DMFile::finalize(WriteBuffer & buffer)
     old_ngc_file.remove();
 }
 
-std::set<UInt64> DMFile::listAllInPath(const String & parent_path, bool can_gc)
+std::set<UInt64> DMFile::listAllInPath(const FileProviderPtr & file_provider, const String & parent_path, bool can_gc)
 {
     Poco::File folder(parent_path);
     if (!folder.exists())
@@ -337,18 +383,47 @@ std::set<UInt64> DMFile::listAllInPath(const String & parent_path, bool can_gc)
     folder.list(file_names);
     std::set<UInt64> file_ids;
     Logger *         log = &Logger::get("DMFile");
-    for (auto & name : file_names)
-    {
-        if (!startsWith(name, "dmf_"))
-            continue;
+
+    auto try_parse_file_id = [](const String & name) -> std::optional<UInt64> {
         std::vector<std::string> ss;
         boost::split(ss, name, boost::is_any_of("_"));
         if (ss.size() != 2)
+            return std::nullopt;
+        return std::make_optional(std::stoull(ss[1]));
+    };
+
+    for (const auto & name : file_names)
+    {
+
+        // clear deleted (maybe broken) DMFiles
+        if (startsWith(name, FOLDER_PREFIX_DROPPED))
+        {
+            auto res = try_parse_file_id(name);
+            if (!res)
+            {
+                LOG_INFO(log, "Unrecognized dropped DM file, ignored: " + name);
+                continue;
+            }
+            UInt64 file_id = *res;
+            // The encryption info use readable path. We are not sure the encryption info is deleted or not.
+            // Try to delete and ignore if it is already deleted.
+            const String readable_path = getPathByStatus(parent_path, file_id, DMFile::Status::READABLE);
+            file_provider->deleteEncryptionInfo(EncryptionPath(readable_path, ""), /* throw_on_error= */ false);
+            if (Poco::File del_file(parent_path + "/" + name); del_file.exists())
+                del_file.remove(true);
+            continue;
+        }
+
+        if (!startsWith(name, FOLDER_PREFIX_READABLE))
+            continue;
+        auto res = try_parse_file_id(name);
+        if (!res)
         {
             LOG_INFO(log, "Unrecognized DM file, ignored: " + name);
             continue;
         }
-        UInt64 file_id = std::stoull(ss[1]);
+        UInt64 file_id = *res;
+
         if (can_gc)
         {
             Poco::File file(parent_path + "/" + name);
@@ -385,7 +460,22 @@ void DMFile::remove(const FileProviderPtr & file_provider)
     }
     else
     {
-        file_provider->deleteDirectory(path(), true, true);
+        // If we use `FileProvider::deleteDirectory`, it may left a broken DMFile on disk.
+        // By renaming DMFile with a prefix first, even if there are broken DMFiles left,
+        // we can safely clean them when `DMFile::listAllInPath` is called.
+        const String dir_path = path();
+        if (Poco::File dir_file(dir_path); dir_file.exists())
+        {
+            setStatus(Status::DROPPED);
+            const String deleted_path = path();
+            // Rename the directory first (note that we should do it before deleting encryption info)
+            dir_file.renameTo(deleted_path);
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_dmfile_remove_encryption);
+            file_provider->deleteEncryptionInfo(EncryptionPath(encryptionBasePath(), ""));
+            FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_dmfile_remove_from_disk);
+            // Then clean the files on disk
+            dir_file.remove(true);
+        }
     }
 }
 

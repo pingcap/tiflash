@@ -31,6 +31,7 @@ public:
         WRITABLE,
         WRITING,
         READABLE,
+        DROPPED,
     };
 
     enum DMSingleFileFormatVersion : int
@@ -48,6 +49,8 @@ public:
             return "WRITING";
         case READABLE:
             return "READABLE";
+        case DROPPED:
+            return "DROPPED";
         default:
             throw Exception("Unexpected status: " + DB::toString((int)status));
         }
@@ -91,10 +94,11 @@ public:
     using PackStats = PaddedPODArray<PackStat>;
 
     static DMFilePtr create(UInt64 file_id, const String & parent_path, bool single_file_mode = false);
+
     static DMFilePtr
     restore(const FileProviderPtr & file_provider, UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta = true);
 
-    static std::set<UInt64> listAllInPath(const String & parent_path, bool can_gc);
+    static std::set<UInt64> listAllInPath(const FileProviderPtr & file_provider, const String & parent_path, bool can_gc);
 
     bool canGC();
     void enableGC();
@@ -102,9 +106,11 @@ public:
 
     UInt64 fileId() const { return file_id; }
     UInt64 refId() const { return ref_id; }
-    String path() const { return parent_path + (status == Status::READABLE ? "/dmf_" : "/.tmp.dmf_") + DB::toString(file_id); }
+
+    String path() const;
     String metaPath() const { return subFilePath(metaFileName()); }
     String packStatPath() const { return subFilePath(packStatFileName()); }
+
     // Do not gc me.
     String ngcPath() const;
 
@@ -124,7 +130,7 @@ public:
 
     bool isColIndexExist(const ColId & col_id) const;
 
-    const String         encryptionBasePath() const { return parent_path + "/dmf_" + DB::toString(file_id); }
+    const String         encryptionBasePath() const;
     const EncryptionPath encryptionDataPath(const FileNameBase & file_name_base) const;
     const EncryptionPath encryptionIndexPath(const FileNameBase & file_name_base) const;
     const EncryptionPath encryptionMarkPath(const FileNameBase & file_name_base) const;
