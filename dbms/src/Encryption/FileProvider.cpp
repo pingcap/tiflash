@@ -9,10 +9,6 @@
 
 namespace DB
 {
-namespace ErrorCodes
-{
-extern const int NOT_IMPLEMENTED;
-} // namespace ErrorCodes
 
 RandomAccessFilePtr FileProvider::newRandomAccessFile(const String & file_path_, const EncryptionPath & encryption_path_, int flags) const
 {

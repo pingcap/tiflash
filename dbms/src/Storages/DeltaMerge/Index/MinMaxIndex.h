@@ -51,7 +51,7 @@ public:
     void addPack(const IColumn & column, const ColumnVector<UInt8> * del_mark);
 
     void                  write(const IDataType & type, WriteBuffer & buf);
-    static MinMaxIndexPtr read(const IDataType & type, ReadBuffer & buf);
+    static MinMaxIndexPtr read(const IDataType & type, ReadBuffer & buf, size_t bytes_limit);
 
     std::pair<Int64, Int64> getIntMinMax(size_t pack_index);
 
