@@ -199,7 +199,7 @@ void ApplyPreHandledTiKVSnapshot(TiFlashServer * server, PreHandledTiKVSnapshot 
 
 void ApplyPreHandledTiFlashSnapshot(TiFlashServer * server, PreHandledTiFlashSnapshot * snap)
 {
-    applyPreHandledTiFlashSnapshot(server->tmt, snap);
+    TiFlashSnapshotHandler::applyPreHandledTiFlashSnapshot(server->tmt, snap);
 }
 
 void ApplyPreHandledSnapshot(TiFlashServer * server, void * res, RawCppPtrType type)
@@ -241,10 +241,10 @@ void GcRawCppPtr(TiFlashServer *, RawCppPtr p)
                 delete reinterpret_cast<PreHandledTiKVSnapshot *>(ptr);
                 break;
             case RawCppPtrType::TiFlashSnapshot:
-                deleteTiFlashSnapshot(reinterpret_cast<TiFlashSnapshot *>(ptr));
+                TiFlashSnapshotHandler::deleteTiFlashSnapshot(reinterpret_cast<TiFlashSnapshot *>(ptr));
                 break;
             case RawCppPtrType::PreHandledTiFlashSnapshot:
-                deletePreHandledTiFlashSnapshot(reinterpret_cast<PreHandledTiFlashSnapshot *>(ptr));
+                TiFlashSnapshotHandler::deletePreHandledTiFlashSnapshot(reinterpret_cast<PreHandledTiFlashSnapshot *>(ptr));
                 break;
             case RawCppPtrType::SplitKeys:
                 delete reinterpret_cast<SplitKeys *>(ptr);
@@ -280,7 +280,7 @@ RawCppPtr GenTiFlashSnapshot(TiFlashServer * server, RaftCmdHeader header)
         if (!kvstore->preGenTiFlashSnapshot(header.region_id, header.index, *tmt))
             return RawCppPtr(nullptr, RawCppPtrType::None);
 
-        return RawCppPtr(genTiFlashSnapshot(tmt, header.region_id), RawCppPtrType::TiFlashSnapshot);
+        return RawCppPtr(TiFlashSnapshotHandler::genTiFlashSnapshot(tmt, header.region_id), RawCppPtrType::TiFlashSnapshot);
     }
     catch (...)
     {
@@ -293,7 +293,7 @@ SerializeTiFlashSnapshotRes SerializeTiFlashSnapshotInto(TiFlashServer * server,
 {
     std::string real_path(path.data, path.len);
     std::cerr << "serialize TiFlashSnapshot into path " << real_path << "\n";
-    auto res = serializeTiFlashSnapshotInto(server->tmt, snapshot, real_path);
+    auto res = TiFlashSnapshotHandler::serializeTiFlashSnapshotInto(server->tmt, snapshot, real_path);
     std::cerr << "finish write " << res.total_size << " bytes "
               << "\n";
     return res;
@@ -303,7 +303,7 @@ uint8_t IsTiFlashSnapshot(TiFlashServer * server, BaseBuffView path)
 {
     std::string real_path(path.data, path.len);
     std::cerr << "IsTiFlashSnapshot of path " << real_path << "\n";
-    auto res = isTiFlashSnapshot(server->tmt, real_path);
+    auto res = TiFlashSnapshotHandler::isTiFlashSnapshot(server->tmt, real_path);
     std::cerr << "start to check IsTiFlashSnapshot, res " << res << "\n";
     return res;
 }
@@ -321,7 +321,7 @@ RawCppPtr PreHandleTiFlashSnapshot(
 
         std::cerr << "PreHandleTiFlashSnapshot from path " << real_path << " region " << region.id() << " peer " << peer_id
                   << " index " << index << " term " << term << "\n";
-        return RawCppPtr(preHandleTiFlashSnapshot(new_region, real_path), RawCppPtrType::PreHandledTiFlashSnapshot);
+        return RawCppPtr(TiFlashSnapshotHandler::preHandleTiFlashSnapshot(new_region, real_path), RawCppPtrType::PreHandledTiFlashSnapshot);
     }
     catch (...)
     {

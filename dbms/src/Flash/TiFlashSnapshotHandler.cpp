@@ -44,12 +44,12 @@ TiFlashSnapshot::~TiFlashSnapshot()
               << "\n";
 }
 
-PreHandledTiFlashSnapshot *preHandleTiFlashSnapshot(RegionPtr region, const String & path)
+PreHandledTiFlashSnapshot *TiFlashSnapshotHandler::preHandleTiFlashSnapshot(RegionPtr region, const String & path)
 {
     return new PreHandledTiFlashSnapshot{std::move(region), path};
 }
 
-void applyPreHandledTiFlashSnapshot(TMTContext * tmt, PreHandledTiFlashSnapshot * snap)
+void TiFlashSnapshotHandler::applyPreHandledTiFlashSnapshot(TMTContext * tmt, PreHandledTiFlashSnapshot * snap)
 {
     std::cerr << "applyPreHandledTiFlashSnapshot: " << snap->region->toString() << "\n";
     auto & kvstore = tmt->getKVStore();
@@ -76,22 +76,28 @@ void applyPreHandledTiFlashSnapshot(TMTContext * tmt, PreHandledTiFlashSnapshot 
     auto settings = tmt->getContext().getSettingsRef();
     stream.readPrefix();
     while (auto block = stream.read())
-    {
         dm_storage->write(std::move(block), settings);
-    }
+
     stream.readSuffix();
 }
 
-TiFlashSnapshot *genTiFlashSnapshot(TMTContext * tmt, uint64_t region_id)
+TiFlashSnapshot *TiFlashSnapshotHandler::genTiFlashSnapshot(TMTContext * tmt, uint64_t region_id)
 {
     auto & kvstore = tmt->getKVStore();
     // generate snapshot struct;
-    // TODO: check RegionPtr is not nullptr
     const RegionPtr region = kvstore->getRegion(region_id);
     auto region_range = region->getRange();
-    // TODO: check storage is not nullptr
     auto table_id = region->getMappedTableID();
     auto storage = tmt->getStorages().get(table_id);
+    Logger * log = &Logger::get("TiFlashSnapshotHandler");
+    if (storage == nullptr)
+    {
+        LOG_WARNING(log,
+            "genTiFlashSnapshot can not get table for region:" + region->toString()
+                + " with table id: " + DB::toString(table_id) + ", ignored");
+        return new TiFlashSnapshot(DM::ColumnDefines{});
+    }
+
     auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
 
     auto * snapshot = new TiFlashSnapshot(dm_storage->getStore()->getTableColumns());
@@ -129,44 +135,36 @@ TiFlashSnapshot *genTiFlashSnapshot(TMTContext * tmt, uint64_t region_id)
     return snapshot;
 }
 
-SerializeTiFlashSnapshotRes serializeTiFlashSnapshotInto(TMTContext * tmt, TiFlashSnapshot *snapshot, const String & path)
+SerializeTiFlashSnapshotRes TiFlashSnapshotHandler::serializeTiFlashSnapshotInto(TMTContext * tmt, TiFlashSnapshot *snapshot, const String & path)
 {
+    if (snapshot->write_columns.empty())
+        return {0, 0, 0};
     auto snapshot_file = DM::DMFile::create(path);
-    Poco::File file1(path);
-    std::cerr << "after create dmfile, file exists: " << file1.exists() << std::endl;
     uint64_t key_count = 0;
     DM::DMFileBlockOutputStream dst_stream(tmt->getContext(), snapshot_file, snapshot->write_columns);
     auto & src_stream = snapshot->pipeline.firstStream();
-    Poco::File file2(path);
-    std::cerr << "after get src stream, file exists: " << file2.exists() << std::endl;
     src_stream->readPrefix();
     dst_stream.writePrefix();
-    Poco::File file3(path);
-    std::cerr << "after write prewrite, file exists: " << file3.exists() << std::endl;
     while (auto block = src_stream->read())
     {
         key_count += block.rows();
         dst_stream.write(block, 0);
-        Poco::File file4(path);
-        std::cerr << "after write block, file exists: " << file4.exists() << std::endl;
     }
     src_stream->readSuffix();
     dst_stream.writeSuffix();
-    Poco::File file5(path);
-    std::cerr << "after write suffix, file exists: " << file5.exists() << std::endl;
     Poco::File file(path);
     uint64_t total_size = file.getSize();
     // if key_count is 0, file will be deleted
     return {1, key_count, total_size};
 }
 
-bool isTiFlashSnapshot(TMTContext * tmt, const String & path)
+bool TiFlashSnapshotHandler::isTiFlashSnapshot(TMTContext * tmt, const String & path)
 {
     return DM::DMFile::isValidDMFileInSingleFileMode(tmt->getContext().getFileProvider(), path);
 }
 
-void deleteTiFlashSnapshot(TiFlashSnapshot * snap) { delete snap; }
+void TiFlashSnapshotHandler::deleteTiFlashSnapshot(TiFlashSnapshot * snap) { delete snap; }
 
-void deletePreHandledTiFlashSnapshot(PreHandledTiFlashSnapshot * snap) { delete snap; }
+void TiFlashSnapshotHandler::deletePreHandledTiFlashSnapshot(PreHandledTiFlashSnapshot * snap) { delete snap; }
 
 }

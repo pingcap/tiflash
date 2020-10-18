@@ -361,7 +361,6 @@ void DMFile::finalize(const FileProviderPtr & file_provider)
 
 void DMFile::finalize(WriteBuffer & buffer)
 {
-    std::cerr << "DMFile::finalize" << std::endl;
     Footer footer;
     footer.magic_number = DMFile::magic_number;
     std::tie(footer.meta_pack_info.meta_offset, footer.meta_pack_info.meta_size)           = writeMeta(buffer);
@@ -394,7 +393,6 @@ void DMFile::finalize(WriteBuffer & buffer)
     // If the path is same, then this is a snapshot file, no need to rename the file
     if (old_path == new_path)
         return;
-    std::cerr << "old_path " << old_path << " new_path " << new_path << std::endl;
     Poco::File old_file(old_path);
     Poco::File old_ngc_file(old_ngc_path);
     Poco::File file(new_path);
@@ -524,7 +522,7 @@ bool DMFile::isValidDMFileInSingleFileMode(const FileProviderPtr & file_provider
     return number == DMFile::magic_number;
 }
 
-const DMFile::MagicNumber DMFile::magic_number = 0x13579BDF13579BDF;
+const DMFile::MagicNumber DMFile::magic_number = 0x23579BDF48799ADE;
 
 } // namespace DM
 } // namespace DB

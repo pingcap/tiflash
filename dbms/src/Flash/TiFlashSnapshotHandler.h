@@ -18,13 +18,22 @@ struct SerializeTiFlashSnapshotRes
 };
 using String = std::string;
 
-PreHandledTiFlashSnapshot *preHandleTiFlashSnapshot(RegionPtr region, const String & path);
-void applyPreHandledTiFlashSnapshot(TMTContext * tmt, PreHandledTiFlashSnapshot * snap);
-TiFlashSnapshot *genTiFlashSnapshot(TMTContext * tmt, uint64_t region_id);
-SerializeTiFlashSnapshotRes serializeTiFlashSnapshotInto(TMTContext * tmt, TiFlashSnapshot *snapshot, const String & path);
-bool isTiFlashSnapshot(TMTContext * tmt, const String & path);
-void deleteTiFlashSnapshot(TiFlashSnapshot * snap);
-void deletePreHandledTiFlashSnapshot(PreHandledTiFlashSnapshot * snap);
+class TiFlashSnapshotHandler
+{
+public:
+    static PreHandledTiFlashSnapshot *preHandleTiFlashSnapshot(RegionPtr region, const String & path);
+
+    static void applyPreHandledTiFlashSnapshot(TMTContext * tmt, PreHandledTiFlashSnapshot * snap);
+
+    static TiFlashSnapshot *genTiFlashSnapshot(TMTContext * tmt, uint64_t region_id);
+
+    static SerializeTiFlashSnapshotRes serializeTiFlashSnapshotInto(TMTContext * tmt, TiFlashSnapshot *snapshot, const String & path);
+
+    static bool isTiFlashSnapshot(TMTContext * tmt, const String & path);
+
+    static void deleteTiFlashSnapshot(TiFlashSnapshot * snap);
+
+    static void deletePreHandledTiFlashSnapshot(PreHandledTiFlashSnapshot * snap);
+};
 
 }
-

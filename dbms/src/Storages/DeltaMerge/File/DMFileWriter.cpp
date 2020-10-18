@@ -112,12 +112,10 @@ void DMFileWriter::write(const Block & block, size_t not_clean_rows)
 
 void DMFileWriter::finalize()
 {
-    std::cerr << "finalize\n";
     for (auto & cd : write_columns)
     {
         finalizeColumn(cd.id, cd.type);
     }
-    std::cerr << "after finalizeColumn\n";
 
     if (single_file_mode)
     {
