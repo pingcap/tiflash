@@ -90,7 +90,7 @@ public:
         UInt32       sub_file_num;
 
         DMSingleFileFormatVersion file_format_version;
-        static const MagicNumber magic_number;
+        MagicNumber magic_number;
     };
 
     using PackStats = PaddedPODArray<PackStat>;
@@ -260,6 +260,8 @@ private:
 
     mutable std::mutex mutex;
     SubFileStats       sub_file_stats;
+
+    static const MagicNumber magic_number;
 
     Logger * log;
 

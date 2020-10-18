@@ -13,24 +13,23 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
                            size_t                      min_compress_block_size_,
                            size_t                      max_compress_block_size_,
                            const CompressionSettings & compression_settings_,
-                           const FileProviderPtr &     file_provider_,
-                           bool                        single_file_mode_)
+                           const FileProviderPtr &     file_provider_)
     : dmfile(dmfile_),
       write_columns(write_columns_),
       min_compress_block_size(min_compress_block_size_),
       max_compress_block_size(max_compress_block_size_),
       compression_settings(compression_settings_),
+      single_file_mode(dmfile_->isSingleFileMode()),
       // assume pack_stat_file is the first file created inside DMFile
       // it will create encryption info for the whole DMFile
       pack_stat_file(
-          single_file_mode_
+          single_file_mode
               ? nullptr
               : createWriteBufferFromFileBaseByFileProvider(
                   file_provider_, dmfile->packStatPath(), dmfile->encryptionPackStatPath(), true, 0, 0, max_compress_block_size)),
       single_file_stream(
-          !single_file_mode_ ? nullptr : new SingleFileStream(dmfile_, compression_settings_, max_compress_block_size_, file_provider_)),
-      file_provider(file_provider_),
-      single_file_mode(single_file_mode_)
+          !single_file_mode ? nullptr : new SingleFileStream(dmfile_, compression_settings_, max_compress_block_size_, file_provider_)),
+      file_provider(file_provider_)
 {
     dmfile->setStatus(DMFile::Status::WRITING);
     for (auto & cd : write_columns)
@@ -113,10 +112,12 @@ void DMFileWriter::write(const Block & block, size_t not_clean_rows)
 
 void DMFileWriter::finalize()
 {
+    std::cerr << "finalize\n";
     for (auto & cd : write_columns)
     {
         finalizeColumn(cd.id, cd.type);
     }
+    std::cerr << "after finalizeColumn\n";
 
     if (single_file_mode)
     {

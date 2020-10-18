@@ -361,7 +361,9 @@ void DMFile::finalize(const FileProviderPtr & file_provider)
 
 void DMFile::finalize(WriteBuffer & buffer)
 {
+    std::cerr << "DMFile::finalize" << std::endl;
     Footer footer;
+    footer.magic_number = DMFile::magic_number;
     std::tie(footer.meta_pack_info.meta_offset, footer.meta_pack_info.meta_size)           = writeMeta(buffer);
     std::tie(footer.meta_pack_info.pack_stat_offset, footer.meta_pack_info.pack_stat_size) = writePack(buffer);
     footer.sub_file_stat_offset                                                            = buffer.count();
@@ -384,11 +386,17 @@ void DMFile::finalize(WriteBuffer & buffer)
     buffer.next();
     if (status != Status::WRITING)
         throw Exception("Expected WRITING status, now " + statusString(status));
-    Poco::File old_file(path());
-    Poco::File old_ngc_file(ngcPath());
-    status = Status::READABLE;
 
+    auto old_path = path();
+    auto old_ngc_path = ngcPath();
+    status = Status::READABLE;
     auto       new_path = path();
+    // If the path is same, then this is a snapshot file, no need to rename the file
+    if (old_path == new_path)
+        return;
+    std::cerr << "old_path " << old_path << " new_path " << new_path << std::endl;
+    Poco::File old_file(old_path);
+    Poco::File old_ngc_file(old_ngc_path);
     Poco::File file(new_path);
     if (file.exists())
         file.remove();
@@ -509,14 +517,14 @@ bool DMFile::isValidDMFileInSingleFileMode(const FileProviderPtr & file_provider
     if (!file.isFile())
         return false;
 
-    MagicNumber magic_number;
+    MagicNumber number;
     ReadBufferFromFileProvider buf(file_provider, path, EncryptionPath(path, ""));
     buf.seek(file.getSize() - sizeof(MagicNumber), SEEK_SET);
-    DB::readIntBinary(magic_number, buf);
-    return magic_number == DMFile::Footer::magic_number;
+    DB::readIntBinary(number, buf);
+    return number == DMFile::magic_number;
 }
 
-const DMFile::MagicNumber DMFile::Footer::magic_number = 0x13579BDF13579BDF;
+const DMFile::MagicNumber DMFile::magic_number = 0x13579BDF13579BDF;
 
 } // namespace DM
 } // namespace DB

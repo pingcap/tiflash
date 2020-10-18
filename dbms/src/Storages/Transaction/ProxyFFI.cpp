@@ -1,13 +1,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Encryption/AESCTRCipherStream.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/SQLQuerySource.h>
-#include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
-#include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
-#include <Storages/IManageableStorage.h>
 #include <Storages/PathCapacityMetrics.h>
-#include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFIType.h>
 #include <Storages/Transaction/Region.h>
@@ -203,52 +197,9 @@ void ApplyPreHandledTiKVSnapshot(TiFlashServer * server, PreHandledTiKVSnapshot 
     }
 }
 
-struct PreHandledTiFlashSnapshot
-{
-    ~PreHandledTiFlashSnapshot();
-    RegionPtr region;
-    std::string path;
-};
-
-PreHandledTiFlashSnapshot::~PreHandledTiFlashSnapshot()
-{
-    std::cerr << "GC PreHandledTiFlashSnapshot success"
-              << "\n";
-}
-
 void ApplyPreHandledTiFlashSnapshot(TiFlashServer * server, PreHandledTiFlashSnapshot * snap)
 {
-    std::cerr << "ApplyPreHandledTiFlashSnapshot: " << snap->region->toString() << "\n";
-    auto & tmt = server->tmt;
-    auto & kvstore = tmt->getKVStore();
-    kvstore->handleApplySnapshot(snap->region, *tmt);
-
-    // TODO: check storage is not nullptr
-    auto table_id = snap->region->getMappedTableID();
-    auto storage = tmt->getStorages().get(table_id);
-    auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-
-    auto snapshot_file = DM::DMFile::restore(tmt->getContext().getFileProvider(), snap->path);
-    auto column_cache = std::make_shared<DM::ColumnCache>();
-    DM::DMFileBlockInputStream stream(server->tmt->getContext(),
-        DM::MAX_UINT64,
-        false,
-        0,
-        snapshot_file,
-        dm_storage->getStore()->getTableColumns(),
-        // TODO: how to deal with is_common_handle
-        DM::RowKeyRange::newAll(false, 1),
-        DM::EMPTY_FILTER,
-        column_cache,
-        DM::IdSetPtr{});
-
-    auto settings = tmt->getContext().getSettingsRef();
-    stream.readPrefix();
-    while (auto block = stream.read())
-    {
-        dm_storage->write(std::move(block), settings);
-    }
-    stream.readSuffix();
+    applyPreHandledTiFlashSnapshot(server->tmt, snap);
 }
 
 void ApplyPreHandledSnapshot(TiFlashServer * server, void * res, RawCppPtrType type)
@@ -290,10 +241,10 @@ void GcRawCppPtr(TiFlashServer *, RawCppPtr p)
                 delete reinterpret_cast<PreHandledTiKVSnapshot *>(ptr);
                 break;
             case RawCppPtrType::TiFlashSnapshot:
-                delete reinterpret_cast<TiFlashSnapshot *>(ptr);
+                deleteTiFlashSnapshot(reinterpret_cast<TiFlashSnapshot *>(ptr));
                 break;
             case RawCppPtrType::PreHandledTiFlashSnapshot:
-                delete reinterpret_cast<PreHandledTiFlashSnapshot *>(ptr);
+                deletePreHandledTiFlashSnapshot(reinterpret_cast<PreHandledTiFlashSnapshot *>(ptr));
                 break;
             case RawCppPtrType::SplitKeys:
                 delete reinterpret_cast<SplitKeys *>(ptr);
@@ -328,46 +279,8 @@ RawCppPtr GenTiFlashSnapshot(TiFlashServer * server, RaftCmdHeader header)
         // flush all data of region and persist
         if (!kvstore->preGenTiFlashSnapshot(header.region_id, header.index, *tmt))
             return RawCppPtr(nullptr, RawCppPtrType::None);
-        // generate snapshot struct;
 
-        // TODO: check RegionPtr is not nullptr
-        const RegionPtr region = kvstore->getRegion(header.region_id);
-        auto region_range = region->getRange();
-
-        // TODO: check storage is not nullptr
-        auto table_id = region->getMappedTableID();
-        auto storage = tmt->getStorages().get(table_id);
-        auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-
-        auto * snapshot = new TiFlashSnapshot(dm_storage->getStore()->getTableColumns());
-
-        const Settings & settings = tmt->getContext().getSettingsRef();
-        auto mvcc_query_info = std::make_unique<MvccQueryInfo>();
-        mvcc_query_info->resolve_locks = true;
-        mvcc_query_info->read_tso = settings.read_tso;
-        RegionQueryInfo info;
-        {
-            info.region_id = header.region_id;
-            info.version = region->version();
-            info.conf_version = region->confVer();
-            info.range_in_table = region_range->rawKeys();
-        }
-        mvcc_query_info->regions_query_info.emplace_back(std::move(info));
-
-        SelectQueryInfo query_info;
-        String query_str = "SELECT * FROM " + storage->getDatabaseName() + "." + storage->getTableName();
-        SQLQuerySource query_src(query_str.data(), query_str.data() + query_str.size());
-        std::tie(std::ignore, query_info.query) = query_src.parse(0);
-
-        query_info.mvcc_query_info = std::move(mvcc_query_info);
-
-        QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
-
-        auto table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
-        Names required_columns = storage->getColumns().getNamesOfPhysical();
-        snapshot->pipeline.streams = storage->read(required_columns, query_info, tmt->getContext(), from_stage, settings.max_block_size, 1);
-        snapshot->pipeline.transform([&](auto & stream) { stream->addTableLock(table_lock); });
-        return RawCppPtr(snapshot, RawCppPtrType::TiFlashSnapshot);
+        return RawCppPtr(genTiFlashSnapshot(tmt, header.region_id), RawCppPtrType::TiFlashSnapshot);
     }
     catch (...)
     {
@@ -379,71 +292,18 @@ RawCppPtr GenTiFlashSnapshot(TiFlashServer * server, RaftCmdHeader header)
 SerializeTiFlashSnapshotRes SerializeTiFlashSnapshotInto(TiFlashServer * server, TiFlashSnapshot *snapshot, BaseBuffView path)
 {
     std::string real_path(path.data, path.len);
-    std::cerr << "serializeInto TiFlashSnapshot into path " << real_path << "\n";
-//    auto encryption_info = server->proxy_helper->newFile(real_path);
-//    char buffer[TiFlashSnapshot::flag.size() + 10];
-//    std::memset(buffer, 0, sizeof(buffer));
-//    auto file = fopen(real_path.data(), "w");
-//    if (encryption_info.res == FileEncryptionRes::Ok && encryption_info.method != EncryptionMethod::Plaintext)
-//    {
-//        std::cerr << "start to write encryption data"
-//                  << "\n";
-//        BlockAccessCipherStreamPtr cipher_stream = AESCTRCipherStream::createCipherStream(encryption_info, EncryptionPath(real_path, ""));
-//        memcpy(buffer, TiFlashSnapshot::flag.data(), TiFlashSnapshot::flag.size());
-//        cipher_stream->encrypt(0, buffer, TiFlashSnapshot::flag.size());
-//        fputs(buffer, file);
-//    }
-//    else
-//    {
-//        fputs(TiFlashSnapshot::flag.data(), file);
-//        std::cerr << "start to write data"
-//                  << "\n";
-//    }
-//    fclose(file);
-    auto snapshot_file = DM::DMFile::create(real_path);
-    DM::DMFileBlockOutputStream dst_stream(server->tmt->getContext(), snapshot_file, snapshot->write_columns);
-    auto & src_stream = snapshot->pipeline.firstStream();
-    src_stream->readPrefix();
-    dst_stream.writePrefix();
-    while (auto block = src_stream->read())
-    {
-        dst_stream.write(block, 0);
-    }
-    src_stream->readSuffix();
-    dst_stream.writeSuffix();
-    std::cerr << "finish write " << TiFlashSnapshot::flag.size() << " bytes "
+    std::cerr << "serialize TiFlashSnapshot into path " << real_path << "\n";
+    auto res = serializeTiFlashSnapshotInto(server->tmt, snapshot, real_path);
+    std::cerr << "finish write " << res.total_size << " bytes "
               << "\n";
-    // if key_count is 0, file will be deleted
-    return {1, 6, TiFlashSnapshot::flag.size()};
+    return res;
 }
 
 uint8_t IsTiFlashSnapshot(TiFlashServer * server, BaseBuffView path)
 {
     std::string real_path(path.data, path.len);
     std::cerr << "IsTiFlashSnapshot of path " << real_path << "\n";
-    bool res = false;
-//    char buffer[TiFlashSnapshot::flag.size() + 10];
-//    std::memset(buffer, 0, sizeof(buffer));
-//    auto encryption_info = server->proxy_helper->getFile(path);
-//    auto file = fopen(real_path.data(), "rb");
-//    size_t bytes_read = 0;
-//    if (encryption_info.res == FileEncryptionRes::Ok && encryption_info.method != EncryptionMethod::Plaintext)
-//    {
-//        std::cerr << "try to decrypt file"
-//                  << "\n";
-//
-//        BlockAccessCipherStreamPtr cipher_stream = AESCTRCipherStream::createCipherStream(encryption_info, EncryptionPath(real_path, ""));
-//        bytes_read = fread(buffer, 1, TiFlashSnapshot::flag.size(), file);
-//        cipher_stream->decrypt(0, buffer, bytes_read);
-//    }
-//    else
-//    {
-//        bytes_read = fread(buffer, 1, TiFlashSnapshot::flag.size(), file);
-//    }
-//    fclose(file);
-//    if (bytes_read == TiFlashSnapshot::flag.size() && memcmp(buffer, TiFlashSnapshot::flag.data(), TiFlashSnapshot::flag.size()) == 0)
-//        res = true;
-    res = DM::DMFile::isValidDMFileInSingleFileMode(server->tmt->getContext().getFileProvider(), real_path);
+    auto res = isTiFlashSnapshot(server->tmt, real_path);
     std::cerr << "start to check IsTiFlashSnapshot, res " << res << "\n";
     return res;
 }
@@ -461,7 +321,7 @@ RawCppPtr PreHandleTiFlashSnapshot(
 
         std::cerr << "PreHandleTiFlashSnapshot from path " << real_path << " region " << region.id() << " peer " << peer_id
                   << " index " << index << " term " << term << "\n";
-        return RawCppPtr(new PreHandledTiFlashSnapshot{new_region, real_path}, RawCppPtrType::PreHandledTiFlashSnapshot);
+        return RawCppPtr(preHandleTiFlashSnapshot(new_region, real_path), RawCppPtrType::PreHandledTiFlashSnapshot);
     }
     catch (...)
     {
@@ -469,14 +329,6 @@ RawCppPtr PreHandleTiFlashSnapshot(
         exit(-1);
     }
 }
-
-TiFlashSnapshot::~TiFlashSnapshot()
-{
-    std::cerr << "GC TiFlashSnapshot success"
-              << "\n";
-}
-
-const std::string TiFlashSnapshot::flag = "this is tiflash snapshot";
 
 GetRegionApproximateSizeKeysRes GetRegionApproximateSizeKeys(
     TiFlashServer * server, uint64_t region_id, BaseBuffView start_key, BaseBuffView end_key)
