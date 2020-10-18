@@ -107,7 +107,7 @@ DMFilePtr DMFile::create(const String & path)
 {
     Logger * log = &Logger::get("DMFile");
 
-    DMFilePtr new_dmfile(new DMFile(path, Mode::SINGLE_FILE, Status::WRITABLE, log));
+    DMFilePtr  new_dmfile(new DMFile(path, Mode::SINGLE_FILE, Status::WRITABLE, log));
     Poco::File file(path);
     if (file.exists())
     {
@@ -362,7 +362,7 @@ void DMFile::finalize(const FileProviderPtr & file_provider)
 void DMFile::finalize(WriteBuffer & buffer)
 {
     Footer footer;
-    footer.magic_number = DMFile::magic_number;
+    footer.magic_number                                                                    = DMFile::magic_number;
     std::tie(footer.meta_pack_info.meta_offset, footer.meta_pack_info.meta_size)           = writeMeta(buffer);
     std::tie(footer.meta_pack_info.pack_stat_offset, footer.meta_pack_info.pack_stat_size) = writePack(buffer);
     footer.sub_file_stat_offset                                                            = buffer.count();
@@ -386,10 +386,10 @@ void DMFile::finalize(WriteBuffer & buffer)
     if (status != Status::WRITING)
         throw Exception("Expected WRITING status, now " + statusString(status));
 
-    auto old_path = path();
+    auto old_path     = path();
     auto old_ngc_path = ngcPath();
-    status = Status::READABLE;
-    auto       new_path = path();
+    status            = Status::READABLE;
+    auto new_path     = path();
     // If the path is same, then this is a snapshot file, no need to rename the file
     if (old_path == new_path)
         return;
@@ -515,7 +515,7 @@ bool DMFile::isValidDMFileInSingleFileMode(const FileProviderPtr & file_provider
     if (!file.isFile())
         return false;
 
-    MagicNumber number;
+    MagicNumber                number;
     ReadBufferFromFileProvider buf(file_provider, path, EncryptionPath(path, ""));
     buf.seek(file.getSize() - sizeof(MagicNumber), SEEK_SET);
     DB::readIntBinary(number, buf);

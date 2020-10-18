@@ -1,16 +1,16 @@
+#include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
+#include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/TiFlashSnapshotHandler.h>
 #include <Interpreters/SQLQuerySource.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/StorageDeltaMerge.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/IManageableStorage.h>
-#include <Flash/Coprocessor/DAGQueryInfo.h>
-#include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
-#include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/StorageDeltaMerge.h>
+#include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/TMTContext.h>
 
 #include <iostream>
 
@@ -44,7 +44,7 @@ TiFlashSnapshot::~TiFlashSnapshot()
               << "\n";
 }
 
-PreHandledTiFlashSnapshot *TiFlashSnapshotHandler::preHandleTiFlashSnapshot(RegionPtr region, const String & path)
+PreHandledTiFlashSnapshot * TiFlashSnapshotHandler::preHandleTiFlashSnapshot(RegionPtr region, const String & path)
 {
     return new PreHandledTiFlashSnapshot{std::move(region), path};
 }
@@ -81,7 +81,7 @@ void TiFlashSnapshotHandler::applyPreHandledTiFlashSnapshot(TMTContext * tmt, Pr
     stream.readSuffix();
 }
 
-TiFlashSnapshot *TiFlashSnapshotHandler::genTiFlashSnapshot(TMTContext * tmt, uint64_t region_id)
+TiFlashSnapshot * TiFlashSnapshotHandler::genTiFlashSnapshot(TMTContext * tmt, uint64_t region_id)
 {
     auto & kvstore = tmt->getKVStore();
     // generate snapshot struct;
@@ -93,8 +93,8 @@ TiFlashSnapshot *TiFlashSnapshotHandler::genTiFlashSnapshot(TMTContext * tmt, ui
     if (storage == nullptr)
     {
         LOG_WARNING(log,
-            "genTiFlashSnapshot can not get table for region:" + region->toString()
-                + " with table id: " + DB::toString(table_id) + ", ignored");
+            "genTiFlashSnapshot can not get table for region:" + region->toString() + " with table id: " + DB::toString(table_id)
+                + ", ignored");
         return new TiFlashSnapshot(DM::ColumnDefines{});
     }
 
@@ -135,7 +135,8 @@ TiFlashSnapshot *TiFlashSnapshotHandler::genTiFlashSnapshot(TMTContext * tmt, ui
     return snapshot;
 }
 
-SerializeTiFlashSnapshotRes TiFlashSnapshotHandler::serializeTiFlashSnapshotInto(TMTContext * tmt, TiFlashSnapshot *snapshot, const String & path)
+SerializeTiFlashSnapshotRes TiFlashSnapshotHandler::serializeTiFlashSnapshotInto(
+    TMTContext * tmt, TiFlashSnapshot * snapshot, const String & path)
 {
     if (snapshot->write_columns.empty())
         return {0, 0, 0};
@@ -167,4 +168,4 @@ void TiFlashSnapshotHandler::deleteTiFlashSnapshot(TiFlashSnapshot * snap) { del
 
 void TiFlashSnapshotHandler::deletePreHandledTiFlashSnapshot(PreHandledTiFlashSnapshot * snap) { delete snap; }
 
-}
+} // namespace DB

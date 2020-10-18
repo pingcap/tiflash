@@ -289,7 +289,7 @@ RawCppPtr GenTiFlashSnapshot(TiFlashServer * server, RaftCmdHeader header)
     }
 }
 
-SerializeTiFlashSnapshotRes SerializeTiFlashSnapshotInto(TiFlashServer * server, TiFlashSnapshot *snapshot, BaseBuffView path)
+SerializeTiFlashSnapshotRes SerializeTiFlashSnapshotInto(TiFlashServer * server, TiFlashSnapshot * snapshot, BaseBuffView path)
 {
     std::string real_path(path.data, path.len);
     std::cerr << "serialize TiFlashSnapshot into path " << real_path << "\n";
@@ -319,8 +319,8 @@ RawCppPtr PreHandleTiFlashSnapshot(
         auto new_region = GenRegionPtr(std::move(region), peer_id, index, term, tmt);
         std::string real_path(path.data, path.len);
 
-        std::cerr << "PreHandleTiFlashSnapshot from path " << real_path << " region " << region.id() << " peer " << peer_id
-                  << " index " << index << " term " << term << "\n";
+        std::cerr << "PreHandleTiFlashSnapshot from path " << real_path << " region " << region.id() << " peer " << peer_id << " index "
+                  << index << " term " << term << "\n";
         return RawCppPtr(TiFlashSnapshotHandler::preHandleTiFlashSnapshot(new_region, real_path), RawCppPtrType::PreHandledTiFlashSnapshot);
     }
     catch (...)

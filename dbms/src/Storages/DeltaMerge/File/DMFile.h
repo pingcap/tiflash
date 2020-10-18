@@ -90,7 +90,7 @@ public:
         UInt32       sub_file_num;
 
         DMSingleFileFormatVersion file_format_version;
-        MagicNumber magic_number;
+        MagicNumber               magic_number;
     };
 
     using PackStats = PaddedPODArray<PackStat>;
@@ -199,10 +199,7 @@ private:
     {
     }
 
-    DMFile(const String & path_, Mode mode_, Status status_, Logger * log_)
-        : file_path(path_), mode(mode_), status(status_), log(log_)
-    {
-    }
+    DMFile(const String & path_, Mode mode_, Status status_, Logger * log_) : file_path(path_), mode(mode_), status(status_), log(log_) {}
 
     bool isSingleFileMode() const { return mode == Mode::SINGLE_FILE; }
     bool isFolderMode() const { return mode == Mode::FOLDER; }

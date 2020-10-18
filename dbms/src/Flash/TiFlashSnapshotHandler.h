@@ -21,13 +21,13 @@ using String = std::string;
 class TiFlashSnapshotHandler
 {
 public:
-    static PreHandledTiFlashSnapshot *preHandleTiFlashSnapshot(RegionPtr region, const String & path);
+    static PreHandledTiFlashSnapshot * preHandleTiFlashSnapshot(RegionPtr region, const String & path);
 
     static void applyPreHandledTiFlashSnapshot(TMTContext * tmt, PreHandledTiFlashSnapshot * snap);
 
-    static TiFlashSnapshot *genTiFlashSnapshot(TMTContext * tmt, uint64_t region_id);
+    static TiFlashSnapshot * genTiFlashSnapshot(TMTContext * tmt, uint64_t region_id);
 
-    static SerializeTiFlashSnapshotRes serializeTiFlashSnapshotInto(TMTContext * tmt, TiFlashSnapshot *snapshot, const String & path);
+    static SerializeTiFlashSnapshotRes serializeTiFlashSnapshotInto(TMTContext * tmt, TiFlashSnapshot * snapshot, const String & path);
 
     static bool isTiFlashSnapshot(TMTContext * tmt, const String & path);
 
@@ -36,4 +36,4 @@ public:
     static void deletePreHandledTiFlashSnapshot(PreHandledTiFlashSnapshot * snap);
 };
 
-}
+} // namespace DB
