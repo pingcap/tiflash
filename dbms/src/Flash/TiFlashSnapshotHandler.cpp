@@ -19,9 +19,9 @@ namespace DB
 
 struct PreHandledTiFlashSnapshot
 {
-    ~PreHandledTiFlashSnapshot();
     RegionPtr region;
     std::string path;
+    ~PreHandledTiFlashSnapshot();
 };
 
 PreHandledTiFlashSnapshot::~PreHandledTiFlashSnapshot()
@@ -55,9 +55,16 @@ void TiFlashSnapshotHandler::applyPreHandledTiFlashSnapshot(TMTContext * tmt, Pr
     auto & kvstore = tmt->getKVStore();
     kvstore->handleApplySnapshot(snap->region, *tmt);
 
-    // TODO: check storage is not nullptr
     auto table_id = snap->region->getMappedTableID();
     auto storage = tmt->getStorages().get(table_id);
+    Logger * log = &Logger::get("TiFlashSnapshotHandler");
+    if (storage == nullptr)
+    {
+        LOG_WARNING(log,
+            "applyPreHandledTiFlashSnapshot can not get table for region:" + snap->region->toString()
+                + " with table id: " + DB::toString(table_id) + ", ignored");
+        return;
+    }
     auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
 
     auto snapshot_file = DM::DMFile::restore(tmt->getContext().getFileProvider(), snap->path);
@@ -77,7 +84,6 @@ void TiFlashSnapshotHandler::applyPreHandledTiFlashSnapshot(TMTContext * tmt, Pr
     stream.readPrefix();
     while (auto block = stream.read())
         dm_storage->write(std::move(block), settings);
-
     stream.readSuffix();
 }
 
