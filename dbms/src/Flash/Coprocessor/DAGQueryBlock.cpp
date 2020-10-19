@@ -180,9 +180,38 @@ void DAGQueryBlock::fillOutputFieldTypes()
         if (output_field_types.empty())
         {
             for (auto & field_type : children[0]->output_field_types)
-                output_field_types.push_back(field_type);
-            for (auto & field_type : children[1]->output_field_types)
-                output_field_types.push_back(field_type);
+            {
+                if (source->join().join_type() == tipb::JoinType::TypeRightOuterJoin)
+                {
+                    /// the type of left column for right join is always nullable
+                    auto updated_field_type = field_type;
+                    updated_field_type.set_flag((UInt32)updated_field_type.flag() & (~(UInt32)TiDB::ColumnFlagNotNull));
+                    output_field_types.push_back(updated_field_type);
+                }
+                else
+                {
+                    output_field_types.push_back(field_type);
+                }
+            }
+            if (source->join().join_type() != tipb::JoinType::TypeSemiJoin
+                && source->join().join_type() != tipb::JoinType::TypeAntiSemiJoin)
+            {
+                /// for semi/anti semi join, the right table column is ignored
+                for (auto & field_type : children[1]->output_field_types)
+                {
+                    if (source->join().join_type() == tipb::JoinType::TypeLeftOuterJoin)
+                    {
+                        /// the type of right column for left join is always nullable
+                        auto updated_field_type = field_type;
+                        updated_field_type.set_flag(updated_field_type.flag() & (~(UInt32)TiDB::ColumnFlagNotNull));
+                        output_field_types.push_back(updated_field_type);
+                    }
+                    else
+                    {
+                        output_field_types.push_back(field_type);
+                    }
+                }
+            }
         }
     }
     else
