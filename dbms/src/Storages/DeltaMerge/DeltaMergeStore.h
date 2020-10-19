@@ -279,8 +279,9 @@ public:
                            size_t                num_streams,
                            UInt64                max_version,
                            const RSOperatorPtr & filter,
-                           size_t                expected_block_size = DEFAULT_BLOCK_SIZE,
-                           const SegmentIdSet &  read_segments       = {});
+                           size_t                expected_block_size   = DEFAULT_BLOCK_SIZE,
+                           const SegmentIdSet &  read_segments         = {},
+                           bool                  reserve_multi_version = false);
 
     /// Force flush all data to disk.
     void flushCache(const Context & context, const RowKeyRange & range)

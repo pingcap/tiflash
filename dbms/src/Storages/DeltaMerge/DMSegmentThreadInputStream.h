@@ -1,5 +1,6 @@
 #pragma once
 
+#include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
@@ -8,6 +9,13 @@ namespace DB
 {
 namespace DM
 {
+
+enum SegmentReadType
+{
+    NORMAL,
+    RAW,
+    EXPORT_DATA,
+};
 
 class DMSegmentThreadInputStream : public IProfilingBlockInputStream
 {
@@ -20,7 +28,7 @@ public:
                                const RSOperatorPtr &          filter_,
                                UInt64                         max_version_,
                                size_t                         expected_block_size_,
-                               bool                           is_raw_,
+                               SegmentReadType                read_type_,
                                bool                           do_range_filter_for_raw_)
         : dm_context(dm_context_),
           task_pool(task_pool_),
@@ -30,7 +38,7 @@ public:
           header(toEmptyBlock(columns_to_read)),
           max_version(max_version_),
           expected_block_size(expected_block_size_),
-          is_raw(is_raw_),
+          read_type(read_type_),
           do_range_filter_for_raw(do_range_filter_for_raw_),
           log(&Logger::get("DMSegmentThreadInputStream"))
     {
@@ -63,11 +71,11 @@ protected:
                 }
 
                 cur_segment = task->segment;
-                if (is_raw)
+                if (read_type == SegmentReadType::RAW)
                 {
                     cur_stream = cur_segment->getInputStreamRaw(*dm_context, columns_to_read, task->read_snapshot, do_range_filter_for_raw);
                 }
-                else
+                else if (read_type == SegmentReadType::NORMAL)
                 {
                     cur_stream = cur_segment->getInputStream(
                         *dm_context,
@@ -77,6 +85,27 @@ protected:
                         filter,
                         max_version,
                         std::max(expected_block_size, (size_t)(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows)));
+                }
+                else if (read_type == SegmentReadType::EXPORT_DATA)
+                {
+                    BlockInputStreams streams;
+                    for (const auto & range : task->ranges)
+                    {
+                        streams.push_back(
+                            cur_segment->getInputStreamForDataExport(*dm_context, columns_to_read, task->read_snapshot, range));
+                    }
+                    if (streams.size() == 1)
+                    {
+                        cur_stream = streams[0];
+                    }
+                    else
+                    {
+                        cur_stream = std::make_shared<ConcatBlockInputStream>(streams);
+                    }
+                }
+                else
+                {
+                    throw DB::TiFlashException("Unknown SegmentReadType: " + std::to_string(read_type), Errors::DeltaTree::Internal);
                 }
                 LOG_TRACE(log, "Start to read segment [" + DB::toString(cur_segment->segmentId()) + "]");
             }
@@ -109,7 +138,7 @@ private:
     Block                  header;
     UInt64                 max_version;
     size_t                 expected_block_size;
-    bool                   is_raw;
+    SegmentReadType        read_type;
     bool                   do_range_filter_for_raw;
 
     bool done = false;

@@ -710,7 +710,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
             EMPTY_FILTER,
             MAX_UINT64,
             DEFAULT_BLOCK_SIZE,
-            true,
+            SegmentReadType::RAW,
             db_settings.dt_raw_filter_range);
         res.push_back(stream);
     }
@@ -725,7 +725,8 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
                                         UInt64                max_version,
                                         const RSOperatorPtr & filter,
                                         size_t                expected_block_size,
-                                        const SegmentIdSet &  read_segments)
+                                        const SegmentIdSet &  read_segments,
+                                        bool                  reserve_multi_version)
 {
     LOG_DEBUG(log, "Read with " << sorted_ranges.size() << " ranges");
 
@@ -754,7 +755,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
             filter,
             max_version,
             expected_block_size,
-            false,
+            reserve_multi_version ? SegmentReadType::EXPORT_DATA : SegmentReadType::NORMAL,
             db_settings.dt_raw_filter_range);
         res.push_back(stream);
     }
@@ -1071,13 +1072,15 @@ bool DeltaMergeStore::handleBackgroundTask()
             left = segmentMergeDelta(*task.dm_context, task.segment, false);
             type = ThreadType::BG_MergeDelta;
             break;
-        case Compact: {
+        case Compact:
+        {
             task.segment->compactDelta(*task.dm_context);
             left = task.segment;
             type = ThreadType::BG_Compact;
             break;
         }
-        case Flush: {
+        case Flush:
+        {
             task.segment->flushCache(*task.dm_context);
             // After flush cache, better place delta index.
             task.segment->placeDeltaIndex(*task.dm_context);
@@ -1085,7 +1088,8 @@ bool DeltaMergeStore::handleBackgroundTask()
             type = ThreadType::BG_Flush;
             break;
         }
-        case PlaceIndex: {
+        case PlaceIndex:
+        {
             task.segment->placeDeltaIndex(*task.dm_context);
             break;
         }

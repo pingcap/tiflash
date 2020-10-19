@@ -1,13 +1,9 @@
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
-#include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/TiFlashSnapshotHandler.h>
-#include <Interpreters/SQLQuerySource.h>
-#include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
-#include <Storages/IManageableStorage.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -104,39 +100,17 @@ TiFlashSnapshot * TiFlashSnapshotHandler::genTiFlashSnapshot(TMTContext * tmt, u
         return new TiFlashSnapshot(DM::ColumnDefines{});
     }
 
-    auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-
-    auto * snapshot = new TiFlashSnapshot(dm_storage->getStore()->getTableColumns());
     const Settings & settings = tmt->getContext().getSettingsRef();
+    auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+    auto dm_store = dm_storage->getStore();
+    auto columns_to_read = dm_store->getTableColumns();
+    auto * snapshot = new TiFlashSnapshot(columns_to_read);
+    auto range
+        = DM::RowKeyRange::fromRegionRange(region->getRange(), table_id, dm_store->isCommonHandle(), dm_store->getRowKeyColumnSize());
 
-    SelectQueryInfo query_info;
-    // query_info.query is just a placeholder
-    String query_str = "SELECT 1";
-    SQLQuerySource query_src(query_str.data(), query_str.data() + query_str.size());
-    std::tie(std::ignore, query_info.query) = query_src.parse(0);
-    const ASTSelectWithUnionQuery & ast = typeid_cast<const ASTSelectWithUnionQuery &>(*query_info.query);
-    query_info.query = ast.list_of_selects->children[0];
-
-    auto mvcc_query_info = std::make_unique<MvccQueryInfo>();
-    mvcc_query_info->resolve_locks = true;
-    mvcc_query_info->read_tso = settings.read_tso;
-    RegionQueryInfo info;
-    {
-        info.region_id = region_id;
-        info.version = region->version();
-        info.conf_version = region->confVer();
-        info.range_in_table = region_range->rawKeys();
-    }
-    mvcc_query_info->regions_query_info.emplace_back(std::move(info));
-    query_info.mvcc_query_info = std::move(mvcc_query_info);
-
-    DAGPreparedSets dag_sets{};
-    query_info.dag_query = std::make_unique<DAGQueryInfo>(std::vector<const tipb::Expr *>{}, dag_sets, std::vector<NameAndTypePair>{});
-
-    QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
     auto table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
-    Names required_columns = storage->getColumns().getNamesOfPhysical();
-    snapshot->pipeline.streams = storage->read(required_columns, query_info, tmt->getContext(), from_stage, settings.max_block_size, 1);
+    snapshot->pipeline.streams = dm_store->read(
+        tmt->getContext(), settings, columns_to_read, {range}, 1, DM::MAX_UINT64, DM::EMPTY_FILTER, DEFAULT_BLOCK_SIZE, {}, true);
     snapshot->pipeline.transform([&](auto & stream) { stream->addTableLock(table_lock); });
     return snapshot;
 }
