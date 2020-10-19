@@ -1,7 +1,9 @@
 #include <Common/CurrentMetrics.h>
 #include <Encryption/AESCTRCipherStream.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/PathCapacityMetrics.h>
+#include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFIType.h>
 #include <Storages/Transaction/Region.h>
