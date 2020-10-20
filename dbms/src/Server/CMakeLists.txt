@@ -111,11 +111,6 @@ else ()
     target_link_libraries (tiflash clickhouse_common_io)
     target_include_directories (tiflash BEFORE PRIVATE ${COMMON_INCLUDE_DIR})
     target_include_directories (tiflash PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
-    if (ARCH_LINUX)
-        add_custom_command(TARGET tiflash POST_BUILD
-            COMMAND chrpath -d ${TIFLASH_PROXY_LIB_PATH}/libtiflash_proxy.so ${CMAKE_CURRENT_BINARY_DIR}/tiflash
-            COMMENT "Removing the absolute path of proxy library from binary...")
-    endif(ARCH_LINUX)
 
     if (USE_EMBEDDED_COMPILER)
         target_link_libraries (tiflash clickhouse-compiler-lib)
