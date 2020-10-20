@@ -296,7 +296,7 @@ SerializeTiFlashSnapshotRes SerializeTiFlashSnapshotInto(TiFlashServer * server,
     std::string real_path(path.data, path.len);
     std::cerr << "serialize TiFlashSnapshot into path " << real_path << "\n";
     auto res = TiFlashSnapshotHandler::serializeTiFlashSnapshotInto(server->tmt, snapshot, real_path);
-    std::cerr << "finish write " << res.total_size << " bytes "
+    std::cerr << "finish write " << res.key_count << " rows " << res.total_size << " bytes "
               << "\n";
     return res;
 }
