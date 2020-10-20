@@ -1,3 +1,4 @@
+#include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
@@ -9,6 +10,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
 
+#include <ext/scope_guard.h>
 #include <memory>
 
 namespace DB
@@ -559,6 +561,13 @@ TiFlashApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 in
         return TiFlashApplyRes::None;
     }
 
+    auto & context = tmt.getContext();
+    Stopwatch watch;
+    SCOPE_EXIT({
+        auto metrics = context.getTiFlashMetrics();
+        GET_METRIC(metrics, tiflash_raft_apply_write_command_duration_seconds, type_write).Observe(watch.elapsedSeconds());
+    });
+
     const auto handle_by_index_func = [&](auto i) {
         auto type = cmds.cmd_types[i];
         auto cf = cmds.cmd_cf[i];
@@ -644,7 +653,7 @@ TiFlashApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 in
         {
             /// Flush data right after they are committed.
             RegionDataReadInfoList data_list_to_remove;
-            RegionTable::writeBlockByRegion(tmt.getContext(), shared_from_this(), data_list_to_remove, log, false);
+            RegionTable::writeBlockByRegion(context, shared_from_this(), data_list_to_remove, log, false);
 
             /// Do not need to run predecode.
             data.writeCF().getCFDataPreDecode().popAll();
