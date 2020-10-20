@@ -17,7 +17,7 @@ namespace FailPoints
 {
 extern const char exception_before_dmfile_remove_encryption[];
 extern const char exception_before_dmfile_remove_from_disk[];
-}
+} // namespace FailPoints
 
 namespace DM
 {
@@ -324,7 +324,7 @@ void DMFile::initializeSubFileStatIfNeeded(const FileProviderPtr & file_provider
     {
         Footer                     footer;
         ReadBufferFromFileProvider buf(file_provider, path(), EncryptionPath(encryptionBasePath(), ""));
-        buf.seek(file.getSize() - sizeof(Footer) + sizeof(MetaPackInfo) ,SEEK_SET);
+        buf.seek(file.getSize() - sizeof(Footer) + sizeof(MetaPackInfo), SEEK_SET);
         // ignore footer.file_format_version
         DB::readIntBinary(footer.sub_file_stat_offset, buf);
         DB::readIntBinary(footer.sub_file_num, buf);
