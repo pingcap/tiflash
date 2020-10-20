@@ -93,7 +93,6 @@ private:
     void executeRemoteQuery(Pipeline & pipeline);
     void executeImpl(Pipeline & pipeline);
     void executeTS(const tipb::TableScan & ts, Pipeline & pipeline);
-    void executeExchangeClient(const tipb::TableScan & ts, Pipeline & pipeline);
     void executeJoin(const tipb::Join & join, Pipeline & pipeline, SubqueryForSet & right_query);
     void prepareJoin(const google::protobuf::RepeatedPtrField<tipb::Expr> & keys, const DataTypes & key_types, Pipeline & pipeline,
         Names & key_names, bool left, bool is_right_out_join, const google::protobuf::RepeatedPtrField<tipb::Expr> & filters,

@@ -160,7 +160,7 @@ void DAGStringConverter::buildString(const tipb::Executor & executor, std::strin
             return buildLimitString(executor.limit(), ss);
         case tipb::ExecType::TypeExchangeSender:
         case tipb::ExecType::TypeExchangeReceiver:
-            return;
+            throw TiFlashException("Mpp executor is not supported", Errors::Coprocessor::Unimplemented);
     }
 }
 

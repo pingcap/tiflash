@@ -1256,6 +1256,10 @@ void DAGQueryBlockInterpreter::executeRemoteQueryImpl(Pipeline & pipeline,
 // 1. generate the date stream and push it to pipeline.
 // 2. assign the analyzer
 // 3. construct a final projection, even if it's not necessary. just construct it.
+// Talking about projection, it has following rules.
+// 1. if the query block does not contain agg, then the final project is the same as the source Executor
+// 2. if the query block contains agg, then the final project is the same as agg Executor
+// 3. if the cop task may contains more then 1 query block, and the current query block is not the root query block, then the project should add an alias for each column that needs to be projected, something like final_project.emplace_back(col.name, query_block.qb_column_prefix + col.name);
 void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
 {
     if (query_block.isRemoteQuery())
@@ -1271,14 +1275,14 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
-        auto exchange_receiver_stream = std::make_shared<ExchangeReceiverInputStream>(
-            context, query_block.source->exchange_receiver(), dag.getMPPTask()->meta);
+        auto exchange_receiver_stream
+            = std::make_shared<ExchangeReceiverInputStream>(context, query_block.source->exchange_receiver(), dag.getMPPTask()->meta);
         pipeline.streams.push_back(exchange_receiver_stream);
         std::vector<NameAndTypePair> source_columns;
         Block block = exchange_receiver_stream->getHeader();
-        for (const auto & col : block.getColumnsWithTypeAndName()) {
+        for (const auto & col : block.getColumnsWithTypeAndName())
+        {
             source_columns.emplace_back(NameAndTypePair(col.name, col.type));
-            // TODO: Is there an elegant way to process or omit the projection ?
             final_project.emplace_back(std::make_pair(col.name, col.name));
         }
         analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
