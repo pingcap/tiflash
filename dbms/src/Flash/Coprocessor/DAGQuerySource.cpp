@@ -15,12 +15,11 @@ extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
 DAGQuerySource::DAGQuerySource(Context & context_, const std::unordered_map<RegionID, RegionInfo> & regions_,
-    const tipb::DAGRequest & dag_request_, const bool is_batch_cop_, MPPTaskPtr mpp_task_)
+    const tipb::DAGRequest & dag_request_, const bool is_batch_cop_)
     : context(context_),
       regions(regions_),
       dag_request(dag_request_),
-      is_batch_cop(is_batch_cop_),
-      mpp_task(mpp_task_)
+      is_batch_cop(is_batch_cop_)
 {
     if (dag_request.has_root_executor())
     {

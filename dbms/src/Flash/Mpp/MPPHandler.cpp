@@ -114,10 +114,10 @@ grpc::Status MPPHandler::execute(mpp::DispatchTaskResponse * response)
         LOG_DEBUG(log, "begin to register the task " << task->id.toString());
         task_manager->registerTask(task);
 
-        DAGContext dag_context(dag_req);
+        DAGContext dag_context(dag_req, task_request.meta());
         context.setDAGContext(&dag_context);
 
-        DAGQuerySource dag(context, regions, dag_req, true, task);
+        DAGQuerySource dag(context, regions, dag_req, true);
 
         // register tunnels
         MPPTunnelSetPtr tunnel_set = std::make_shared<MPPTunnelSet>();
@@ -165,7 +165,9 @@ grpc::Status MPPHandler::execute(mpp::DispatchTaskResponse * response)
         error.set_msg("fatal error");
         response->set_allocated_error(&error);
     }
-    LOG_INFO(log, "processing dispatch task " << task_request.DebugString() << " is over; the time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms");
+    LOG_INFO(log,
+        "processing dispatch task " << task_request.DebugString() << " is over; the time cost is "
+                                    << std::to_string(stopwatch.elapsedMilliseconds()) << " ms");
     return grpc::Status::OK;
 }
 

@@ -2,6 +2,7 @@
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <kvproto/mpp.pb.h>
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 
@@ -24,6 +25,8 @@ class DAGContext
 {
 public:
     explicit DAGContext(const tipb::DAGRequest & dag_request) : flags(dag_request.flags()), sql_mode(dag_request.sql_mode()){};
+    explicit DAGContext(const tipb::DAGRequest & dag_request, const mpp::TaskMeta & meta_)
+        : flags(dag_request.flags()), sql_mode(dag_request.sql_mode()), task_meta(meta_){};
     std::map<String, ProfileStreamsInfo> & getProfileStreamsMap();
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMapForJoinBuildSide();
     std::unordered_map<UInt32, std::vector<String>> & getQBIdToJoinAliasMap();
@@ -33,7 +36,8 @@ public:
     void handleInvalidTime(const String & msg);
     bool shouldClipToZero();
     const std::vector<std::pair<Int32, String>> & getWarnings() const { return warnings; }
-    
+    const mpp::TaskMeta & getMPPTaskMeta() const { return task_meta; }
+
     size_t final_concurency;
     Int64 compile_time_ns;
 
@@ -44,6 +48,7 @@ private:
     std::vector<std::pair<Int32, String>> warnings;
     UInt64 flags;
     UInt64 sql_mode;
+    mpp::TaskMeta task_meta;
 };
 
 } // namespace DB
