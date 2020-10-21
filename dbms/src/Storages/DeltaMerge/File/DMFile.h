@@ -212,8 +212,8 @@ private:
 
     void initializeSubFileStatIfNeeded(const FileProviderPtr & file_provider);
 
-    void finalize(const FileProviderPtr & file_provider);
-    void finalize(WriteBuffer & buffer);
+    void finalizeForFolderMode(const FileProviderPtr & file_provider);
+    void finalizeForSingleFileMode(WriteBuffer & buffer);
 
     void addSubFileStat(const String & name, UInt64 offset, UInt64 size) { sub_file_stats.emplace(name, SubFileStat{offset, size}); }
 
