@@ -114,9 +114,9 @@ struct TiFlashError
 {
     const std::string error_class;
     const std::string error_code;
-    const std::string description;
-    const std::string workaround;
     const std::string message_template;
+    const std::string workaround;
+    const std::string description;
 
     std::string standardName() const { return "FLASH:" + error_class + ":" + error_code; }
 };
