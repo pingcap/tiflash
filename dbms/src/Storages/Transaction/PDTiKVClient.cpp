@@ -21,6 +21,7 @@ ReadIndexResult::ReadIndexResult(UInt64 read_index_, bool region_unavailable_, b
       lock_info(lock_info_)
 {}
 
+// Client to send read_index request to proxy by store id.
 struct ReadIndexClient : pingcap::kv::RegionClient
 {
     ReadIndexClient(pingcap::kv::Cluster * cluster, const pingcap::kv::RegionVerID & id) : pingcap::kv::RegionClient(cluster, id) {}
@@ -51,14 +52,17 @@ struct ReadIndexClient : pingcap::kv::RegionClient
             if (resp->has_region_error())
             {
                 auto & region_error = resp->region_error();
+                LOG_WARNING(log, "Region " << region_id.toString() << " find error: " << region_error.message());
+
                 if (region_error.has_not_leader())
                 {
+                    // special region error `NotLeader` with empty data to present that proxy can not find leader.
                     throw pingcap::Exception("proxy can not find leader", pingcap::LeaderNotMatch);
                 }
                 else
                 {
-                    LOG_WARNING(log, "Region " << region_id.toString() << " find error: " << region_error.message());
-                    onRegionError(bo, ctx, region_error);
+                    // raise region exception and let upper layer retry immediately.
+                    throw pingcap::Exception("epoch not match", pingcap::RegionEpochNotMatch);
                 }
             }
             else
@@ -69,6 +73,9 @@ struct ReadIndexClient : pingcap::kv::RegionClient
     }
 };
 
+// Sending read_index request to leader directly may make proxy can not catch up lease info with leader in time.
+// Request should be sent to proxy within same store and let proxy try to find leader peer and rebuild lease.
+// Since store id is unique and will not change until destroyed. It's able to send request by store id.
 ReadIndexResult IndexReader::getReadIndex(const pingcap::kv::RegionVerID & region_id,
     const std::string & start_key,
     const std::string & end_key,
