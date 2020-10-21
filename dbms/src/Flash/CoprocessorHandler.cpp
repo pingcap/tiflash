@@ -56,6 +56,8 @@ grpc::Status CoprocessorHandler::execute()
             case COP_REQ_TYPE_DAG:
             {
                 GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_count, type_cop_dag).Increment();
+                GET_METRIC(cop_context.metrics, tiflash_coprocessor_handling_request_count, type_cop_dag).Increment();
+                SCOPE_EXIT({ GET_METRIC(cop_context.metrics, tiflash_coprocessor_handling_request_count, type_cop_dag).Decrement(); });
 
                 tipb::DAGRequest dag_request;
                 dag_request.ParseFromString(cop_request->data());
