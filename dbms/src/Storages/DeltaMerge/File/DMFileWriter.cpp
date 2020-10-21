@@ -113,6 +113,11 @@ void DMFileWriter::write(const Block & block, size_t not_clean_rows)
 
 void DMFileWriter::finalize()
 {
+    if (!single_file_mode)
+    {
+        pack_stat_file->sync();
+    }
+
     for (auto & cd : write_columns)
     {
         finalizeColumn(cd.id, cd.type);
@@ -120,12 +125,12 @@ void DMFileWriter::finalize()
 
     if (single_file_mode)
     {
-        dmfile->finalize(single_file_stream->plain_hashing);
+        dmfile->finalizeForSingleFileMode(single_file_stream->plain_hashing);
         single_file_stream->flush();
     }
     else
     {
-        dmfile->finalize(file_provider);
+        dmfile->finalizeForFolderMode(file_provider);
     }
 }
 

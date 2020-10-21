@@ -200,9 +200,11 @@ void DMFile::writeMeta(const FileProviderPtr & file_provider)
     String meta_path     = metaPath();
     String tmp_meta_path = meta_path + ".tmp";
 
-    WriteBufferFromFileProvider buf(file_provider, tmp_meta_path, encryptionMetaPath(), false, 4096);
-    writeMeta(buf);
-
+    {
+        WriteBufferFromFileProvider buf(file_provider, tmp_meta_path, encryptionMetaPath(), false, 4096);
+        writeMeta(buf);
+        buf.sync();
+    }
     Poco::File(tmp_meta_path).renameTo(meta_path);
 }
 
@@ -320,7 +322,7 @@ void DMFile::initializeSubFileStatIfNeeded(const FileProviderPtr & file_provider
     }
 }
 
-void DMFile::finalize(const FileProviderPtr & file_provider)
+void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider)
 {
     writeMeta(file_provider);
     if (unlikely(status != Status::WRITING))
@@ -336,7 +338,7 @@ void DMFile::finalize(const FileProviderPtr & file_provider)
     old_file.renameTo(new_path);
 }
 
-void DMFile::finalize(WriteBuffer & buffer)
+void DMFile::finalizeForSingleFileMode(WriteBuffer & buffer)
 {
     Footer footer;
     std::tie(footer.meta_pack_info.meta_offset, footer.meta_pack_info.meta_size)           = writeMeta(buffer);
