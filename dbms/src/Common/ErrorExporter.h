@@ -26,10 +26,8 @@ private:
     void flush();
 };
 
-const char * ErrorExporter::ERROR_TEMPLATE = "[error.%s]\n"
-                                             "error = '''%s'''\n"
-                                             "description = '''%s'''\n"
-                                             "workaround = '''%s'''\n\n";
+const char * ErrorExporter::ERROR_TEMPLATE = "[\"%s\"]\n"
+                                             "error = '''\n%s\n'''\n\n";
 
 void ErrorExporter::writeError(const TiFlashError & error)
 {
