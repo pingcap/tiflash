@@ -305,6 +305,7 @@ public:
                      const Context &               context);
 
     const ColumnDefines & getTableColumns() const { return original_table_columns; }
+    ColumnDefinesPtr      getPhysicalColumns() const { return store_columns; }
     const ColumnDefine &  getHandle() const { return original_table_handle_define; }
     BlockPtr              getHeader() const;
     const Settings &      getSettings() const { return settings; }

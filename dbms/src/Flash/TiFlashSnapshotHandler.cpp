@@ -29,9 +29,11 @@ PreHandledTiFlashSnapshot::~PreHandledTiFlashSnapshot()
 
 struct TiFlashSnapshot
 {
-    TiFlashSnapshot(DM::ColumnDefines && write_columns_) : write_columns{std::move(write_columns_)} {}
-    Pipeline pipeline;
+    TiFlashSnapshot(DM::ColumnDefines write_columns_, BlockInputStreamPtr stream_)
+        : write_columns{std::move(write_columns_)}, stream{std::move(stream_)}
+    {}
     DM::ColumnDefines write_columns;
+    BlockInputStreamPtr stream;
     ~TiFlashSnapshot();
 };
 
@@ -99,33 +101,26 @@ TiFlashSnapshot * TiFlashSnapshotHandler::genTiFlashSnapshot(TMTContext * tmt, u
         LOG_WARNING(log,
             "genTiFlashSnapshot can not get table for region:" + region->toString() + " with table id: " + DB::toString(table_id)
                 + ", ignored");
-        return new TiFlashSnapshot(DM::ColumnDefines{});
+        return new TiFlashSnapshot(DM::ColumnDefines{}, nullptr);
     }
 
     const Settings & settings = tmt->getContext().getSettingsRef();
     auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
     auto dm_store = dm_storage->getStore();
 
-    DM::ColumnDefines columns_to_read;
-    columns_to_read.push_back(DM::getExtraHandleColumnDefine(dm_storage->isCommonHandle()));
-    columns_to_read.push_back(DM::getVersionColumnDefine());
-    columns_to_read.push_back(DM::getTagColumnDefine());
-    auto all_columns = dm_store->getTableColumns();
-    for (size_t i = 0; i < all_columns.size(); ++i)
-    {
-        auto & c = all_columns[i];
-        if (c.id != EXTRA_HANDLE_COLUMN_ID && c.id != VERSION_COLUMN_ID && c.id != TAG_COLUMN_ID)
-            columns_to_read.push_back(c);
-    }
-
     auto range
         = DM::RowKeyRange::fromRegionRange(region->getRange(), table_id, dm_storage->isCommonHandle(), dm_store->getRowKeyColumnSize());
-    auto streams = dm_store->read(
-        tmt->getContext(), settings, columns_to_read, {range}, 1, DM::MAX_UINT64, DM::EMPTY_FILTER, DEFAULT_BLOCK_SIZE, {}, true);
-    auto * snapshot = new TiFlashSnapshot(std::move(columns_to_read));
-    snapshot->pipeline.streams = streams;
-    auto table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
-    snapshot->pipeline.transform([&](auto & stream) { stream->addTableLock(table_lock); });
+    auto streams = dm_store->read(tmt->getContext(),
+        settings,
+        *dm_store->getPhysicalColumns(),
+        {range},
+        1,
+        DM::MAX_UINT64,
+        DM::EMPTY_FILTER,
+        DEFAULT_BLOCK_SIZE,
+        {},
+        true);
+    auto * snapshot = new TiFlashSnapshot(*dm_store->getPhysicalColumns(), streams.at(0));
     return snapshot;
 }
 
@@ -137,7 +132,7 @@ SerializeTiFlashSnapshotRes TiFlashSnapshotHandler::serializeTiFlashSnapshotInto
     auto snapshot_file = DM::DMFile::create(path);
     uint64_t key_count = 0;
     DM::DMFileBlockOutputStream dst_stream(tmt->getContext(), snapshot_file, snapshot->write_columns);
-    auto & src_stream = snapshot->pipeline.firstStream();
+    auto & src_stream = snapshot->stream;
     src_stream->readPrefix();
     dst_stream.writePrefix();
     while (auto block = src_stream->read())
