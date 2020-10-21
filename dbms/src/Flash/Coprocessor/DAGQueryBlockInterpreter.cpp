@@ -154,6 +154,8 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
                     throw TiFlashException("TiFlash server is terminating", Errors::Coprocessor::Internal);
                 // By now, RegionException will contain all region id of MvccQueryInfo, which is needed by CHSpark.
                 // When meeting RegionException, we can let MakeRegionQueryInfos to check in next loop.
+                if (e.unavailable_region != InvalidRegionID)
+                    force_retry.emplace(e.unavailable_region);
             }
             catch (DB::Exception & e)
             {
