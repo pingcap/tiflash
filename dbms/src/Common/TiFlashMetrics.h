@@ -22,6 +22,9 @@ namespace DB
     M(tiflash_coprocessor_request_count, "Total number of request", Counter, F(type_batch, {"type", "batch"}),                            \
         F(type_batch_cop, {"type", "batch_cop"}), F(type_cop, {"type", "cop"}), F(type_cop_dag, {"type", "cop_dag"}),                     \
         F(type_super_batch, {"type", "super_batch"}), F(type_super_batch_cop_dag, {"type", "super_batch_cop_dag"}))                       \
+    M(tiflash_coprocessor_handling_request_count, "Number of handling request", Gauge, F(type_batch, {"type", "batch"}),                  \
+        F(type_batch_cop, {"type", "batch_cop"}), F(type_cop, {"type", "cop"}), F(type_cop_dag, {"type", "cop_dag"}),                     \
+        F(type_super_batch, {"type", "super_batch"}), F(type_super_batch_cop_dag, {"type", "super_batch_cop_dag"}))                       \
     M(tiflash_coprocessor_executor_count, "Total number of each executor", Counter, F(type_ts, {"type", "table_scan"}),                   \
         F(type_sel, {"type", "selection"}), F(type_agg, {"type", "aggregation"}), F(type_topn, {"type", "top_n"}),                        \
         F(type_limit, {"type", "limit"}), F(type_join, {"type", "join"}))                                                                 \
