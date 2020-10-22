@@ -31,12 +31,14 @@ public:
     };
 
 public:
-    RegionException(std::vector<RegionID> && region_ids_, RegionReadStatus status_)
-        : Exception(RegionReadStatusString(status_)), region_ids(region_ids_), status(status_)
+    RegionException(std::vector<RegionID> && region_ids_, RegionReadStatus status_, RegionID unavailable_region_ = InvalidRegionID)
+        : Exception(RegionReadStatusString(status_)), region_ids(region_ids_), status(status_), unavailable_region(unavailable_region_)
     {}
 
     std::vector<RegionID> region_ids;
     RegionReadStatus status;
+    /// Region could be found with correct epoch, but unavailable (e.g. its lease in proxy has not been built with leader).
+    RegionID unavailable_region;
 };
 
 } // namespace DB
