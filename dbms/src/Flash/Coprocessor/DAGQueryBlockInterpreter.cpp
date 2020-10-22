@@ -376,6 +376,8 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
                     throw TiFlashException("TiFlash server is terminating", Errors::Coprocessor::Internal);
                 // By now, RegionException will contain all region id of MvccQueryInfo, which is needed by CHSpark.
                 // When meeting RegionException, we can let MakeRegionQueryInfos to check in next loop.
+                if (e.unavailable_region != InvalidRegionID)
+                    force_retry.emplace(e.unavailable_region);
             }
             catch (DB::Exception & e)
             {
@@ -1039,7 +1041,8 @@ void DAGQueryBlockInterpreter::executeAggregation(Pipeline & pipeline, const Exp
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.streams.size() > 1)
     {
-        pipeline.firstStream() = std::make_shared<ParallelAggregatingBlockInputStream>(pipeline.streams, pipeline.stream_with_non_joined_data, params, context.getFileProvider(), true, max_streams,
+        pipeline.firstStream() = std::make_shared<ParallelAggregatingBlockInputStream>(pipeline.streams,
+            pipeline.stream_with_non_joined_data, params, context.getFileProvider(), true, max_streams,
             settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
                                                                 : static_cast<size_t>(settings.max_threads));
 

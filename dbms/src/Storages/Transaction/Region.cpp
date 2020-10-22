@@ -471,7 +471,7 @@ ImutRegionRangePtr Region::getRange() const { return meta.getRange(); }
 ReadIndexResult Region::learnerRead()
 {
     if (index_reader != nullptr)
-        return index_reader->getReadIndex(meta.getRegionVerID());
+        return index_reader->getReadIndex(meta.getRegionVerID(), meta.storeId());
     return {};
 }
 
@@ -479,8 +479,7 @@ TerminateWaitIndex Region::waitIndex(UInt64 index, const std::atomic_bool & term
 {
     if (index_reader != nullptr)
     {
-        // if index 6 is with election cmd, can be ignored directly without waiting.
-        if (index != 1 + RAFT_INIT_LOG_INDEX && !meta.checkIndex(index))
+        if (!meta.checkIndex(index))
         {
             LOG_DEBUG(log, toString() << " need to wait learner index: " << index);
             if (meta.waitIndex(index, terminated))
@@ -577,13 +576,6 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const Timestamp 
 
 TiFlashApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt)
 {
-    if (index == 1 + RAFT_INIT_LOG_INDEX)
-    {
-        // optimize: if index is 6, cmd should be empty.
-        if (cmds.len)
-            throw Exception(std::string(__PRETTY_FUNCTION__) + ": index 6 should be with empty cmd list", ErrorCodes::LOGICAL_ERROR);
-    }
-
     if (index <= appliedIndex())
     {
         LOG_TRACE(log, toString() << " ignore outdated raft log [term: " << term << ", index: " << index << "]");
