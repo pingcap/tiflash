@@ -84,6 +84,7 @@ void DMFileWriter::write(const Block & block, size_t not_clean_rows)
 
 void DMFileWriter::finalize()
 {
+    pack_stat_file.sync();
     for (auto & cd : write_columns)
     {
         finalizeColumn(cd.id, *(cd.type));
