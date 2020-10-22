@@ -95,11 +95,14 @@ void DMFile::writeMeta(const FileProviderPtr & file_provider)
     String meta_path     = metaPath();
     String tmp_meta_path = meta_path + ".tmp";
 
-    WriteBufferFromFileProvider buf(file_provider, tmp_meta_path, encryptionMetaPath(), false, 4096);
-    writeString("DTFile format: ", buf);
-    writeIntText(static_cast<std::underlying_type_t<DMFileVersion>>(DMFileVersion::CURRENT_VERSION), buf);
-    writeString("\n", buf);
-    writeText(column_stats, CURRENT_VERSION, buf);
+    {
+        WriteBufferFromFileProvider buf(file_provider, tmp_meta_path, encryptionMetaPath(), false, 4096);
+        writeString("DTFile format: ", buf);
+        writeIntText(static_cast<std::underlying_type_t<DMFileVersion>>(DMFileVersion::CURRENT_VERSION), buf);
+        writeString("\n", buf);
+        writeText(column_stats, CURRENT_VERSION, buf);
+        buf.sync();
+    }
 
     Poco::File(tmp_meta_path).renameTo(meta_path);
 }
