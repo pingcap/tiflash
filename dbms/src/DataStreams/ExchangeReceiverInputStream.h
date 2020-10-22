@@ -73,8 +73,22 @@ class ExchangeReceiverInputStream : public IProfilingBlockInputStream
             return;
         for (int i = 0; i < chunks_size; i++)
         {
+            Block block;
             const tipb::Chunk & chunk = resp.chunks(i);
-            Block block = CHBlockChunkCodec().decode(chunk, fake_schema);
+            switch (resp.encode_type())
+            {
+                case tipb::EncodeType::TypeCHBlock:
+                    block = CHBlockChunkCodec().decode(chunk, fake_schema);
+                    break;
+                case tipb::EncodeType::TypeChunk:
+                    block = ArrowChunkCodec().decode(chunk, fake_schema);
+                    break;
+                case tipb::EncodeType::TypeDefault:
+                    block = DefaultChunkCodec().decode(chunk, fake_schema);
+                    break;
+                default:
+                    throw Exception("Unsupported encode type", ErrorCodes::LOGICAL_ERROR);
+            }
             std::lock_guard<std::mutex> lk(rw_mu);
             q.push(std::move(block));
             cv.notify_one();
