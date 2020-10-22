@@ -12,13 +12,14 @@
 namespace DB
 {
 
-void throwRetryRegion(const MvccQueryInfo::RegionsQueryInfo & regions_info, RegionException::RegionReadStatus status)
+void throwRetryRegion(const MvccQueryInfo::RegionsQueryInfo & regions_info, RegionException::RegionReadStatus status,
+    RegionID unavailable_region = InvalidRegionID)
 {
     std::vector<RegionID> region_ids;
     region_ids.reserve(regions_info.size());
     for (const auto & info : regions_info)
         region_ids.push_back(info.region_id);
-    throw RegionException(std::move(region_ids), status);
+    throw RegionException(std::move(region_ids), status, unavailable_region);
 }
 
 /// Check whether region is invalid or not.
@@ -85,6 +86,7 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
     const size_t num_regions = regions_info.size();
     const size_t batch_size = num_regions / concurrent_num;
     std::atomic_uint8_t region_status = RegionException::RegionReadStatus::OK;
+    std::atomic_uint64_t unavailable_region{InvalidRegionID};
     const auto batch_wait_index = [&, resolve_locks, start_ts](const size_t region_begin_idx) -> void {
         const size_t region_end_idx = std::min(region_begin_idx + batch_size, num_regions);
         for (size_t region_idx = region_begin_idx; region_idx < region_end_idx; ++region_idx)
@@ -121,6 +123,7 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
             {
                 // client-c detect region removed. Set region_status and continue.
                 region_status = RegionException::RegionReadStatus::NOT_FOUND;
+                unavailable_region = region_id;
                 continue;
             }
             else if (read_index_result.region_epoch_not_match)
@@ -185,7 +188,7 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
 
     // Check if any region is invalid, TiDB / TiSpark should refresh region cache and retry.
     if (region_status != RegionException::RegionReadStatus::OK)
-        throwRetryRegion(regions_info, static_cast<RegionException::RegionReadStatus>(region_status.load()));
+        throwRetryRegion(regions_info, static_cast<RegionException::RegionReadStatus>(region_status.load()), unavailable_region);
 
     auto end_time = Clock::now();
     LOG_DEBUG(log,

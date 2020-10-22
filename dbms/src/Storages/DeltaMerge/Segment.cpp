@@ -1,5 +1,7 @@
+
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/ConcatBlockInputStream.h>
+#include <DataStreams/EmptyBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Storages/DeltaMerge/DMContext.h>
@@ -77,7 +79,7 @@ DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
                              UInt64                      file_id,
                              const String &              parent_path)
 {
-    auto   dmfile        = DMFile::create(file_id, parent_path);
+    auto   dmfile        = DMFile::create(file_id, parent_path, dm_context.db_context.getSettingsRef().dt_enable_single_file_mode_dmfile);
     auto   output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.db_context, dmfile, *dm_context.store_columns);
     auto * mvcc_stream   = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(input_stream.get());
 
@@ -328,12 +330,17 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
         return stream;
     };
 
+    BlockInputStreamPtr stream;
     if (read_ranges.size() == 1)
     {
         LOG_TRACE(log,
                   "Segment [" << DB::toString(segment_id) << "] is read by max_version: " << max_version << ", 1"
                               << " range: " << toString(read_ranges));
-        return create_stream(rowkey_range.shrink(read_ranges[0]));
+        RowKeyRange real_range = rowkey_range.shrink(read_ranges[0]);
+        if (real_range.none())
+            stream = std::make_shared<EmptyBlockInputStream>(toEmptyBlock(read_info.read_columns));
+        else
+            stream = create_stream(real_range);
     }
     else
     {
@@ -349,8 +356,12 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
                   "Segment [" << DB::toString(segment_id) << "] is read by max_version: " << max_version << ", "
                               << DB::toString(streams.size()) << " ranges: " << toString(read_ranges));
 
-        return std::make_shared<ConcatBlockInputStream>(streams);
+        if (streams.empty())
+            stream = std::make_shared<EmptyBlockInputStream>(toEmptyBlock(read_info.read_columns));
+        else
+            stream = std::make_shared<ConcatBlockInputStream>(streams);
     }
+    return stream;
 }
 
 BlockInputStreamPtr Segment::getInputStream(const DMContext &     dm_context,

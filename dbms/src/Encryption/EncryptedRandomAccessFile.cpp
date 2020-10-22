@@ -1,4 +1,3 @@
-#include <Common/Exception.h>
 #include <Encryption/EncryptedRandomAccessFile.h>
 #include <fcntl.h>
 #include <unistd.h>

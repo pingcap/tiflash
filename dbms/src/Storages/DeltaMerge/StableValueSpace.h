@@ -48,11 +48,12 @@ public:
 
     void recordRemovePacksPages(WriteBatches & wbs) const;
 
+    struct Snapshot;
+    using SnapshotPtr = std::shared_ptr<Snapshot>;
+
     struct Snapshot : public std::enable_shared_from_this<Snapshot>, private boost::noncopyable
     {
-        Snapshot() : log(&Logger::get("StableValueSpace::Snapshot")) {}
         StableValueSpacePtr stable;
-        ColumnCachePtrs     column_caches;
 
         PageId id;
         UInt64 valid_rows;
@@ -60,6 +61,30 @@ public:
 
         bool   is_common_handle;
         size_t rowkey_column_size;
+
+        /// TODO: The members below are not actually snapshots, they should not be here.
+
+        ColumnCachePtrs column_caches;
+
+        Snapshot() : log(&Logger::get("StableValueSpace::Snapshot")) {}
+
+        SnapshotPtr clone()
+        {
+            auto c                = std::make_shared<Snapshot>();
+            c->stable             = stable;
+            c->id                 = id;
+            c->valid_rows         = valid_rows;
+            c->valid_bytes        = valid_bytes;
+            c->is_common_handle   = is_common_handle;
+            c->rowkey_column_size = rowkey_column_size;
+
+            for (size_t i = 0; i < column_caches.size(); i++)
+            {
+                auto column_cache = std::make_shared<ColumnCache>();
+                c->column_caches.emplace_back(column_cache);
+            }
+            return c;
+        }
 
         PageId getId() { return id; }
 
@@ -91,7 +116,6 @@ public:
     private:
         Logger * log;
     };
-    using SnapshotPtr = std::shared_ptr<Snapshot>;
 
     SnapshotPtr createSnapshot();
 

@@ -9,10 +9,6 @@
 
 namespace DB
 {
-namespace ErrorCodes
-{
-extern const int NOT_IMPLEMENTED;
-} // namespace ErrorCodes
 
 RandomAccessFilePtr FileProvider::newRandomAccessFile(const String & file_path_, const EncryptionPath & encryption_path_, int flags) const
 {
@@ -52,7 +48,7 @@ void FileProvider::deleteDirectory(const String & dir_path_, bool dir_path_as_en
     {
         if (dir_path_as_encryption_path)
         {
-            key_manager->deleteFile(dir_path_);
+            key_manager->deleteFile(dir_path_, true);
             dir_file.remove(recursive);
         }
         else if (recursive)
@@ -63,7 +59,7 @@ void FileProvider::deleteDirectory(const String & dir_path_, bool dir_path_as_en
             {
                 if (file.isFile())
                 {
-                    key_manager->deleteFile(file.path());
+                    key_manager->deleteFile(file.path(), true);
                 }
                 else if (file.isDirectory())
                 {
@@ -95,7 +91,7 @@ void FileProvider::deleteRegularFile(const String & file_path_, const Encryption
             throw DB::TiFlashException(
                     "File: " + data_file.path() + " is not a regular file", Errors::Encryption::Internal);
         }
-        key_manager->deleteFile(encryption_path_.full_path);
+        key_manager->deleteFile(encryption_path_.full_path, true);
         data_file.remove(false);
     }
 }
@@ -108,9 +104,9 @@ void FileProvider::createEncryptionInfo(const EncryptionPath & encryption_path_)
     }
 }
 
-void FileProvider::deleteEncryptionInfo(const EncryptionPath & encryption_path_) const
+void FileProvider::deleteEncryptionInfo(const EncryptionPath & encryption_path_, bool throw_on_error) const
 {
-    key_manager->deleteFile(encryption_path_.full_path);
+    key_manager->deleteFile(encryption_path_.full_path, throw_on_error);
 }
 
 void FileProvider::linkEncryptionInfo(const EncryptionPath & src_encryption_path_, const EncryptionPath & dst_encryption_path_) const

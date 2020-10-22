@@ -37,4 +37,27 @@ struct MarkInCompressedFile
 using MarksInCompressedFile = PODArray<MarkInCompressedFile>;
 using MarksInCompressedFilePtr = std::shared_ptr<MarksInCompressedFile>;
 
+struct MarkWithSizeInCompressedFile
+{
+    MarkInCompressedFile mark;
+    size_t mark_size;
+
+    bool operator==(const MarkWithSizeInCompressedFile & rhs) const
+    {
+        return std::tie(mark, mark_size) == std::tie(rhs.mark, rhs.mark_size);
+    }
+    bool operator!=(const MarkWithSizeInCompressedFile & rhs) const
+    {
+        return !(*this == rhs);
+    }
+
+    String toString() const
+    {
+        return "(" + mark.toString() + "," + DB::toString(mark_size) + ")";
+    }
+};
+
+using MarkWithSizesInCompressedFile = PODArray<MarkWithSizeInCompressedFile>;
+using MarkWithSizesInCompressedFilePtr = std::shared_ptr<MarkWithSizesInCompressedFile>;
+
 }

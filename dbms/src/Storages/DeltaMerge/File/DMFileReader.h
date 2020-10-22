@@ -30,8 +30,20 @@ public:
                size_t         max_read_buffer_size,
                Logger *       log);
 
-        double                   avg_size_hint;
-        MarksInCompressedFilePtr marks;
+        bool                             single_file_mode;
+        double                           avg_size_hint;
+        MarksInCompressedFilePtr         marks;
+        MarkWithSizesInCompressedFilePtr mark_with_sizes;
+
+        size_t getOffsetInFile(size_t i) const
+        {
+            return single_file_mode ? (*mark_with_sizes)[i].mark.offset_in_compressed_file : (*marks)[i].offset_in_compressed_file;
+        }
+
+        size_t getOffsetInDecompressedBlock(size_t i) const
+        {
+            return single_file_mode ? (*mark_with_sizes)[i].mark.offset_in_decompressed_block : (*marks)[i].offset_in_decompressed_block;
+        }
 
         std::unique_ptr<CompressedReadBufferFromFileProvider> buf;
     };
@@ -67,7 +79,12 @@ public:
 private:
     bool shouldSeek(size_t pack_id);
 
-    void readFromDisk(ColumnDefine & column_define, MutableColumnPtr & column, size_t start_pack_id, size_t read_rows, size_t skip_packs);
+    void readFromDisk(ColumnDefine &     column_define,
+                      MutableColumnPtr & column,
+                      size_t             start_pack_id,
+                      size_t             read_rows,
+                      size_t             skip_packs,
+                      bool               force_seek);
 
 private:
     DMFilePtr     dmfile;
@@ -99,6 +116,8 @@ private:
     size_t next_pack_id = 0;
 
     FileProviderPtr file_provider;
+
+    bool single_file_mode;
 
     Logger * log;
 };

@@ -206,9 +206,10 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
         PageStorage::PathAndIdsVec path_and_ids_vec;
         for (auto & root_path : extra_paths.listPaths())
         {
-            auto & path_and_ids           = path_and_ids_vec.emplace_back();
-            path_and_ids.first            = root_path;
-            auto file_ids_in_current_path = DMFile::listAllInPath(root_path + "/" + STABLE_FOLDER_NAME, /* can_gc= */ true);
+            auto & path_and_ids = path_and_ids_vec.emplace_back();
+            path_and_ids.first  = root_path;
+            auto file_ids_in_current_path
+                = DMFile::listAllInPath(global_context.getFileProvider(), root_path + "/" + STABLE_FOLDER_NAME, /* can_gc= */ true);
             for (auto id : file_ids_in_current_path)
                 path_and_ids.second.insert(id);
         }
@@ -285,6 +286,8 @@ void DeltaMergeStore::drop()
 {
     // Remove all background task first
     shutdown();
+
+    LOG_INFO(log, "Drop DeltaMerge removing data from filesystem [" << db_name << "." << table_name << "]");
     storage_pool.drop();
     for (auto & [end, segment] : segments)
     {
@@ -294,9 +297,9 @@ void DeltaMergeStore::drop()
     // Drop data in extra path (stable data by default)
     extra_paths.drop(true);
     // Check if path(delta && meta by default) is covered by extra_paths, if not, drop it.
-    Poco::File dir(path);
-    if (dir.exists())
+    if (Poco::File dir(path); dir.exists())
         global_context.getFileProvider()->deleteDirectory(path, false, true);
+    LOG_INFO(log, "Drop DeltaMerge done [" << db_name << "." << table_name << "]");
 
 #if USE_TCMALLOC
     // Reclaim memory.
@@ -310,13 +313,13 @@ void DeltaMergeStore::shutdown()
     if (!shutdown_called.compare_exchange_strong(v, true))
         return;
 
-    LOG_DEBUG(log, "Shutdown DeltaMerge Store start [" << db_name << "." << table_name << "]");
+    LOG_TRACE(log, "Shutdown DeltaMerge start [" << db_name << "." << table_name << "]");
     background_pool.removeTask(gc_handle);
     gc_handle = nullptr;
 
     background_pool.removeTask(background_task_handle);
     background_task_handle = nullptr;
-    LOG_DEBUG(log, "Shutdown DeltaMerge Store start [" << db_name << "." << table_name << "]");
+    LOG_TRACE(log, "Shutdown DeltaMerge end [" << db_name << "." << table_name << "]");
 }
 
 DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings)
@@ -728,35 +731,9 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
 
     auto dm_context = newDMContext(db_context, db_settings);
 
-    SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, read_segments);
+    SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments);
 
     LOG_DEBUG(log, "Read create segment snapshot done");
-
-#if 0
-    if (log->trace())
-    {
-        auto ranges_to_string = [](const HandleRanges & ranges) -> String {
-            std::stringstream ss;
-            bool              is_first = true;
-            ss << "[";
-            for (const auto & range : ranges)
-            {
-                if (!is_first)
-                    ss << ",";
-                is_first = false;
-                ss << range.toString();
-            }
-            ss << "]";
-            return ss.str();
-        };
-        for (const auto & task : tasks)
-        {
-            LOG_TRACE(log,
-                      "Read range: " << ranges_to_string(sorted_ranges) << " -> segment: " << task->segment->info()
-                                     << " range: " << ranges_to_string(task->ranges));
-        }
-    }
-#endif
 
     auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
         this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read);
@@ -1564,7 +1541,7 @@ void DeltaMergeStore::restoreExtraPathCapacity()
     for (const auto & root_path : extra_paths.listPaths())
     {
         auto parent_path = root_path + "/" + STABLE_FOLDER_NAME;
-        for (auto & file_id : DMFile::listAllInPath(parent_path, false))
+        for (auto & file_id : DMFile::listAllInPath(global_context.getFileProvider(), parent_path, false))
         {
             auto dmfile = DMFile::restore(global_context.getFileProvider(), file_id, /* ref_id= */ 0, parent_path, true);
             extra_paths.addDMFile(file_id, dmfile->getBytesOnDisk(), root_path);
@@ -1717,7 +1694,10 @@ SegmentStats DeltaMergeStore::getSegmentStats()
     return stats;
 }
 
-SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(DMContext & dm_context, const RowKeyRanges & sorted_ranges, const SegmentIdSet &  read_segments)
+SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(DMContext &          dm_context,
+                                                       const RowKeyRanges & sorted_ranges,
+                                                       size_t               expected_tasks_count,
+                                                       const SegmentIdSet & read_segments)
 {
     SegmentReadTasks tasks;
 
@@ -1771,7 +1751,22 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(DMContext & dm_context, c
         }
     }
 
-    return tasks;
+    /// Try to make task number larger or equal to expected_tasks_count.
+    auto   result_tasks = SegmentReadTask::trySplitReadTasks(tasks, expected_tasks_count);
+
+    size_t total_ranges = 0;
+    for (auto & task : result_tasks)
+    {
+        /// Merge continuously ranges.
+        task->mergeRanges();
+        total_ranges += task->ranges.size();
+    }
+
+    LOG_DEBUG(log,
+              __FUNCTION__ << " [sorted_ranges: " << sorted_ranges.size() << "] [tasks before split: " << tasks.size()
+                           << "] [tasks final : " << result_tasks.size() << "] [ranges final: " << total_ranges << "]");
+
+    return result_tasks;
 }
 
 } // namespace DM
