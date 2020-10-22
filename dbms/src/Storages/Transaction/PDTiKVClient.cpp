@@ -1,5 +1,3 @@
-#include <Common/DNSCache.h>
-#include <Common/Exception.h>
 #include <Storages/Transaction/PDTiKVClient.h>
 
 namespace DB
@@ -11,18 +9,71 @@ extern const int LOGICAL_ERROR;
 }
 
 constexpr int readIndexMaxBackoff = 10000;
-constexpr int maxRetryTime = 3;
 Timestamp PDClientHelper::cached_gc_safe_point = 0;
 std::chrono::time_point<std::chrono::system_clock> PDClientHelper::safe_point_last_update_time;
 
-
 IndexReader::IndexReader(KVClusterPtr cluster_) : cluster(cluster_), log(&Logger::get("pingcap.index_read")) {}
 
-ReadIndexResult IndexReader::getReadIndex(const pingcap::kv::RegionVerID & region_id)
+// Client to send read_index request to proxy by store id.
+struct ReadIndexClient : pingcap::kv::RegionClient
+{
+    ReadIndexClient(pingcap::kv::Cluster * cluster, const pingcap::kv::RegionVerID & id) : pingcap::kv::RegionClient(cluster, id) {}
+    auto sendReqToRegion(pingcap::kv::Backoffer & bo,
+        std::shared_ptr<kvrpcpb::ReadIndexRequest>
+            request,
+        const metapb::Region & meta,
+        const metapb::Peer & peer,
+        int timeout = pingcap::kv::dailTimeout)
+    {
+        pingcap::kv::RpcCall<kvrpcpb::ReadIndexRequest> rpc(request);
+        for (;;)
+        {
+            const auto store = cluster->region_cache->getStore(bo, peer.store_id());
+            const auto & store_addr = store.peer_addr.empty() ? store.addr : store.peer_addr;
+            auto ctx = std::make_shared<pingcap::kv::RPCContext>(region_id, meta, peer, store_addr);
+            rpc.setCtx(ctx);
+            try
+            {
+                cluster->rpc_client->sendRequest(store_addr, rpc, timeout);
+            }
+            catch (const pingcap::Exception & e)
+            {
+                onSendFail(bo, e, ctx);
+                continue;
+            }
+            auto resp = rpc.getResp();
+            if (resp->has_region_error())
+            {
+                auto & region_error = resp->region_error();
+                LOG_WARNING(log, "Region " << region_id.toString() << " find error: " << region_error.message());
+
+                if (region_error.has_not_leader())
+                {
+                    // special region error `NotLeader` with empty data to present that proxy can not find leader.
+                    throw pingcap::Exception("proxy can not find leader", pingcap::LeaderNotMatch);
+                }
+                else
+                {
+                    // raise region exception and let upper layer retry immediately.
+                    throw pingcap::Exception("epoch not match", pingcap::RegionEpochNotMatch);
+                }
+            }
+            else
+            {
+                return resp;
+            }
+        }
+    }
+};
+
+// Sending read_index request to leader directly may make proxy can not catch up lease info with leader in time.
+// Request should be sent to proxy within same store and let proxy try to find leader peer and rebuild lease.
+// Since store id is unique and will not change until destroyed. It's able to send request by store id.
+ReadIndexResult IndexReader::getReadIndex(const pingcap::kv::RegionVerID & region_id, UInt64 store_id)
 {
     pingcap::kv::Backoffer bo(readIndexMaxBackoff);
     auto request = std::make_shared<kvrpcpb::ReadIndexRequest>();
-    int retry_time = 0;
+
     for (;;)
     {
         pingcap::kv::RegionPtr region_ptr;
@@ -35,37 +86,49 @@ ReadIndexResult IndexReader::getReadIndex(const pingcap::kv::RegionVerID & regio
             LOG_WARNING(log, "Get Region By id " << region_id.toString() << " failed, error message is " << e.displayText());
             if (e.code() == pingcap::ErrorCodes::RegionUnavailable)
             {
-                LOG_WARNING(log, "Region " << region_id.toString() << " not found.");
+                LOG_WARNING(log, "Region " << region_id.toString() << " not found");
                 return {0, true, false};
             }
             bo.backoff(pingcap::kv::boPDRPC, e);
             continue;
         }
-        if (region_ptr == nullptr)
+        const metapb::Peer * peer_ptr = nullptr;
+        if (region_ptr)
         {
-            LOG_WARNING(log, "Region " << region_id.toString() << " not found.");
+            if (region_ptr->peer.store_id() == store_id) // to be compatible with tiflash directly writing
+                peer_ptr = &region_ptr->peer;
+            else
+            {
+                for (const auto & peer : region_ptr->learners)
+                {
+                    if (peer.store_id() == store_id)
+                    {
+                        peer_ptr = &peer;
+                        break;
+                    }
+                }
+            }
+        }
+        // peer is strongly dependent on region version
+        if (region_ptr == nullptr || peer_ptr == nullptr)
+        {
+            LOG_WARNING(log, "Region " << region_id.toString() << " not found");
             return {0, true, false};
         }
         auto region_id = region_ptr->verID();
 
-        auto region_client = pingcap::kv::RegionClient(cluster.get(), region_id);
+        auto read_index_client = ReadIndexClient(cluster.get(), region_id);
 
         try
         {
-            UInt64 index = region_client.sendReqToRegion(bo, request)->read_index();
-            return {index, false, false};
+            auto resp = read_index_client.sendReqToRegion(bo, request, region_ptr->meta, *peer_ptr);
+            return {resp->read_index(), false, false};
         }
         catch (pingcap::Exception & e)
         {
-            LOG_WARNING(log, "Region " << region_id.toString() << " get index failed, error message is :" << e.displayText());
-            retry_time++;
-            // We try few times, may be cost several seconds, if it still fails, we should not waste too much time and report to tidb as soon.
-            if (retry_time < maxRetryTime)
-            {
-                LOG_INFO(log, "read index retry");
-                bo.backoff(pingcap::kv::boTiKVRPC, e);
-                continue;
-            }
+            LOG_WARNING(log, "Region " << region_id.toString() << " get index failed, error message is: " << e.displayText());
+            if (e.code() == pingcap::LeaderNotMatch)
+                return {0, true, false};
             return {0, false, true};
         }
     }
