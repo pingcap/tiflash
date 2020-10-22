@@ -1,5 +1,6 @@
 #include <Common/FailPoint.h>
 #include <Common/TiFlashException.h>
+#include <Common/TiFlashMetrics.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/CoprocessorBlockInputStream.h>
@@ -154,6 +155,8 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
                     throw TiFlashException("TiFlash server is terminating", Errors::Coprocessor::Internal);
                 // By now, RegionException will contain all region id of MvccQueryInfo, which is needed by CHSpark.
                 // When meeting RegionException, we can let MakeRegionQueryInfos to check in next loop.
+                if (e.unavailable_region != InvalidRegionID)
+                    force_retry.emplace(e.unavailable_region);
             }
             catch (DB::Exception & e)
             {
@@ -592,7 +595,8 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
         throw TiFlashException("Unknown join type in dag request", Errors::Coprocessor::BadRequest);
     ASTTableJoin::Kind kind = join_type_it->second;
     ASTTableJoin::Strictness strictness = ASTTableJoin::Strictness::All;
-    if (join.join_type() == tipb::JoinType::TypeSemiJoin || join.join_type() == tipb::JoinType::TypeAntiSemiJoin)
+    bool is_semi_join = join.join_type() == tipb::JoinType::TypeSemiJoin || join.join_type() == tipb::JoinType::TypeAntiSemiJoin;
+    if (is_semi_join)
         strictness = ASTTableJoin::Strictness::Any;
 
     BlockInputStreams left_streams;
@@ -617,19 +621,28 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     }
 
     std::vector<NameAndTypePair> join_output_columns;
+    std::vector<NameAndTypePair> columns_for_other_join_filter;
+    bool make_nullable = join.join_type() == tipb::JoinType::TypeRightOuterJoin;
     for (auto const & p : input_streams_vec[0][0]->getHeader().getNamesAndTypesList())
     {
-        join_output_columns.emplace_back(p.name, p.type);
+        join_output_columns.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
+        columns_for_other_join_filter.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
     }
+    make_nullable = join.join_type() == tipb::JoinType::TypeLeftOuterJoin;
     for (auto const & p : input_streams_vec[1][0]->getHeader().getNamesAndTypesList())
     {
-        join_output_columns.emplace_back(p.name, p.type);
+        if (!is_semi_join)
+            /// for semi join, the columns from right table will be ignored
+            join_output_columns.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
+        /// however, when compiling join's other condition, we still need the columns from right table
+        columns_for_other_join_filter.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
     }
     /// all the columns from right table should be added after join, even for the join key
     NamesAndTypesList columns_added_by_join;
+    make_nullable = kind == ASTTableJoin::Kind::Left;
     for (auto const & p : right_streams[0]->getHeader().getNamesAndTypesList())
     {
-        columns_added_by_join.emplace_back(p.name, p.type);
+        columns_added_by_join.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
     }
 
     if (!query_block.aggregation)
@@ -685,7 +698,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     right_streams = right_pipeline.streams;
     String other_filter_column_name = "";
     ExpressionActionsPtr other_condition_expr
-        = genJoinOtherConditionAction(join.other_conditions(), join_output_columns, other_filter_column_name);
+        = genJoinOtherConditionAction(join.other_conditions(), columns_for_other_join_filter, other_filter_column_name);
 
     const Settings & settings = context.getSettingsRef();
     JoinPtr joinPtr = std::make_shared<Join>(left_key_names, right_key_names, true,
@@ -963,6 +976,7 @@ void DAGQueryBlockInterpreter::getAndLockStorageWithSchemaVersion(TableID table_
     {
         log_schema_version("not OK, syncing schemas.");
         auto start_time = Clock::now();
+        GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_trigger_count, type_cop_read).Increment();
         context.getTMTContext().getSchemaSyncer()->syncSchemas(context);
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
         LOG_DEBUG(log, __PRETTY_FUNCTION__ << " Table " << table_id << " schema sync cost " << schema_sync_cost << "ms.");

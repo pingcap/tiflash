@@ -53,7 +53,9 @@ class EtcdClient:
     def __init__(self, host, port):
         self.logger = logging.getLogger('etcd.client')
         if conf.flash_conf.enable_tls:
-            self.client = etcd3.client(host=host, port=port, timeout=conf.flash_conf.update_rule_interval, ca_cert=conf.flash_conf.ca_path, cert_key=conf.flash_conf.key_path, cert_cert=conf.flash_conf.cert_path)
+            self.client = etcd3.client(host=host, port=port, timeout=conf.flash_conf.update_rule_interval,
+                                       ca_cert=conf.flash_conf.ca_path, cert_key=conf.flash_conf.key_path,
+                                       cert_cert=conf.flash_conf.cert_path)
         else:
             self.client = etcd3.client(host=host, port=port, timeout=conf.flash_conf.update_rule_interval)
 
@@ -138,21 +140,27 @@ class PDClient:
                                                 rule_id))
         return r.status_code
 
+    def _try_update_leader_etcd(self, url):
+        resp = self.get_members_json(url)
+        leader = resp.get('leader', {})
+        client_urls = leader.get('client_urls', [])
+        if client_urls:
+            _client_urls = []
+            for member in resp.get('members', {}):
+                _client_urls.extend(member.get('client_urls', []))
+            self.urls = _client_urls
+            self.leader = uri.URI(client_urls[0]).authority
+            _etcd_leader_uri = uri.URI(resp.get('etcd_leader', {}).get('client_urls', [])[0])
+            self.etcd_client = EtcdClient(_etcd_leader_uri.host, _etcd_leader_uri.port)
+
     def _update_leader_etcd(self):
+        errors = []
         for url in self.urls:
-            resp = self.get_members_json(url)
-            leader = resp.get('leader', {})
-            client_urls = leader.get('client_urls', [])
-            if client_urls:
-                _client_urls = []
-                for member in resp.get('members', {}):
-                    _client_urls.extend(member.get('client_urls', []))
-                self.urls = _client_urls
-                self.leader = uri.URI(client_urls[0]).authority
-                _etcd_leader_uri = uri.URI(resp.get('etcd_leader', {}).get('client_urls', [])[0])
-                self.etcd_client = EtcdClient(_etcd_leader_uri.host, _etcd_leader_uri.port)
-                return
-        raise Exception("can not find pd leader")
+            try:
+                return self._try_update_leader_etcd(url)
+            except Exception as e:
+                errors.append(e)
+        raise Exception("can not find pd leader: {}".format(errors))
 
     def get_store_by_labels(self, flash_label):
         res = {}

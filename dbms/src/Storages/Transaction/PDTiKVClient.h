@@ -41,8 +41,8 @@ struct IndexReader
 
     IndexReader(KVClusterPtr cluster_);
 
-    ReadIndexResult getReadIndex(
-        const pingcap::kv::RegionVerID & region_id, const std::string & start_key, const std::string & end_key, UInt64 start_ts);
+    ReadIndexResult getReadIndex(const pingcap::kv::RegionVerID & region_id, const std::string & start_key, const std::string & end_key,
+        UInt64 start_ts, UInt64 store_id);
 };
 
 using IndexReaderPtr = std::shared_ptr<IndexReader>;

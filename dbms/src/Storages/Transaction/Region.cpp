@@ -1,3 +1,4 @@
+#include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
@@ -9,6 +10,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
 
+#include <ext/scope_guard.h>
 #include <memory>
 
 namespace DB
@@ -442,8 +444,8 @@ ReadIndexResult Region::learnerRead(UInt64 start_ts)
     if (index_reader != nullptr)
     {
         auto [version, conf_ver, range] = dumpVersionRange();
-
-        return index_reader->getReadIndex({id(), conf_ver, version}, *range->rawKeys().first, *range->rawKeys().second, start_ts);
+        return index_reader->getReadIndex(
+            {id(), conf_ver, version}, *range->rawKeys().first, *range->rawKeys().second, start_ts, meta.storeId());
     }
     return {};
 }
@@ -452,8 +454,7 @@ TerminateWaitIndex Region::waitIndex(UInt64 index, const std::atomic_bool & term
 {
     if (index_reader != nullptr)
     {
-        // if index 6 is with election cmd, can be ignored directly without waiting.
-        if (index != 1 + RAFT_INIT_LOG_INDEX && !meta.checkIndex(index))
+        if (!meta.checkIndex(index))
         {
             LOG_DEBUG(log, toString() << " need to wait learner index: " << index);
             if (meta.waitIndex(index, terminated))
@@ -546,18 +547,18 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const Timestamp 
 
 TiFlashApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt)
 {
-    if (index == 1 + RAFT_INIT_LOG_INDEX)
-    {
-        // optimize: if index is 6, cmd should be empty.
-        if (cmds.len)
-            throw Exception(std::string(__PRETTY_FUNCTION__) + ": index 6 should be with empty cmd list", ErrorCodes::LOGICAL_ERROR);
-    }
-
     if (index <= appliedIndex())
     {
         LOG_TRACE(log, toString() << " ignore outdated raft log [term: " << term << ", index: " << index << "]");
         return TiFlashApplyRes::None;
     }
+
+    auto & context = tmt.getContext();
+    Stopwatch watch;
+    SCOPE_EXIT({
+        auto metrics = context.getTiFlashMetrics();
+        GET_METRIC(metrics, tiflash_raft_apply_write_command_duration_seconds, type_write).Observe(watch.elapsedSeconds());
+    });
 
     const auto handle_by_index_func = [&](auto i) {
         auto type = cmds.cmd_types[i];
@@ -644,7 +645,7 @@ TiFlashApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 in
         {
             /// Flush data right after they are committed.
             RegionDataReadInfoList data_list_to_remove;
-            RegionTable::writeBlockByRegion(tmt.getContext(), shared_from_this(), data_list_to_remove, log, false);
+            RegionTable::writeBlockByRegion(context, shared_from_this(), data_list_to_remove, log, false);
 
             /// Do not need to run predecode.
             data.writeCF().getCFDataPreDecode().popAll();

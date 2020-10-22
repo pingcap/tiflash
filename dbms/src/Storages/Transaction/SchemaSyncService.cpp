@@ -1,3 +1,4 @@
+#include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Parsers/ASTDropQuery.h>
@@ -26,6 +27,9 @@ SchemaSyncService::SchemaSyncService(DB::Context & context_)
                 auto gc_safe_point = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient());
                 stage = "Sync schemas";
                 done_anything = syncSchemas();
+                if (done_anything)
+                    GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_trigger_count, type_timer).Increment();
+
                 stage = "GC";
                 done_anything = gc(gc_safe_point);
 
