@@ -68,7 +68,6 @@ FsStats PathCapacityMetrics::getFsStats() const
     // Now we expect size of path_infos not change, don't acquire hevay lock on `path_infos` now.
     FsStats total_stat;
     double max_used_rate = 0.0;
-    std::optional<uint64_t> first_avail_size = std::nullopt;
     for (size_t i = 0; i < path_infos.size(); ++i)
     {
         FsStats path_stat = path_infos[i].getStats(log);
@@ -82,8 +81,6 @@ FsStats PathCapacityMetrics::getFsStats() const
         total_stat.capacity_size += path_stat.capacity_size;
 
         max_used_rate = std::max(max_used_rate, 1.0 * path_stat.used_size / path_stat.capacity_size);
-        if (!first_avail_size)
-            first_avail_size = path_stat.avail_size;
     }
 
     // appromix used size, make pd happy
@@ -94,7 +91,6 @@ FsStats PathCapacityMetrics::getFsStats() const
 
     // appromix avail size
     total_stat.avail_size = total_stat.capacity_size - total_stat.used_size;
-    total_stat.avail_size = std::min(total_stat.avail_size, *first_avail_size);
 
     const double avail_rate = 1.0 * total_stat.avail_size / total_stat.capacity_size;
     if (avail_rate <= 0.2)
