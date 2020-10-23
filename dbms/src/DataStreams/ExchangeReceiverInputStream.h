@@ -40,6 +40,10 @@ struct RpcTypeTraits<::mpp::EstablishMPPConnectionRequest>
 
 namespace DB
 {
+
+// ExchangeReceiver is in charge of receiving data from exchangeSender located in upstream tasks.
+// TODO: Currently, there is a single thread to call the receiver, we need to consider reading parallely
+// in the future.
 class ExchangeReceiverInputStream : public IProfilingBlockInputStream
 {
     TMTContext & context;
@@ -55,7 +59,7 @@ class ExchangeReceiverInputStream : public IProfilingBlockInputStream
     // TODO: should be a concurrency bounded queue.
     std::mutex rw_mu;
     std::condition_variable cv;
-    std::queue<Block> q;
+    std::queue<Block> block_buffer;
     std::atomic_int live_workers;
     bool inited;
     bool meet_error;
@@ -90,7 +94,7 @@ class ExchangeReceiverInputStream : public IProfilingBlockInputStream
                     throw Exception("Unsupported encode type", ErrorCodes::LOGICAL_ERROR);
             }
             std::lock_guard<std::mutex> lk(rw_mu);
-            q.push(std::move(block));
+            block_buffer.push(std::move(block));
             cv.notify_one();
         }
     }
@@ -238,17 +242,17 @@ public:
         if (!inited)
             init();
         std::unique_lock<std::mutex> lk(rw_mu);
-        cv.wait(lk, [&] { return q.size() > 0 || live_workers == 0 || meet_error; });
+        cv.wait(lk, [&] { return block_buffer.size() > 0 || live_workers == 0 || meet_error; });
         if (meet_error)
         {
             throw err;
         }
-        if (q.empty())
+        if (block_buffer.empty())
         {
             return {};
         }
-        Block blk = q.front();
-        q.pop();
+        Block blk = block_buffer.front();
+        block_buffer.pop();
         return blk;
     }
 };
