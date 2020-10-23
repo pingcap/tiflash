@@ -28,6 +28,9 @@ namespace DB
     M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of request duration", Histogram,                                  \
         F(type_batch, {{"type", "batch"}}, ExpBuckets{0.0005, 2, 20}), F(type_cop, {{"type", "cop"}}, ExpBuckets{0.0005, 2, 20}),         \
         F(type_super_batch, {{"type", "super_batch"}}, ExpBuckets{0.0005, 2, 20}))                                                        \
+    M(tiflash_coprocessor_request_memory_usage, "Bucketed histogram of request memory usage", Histogram,                                  \
+        F(type_cop, {{"type", "cop"}}, ExpBuckets{1024 * 1024, 2, 16}),                                                                   \
+        F(type_super_batch, {{"type", "super_batch"}}, ExpBuckets{1024 * 1024, 2, 16}))                                                   \
     M(tiflash_coprocessor_request_error, "Total number of request error", Counter, F(reason_meet_lock, {"reason", "meet_lock"}),          \
         F(reason_region_not_found, {"reason", "region_not_found"}), F(reason_epoch_not_match, {"reason", "epoch_not_match"}),             \
         F(reason_kv_client_error, {"reason", "kv_client_error"}), F(reason_internal_error, {"reason", "internal_error"}),                 \
