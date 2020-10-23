@@ -1257,7 +1257,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Request Duration Time",
+          "title": "Request Duration",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -1452,7 +1452,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Request Handle Time",
+          "title": "Request Handle Duration",
           "tooltip": {
             "shared": true,
             "sort": 0,
