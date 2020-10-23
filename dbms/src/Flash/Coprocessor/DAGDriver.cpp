@@ -1,3 +1,4 @@
+#include <Common/TiFlashMetrics.h>
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
@@ -9,6 +10,7 @@
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LockException.h>
@@ -92,6 +94,17 @@ try
             dag.getResultFieldTypes(), dag_context, collect_exec_summary, dag_request.has_root_executor());
         dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), response_writer);
         copyData(*streams.in, *dag_output_stream);
+    }
+
+    auto process_info = context.getProcessListElement()->getInfo();
+    auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
+    if constexpr (!batch)
+    {
+        GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_memory_usage, type_cop).Observe(peak_memory);
+    }
+    else
+    {
+        GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_memory_usage, type_super_batch).Observe(peak_memory);
     }
 
     if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streams.in.get()))
