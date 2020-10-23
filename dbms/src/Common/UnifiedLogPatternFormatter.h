@@ -121,7 +121,7 @@ std::string UnifiedLogPatternFormatter::getTimestamp() const
     int hour = local_tm->tm_hour;
     int minute = local_tm->tm_min;
     int second = local_tm->tm_sec;
-    int milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(time_point.time_since_epoch()).count() % 1000000 / 1000;
+    int milliseconds = std::chrono::duration_cast<std::chrono::microseconds>(time_point.time_since_epoch()).count() % 1000000 / 1000;
 
     int zone_offset = local_tm->tm_gmtoff;
 
