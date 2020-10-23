@@ -1452,7 +1452,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Request Handle",
+          "title": "Request Handle Duration",
           "tooltip": {
             "shared": true,
             "sort": 0,
