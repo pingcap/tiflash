@@ -95,17 +95,12 @@ ReadIndexResult IndexReader::getReadIndex(const pingcap::kv::RegionVerID & regio
         const metapb::Peer * peer_ptr = nullptr;
         if (region_ptr)
         {
-            if (region_ptr->peer.store_id() == store_id) // to be compatible with tiflash directly writing
-                peer_ptr = &region_ptr->peer;
-            else
+            for (const auto & peer : region_ptr->meta.peers())
             {
-                for (const auto & peer : region_ptr->learners)
+                if (peer.store_id() == store_id)
                 {
-                    if (peer.store_id() == store_id)
-                    {
-                        peer_ptr = &peer;
-                        break;
-                    }
+                    peer_ptr = &peer;
+                    break;
                 }
             }
         }
