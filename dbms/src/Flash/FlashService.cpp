@@ -33,6 +33,8 @@ grpc::Status FlashService::Coprocessor(
     grpc::ServerContext * grpc_context, const coprocessor::Request * request, coprocessor::Response * response)
 {
     GET_METRIC(metrics, tiflash_coprocessor_request_count, type_cop).Increment();
+    GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_cop).Increment();
+    SCOPE_EXIT({ GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_cop).Decrement(); });
     if (!security_config.checkGrpcContext(grpc_context))
     {
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
@@ -72,6 +74,8 @@ grpc::Status FlashService::Coprocessor(
     }
 
     GET_METRIC(metrics, tiflash_coprocessor_request_count, type_super_batch).Increment();
+    GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_super_batch).Increment();
+    SCOPE_EXIT({ GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_super_batch).Decrement(); });
     Stopwatch watch;
     SCOPE_EXIT({ GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_super_batch).Observe(watch.elapsedSeconds()); });
 
@@ -183,6 +187,8 @@ grpc::Status FlashService::BatchCommands(
     {
         tikvpb::BatchCommandsResponse response;
         GET_METRIC(metrics, tiflash_coprocessor_request_count, type_batch).Increment();
+        GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_batch).Increment();
+        SCOPE_EXIT({ GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_batch).Decrement(); });
         auto start_time = std::chrono::system_clock::now();
         SCOPE_EXIT({
             std::chrono::duration<double> duration_sec = std::chrono::system_clock::now() - start_time;
