@@ -17,6 +17,7 @@ namespace DB
 {
 
 /// Serializes the stream of blocks in TiDB DAG response format.
+template <class StreamWriterPtr>
 class StreamingDAGResponseWriter : public DAGResponseWriter
 {
 public:
@@ -29,7 +30,7 @@ public:
 
 private:
     void ScheduleEncodeTask();
-    ThreadPool::Job getEncodeTask(std::vector<Block> & input_blocks, tipb::SelectResponse & response, StreamWriterPtr stream_writer) const;
+    ThreadPool::Job getEncodeTask(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
 
     StreamWriterPtr writer;
     std::vector<Block> blocks;
