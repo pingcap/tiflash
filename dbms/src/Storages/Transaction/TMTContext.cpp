@@ -1,4 +1,5 @@
 #include <Common/DNSCache.h>
+#include <Flash/Mpp/MPPHandler.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/KVStore.h>
@@ -23,6 +24,7 @@ TMTContext::TMTContext(Context & context_, const std::vector<std::string> & addr
       ignore_databases(ignore_databases_),
       schema_syncer(addrs.size() == 0 ? std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<true>>(cluster))
                                       : std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<false>>(cluster))),
+      mpp_task_manager(std::make_shared<MPPTaskManager>()),
       engine(engine_),
       disable_bg_flush(disable_bg_flush_)
 {}
@@ -69,6 +71,8 @@ void TMTContext::setSchemaSyncer(SchemaSyncerPtr rhs)
 }
 
 pingcap::pd::ClientPtr TMTContext::getPDClient() const { return cluster->pd_client; }
+
+MPPTaskManagerPtr TMTContext::getMPPTaskManager() { return mpp_task_manager; }
 
 IndexReaderPtr TMTContext::createIndexReader() const
 {

@@ -4,8 +4,10 @@
 #include <Flash/BatchCommandsHandler.h>
 #include <Flash/BatchCoprocessorHandler.h>
 #include <Flash/FlashService.h>
+#include <Flash/Mpp/MPPHandler.h>
 #include <Interpreters/Context.h>
 #include <Server/IServer.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/server_builder.h>
 
 #include <ext/scope_guard.h>
@@ -90,6 +92,80 @@ grpc::Status FlashService::Coprocessor(
 
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle coprocessor request done: " << ret.error_code() << ", " << ret.error_message());
     return ret;
+}
+
+::grpc::Status FlashService::DispatchMPPTask(
+    ::grpc::ServerContext * grpc_context, const ::mpp::DispatchTaskRequest * request, ::mpp::DispatchTaskResponse * response)
+{
+
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling mpp dispatch request: " << request->DebugString());
+
+    if (!security_config.checkGrpcContext(grpc_context))
+    {
+        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
+    }
+    // TODO: Add metric.
+
+    auto [context, status] = createDBContext(grpc_context);
+    if (!status.ok())
+    {
+        return status;
+    }
+
+    MPPHandler mpp_handler(context, *request);
+    return mpp_handler.execute(response);
+}
+
+::grpc::Status FlashService::EstablishMPPConnection(::grpc::ServerContext * grpc_context,
+    const ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer)
+{
+    // Establish a pipe for data transferring. The pipes has registered by the task in advance.
+    // We need to find it out and bind the grpc stream with it.
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling establish mpp connection request: " << request->DebugString());
+
+    if (!security_config.checkGrpcContext(grpc_context))
+    {
+        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
+    }
+    // TODO: Add metric.
+
+    auto [context, status] = createDBContext(grpc_context);
+    if (!status.ok())
+    {
+        return status;
+    }
+
+    auto & tmt_context = context.getTMTContext();
+    auto task_manager = tmt_context.getMPPTaskManager();
+    MPPTaskPtr sender_task = task_manager->findTask(request->sender_meta());
+    if (sender_task == nullptr)
+    {
+        LOG_DEBUG(log, "can't find task");
+        mpp::MPPDataPacket packet;
+        auto err = new mpp::Error();
+        err->set_msg("can't find task");
+        packet.set_allocated_error(err);
+        writer->Write(packet);
+        return grpc::Status::OK;
+    }
+    MPPTunnelPtr tunnel = sender_task->getTunnel(request->receiver_meta());
+    if (tunnel == nullptr)
+    {
+        LOG_DEBUG(log, "can't find tunnel");
+        mpp::MPPDataPacket packet;
+        auto err = new mpp::Error();
+        err->set_msg("can't find tunnel");
+        packet.set_allocated_error(err);
+        writer->Write(packet);
+        return grpc::Status::OK;
+    }
+    Stopwatch stopwatch;
+    tunnel->connect(writer);
+    LOG_DEBUG(log, "connect tunnel successfully and begin to wait");
+    tunnel->waitForFinish();
+    LOG_INFO(log, "connection for " << tunnel->tunnel_id << " cost " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
+    // TODO: Check if there are errors in task.
+    return grpc::Status::OK;
 }
 
 grpc::Status FlashService::BatchCommands(

@@ -20,6 +20,9 @@ using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
 class BackgroundService;
 using BackGroundServicePtr = std::unique_ptr<BackgroundService>;
 
+class MPPTaskManager;
+using MPPTaskManagerPtr = std::shared_ptr<MPPTaskManager>;
+
 class TMTContext : private boost::noncopyable
 {
 public:
@@ -52,6 +55,8 @@ public:
 
     pingcap::kv::Cluster * getKVCluster() { return cluster.get(); }
 
+    MPPTaskManagerPtr getMPPTaskManager();
+
     IndexReaderPtr createIndexReader() const;
 
     void restore();
@@ -82,6 +87,7 @@ private:
 
     const std::unordered_set<std::string> ignore_databases;
     SchemaSyncerPtr schema_syncer;
+    MPPTaskManagerPtr mpp_task_manager;
 
     ::TiDB::StorageEngine engine;
 
