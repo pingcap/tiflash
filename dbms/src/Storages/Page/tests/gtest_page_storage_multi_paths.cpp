@@ -91,7 +91,7 @@ try
 
     size_t          number_of_paths = GetParam();
     auto            all_paths       = getMultiTestPaths(number_of_paths);
-    auto            capacity        = std::make_shared<PathCapacityMetrics>(all_paths, std::vector<size_t>{});
+    auto            capacity        = std::make_shared<PathCapacityMetrics>(all_paths, 0);
     StoragePathPool pool            = PathPool(all_paths, all_paths, capacity, file_provider).withTable("test", "table", false);
 
     storage = std::make_shared<PageStorage>("test.table", pool.getDeltaDelegate(), config, file_provider);

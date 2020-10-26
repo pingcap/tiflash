@@ -400,7 +400,7 @@ public:
     void initializeSchemaSyncService();
     SchemaSyncServicePtr & getSchemaSyncService();
 
-    void initializePathCapacityMetric(const std::vector<std::string> & all_path, std::vector<size_t> && all_capacity);
+    void initializePathCapacityMetric(const std::vector<std::string> & all_path, size_t capacity_quota);
     PathCapacityMetricsPtr getPathCapacity() const;
 
     void initializePartPathSelector(std::vector<std::string> && all_path, std::vector<std::string> && all_fast_path);

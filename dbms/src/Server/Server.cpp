@@ -396,7 +396,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     std::vector<String> all_normal_path;
-    std::vector<size_t> all_capacity;
+    size_t capacity = 0;
     if (config().has("capacity"))
     {
         // TODO: support human readable format for capacity, mark_cache_size, minmax_index_cache_size
@@ -404,12 +404,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
         String capacities = config().getString("capacity");
         Poco::trimInPlace(capacities);
         Poco::StringTokenizer string_tokens(capacities, ",");
+        size_t num_token = 0;
         for (auto it = string_tokens.begin(); it != string_tokens.end(); ++it)
         {
-            const std::string & s = *it;
-            size_t capacity = parse<size_t>(s.data(), s.size());
-            all_capacity.emplace_back(capacity);
+            if (num_token == 0)
+            {
+                const std::string & s = *it;
+                capacity = parse<size_t>(s.data(), s.size());
+            }
+            num_token++;
         }
+        if (num_token != 1)
+            LOG_WARNING(log, "Only the first number in configuration \"capacity\" take effect");
+        LOG_INFO(log, "The capacity limit is: " + formatReadableSizeWithBinarySuffix(capacity));
     }
 
     Strings main_data_paths, latest_data_paths;
@@ -457,13 +464,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (paths.empty())
             throw Exception("path configuration parameter is empty");
         Poco::StringTokenizer string_tokens(paths, ",");
-        size_t idx = 0;
         for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
         {
             all_normal_path.emplace_back(getCanonicalPath(std::string(*it)));
-            if (all_capacity.size() < all_normal_path.size())
-                all_capacity.emplace_back(0);
-            LOG_DEBUG(log, "Data part candidate path: " << std::string(*it) << ", capacity: " << all_capacity[idx++]);
+            LOG_DEBUG(log, "Data part candidate path: " << std::string(*it));
         }
 
         // If you set `path_realtime_mode` to `true` and multiple directories are deployed in the path, the latest data is stored in the first directory and older data is stored in the rest directories.
@@ -490,7 +494,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_ERROR(log, "The configuration \"main_data_path\" is not defined.");
     }
 
-    global_context->initializePathCapacityMetric(all_normal_path, std::move(all_capacity));
+    global_context->initializePathCapacityMetric(all_normal_path, capacity);
     global_context->setExtraPaths(main_data_paths, latest_data_paths, global_context->getPathCapacity(), global_context->getFileProvider());
 
     const std::string path = all_normal_path[0];

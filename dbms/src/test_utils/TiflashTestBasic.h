@@ -135,12 +135,11 @@ public:
             context.initializeTiFlashMetrics();
             KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
             context.initializeFileProvider(key_manager, false);
-            std::vector<size_t> all_capacity{0};
 
             // FIXME: These paths are only set at the first time
             if (testdata_path.empty())
                 testdata_path.emplace_back(getTemporaryPath());
-            context.initializePathCapacityMetric(testdata_path, std::move(all_capacity));
+            context.initializePathCapacityMetric(testdata_path, 0);
             context.createTMTContext({}, {"default"}, root_path + "/kvstore", TiDB::StorageEngine::TMT, false);
 
             context.getTMTContext().restore();
