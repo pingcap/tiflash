@@ -161,6 +161,8 @@ void DAGStringConverter::buildString(const tipb::Executor & executor, std::strin
         case tipb::ExecType::TypeExchangeSender:
         case tipb::ExecType::TypeExchangeReceiver:
             throw TiFlashException("Mpp executor is not supported", Errors::Coprocessor::Unimplemented);
+        case tipb::ExecType::TypeKill:
+            throw TiFlashException("Kill executor is not supported", Errors::Coprocessor::Unimplemented);
     }
 }
 
