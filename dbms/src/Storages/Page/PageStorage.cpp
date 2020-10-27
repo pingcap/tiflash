@@ -70,7 +70,7 @@ PageFileSet PageStorage::listAllPageFiles(const FileProviderPtr &     file_provi
     std::vector<std::pair<String, Strings>> all_file_names;
     {
         std::vector<std::string> file_names;
-        for (const auto & p: delegator->listPaths())
+        for (const auto & p : delegator->listPaths())
         {
             Poco::File directory(p);
             if (!directory.exists())
@@ -166,7 +166,9 @@ static inline bool isPageFileSizeFitsWritable(const PageFile & pf, const PageSto
 
 void PageStorage::restore()
 {
-    LOG_INFO(log, storage_name << " begin to restore from path: " << delegator->normalPath());
+    LOG_INFO(log,
+             storage_name << " begin to restore data from disk. [path=" << delegator->normalPath()
+                          << "] [num_writers=" << write_files.size() << "]");
 
     /// page_files are in ascending ordered by (file_id, level).
     ListPageFilesOption opt;
@@ -306,13 +308,11 @@ void PageStorage::restore()
     }
 }
 
-
 PageId PageStorage::getMaxId()
 {
     std::lock_guard<std::mutex> write_lock(write_mutex);
     return versioned_page_entries.getSnapshot()->version()->maxId();
 }
-
 
 PageId PageStorage::getNormalPageId(PageId page_id, SnapshotPtr snapshot)
 {
@@ -324,7 +324,6 @@ PageId PageStorage::getNormalPageId(PageId page_id, SnapshotPtr snapshot)
     auto [is_ref_id, normal_page_id] = snapshot->version()->isRefId(page_id);
     return is_ref_id ? normal_page_id : page_id;
 }
-
 
 PageEntry PageStorage::getEntry(PageId page_id, SnapshotPtr snapshot)
 {
@@ -347,7 +346,6 @@ PageEntry PageStorage::getEntry(PageId page_id, SnapshotPtr snapshot)
         return {}; // return invalid PageEntry
     }
 }
-
 
 PageStorage::WriterPtr PageStorage::getWriter( //
     PageFile &                page_file,
@@ -398,7 +396,6 @@ PageStorage::WriterPtr PageStorage::getWriter( //
     return write_file_writer;
 }
 
-
 PageStorage::ReaderPtr PageStorage::getReader(const PageFileIdAndLevel & file_id_level)
 {
     std::lock_guard<std::mutex> lock(open_read_files_mutex);
@@ -417,7 +414,6 @@ PageStorage::ReaderPtr PageStorage::getReader(const PageFileIdAndLevel & file_id
     }
     return pages_reader;
 }
-
 
 void PageStorage::write(WriteBatch && wb)
 {
@@ -934,7 +930,6 @@ bool PageStorage::gc()
                           << ", gc apply: " << debugging_info.gc_apply_stat.toString());
     return debugging_info.compact_result.do_compaction;
 }
-
 
 void PageStorage::archivePageFiles(const PageFileSet & page_files)
 {

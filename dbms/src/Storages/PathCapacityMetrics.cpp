@@ -84,7 +84,6 @@ FsStats PathCapacityMetrics::getFsStats() const
     if (capacity_quota != 0 && capacity_quota < total_stat.capacity_size)
         total_stat.capacity_size = capacity_quota;
 
-    // appromix used size, make pd happy
     // PD get weird if used_size == 0, make it 1 byte at least
     total_stat.used_size = std::max(1, total_stat.used_size);
 

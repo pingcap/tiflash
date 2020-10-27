@@ -18,9 +18,12 @@ using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
 class FileProvider;
 using FileProviderPtr = std::shared_ptr<FileProvider>;
 
+/// A class to manage global paths.
 class PathPool;
+/// A class to manage paths for the specified storage.
 class StoragePathPool;
-// Delegators to StoragePathPool
+
+/// Delegators to StoragePathPool. They are used for managing the path for storing stable/delta/raft data.
 class StableDelegator;
 class PSPathDelegator;
 using PSPathDelegatorPtr = std::shared_ptr<PSPathDelegator>;
@@ -30,7 +33,7 @@ class NormalPathDelegator;
 // using RaftDelegator = NormalPathDelegator;
 
 
-/// A class to manage which paths for storing delta/stable data.
+/// A class to manage global paths.
 class PathPool
 {
 public:
@@ -149,6 +152,7 @@ private:
     const String path_prefix;
 };
 
+/// A class to manage paths for the specified storage.
 class StoragePathPool
 {
 public:
@@ -162,8 +166,16 @@ public:
     StoragePathPool(const StoragePathPool & rhs);
     StoragePathPool & operator=(const StoragePathPool & rhs);
 
+    // Generate a lightweight delegator for managing stable data, such as choosing path for DTFile or getting DTFile path by ID and so on.
+    // Those paths are generate from `main_path_infos` and `STABLE_FOLDER_NAME`
     StableDelegator getStableDelegate() { return StableDelegator(*this); }
+
+    // Generate a lightweight delegator for managing data in `StoragePool`.
+    // Those paths are generate from `latest_path_infos` and `DELTA_FOLDER_NAME`
     PSPathDelegatorPtr getDeltaDelegate() { return std::make_shared<DeltaDelegator>(*this); }
+
+    // Generate a lightweight delegator for managing data in `StoragePool`.
+    // Those paths are generate from the first path of `latest_path_infos` and `prefix`
     PSPathDelegatorPtr getNormalDelegate(const String & prefix) { return std::make_shared<NormalPathDelegator>(*this, prefix); }
 
     void rename(const String & new_database, const String & new_table, bool clean_rename);

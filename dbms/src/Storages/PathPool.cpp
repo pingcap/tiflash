@@ -133,11 +133,9 @@ void StoragePathPool::rename(const String & new_database, const String & new_tab
     else
     {
         if (unlikely(file_provider->isEncryptionEnabled()))
-        {
             throw Exception("Encryption is only supported when using clean_rename");
-        }
-        // Note: changing these path is not atomic, we may lost data if process is crash here.
 
+        // Note: changing these path is not atomic, we may lost data if process is crash here.
         std::lock_guard<std::mutex> lock{mutex};
         // Get root path without database and table
         for (auto & info : main_path_infos)
@@ -244,9 +242,6 @@ void StoragePathPool::renamePath(const String & old_path, const String & new_pat
 Strings StableDelegator::listPaths() const
 {
     std::lock_guard<std::mutex> lock{pool.mutex};
-    // If `path_realtime_mode` is `true` and multiple directories are deployed in the path,
-    // the stable data is stored in the directories except first.
-    // Otherwise the stable data could be stored in all direcotries.
     std::vector<String> paths;
     for (size_t i = 0; i < pool.main_path_infos.size(); ++i)
     {
@@ -366,7 +361,6 @@ String DeltaDelegator::choosePath(const PageFileIdAndLevel & id_lvl)
 
     if (pool.latest_path_infos.size() == 1)
     {
-        std::lock_guard<std::mutex> lock{pool.mutex};
         return return_path(0);
     }
 
@@ -419,6 +413,7 @@ size_t DeltaDelegator::addPageFileUsedSize(
         return 0;
     }
 
+    // Get a normalized path without `StoragePathPool::DELTA_FOLDER_NAME` and trailing '/'
     String upper_path = Poco::Path(pf_parent_path).parent().toString();
     if (upper_path.back() == '/')
         upper_path.erase(upper_path.begin() + upper_path.size() - 1);

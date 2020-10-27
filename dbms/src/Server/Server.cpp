@@ -377,6 +377,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->initializeFileProvider(key_manager, false);
     }
 
+    /// ===== Paths related configuration initialized start ===== ///
 
     // TODO: remove this configuration left by ClickHouse
     std::vector<String> all_fast_path;
@@ -395,8 +396,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     }
 
-    std::vector<String> all_normal_path;
-    size_t capacity = 0;
+    size_t capacity = 0; // "0" by default, means no quota, use the whole disk capacity.
     if (config().has("capacity"))
     {
         // TODO: support human readable format for capacity, mark_cache_size, minmax_index_cache_size
@@ -419,6 +419,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_INFO(log, "The capacity limit is: " + formatReadableSizeWithBinarySuffix(capacity));
     }
 
+    Strings all_normal_path;
     Strings main_data_paths, latest_data_paths;
     if (config().has("main_data_path"))
     {
@@ -435,10 +436,23 @@ int Server::main(const std::vector<std::string> & /*args*/)
         };
 
         main_data_paths = parse_multiple_paths(config().getString("main_data_path"), "Main");
+        if (main_data_paths.empty())
+        {
+            String error_msg
+                = "The configuration \"main_data_path\" is empty! [main_data_path=" + config().getString("main_data_path") + "]";
+            LOG_ERROR(log, error_msg);
+            throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
+        }
+
         if (config().has("latest_data_path"))
             latest_data_paths = parse_multiple_paths(config().getString("latest_data_path"), "Latest");
-        else
+        if (latest_data_paths.empty())
+        {
+            LOG_INFO(log, "The configuration \"latest_data_paths\" is empty, use the same paths of \"main_data_path\"");
             latest_data_paths = main_data_paths;
+            for (const auto & s : latest_data_paths)
+                LOG_INFO(log, "Latest data candidate path: " << s);
+        }
 
         {
             std::set<String> path_set;
@@ -462,7 +476,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         String paths = config().getString("path");
         Poco::trimInPlace(paths);
         if (paths.empty())
-            throw Exception("path configuration parameter is empty");
+            throw Exception(
+                "The configuration \"path\" is empty! [path=" + config().getString("paths") + "]", ErrorCodes::INVALID_CONFIG_PARAMETER);
         Poco::StringTokenizer string_tokens(paths, ",");
         for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
         {
@@ -492,6 +507,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     else
     {
         LOG_ERROR(log, "The configuration \"main_data_path\" is not defined.");
+        throw Exception("The configuration \"main_data_path\" is not defined.", ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
 
     global_context->initializePathCapacityMetric(all_normal_path, capacity);
@@ -504,6 +520,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::string default_database = config().getString("default_database", raft_config.pd_addrs.empty() ? "default" : "system");
     global_context->setPath(path);
     global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
+
+    /// ===== Paths related configuration initialized end ===== ///
 
     security_config = TiFlashSecurityConfig(config(), log);
 
