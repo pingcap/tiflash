@@ -1052,8 +1052,6 @@ public:
     size_t getSegmentSize() const { return segment_size; }
 
     size_t hash(const Key & x) const {
-        if (Cell::isZero(x, *this))
-            return 0;
         return Hash::operator()(x);
     }
     bool isZero(const Key & x) const {

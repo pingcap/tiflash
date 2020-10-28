@@ -420,7 +420,7 @@ private:
     /// 2. Rows that are filtered by right join conditions
     RowRefList rows_not_inserted_to_map;
     /// mutex to protect concurrent insert to rows_not_inserted_to_map
-    std::mutex outer_mutex;
+    std::mutex not_inserted_rows_mutex;
 
     /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
     Arena pool;
