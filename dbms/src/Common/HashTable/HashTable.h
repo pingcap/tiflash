@@ -932,3 +932,304 @@ public:
     }
 #endif
 };
+
+template
+<
+    typename Key,
+    typename Cell,
+    typename Hash,
+    typename Grower,
+    typename Allocator
+>
+class HashTableWithLock {
+    HashTable<Key, Cell, Hash, Grower, Allocator> hash_table;
+    using HashTableType = HashTable<Key, Cell, Hash, Grower, Allocator>;
+    mutable std::mutex mutex;
+public:
+    HashTableWithLock() {}
+    HashTableWithLock(size_t reserve_for_num_elements) : hash_table(reserve_for_num_elements) {}
+    std::mutex & getMutex() { return mutex; }
+    HashTable<Key, Cell, Hash, Grower, Allocator> & getHashTable() { return hash_table; }
+    typename HashTableType::iterator ALWAYS_INLINE find(const Key & x, bool lock = true) {
+        if (lock)
+        {
+            std::lock_guard<std::mutex> lk(mutex);
+            return hash_table.find(x);
+        }
+        else
+        {
+            return hash_table.find(x);
+        }
+    }
+    typename HashTableType::const_iterator ALWAYS_INLINE find(const Key & x, bool lock = true) const {
+        if (lock)
+        {
+            std::lock_guard<std::mutex> lk(mutex);
+            return hash_table.find(x);
+        }
+        else
+        {
+            return hash_table.find(x);
+        }
+    }
+    typename HashTableType::iterator ALWAYS_INLINE find(const Key & x, size_t hash_value, bool lock = true) {
+        if (lock)
+        {
+            std::lock_guard<std::mutex> lk(mutex);
+            return hash_table.find(x, hash_value);
+        }
+        else
+        {
+            return hash_table.find(x, hash_value);
+        }
+    }
+    typename HashTableType::const_iterator ALWAYS_INLINE find(const Key & x, size_t hash_value, bool lock) const {
+        if (lock)
+        {
+            std::lock_guard<std::mutex> lk(mutex);
+            return hash_table.find(x, hash_value);
+        }
+        else
+        {
+            return hash_table.find(x, hash_value);
+        }
+    }
+    /// Insert a value. In the case of any more complex values, it is better to use the `emplace` function.
+    std::pair<typename HashTableType::iterator, bool> ALWAYS_INLINE insert(const typename HashTableType::value_type & x, bool lock = true)
+    {
+        if (lock)
+        {
+            std::lock_guard<std::mutex> lk(mutex);
+            return hash_table.insert(x);
+        }
+        else
+        {
+            return hash_table.insert(x);
+        }
+    }
+    void ALWAYS_INLINE emplace(const Key & x, typename HashTableType::iterator & it, bool & inserted, bool lock = true)
+    {
+        if (lock)
+        {
+            std::lock_guard<std::mutex> lk(mutex);
+            return hash_table.emplace(x, it, inserted);
+        }
+        else
+        {
+            return hash_table.emplace(x, it, inserted);
+        }
+    }
+    void ALWAYS_INLINE emplace(const Key & x, typename HashTableType::iterator & it, bool & inserted, size_t hash_value, bool lock = true)
+    {
+        if (lock)
+        {
+            std::lock_guard<std::mutex> lk(mutex);
+            return hash_table.emplace(x, it, inserted, hash_value);
+        }
+        else
+        {
+            return hash_table.emplace(x, it, inserted, hash_value);
+        }
+    }
+    bool ALWAYS_INLINE has(const Key & x, bool lock = true) const
+    {
+        if (lock)
+        {
+            std::lock_guard<std::mutex> lk(mutex);
+            return hash_table.has(x);
+        }
+        else
+        {
+            return hash_table.has(x);
+        }
+    }
+    bool ALWAYS_INLINE has(const Key & x, size_t hash_value, bool lock = true) const
+    {
+        if (lock)
+        {
+            std::lock_guard<std::mutex> lk(mutex);
+            return hash_table.has(x, hash_value);
+        }
+        else
+        {
+            return hash_table.has(x, hash_value);
+        }
+    }
+    size_t getBufferSizeInBytes() const
+    {
+        return hash_table.getBufferSizeInBytes();
+    }
+    size_t size() const
+    {
+        return hash_table.size();
+    }
+};
+
+template
+<
+    typename Key,
+    typename Cell,
+    typename Hash,
+    typename Grower,
+    typename Allocator
+>
+class ConcurrentHashTable :
+        private boost::noncopyable,
+        protected Hash,
+        protected Allocator,
+        protected Cell::State,
+        protected ZeroValueStorage<Cell::need_zero_value_storage, Cell>
+{
+    std::vector<std::unique_ptr<HashTableWithLock<Key, Cell, Hash, Grower, Allocator>>> segments;
+    size_t segment_size;
+public:
+    using segment_type = HashTable<Key, Cell, Hash, Grower, Allocator>;
+    ConcurrentHashTable(size_t segment_size_) : segment_size(segment_size_) {
+        for (size_t i = 0; i < segment_size; i++)
+        {
+            segments.emplace_back(std::move(std::make_unique<HashTableWithLock<Key, Cell, Hash, Grower, Allocator>>()));
+        }
+    }
+    ConcurrentHashTable(size_t segment_size_, size_t reserve_for_num_elements) : segment_size(segment_size_) {
+        for (size_t i = 0; i < segment_size; i++)
+        {
+            segments.emplace_back(std::move(std::make_unique<HashTableWithLock<Key, Cell, Hash, Grower, Allocator>>(reserve_for_num_elements)));
+        }
+    }
+
+    const segment_type & getInternalHashTable(size_t segment_index) const
+    {
+        return segments[segment_index]->getHashTable();
+    }
+
+    segment_type & getInternalHashTable(size_t segment_index)
+    {
+        return segments[segment_index]->getHashTable();
+    }
+
+    std::mutex & getInternalMutex(size_t segment_index)
+    {
+        return segments[segment_index]->getMutex();
+    }
+
+    size_t getSegmentSize() const { return segment_size; }
+
+    size_t hash(const Key & x) const {
+        if (Cell::isZero(x, *this))
+            return 0;
+        return Hash::operator()(x);
+    }
+
+    typename segment_type::iterator ALWAYS_INLINE find(const Key & x, bool lock = true) {
+        size_t segment_index = 0;
+        size_t hash_value = 0;
+        if (Cell::isZero(x, *this))
+            segment_index = 0;
+        else
+        {
+            hash_value = hash(x);
+            segment_index = hash_value % segment_size;
+        }
+
+        return segments[segment_index]->find(x, hash_value, lock);
+    }
+
+    typename segment_type::const_iterator ALWAYS_INLINE find(const Key & x, bool lock = true) const {
+        size_t segment_index = 0;
+        size_t hash_value = 0;
+        if (Cell::isZero(x, *this))
+            segment_index = 0;
+        else
+        {
+            hash_value = hash(x);
+            segment_index = hash_value % segment_size;
+        }
+
+        return ((const HashTableWithLock<Key, Cell, Hash, Grower, Allocator> &)*segments[segment_index]).find(x, hash_value, lock);
+    }
+
+    typename segment_type::iterator ALWAYS_INLINE find(const Key & x, size_t hash_value, bool lock = true) {
+        size_t segment_index = 0;
+        if (Cell::isZero(x, *this))
+            segment_index = 0;
+        else
+            segment_index = hash_value % segment_size;
+
+        return segments[segment_index]->find(x, hash_value, lock);
+    }
+
+    typename segment_type::const_iterator ALWAYS_INLINE find(const Key & x, size_t hash_value, bool lock) const {
+        size_t segment_index = 0;
+        if (Cell::isZero(x, *this))
+            segment_index = 0;
+        else
+            segment_index = hash_value % segment_size;
+
+        return segments[segment_index]->find(x, hash_value, lock);
+    }
+
+    /// Insert a value. In the case of any more complex values, it is better to use the `emplace` function.
+    std::pair<typename segment_type::iterator, bool> ALWAYS_INLINE insert(const typename segment_type::value_type & x, bool lock = true)
+    {
+        std::pair<typename segment_type::iterator, bool> res;
+
+        size_t hash_value = hash(Cell::getKey(x));
+        size_t segment_index = hash_value % segment_size;
+
+        return segments[segment_index]->insert(x, lock);
+    }
+
+    void ALWAYS_INLINE emplace(const Key & x, typename segment_type::iterator & it, bool & inserted, bool lock = true)
+    {
+        size_t hash_value = hash(x);
+        size_t segment_index = hash_value % segment_size;
+        return segments[segment_index]->emplace(x, it, inserted, lock);
+    }
+
+    void ALWAYS_INLINE emplace(const Key & x, typename segment_type::iterator & it, bool & inserted, size_t hash_value, bool lock = true)
+    {
+        // todo make sure that if x is zero, then segment_index is always 0
+        size_t segment_index = hash_value % segment_size;
+        return segments[segment_index]->emplace(x, it, inserted, hash_value, lock);
+    }
+
+    bool ALWAYS_INLINE has(const Key & x, bool lock = true) const
+    {
+        size_t segment_index = 0;
+        if (Cell::isZero(x, *this))
+        {
+            segment_index = 0;
+        } else {
+            size_t hash_value = hash(x);
+            segment_index = hash_value % segment_size;
+        }
+
+        return segments[segment_index]->has(x, lock);
+    }
+
+    bool ALWAYS_INLINE has(const Key & x, size_t hash_value, bool lock = true) const
+    {
+        size_t segment_index = 0;
+        if (Cell::isZero(x, *this))
+            segment_index = 0;
+        else
+            segment_index = hash_value % segment_index;
+
+        return segments[segment_index]->has(x, hash_value, lock);
+    }
+
+    size_t getBufferSizeInBytes() const
+    {
+        size_t ret = 0;
+        for (size_t i = 0; i < segments.size(); i++)
+            ret += segments[i]->getBufferSizeInBytes();
+        return ret;
+    }
+    size_t rowCount() const
+    {
+        size_t ret = 0;
+        for (size_t i = 0; i < segments.size(); i++)
+            ret += segments[i]->size();
+        return ret;
+    }
+};
