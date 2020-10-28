@@ -50,6 +50,7 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
     log(&Logger::get("Join")),
     limits(limits)
 {
+    build_set_exceeded.store(false);
     if (!other_filter_column.empty())
     {
         /// if there is other_condition, then should keep all the valid rows during probe stage
@@ -128,7 +129,7 @@ static void initImpl(Maps & maps, Join::Type type, size_t build_concurrency)
         case Join::Type::CROSS:            break;
 
     #define M(TYPE) \
-        case Join::Type::TYPE: maps.TYPE = std::make_unique<typename decltype(maps.TYPE)::element_type>(build_concurrency); break;
+        case Join::Type::TYPE: maps.TYPE = std::make_unique<typename decltype(maps.TYPE)::element_type>(build_concurrency * 2); break;
         APPLY_FOR_JOIN_VARIANTS(M)
     #undef M
 
@@ -443,8 +444,13 @@ namespace
 
             auto key = key_getter.getKey(key_columns, keys_size, i, key_sizes, sort_key_containers);
             // todo reuse the hash_value
-            size_t hash_value = map.hash(key);
-            size_t segment_index = hash_value % segment_size;
+            size_t segment_index = 0;
+            size_t hash_value = 0;
+            if (!map.isZero(key))
+            {
+                hash_value = map.hash(key);
+                segment_index = hash_value % segment_size;
+            }
             std::lock_guard<std::mutex> lk(map.getInternalMutex(segment_index));
             Inserter<STRICTNESS, typename Map::segment_type, KeyGetter, typename Map::mapped_type>::insert(map.getInternalHashTable(segment_index), key, stored_block, i, pool);
         }
@@ -582,7 +588,7 @@ void Join::insertFromBlockASync(const Block & block, ThreadPool & thread_pool)
         blocks.push_back(block);
         stored_block = &blocks.back();
     }
-    thread_pool.schedule([&]
+    thread_pool.schedule([&, stored_block]
     {
         if (build_set_exceeded.load())
             return;
@@ -826,7 +832,7 @@ namespace
             {
                 auto key = key_getter.getKey(key_columns, keys_size, i, key_sizes, sort_key_containers);
                 size_t segment_index = 0;
-                if (map.getSegmentSize() > 0)
+                if (map.getSegmentSize() > 0 && !map.isZero(key))
                 {
                     size_t hash_value = map.hash(key);
                     segment_index = hash_value % map.getSegmentSize();
@@ -834,7 +840,6 @@ namespace
                 auto & internalMap = map.getInternalHashTable(segment_index);
                 typename Map::segment_type::const_iterator it = internalMap.find(key);
 
-                //if (map.has(key))
                 if (it != internalMap.end())
                 {
                     it->second.setUsed();

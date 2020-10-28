@@ -950,110 +950,47 @@ public:
     HashTableWithLock(size_t reserve_for_num_elements) : hash_table(reserve_for_num_elements) {}
     std::mutex & getMutex() { return mutex; }
     HashTable<Key, Cell, Hash, Grower, Allocator> & getHashTable() { return hash_table; }
-    typename HashTableType::iterator ALWAYS_INLINE find(const Key & x, bool lock = true) {
-        if (lock)
-        {
-            std::lock_guard<std::mutex> lk(mutex);
-            return hash_table.find(x);
-        }
-        else
-        {
-            return hash_table.find(x);
-        }
+    typename HashTableType::iterator ALWAYS_INLINE find(const Key & x) {
+        std::lock_guard<std::mutex> lk(mutex);
+        return hash_table.find(x);
     }
-    typename HashTableType::const_iterator ALWAYS_INLINE find(const Key & x, bool lock = true) const {
-        if (lock)
-        {
-            std::lock_guard<std::mutex> lk(mutex);
-            return hash_table.find(x);
-        }
-        else
-        {
-            return hash_table.find(x);
-        }
+    typename HashTableType::const_iterator ALWAYS_INLINE find(const Key & x) const {
+        std::lock_guard<std::mutex> lk(mutex);
+        return hash_table.find(x);
     }
-    typename HashTableType::iterator ALWAYS_INLINE find(const Key & x, size_t hash_value, bool lock = true) {
-        if (lock)
-        {
-            std::lock_guard<std::mutex> lk(mutex);
-            return hash_table.find(x, hash_value);
-        }
-        else
-        {
-            return hash_table.find(x, hash_value);
-        }
+    typename HashTableType::iterator ALWAYS_INLINE find(const Key & x, size_t hash_value) {
+        std::lock_guard<std::mutex> lk(mutex);
+        return hash_table.find(x, hash_value);
     }
-    typename HashTableType::const_iterator ALWAYS_INLINE find(const Key & x, size_t hash_value, bool lock) const {
-        if (lock)
-        {
-            std::lock_guard<std::mutex> lk(mutex);
-            return hash_table.find(x, hash_value);
-        }
-        else
-        {
-            return hash_table.find(x, hash_value);
-        }
+    typename HashTableType::const_iterator ALWAYS_INLINE find(const Key & x, size_t hash_value) const {
+        std::lock_guard<std::mutex> lk(mutex);
+        return hash_table.find(x, hash_value);
     }
     /// Insert a value. In the case of any more complex values, it is better to use the `emplace` function.
-    std::pair<typename HashTableType::iterator, bool> ALWAYS_INLINE insert(const typename HashTableType::value_type & x, bool lock = true)
+    std::pair<typename HashTableType::iterator, bool> ALWAYS_INLINE insert(const typename HashTableType::value_type & x)
     {
-        if (lock)
-        {
-            std::lock_guard<std::mutex> lk(mutex);
-            return hash_table.insert(x);
-        }
-        else
-        {
-            return hash_table.insert(x);
-        }
+        std::lock_guard<std::mutex> lk(mutex);
+        return hash_table.insert(x);
     }
-    void ALWAYS_INLINE emplace(const Key & x, typename HashTableType::iterator & it, bool & inserted, bool lock = true)
+    void ALWAYS_INLINE emplace(const Key & x, typename HashTableType::iterator & it, bool & inserted)
     {
-        if (lock)
-        {
-            std::lock_guard<std::mutex> lk(mutex);
-            return hash_table.emplace(x, it, inserted);
-        }
-        else
-        {
-            return hash_table.emplace(x, it, inserted);
-        }
+        std::lock_guard<std::mutex> lk(mutex);
+        return hash_table.emplace(x, it, inserted);
     }
-    void ALWAYS_INLINE emplace(const Key & x, typename HashTableType::iterator & it, bool & inserted, size_t hash_value, bool lock = true)
+    void ALWAYS_INLINE emplace(const Key & x, typename HashTableType::iterator & it, bool & inserted, size_t hash_value)
     {
-        if (lock)
-        {
-            std::lock_guard<std::mutex> lk(mutex);
-            return hash_table.emplace(x, it, inserted, hash_value);
-        }
-        else
-        {
-            return hash_table.emplace(x, it, inserted, hash_value);
-        }
+        std::lock_guard<std::mutex> lk(mutex);
+        return hash_table.emplace(x, it, inserted, hash_value);
     }
-    bool ALWAYS_INLINE has(const Key & x, bool lock = true) const
+    bool ALWAYS_INLINE has(const Key & x) const
     {
-        if (lock)
-        {
-            std::lock_guard<std::mutex> lk(mutex);
-            return hash_table.has(x);
-        }
-        else
-        {
-            return hash_table.has(x);
-        }
+        std::lock_guard<std::mutex> lk(mutex);
+        return hash_table.has(x);
     }
-    bool ALWAYS_INLINE has(const Key & x, size_t hash_value, bool lock = true) const
+    bool ALWAYS_INLINE has(const Key & x, size_t hash_value) const
     {
-        if (lock)
-        {
-            std::lock_guard<std::mutex> lk(mutex);
-            return hash_table.has(x, hash_value);
-        }
-        else
-        {
-            return hash_table.has(x, hash_value);
-        }
+        std::lock_guard<std::mutex> lk(mutex);
+        return hash_table.has(x, hash_value);
     }
     size_t getBufferSizeInBytes() const
     {
@@ -1119,8 +1056,11 @@ public:
             return 0;
         return Hash::operator()(x);
     }
+    bool isZero(const Key & x) const {
+        return Cell::isZero(x, *this);
+    }
 
-    typename segment_type::iterator ALWAYS_INLINE find(const Key & x, bool lock = true) {
+    typename segment_type::iterator ALWAYS_INLINE find(const Key & x) {
         size_t segment_index = 0;
         size_t hash_value = 0;
         if (Cell::isZero(x, *this))
@@ -1131,10 +1071,10 @@ public:
             segment_index = hash_value % segment_size;
         }
 
-        return segments[segment_index]->find(x, hash_value, lock);
+        return segments[segment_index]->find(x, hash_value);
     }
 
-    typename segment_type::const_iterator ALWAYS_INLINE find(const Key & x, bool lock = true) const {
+    typename segment_type::const_iterator ALWAYS_INLINE find(const Key & x) const {
         size_t segment_index = 0;
         size_t hash_value = 0;
         if (Cell::isZero(x, *this))
@@ -1145,55 +1085,55 @@ public:
             segment_index = hash_value % segment_size;
         }
 
-        return ((const HashTableWithLock<Key, Cell, Hash, Grower, Allocator> &)*segments[segment_index]).find(x, hash_value, lock);
+        return ((const HashTableWithLock<Key, Cell, Hash, Grower, Allocator> &)*segments[segment_index]).find(x, hash_value);
     }
 
-    typename segment_type::iterator ALWAYS_INLINE find(const Key & x, size_t hash_value, bool lock = true) {
+    typename segment_type::iterator ALWAYS_INLINE find(const Key & x, size_t hash_value) {
         size_t segment_index = 0;
         if (Cell::isZero(x, *this))
             segment_index = 0;
         else
             segment_index = hash_value % segment_size;
 
-        return segments[segment_index]->find(x, hash_value, lock);
+        return segments[segment_index]->find(x, hash_value);
     }
 
-    typename segment_type::const_iterator ALWAYS_INLINE find(const Key & x, size_t hash_value, bool lock) const {
+    typename segment_type::const_iterator ALWAYS_INLINE find(const Key & x, size_t hash_value) const {
         size_t segment_index = 0;
         if (Cell::isZero(x, *this))
             segment_index = 0;
         else
             segment_index = hash_value % segment_size;
 
-        return segments[segment_index]->find(x, hash_value, lock);
+        return segments[segment_index]->find(x, hash_value);
     }
 
     /// Insert a value. In the case of any more complex values, it is better to use the `emplace` function.
-    std::pair<typename segment_type::iterator, bool> ALWAYS_INLINE insert(const typename segment_type::value_type & x, bool lock = true)
+    std::pair<typename segment_type::iterator, bool> ALWAYS_INLINE insert(const typename segment_type::value_type & x)
     {
         std::pair<typename segment_type::iterator, bool> res;
 
         size_t hash_value = hash(Cell::getKey(x));
         size_t segment_index = hash_value % segment_size;
 
-        return segments[segment_index]->insert(x, lock);
+        return segments[segment_index]->insert(x);
     }
 
-    void ALWAYS_INLINE emplace(const Key & x, typename segment_type::iterator & it, bool & inserted, bool lock = true)
+    void ALWAYS_INLINE emplace(const Key & x, typename segment_type::iterator & it, bool & inserted)
     {
         size_t hash_value = hash(x);
         size_t segment_index = hash_value % segment_size;
-        return segments[segment_index]->emplace(x, it, inserted, lock);
+        return segments[segment_index]->emplace(x, it, inserted);
     }
 
-    void ALWAYS_INLINE emplace(const Key & x, typename segment_type::iterator & it, bool & inserted, size_t hash_value, bool lock = true)
+    void ALWAYS_INLINE emplace(const Key & x, typename segment_type::iterator & it, bool & inserted, size_t hash_value)
     {
         // todo make sure that if x is zero, then segment_index is always 0
         size_t segment_index = hash_value % segment_size;
-        return segments[segment_index]->emplace(x, it, inserted, hash_value, lock);
+        return segments[segment_index]->emplace(x, it, inserted, hash_value);
     }
 
-    bool ALWAYS_INLINE has(const Key & x, bool lock = true) const
+    bool ALWAYS_INLINE has(const Key & x) const
     {
         size_t segment_index = 0;
         if (Cell::isZero(x, *this))
@@ -1204,10 +1144,10 @@ public:
             segment_index = hash_value % segment_size;
         }
 
-        return segments[segment_index]->has(x, lock);
+        return segments[segment_index]->has(x);
     }
 
-    bool ALWAYS_INLINE has(const Key & x, size_t hash_value, bool lock = true) const
+    bool ALWAYS_INLINE has(const Key & x, size_t hash_value) const
     {
         size_t segment_index = 0;
         if (Cell::isZero(x, *this))
@@ -1215,7 +1155,7 @@ public:
         else
             segment_index = hash_value % segment_index;
 
-        return segments[segment_index]->has(x, hash_value, lock);
+        return segments[segment_index]->has(x, hash_value);
     }
 
     size_t getBufferSizeInBytes() const
