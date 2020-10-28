@@ -41,7 +41,7 @@ public:
 
         auto & ctx      = DMTestEnv::getContext();
         auto   settings = DB::Settings();
-        path_pool       = std::make_unique<StoragePathPool>(ctx.getExtraPaths().withTable("test", "t1", false));
+        path_pool       = std::make_unique<StoragePathPool>(ctx.getPathPool().withTable("test", "t1", false));
         storage_pool    = std::make_unique<StoragePool>("test.t1", *path_pool, ctx, settings);
         dm_file         = DMFile::create(0, parent_path);
         db_context      = std::make_unique<Context>(DMTestEnv::getContext(settings));
@@ -65,7 +65,7 @@ public:
         *table_columns_ = *cols;
 
         auto & ctx = DMTestEnv::getContext();
-        *path_pool = ctx.getExtraPaths().withTable("test", "t1", false);
+        *path_pool = ctx.getPathPool().withTable("test", "t1", false);
         dm_context = std::make_unique<DMContext>( //
             *db_context,
             *path_pool,
@@ -917,7 +917,7 @@ public:
 
         auto   settings = DB::Settings();
         auto & ctx      = DMTestEnv::getContext();
-        path_pool       = std::make_unique<StoragePathPool>(ctx.getExtraPaths().withTable("test", "t", false));
+        path_pool       = std::make_unique<StoragePathPool>(ctx.getPathPool().withTable("test", "t", false));
         storage_pool    = std::make_unique<StoragePool>("test.t1", *path_pool, ctx, settings);
         dm_file         = DMFile::create(0, path);
         db_context      = std::make_unique<Context>(DMTestEnv::getContext(settings));

@@ -1,12 +1,19 @@
 #pragma once
 
-#include <Storages/Page/stable/PageStorage.h>
+#include <IO/MemoryReadWriteBuffer.h>
 #include <Storages/Transaction/IndexReaderCreate.h>
 #include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
 
 namespace DB
 {
+
+class Context;
+class PageStorage;
+namespace stable
+{
+class PageStorage;
+}
 
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
@@ -18,10 +25,7 @@ class RegionManager;
 class RegionPersister final : private boost::noncopyable
 {
 public:
-    RegionPersister(
-        const std::string & storage_path, const RegionManager & region_manager_, const FileProviderPtr & file_provider, const stable::PageStorage::Config & config = {})
-        : page_storage("RegionPersister", storage_path, config, file_provider), region_manager(region_manager_), log(&Logger::get("RegionPersister"))
-    {}
+    RegionPersister(Context & global_context_, const RegionManager & region_manager_);
 
     void drop(RegionID region_id, const RegionTaskLock &);
     void persist(const Region & region);
@@ -37,7 +41,10 @@ private:
     void doPersist(const Region & region, const RegionTaskLock * lock);
 
 private:
-    DB::stable::PageStorage page_storage;
+    Context & global_context;
+    std::shared_ptr<DB::PageStorage> page_storage;
+    std::shared_ptr<DB::stable::PageStorage> stable_page_storage;
+
     const RegionManager & region_manager;
     std::mutex mutex;
     Logger * log;

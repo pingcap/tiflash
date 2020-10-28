@@ -92,6 +92,19 @@ static std::string getCanonicalPath(std::string path)
     return path;
 }
 
+static Strings parseMultiplePaths(String s, const String & logging_prefix, Poco::Logger * log)
+{
+    Poco::trimInPlace(s);
+    Strings res;
+    Poco::StringTokenizer string_tokens(s, ",");
+    for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
+    {
+        res.emplace_back(getCanonicalPath(std::string(*it)));
+        LOG_INFO(log, logging_prefix << " data candidate path: " << std::string(*it));
+    }
+    return res;
+}
+
 void Server::uninitialize()
 {
     logger().information("shutting down");
@@ -152,23 +165,24 @@ struct TiFlashRaftConfig
 {
     const std::string engine_key = "engine";
     const std::string engine_value = "tiflash";
-    std::vector<std::string> pd_addrs;
+    Strings pd_addrs;
     std::unordered_set<std::string> ignore_databases{"system"};
-    std::string kvstore_path;
+    Strings kvstore_path;
     // Actually it is "flash.service_addr"
     std::string flash_server_addr;
+    bool enable_storage_compatibility_mode = true;
 
     static const TiDB::StorageEngine DEFAULT_ENGINE = TiDB::StorageEngine::DT;
     bool disable_bg_flush = false;
     TiDB::StorageEngine engine = DEFAULT_ENGINE;
 
 public:
-    TiFlashRaftConfig(const std::string & path, Poco::Util::LayeredConfiguration & config, Poco::Logger * log);
+    TiFlashRaftConfig(const Strings & latest_data_paths, Poco::Util::LayeredConfiguration & config, Poco::Logger * log);
 };
 
 /// Load raft related configs.
-TiFlashRaftConfig::TiFlashRaftConfig(const std::string & path, Poco::Util::LayeredConfiguration & config, Poco::Logger * log)
-    : ignore_databases{"system"}, kvstore_path{path + "kvstore/"}
+TiFlashRaftConfig::TiFlashRaftConfig(const Strings & latest_data_paths, Poco::Util::LayeredConfiguration & config, Poco::Logger * log)
+    : ignore_databases{"system"}, kvstore_path{}
 {
     flash_server_addr = config.getString("flash.service_addr", "0.0.0.0:3930");
 
@@ -210,7 +224,17 @@ TiFlashRaftConfig::TiFlashRaftConfig(const std::string & path, Poco::Util::Layer
 
         if (config.has("raft.kvstore_path"))
         {
-            kvstore_path = config.getString("raft.kvstore_path");
+            kvstore_path = parseMultiplePaths(config.getString("raft.kvstore_path"), "Raft", log);
+            if (kvstore_path.empty())
+            {
+                LOG_INFO(log, "The configuration \"raft.kvstore_path\" is empty, generate the paths from \"latest_data_path\"");
+                for (const auto & s : latest_data_paths)
+                {
+                    String path = Poco::Path{s + "/kvstore"}.toString();
+                    LOG_INFO(log, "Raft data candidate path: " << path);
+                    kvstore_path.emplace_back(std::move(path));
+                }
+            }
         }
 
         if (config.has("raft.storage_engine"))
@@ -244,6 +268,11 @@ TiFlashRaftConfig::TiFlashRaftConfig(const std::string & path, Poco::Util::Layer
                 throw Exception("Illegal arguments: enable background flush while using engine " + MutableSupport::delta_tree_storage_name,
                     ErrorCodes::INVALID_CONFIG_PARAMETER);
             disable_bg_flush = true;
+        }
+
+        if (config.has("raft.enable_storage_compatibility_mode"))
+        {
+            enable_storage_compatibility_mode = config.getBool("raft.enable_storage_compatibility_mode");
         }
     }
 }
@@ -383,6 +412,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     /// ===== Paths related configuration initialized start ===== ///
+    /// Note that theses global variables should be initialized by the following order:
+    // 1. capacity
+    // 2. path pool
+    // 3. TMTContext
+
 
     // TODO: remove this configuration left by ClickHouse
     std::vector<String> all_fast_path;
@@ -428,19 +462,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     Strings main_data_paths, latest_data_paths;
     if (config().has("main_data_path"))
     {
-        auto parse_multiple_paths = [&log](String s, const String & logging_prefix) -> Strings {
-            Poco::trimInPlace(s);
-            Strings res;
-            Poco::StringTokenizer string_tokens(s, ",");
-            for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
-            {
-                res.emplace_back(getCanonicalPath(std::string(*it)));
-                LOG_INFO(log, logging_prefix << " data candidate path: " << std::string(*it));
-            }
-            return res;
-        };
-
-        main_data_paths = parse_multiple_paths(config().getString("main_data_path"), "Main");
+        main_data_paths = parseMultiplePaths(config().getString("main_data_path"), "Main", log);
         if (main_data_paths.empty())
         {
             String error_msg
@@ -450,7 +472,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
 
         if (config().has("latest_data_path"))
-            latest_data_paths = parse_multiple_paths(config().getString("latest_data_path"), "Latest");
+            latest_data_paths = parseMultiplePaths(config().getString("latest_data_path"), "Latest", log);
         if (latest_data_paths.empty())
         {
             LOG_INFO(log, "The configuration \"latest_data_paths\" is empty, use the same paths of \"main_data_path\"");
@@ -516,10 +538,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     global_context->initializePathCapacityMetric(all_normal_path, capacity);
-    global_context->setExtraPaths(main_data_paths, latest_data_paths, global_context->getPathCapacity(), global_context->getFileProvider());
-
     const std::string path = all_normal_path[0];
-    TiFlashRaftConfig raft_config(path, config(), log);
+    TiFlashRaftConfig raft_config(latest_data_paths, config(), log);
+    global_context->setPathPool(main_data_paths, latest_data_paths, raft_config.kvstore_path, //
+        raft_config.enable_storage_compatibility_mode,                                        //
+        global_context->getPathCapacity(), global_context->getFileProvider());
+
     // Use pd address to define which default_database we use by defauly.
     // For mock test, we use "default". For deployed with pd/tidb/tikv use "system", which is always exist in TiFlash.
     std::string default_database = config().getString("default_database", raft_config.pd_addrs.empty() ? "default" : "system");
@@ -763,7 +787,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         auto cluster_config = getClusterConfig(security_config, raft_config);
         global_context->createTMTContext(raft_config.pd_addrs,
             raft_config.ignore_databases,
-            raft_config.kvstore_path,
             raft_config.engine,
             raft_config.disable_bg_flush,
             cluster_config);

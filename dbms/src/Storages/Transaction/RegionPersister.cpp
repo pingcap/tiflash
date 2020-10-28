@@ -1,4 +1,8 @@
 #include <IO/MemoryReadWriteBuffer.h>
+#include <Interpreters/Context.h>
+#include <Storages/Page/PageStorage.h>
+#include <Storages/Page/stable/PageStorage.h>
+#include <Storages/PathPool.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/RegionPersister.h>
@@ -13,9 +17,18 @@ extern const int LOGICAL_ERROR;
 
 void RegionPersister::drop(RegionID region_id, const RegionTaskLock &)
 {
-    stable::WriteBatch wb;
-    wb.delPage(region_id);
-    page_storage.write(std::move(wb));
+    if (page_storage)
+    {
+        WriteBatch wb;
+        wb.delPage(region_id);
+        page_storage->write(std::move(wb));
+    }
+    else
+    {
+        DB::stable::WriteBatch wb;
+        wb.delPage(region_id);
+        stable_page_storage->write(std::move(wb));
+    }
 }
 
 void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionCacheWriteElement & region_write_buffer)
@@ -29,7 +42,6 @@ void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionCach
         LOG_WARNING(&Logger::get("RegionPersister"),
             "Persisting big region: " << region.toString() << " with data info: " << region.dataInfo() << ", serialized size "
                                       << region_size);
-        //throw Exception("Region is too big to persist", ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -55,9 +67,18 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
 
     std::lock_guard<std::mutex> lock(mutex);
 
-    auto cache = page_storage.getEntry(region_id);
-    if (cache.isValid() && cache.tag > applied_index)
-        return;
+    if (page_storage)
+    {
+        auto entry = page_storage->getEntry(region_id);
+        if (entry.isValid() && entry.tag > applied_index)
+            return;
+    }
+    else
+    {
+        auto entry = stable_page_storage->getEntry(region_id);
+        if (entry.isValid() && entry.tag > applied_index)
+            return;
+    }
 
     if (region.isPendingRemove())
     {
@@ -65,30 +86,85 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
         return;
     }
 
-    stable::WriteBatch wb;
     auto read_buf = buffer.tryGetReadBuffer();
-    wb.putPage(region_id, applied_index, read_buf, region_size);
-    page_storage.write(std::move(wb));
+    if (page_storage)
+    {
+        WriteBatch wb;
+        wb.putPage(region_id, applied_index, read_buf, region_size);
+        page_storage->write(std::move(wb));
+    }
+    else
+    {
+        DB::stable::WriteBatch wb;
+        wb.putPage(region_id, applied_index, read_buf, region_size);
+        stable_page_storage->write(std::move(wb));
+    }
 }
+
+RegionPersister::RegionPersister(Context & global_context_, const RegionManager & region_manager_)
+    : global_context(global_context_), region_manager(region_manager_), log(&Logger::get("RegionPersister"))
+{}
 
 RegionMap RegionPersister::restore(IndexReaderCreateFunc * func)
 {
-    // FIXME: if we use DB::PageStorage, we should call `restore`
-    // page_storage.restore();
+    auto & path_pool = global_context.getPathPool();
+    auto delegator = path_pool.getPSDiskDelegatorRaft();
+    // If there is no PageFile with basic version binary format, use the latest version of PageStorage.
+    auto detect_binary_version = PageStorage::getMinDataVersion(global_context.getFileProvider(), delegator);
+    bool run_in_compatibility_mode = path_pool.isRaftStorageCapatibilityModeEnabled() && (detect_binary_version == PageFile::VERSION_BASE);
+    if (!run_in_compatibility_mode)
+    {
+        LOG_INFO(log, "RegionPersister running in normal mode");
+        DB::PageStorage::Config config;
+        config.num_write_slots = 4; // extend write slots to 4 at least
+        page_storage = std::make_unique<DB::PageStorage>( //
+            "RegionPersister",
+            std::move(delegator),
+            config,
+            global_context.getFileProvider(),
+            global_context.getTiFlashMetrics());
+        page_storage->restore();
+    }
+    else
+    {
+        LOG_INFO(log, "RegionPersister running in compatibility mode");
+        stable_page_storage = std::make_unique<DB::stable::PageStorage>(
+            "RegionPersister", delegator->defaultPath(), DB::stable::PageStorage::Config(), global_context.getFileProvider());
+    }
 
     RegionMap regions;
-    auto acceptor = [&](const stable::Page & page) {
-        ReadBufferFromMemory buf(page.data.begin(), page.data.size());
-        auto region = Region::deserialize(buf, func);
-        if (page.page_id != region->id())
-            throw Exception("region id and page id not match!", ErrorCodes::LOGICAL_ERROR);
-        regions.emplace(page.page_id, region);
-    };
-    page_storage.traverse(acceptor);
+    if (page_storage)
+    {
+        auto acceptor = [&](const Page & page) {
+            ReadBufferFromMemory buf(page.data.begin(), page.data.size());
+            auto region = Region::deserialize(buf, func);
+            if (page.page_id != region->id())
+                throw Exception("region id and page id not match!", ErrorCodes::LOGICAL_ERROR);
+            regions.emplace(page.page_id, region);
+        };
+        page_storage->traverse(acceptor);
+    }
+    else
+    {
+        auto acceptor = [&](const DB::stable::Page & page) {
+            ReadBufferFromMemory buf(page.data.begin(), page.data.size());
+            auto region = Region::deserialize(buf, func);
+            if (page.page_id != region->id())
+                throw Exception("region id and page id not match!", ErrorCodes::LOGICAL_ERROR);
+            regions.emplace(page.page_id, region);
+        };
+        stable_page_storage->traverse(acceptor);
+    }
 
     return regions;
 }
 
-bool RegionPersister::gc() { return page_storage.gc(); }
+bool RegionPersister::gc()
+{
+    if (page_storage)
+        return page_storage->gc();
+    else
+        return stable_page_storage->gc();
+}
 
 } // namespace DB

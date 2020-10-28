@@ -60,6 +60,33 @@ bool PageStorage::StatisticsInfo::equals(const StatisticsInfo & rhs)
     return puts == rhs.puts && refs == rhs.refs && deletes == rhs.deletes && upserts == rhs.upserts;
 }
 
+PageFile::Version PageStorage::getMinDataVersion(const FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator)
+{
+    Poco::Logger *      log = &Poco::Logger::get("PageStorage::getMinDataVersion");
+    ListPageFilesOption option;
+    option.ignore_checkpoint = true;
+    option.ignore_legacy     = true;
+    option.remove_tmp_files  = false;
+    auto page_files          = listAllPageFiles(file_provider, delegator, log, option);
+    if (page_files.empty())
+        return PageFile::CURRENT_VERSION;
+
+    // Simply check the first PageFile is good enough
+    auto reader = const_cast<PageFile &>(*page_files.begin()).createMetaMergingReader();
+
+    PageFile::Version min_binary_version = PageFile::CURRENT_VERSION, temp_version;
+    reader->moveNext(&temp_version);
+    min_binary_version = std::min(min_binary_version, temp_version);
+    while (reader->hasNext())
+    {
+        // Continue to read the binary version of next WriteBatch.
+        reader->moveNext(&temp_version);
+        min_binary_version = std::min(min_binary_version, temp_version);
+    }
+    LOG_TRACE(log, "getMinDataVersion done from " + reader->toString());
+    return min_binary_version;
+}
+
 PageFileSet PageStorage::listAllPageFiles(const FileProviderPtr &     file_provider,
                                           PSDiskDelegatorPtr &        delegator,
                                           Poco::Logger *              page_file_log,

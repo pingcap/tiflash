@@ -371,7 +371,7 @@ void IDAsPathUpgrader::DatabaseDiskInfo::renameToTmpDirectories(const Context & 
         true);
 
     // Rename database data dir for multi-paths
-    auto root_pool = ctx.getExtraPaths();
+    auto root_pool = ctx.getPathPool();
     for (const auto & extra_path : root_pool.listPaths())
         renamePath(                                                          //
             doGetExtraDirectory(extra_path, /*escape*/ true, /*tmp*/ false), //
@@ -481,7 +481,7 @@ static void dropAbsentDatabase(
     const String old_data_dir_not_escaped = db_info.getDataDirectory(root_path, false);
     tryRemoveDirectory(old_data_dir_not_escaped, log, true);
 
-    const auto & data_extra_paths = context.getExtraPaths();
+    const auto & data_extra_paths = context.getPathPool();
     for (const auto & extra_root_path : data_extra_paths.listPaths())
     {
         tryRemoveDirectory(db_info.getExtraDirectory(extra_root_path), log, true);
@@ -562,7 +562,7 @@ void IDAsPathUpgrader::fixNotEscapedDirectories()
             if (Poco::File dir(escaped_db_data_dir); !dir.exists())
                 dir.createDirectory();
 
-            const auto & data_extra_paths = global_context.getExtraPaths();
+            const auto & data_extra_paths = global_context.getPathPool();
             for (const auto & extra_root_path : data_extra_paths.listPaths())
             {
                 auto escaped_extra_dir = db_info.getExtraDirectory(extra_root_path, /*escape=*/true);
@@ -611,7 +611,7 @@ void IDAsPathUpgrader::fixNotEscapedDirectories()
             }
 
             // Fix extra path.
-            const auto & data_extra_paths = global_context.getExtraPaths();
+            const auto & data_extra_paths = global_context.getPathPool();
             for (const auto & extra_root_path : data_extra_paths.listPaths())
             {
                 // It was created by old PathPool, both database name and table name are not escaped.
@@ -631,7 +631,7 @@ void IDAsPathUpgrader::fixNotEscapedDirectories()
             // clean not escaped database dir created by old PathPool
             const String not_escaped_data_dir = db_info.getDataDirectory(root_path, /*escape*/ false);
             tryRemoveDirectory(not_escaped_data_dir, log, true);
-            const auto & data_extra_paths = global_context.getExtraPaths();
+            const auto & data_extra_paths = global_context.getPathPool();
             for (const auto & extra_root_path : data_extra_paths.listPaths())
             {
                 auto not_escaped_extra_data_dir = db_info.getExtraDirectory(extra_root_path, /*escape*/ false);
@@ -735,7 +735,7 @@ void IDAsPathUpgrader::renameDatabase(const String & db_name, const DatabaseDisk
         // Remove old data dir
         const String old_data_dir = db_info.getDataDirectory(root_path);
         tryRemoveDirectory(old_data_dir, log);
-        const auto & data_extra_paths = global_context.getExtraPaths();
+        const auto & data_extra_paths = global_context.getPathPool();
         for (const auto & extra_root_path : data_extra_paths.listPaths())
         {
             tryRemoveDirectory(db_info.getExtraDirectory(extra_root_path), log);
@@ -762,7 +762,7 @@ void IDAsPathUpgrader::renameTable(
 
     {
         // Rename data path for multi disk
-        auto data_extra_paths = global_context.getExtraPaths();
+        auto data_extra_paths = global_context.getPathPool();
         for (const auto & extra_root_path : data_extra_paths.listPaths())
         {
             auto old_tbl_extra_data_path = table.getExtraDirectory(extra_root_path, db_info);

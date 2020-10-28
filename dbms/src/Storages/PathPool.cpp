@@ -24,13 +24,29 @@ extern const int LOGICAL_ERROR;
 }
 
 // Constructor to be used during initialization
-PathPool::PathPool(const Strings & main_data_paths_, const Strings & latest_data_paths_, //
-    PathCapacityMetricsPtr global_capacity_, FileProviderPtr file_provider_)
+PathPool::PathPool(const Strings & main_data_paths_, const Strings & latest_data_paths_, const Strings & kvstore_paths_, //
+    PathCapacityMetricsPtr global_capacity_, FileProviderPtr file_provider_, bool enable_raft_storage_compatibility_mode_)
     : main_data_paths(main_data_paths_),
       latest_data_paths(latest_data_paths_),
+      kvstore_paths(kvstore_paths_),
+      enable_raft_storage_compatibility_mode(enable_raft_storage_compatibility_mode_),
       global_capacity(global_capacity_),
-      file_provider(file_provider_)
-{}
+      file_provider(file_provider_),
+      log(&Poco::Logger::get("PathPool"))
+{
+    if (kvstore_paths.empty())
+    {
+        // Set default path generated from latest_data_paths
+        for (const auto & s : latest_data_paths)
+        {
+            // Get a normalized path without trailing '/'
+            auto p = Poco::Path{s + "/kvstore"}.toString();
+            if (p.back() == '/')
+                p.erase(p.begin() + p.size() - 1);
+            kvstore_paths.emplace_back(std::move(p));
+        }
+    }
+}
 
 StoragePathPool PathPool::withTable(const String & database_, const String & table_, bool path_need_database_name_) const
 {
@@ -49,6 +65,8 @@ Strings PathPool::listPaths() const
         paths.emplace_back(p);
     return paths;
 }
+
+PSDiskDelegatorPtr PathPool::getPSDiskDelegatorRaft() { return std::make_shared<PSDiskDelegatorRaft>(*this); }
 
 //==========================================================================================
 // StoragePathPool
@@ -482,5 +500,118 @@ void PSDiskDelegatorSingle::removePageFile(const PageFileIdAndLevel & /*id_lvl*/
     pool.global_capacity->freeUsedSize(pool.latest_path_infos[0].path, file_size);
 }
 
+//==========================================================================================
+// Raft data
+//==========================================================================================
+PSDiskDelegatorRaft::PSDiskDelegatorRaft(PathPool & pool_) : pool(pool_)
+{
+    for (const auto & s : pool.kvstore_paths)
+    {
+        RaftPathInfo info;
+        // Get a normalized path without trailing '/'
+        info.path = s;
+        if (info.path.back() == '/')
+            info.path.erase(info.path.begin() + info.path.size() - 1);
+        info.total_size = 0;
+        raft_path_infos.emplace_back(info);
+    }
+}
+
+size_t PSDiskDelegatorRaft::numPaths() const { return raft_path_infos.size(); }
+
+String PSDiskDelegatorRaft::defaultPath() const { return raft_path_infos[0].path; }
+
+Strings PSDiskDelegatorRaft::listPaths() const { return pool.kvstore_paths; }
+
+String PSDiskDelegatorRaft::choosePath(const PageFileIdAndLevel & id_lvl)
+{
+    std::lock_guard lock{mutex};
+    /// If id exists in page_path_map, just return the same path
+    if (auto iter = page_path_map.find(id_lvl); iter != page_path_map.end())
+    {
+        return raft_path_infos[iter->second].path;
+    }
+
+    // Else choose path randomly
+    UInt64 total_size = 0;
+    for (size_t i = 0; i < raft_path_infos.size(); ++i)
+        total_size += raft_path_infos[i].total_size;
+    if (total_size == 0)
+    {
+        LOG_DEBUG(pool.log, "PSDiskDelegatorRaft no data currently. Choose path 0 for Raft.");
+        return raft_path_infos[0].path;
+    }
+
+    std::vector<double> ratio;
+    for (size_t i = 0; i < raft_path_infos.size(); ++i)
+    {
+        ratio.push_back((double)(total_size - raft_path_infos[i].total_size) / ((raft_path_infos.size() - 1) * total_size));
+    }
+    double rand_number = (double)rand() / RAND_MAX;
+    double ratio_sum = 0;
+    for (size_t i = 0; i < ratio.size(); i++)
+    {
+        ratio_sum += ratio[i];
+        if ((rand_number < ratio_sum) || (i == ratio.size() - 1))
+        {
+            LOG_DEBUG(pool.log, "PSDiskDelegatorRaft choose path " + toString(i) + " for Raft");
+            return raft_path_infos[0].path;
+        }
+    }
+    throw Exception("Should not reach here", ErrorCodes::LOGICAL_ERROR);
+}
+
+size_t PSDiskDelegatorRaft::addPageFileUsedSize(
+    const PageFileIdAndLevel & id_lvl, size_t size_to_add, const String & pf_parent_path, bool need_insert_location)
+{
+    // Get a normalized path without trailing '/'
+    String upper_path = Poco::Path(pf_parent_path).toString();
+    if (upper_path.back() == '/')
+        upper_path.erase(upper_path.begin() + upper_path.size() - 1);
+    UInt32 index = UINT32_MAX;
+    for (size_t i = 0; i < raft_path_infos.size(); i++)
+    {
+        if (raft_path_infos[i].path == upper_path)
+        {
+            index = i;
+            break;
+        }
+    }
+    if (unlikely(index == UINT32_MAX))
+        throw Exception("Unrecognized path " + upper_path);
+
+    {
+        std::lock_guard<std::mutex> lock{mutex};
+        if (need_insert_location)
+            page_path_map[id_lvl] = index;
+        raft_path_infos[index].total_size += size_to_add;
+    }
+
+    // update global used size
+    pool.global_capacity->addUsedSize(upper_path, size_to_add);
+    return index;
+}
+
+String PSDiskDelegatorRaft::getPageFilePath(const PageFileIdAndLevel & id_lvl) const
+{
+    std::lock_guard<std::mutex> lock{mutex};
+    auto iter = page_path_map.find(id_lvl);
+    if (likely(iter != page_path_map.end()))
+        return raft_path_infos[iter->second].path;
+    throw Exception("Can not find path for PageFile [id=" + toString(id_lvl.first) + "_" + toString(id_lvl.second) + "]");
+}
+
+void PSDiskDelegatorRaft::removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size)
+{
+    std::lock_guard<std::mutex> lock{mutex};
+    auto iter = page_path_map.find(id_lvl);
+    if (unlikely(iter == page_path_map.end()))
+        return;
+    auto index = iter->second;
+    raft_path_infos[index].total_size -= file_size;
+    page_path_map.erase(iter);
+
+    pool.global_capacity->freeUsedSize(raft_path_infos[index].path, file_size);
+}
 
 } // namespace DB
