@@ -700,7 +700,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
         = genJoinOtherConditionAction(join.other_conditions(), columns_for_other_join_filter, other_filter_column_name);
 
     const Settings & settings = context.getSettingsRef();
-    size_t join_build_concurrency = std::min(max_streams, right_pipeline.streams.size());
+    size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, right_pipeline.streams.size()) : 1;
     JoinPtr joinPtr = std::make_shared<Join>(left_key_names, right_key_names, true,
         SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode), kind, strictness, join_build_concurrency, collators,
         left_filter_column_name, right_filter_column_name, other_filter_column_name, other_condition_expr);
