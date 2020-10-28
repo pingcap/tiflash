@@ -251,7 +251,7 @@ public:
     /** Add block of data from right hand of JOIN to the map.
       * Returns false, if some limit was exceeded and you should not insert more data.
       */
-    bool insertFromBlockInternal(Block * stored_block);
+    bool insertFromBlockInternal(Block * stored_block, size_t block_index);
 
     bool insertFromBlock(const Block & block);
 
