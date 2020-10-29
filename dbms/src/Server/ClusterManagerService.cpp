@@ -43,7 +43,7 @@ ClusterManagerService::ClusterManagerService(DB::Context & context_, const std::
 
     if (!conf.has(CLUSTER_MANAGER_PATH_KEY))
     {
-        LOG_WARNING(log, "cluster manager will not run because of no config option, try to use default path: " << default_bin_path);
+        LOG_WARNING(log, "Binary path of cluster manager is not set, try to use default: " << default_bin_path);
     }
 
     auto bin_path = conf.getString(CLUSTER_MANAGER_PATH_KEY, default_bin_path) + Poco::Path::separator() + BIN_NAME;
@@ -51,8 +51,8 @@ ClusterManagerService::ClusterManagerService(DB::Context & context_, const std::
 
     if (!Poco::File(bin_path).exists())
     {
-        LOG_ERROR(log, "binary file of cluster manager does not exist: " << bin_path);
-        throw Exception("Binary file of cluster manager does not exist", ErrorCodes::LOGICAL_ERROR);
+        LOG_ERROR(log, "Binary file of cluster manager does not exist in " << bin_path << ", can not sync tiflash replica");
+        return;
     }
 
     std::vector<std::string> args;
