@@ -130,6 +130,11 @@ struct TiFlashProxyConfig
         val_map["--tiflash-version"] = TiFlashBuildInfo::getReleaseVersion();
         val_map["--tiflash-git-hash"] = TiFlashBuildInfo::getGitHash();
 
+        if (!val_map.count("--engine-addr"))
+            val_map["--engine-addr"] = config.getString("flash.service_addr");
+        else
+            val_map["--advertise-engine-addr"] = val_map["--engine-addr"];
+
         args.push_back("TiFlash Proxy");
         for (const auto & v : val_map)
         {
@@ -794,8 +799,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         bool listen_try = config().getBool("listen_try", false);
         if (listen_hosts.empty())
         {
-            listen_hosts.emplace_back("::1");
-            listen_hosts.emplace_back("127.0.0.1");
+            listen_hosts.emplace_back("0.0.0.0");
             listen_try = true;
         }
 

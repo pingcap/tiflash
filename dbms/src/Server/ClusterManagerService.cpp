@@ -39,13 +39,14 @@ ClusterManagerService::ClusterManagerService(DB::Context & context_, const std::
 {
     const auto & conf = context.getConfigRef();
 
+    const auto default_bin_path = conf.getString("application.dir") + "flash_cluster_manager";
+
     if (!conf.has(CLUSTER_MANAGER_PATH_KEY))
     {
-        LOG_WARNING(log, "cluster manager will not run because of no config option");
-        return;
+        LOG_WARNING(log, "cluster manager will not run because of no config option, try to use default path: " << default_bin_path);
     }
 
-    auto bin_path = conf.getString(CLUSTER_MANAGER_PATH_KEY) + Poco::Path::separator() + BIN_NAME;
+    auto bin_path = conf.getString(CLUSTER_MANAGER_PATH_KEY, default_bin_path) + Poco::Path::separator() + BIN_NAME;
     auto task_interval = conf.getInt(TASK_INTERVAL_KEY, 10);
 
     if (!Poco::File(bin_path).exists())
