@@ -409,7 +409,7 @@ namespace
             }
 
             auto key = key_getter.getKey(key_columns, keys_size, i, key_sizes, sort_key_containers);
-            Inserter<STRICTNESS, typename Map::segment_type, KeyGetter, typename Map::mapped_type>::insert(map.getInternalHashTable(0), key, stored_block, i, pool);
+            Inserter<STRICTNESS, typename Map::segment_type, KeyGetter, typename Map::mapped_type>::insert(map.getSegment(0), key, stored_block, i, pool);
         }
     }
 
@@ -480,47 +480,14 @@ namespace
             }
             else
             {
-                std::lock_guard<std::mutex> lk(map.getInternalMutex(segment_index));
+                std::lock_guard<std::mutex> lk(map.getSegmentMutex(segment_index));
                 for (size_t i = 0; i < indexes[segment_index].size(); i++)
                 {
                     auto key = key_getter.getKey(key_columns, keys_size, indexes[segment_index][i], key_sizes, sort_key_containers);
-                    Inserter<STRICTNESS, typename Map::segment_type, KeyGetter, typename Map::mapped_type>::insert(map.getInternalHashTable(segment_index), key, stored_block, indexes[segment_index][i], pool);
+                    Inserter<STRICTNESS, typename Map::segment_type, KeyGetter, typename Map::mapped_type>::insert(map.getSegment(segment_index), key, stored_block, indexes[segment_index][i], pool);
                 }
             }
         }
-
-        /*
-        for (size_t i = 0; i < rows; ++i)
-        {
-            if (has_null_map && (*null_map)[i])
-            {
-                if (rows_not_inserted_to_map)
-                {
-                    /// for right/full out join, need to record the rows not inserted to map
-                    auto elem = reinterpret_cast<Join::RowRefList *>(pool.alloc(sizeof(Join::RowRefList)));
-
-                    std::lock_guard<std::mutex> lk(not_inserted_rows_mutex);
-                    elem->next = rows_not_inserted_to_map->next;
-                    rows_not_inserted_to_map->next = elem;
-                    elem->block = stored_block;
-                    elem->row_num = i;
-                }
-                continue;
-            }
-
-            auto key = key_getter.getKey(key_columns, keys_size, i, key_sizes, sort_key_containers);
-            // todo reuse the hash_value
-            size_t segment_index = 0;
-            size_t hash_value = 0;
-            if (!map.isZero(key))
-            {
-                hash_value = map.hash(key);
-                segment_index = hash_value % segment_size;
-            }
-            std::lock_guard<std::mutex> lk(map.getInternalMutex(segment_index));
-            Inserter<STRICTNESS, typename Map::segment_type, KeyGetter, typename Map::mapped_type>::insert(map.getInternalHashTable(segment_index), key, stored_block, i, pool);
-        }
-         */
     }
 
 
@@ -901,13 +868,15 @@ namespace
             {
                 auto key = key_getter.getKey(key_columns, keys_size, i, key_sizes, sort_key_containers);
                 size_t segment_index = 0;
+                size_t hash_value = 0;
                 if (map.getSegmentSize() > 0 && !map.isZero(key))
                 {
-                    size_t hash_value = map.hash(key);
+                    hash_value = map.hash(key);
                     segment_index = hash_value % map.getSegmentSize();
                 }
-                auto & internalMap = map.getInternalHashTable(segment_index);
-                typename Map::segment_type::const_iterator it = internalMap.find(key);
+                auto & internalMap = map.getSegment(segment_index);
+                /// do not require segment lock because in join, the hash table can not be changed in probe stage.
+                typename Map::segment_type::const_iterator it = map.getSegmentSize() > 0 ? internalMap.find(key, hash_value) : internalMap.find(key);
 
                 if (it != internalMap.end())
                 {
@@ -1534,24 +1503,24 @@ private:
         {
             current_segment = 0;
             position = decltype(position)(
-                    static_cast<void *>(new typename Map::segment_type::const_iterator(map.getInternalHashTable(current_segment).begin())),
+                    static_cast<void *>(new typename Map::segment_type::const_iterator(map.getSegment(current_segment).begin())),
                     [](void *ptr) { delete reinterpret_cast<typename Map::segment_type::const_iterator *>(ptr); });
         }
 
         auto & it = *reinterpret_cast<typename Map::segment_type::const_iterator *>(position.get());
-        auto end = map.getInternalHashTable(current_segment).end();
+        auto end = map.getSegment(current_segment).end();
 
-        for (; it != end && current_segment != map.getSegmentSize(); ++it)
+        for (; it != end || current_segment < map.getSegmentSize() - 1; ++it)
         {
             if (it == end)
             {
                 // move to next internal hash table
                 current_segment++;
                 position = decltype(position)(
-                        static_cast<void *>(new typename Map::segment_type::const_iterator(map.getInternalHashTable(current_segment).begin())),
+                        static_cast<void *>(new typename Map::segment_type::const_iterator(map.getSegment(current_segment).begin())),
                         [](void *ptr) { delete reinterpret_cast<typename Map::segment_type::const_iterator *>(ptr); });
                 it = *reinterpret_cast<typename Map::segment_type::const_iterator *>(position.get());
-                end = map.getInternalHashTable(current_segment).end();
+                end = map.getSegment(current_segment).end();
             }
             if (it->second.getUsed())
                 continue;

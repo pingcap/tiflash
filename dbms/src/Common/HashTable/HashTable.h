@@ -1034,17 +1034,17 @@ public:
         }
     }
 
-    const segment_type & getInternalHashTable(size_t segment_index) const
+    const segment_type & getSegment(size_t segment_index) const
     {
         return segments[segment_index]->getHashTable();
     }
 
-    segment_type & getInternalHashTable(size_t segment_index)
+    segment_type & getSegment(size_t segment_index)
     {
         return segments[segment_index]->getHashTable();
     }
 
-    std::mutex & getInternalMutex(size_t segment_index)
+    std::mutex & getSegmentMutex(size_t segment_index)
     {
         return segments[segment_index]->getMutex();
     }
