@@ -131,7 +131,7 @@ class ExchangeReceiverInputStream : public IProfilingBlockInputStream
     {
         // TODO: Retry backoff.
         int max_retry = 60;
-        std::chrono::seconds total_wait_time;
+        std::chrono::seconds total_wait_time{};
         for (int idx = 0; idx < max_retry; idx++)
         {
             auto sender_task = new mpp::TaskMeta();

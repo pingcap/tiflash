@@ -18,18 +18,20 @@ class FlashConfig:
 
         p = self.conf_toml['flash']
         service_addr = p['service_addr']
-        host, port = [e.strip() for e in service_addr.split(':')]
-        if host == '0.0.0.0':
+        if p['proxy'].get('config') is not None:
             proxy_toml = toml.load(p['proxy']['config'], _dict=dict)
-            host = [e.strip() for e in proxy_toml['server']['engine-addr'].split(':')][0]
+            service_addr = proxy_toml.get('server', {}).get('engine-addr', service_addr)
+        service_addr = p['proxy'].get('engine-addr', service_addr)
+        service_addr = service_addr.strip()
+        host, port = [e.strip() for e in service_addr.split(':')]
         self.service_addr = '{}:{}'.format(host, port)
         self.http_addr = '{}:{}'.format(host, self.http_port)
         self.tidb_status_addr = util.compute_addr_list(p['tidb_status_addr'])
         flash_cluster = p['flash_cluster']
-        self.cluster_master_ttl = flash_cluster['master_ttl']
+        self.cluster_master_ttl = flash_cluster.get('master_ttl', 60)
         self.cluster_refresh_interval = min(
-            int(flash_cluster['refresh_interval']), self.cluster_master_ttl)
-        self.update_rule_interval = int(flash_cluster['update_rule_interval'])
+            int(flash_cluster.get('refresh_interval', 20)), self.cluster_master_ttl)
+        self.update_rule_interval = int(flash_cluster.get('update_rule_interval', 10))
         self.log_path = flash_cluster.get('log', '{}/flash_cluster_manager.log'.format(tmp_path))
 
         self.enable_tls = False
