@@ -12,7 +12,6 @@ mark_cache_size = 5368709120
 minmax_index_cache_size = 5368709120
 tcp_port = 9000
 http_port = 8123
-interserver_http_port = 9009
 [flash]
 	tidb_status_addr = "tidb0:10080"
 	service_addr = "0.0.0.0:3930"
