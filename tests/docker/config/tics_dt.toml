@@ -1,7 +1,5 @@
 tmp_path = "/tmp/tiflash/data/tmp"
 display_name = "TiFlash"
-default_profile = "default"
-users_config = "users.toml"
 # specify paths used for store data, multiple path should be seperated by comma
 path = "/tmp/tiflash/data/db"
 capacity = "107374182400" 

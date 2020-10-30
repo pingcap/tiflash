@@ -27,7 +27,7 @@ class FlashConfig:
         self.service_addr = '{}:{}'.format(host, port)
         self.http_addr = '{}:{}'.format(host, self.http_port)
         self.tidb_status_addr = util.compute_addr_list(p['tidb_status_addr'])
-        flash_cluster = p['flash_cluster']
+        flash_cluster = p.get('flash_cluster', {})
         self.cluster_master_ttl = flash_cluster.get('master_ttl', 60)
         self.cluster_refresh_interval = min(
             int(flash_cluster.get('refresh_interval', 20)), self.cluster_master_ttl)
