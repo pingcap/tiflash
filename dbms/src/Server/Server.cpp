@@ -130,6 +130,11 @@ struct TiFlashProxyConfig
         val_map["--tiflash-version"] = TiFlashBuildInfo::getReleaseVersion();
         val_map["--tiflash-git-hash"] = TiFlashBuildInfo::getGitHash();
 
+        if (!val_map.count("--engine-addr"))
+            val_map["--engine-addr"] = config.getString("flash.service_addr");
+        else
+            val_map["--advertise-engine-addr"] = val_map["--engine-addr"];
+
         args.push_back("TiFlash Proxy");
         for (const auto & v : val_map)
         {
@@ -145,8 +150,8 @@ const std::string TiFlashProxyConfig::config_prefix = "flash.proxy";
 
 struct TiFlashRaftConfig
 {
-    const std::string learner_key = "engine";
-    const std::string learner_value = "tiflash";
+    const std::string engine_key = "engine";
+    const std::string engine_value = "tiflash";
     std::vector<std::string> pd_addrs;
     std::unordered_set<std::string> ignore_databases{"system"};
     std::string kvstore_path;
@@ -246,8 +251,8 @@ TiFlashRaftConfig::TiFlashRaftConfig(const std::string & path, Poco::Util::Layer
 pingcap::ClusterConfig getClusterConfig(const TiFlashSecurityConfig & security_config, const TiFlashRaftConfig & raft_config)
 {
     pingcap::ClusterConfig config;
-    config.learner_key = raft_config.learner_key;
-    config.learner_value = raft_config.learner_value;
+    config.tiflash_engine_key = raft_config.engine_key;
+    config.tiflash_engine_value = raft_config.engine_value;
     config.ca_path = security_config.ca_path;
     config.cert_path = security_config.cert_path;
     config.key_path = security_config.key_path;
@@ -794,8 +799,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         bool listen_try = config().getBool("listen_try", false);
         if (listen_hosts.empty())
         {
-            listen_hosts.emplace_back("::1");
-            listen_hosts.emplace_back("127.0.0.1");
+            listen_hosts.emplace_back("0.0.0.0");
             listen_try = true;
         }
 
@@ -882,13 +886,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
                         security_config.cert_path,
                         security_config.ca_path,
                         Poco::Net::Context::VerificationMode::VERIFY_STRICT);
-                    std::function<bool(const Poco::Crypto::X509Certificate &)> check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
-                        if (security_config.allowed_common_names.empty())
-                        {
-                            return true;
-                        }
-                        return security_config.allowed_common_names.count(cert.commonName()) > 0;
-                    };
+                    std::function<bool(const Poco::Crypto::X509Certificate &)> check_common_name
+                        = [&](const Poco::Crypto::X509Certificate & cert) {
+                              if (security_config.allowed_common_names.empty())
+                              {
+                                  return true;
+                              }
+                              return security_config.allowed_common_names.count(cert.commonName()) > 0;
+                          };
                     context->setAdhocVerification(check_common_name);
                     std::call_once(ssl_init_once, SSLInit);
 

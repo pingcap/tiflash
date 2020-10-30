@@ -40,6 +40,10 @@ grpc::Status BatchCoprocessorHandler::execute()
             case COP_REQ_TYPE_DAG:
             {
                 GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_count, type_super_batch_cop_dag).Increment();
+                GET_METRIC(cop_context.metrics, tiflash_coprocessor_handling_request_count, type_super_batch_cop_dag).Increment();
+                SCOPE_EXIT(
+                    { GET_METRIC(cop_context.metrics, tiflash_coprocessor_handling_request_count, type_super_batch_cop_dag).Decrement(); });
+
                 const auto dag_request = ({
                     tipb::DAGRequest dag_req;
                     dag_req.ParseFromString(cop_request->data());

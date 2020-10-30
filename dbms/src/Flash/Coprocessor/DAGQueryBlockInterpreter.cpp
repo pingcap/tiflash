@@ -4,6 +4,7 @@
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/CoprocessorBlockInputStream.h>
+#include <DataStreams/ExchangeReceiverInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/LimitBlockInputStream.h>
@@ -1245,7 +1246,7 @@ void DAGQueryBlockInterpreter::executeRemoteQueryImpl(Pipeline & pipeline,
 
     pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
     pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
-    pingcap::kv::StoreType store_type = pingcap::kv::TiFlash;
+    pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
     auto all_tasks = pingcap::coprocessor::buildCopTasks(bo, cluster, cop_key_ranges, req, store_type, &Logger::get("pingcap/coprocessor"));
 
     size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());
@@ -1266,6 +1267,14 @@ void DAGQueryBlockInterpreter::executeRemoteQueryImpl(Pipeline & pipeline,
     }
 }
 
+// To execute a query block, you have to:
+// 1. generate the date stream and push it to pipeline.
+// 2. assign the analyzer
+// 3. construct a final projection, even if it's not necessary. just construct it.
+// Talking about projection, it has following rules.
+// 1. if the query block does not contain agg, then the final project is the same as the source Executor
+// 2. if the query block contains agg, then the final project is the same as agg Executor
+// 3. if the cop task may contains more then 1 query block, and the current query block is not the root query block, then the project should add an alias for each column that needs to be projected, something like final_project.emplace_back(col.name, query_block.qb_column_prefix + col.name);
 void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
 {
     if (query_block.isRemoteQuery())
@@ -1277,6 +1286,27 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     if (query_block.source->tp() == tipb::ExecType::TypeJoin)
     {
         executeJoin(query_block.source->join(), pipeline, right_query);
+        recordProfileStreams(pipeline, query_block.source_name);
+    }
+    else if (query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
+    {
+        auto exchange_receiver_stream = std::make_shared<ExchangeReceiverInputStream>(
+            context, query_block.source->exchange_receiver(), dag.getDAGContext().getMPPTaskMeta());
+        pipeline.streams.push_back(exchange_receiver_stream);
+        std::vector<NameAndTypePair> source_columns;
+        Block block = exchange_receiver_stream->getHeader();
+        for (const auto & col : block.getColumnsWithTypeAndName())
+        {
+            source_columns.emplace_back(NameAndTypePair(col.name, col.type));
+            if (query_block.aggregation == nullptr)
+            {
+                if (query_block.isRootQueryBlock())
+                    final_project.emplace_back(col.name, "");
+                else
+                    final_project.emplace_back(col.name, query_block.qb_column_prefix + col.name);
+            }
+        }
+        analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
         recordProfileStreams(pipeline, query_block.source_name);
     }
     else
