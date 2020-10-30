@@ -391,7 +391,17 @@ std::set<UInt64> DMFile::listAllInPath(const FileProviderPtr & file_provider, co
         boost::split(ss, name, boost::is_any_of("_"));
         if (ss.size() != 2)
             return std::nullopt;
-        return std::make_optional(std::stoull(ss[1]));
+        size_t pos;
+        auto id = std::stoull(ss[1], &pos);
+        if (pos < ss[1].size())
+        {
+            // this is invalid file_id
+            return std::nullopt;
+        }
+        else
+        {
+            return std::make_optional(id);
+        }
     };
 
     for (const auto & name : file_names)
