@@ -51,7 +51,8 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
     limits(limits)
 {
     build_set_exceeded.store(false);
-    pools.resize(build_concurrency);
+    for (size_t i = 0; i < build_concurrency; i++)
+        pools.emplace_back(std::make_shared<Arena>());
     if (!other_filter_column.empty())
     {
         /// if there is other_condition, then should keep all the valid rows during probe stage
@@ -256,7 +257,7 @@ size_t Join::getTotalByteCount() const
         res += getTotalByteCountImpl(maps_any_full, type);
         res += getTotalByteCountImpl(maps_all_full, type);
         for (auto & pool : pools) {
-            res += pool.size();
+            res += pool->size();
         }
     }
 
@@ -388,7 +389,7 @@ namespace
         Map & map, size_t rows, const ColumnRawPtrs & key_columns,
         size_t keys_size, const Sizes & key_sizes, const TiDB::TiDBCollators & collators,
         Block * stored_block, ConstNullMapPtr null_map, Join::RowRefList * rows_not_inserted_to_map,
-        std::mutex &, size_t, std::vector<Arena> & pools)
+        std::mutex &, size_t, Arenas & pools)
     {
         KeyGetter key_getter(key_columns, collators);
         std::vector<std::string> sort_key_containers;
@@ -401,7 +402,7 @@ namespace
                 if (rows_not_inserted_to_map)
                 {
                     /// for right/full out join, need to record the rows not inserted to map
-                    auto elem = reinterpret_cast<Join::RowRefList *>(pools[0].alloc(sizeof(Join::RowRefList)));
+                    auto elem = reinterpret_cast<Join::RowRefList *>(pools[0]->alloc(sizeof(Join::RowRefList)));
 
                     elem->next = rows_not_inserted_to_map->next;
                     rows_not_inserted_to_map->next = elem;
@@ -412,7 +413,7 @@ namespace
             }
 
             auto key = key_getter.getKey(key_columns, keys_size, i, key_sizes, sort_key_containers);
-            Inserter<STRICTNESS, typename Map::segment_type, KeyGetter, typename Map::mapped_type>::insert(map.getSegment(0), key, stored_block, i, pools[0]);
+            Inserter<STRICTNESS, typename Map::segment_type, KeyGetter, typename Map::mapped_type>::insert(map.getSegment(0), key, stored_block, i, *pools[0]);
         }
     }
 
@@ -421,7 +422,7 @@ namespace
             Map & map, size_t rows, const ColumnRawPtrs & key_columns,
             size_t keys_size, const Sizes & key_sizes, const TiDB::TiDBCollators & collators,
             Block * stored_block, ConstNullMapPtr null_map, Join::RowRefList * rows_not_inserted_to_map,
-            std::mutex & not_inserted_rows_mutex, size_t block_index, std::vector<Arena> & pools)
+            std::mutex & not_inserted_rows_mutex, size_t block_index, Arenas & pools)
     {
         KeyGetter key_getter(key_columns, collators);
         std::vector<std::string> sort_key_containers;
@@ -474,7 +475,7 @@ namespace
                 for (size_t i = 0; i < indexes[segment_index].size(); i++)
                 {
                     /// for right/full out join, need to record the rows not inserted to map
-                    auto elem = reinterpret_cast<Join::RowRefList *>(pools[0].alloc(sizeof(Join::RowRefList)));
+                    auto elem = reinterpret_cast<Join::RowRefList *>(pools[0]->alloc(sizeof(Join::RowRefList)));
                     elem->next = rows_not_inserted_to_map->next;
                     rows_not_inserted_to_map->next = elem;
                     elem->block = stored_block;
@@ -487,7 +488,7 @@ namespace
                 for (size_t i = 0; i < indexes[segment_index].size(); i++)
                 {
                     auto key = key_getter.getKey(key_columns, keys_size, indexes[segment_index][i], key_sizes, sort_key_containers);
-                    Inserter<STRICTNESS, typename Map::segment_type, KeyGetter, typename Map::mapped_type>::insert(map.getSegment(segment_index), key, stored_block, indexes[segment_index][i], pools[segment_index]);
+                    Inserter<STRICTNESS, typename Map::segment_type, KeyGetter, typename Map::mapped_type>::insert(map.getSegment(segment_index), key, stored_block, indexes[segment_index][i], *pools[segment_index]);
                 }
             }
         }
@@ -499,7 +500,7 @@ namespace
         Map & map, size_t rows, const ColumnRawPtrs & key_columns,
         size_t keys_size, const Sizes & key_sizes, const TiDB::TiDBCollators & collators,
         Block * stored_block, ConstNullMapPtr null_map, Join::RowRefList * rows_not_inserted_to_map,
-        std::mutex & not_inserted_rows_mutex, size_t block_index, size_t insert_concurrency, std::vector<Arena> & pools)
+        std::mutex & not_inserted_rows_mutex, size_t block_index, size_t insert_concurrency, Arenas & pools)
     {
         if (null_map) {
             if (insert_concurrency > 1)
@@ -541,7 +542,7 @@ namespace
         Join::Type type, Maps & maps, size_t rows, const ColumnRawPtrs & key_columns,
         size_t keys_size, const Sizes & key_sizes, const TiDB::TiDBCollators & collators,
         Block * stored_block, ConstNullMapPtr null_map, Join::RowRefList * rows_not_inserted_to_map,
-        std::mutex & not_inserted_rows_mutex, size_t block_index, size_t insert_concurrency, std::vector<Arena> & pools)
+        std::mutex & not_inserted_rows_mutex, size_t block_index, size_t insert_concurrency, Arenas & pools)
     {
         switch (type)
         {
