@@ -391,7 +391,10 @@ std::set<UInt64> DMFile::listAllInPath(const FileProviderPtr & file_provider, co
         boost::split(ss, name, boost::is_any_of("_"));
         if (ss.size() != 2)
             return std::nullopt;
-        return std::make_optional(std::stoull(ss[1]));
+        size_t pos;
+        auto id = std::stoull(ss[1], &pos);
+        // pos < ss[1].size() means that ss[1] is not an invalid integer
+        return pos < ss[1].size() ? std::nullopt : std::make_optional(id);
     };
 
     for (const auto & name : file_names)
@@ -417,6 +420,9 @@ std::set<UInt64> DMFile::listAllInPath(const FileProviderPtr & file_provider, co
         }
 
         if (!startsWith(name, FOLDER_PREFIX_READABLE))
+            continue;
+        // When single_file_mode is enabled, ngc file will appear in the same level of directory with dmfile. Just ignore it.
+        if (endsWith(name, NGC_FILE_NAME))
             continue;
         auto res = try_parse_file_id(name);
         if (!res)
