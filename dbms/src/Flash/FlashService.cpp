@@ -236,11 +236,9 @@ std::tuple<Context, grpc::Status> FlashService::createDBContext(const grpc::Serv
     context.setGlobalContext(server.context());
 
     /// Set a bunch of client information.
-    String query_id = getClientMetaVarWithDefault(grpc_context, "query_id", "");
-    context.setCurrentQueryId(query_id);
-    ClientInfo & client_info = context.getClientInfo();
-    client_info.query_kind = ClientInfo::QueryKind::INITIAL_QUERY;
-    client_info.interface = ClientInfo::Interface::GRPC;
+    std::string user = getClientMetaVarWithDefault(grpc_context, "user", "default");
+    std::string password = getClientMetaVarWithDefault(grpc_context, "password", "");
+    std::string quota_key = getClientMetaVarWithDefault(grpc_context, "quota_key", "");
     std::string peer = grpc_context->peer();
     Int64 pos = peer.find(':');
     if (pos == -1)
@@ -249,8 +247,15 @@ std::tuple<Context, grpc::Status> FlashService::createDBContext(const grpc::Serv
     }
     std::string client_ip = peer.substr(pos + 1);
     Poco::Net::SocketAddress client_address(client_ip);
-    client_info.current_address = client_address;
-    client_info.current_user = getClientMetaVarWithDefault(grpc_context, "user", "");
+
+    context.setUser(user, password, client_address, quota_key);
+
+    String query_id = getClientMetaVarWithDefault(grpc_context, "query_id", "");
+    context.setCurrentQueryId(query_id);
+
+    ClientInfo & client_info = context.getClientInfo();
+    client_info.query_kind = ClientInfo::QueryKind::INITIAL_QUERY;
+    client_info.interface = ClientInfo::Interface::GRPC;
 
     /// Set DAG parameters.
     std::string dag_records_per_chunk_str = getClientMetaVarWithDefault(grpc_context, "dag_records_per_chunk", "");
