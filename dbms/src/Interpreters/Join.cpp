@@ -257,6 +257,7 @@ size_t Join::getTotalByteCount() const
         res += getTotalByteCountImpl(maps_any_full, type);
         res += getTotalByteCountImpl(maps_all_full, type);
         for (auto & pool : pools) {
+            /// note the return value might not be accurate since it does not use lock, but should be enough for current usage
             res += pool->size();
         }
     }
