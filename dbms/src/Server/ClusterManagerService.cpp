@@ -10,9 +10,10 @@
 namespace DB
 {
 
-const std::string CLUSTER_MANAGER_PATH_KEY = "flash.flash_cluster.cluster_manager_path";
+const std::string TIFLASH_PREFIX = "flash";
+const std::string CLUSTER_MANAGER_PATH_KEY = TIFLASH_PREFIX + ".flash_cluster.cluster_manager_path";
 const std::string BIN_NAME = "flash_cluster_manager";
-const std::string TASK_INTERVAL_KEY = "flash.flash_cluster.update_rule_interval";
+const std::string TASK_INTERVAL_KEY = TIFLASH_PREFIX + ".flash_cluster.update_rule_interval";
 
 constexpr long MILLISECOND = 1000;
 constexpr long INIT_DELAY = 5;
@@ -40,6 +41,12 @@ ClusterManagerService::ClusterManagerService(DB::Context & context_, const std::
     const auto & conf = context.getConfigRef();
 
     const auto default_bin_path = conf.getString("application.dir") + "flash_cluster_manager";
+
+    if (!conf.has(TIFLASH_PREFIX))
+    {
+        LOG_WARNING(log, "TiFlash service is not specified, cluster manager can not be started");
+        return;
+    }
 
     if (!conf.has(CLUSTER_MANAGER_PATH_KEY))
     {
