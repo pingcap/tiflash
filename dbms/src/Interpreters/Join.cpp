@@ -435,26 +435,26 @@ namespace
         /// with relatively low cost(if key is stringRef, just cache a stringRef is meaningless, we need to cache the whole `sort_key_containers`)
         /// 2. hash value is calculated twice, maybe we can refine the code to cache the hash value
         /// 3. extra memory to store the segment index info
-        std::vector<std::vector<size_t>> indexes;
+        std::vector<std::vector<size_t>> segment_index_info;
         if (has_null_map && rows_not_inserted_to_map)
         {
-            indexes.resize(segment_size + 1);
+            segment_index_info.resize(segment_size + 1);
         }
         else
         {
-            indexes.resize(segment_size);
+            segment_index_info.resize(segment_size);
         }
-        size_t rows_per_seg = rows / indexes.size();
-        for (size_t i = 0; i < indexes.size(); i++)
+        size_t rows_per_seg = rows / segment_index_info.size();
+        for (size_t i = 0; i < segment_index_info.size(); i++)
         {
-            indexes[i].reserve(rows_per_seg);
+            segment_index_info[i].reserve(rows_per_seg);
         }
         for (size_t i = 0; i < rows; i++)
         {
             if (has_null_map && (*null_map)[i])
             {
                 if (rows_not_inserted_to_map)
-                    indexes[indexes.size() - 1].push_back(i);
+                    segment_index_info[segment_index_info.size() - 1].push_back(i);
             }
             auto key = key_getter.getKey(key_columns, keys_size, i, key_sizes, sort_key_containers);
             size_t segment_index = 0;
@@ -464,32 +464,32 @@ namespace
                 hash_value = map.hash(key);
                 segment_index = hash_value % segment_size;
             }
-            indexes[segment_index].push_back(i);
+            segment_index_info[segment_index].push_back(i);
         }
-        for (size_t insert_index = 0; insert_index < indexes.size(); insert_index++)
+        for (size_t insert_index = 0; insert_index < segment_index_info.size(); insert_index++)
         {
-            size_t segment_index = (insert_index + block_index) % indexes.size();
+            size_t segment_index = (insert_index + block_index) % segment_index_info.size();
             if (segment_index == segment_size)
             {
                 /// null value
                 std::lock_guard<std::mutex> lk(not_inserted_rows_mutex);
-                for (size_t i = 0; i < indexes[segment_index].size(); i++)
+                for (size_t i = 0; i < segment_index_info[segment_index].size(); i++)
                 {
                     /// for right/full out join, need to record the rows not inserted to map
                     auto elem = reinterpret_cast<Join::RowRefList *>(pools[0]->alloc(sizeof(Join::RowRefList)));
                     elem->next = rows_not_inserted_to_map->next;
                     rows_not_inserted_to_map->next = elem;
                     elem->block = stored_block;
-                    elem->row_num = indexes[segment_index][i];
+                    elem->row_num = segment_index_info[segment_index][i];
                 }
             }
             else
             {
                 std::lock_guard<std::mutex> lk(map.getSegmentMutex(segment_index));
-                for (size_t i = 0; i < indexes[segment_index].size(); i++)
+                for (size_t i = 0; i < segment_index_info[segment_index].size(); i++)
                 {
-                    auto key = key_getter.getKey(key_columns, keys_size, indexes[segment_index][i], key_sizes, sort_key_containers);
-                    Inserter<STRICTNESS, typename Map::segment_type, KeyGetter, typename Map::mapped_type>::insert(map.getSegment(segment_index), key, stored_block, indexes[segment_index][i], *pools[segment_index]);
+                    auto key = key_getter.getKey(key_columns, keys_size, segment_index_info[segment_index][i], key_sizes, sort_key_containers);
+                    Inserter<STRICTNESS, typename Map::segment_type, KeyGetter, typename Map::mapped_type>::insert(map.getSegment(segment_index), key, stored_block, segment_index_info[segment_index][i], *pools[segment_index]);
                 }
             }
         }

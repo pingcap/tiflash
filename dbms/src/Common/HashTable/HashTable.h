@@ -1061,9 +1061,7 @@ public:
     typename segment_type::iterator ALWAYS_INLINE find(const Key & x) {
         size_t segment_index = 0;
         size_t hash_value = 0;
-        if (Cell::isZero(x, *this))
-            segment_index = 0;
-        else
+        if (!isZero(x))
         {
             hash_value = hash(x);
             segment_index = hash_value % segment_size;
@@ -1075,9 +1073,7 @@ public:
     typename segment_type::const_iterator ALWAYS_INLINE find(const Key & x) const {
         size_t segment_index = 0;
         size_t hash_value = 0;
-        if (Cell::isZero(x, *this))
-            segment_index = 0;
-        else
+        if (!isZero(x))
         {
             hash_value = hash(x);
             segment_index = hash_value % segment_size;
@@ -1088,9 +1084,7 @@ public:
 
     typename segment_type::iterator ALWAYS_INLINE find(const Key & x, size_t hash_value) {
         size_t segment_index = 0;
-        if (Cell::isZero(x, *this))
-            segment_index = 0;
-        else
+        if (!isZero(x))
             segment_index = hash_value % segment_size;
 
         return segments[segment_index]->find(x, hash_value);
@@ -1098,9 +1092,7 @@ public:
 
     typename segment_type::const_iterator ALWAYS_INLINE find(const Key & x, size_t hash_value) const {
         size_t segment_index = 0;
-        if (Cell::isZero(x, *this))
-            segment_index = 0;
-        else
+        if (!isZero(x))
             segment_index = hash_value % segment_size;
 
         return segments[segment_index]->find(x, hash_value);
@@ -1109,35 +1101,40 @@ public:
     /// Insert a value. In the case of any more complex values, it is better to use the `emplace` function.
     std::pair<typename segment_type::iterator, bool> ALWAYS_INLINE insert(const typename segment_type::value_type & x)
     {
-        std::pair<typename segment_type::iterator, bool> res;
-
-        size_t hash_value = hash(Cell::getKey(x));
-        size_t segment_index = hash_value % segment_size;
+        size_t segment_index = 0;
+        if (!isZero(Cell::getKey(x)))
+        {
+            size_t hash_value = hash(Cell::getKey(x));
+            segment_index = hash_value % segment_size;
+        }
 
         return segments[segment_index]->insert(x);
     }
 
     void ALWAYS_INLINE emplace(const Key & x, typename segment_type::iterator & it, bool & inserted)
     {
-        size_t hash_value = hash(x);
-        size_t segment_index = hash_value % segment_size;
+        size_t segment_index = 0;
+        if (!isZero(x))
+        {
+            size_t hash_value = hash(x);
+            segment_index = hash_value % segment_size;
+        }
         return segments[segment_index]->emplace(x, it, inserted);
     }
 
     void ALWAYS_INLINE emplace(const Key & x, typename segment_type::iterator & it, bool & inserted, size_t hash_value)
     {
-        // todo make sure that if x is zero, then segment_index is always 0
-        size_t segment_index = hash_value % segment_size;
+        size_t segment_index = 0;
+        if (!isZero(x))
+            segment_index = hash_value % segment_size;
         return segments[segment_index]->emplace(x, it, inserted, hash_value);
     }
 
     bool ALWAYS_INLINE has(const Key & x) const
     {
         size_t segment_index = 0;
-        if (Cell::isZero(x, *this))
+        if (!isZero(x))
         {
-            segment_index = 0;
-        } else {
             size_t hash_value = hash(x);
             segment_index = hash_value % segment_size;
         }
@@ -1148,9 +1145,7 @@ public:
     bool ALWAYS_INLINE has(const Key & x, size_t hash_value) const
     {
         size_t segment_index = 0;
-        if (Cell::isZero(x, *this))
-            segment_index = 0;
-        else
+        if (isZero(x))
             segment_index = hash_value % segment_index;
 
         return segments[segment_index]->has(x, hash_value);
