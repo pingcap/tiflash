@@ -393,15 +393,8 @@ std::set<UInt64> DMFile::listAllInPath(const FileProviderPtr & file_provider, co
             return std::nullopt;
         size_t pos;
         auto id = std::stoull(ss[1], &pos);
-        if (pos < ss[1].size())
-        {
-            // this is invalid file_id
-            return std::nullopt;
-        }
-        else
-        {
-            return std::make_optional(id);
-        }
+        // pos < ss[1].size() means that ss[1] is not an invalid integer
+        return pos < ss[1].size() ? std::nullopt : std::make_optional(id);
     };
 
     for (const auto & name : file_names)
