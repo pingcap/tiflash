@@ -423,7 +423,7 @@ private:
     std::mutex not_inserted_rows_mutex;
 
     /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
-    Arena pool;
+    std::vector<Arena> pools;
 
 private:
     Type type = Type::EMPTY;
