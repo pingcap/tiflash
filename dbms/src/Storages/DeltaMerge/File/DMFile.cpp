@@ -421,6 +421,9 @@ std::set<UInt64> DMFile::listAllInPath(const FileProviderPtr & file_provider, co
 
         if (!startsWith(name, FOLDER_PREFIX_READABLE))
             continue;
+        // When single_file_mode is enabled, ngc file will appear in the same level of directory with dmfile. Just ignore it.
+        if (endsWith(name, NGC_FILE_NAME))
+            continue;
         auto res = try_parse_file_id(name);
         if (!res)
         {
