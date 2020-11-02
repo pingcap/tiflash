@@ -2,7 +2,6 @@
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/ClickHouseRevision.h>
-#include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Macros.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -54,6 +53,7 @@
 
 #include "ClusterManagerService.h"
 #include "HTTPHandlerFactory.h"
+#include "ImmutableConfigReloader.h"
 #include "MetricsPrometheus.h"
 #include "MetricsTransmitter.h"
 #include "StatusFile.h"
@@ -129,6 +129,11 @@ struct TiFlashProxyConfig
         val_map["--pd-endpoints"] = config.getString("raft.pd_addr");
         val_map["--tiflash-version"] = TiFlashBuildInfo::getReleaseVersion();
         val_map["--tiflash-git-hash"] = TiFlashBuildInfo::getGitHash();
+
+        if (!val_map.count("--engine-addr"))
+            val_map["--engine-addr"] = config.getString("flash.service_addr");
+        else
+            val_map["--advertise-engine-addr"] = val_map["--engine-addr"];
 
         args.push_back("TiFlash Proxy");
         for (const auto & v : val_map)
@@ -572,19 +577,24 @@ int Server::main(const std::vector<std::string> & /*args*/)
         /* already_loaded = */ true);
 
     /// Initialize users config reloader.
-    std::string users_config_path = config().getString("users_config", config_path);
+    std::string users_config_path = config().getString("users_config", String(1, '\0'));
     /// If path to users' config isn't absolute, try guess its root (current) dir.
     /// At first, try to find it in dir of main config, after will use current dir.
-    if (users_config_path.empty() || users_config_path[0] != '/')
+    if (users_config_path[0])
     {
-        std::string config_dir = Poco::Path(config_path).parent().toString();
-        if (Poco::File(config_dir + users_config_path).exists())
-            users_config_path = config_dir + users_config_path;
+        if (users_config_path.empty() || users_config_path[0] != '/')
+        {
+            std::string config_dir = Poco::Path(config_path).parent().toString();
+            if (Poco::File(config_dir + users_config_path).exists())
+                users_config_path = config_dir + users_config_path;
+        }
     }
-    auto users_config_reloader = std::make_unique<ConfigReloader>(
-        users_config_path,
-        [&](ConfigurationPtr config) { global_context->setUsersConfig(config); },
-        /* already_loaded = */ false);
+    auto users_config_reloader = users_config_path[0]
+        ? std::make_unique<ConfigReloader>(
+            users_config_path,
+            [&](ConfigurationPtr config) { global_context->setUsersConfig(config); },
+            /* already_loaded = */ false)
+        : std::make_unique<ImmutableConfigReloader>([&](ConfigurationPtr config) { global_context->setUsersConfig(config); });
 
     /// Reload config in SYSTEM RELOAD CONFIG query.
     global_context->setConfigReloadCallback([&]() {
@@ -794,8 +804,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         bool listen_try = config().getBool("listen_try", false);
         if (listen_hosts.empty())
         {
-            listen_hosts.emplace_back("::1");
-            listen_hosts.emplace_back("127.0.0.1");
+            listen_hosts.emplace_back("0.0.0.0");
             listen_try = true;
         }
 
