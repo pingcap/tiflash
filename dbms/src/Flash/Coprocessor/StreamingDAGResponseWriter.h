@@ -15,26 +15,33 @@
 
 namespace DB
 {
-
+enum ExchangeType{
+    COLLECT,
+    BROADCAST,
+    PARTITION,
+};
 /// Serializes the stream of blocks in TiDB DAG response format.
 template <class StreamWriterPtr>
 class StreamingDAGResponseWriter : public DAGResponseWriter
 {
 public:
-    StreamingDAGResponseWriter(StreamWriterPtr writer_, Int64 records_per_chunk_, tipb::EncodeType encodeType_,
+    StreamingDAGResponseWriter(StreamWriterPtr writer_, std::vector<Int64>partition_col_ids_, ExchangeType exchange_type_, Int64 records_per_chunk_, tipb::EncodeType encodeType_,
         std::vector<tipb::FieldType> result_field_types, DAGContext & dag_context_, bool collect_execute_summary_,
         bool return_executor_id_);
-
     void write(const Block & block) override;
     void finishWrite() override;
 
 private:
     void ScheduleEncodeTask();
     ThreadPool::Job getEncodeTask(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
+    ThreadPool::Job getEncodePartitionTask(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
 
+    ExchangeType exchange_type;
     StreamWriterPtr writer;
     std::vector<Block> blocks;
+    std::vector<Int64> partition_col_ids;
     size_t rows_in_blocks;
+    uint16_t partition_num;
     ThreadPool thread_pool;
 };
 

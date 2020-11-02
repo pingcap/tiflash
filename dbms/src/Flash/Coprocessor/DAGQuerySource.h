@@ -30,12 +30,17 @@ struct StreamWriter
 
     StreamWriter(::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_) : writer(writer_) {}
 
-    void write(const String & dag_data)
+    void write(const String & dag_data, uint16_t id =0)
     {
         ::coprocessor::BatchResponse resp;
         resp.set_data(dag_data);
+        assert(id==0);
         std::lock_guard<std::mutex> lk(write_mutex);
         writer->Write(resp);
+    }
+    // a helper function
+    uint16_t getPartitionNum() {
+        return 0;
     }
 };
 

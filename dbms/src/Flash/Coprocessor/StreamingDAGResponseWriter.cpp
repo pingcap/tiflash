@@ -3,6 +3,7 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
+#include <Interpreters/AggregationCommon.h>
 
 namespace DB
 {
@@ -14,14 +15,17 @@ extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 template <class StreamWriterPtr>
-StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWriterPtr writer_, Int64 records_per_chunk_,
+StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWriterPtr writer_,  std::vector<Int64>partition_col_ids_, ExchangeType exchange_type_, Int64 records_per_chunk_,
     tipb::EncodeType encode_type_, std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_,
     bool collect_execute_summary_, bool return_executor_id_)
     : DAGResponseWriter(records_per_chunk_, encode_type_, result_field_types_, dag_context_, collect_execute_summary_, return_executor_id_),
+      exchange_type(exchange_type_),
       writer(writer_),
+      partition_col_ids(partition_col_ids_),
       thread_pool(dag_context.final_concurency)
 {
     rows_in_blocks = 0;
+    partition_num = writer_->getPartitionNum();
 }
 
 template <class StreamWriterPtr>
@@ -29,7 +33,14 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::ScheduleEncodeTask()
 {
     tipb::SelectResponse response;
     addExecuteSummaries(response);
-    thread_pool.schedule(getEncodeTask(blocks, response));
+    if(exchange_type == ExchangeType::PARTITION)
+    {
+        thread_pool.schedule(getEncodePartitionTask(blocks, response));
+    }
+    else
+    {
+        thread_pool.schedule(getEncodeTask(blocks, response));
+    }
     blocks.clear();
     rows_in_blocks = 0;
 }
@@ -112,6 +123,60 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodeTask(
         writer->write(select_resp);
     };
 }
+
+template <class StreamWriterPtr>
+ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionTask(
+        std::vector<Block> & input_blocks, tipb::SelectResponse & response) const
+{
+    /// todo find a way to avoid copying input_blocks
+    return [this, input_blocks, response]() mutable {
+        std::vector<std::unique_ptr<ChunkCodecStream> > chunk_codec_stream;
+        std::vector<tipb::SelectResponse> responses;
+        for(auto i=0; i < partition_num ; ++i) {
+            if (encode_type == tipb::EncodeType::TypeDefault) {
+                chunk_codec_stream[i] = std::make_unique<DefaultChunkCodec>()->newCodecStream(result_field_types);
+            } else if (encode_type == tipb::EncodeType::TypeChunk) {
+                chunk_codec_stream[i] = std::make_unique<ArrowChunkCodec>()->newCodecStream(result_field_types);
+            } else if (encode_type == tipb::EncodeType::TypeCHBlock) {
+                chunk_codec_stream[i] = std::make_unique<CHBlockChunkCodec>()->newCodecStream(result_field_types);
+            }
+            responses[i] = response;
+            responses[i].set_encode_type(encode_type);
+        }
+
+        // partition tuples in blocks
+        // 1) compute partition id
+        // 2) encode each tuple
+        ColumnRawPtrs col_ptrs;
+        for (auto & block : input_blocks)
+        {
+            size_t rows = block.rows();
+            // get partition key column ids
+            for(auto i : partition_col_ids)
+            {
+                col_ptrs.emplace_back(block.getByPosition(i).column.get());
+            }
+            for (size_t row_index = 0; row_index < rows; ++row_index)
+            {
+                UInt128 key = hash128(row_index, col_ptrs.size(), col_ptrs, TiDB::dummy_collators, TiDB::dummy_sort_key_contaners);
+                chunk_codec_stream[(key.low % partition_num)]->encode(block, row_index, row_index+1);
+            }
+        }
+
+        // serialize each partitioned chunk and write it to its destination
+        for (auto i=0; i< partition_num; ++i)
+        {
+            auto dag_chunk = responses[i].add_chunks();
+            dag_chunk->set_rows_data(chunk_codec_stream[i]->getString());
+            chunk_codec_stream[i]->clear();
+            std::string select_resp;
+            responses[i].SerializeToString(&select_resp);
+            writer->write(select_resp, i);
+        }
+    };
+}
+
+
 
 template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
