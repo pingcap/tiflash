@@ -31,6 +31,11 @@ namespace ErrorCodes
     extern const int ILLEGAL_COLUMN;
 }
 
+/// Do I need to use the hash table maps_*_full, in which we remember whether the row was joined.
+static bool getFullness(ASTTableJoin::Kind kind)
+{
+    return kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Full;
+}
 
 Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool use_nulls_,
     const SizeLimits & limits, ASTTableJoin::Kind kind_, ASTTableJoin::Strictness strictness_, size_t build_concurrency_,
@@ -52,6 +57,8 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
 {
     build_set_exceeded.store(false);
     for (size_t i = 0; i < build_concurrency; i++)
+        pools.emplace_back(std::make_shared<Arena>());
+    if (build_concurrency > 1 && getFullness(kind))
         pools.emplace_back(std::make_shared<Arena>());
     if (!other_filter_column.empty())
     {
@@ -189,13 +196,6 @@ template <> struct KeyGetterForType<Join::Type::key_fixed_string> { using Type =
 template <> struct KeyGetterForType<Join::Type::keys128> { using Type = JoinKeyGetterFixed<UInt128>; };
 template <> struct KeyGetterForType<Join::Type::keys256> { using Type = JoinKeyGetterFixed<UInt256>; };
 template <> struct KeyGetterForType<Join::Type::hashed> { using Type = JoinKeyGetterHashed; };
-
-
-/// Do I need to use the hash table maps_*_full, in which we remember whether the row was joined.
-static bool getFullness(ASTTableJoin::Kind kind)
-{
-    return kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Full;
-}
 
 
 void Join::init(Type type_)
@@ -455,6 +455,7 @@ namespace
             {
                 if (rows_not_inserted_to_map)
                     segment_index_info[segment_index_info.size() - 1].push_back(i);
+                continue;
             }
             auto key = key_getter.getKey(key_columns, keys_size, i, key_sizes, sort_key_containers);
             size_t segment_index = 0;
@@ -476,7 +477,7 @@ namespace
                 for (size_t i = 0; i < segment_index_info[segment_index].size(); i++)
                 {
                     /// for right/full out join, need to record the rows not inserted to map
-                    auto elem = reinterpret_cast<Join::RowRefList *>(pools[0]->alloc(sizeof(Join::RowRefList)));
+                    auto elem = reinterpret_cast<Join::RowRefList *>(pools[segment_index]->alloc(sizeof(Join::RowRefList)));
                     elem->next = rows_not_inserted_to_map->next;
                     rows_not_inserted_to_map->next = elem;
                     elem->block = stored_block;
@@ -1320,7 +1321,7 @@ struct AdderNonJoined;
 template <typename Mapped>
 struct AdderNonJoined<ASTTableJoin::Strictness::Any, Mapped>
 {
-    static void add(const Mapped & mapped,
+    static size_t add(const Mapped & mapped,
         size_t num_columns_left, MutableColumns & columns_left,
         size_t num_columns_right, MutableColumns & columns_right)
     {
@@ -1329,16 +1330,18 @@ struct AdderNonJoined<ASTTableJoin::Strictness::Any, Mapped>
 
         for (size_t j = 0; j < num_columns_right; ++j)
             columns_right[j]->insertFrom(*mapped.block->getByPosition(j).column.get(), mapped.row_num);
+        return 1;
     }
 };
 
 template <typename Mapped>
 struct AdderNonJoined<ASTTableJoin::Strictness::All, Mapped>
 {
-    static void add(const Mapped & mapped,
+    static size_t add(const Mapped & mapped,
         size_t num_columns_left, MutableColumns & columns_left,
         size_t num_columns_right, MutableColumns & columns_right)
     {
+        size_t rows_added = 0;
         for (auto current = &static_cast<const typename Mapped::Base_t &>(mapped); current != nullptr; current = current->next)
         {
             for (size_t j = 0; j < num_columns_left; ++j)
@@ -1346,7 +1349,9 @@ struct AdderNonJoined<ASTTableJoin::Strictness::All, Mapped>
 
             for (size_t j = 0; j < num_columns_right; ++j)
                 columns_right[j]->insertFrom(*current->block->getByPosition(j).column.get(), current->row_num);
+            rows_added++;
         }
+        return rows_added;
     }
 };
 
@@ -1423,6 +1428,12 @@ protected:
         if (parent.blocks.empty())
             return Block();
 
+        if (add_not_mapped_rows)
+        {
+            current_not_mapped_row = parent.rows_not_inserted_to_map.next;
+            add_not_mapped_rows = false;
+        }
+
         if (parent.strictness == ASTTableJoin::Strictness::Any)
             return createBlock<ASTTableJoin::Strictness::Any>(parent.maps_any_full);
         else if (parent.strictness == ASTTableJoin::Strictness::All)
@@ -1449,6 +1460,7 @@ private:
 
     std::unique_ptr<void, std::function<void(void *)>> position;    /// type erasure
     size_t current_segment;
+    Join::RowRefList * current_not_mapped_row;
 
 
     template <ASTTableJoin::Strictness STRICTNESS, typename Maps>
@@ -1503,6 +1515,23 @@ private:
         size_t num_columns_right, MutableColumns & columns_right)
     {
         size_t rows_added = 0;
+        while (current_not_mapped_row != nullptr)
+        {
+            rows_added++;
+            for (size_t j = 0; j < num_columns_left; ++j)
+                columns_left[j]->insertDefault();
+
+            for (size_t j = 0; j < num_columns_right; ++j)
+                columns_right[j]->insertFrom(*current_not_mapped_row->block->getByPosition(j).column.get(),
+                                             current_not_mapped_row->row_num);
+
+            current_not_mapped_row = current_not_mapped_row->next;
+            if (rows_added == max_block_size)
+            {
+                return rows_added;
+            }
+        }
+
 
         if (!position)
         {
@@ -1512,57 +1541,38 @@ private:
                     [](void *ptr) { delete reinterpret_cast<typename Map::segment_type::const_iterator *>(ptr); });
         }
 
-        auto & it = *reinterpret_cast<typename Map::segment_type::const_iterator *>(position.get());
+        /// use pointer instead of reference because `it` need to be re-assigned latter
+        auto it = reinterpret_cast<typename Map::segment_type::const_iterator *>(position.get());
         auto end = map.getSegment(current_segment).end();
 
-        for (; it != end || current_segment < map.getSegmentSize() - 1; ++it)
+        for (; *it != end || current_segment < map.getSegmentSize() - 1; ++(*it))
         {
-            if (it == end)
+            if (*it == end)
             {
                 // move to next internal hash table
-                current_segment++;
-                position = decltype(position)(
-                        static_cast<void *>(new typename Map::segment_type::const_iterator(map.getSegment(current_segment).begin())),
-                        [](void *ptr) { delete reinterpret_cast<typename Map::segment_type::const_iterator *>(ptr); });
-                it = *reinterpret_cast<typename Map::segment_type::const_iterator *>(position.get());
-                end = map.getSegment(current_segment).end();
+                do {
+                    current_segment++;
+                    position = decltype(position)(
+                            static_cast<void *>(new typename Map::segment_type::const_iterator(
+                                    map.getSegment(current_segment).begin())),
+                            [](void *ptr) { delete reinterpret_cast<typename Map::segment_type::const_iterator *>(ptr); });
+                    it = reinterpret_cast<typename Map::segment_type::const_iterator *>(position.get());
+                    end = map.getSegment(current_segment).end();
+                } while (*it == end && current_segment < map.getSegmentSize() - 1);
+                if (*it == end)
+                    break;
             }
-            if (it->second.getUsed())
+            if ((*it)->second.getUsed())
                 continue;
 
-            AdderNonJoined<STRICTNESS, typename Map::mapped_type>::add(it->second, num_columns_left, columns_left, num_columns_right, columns_right);
+            rows_added += AdderNonJoined<STRICTNESS, typename Map::mapped_type>::add((*it)->second, num_columns_left, columns_left, num_columns_right, columns_right);
 
-            ++rows_added;
-            if (rows_added == max_block_size)
+            if (rows_added >= max_block_size)
             {
-                ++it;
+                ++(*it);
                 break;
             }
         }
-
-        if (add_not_mapped_rows)
-        {
-            for (auto *row_ref = parent.rows_not_inserted_to_map.next; row_ref != nullptr;)
-            {
-                rows_added++;
-                for (size_t j = 0; j < num_columns_left; ++j)
-                    columns_left[j]->insertDefault();
-
-                for (size_t j = 0; j < num_columns_right; ++j)
-                    columns_right[j]->insertFrom(*row_ref->block->getByPosition(j).column.get(), row_ref->row_num);
-                if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
-                {
-                    row_ref = nullptr;
-                }
-                else
-                {
-                    row_ref = row_ref->next;
-                }
-            }
-            /// so this is not thread safe
-            add_not_mapped_rows = false;
-        }
-
         return rows_added;
     }
 };
