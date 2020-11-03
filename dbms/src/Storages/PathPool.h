@@ -23,14 +23,16 @@ class PathPool;
 /// A class to manage paths for the specified storage.
 class StoragePathPool;
 
-/// Delegators to StoragePathPool. They are used for managing the path for storing stable/delta/raft data.
-class StableDelegator;
+/// ===== Delegators to StoragePathPool ===== ///
+/// Delegators to StoragePathPool. Use for managing the path of DTFiles.
+class StableDiskDelegator;
+/// Delegators to StoragePathPool. Use by PageStorage for managing the path of PageFiles.
 class PSDiskDelegator;
 using PSDiskDelegatorPtr = std::shared_ptr<PSDiskDelegator>;
-class MultiDiskDelegator;
-class NormalDiskDelegator;
-// TODO: support multi-paths for RaftDelegator
-// using RaftDelegator = NormalDiskDelegator;
+class PSDiskDelegatorMulti;
+class PSDiskDelegatorSingle;
+// TODO: support multi-paths for Raft data
+// using PSDiskDelegatorRaft = PSDiskDelegatorSingle;
 
 
 /// A class to manage global paths.
@@ -70,10 +72,10 @@ private:
     Poco::Logger * log;
 };
 
-class StableDelegator : private boost::noncopyable
+class StableDiskDelegator : private boost::noncopyable
 {
 public:
-    StableDelegator(StoragePathPool & pool_) : pool(pool_) {}
+    StableDiskDelegator(StoragePathPool & pool_) : pool(pool_) {}
 
     Strings listPaths() const;
 
@@ -92,12 +94,11 @@ private:
 class PSDiskDelegator : private boost::noncopyable
 {
 public:
-    PSDiskDelegator() {}
     virtual ~PSDiskDelegator() {}
 
     virtual size_t numPaths() const = 0;
 
-    virtual String normalPath() const = 0;
+    virtual String defaultPath() const = 0;
 
     virtual Strings listPaths() const = 0;
 
@@ -112,14 +113,14 @@ public:
     virtual void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size) = 0;
 };
 
-class MultiDiskDelegator : public PSDiskDelegator
+class PSDiskDelegatorMulti : public PSDiskDelegator
 {
 public:
-    MultiDiskDelegator(StoragePathPool & pool_, String prefix) : pool(pool_), path_prefix(std::move(prefix)) {}
+    PSDiskDelegatorMulti(StoragePathPool & pool_, String prefix) : pool(pool_), path_prefix(std::move(prefix)) {}
 
     size_t numPaths() const override;
 
-    String normalPath() const override;
+    String defaultPath() const override;
 
     Strings listPaths() const override;
 
@@ -139,14 +140,14 @@ private:
     PathPool::PageFilePathMap page_path_map;
 };
 
-class NormalDiskDelegator : public PSDiskDelegator
+class PSDiskDelegatorSingle : public PSDiskDelegator
 {
 public:
-    NormalDiskDelegator(StoragePathPool & pool_, String prefix) : pool(pool_), path_prefix(std::move(prefix)) {}
+    PSDiskDelegatorSingle(StoragePathPool & pool_, String prefix) : pool(pool_), path_prefix(std::move(prefix)) {}
 
     size_t numPaths() const override;
 
-    String normalPath() const override;
+    String defaultPath() const override;
 
     Strings listPaths() const override;
 
@@ -179,16 +180,16 @@ public:
 
     // Generate a lightweight delegator for managing stable data, such as choosing path for DTFile or getting DTFile path by ID and so on.
     // Those paths are generated from `main_path_infos` and `STABLE_FOLDER_NAME`
-    StableDelegator getStableDelegate() { return StableDelegator(*this); }
+    StableDiskDelegator getStableDiskDelegator() { return StableDiskDelegator(*this); }
 
     // Generate a delegator for managing the paths of `StoragePool`.
     // Those paths are generated from `latest_path_infos` and `prefix`.
     // User should keep the pointer to track the PageFileID -> path index mapping.
-    PSDiskDelegatorPtr getMultiDiskDelegate(const String & prefix) { return std::make_shared<MultiDiskDelegator>(*this, prefix); }
+    PSDiskDelegatorPtr getPSDiskDelegatorMulti(const String & prefix) { return std::make_shared<PSDiskDelegatorMulti>(*this, prefix); }
 
     // Generate a delegator for managing the paths of `StoragePool`.
     // Those paths are generated from the first path of `latest_path_infos` and `prefix`
-    PSDiskDelegatorPtr getNormalDiskDelegate(const String & prefix) { return std::make_shared<NormalDiskDelegator>(*this, prefix); }
+    PSDiskDelegatorPtr getPSDiskDelegatorSingle(const String & prefix) { return std::make_shared<PSDiskDelegatorSingle>(*this, prefix); }
 
     void rename(const String & new_database, const String & new_table, bool clean_rename);
 
@@ -215,9 +216,9 @@ private:
     };
     using LatestPathInfos = std::vector<LatestPathInfo>;
 
-    friend class StableDelegator;
-    friend class MultiDiskDelegator;
-    friend class NormalDiskDelegator;
+    friend class StableDiskDelegator;
+    friend class PSDiskDelegatorMulti;
+    friend class PSDiskDelegatorSingle;
 
 private:
     // Path, size

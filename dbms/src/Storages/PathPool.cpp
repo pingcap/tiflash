@@ -237,7 +237,7 @@ void StoragePathPool::renamePath(const String & old_path, const String & new_pat
 // Stable data
 //==========================================================================================
 
-Strings StableDelegator::listPaths() const
+Strings StableDiskDelegator::listPaths() const
 {
     std::vector<String> paths;
     for (size_t i = 0; i < pool.main_path_infos.size(); ++i)
@@ -247,7 +247,7 @@ Strings StableDelegator::listPaths() const
     return paths;
 }
 
-String StableDelegator::choosePath() const
+String StableDiskDelegator::choosePath() const
 {
     std::lock_guard<std::mutex> lock{pool.mutex};
     UInt64 total_size = 0;
@@ -278,7 +278,7 @@ String StableDelegator::choosePath() const
     throw Exception("Should not reach here", ErrorCodes::LOGICAL_ERROR);
 }
 
-String StableDelegator::getDTFilePath(UInt64 file_id) const
+String StableDiskDelegator::getDTFilePath(UInt64 file_id) const
 {
     std::lock_guard<std::mutex> lock{pool.mutex};
     auto iter = pool.dt_file_path_map.find(file_id);
@@ -287,7 +287,7 @@ String StableDelegator::getDTFilePath(UInt64 file_id) const
     throw Exception("Can not find path for DMFile [id=" + toString(file_id) + "]");
 }
 
-void StableDelegator::addDTFile(UInt64 file_id, size_t file_size, std::string_view path)
+void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::string_view path)
 {
     path.remove_suffix(1 + strlen(StoragePathPool::STABLE_FOLDER_NAME)); // remove '/stable' added in listPathsForStable/getDTFilePath
     std::lock_guard<std::mutex> lock{pool.mutex};
@@ -316,7 +316,7 @@ void StableDelegator::addDTFile(UInt64 file_id, size_t file_size, std::string_vi
     pool.global_capacity->addUsedSize(path, file_size);
 }
 
-void StableDelegator::removeDTFile(UInt64 file_id)
+void StableDiskDelegator::removeDTFile(UInt64 file_id)
 {
     std::lock_guard<std::mutex> lock{pool.mutex};
     auto iter = pool.dt_file_path_map.find(file_id);
@@ -335,11 +335,11 @@ void StableDelegator::removeDTFile(UInt64 file_id)
 // Delta data
 //==========================================================================================
 
-size_t MultiDiskDelegator::numPaths() const { return pool.latest_path_infos.size(); }
+size_t PSDiskDelegatorMulti::numPaths() const { return pool.latest_path_infos.size(); }
 
-String MultiDiskDelegator::normalPath() const { return pool.latest_path_infos[0].path + "/" + path_prefix; }
+String PSDiskDelegatorMulti::defaultPath() const { return pool.latest_path_infos[0].path + "/" + path_prefix; }
 
-Strings MultiDiskDelegator::listPaths() const
+Strings PSDiskDelegatorMulti::listPaths() const
 {
     // The delta data could be stored in all direcotries.
     std::vector<String> paths;
@@ -350,7 +350,7 @@ Strings MultiDiskDelegator::listPaths() const
     return paths;
 }
 
-String MultiDiskDelegator::choosePath(const PageFileIdAndLevel & id_lvl)
+String PSDiskDelegatorMulti::choosePath(const PageFileIdAndLevel & id_lvl)
 {
     auto return_path = [&](const size_t index) -> String { return pool.latest_path_infos[index].path + "/" + path_prefix; };
 
@@ -392,7 +392,7 @@ String MultiDiskDelegator::choosePath(const PageFileIdAndLevel & id_lvl)
     throw Exception("Should not reach here", ErrorCodes::LOGICAL_ERROR);
 }
 
-size_t MultiDiskDelegator::addPageFileUsedSize(
+size_t PSDiskDelegatorMulti::addPageFileUsedSize(
     const PageFileIdAndLevel & id_lvl, size_t size_to_add, const String & pf_parent_path, bool need_insert_location)
 {
     // Get a normalized path without `path_prefix` and trailing '/'
@@ -423,7 +423,7 @@ size_t MultiDiskDelegator::addPageFileUsedSize(
     return index;
 }
 
-String MultiDiskDelegator::getPageFilePath(const PageFileIdAndLevel & id_lvl) const
+String PSDiskDelegatorMulti::getPageFilePath(const PageFileIdAndLevel & id_lvl) const
 {
     std::lock_guard<std::mutex> lock{pool.mutex};
     auto iter = page_path_map.find(id_lvl);
@@ -432,7 +432,7 @@ String MultiDiskDelegator::getPageFilePath(const PageFileIdAndLevel & id_lvl) co
     throw Exception("Can not find path for PageFile [id=" + toString(id_lvl.first) + "_" + toString(id_lvl.second) + "]");
 }
 
-void MultiDiskDelegator::removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size)
+void PSDiskDelegatorMulti::removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size)
 {
     std::lock_guard<std::mutex> lock{pool.mutex};
     auto iter = page_path_map.find(id_lvl);
@@ -449,11 +449,11 @@ void MultiDiskDelegator::removePageFile(const PageFileIdAndLevel & id_lvl, size_
 // Normal data
 //==========================================================================================
 
-size_t NormalDiskDelegator::numPaths() const { return 1; }
+size_t PSDiskDelegatorSingle::numPaths() const { return 1; }
 
-String NormalDiskDelegator::normalPath() const { return pool.latest_path_infos[0].path + "/" + path_prefix; }
+String PSDiskDelegatorSingle::defaultPath() const { return pool.latest_path_infos[0].path + "/" + path_prefix; }
 
-Strings NormalDiskDelegator::listPaths() const
+Strings PSDiskDelegatorSingle::listPaths() const
 {
     // only stored in the first path.
     std::vector<String> paths;
@@ -461,9 +461,9 @@ Strings NormalDiskDelegator::listPaths() const
     return paths;
 }
 
-String NormalDiskDelegator::choosePath(const PageFileIdAndLevel & /*id_lvl*/) { return pool.latest_path_infos[0].path + "/" + path_prefix; }
+String PSDiskDelegatorSingle::choosePath(const PageFileIdAndLevel & /*id_lvl*/) { return pool.latest_path_infos[0].path + "/" + path_prefix; }
 
-size_t NormalDiskDelegator::addPageFileUsedSize(
+size_t PSDiskDelegatorSingle::addPageFileUsedSize(
     const PageFileIdAndLevel & /*id_lvl*/, size_t size_to_add, const String & pf_parent_path, bool /*need_insert_location*/)
 {
     // In this case, inserting to page_path_map or adding total_size for PathInfo seems useless.
@@ -472,12 +472,12 @@ size_t NormalDiskDelegator::addPageFileUsedSize(
     return 0;
 }
 
-String NormalDiskDelegator::getPageFilePath(const PageFileIdAndLevel & /*id_lvl*/) const
+String PSDiskDelegatorSingle::getPageFilePath(const PageFileIdAndLevel & /*id_lvl*/) const
 {
     return pool.latest_path_infos[0].path + "/" + path_prefix;
 }
 
-void NormalDiskDelegator::removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t file_size)
+void PSDiskDelegatorSingle::removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t file_size)
 {
     pool.global_capacity->freeUsedSize(pool.latest_path_infos[0].path, file_size);
 }

@@ -66,7 +66,7 @@ protected:
     std::shared_ptr<PageStorage> reopenWithConfig(const PageStorage::Config & config_)
     {
         auto spool     = TiFlashTestEnv::getContext().getExtraPaths().withTable("test", "t", false);
-        auto delegator = spool.getNormalDiskDelegate("log");
+        auto delegator = spool.getPSDiskDelegatorSingle("log");
         auto storage   = std::make_shared<PageStorage>("test.t", delegator, config_, file_provider);
         storage->restore();
         return storage;

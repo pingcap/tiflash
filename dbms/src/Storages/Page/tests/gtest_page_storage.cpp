@@ -45,7 +45,7 @@ protected:
         // drop dir if exists
         auto & ctx = TiFlashTestEnv::getContext();
         path_pool  = std::make_unique<StoragePathPool>(ctx.getExtraPaths().withTable("test", "t1", false));
-        for (const auto & p : path_pool->getNormalDiskDelegate("log")->listPaths())
+        for (const auto & p : path_pool->getPSDiskDelegatorSingle("log")->listPaths())
         {
             if (Poco::File file(p); file.exists())
             {
@@ -62,7 +62,7 @@ protected:
     std::shared_ptr<PageStorage> reopenWithConfig(const PageStorage::Config & config_)
     {
         auto & ctx       = TiFlashTestEnv::getContext();
-        auto   delegator = path_pool->getNormalDiskDelegate("log");
+        auto   delegator = path_pool->getPSDiskDelegatorSingle("log");
         auto   storage   = std::make_shared<PageStorage>("test.t", delegator, config_, file_provider, ctx.getTiFlashMetrics());
         storage->restore();
         return storage;
@@ -382,7 +382,7 @@ try
         wb.putPage(1, 0, buf, buf_sz);
         storage->write(std::move(wb));
 
-        auto f = PageFile::openPageFileForRead(1, 0, storage->delegator->normalPath(), file_provider, PageFile::Type::Formal, storage->log);
+        auto f = PageFile::openPageFileForRead(1, 0, storage->delegator->defaultPath(), file_provider, PageFile::Type::Formal, storage->log);
         f.setLegacy();
     }
 
@@ -393,7 +393,7 @@ try
         auto buf = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
         wb.putPage(1, 0, buf, buf_sz);
 
-        auto f = PageFile::newPageFile(2, 0, storage->delegator->normalPath(), file_provider, PageFile::Type::Temp, storage->log);
+        auto f = PageFile::newPageFile(2, 0, storage->delegator->defaultPath(), file_provider, PageFile::Type::Temp, storage->log);
         {
             auto w = f.createWriter(false, true);
 

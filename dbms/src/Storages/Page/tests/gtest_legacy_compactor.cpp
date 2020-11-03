@@ -168,7 +168,7 @@ try
     auto &                ctx           = TiFlashTestEnv::getContext();
     const FileProviderPtr file_provider = ctx.getFileProvider();
     StoragePathPool       spool         = ctx.getExtraPaths().withTable("test", "t", false);
-    auto                  delegator     = spool.getNormalDiskDelegate("meta");
+    auto                  delegator     = spool.getPSDiskDelegatorSingle("meta");
     PageStorage           storage("compact_test", delegator, PageStorage::Config{}, file_provider);
 
     PageStorage::ListPageFilesOption opt;
@@ -185,7 +185,7 @@ try
 
     // TODO:
     PageFile page_file
-        = PageFile::openPageFileForRead(7, 0, delegator->normalPath(), file_provider, PageFile::Type::Checkpoint, storage.page_file_log);
+        = PageFile::openPageFileForRead(7, 0, delegator->defaultPath(), file_provider, PageFile::Type::Checkpoint, storage.page_file_log);
     ASSERT_TRUE(page_file.isExist());
 
     PageStorage::MetaMergingQueue mergine_queue;

@@ -39,7 +39,7 @@ try
 
     // Stable delegate
     {
-        auto delegate = spool.getStableDelegate();
+        auto delegate = spool.getStableDiskDelegator();
         auto res = delegate.listPaths();
         EXPECT_EQ(res.size(), paths.size());
         for (size_t i = 0; i < res.size(); ++i)
@@ -62,7 +62,7 @@ try
     }
     // Delta delegate
     {
-        auto delegate = spool.getMultiDiskDelegate("log");
+        auto delegate = spool.getPSDiskDelegatorMulti("log");
         auto res = delegate->listPaths();
         EXPECT_EQ(res.size(), paths.size());
         for (size_t i = 0; i < res.size(); ++i)
@@ -89,7 +89,7 @@ try
     }
     // Normal delegate
     {
-        auto delegate = spool.getNormalDiskDelegate("meta");
+        auto delegate = spool.getPSDiskDelegatorSingle("meta");
         auto res = delegate->listPaths();
         EXPECT_EQ(res.size(), 1UL);
         for (size_t i = 0; i < res.size(); ++i)
@@ -128,7 +128,7 @@ try
     auto spool = pool.withTable("test", "t", false);
     // Stable delegate
     {
-        auto delegate = spool.getStableDelegate();
+        auto delegate = spool.getStableDiskDelegator();
         auto res = delegate.listPaths();
         EXPECT_EQ(res.size(), paths.size());
         for (size_t i = 0; i < res.size(); ++i)
@@ -151,7 +151,7 @@ try
     }
     // Delta delegate
     {
-        auto delegate = spool.getMultiDiskDelegate("log");
+        auto delegate = spool.getPSDiskDelegatorMulti("log");
         auto res = delegate->listPaths();
         EXPECT_EQ(res.size(), latest_paths.size());
         for (size_t i = 0; i < res.size(); ++i)
@@ -178,7 +178,7 @@ try
     }
     // Normal delegate
     {
-        auto delegate = spool.getNormalDiskDelegate("meta");
+        auto delegate = spool.getPSDiskDelegatorSingle("meta");
         auto res = delegate->listPaths();
         EXPECT_EQ(res.size(), 1UL);
         for (size_t i = 0; i < res.size(); ++i)

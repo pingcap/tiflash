@@ -167,7 +167,7 @@ static inline bool isPageFileSizeFitsWritable(const PageFile & pf, const PageSto
 void PageStorage::restore()
 {
     LOG_INFO(log,
-             storage_name << " begin to restore data from disk. [path=" << delegator->normalPath()
+             storage_name << " begin to restore data from disk. [path=" << delegator->defaultPath()
                           << "] [num_writers=" << write_files.size() << "]");
 
     /// page_files are in ascending ordered by (file_id, level).
@@ -293,7 +293,7 @@ void PageStorage::restore()
     std::vector<String> store_paths = delegator->listPaths();
     for (size_t i = 0; i < write_files.size(); ++i)
     {
-        auto writer = getWriter(write_files[i], store_paths[i % store_paths.size()]);
+        auto writer = checkAndRenewWriter(write_files[i], /*parent_path_hint=*/store_paths[i % store_paths.size()]);
         idle_writers.emplace_back(std::move(writer));
     }
 #endif
@@ -347,9 +347,13 @@ PageEntry PageStorage::getEntry(PageId page_id, SnapshotPtr snapshot)
     }
 }
 
-PageStorage::WriterPtr PageStorage::getWriter( //
+// Check whether `page_file` is writable or not, renew `page_file` if need and return its belonging writer.
+// - Writable, reuse `old_writer` if it is not a nullptr, otherwise, create a new writer from `page_file`
+// - Not writable, renew the `page_file` and its belonging writer.
+//   The <id,level> of the new `page_file` is <max_id + 1, 0> of all `write_files`
+PageStorage::WriterPtr PageStorage::checkAndRenewWriter( //
     PageFile &                page_file,
-    const String &            pf_parent_path_hint,
+    const String &            parent_path_hint,
     PageStorage::WriterPtr && old_writer,
     const String &            logging_msg)
 {
@@ -360,22 +364,33 @@ PageStorage::WriterPtr PageStorage::getWriter( //
     if (is_writable)
     {
         if (old_writer)
+        {
+            // Reuse the old_writer instead of creating a new writer
             write_file_writer.swap(old_writer);
+        }
         else
+        {
+            // Create a new writer from `page_file`
             write_file_writer = page_file.createWriter(config.sync_on_write, false);
+        }
     }
     else
     {
-        String pf_parent_path = delegator->normalPath();
+        /// Create a new PageFile and generate its belonging writer
+
+        String pf_parent_path = delegator->defaultPath();
         if (old_writer)
         {
+            // If the old_writer is not NULL, use the same parent path to create a new writer.
+            // So the number of writers on different paths keep unchanged.
             pf_parent_path = old_writer->parentPath();
             // Reset writer to ensure all data have been flushed.
             old_writer.reset();
         }
-        else if (!pf_parent_path_hint.empty())
+        else if (!parent_path_hint.empty())
         {
-            pf_parent_path = pf_parent_path_hint;
+            // Check whether caller has defined a hint path
+            pf_parent_path = parent_path_hint;
         }
 
         PageFileIdAndLevel max_writing_id_lvl{0, 0};
@@ -452,8 +467,8 @@ void PageStorage::write(WriteBatch && wb)
             }
         }
         auto & page_file = write_files[index];
-        file_to_write
-            = getWriter(page_file, "", std::move(file_to_write), " PageFile_" + DB::toString(page_file.getFileId()) + "_0 is full,");
+        file_to_write    = checkAndRenewWriter(
+            page_file, "", std::move(file_to_write), /*logging_msg=*/" PageFile_" + DB::toString(page_file.getFileId()) + "_0 is full,");
 
         idle_writers.emplace_back(std::move(file_to_write));
 
@@ -936,7 +951,7 @@ void PageStorage::archivePageFiles(const PageFileSet & page_files)
     if (page_files.empty())
         return;
 
-    const Poco::Path archive_path(delegator->normalPath(), PageStorage::ARCHIVE_SUBDIR);
+    const Poco::Path archive_path(delegator->defaultPath(), PageStorage::ARCHIVE_SUBDIR);
     Poco::File       archive_dir(archive_path);
     if (!archive_dir.exists())
         archive_dir.createDirectory();

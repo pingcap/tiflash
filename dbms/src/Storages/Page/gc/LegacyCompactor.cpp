@@ -45,7 +45,7 @@ LegacyCompactor::tryCompact(                 //
     // Use the largest id-level in page_files_to_compact as Checkpoint's file
     const PageFileIdAndLevel checkpoint_id = page_files_to_compact.rbegin()->fileIdLevel();
 
-    const String storage_path = delegator->normalPath();
+    const String storage_path = delegator->defaultPath();
     if (PageFile::isPageFileExist(checkpoint_id, storage_path, file_provider, PageFile::Type::Checkpoint, page_file_log))
     {
         LOG_WARNING(log,

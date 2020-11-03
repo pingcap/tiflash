@@ -201,7 +201,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
 {
     auto dmfile_scanner = [=]() {
         PageStorage::PathAndIdsVec path_and_ids_vec;
-        auto                       delegate = path_pool.getStableDelegate();
+        auto                       delegate = path_pool.getStableDiskDelegator();
         for (auto & root_path : delegate.listPaths())
         {
             auto & path_and_ids           = path_and_ids_vec.emplace_back();
@@ -213,7 +213,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
         return path_and_ids_vec;
     };
     auto dmfile_remover = [&](const PageStorage::PathAndIdsVec & path_and_ids_vec, const std::set<PageId> & valid_ids) {
-        auto delegate = path_pool.getStableDelegate();
+        auto delegate = path_pool.getStableDiskDelegator();
         for (auto & [path, ids] : path_and_ids_vec)
         {
             for (auto id : ids)
@@ -1523,7 +1523,7 @@ void DeltaMergeStore::restoreStableFiles()
 {
     LOG_DEBUG(log, "Loading dt files");
 
-    auto path_delegate = path_pool.getStableDelegate();
+    auto path_delegate = path_pool.getStableDiskDelegator();
     for (const auto & root_path : path_delegate.listPaths())
     {
         for (auto & file_id : DMFile::listAllInPath(global_context.getFileProvider(), root_path, false))

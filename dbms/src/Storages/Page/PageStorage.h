@@ -156,10 +156,10 @@ public:
                                         const ListPageFilesOption & option = ListPageFilesOption());
 
 private:
-    WriterPtr getWriter(PageFile &     page_file,
-                        const String & pf_parent_path_hint = "",
-                        WriterPtr &&   old_writer          = nullptr,
-                        const String & logging_msg         = "");
+    WriterPtr checkAndRenewWriter(PageFile &     page_file,
+                                  const String & parent_path_hint,
+                                  WriterPtr &&   old_writer  = nullptr,
+                                  const String & logging_msg = "");
     ReaderPtr getReader(const PageFileIdAndLevel & file_id_level);
 
     static constexpr const char * ARCHIVE_SUBDIR = "archive";

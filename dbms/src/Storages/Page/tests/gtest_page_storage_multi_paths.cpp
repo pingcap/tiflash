@@ -94,7 +94,7 @@ try
     auto            capacity        = std::make_shared<PathCapacityMetrics>(all_paths, 0);
     StoragePathPool pool            = PathPool(all_paths, all_paths, capacity, file_provider).withTable("test", "table", false);
 
-    storage = std::make_shared<PageStorage>("test.table", pool.getMultiDiskDelegate("log"), config, file_provider);
+    storage = std::make_shared<PageStorage>("test.table", pool.getPSDiskDelegatorMulti("log"), config, file_provider);
     storage->restore();
 
     const UInt64 tag    = 0;
@@ -132,7 +132,7 @@ try
     }
 
     // restore
-    storage = std::make_shared<PageStorage>("test.t", pool.getMultiDiskDelegate("log"), config, file_provider);
+    storage = std::make_shared<PageStorage>("test.t", pool.getPSDiskDelegatorMulti("log"), config, file_provider);
     storage->restore();
 
     // Read again
@@ -188,7 +188,7 @@ try
     }
 
     // Restore. This ensure last write is correct.
-    storage = std::make_shared<PageStorage>("test.t", pool.getMultiDiskDelegate("log"), config, file_provider);
+    storage = std::make_shared<PageStorage>("test.t", pool.getPSDiskDelegatorMulti("log"), config, file_provider);
     storage->restore();
 
     // Read again to check all data.
