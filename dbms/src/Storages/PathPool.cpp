@@ -241,7 +241,6 @@ void StoragePathPool::renamePath(const String & old_path, const String & new_pat
 
 Strings StableDelegator::listPaths() const
 {
-    std::lock_guard<std::mutex> lock{pool.mutex};
     std::vector<String> paths;
     for (size_t i = 0; i < pool.main_path_infos.size(); ++i)
     {
@@ -344,7 +343,6 @@ String DeltaDelegator::normalPath() const { return pool.latest_path_infos[0].pat
 
 Strings DeltaDelegator::listPaths() const
 {
-    std::lock_guard<std::mutex> lock{pool.mutex};
     // The delta data could be stored in all direcotries.
     std::vector<String> paths;
     for (size_t i = 0; i < pool.latest_path_infos.size(); ++i)
@@ -358,11 +356,6 @@ String DeltaDelegator::choosePath(const PageFileIdAndLevel & id_lvl)
 {
     auto return_path
         = [&](const size_t index) -> String { return pool.latest_path_infos[index].path + "/" + StoragePathPool::DELTA_FOLDER_NAME; };
-
-    if (pool.latest_path_infos.size() == 1)
-    {
-        return return_path(0);
-    }
 
     std::lock_guard<std::mutex> lock{pool.mutex};
     /// If id exists in page_path_map, just return the same path
@@ -405,14 +398,6 @@ String DeltaDelegator::choosePath(const PageFileIdAndLevel & id_lvl)
 size_t DeltaDelegator::addPageFileUsedSize(
     const PageFileIdAndLevel & id_lvl, size_t size_to_add, const String & pf_parent_path, bool need_insert_location)
 {
-    if (pool.latest_path_infos.size() == 1)
-    {
-        // In this case, inserting to page_path_map or adding total_size for PathInfo seems useless.
-        // Simply add used size for global capacity is OK.
-        pool.global_capacity->addUsedSize(pf_parent_path, size_to_add);
-        return 0;
-    }
-
     // Get a normalized path without `StoragePathPool::DELTA_FOLDER_NAME` and trailing '/'
     String upper_path = Poco::Path(pf_parent_path).parent().toString();
     if (upper_path.back() == '/')
@@ -443,9 +428,6 @@ size_t DeltaDelegator::addPageFileUsedSize(
 
 String DeltaDelegator::getPageFilePath(const PageFileIdAndLevel & id_lvl) const
 {
-    if (pool.latest_path_infos.size() == 1)
-        return pool.latest_path_infos[0].path + "/" + StoragePathPool::DELTA_FOLDER_NAME;
-
     std::lock_guard<std::mutex> lock{pool.mutex};
     auto iter = pool.page_path_map.find(id_lvl);
     if (likely(iter != pool.page_path_map.end()))
@@ -455,12 +437,6 @@ String DeltaDelegator::getPageFilePath(const PageFileIdAndLevel & id_lvl) const
 
 void DeltaDelegator::removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size)
 {
-    if (pool.latest_path_infos.size() == 1)
-    {
-        pool.global_capacity->freeUsedSize(pool.latest_path_infos[0].path, file_size);
-        return;
-    }
-
     std::lock_guard<std::mutex> lock{pool.mutex};
     auto iter = pool.page_path_map.find(id_lvl);
     if (unlikely(iter == pool.page_path_map.end()))
@@ -482,8 +458,7 @@ String NormalPathDelegator::normalPath() const { return pool.latest_path_infos[0
 
 Strings NormalPathDelegator::listPaths() const
 {
-    std::lock_guard<std::mutex> lock{pool.mutex};
-    // stored in the first directory.
+    // only stored in the first path.
     std::vector<String> paths;
     paths.push_back(pool.latest_path_infos[0].path + "/" + path_prefix);
     return paths;

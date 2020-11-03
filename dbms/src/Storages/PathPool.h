@@ -228,6 +228,8 @@ private:
     String database;
     String table;
 
+    // Note that we keep an assumption that the size of `main_path_infos` and `latest_path_infos` won't be changed during the whole runtime.
+    // This mutex mainly used to protect the `dt_file_path_map` , `page_path_map` and `total_size` of each path.
     mutable std::mutex mutex;
 
     bool path_need_database_name = false;
