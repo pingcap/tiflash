@@ -62,12 +62,12 @@ try
     }
     // Delta delegate
     {
-        auto delegate = spool.getDeltaDelegate();
+        auto delegate = spool.getMultiDiskDelegate("log");
         auto res = delegate->listPaths();
         EXPECT_EQ(res.size(), paths.size());
         for (size_t i = 0; i < res.size(); ++i)
         {
-            EXPECT_EQ(res[i], paths[i] + DIR_PREFIX_OF_TABLE + StoragePathPool::DELTA_FOLDER_NAME);
+            EXPECT_EQ(res[i], paths[i] + DIR_PREFIX_OF_TABLE + "log");
         }
         EXPECT_EQ(delegate->numPaths(), res.size());
 
@@ -89,7 +89,7 @@ try
     }
     // Normal delegate
     {
-        auto delegate = spool.getNormalDelegate("meta");
+        auto delegate = spool.getNormalDiskDelegate("meta");
         auto res = delegate->listPaths();
         EXPECT_EQ(res.size(), 1UL);
         for (size_t i = 0; i < res.size(); ++i)
@@ -151,12 +151,12 @@ try
     }
     // Delta delegate
     {
-        auto delegate = spool.getDeltaDelegate();
+        auto delegate = spool.getMultiDiskDelegate("log");
         auto res = delegate->listPaths();
         EXPECT_EQ(res.size(), latest_paths.size());
         for (size_t i = 0; i < res.size(); ++i)
         {
-            EXPECT_EQ(res[i], latest_paths[i] + DIR_PREFIX_OF_TABLE + StoragePathPool::DELTA_FOLDER_NAME);
+            EXPECT_EQ(res[i], latest_paths[i] + DIR_PREFIX_OF_TABLE + "log");
         }
         EXPECT_EQ(delegate->numPaths(), res.size());
 
@@ -178,7 +178,7 @@ try
     }
     // Normal delegate
     {
-        auto delegate = spool.getNormalDelegate("meta");
+        auto delegate = spool.getNormalDiskDelegate("meta");
         auto res = delegate->listPaths();
         EXPECT_EQ(res.size(), 1UL);
         for (size_t i = 0; i < res.size(); ++i)

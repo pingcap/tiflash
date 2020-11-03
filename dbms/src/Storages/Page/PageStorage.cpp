@@ -61,7 +61,7 @@ bool PageStorage::StatisticsInfo::equals(const StatisticsInfo & rhs)
 }
 
 PageFileSet PageStorage::listAllPageFiles(const FileProviderPtr &     file_provider,
-                                          PSPathDelegatorPtr &        delegator,
+                                          PSDiskDelegatorPtr &        delegator,
                                           Poco::Logger *              page_file_log,
                                           const ListPageFilesOption & option)
 {
@@ -128,7 +128,7 @@ PageFileSet PageStorage::listAllPageFiles(const FileProviderPtr &     file_provi
 }
 
 PageStorage::PageStorage(String                  name,
-                         PSPathDelegatorPtr      delegator_, //
+                         PSDiskDelegatorPtr      delegator_, //
                          const Config &          config_,
                          const FileProviderPtr & file_provider_,
                          TiFlashMetricsPtr       metrics_)

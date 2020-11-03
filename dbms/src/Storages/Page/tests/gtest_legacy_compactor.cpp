@@ -168,7 +168,7 @@ try
     auto &                ctx           = TiFlashTestEnv::getContext();
     const FileProviderPtr file_provider = ctx.getFileProvider();
     StoragePathPool       spool         = ctx.getExtraPaths().withTable("test", "t", false);
-    auto                  delegator     = spool.getNormalDelegate("meta");
+    auto                  delegator     = spool.getNormalDiskDelegate("meta");
     PageStorage           storage("compact_test", delegator, PageStorage::Config{}, file_provider);
 
     PageStorage::ListPageFilesOption opt;

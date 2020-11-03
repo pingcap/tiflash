@@ -33,18 +33,21 @@ PageStorage::Config extractConfig(const Settings & settings, UInt64 subtype)
 }
 
 StoragePool::StoragePool(const String & name, StoragePathPool & path_pool, const Context & global_ctx, const Settings & settings)
-    : log_storage(name + ".log", //
-                  path_pool.getDeltaDelegate(),
+    : // The iops and bandwidth in log_storage are relatively high, use multi-disks if possible
+      log_storage(name + ".log",
+                  path_pool.getMultiDiskDelegate("log"),
                   extractConfig(settings, STORAGE_LOG),
                   global_ctx.getFileProvider(),
                   global_ctx.getTiFlashMetrics()),
+      // The iops in data_storage is low, only use the first disk for storing data
       data_storage(name + ".data",
-                   path_pool.getNormalDelegate("data"),
+                   path_pool.getNormalDiskDelegate("data"),
                    extractConfig(settings, STORAGE_DATA),
                    global_ctx.getFileProvider(),
                    global_ctx.getTiFlashMetrics()),
+      // The iops in meta_storage is relatively high, use multi-disks if possible
       meta_storage(name + ".meta",
-                   path_pool.getNormalDelegate("meta"),
+                   path_pool.getMultiDiskDelegate("meta"),
                    extractConfig(settings, STORAGE_META),
                    global_ctx.getFileProvider(),
                    global_ctx.getTiFlashMetrics()),

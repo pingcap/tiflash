@@ -38,7 +38,7 @@ try
     auto &                ctx           = TiFlashTestEnv::getContext(DB::Settings(), test_paths);
     const FileProviderPtr file_provider = ctx.getFileProvider();
     auto                  pool          = ctx.getExtraPaths().withTable("test", "t", false);
-    auto                  delegate      = pool.getDeltaDelegate();
+    auto                  delegate      = pool.getMultiDiskDelegate("log");
 
     PageStorage storage("data_compact_test", delegate, config, file_provider);
 

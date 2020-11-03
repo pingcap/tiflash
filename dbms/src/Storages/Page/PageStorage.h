@@ -23,8 +23,8 @@ class TiFlashMetrics;
 using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 class PathCapacityMetrics;
 using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
-class PSPathDelegator;
-using PSPathDelegatorPtr = std::shared_ptr<PSPathDelegator>;
+class PSDiskDelegator;
+using PSDiskDelegatorPtr = std::shared_ptr<PSDiskDelegator>;
 
 
 /**
@@ -111,7 +111,7 @@ public:
 
 public:
     PageStorage(String                  name,
-                PSPathDelegatorPtr      delegator, //
+                PSDiskDelegatorPtr      delegator, //
                 const Config &          config_,
                 const FileProviderPtr & file_provider_,
                 TiFlashMetricsPtr       metrics_ = nullptr);
@@ -151,7 +151,7 @@ public:
     FileProviderPtr getFileProvider() const { return file_provider; }
 
     static PageFileSet listAllPageFiles(const FileProviderPtr &     file_provider,
-                                        PSPathDelegatorPtr &        delegator,
+                                        PSDiskDelegatorPtr &        delegator,
                                         Poco::Logger *              page_file_log,
                                         const ListPageFilesOption & option = ListPageFilesOption());
 
@@ -178,7 +178,7 @@ private:
 
 private:
     String             storage_name; // Identify between different Storage
-    PSPathDelegatorPtr delegator;    // Get paths for storing data
+    PSDiskDelegatorPtr delegator;    // Get paths for storing data
     Config             config;
 
     FileProviderPtr file_provider;

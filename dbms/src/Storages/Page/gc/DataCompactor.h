@@ -81,7 +81,7 @@ private:
 private:
     const String & storage_name;
 
-    PSPathDelegatorPtr delegator;
+    PSDiskDelegatorPtr delegator;
     FileProviderPtr    file_provider;
 
     const PageStorage::Config & config;

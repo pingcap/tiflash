@@ -45,7 +45,7 @@ protected:
         // drop dir if exists
         auto & ctx = TiFlashTestEnv::getContext();
         path_pool  = std::make_unique<StoragePathPool>(ctx.getExtraPaths().withTable("test", "t1", false));
-        for (const auto & p : path_pool->getNormalDelegate("log")->listPaths())
+        for (const auto & p : path_pool->getNormalDiskDelegate("log")->listPaths())
         {
             if (Poco::File file(p); file.exists())
             {
@@ -62,7 +62,7 @@ protected:
     std::shared_ptr<PageStorage> reopenWithConfig(const PageStorage::Config & config_)
     {
         auto & ctx       = TiFlashTestEnv::getContext();
-        auto   delegator = path_pool->getNormalDelegate("log");
+        auto   delegator = path_pool->getNormalDiskDelegate("log");
         auto   storage   = std::make_shared<PageStorage>("test.t", delegator, config_, file_provider, ctx.getTiFlashMetrics());
         storage->restore();
         return storage;

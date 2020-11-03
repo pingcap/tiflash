@@ -11,8 +11,8 @@
 namespace DB
 {
 
-class PSPathDelegator;
-using PSPathDelegatorPtr = std::shared_ptr<PSPathDelegator>;
+class PSDiskDelegator;
+using PSDiskDelegatorPtr = std::shared_ptr<PSDiskDelegator>;
 
 class LegacyCompactor : private boost::noncopyable
 {
@@ -37,7 +37,7 @@ private:
 private:
     const String & storage_name;
 
-    PSPathDelegatorPtr delegator;
+    PSDiskDelegatorPtr delegator;
     FileProviderPtr    file_provider;
 
     const PageStorage::Config & config;
