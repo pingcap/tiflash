@@ -31,8 +31,7 @@ class PSDiskDelegator;
 using PSDiskDelegatorPtr = std::shared_ptr<PSDiskDelegator>;
 class PSDiskDelegatorMulti;
 class PSDiskDelegatorSingle;
-// TODO: support multi-paths for Raft data
-// using PSDiskDelegatorRaft = PSDiskDelegatorSingle;
+class PSDiskDelegatorRaft;
 
 
 /// A class to manage global paths.
@@ -42,11 +41,21 @@ public:
     PathPool() = default;
 
     // Constructor to be used during initialization
-    PathPool(const Strings & main_data_paths, const Strings & latest_data_paths, PathCapacityMetricsPtr global_capacity_,
-        FileProviderPtr file_provider_);
+    PathPool(                                                                    //
+        const Strings & main_data_paths, const Strings & latest_data_paths,      //
+        const Strings & kvstore_paths,                                           //
+        PathCapacityMetricsPtr global_capacity_, FileProviderPtr file_provider_, //
+        bool enable_raft_compatibility_mode_ = false);
 
     // Constructor to create PathPool for one Storage
     StoragePathPool withTable(const String & database_, const String & table_, bool path_need_database_name_) const;
+
+    bool isRaftCompatibilityModeEnabled() const { return enable_raft_compatibility_mode; }
+
+    // Generate a delegator for managing the paths of `RegionPersister`.
+    // Those paths are generated from `kvstore_paths`.
+    // User should keep the pointer to track the PageFileID -> path index mapping.
+    PSDiskDelegatorPtr getPSDiskDelegatorRaft();
 
 public:
     /// Methods for the root PathPool ///
@@ -61,9 +70,15 @@ public:
         }
     };
     using PageFilePathMap = std::unordered_map<PageFileIdAndLevel, UInt32, PageFileIdLvlHasher>;
+
+    friend class PSDiskDelegatorRaft;
+
 private:
     Strings main_data_paths;
     Strings latest_data_paths;
+    Strings kvstore_paths;
+
+    bool enable_raft_compatibility_mode;
 
     PathCapacityMetricsPtr global_capacity;
 
@@ -163,6 +178,41 @@ public:
 private:
     StoragePathPool & pool;
     const String path_prefix;
+};
+
+class PSDiskDelegatorRaft : public PSDiskDelegator
+{
+public:
+    PSDiskDelegatorRaft(PathPool & pool_);
+
+    size_t numPaths() const override;
+
+    String defaultPath() const override;
+
+    Strings listPaths() const override;
+
+    String choosePath(const PageFileIdAndLevel & id_lvl) override;
+
+    size_t addPageFileUsedSize(
+        const PageFileIdAndLevel & id_lvl, size_t size_to_add, const String & pf_parent_path, bool need_insert_location) override;
+
+    String getPageFilePath(const PageFileIdAndLevel & id_lvl) const override;
+
+    void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size) override;
+
+private:
+    struct RaftPathInfo
+    {
+        String path;
+        size_t total_size; // total used bytes
+    };
+    using RaftPathInfos = std::vector<RaftPathInfo>;
+
+    PathPool & pool;
+    mutable std::mutex mutex;
+    RaftPathInfos raft_path_infos;
+    // PageFileID -> path index
+    PathPool::PageFilePathMap page_path_map;
 };
 
 /// A class to manage paths for the specified storage.

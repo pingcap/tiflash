@@ -44,7 +44,7 @@ protected:
     {
         // drop dir if exists
         auto & ctx = TiFlashTestEnv::getContext();
-        path_pool  = std::make_unique<StoragePathPool>(ctx.getExtraPaths().withTable("test", "t1", false));
+        path_pool  = std::make_unique<StoragePathPool>(ctx.getPathPool().withTable("test", "t1", false));
         for (const auto & p : path_pool->getPSDiskDelegatorSingle("log")->listPaths())
         {
             if (Poco::File file(p); file.exists())

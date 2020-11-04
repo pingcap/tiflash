@@ -254,7 +254,7 @@ bool PageFile::MetaMergingReader::hasNext() const
     return (status == Status::Uninitialized) || (status == Status::Opened && meta_file_offset < meta_size);
 }
 
-void PageFile::MetaMergingReader::moveNext()
+void PageFile::MetaMergingReader::moveNext(PageFile::Version * v)
 {
     curr_edit.clear();
     curr_write_batch_sequence = 0;
@@ -296,6 +296,10 @@ void PageFile::MetaMergingReader::moveNext()
     {
         throw Exception("PageFile binary version not match, unknown version: " + DB::toString(binary_version), ErrorCodes::LOGICAL_ERROR);
     }
+
+    // return the binary_version if `v` is not null
+    if (unlikely(v != nullptr))
+        *v = binary_version;
 
     // check the checksum of WriteBatch
     const auto wb_bytes_without_checksum = wb_bytes - sizeof(PageMetaFormat::Checksum);

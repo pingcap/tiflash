@@ -118,7 +118,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
                                  const ColumnDefine &  handle,
                                  const Settings &      settings_)
     : global_context(db_context.getGlobalContext()),
-      path_pool(global_context.getExtraPaths().withTable(db_name_, table_name_, data_path_contains_database_name)),
+      path_pool(global_context.getPathPool().withTable(db_name_, table_name_, data_path_contains_database_name)),
       settings(settings_),
       storage_pool(db_name_ + "." + table_name_, path_pool, global_context, db_context.getSettingsRef()),
       db_name(db_name_),

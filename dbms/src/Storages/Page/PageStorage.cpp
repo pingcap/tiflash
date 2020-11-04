@@ -1,5 +1,6 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
+#include <Encryption/FileProvider.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Poco/File.h>
@@ -58,6 +59,33 @@ String PageStorage::StatisticsInfo::toString() const
 bool PageStorage::StatisticsInfo::equals(const StatisticsInfo & rhs)
 {
     return puts == rhs.puts && refs == rhs.refs && deletes == rhs.deletes && upserts == rhs.upserts;
+}
+
+PageFile::Version PageStorage::getMaxDataVersion(const FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator)
+{
+    Poco::Logger *      log = &Poco::Logger::get("PageStorage::getMaxDataVersion");
+    ListPageFilesOption option;
+    option.ignore_checkpoint = true;
+    option.ignore_legacy     = true;
+    option.remove_tmp_files  = false;
+    auto page_files          = listAllPageFiles(file_provider, delegator, log, option);
+    if (page_files.empty())
+        return PageFile::CURRENT_VERSION;
+
+    // Simply check the last PageFile is good enough
+    auto reader = const_cast<PageFile &>(*page_files.rbegin()).createMetaMergingReader();
+
+    PageFile::Version max_binary_version = PageFile::VERSION_BASE, temp_version = PageFile::CURRENT_VERSION;
+    reader->moveNext(&temp_version);
+    max_binary_version = std::max(max_binary_version, temp_version);
+    while (reader->hasNext())
+    {
+        // Continue to read the binary version of next WriteBatch.
+        reader->moveNext(&temp_version);
+        max_binary_version = std::max(max_binary_version, temp_version);
+    }
+    LOG_DEBUG(log, "getMaxDataVersion done from " + reader->toString() << " [max version=" << max_binary_version << "]");
+    return max_binary_version;
 }
 
 PageFileSet PageStorage::listAllPageFiles(const FileProviderPtr &     file_provider,
