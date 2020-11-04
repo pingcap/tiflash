@@ -105,31 +105,55 @@ RegionPersister::RegionPersister(Context & global_context_, const RegionManager 
     : global_context(global_context_), region_manager(region_manager_), log(&Logger::get("RegionPersister"))
 {}
 
-RegionMap RegionPersister::restore(IndexReaderCreateFunc * func)
+namespace
 {
-    auto & path_pool = global_context.getPathPool();
-    auto delegator = path_pool.getPSDiskDelegatorRaft();
-    // If there is no PageFile with basic version binary format, use the latest version of PageStorage.
-    auto detect_binary_version = PageStorage::getMinDataVersion(global_context.getFileProvider(), delegator);
-    bool run_in_compatibility_mode = path_pool.isRaftStorageCapatibilityModeEnabled() && (detect_binary_version == PageFile::VERSION_BASE);
-    if (!run_in_compatibility_mode)
+DB::stable::PageStorage::Config getStablePSConfig(const PageStorage::Config & config)
+{
+    DB::stable::PageStorage::Config c;
+    c.sync_on_write = config.sync_on_write;
+    c.file_roll_size = config.file_roll_size;
+    c.file_max_size = config.file_max_size;
+    c.file_small_size = config.file_max_size;
+
+    c.merge_hint_low_used_rate = config.merge_hint_low_used_rate;
+    c.merge_hint_low_used_file_total_size = config.merge_hint_low_used_file_total_size;
+    c.merge_hint_low_used_file_num = config.merge_hint_low_used_file_num;
+    c.gc_compact_legacy_min_num = config.gc_compact_legacy_min_num;
+
+    c.version_set_config.compact_hint_delta_deletions = config.version_set_config.compact_hint_delta_deletions;
+    c.version_set_config.compact_hint_delta_entries = config.version_set_config.compact_hint_delta_entries;
+    return c;
+}
+} // namespace
+
+RegionMap RegionPersister::restore(IndexReaderCreateFunc * func, PageStorage::Config config)
+{
     {
-        LOG_INFO(log, "RegionPersister running in normal mode");
-        DB::PageStorage::Config config;
-        config.num_write_slots = 4; // extend write slots to 4 at least
-        page_storage = std::make_unique<DB::PageStorage>( //
-            "RegionPersister",
-            std::move(delegator),
-            config,
-            global_context.getFileProvider(),
-            global_context.getTiFlashMetrics());
-        page_storage->restore();
-    }
-    else
-    {
-        LOG_INFO(log, "RegionPersister running in compatibility mode");
-        stable_page_storage = std::make_unique<DB::stable::PageStorage>(
-            "RegionPersister", delegator->defaultPath(), DB::stable::PageStorage::Config(), global_context.getFileProvider());
+        auto & path_pool = global_context.getPathPool();
+        auto delegator = path_pool.getPSDiskDelegatorRaft();
+        // If there is no PageFile with basic version binary format, use the latest version of PageStorage.
+        auto detect_binary_version = PageStorage::getMinDataVersion(global_context.getFileProvider(), delegator);
+        bool run_in_compatibility_mode
+            = path_pool.isRaftStorageCapatibilityModeEnabled() && (detect_binary_version == PageFile::VERSION_BASE);
+        if (!run_in_compatibility_mode)
+        {
+            config.num_write_slots = 4; // extend write slots to 4 at least
+            LOG_INFO(log, "RegionPersister running in normal mode");
+            page_storage = std::make_unique<DB::PageStorage>( //
+                "RegionPersister",
+                std::move(delegator),
+                config,
+                global_context.getFileProvider(),
+                global_context.getTiFlashMetrics());
+            page_storage->restore();
+        }
+        else
+        {
+            LOG_INFO(log, "RegionPersister running in compatibility mode");
+            auto c = getStablePSConfig(config);
+            stable_page_storage = std::make_unique<DB::stable::PageStorage>( //
+                "RegionPersister", delegator->defaultPath(), c, global_context.getFileProvider());
+        }
     }
 
     RegionMap regions;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <IO/MemoryReadWriteBuffer.h>
+#include <Storages/Page/PageStorage.h>
 #include <Storages/Transaction/IndexReaderCreate.h>
 #include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
@@ -30,7 +31,7 @@ public:
     void drop(RegionID region_id, const RegionTaskLock &);
     void persist(const Region & region);
     void persist(const Region & region, const RegionTaskLock & lock);
-    RegionMap restore(IndexReaderCreateFunc * func = nullptr);
+    RegionMap restore(IndexReaderCreateFunc * func = nullptr, PageStorage::Config config = {});
     bool gc();
 
     using RegionCacheWriteElement = std::tuple<RegionID, MemoryWriteBuffer, size_t, UInt64>;

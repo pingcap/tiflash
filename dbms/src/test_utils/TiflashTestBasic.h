@@ -113,7 +113,7 @@ public:
         throw Exception("Can not find testdata with name[" + name + "]");
     }
 
-    static Context & getContext(const DB::Settings & settings = DB::Settings(), std::vector<String> testdata_path = {})
+    static Context & getContext(const DB::Settings & settings = DB::Settings(), Strings testdata_path = {})
     {
         static Context context = DB::Context::createGlobal();
         // Load `testdata_path` as path if it is set.
