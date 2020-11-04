@@ -578,18 +578,45 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// Initialize users config reloader.
     std::string users_config_path = config().getString("users_config", String(1, '\0'));
+    bool use_default_users_config = true;
+    // if `users_config` does not exit, use default immutable users config.
+    if (users_config_path.empty())
+        use_default_users_config = true;
+    else
+    {
+        if (0 == users_config_path[0])
+        {
+            // if `profiles` exits in config file, use it as user config file.
+            if (config().has("profiles"))
+            {
+                use_default_users_config = false;
+                users_config_path = config_path;
+            }
+            else
+                use_default_users_config = true;
+        }
+        else
+        {
+            use_default_users_config = false;
+        }
+    }
+    if (!use_default_users_config)
+        LOG_INFO(log, "Set users config file to: " << users_config_path);
+    else
+        LOG_INFO(log, "Use immutable user config");
+
     /// If path to users' config isn't absolute, try guess its root (current) dir.
     /// At first, try to find it in dir of main config, after will use current dir.
-    if (users_config_path[0])
+    if (!use_default_users_config)
     {
-        if (users_config_path.empty() || users_config_path[0] != '/')
+        if (users_config_path[0] != '/')
         {
             std::string config_dir = Poco::Path(config_path).parent().toString();
             if (Poco::File(config_dir + users_config_path).exists())
                 users_config_path = config_dir + users_config_path;
         }
     }
-    auto users_config_reloader = users_config_path[0]
+    auto users_config_reloader = !use_default_users_config
         ? std::make_unique<ConfigReloader>(
             users_config_path,
             [&](ConfigurationPtr config) { global_context->setUsersConfig(config); },
