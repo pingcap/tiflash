@@ -1,11 +1,12 @@
 #include <Storages/Page/gc/LegacyCompactor.h>
 #include <Storages/Page/gc/restoreFromCheckpoints.h>
+#include <Storages/PathPool.h>
 
 namespace DB
 {
 LegacyCompactor::LegacyCompactor(const PageStorage & storage)
     : storage_name(storage.storage_name),
-      storage_path(storage.storage_path),
+      delegator(storage.delegator),
       file_provider(storage.getFileProvider()),
       config(storage.config),
       log(storage.log),
@@ -44,6 +45,7 @@ LegacyCompactor::tryCompact(                 //
     // Use the largest id-level in page_files_to_compact as Checkpoint's file
     const PageFileIdAndLevel checkpoint_id = page_files_to_compact.rbegin()->fileIdLevel();
 
+    const String storage_path = delegator->defaultPath();
     if (PageFile::isPageFileExist(checkpoint_id, storage_path, file_provider, PageFile::Type::Checkpoint, page_file_log))
     {
         LOG_WARNING(log,
@@ -80,6 +82,8 @@ LegacyCompactor::tryCompact(                 //
     if (!info.empty())
     {
         bytes_written = writeToCheckpoint(storage_path, checkpoint_id, std::move(wb), file_provider, page_file_log);
+        // Don't need to insert location since Checkpoint PageFile won't be read except using listAllPageFiles in `PageStorage::restore`
+        delegator->addPageFileUsedSize(checkpoint_id, bytes_written, storage_path, /*need_insert_location=*/false);
     }
 
     // Clean up compacted PageFiles from `page_files`

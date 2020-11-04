@@ -17,8 +17,6 @@ struct DMContext;
 class StableValueSpace;
 using StableValueSpacePtr = std::shared_ptr<StableValueSpace>;
 
-static const String STABLE_FOLDER_NAME = "stable";
-
 class StableValueSpace : public std::enable_shared_from_this<StableValueSpace>
 {
 public:

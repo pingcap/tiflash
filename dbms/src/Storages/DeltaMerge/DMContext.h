@@ -8,7 +8,7 @@
 namespace DB
 {
 
-class PathPool;
+class StoragePathPool;
 
 class TiFlashMetrics;
 using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
@@ -27,10 +27,9 @@ struct DMContext : private boost::noncopyable
     const Context &         db_context;
     const TiFlashMetricsPtr metrics;
 
-    const String & store_path;
-    PathPool &     extra_paths;
-    StoragePool &  storage_pool;
-    const UInt64   hash_salt;
+    StoragePathPool & path_pool;
+    StoragePool &     storage_pool;
+    const UInt64      hash_salt;
 
     // The schema snapshot
     // We need a consistent snapshot of columns, copy ColumnsDefines
@@ -66,8 +65,7 @@ struct DMContext : private boost::noncopyable
     const bool enable_skippable_place;
 
     DMContext(const Context &          db_context_,
-              const String &           store_path_,
-              PathPool &               extra_paths_,
+              StoragePathPool &        path_pool_,
               StoragePool &            storage_pool_,
               const UInt64             hash_salt_,
               const ColumnDefinesPtr & store_columns_,
@@ -78,8 +76,7 @@ struct DMContext : private boost::noncopyable
               const DB::Settings &     settings)
         : db_context(db_context_),
           metrics(db_context.getTiFlashMetrics()),
-          store_path(store_path_),
-          extra_paths(extra_paths_),
+          path_pool(path_pool_),
           storage_pool(storage_pool_),
           hash_salt(hash_salt_),
           store_columns(store_columns_),
