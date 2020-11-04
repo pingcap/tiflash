@@ -603,7 +603,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (!use_default_users_config)
         LOG_INFO(log, "Set users config file to: " << users_config_path);
     else
-        LOG_INFO(log, "Use immutable user config");
+        LOG_INFO(log, "Use default users config");
 
     /// If path to users' config isn't absolute, try guess its root (current) dir.
     /// At first, try to find it in dir of main config, after will use current dir.
