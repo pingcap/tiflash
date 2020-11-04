@@ -17,6 +17,11 @@ namespace ErrorCodes
 extern const int COP_BAD_DAG_REQUEST;
 extern const int UNSUPPORTED_METHOD;
 extern const int LOGICAL_ERROR;
+extern const int NOT_IMPLEMENTED;
+extern const int UNKNOWN_USER;
+extern const int WRONG_PASSWORD;
+extern const int REQUIRED_PASSWORD;
+extern const int IP_ADDRESS_NOT_ALLOWED;
 } // namespace ErrorCodes
 
 const Int8 VAR_SIZE = 0;
@@ -384,6 +389,17 @@ std::shared_ptr<TiDB::ITiDBCollator> getCollatorFromFieldType(const tipb::FieldT
 }
 
 bool hasUnsignedFlag(const tipb::FieldType & tp) { return tp.flag() & TiDB::ColumnFlagUnsigned; }
+
+grpc::StatusCode tiflashErrorCodeToGrpcStatusCode(int error_code)
+{
+    /// do not use switch statement because ErrorCodes::XXXX is not a compile time constant
+    if (error_code == ErrorCodes::NOT_IMPLEMENTED)
+        return grpc::StatusCode::UNIMPLEMENTED;
+    if (error_code == ErrorCodes::UNKNOWN_USER || error_code == ErrorCodes::WRONG_PASSWORD || error_code == ErrorCodes::REQUIRED_PASSWORD
+        || error_code == ErrorCodes::IP_ADDRESS_NOT_ALLOWED)
+        return grpc::StatusCode::UNAUTHENTICATED;
+    return grpc::StatusCode::INTERNAL;
+}
 
 extern const String UniqRawResName;
 

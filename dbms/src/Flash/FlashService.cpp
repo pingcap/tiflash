@@ -3,6 +3,7 @@
 #include <Core/Types.h>
 #include <Flash/BatchCommandsHandler.h>
 #include <Flash/BatchCoprocessorHandler.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/MPPHandler.h>
 #include <Interpreters/Context.h>
@@ -270,8 +271,8 @@ std::tuple<Context, grpc::Status> FlashService::createDBContext(const grpc::Serv
     }
     catch (Exception & e)
     {
-        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": DB Exception: " << e.message() << "\n" << e.message());
-        return std::make_tuple(server.context(), grpc::Status(grpc::StatusCode::INTERNAL, e.message()));
+        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": DB Exception: " << e.message());
+        return std::make_tuple(server.context(), grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message()));
     }
     catch (const std::exception & e)
     {

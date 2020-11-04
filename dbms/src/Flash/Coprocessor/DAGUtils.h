@@ -12,6 +12,7 @@
 #include <Storages/Transaction/Collator.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
+#include <grpcpp/impl/codegen/status_code_enum.h>
 
 namespace DB
 {
@@ -42,5 +43,6 @@ bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::E
 std::shared_ptr<TiDB::ITiDBCollator> getCollatorFromExpr(const tipb::Expr & expr);
 std::shared_ptr<TiDB::ITiDBCollator> getCollatorFromFieldType(const tipb::FieldType & field_type);
 bool hasUnsignedFlag(const tipb::FieldType & tp);
+grpc::StatusCode tiflashErrorCodeToGrpcStatusCode(int error_code);
 
 } // namespace DB
