@@ -579,7 +579,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Initialize users config reloader.
     std::string users_config_path = config().getString("users_config", String(1, '\0'));
     bool use_default_users_config = true;
-    // if `users_config` does not exit, use default immutable users config.
+    // if `users_config` is set empty, use default immutable users config.
     if (users_config_path.empty())
         use_default_users_config = true;
     else
