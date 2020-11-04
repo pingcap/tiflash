@@ -1,14 +1,15 @@
 #pragma once
 
+#include <Storages/Page/PageStorage.h>
+
 #include <atomic>
 #include <chrono>
-
-#include <Storages/Page/PageStorage.h>
 
 namespace DB
 {
 struct Settings;
 class Context;
+class StoragePathPool;
 
 namespace DM
 {
@@ -23,7 +24,7 @@ public:
     using Duration  = Clock::duration;
     using Seconds   = std::chrono::seconds;
 
-    StoragePool(const String & name, const String & path, const Context & global_ctx, const Settings & settings);
+    StoragePool(const String & name, StoragePathPool & path_pool, const Context & global_ctx, const Settings & settings);
 
     void restore();
 
@@ -58,14 +59,12 @@ private:
     std::mutex mutex;
 };
 
-const static PageStorage::SnapshotPtr EMPTY_PS_SNAP_PTR = {};
-
 struct StorageSnapshot
 {
     StorageSnapshot(StoragePool & storage, bool snapshot_read = true)
-        : log_reader(storage.log(), snapshot_read ? storage.log().getSnapshot() : EMPTY_PS_SNAP_PTR),
-          data_reader(storage.data(), snapshot_read ? storage.data().getSnapshot() : EMPTY_PS_SNAP_PTR),
-          meta_reader(storage.meta(), snapshot_read ? storage.meta().getSnapshot() : EMPTY_PS_SNAP_PTR)
+        : log_reader(storage.log(), snapshot_read ? storage.log().getSnapshot() : nullptr),
+          data_reader(storage.data(), snapshot_read ? storage.data().getSnapshot() : nullptr),
+          meta_reader(storage.meta(), snapshot_read ? storage.meta().getSnapshot() : nullptr)
     {
     }
 

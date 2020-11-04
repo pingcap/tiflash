@@ -1,9 +1,11 @@
 #pragma once
 
+#include <Core/Types.h>
 #include <Encryption/BlockAccessCipherStream.h>
 #include <Encryption/KeyManager.h>
 #include <Encryption/RandomAccessFile.h>
 #include <Encryption/WritableFile.h>
+
 #include <string>
 
 namespace DB
@@ -38,8 +40,8 @@ public:
 
     bool isEncryptionEnabled() const;
 
-    void renameFile(const String & src_file_path_, const EncryptionPath & src_encryption_path_,
-            const String & dst_file_path_, const EncryptionPath & dst_encryption_path_) const;
+    void renameFile(const String & src_file_path_, const EncryptionPath & src_encryption_path_, const String & dst_file_path_,
+        const EncryptionPath & dst_encryption_path_) const;
 
     ~FileProvider() = default;
 

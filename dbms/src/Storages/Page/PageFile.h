@@ -44,6 +44,7 @@ public:
         [[nodiscard]] size_t write(WriteBatch & wb, PageEntriesEdit & edit);
         void                 tryCloseIdleFd(const Seconds & max_idle_time);
 
+        const String &     parentPath() const;
         PageFileIdAndLevel fileIdLevel() const;
 
     private:
@@ -86,6 +87,7 @@ public:
         PageMap read(FieldReadInfos & to_read);
 
         bool isIdle(const Seconds & max_idle_time);
+
     private:
         String data_file_path;
 
@@ -294,6 +296,7 @@ public:
     UInt64 getDataFileSize() const;
     UInt64 getMetaFileSize() const;
 
+    String parentPath() const { return parent_path; }
     String folderPath() const;
 
     void createEncryptionInfo() const
@@ -311,7 +314,7 @@ public:
     // Encryption can be turned on / turned off for existing cluster, we should take care of it when trying to reuse PageFile.
     bool reusableForWrite() const
     {
-        auto file_encrypted = file_provider->isFileEncrypted(dataEncryptionPath());
+        auto file_encrypted     = file_provider->isFileEncrypted(dataEncryptionPath());
         auto encryption_enabled = file_provider->isEncryptionEnabled();
         return (file_encrypted && encryption_enabled) || (!file_encrypted && !encryption_enabled);
     }
@@ -328,17 +331,11 @@ private:
              bool                    is_create,
              Poco::Logger *          log);
 
-    String         dataPath() const { return folderPath() + "/page"; }
-    String         metaPath() const { return folderPath() + "/meta"; }
+    String dataPath() const { return folderPath() + "/page"; }
+    String metaPath() const { return folderPath() + "/meta"; }
 
-    EncryptionPath dataEncryptionPath() const
-    {
-        return EncryptionPath(dataPath(), "");
-    }
-    EncryptionPath metaEncryptionPath() const
-    {
-        return EncryptionPath(metaPath(), "");
-    }
+    EncryptionPath dataEncryptionPath() const { return EncryptionPath(dataPath(), ""); }
+    EncryptionPath metaEncryptionPath() const { return EncryptionPath(metaPath(), ""); }
 
     constexpr static const char * folder_prefix_formal     = "page";
     constexpr static const char * folder_prefix_temp       = ".temp.page";

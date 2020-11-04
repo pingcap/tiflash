@@ -96,8 +96,7 @@ try
         ASTPtr       astptr(new ASTIdentifier(table_name, ASTIdentifier::Kind::Table));
         astptr->children.emplace_back(new ASTIdentifier("col1"));
 
-        storage = StorageDeltaMerge::create(path_name,
-                                            "TiFlash",
+        storage = StorageDeltaMerge::create("TiFlash",
                                             /* db_name= */ "default",
                                             table_name,
                                             std::nullopt,
