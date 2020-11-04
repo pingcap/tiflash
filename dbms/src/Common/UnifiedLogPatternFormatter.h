@@ -165,7 +165,7 @@ void UnifiedLogPatternFormatter::writeEscapedString(DB::WriteBuffer & wb, const 
 
 bool UnifiedLogPatternFormatter::needJsonEncode(const std::string & src)
 {
-    for (const uint8_t & byte : src)
+    for (const uint8_t byte : src)
     {
         if (byte <= 0x20 || byte == 0x22 || byte == 0x3D || byte == 0x5B || byte == 0x5D)
             return true;

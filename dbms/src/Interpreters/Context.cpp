@@ -555,10 +555,13 @@ void Context::setUserFilesPath(const String & path)
     shared->user_files_path = path;
 }
 
-void Context::setExtraPaths(const std::vector<String> & extra_paths_, PathCapacityMetricsPtr global_capacity_, FileProviderPtr file_provider)
+void Context::setExtraPaths(const Strings & main_data_paths,
+    const Strings & latest_data_paths,
+    PathCapacityMetricsPtr global_capacity_,
+    FileProviderPtr file_provider_)
 {
     auto lock = getLock();
-    shared->extra_paths = PathPool(extra_paths_, global_capacity_, file_provider);
+    shared->extra_paths = PathPool(main_data_paths, latest_data_paths, global_capacity_, file_provider_);
 }
 
 void Context::setConfig(const ConfigurationPtr & config)
@@ -1457,12 +1460,12 @@ void Context::createTMTContext(const std::vector<std::string> & pd_addrs,
     shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, ignore_databases, kvstore_path, engine, disable_bg_flush, cluster_config);
 }
 
-void Context::initializePathCapacityMetric(const std::vector<std::string> & all_path, std::vector<size_t> && all_capacity)
+void Context::initializePathCapacityMetric(const std::vector<std::string> & all_path, size_t capacity_quota)
 {
     auto lock = getLock();
     if (shared->path_capacity_ptr)
         throw Exception("PathCapacityMetrics instance has already existed", ErrorCodes::LOGICAL_ERROR);
-    shared->path_capacity_ptr = std::make_shared<PathCapacityMetrics>(all_path, all_capacity);
+    shared->path_capacity_ptr = std::make_shared<PathCapacityMetrics>(all_path, capacity_quota);
 }
 
 PathCapacityMetricsPtr Context::getPathCapacity() const

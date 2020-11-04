@@ -1,6 +1,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/PathPool.h>
 
 namespace DB
 {
@@ -31,25 +32,25 @@ PageStorage::Config extractConfig(const Settings & settings, UInt64 subtype)
     return config;
 }
 
-StoragePool::StoragePool(const String & name, const String & path, const Context & global_ctx, const Settings & settings)
-    : log_storage(name + ".log", //
-                  path + "/log",
+StoragePool::StoragePool(const String & name, StoragePathPool & path_pool, const Context & global_ctx, const Settings & settings)
+    : // The iops and bandwidth in log_storage are relatively high, use multi-disks if possible
+      log_storage(name + ".log",
+                  path_pool.getPSDiskDelegatorMulti("log"),
                   extractConfig(settings, STORAGE_LOG),
                   global_ctx.getFileProvider(),
-                  global_ctx.getTiFlashMetrics(),
-                  global_ctx.getPathCapacity()),
+                  global_ctx.getTiFlashMetrics()),
+      // The iops in data_storage is low, only use the first disk for storing data
       data_storage(name + ".data",
-                   path + "/data",
+                   path_pool.getPSDiskDelegatorSingle("data"),
                    extractConfig(settings, STORAGE_DATA),
                    global_ctx.getFileProvider(),
-                   global_ctx.getTiFlashMetrics(),
-                   global_ctx.getPathCapacity()),
+                   global_ctx.getTiFlashMetrics()),
+      // The iops in meta_storage is relatively high, use multi-disks if possible
       meta_storage(name + ".meta",
-                   path + "/meta",
+                   path_pool.getPSDiskDelegatorMulti("meta"),
                    extractConfig(settings, STORAGE_META),
                    global_ctx.getFileProvider(),
-                   global_ctx.getTiFlashMetrics(),
-                   global_ctx.getPathCapacity()),
+                   global_ctx.getTiFlashMetrics()),
       max_log_page_id(0),
       max_data_page_id(0),
       max_meta_page_id(0)
