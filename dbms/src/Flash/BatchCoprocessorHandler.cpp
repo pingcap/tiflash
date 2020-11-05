@@ -88,14 +88,12 @@ grpc::Status BatchCoprocessorHandler::execute()
     catch (const Exception & e)
     {
         LOG_ERROR(log, __PRETTY_FUNCTION__ << ": DB Exception: " << e.message() << "\n" << e.getStackTrace().toString());
-        return recordError(
-            e.code() == ErrorCodes::NOT_IMPLEMENTED ? grpc::StatusCode::UNIMPLEMENTED : grpc::StatusCode::INTERNAL, e.message());
+        return recordError(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message());
     }
     catch (const pingcap::Exception & e)
     {
         LOG_ERROR(log, __PRETTY_FUNCTION__ << ": KV Client Exception: " << e.message());
-        return recordError(
-            e.code() == ErrorCodes::NOT_IMPLEMENTED ? grpc::StatusCode::UNIMPLEMENTED : grpc::StatusCode::INTERNAL, e.message());
+        return recordError(grpc::StatusCode::INTERNAL, e.message());
     }
     catch (const std::exception & e)
     {
