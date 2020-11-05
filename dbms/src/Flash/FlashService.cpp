@@ -3,6 +3,7 @@
 #include <Core/Types.h>
 #include <Flash/BatchCommandsHandler.h>
 #include <Flash/BatchCoprocessorHandler.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/FlashService.h>
 #include <Interpreters/Context.h>
 #include <Server/IServer.h>
@@ -155,35 +156,58 @@ String getClientMetaVarWithDefault(const grpc::ServerContext * grpc_context, con
 
 std::tuple<Context, grpc::Status> FlashService::createDBContext(const grpc::ServerContext * grpc_context) const
 {
-    /// Create DB context.
-    Context context = server.context();
-    context.setGlobalContext(server.context());
-
-    /// Set a bunch of client information.
-    String query_id = getClientMetaVarWithDefault(grpc_context, "query_id", "");
-    context.setCurrentQueryId(query_id);
-    ClientInfo & client_info = context.getClientInfo();
-    client_info.query_kind = ClientInfo::QueryKind::INITIAL_QUERY;
-    client_info.interface = ClientInfo::Interface::GRPC;
-    std::string peer = grpc_context->peer();
-    Int64 pos = peer.find(':');
-    if (pos == -1)
+    try
     {
-        return std::make_tuple(context, ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, "Invalid peer address: " + peer));
-    }
-    std::string client_ip = peer.substr(pos + 1);
-    Poco::Net::SocketAddress client_address(client_ip);
-    client_info.current_address = client_address;
-    client_info.current_user = getClientMetaVarWithDefault(grpc_context, "user", "");
+        /// Create DB context.
+        Context context = server.context();
+        context.setGlobalContext(server.context());
 
-    /// Set DAG parameters.
-    std::string dag_records_per_chunk_str = getClientMetaVarWithDefault(grpc_context, "dag_records_per_chunk", "");
-    if (!dag_records_per_chunk_str.empty())
+        /// Set a bunch of client information.
+        std::string user = getClientMetaVarWithDefault(grpc_context, "user", "default");
+        std::string password = getClientMetaVarWithDefault(grpc_context, "password", "");
+        std::string quota_key = getClientMetaVarWithDefault(grpc_context, "quota_key", "");
+        std::string peer = grpc_context->peer();
+        Int64 pos = peer.find(':');
+        if (pos == -1)
+        {
+            return std::make_tuple(context, ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, "Invalid peer address: " + peer));
+        }
+        std::string client_ip = peer.substr(pos + 1);
+        Poco::Net::SocketAddress client_address(client_ip);
+
+        context.setUser(user, password, client_address, quota_key);
+
+        String query_id = getClientMetaVarWithDefault(grpc_context, "query_id", "");
+        context.setCurrentQueryId(query_id);
+
+        ClientInfo & client_info = context.getClientInfo();
+        client_info.query_kind = ClientInfo::QueryKind::INITIAL_QUERY;
+        client_info.interface = ClientInfo::Interface::GRPC;
+
+        /// Set DAG parameters.
+        std::string dag_records_per_chunk_str = getClientMetaVarWithDefault(grpc_context, "dag_records_per_chunk", "");
+        if (!dag_records_per_chunk_str.empty())
+        {
+            context.setSetting("dag_records_per_chunk", dag_records_per_chunk_str);
+        }
+
+        return std::make_tuple(context, grpc::Status::OK);
+    }
+    catch (Exception & e)
     {
-        context.setSetting("dag_records_per_chunk", dag_records_per_chunk_str);
+        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": DB Exception: " << e.message());
+        return std::make_tuple(server.context(), grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message()));
     }
-
-    return std::make_tuple(context, grpc::Status::OK);
+    catch (const std::exception & e)
+    {
+        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": std exception: " << e.what());
+        return std::make_tuple(server.context(), grpc::Status(grpc::StatusCode::INTERNAL, e.what()));
+    }
+    catch (...)
+    {
+        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": other exception");
+        return std::make_tuple(server.context(), grpc::Status(grpc::StatusCode::INTERNAL, "other exception"));
+    }
 }
 
 } // namespace DB

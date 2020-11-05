@@ -137,15 +137,13 @@ grpc::Status CoprocessorHandler::execute()
     {
         LOG_ERROR(log, __PRETTY_FUNCTION__ << ": KV Client Exception: " << e.message());
         GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_error, reason_kv_client_error).Increment();
-        return recordError(
-            e.code() == ErrorCodes::NOT_IMPLEMENTED ? grpc::StatusCode::UNIMPLEMENTED : grpc::StatusCode::INTERNAL, e.message());
+        return recordError(grpc::StatusCode::INTERNAL, e.message());
     }
     catch (const Exception & e)
     {
         LOG_ERROR(log, __PRETTY_FUNCTION__ << ": DB Exception: " << e.message() << "\n" << e.getStackTrace().toString());
         GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_error, reason_internal_error).Increment();
-        return recordError(
-            e.code() == ErrorCodes::NOT_IMPLEMENTED ? grpc::StatusCode::UNIMPLEMENTED : grpc::StatusCode::INTERNAL, e.message());
+        return recordError(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message());
     }
     catch (const std::exception & e)
     {
