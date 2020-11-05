@@ -310,7 +310,7 @@ RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(
 {
     // according to the process of pessimistic lock, just overwrite.
     data.insert_or_assign(std::move(kv_pair.first), std::move(kv_pair.second));
-    return true;
+    return 0;
 }
 
 template struct RegionCFDataBase<RegionWriteCFDataTrait>;
