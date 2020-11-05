@@ -12,6 +12,7 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageFile.h>
 #include <Storages/Page/WriteBatch.h>
+#include <Storages/PathPool.h>
 #include <common/logger_useful.h>
 #include <test_utils/TiflashTestBasic.h>
 
@@ -50,8 +51,7 @@ protected:
     void SetUp() override
     {
         // drop dir if exists
-        Poco::File file(path);
-        if (file.exists())
+        if (Poco::File file(path); file.exists())
         {
             file.remove(true);
         }
@@ -65,7 +65,9 @@ protected:
 
     std::shared_ptr<PageStorage> reopenWithConfig(const PageStorage::Config & config_)
     {
-        auto storage = std::make_shared<PageStorage>("test.t", path, config_, file_provider);
+        auto spool     = TiFlashTestEnv::getContext().getExtraPaths().withTable("test", "t", false);
+        auto delegator = spool.getPSDiskDelegatorSingle("log");
+        auto storage   = std::make_shared<PageStorage>("test.t", delegator, config_, file_provider);
         storage->restore();
         return storage;
     }
