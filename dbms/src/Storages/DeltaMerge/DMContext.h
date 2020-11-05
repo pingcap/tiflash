@@ -87,7 +87,7 @@ struct DMContext : private boost::noncopyable
           segment_limit_rows(settings.dt_segment_limit_rows),
           delta_limit_rows(settings.dt_segment_delta_limit_rows),
           delta_cache_limit_rows(settings.dt_segment_delta_cache_limit_rows),
-          delta_small_pack_rows(settings.dt_segment_delta_cache_limit_rows),
+          delta_small_pack_rows(settings.dt_segment_delta_small_pack_rows),
           stable_pack_rows(settings.dt_segment_stable_pack_rows),
           enable_logical_split(settings.dt_enable_logical_split),
           read_delta_only(settings.dt_read_delta_only),
