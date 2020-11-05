@@ -18,7 +18,7 @@ namespace tests
 class DMRegion_test : public ::testing::Test
 {
 public:
-    DMRegion_test() : name("DMRegion_test"), path(DB::tests::TiFlashTestEnv::getTemporaryPath() + name), log(&Logger::get("DMRegion_test"))
+    DMRegion_test() : name("DMRegion_test"), log(&Logger::get("DMRegion_test"))
     {
         settings.set("dt_segment_limit_rows", (UInt64)10000);
         settings.set("dt_segment_delta_limit_rows", (UInt64)1000);
@@ -37,7 +37,7 @@ protected:
     void cleanUp()
     {
         // drop former-gen table's data in disk
-        Poco::File file(path);
+        Poco::File file(DB::tests::TiFlashTestEnv::getTemporaryPath());
         if (file.exists())
             file.remove(true);
     }
@@ -48,14 +48,12 @@ protected:
 
         context = std::make_unique<Context>(DMTestEnv::getContext(settings));
         store   = std::make_shared<DeltaMergeStore>(
-            *context, path, false, "test_database", "test_table", table_columns, getExtraHandleColumnDefine(false), false, 1);
+            *context, false, "test_database", "test_table", table_columns, getExtraHandleColumnDefine(false), false, 1);
     }
 
 private:
     // the table name
     String name;
-    // the path to the dir of table
-    String path;
 
 protected:
     // a ptr to context, we can reload context with different settings if need.

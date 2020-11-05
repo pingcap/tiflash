@@ -18,14 +18,13 @@ namespace tests
 class Segment_Common_Handle_test : public ::testing::Test
 {
 public:
-    Segment_Common_Handle_test() : name("tmp"), path(DB::tests::TiFlashTestEnv::getTemporaryPath() + name), storage_pool() {}
+    Segment_Common_Handle_test() : name("tmp"), storage_pool() {}
 
 private:
     void dropDataOnDisk()
     {
         // drop former-gen table's data in disk
-        Poco::File file(path);
-        if (file.exists())
+        if (Poco::File file(DB::tests::TiFlashTestEnv::getTemporaryPath()); file.exists())
             file.remove(true);
     }
 
@@ -46,7 +45,9 @@ protected:
     SegmentPtr reload(const ColumnDefinesPtr & pre_define_columns = {}, DB::Settings && db_settings = DB::Settings())
     {
         *db_context  = DMTestEnv::getContext(db_settings);
-        storage_pool = std::make_unique<StoragePool>("test.t1", path, DMTestEnv::getContext(), db_context->getSettingsRef());
+        auto & ctx   = DMTestEnv::getContext();
+        path_pool    = std::make_unique<StoragePathPool>(ctx.getExtraPaths().withTable("test", "t", false));
+        storage_pool = std::make_unique<StoragePool>("test.t1", *path_pool, ctx, db_context->getSettingsRef());
         storage_pool->restore();
         ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns(is_common_handle) : pre_define_columns;
         setColumns(cols);
@@ -61,8 +62,7 @@ protected:
         *table_columns_ = *columns;
 
         dm_context_ = std::make_unique<DMContext>(*db_context,
-                                                  path,
-                                                  db_context->getExtraPaths(),
+                                                  *path_pool,
                                                   *storage_pool,
                                                   0,
                                                   table_columns_,
@@ -81,12 +81,11 @@ private:
     std::unique_ptr<Context> db_context;
     // the table name
     String name;
-    // the path to the dir of table
-    String path;
     /// all these var lives as ref in dm_context
-    std::unique_ptr<StoragePool>  storage_pool;
-    ColumnDefinesPtr              table_columns_;
-    DM::DeltaMergeStore::Settings settings;
+    std::unique_ptr<StoragePathPool> path_pool;
+    std::unique_ptr<StoragePool>     storage_pool;
+    ColumnDefinesPtr                 table_columns_;
+    DM::DeltaMergeStore::Settings    settings;
     /// dm_context
     std::unique_ptr<DMContext> dm_context_;
 

@@ -112,7 +112,7 @@ public:
 
 
 protected:
-    StorageDeltaMerge(const String & path_,
+    StorageDeltaMerge( //
         const String & db_engine,
         const String & db_name_,
         const String & name_,
@@ -135,8 +135,6 @@ private:
 
 private:
     using ColumnIdMap = std::unordered_map<String, size_t>;
-
-    String path;
 
     const bool data_path_contains_database_name = false;
 

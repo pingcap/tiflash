@@ -173,7 +173,11 @@ public:
     void setTemporaryPath(const String & path);
     void setFlagsPath(const String & path);
     void setUserFilesPath(const String & path);
-    void setExtraPaths(const std::vector<String> & extra_paths, PathCapacityMetricsPtr global_capacity, FileProviderPtr file_provider);
+
+    void setExtraPaths(const Strings & main_data_paths,
+        const Strings & latest_data_paths,
+        PathCapacityMetricsPtr global_capacity_,
+        FileProviderPtr file_provider);
 
     using ConfigurationPtr = Poco::AutoPtr<Poco::Util::AbstractConfiguration>;
 
@@ -396,7 +400,7 @@ public:
     void initializeSchemaSyncService();
     SchemaSyncServicePtr & getSchemaSyncService();
 
-    void initializePathCapacityMetric(const std::vector<std::string> & all_path, std::vector<size_t> && all_capacity);
+    void initializePathCapacityMetric(const std::vector<std::string> & all_path, size_t capacity_quota);
     PathCapacityMetricsPtr getPathCapacity() const;
 
     void initializePartPathSelector(std::vector<std::string> && all_path, std::vector<std::string> && all_fast_path);
