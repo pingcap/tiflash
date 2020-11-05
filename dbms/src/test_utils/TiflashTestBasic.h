@@ -126,7 +126,7 @@ public:
         {
             context.getTMTContext();
             auto paths = getPathPool(testdata_path);
-            context.setPathPool(paths.first, paths.second, Strings{}, false, context.getPathCapacity(), context.getFileProvider());
+            context.setPathPool(paths.first, paths.second, Strings{}, true, context.getPathCapacity(), context.getFileProvider());
         }
         catch (Exception & e)
         {
@@ -148,7 +148,7 @@ public:
                 testdata_path.emplace_back(getTemporaryPath());
             context.initializePathCapacityMetric(testdata_path, 0);
             auto paths = getPathPool(testdata_path);
-            context.setPathPool(paths.first, paths.second, Strings{}, false, context.getPathCapacity(), context.getFileProvider());
+            context.setPathPool(paths.first, paths.second, Strings{}, true, context.getPathCapacity(), context.getFileProvider());
             context.createTMTContext({}, {"default"}, TiDB::StorageEngine::TMT, false);
 
             context.getTMTContext().restore();

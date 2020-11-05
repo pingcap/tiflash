@@ -2,14 +2,15 @@
 
 #define private public
 #include <Storages/Transaction/RegionManager.h>
+#include <Storages/Transaction/RegionPersister.h>
 #undef private
 
+#include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
 #include <test_utils/TiflashTestBasic.h>
 
@@ -17,7 +18,15 @@
 
 #include "region_helper.h"
 
-namespace DB::tests
+namespace DB
+{
+namespace FailPoints
+{
+extern const char force_enable_region_persister_compatibility_mode[];
+extern const char force_disable_region_persister_compatibility_mode[];
+} // namespace FailPoints
+
+namespace tests
 {
 
 class RegionPersister_test : public ::testing::Test
@@ -25,7 +34,11 @@ class RegionPersister_test : public ::testing::Test
 public:
     RegionPersister_test() : dir_path(TiFlashTestEnv::getTemporaryPath() + "/region_persister_tmp") {}
 
-    static void SetUpTestCase() { TiFlashTestEnv::setupLogger(); }
+    static void SetUpTestCase()
+    {
+        TiFlashTestEnv::setupLogger();
+        fiu_init(0); // init failpoint
+    }
 
     void SetUp() override { dropFiles(); }
 
@@ -53,7 +66,7 @@ static ::testing::AssertionResult PeerCompare( //
     const metapb::Peer & lhs,
     const metapb::Peer & rhs)
 {
-    if (lhs.id() == rhs.id() && lhs.is_learner() == rhs.is_learner())
+    if (lhs.id() == rhs.id() && lhs.role() == rhs.role())
         return ::testing::AssertionSuccess();
     else
         return ::testing::internal::EqFailure(lhs_expr, rhs_expr, lhs.ShortDebugString(), rhs.ShortDebugString(), false);
@@ -198,12 +211,13 @@ try
     size_t region_num = 100;
     RegionMap regions;
     TableID table_id = 100;
+
+    PageStorage::Config config;
+    config.file_roll_size = 128 * MB;
     {
         UInt64 diff = 0;
-        // PageStorage::Config config;
-        // config.file_roll_size = 128 * MB;
         RegionPersister persister(ctx, region_manager);
-        persister.restore();
+        persister.restore(nullptr, config);
 
         for (size_t i = 0; i < region_num; ++i)
         {
@@ -229,14 +243,14 @@ try
     RegionMap new_regions;
     {
         RegionPersister persister(ctx, region_manager);
-        new_regions = persister.restore();
+        new_regions = persister.restore(nullptr, config);
         size_t num_regions_missed = 0;
         for (size_t i = 0; i < region_num; ++i)
         {
             auto new_iter = new_regions.find(i);
             if (new_iter == new_regions.end())
             {
-                LOG_INFO(&Poco::Logger::get("RegionPersister_test"), "Region missed, id=" << i);
+                LOG_ERROR(&Poco::Logger::get("RegionPersister_test"), "Region missed, id=" << i);
                 ++num_regions_missed;
             }
             else
@@ -247,6 +261,117 @@ try
             }
         }
         ASSERT_EQ(num_regions_missed, 1UL);
+    }
+}
+CATCH
+
+TEST_F(RegionPersister_test, persister_compatibility_mode)
+try
+{
+    std::string path = dir_path + "/compatibility_mode";
+
+    // Force to run in compatibility mode for the default region persister
+    FailPointHelper::enableFailPoint(FailPoints::force_enable_region_persister_compatibility_mode);
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_enable_region_persister_compatibility_mode); });
+    auto & ctx = TiFlashTestEnv::getContext(DB::Settings(),
+        Strings{
+            path,
+        });
+
+    size_t region_num = 500;
+    RegionMap regions;
+    TableID table_id = 100;
+
+    PageStorage::Config config;
+    config.file_roll_size = 2 * MB;
+    RegionManager region_manager;
+    DB::Timestamp tso = 0;
+    {
+        RegionPersister persister(ctx, region_manager);
+        // Force to run in compatibility mode
+        FailPointHelper::enableFailPoint(FailPoints::force_enable_region_persister_compatibility_mode);
+        persister.restore(nullptr, config);
+        ASSERT_EQ(persister.page_storage, nullptr);
+        ASSERT_NE(persister.stable_page_storage, nullptr);
+
+        for (size_t i = 0; i < region_num; ++i)
+        {
+            auto region = std::make_shared<Region>(createRegionMeta(i, table_id));
+            TiKVKey key = RecordKVFormat::genKey(table_id, i, tso++);
+            region->insert("default", TiKVKey::copyFrom(key), TiKVValue("value1"));
+            region->insert("write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
+            region->insert("lock", TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
+
+            persister.persist(*region);
+
+            regions.emplace(region->id(), region);
+        }
+    }
+
+    {
+        RegionPersister persister(ctx, region_manager);
+        // restore normally, should run in compatibility mode.
+        RegionMap new_regions = persister.restore(nullptr, config);
+        ASSERT_EQ(persister.page_storage, nullptr);
+        ASSERT_NE(persister.stable_page_storage, nullptr);
+        // Try to read
+        for (size_t i = 0; i < region_num; ++i)
+        {
+            auto new_iter = new_regions.find(i);
+            ASSERT_NE(new_iter, new_regions.end());
+            auto old_region = regions[i];
+            auto new_region = new_regions[i];
+            ASSERT_EQ(*new_region, *old_region);
+        }
+    }
+
+    size_t region_num_under_nromal_mode = 200;
+    {
+        RegionPersister persister(ctx, region_manager);
+        // Force to run in normal mode
+        FailPointHelper::enableFailPoint(FailPoints::force_disable_region_persister_compatibility_mode);
+        RegionMap new_regions = persister.restore(nullptr, config);
+        ASSERT_NE(persister.page_storage, nullptr);
+        ASSERT_EQ(persister.stable_page_storage, nullptr);
+        // Try to read
+        for (size_t i = 0; i < region_num; ++i)
+        {
+            auto new_iter = new_regions.find(i);
+            ASSERT_NE(new_iter, new_regions.end());
+            auto old_region = regions[i];
+            auto new_region = new_regions[i];
+            ASSERT_EQ(*new_region, *old_region);
+        }
+        // Try to write more regions under normal mode
+        for (size_t i = region_num; i < region_num + region_num_under_nromal_mode; ++i)
+        {
+            auto region = std::make_shared<Region>(createRegionMeta(i, table_id));
+            TiKVKey key = RecordKVFormat::genKey(table_id, i, tso++);
+            region->insert("default", TiKVKey::copyFrom(key), TiKVValue("value1"));
+            region->insert("write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
+            region->insert("lock", TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
+
+            persister.persist(*region);
+
+            regions.emplace(region->id(), region);
+        }
+    }
+
+    {
+        RegionPersister persister(ctx, region_manager);
+        // Restore normally, should run in normal mode.
+        RegionMap new_regions = persister.restore(nullptr, config);
+        ASSERT_NE(persister.page_storage, nullptr);
+        ASSERT_EQ(persister.stable_page_storage, nullptr);
+        // Try to read
+        for (size_t i = 0; i < region_num + region_num_under_nromal_mode; ++i)
+        {
+            auto new_iter = new_regions.find(i);
+            ASSERT_NE(new_iter, new_regions.end()) << " region:" << i;
+            auto old_region = regions[i];
+            auto new_region = new_regions[i];
+            ASSERT_EQ(*new_region, *old_region) << " region:" << i;
+        }
     }
 }
 CATCH
@@ -391,4 +516,5 @@ TEST_F(RegionPersister_test, DISABLED_persister_sync_on_write)
     runTest(dir_path + "region_persist_storage_sow_true", true);
 }
 
-} // namespace DB::tests
+} // namespace tests
+} // namespace DB

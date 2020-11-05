@@ -1,3 +1,4 @@
+#include <Common/FailPoint.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
 #include <Storages/Page/PageStorage.h>
@@ -14,6 +15,12 @@ namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
+
+namespace FailPoints
+{
+extern const char force_enable_region_persister_compatibility_mode[];
+extern const char force_disable_region_persister_compatibility_mode[];
+}
 
 void RegionPersister::drop(RegionID region_id, const RegionTaskLock &)
 {
@@ -135,6 +142,10 @@ RegionMap RegionPersister::restore(IndexReaderCreateFunc * func, PageStorage::Co
         auto detect_binary_version = PageStorage::getMinDataVersion(global_context.getFileProvider(), delegator);
         bool run_in_compatibility_mode
             = path_pool.isRaftStorageCapatibilityModeEnabled() && (detect_binary_version == PageFile::VERSION_BASE);
+
+        fiu_do_on(FailPoints::force_enable_region_persister_compatibility_mode, { run_in_compatibility_mode = true; });
+        fiu_do_on(FailPoints::force_disable_region_persister_compatibility_mode, { run_in_compatibility_mode = false; });
+
         if (!run_in_compatibility_mode)
         {
             config.num_write_slots = 4; // extend write slots to 4 at least

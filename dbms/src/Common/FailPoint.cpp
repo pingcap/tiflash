@@ -23,7 +23,9 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(region_exception_after_read_from_storage_some_error)   \
     M(region_exception_after_read_from_storage_all_error)    \
     M(exception_before_dmfile_remove_encryption)             \
-    M(exception_before_dmfile_remove_from_disk)
+    M(exception_before_dmfile_remove_from_disk)              \
+    M(force_enable_region_persister_compatibility_mode)      \
+    M(force_disable_region_persister_compatibility_mode)
 
 #define APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M) M(pause_after_learner_read)
 

@@ -72,8 +72,8 @@ PageFile::Version PageStorage::getMinDataVersion(const FileProviderPtr & file_pr
     if (page_files.empty())
         return PageFile::CURRENT_VERSION;
 
-    // Simply check the first PageFile is good enough
-    auto reader = const_cast<PageFile &>(*page_files.begin()).createMetaMergingReader();
+    // Simply check the last PageFile is good enough
+    auto reader = const_cast<PageFile &>(*page_files.rbegin()).createMetaMergingReader();
 
     PageFile::Version min_binary_version = PageFile::CURRENT_VERSION, temp_version;
     reader->moveNext(&temp_version);
