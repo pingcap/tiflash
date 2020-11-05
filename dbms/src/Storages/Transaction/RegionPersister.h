@@ -31,7 +31,7 @@ public:
     void drop(RegionID region_id, const RegionTaskLock &);
     void persist(const Region & region);
     void persist(const Region & region, const RegionTaskLock & lock);
-    RegionMap restore(IndexReaderCreateFunc * func = nullptr, PageStorage::Config config = {});
+    RegionMap restore(IndexReaderCreateFunc * func = nullptr, DB::PageStorage::Config config = DB::PageStorage::Config{});
     bool gc();
 
     using RegionCacheWriteElement = std::tuple<RegionID, MemoryWriteBuffer, size_t, UInt64>;
