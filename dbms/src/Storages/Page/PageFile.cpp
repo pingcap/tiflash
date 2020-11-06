@@ -114,8 +114,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
         switch (write.type)
         {
         case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::UPSERT:
-        {
+        case WriteBatch::WriteType::UPSERT: {
             PageFlags  flags;
             Checksum   page_checksum = 0;
             PageOffset page_offset   = 0;
@@ -319,8 +318,7 @@ void PageFile::MetaMergingReader::moveNext()
         switch (write_type)
         {
         case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::UPSERT:
-        {
+        case WriteBatch::WriteType::UPSERT: {
             PageMetaFormat::PageFlags flags;
 
             auto      page_id = PageUtil::get<PageId>(pos);
@@ -366,14 +364,12 @@ void PageFile::MetaMergingReader::moveNext()
             }
             break;
         }
-        case WriteBatch::WriteType::DEL:
-        {
+        case WriteBatch::WriteType::DEL: {
             auto page_id = PageUtil::get<PageId>(pos);
             curr_edit.del(page_id);
             break;
         }
-        case WriteBatch::WriteType::REF:
-        {
+        case WriteBatch::WriteType::REF: {
             const auto ref_id  = PageUtil::get<PageId>(pos);
             const auto page_id = PageUtil::get<PageId>(pos);
             curr_edit.ref(ref_id, page_id);
@@ -397,17 +393,13 @@ void PageFile::MetaMergingReader::moveNext()
 // =========================================================
 
 PageFile::Writer::Writer(PageFile & page_file_, bool sync_on_write_, bool create_new_file)
-    : page_file(page_file_),
-      sync_on_write(sync_on_write_),
-      data_file{nullptr},
-      meta_file{nullptr},
-      last_write_time(Clock::now())
+    : page_file(page_file_), sync_on_write(sync_on_write_), data_file{nullptr}, meta_file{nullptr}, last_write_time(Clock::now())
 {
     // Create data and meta file, prevent empty page folder from being removed by GC.
-    data_file = page_file.file_provider->newWritableFile(
-        page_file.dataPath(), page_file.dataEncryptionPath(), create_new_file, create_new_file);
-    meta_file = page_file.file_provider->newWritableFile(
-        page_file.metaPath(), page_file.metaEncryptionPath(), create_new_file, create_new_file);
+    data_file
+        = page_file.file_provider->newWritableFile(page_file.dataPath(), page_file.dataEncryptionPath(), create_new_file, create_new_file);
+    meta_file
+        = page_file.file_provider->newWritableFile(page_file.metaPath(), page_file.metaEncryptionPath(), create_new_file, create_new_file);
     data_file->close();
     meta_file->close();
 }
@@ -418,6 +410,11 @@ PageFile::Writer::~Writer()
         return;
 
     closeFd();
+}
+
+const String & PageFile::Writer::parentPath() const
+{
+    return page_file.parent_path;
 }
 
 size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
@@ -486,7 +483,8 @@ void PageFile::Writer::closeFd()
 
 PageFile::Reader::Reader(PageFile & page_file)
     : data_file_path(page_file.dataPath()),
-      data_file{page_file.file_provider->newRandomAccessFile(page_file.dataPath(), page_file.dataEncryptionPath())}, last_read_time(Clock::now())
+      data_file{page_file.file_provider->newRandomAccessFile(page_file.dataPath(), page_file.dataEncryptionPath())},
+      last_read_time(Clock::now())
 {
 }
 
@@ -836,8 +834,8 @@ void PageFile::setFormal()
 {
     if (type != Type::Temp)
         return;
-    auto old_meta_encryption_path = metaEncryptionPath();
-    auto old_data_encryption_path = dataEncryptionPath();
+    auto       old_meta_encryption_path = metaEncryptionPath();
+    auto       old_data_encryption_path = dataEncryptionPath();
     Poco::File file(folderPath());
     type = Type::Formal;
     file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());
@@ -853,8 +851,8 @@ size_t PageFile::setLegacy()
         return 0;
     // Rename to legacy dir. Note that we can NOT remove the data part before
     // successfully rename to legacy status.
-    auto old_meta_encryption_path = metaEncryptionPath();
-    auto old_data_encryption_path = dataEncryptionPath();
+    auto       old_meta_encryption_path = metaEncryptionPath();
+    auto       old_data_encryption_path = dataEncryptionPath();
     Poco::File formal_dir(folderPath());
     type = Type::Legacy;
     file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());
@@ -879,7 +877,7 @@ size_t PageFile::setCheckpoint()
                             ErrorCodes::LOGICAL_ERROR);
     }
 
-    auto old_meta_encryption_path = metaEncryptionPath();
+    auto       old_meta_encryption_path = metaEncryptionPath();
     Poco::File file(folderPath());
     type = Type::Checkpoint;
     file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());

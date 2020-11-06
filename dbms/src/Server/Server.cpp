@@ -382,8 +382,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->initializeFileProvider(key_manager, false);
     }
 
-    bool has_zookeeper = config().has("zookeeper");
+    /// ===== Paths related configuration initialized start ===== ///
 
+    // TODO: remove this configuration left by ClickHouse
     std::vector<String> all_fast_path;
     if (config().has("fast_path"))
     {
@@ -399,8 +400,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
             }
         }
     }
-    std::vector<String> all_normal_path;
-    std::vector<size_t> all_capacity;
+
+    size_t capacity = 0; // "0" by default, means no quota, use the whole disk capacity.
     if (config().has("capacity"))
     {
         // TODO: support human readable format for capacity, mark_cache_size, minmax_index_cache_size
@@ -408,42 +409,114 @@ int Server::main(const std::vector<std::string> & /*args*/)
         String capacities = config().getString("capacity");
         Poco::trimInPlace(capacities);
         Poco::StringTokenizer string_tokens(capacities, ",");
+        size_t num_token = 0;
         for (auto it = string_tokens.begin(); it != string_tokens.end(); ++it)
         {
-            const std::string & s = *it;
-            size_t capacity = parse<size_t>(s.data(), s.size());
-            all_capacity.emplace_back(capacity);
+            if (num_token == 0)
+            {
+                const std::string & s = *it;
+                capacity = parse<size_t>(s.data(), s.size());
+            }
+            num_token++;
         }
+        if (num_token != 1)
+            LOG_WARNING(log, "Only the first number in configuration \"capacity\" take effect");
+        LOG_INFO(log, "The capacity limit is: " + formatReadableSizeWithBinarySuffix(capacity));
     }
+
+    Strings all_normal_path;
+    Strings main_data_paths, latest_data_paths;
+    if (config().has("main_data_path"))
     {
+        auto parse_multiple_paths = [&log](String s, const String & logging_prefix) -> Strings {
+            Poco::trimInPlace(s);
+            Strings res;
+            Poco::StringTokenizer string_tokens(s, ",");
+            for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
+            {
+                res.emplace_back(getCanonicalPath(std::string(*it)));
+                LOG_INFO(log, logging_prefix << " data candidate path: " << std::string(*it));
+            }
+            return res;
+        };
+
+        main_data_paths = parse_multiple_paths(config().getString("main_data_path"), "Main");
+        if (main_data_paths.empty())
+        {
+            String error_msg
+                = "The configuration \"main_data_path\" is empty! [main_data_path=" + config().getString("main_data_path") + "]";
+            LOG_ERROR(log, error_msg);
+            throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
+        }
+
+        if (config().has("latest_data_path"))
+            latest_data_paths = parse_multiple_paths(config().getString("latest_data_path"), "Latest");
+        if (latest_data_paths.empty())
+        {
+            LOG_INFO(log, "The configuration \"latest_data_paths\" is empty, use the same paths of \"main_data_path\"");
+            latest_data_paths = main_data_paths;
+            for (const auto & s : latest_data_paths)
+                LOG_INFO(log, "Latest data candidate path: " << s);
+        }
+
+        {
+            std::set<String> path_set;
+            for (const auto & s : main_data_paths)
+                path_set.insert(s);
+            for (const auto & s : latest_data_paths)
+                path_set.insert(s);
+            all_normal_path.emplace_back(main_data_paths[0]);
+            path_set.erase(main_data_paths[0]);
+            for (const auto & s : path_set)
+                all_normal_path.emplace_back(s);
+        }
+
+        if (config().has("path"))
+            LOG_WARNING(log, "The configuration \"path\" is ignored when \"main_data_path\" is defined.");
+    }
+    else if (config().has("path"))
+    {
+        LOG_WARNING(log, "The configuration \"path\" is deprecated, use \"main_data_path\" instead.");
 
         String paths = config().getString("path");
         Poco::trimInPlace(paths);
         if (paths.empty())
-            throw Exception("path configuration parameter is empty");
+            throw Exception(
+                "The configuration \"path\" is empty! [path=" + config().getString("paths") + "]", ErrorCodes::INVALID_CONFIG_PARAMETER);
         Poco::StringTokenizer string_tokens(paths, ",");
-        size_t idx = 0;
         for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
         {
             all_normal_path.emplace_back(getCanonicalPath(std::string(*it)));
-            if (all_capacity.size() < all_normal_path.size())
-                all_capacity.emplace_back(0);
-            LOG_DEBUG(log, "Data part candidate path: " << std::string(*it) << ", capacity: " << all_capacity[idx++]);
+            LOG_DEBUG(log, "Data part candidate path: " << std::string(*it));
+        }
+
+        // If you set `path_realtime_mode` to `true` and multiple directories are deployed in the path, the latest data is stored in the first directory and older data is stored in the rest directories.
+        bool path_realtime_mode = config().getBool("path_realtime_mode", false);
+        for (size_t i = 0; i < all_normal_path.size(); ++i)
+        {
+            const String p = Poco::Path{all_normal_path[i]}.toString();
+            // Only use the first path for storing latest data
+            if (i == 0)
+                latest_data_paths.emplace_back(p);
+            if (path_realtime_mode)
+            {
+                if (i != 0)
+                    main_data_paths.emplace_back(p);
+            }
+            else
+            {
+                main_data_paths.emplace_back(p);
+            }
         }
     }
-    global_context->initializePathCapacityMetric(all_normal_path, std::move(all_capacity));
-
-    bool path_realtime_mode = config().getBool("path_realtime_mode", false);
-    std::vector<String> extra_paths(all_normal_path.begin(), all_normal_path.end());
-    for (auto & p : extra_paths)
-        p += "/data";
-
-    if (path_realtime_mode && all_normal_path.size() > 1)
-        global_context->setExtraPaths(std::vector<String>(extra_paths.begin() + 1, extra_paths.end()),
-            global_context->getPathCapacity(),
-            global_context->getFileProvider());
     else
-        global_context->setExtraPaths(extra_paths, global_context->getPathCapacity(), global_context->getFileProvider());
+    {
+        LOG_ERROR(log, "The configuration \"main_data_path\" is not defined.");
+        throw Exception("The configuration \"main_data_path\" is not defined.", ErrorCodes::INVALID_CONFIG_PARAMETER);
+    }
+
+    global_context->initializePathCapacityMetric(all_normal_path, capacity);
+    global_context->setExtraPaths(main_data_paths, latest_data_paths, global_context->getPathCapacity(), global_context->getFileProvider());
 
     const std::string path = all_normal_path[0];
     TiFlashRaftConfig raft_config(path, config(), log);
@@ -452,6 +525,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::string default_database = config().getString("default_database", raft_config.pd_addrs.empty() ? "default" : "system");
     global_context->setPath(path);
     global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
+
+    /// ===== Paths related configuration initialized end ===== ///
 
     security_config = TiFlashSecurityConfig(config(), log);
 
@@ -578,18 +653,45 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// Initialize users config reloader.
     std::string users_config_path = config().getString("users_config", String(1, '\0'));
+    bool use_default_users_config = true;
+    // if `users_config` is set empty, use default immutable users config.
+    if (users_config_path.empty())
+        use_default_users_config = true;
+    else
+    {
+        if (0 == users_config_path[0])
+        {
+            // if `profiles` exits in config file, use it as user config file.
+            if (config().has("profiles"))
+            {
+                use_default_users_config = false;
+                users_config_path = config_path;
+            }
+            else
+                use_default_users_config = true;
+        }
+        else
+        {
+            use_default_users_config = false;
+        }
+    }
+    if (!use_default_users_config)
+        LOG_INFO(log, "Set users config file to: " << users_config_path);
+    else
+        LOG_INFO(log, "Use default users config");
+
     /// If path to users' config isn't absolute, try guess its root (current) dir.
     /// At first, try to find it in dir of main config, after will use current dir.
-    if (users_config_path[0])
+    if (!use_default_users_config)
     {
-        if (users_config_path.empty() || users_config_path[0] != '/')
+        if (users_config_path[0] != '/')
         {
             std::string config_dir = Poco::Path(config_path).parent().toString();
             if (Poco::File(config_dir + users_config_path).exists())
                 users_config_path = config_dir + users_config_path;
         }
     }
-    auto users_config_reloader = users_config_path[0]
+    auto users_config_reloader = !use_default_users_config
         ? std::make_unique<ConfigReloader>(
             users_config_path,
             [&](ConfigurationPtr config) { global_context->setUsersConfig(config); },
@@ -652,6 +754,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// After attaching system databases we can initialize system log.
     global_context->initializeSystemLogs();
     /// After the system database is created, attach virtual system tables (in addition to query_log and part_log)
+    bool has_zookeeper = config().has("zookeeper");
     attachSystemTablesServer(*global_context->getDatabase("system"), has_zookeeper);
 
     {
