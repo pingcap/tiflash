@@ -190,7 +190,7 @@ size_t DeltaValueSpace::getTotalCacheBytes() const
     {
         if (pack->cache && pack->cache != _last_cache)
         {
-            cache_bytes += pack->cache->block.bytes();
+            cache_bytes += pack->cache->block.allocatedBytes();
         }
         _last_cache = pack->cache;
     }
