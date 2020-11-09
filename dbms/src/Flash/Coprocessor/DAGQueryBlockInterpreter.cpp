@@ -1290,11 +1290,15 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
-        auto exchange_receiver_stream = std::make_shared<ExchangeReceiverInputStream>(
-            context, query_block.source->exchange_receiver(), dag.getDAGContext().getMPPTaskMeta());
-        pipeline.streams.push_back(exchange_receiver_stream);
+        auto exchange_receiver
+            = std::make_shared<ExchangeReceiver>(context, query_block.source->exchange_receiver(), dag.getDAGContext().getMPPTaskMeta());
+        // todo choose a more reasonable stream number
+        for (size_t i = 0; i < max_streams; i++)
+        {
+            pipeline.streams.push_back(std::make_shared<ExchangeReceiverInputStream>(exchange_receiver));
+        }
         std::vector<NameAndTypePair> source_columns;
-        Block block = exchange_receiver_stream->getHeader();
+        Block block = pipeline.firstStream()->getHeader();
         for (const auto & col : block.getColumnsWithTypeAndName())
         {
             source_columns.emplace_back(NameAndTypePair(col.name, col.type));
