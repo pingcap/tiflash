@@ -283,7 +283,7 @@ try
     TableID table_id = 100;
 
     PageStorage::Config config;
-    config.file_roll_size = 2 * MB;
+    config.file_roll_size = 16 * 1024;
     RegionManager region_manager;
     DB::Timestamp tso = 0;
     {

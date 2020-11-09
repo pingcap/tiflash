@@ -139,7 +139,7 @@ RegionMap RegionPersister::restore(IndexReaderCreateFunc * func, PageStorage::Co
         auto & path_pool = global_context.getPathPool();
         auto delegator = path_pool.getPSDiskDelegatorRaft();
         // If there is no PageFile with basic version binary format, use the latest version of PageStorage.
-        auto detect_binary_version = PageStorage::getMinDataVersion(global_context.getFileProvider(), delegator);
+        auto detect_binary_version = PageStorage::getMaxDataVersion(global_context.getFileProvider(), delegator);
         bool run_in_compatibility_mode
             = path_pool.isRaftStorageCapatibilityModeEnabled() && (detect_binary_version == PageFile::VERSION_BASE);
 

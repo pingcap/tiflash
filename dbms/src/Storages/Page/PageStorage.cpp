@@ -61,9 +61,9 @@ bool PageStorage::StatisticsInfo::equals(const StatisticsInfo & rhs)
     return puts == rhs.puts && refs == rhs.refs && deletes == rhs.deletes && upserts == rhs.upserts;
 }
 
-PageFile::Version PageStorage::getMinDataVersion(const FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator)
+PageFile::Version PageStorage::getMaxDataVersion(const FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator)
 {
-    Poco::Logger *      log = &Poco::Logger::get("PageStorage::getMinDataVersion");
+    Poco::Logger *      log = &Poco::Logger::get("PageStorage::getMaxDataVersion");
     ListPageFilesOption option;
     option.ignore_checkpoint = true;
     option.ignore_legacy     = true;
@@ -75,17 +75,17 @@ PageFile::Version PageStorage::getMinDataVersion(const FileProviderPtr & file_pr
     // Simply check the last PageFile is good enough
     auto reader = const_cast<PageFile &>(*page_files.rbegin()).createMetaMergingReader();
 
-    PageFile::Version min_binary_version = PageFile::CURRENT_VERSION, temp_version;
+    PageFile::Version max_binary_version = PageFile::CURRENT_VERSION, temp_version;
     reader->moveNext(&temp_version);
-    min_binary_version = std::min(min_binary_version, temp_version);
+    max_binary_version = std::max(max_binary_version, temp_version);
     while (reader->hasNext())
     {
         // Continue to read the binary version of next WriteBatch.
         reader->moveNext(&temp_version);
-        min_binary_version = std::min(min_binary_version, temp_version);
+        max_binary_version = std::max(max_binary_version, temp_version);
     }
-    LOG_TRACE(log, "getMinDataVersion done from " + reader->toString());
-    return min_binary_version;
+    LOG_DEBUG(log, "getMaxDataVersion done from " + reader->toString() << " [max version=" << max_binary_version << "]");
+    return max_binary_version;
 }
 
 PageFileSet PageStorage::listAllPageFiles(const FileProviderPtr &     file_provider,
