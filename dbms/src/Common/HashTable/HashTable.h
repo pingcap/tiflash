@@ -482,14 +482,22 @@ public:
     HashTable()
     {
         if (Cell::need_zero_value_storage)
-            this->zeroValue()->setZero();
+        {
+            key_type key;
+            ZeroTraits::set(key);
+            new(this->zeroValue()) Cell(key, *this);
+        }
         alloc(grower);
     }
 
     HashTable(size_t reserve_for_num_elements)
     {
         if (Cell::need_zero_value_storage)
-            this->zeroValue()->setZero();
+        {
+            key_type key;
+            ZeroTraits::set(key);
+            new(this->zeroValue()) Cell(key, *this);
+        }
         grower.set(reserve_for_num_elements);
         alloc(grower);
     }
