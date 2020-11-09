@@ -75,7 +75,7 @@ PageFile::Version PageStorage::getMaxDataVersion(const FileProviderPtr & file_pr
     // Simply check the last PageFile is good enough
     auto reader = const_cast<PageFile &>(*page_files.rbegin()).createMetaMergingReader();
 
-    PageFile::Version max_binary_version = PageFile::CURRENT_VERSION, temp_version;
+    PageFile::Version max_binary_version = PageFile::VERSION_BASE, temp_version = PageFile::CURRENT_VERSION;
     reader->moveNext(&temp_version);
     max_binary_version = std::max(max_binary_version, temp_version);
     while (reader->hasNext())
