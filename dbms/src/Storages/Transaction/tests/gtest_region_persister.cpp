@@ -265,10 +265,10 @@ try
 }
 CATCH
 
-TEST_F(RegionPersister_test, persister_compatibility_mode)
+TEST_F(RegionPersister_test, persister_compatible_mode)
 try
 {
-    std::string path = dir_path + "/compatibility_mode";
+    std::string path = dir_path + "/compatible_mode";
 
     // Force to run in compatible mode for the default region persister
     FailPointHelper::enableFailPoint(FailPoints::force_enable_region_persister_compatible_mode);
