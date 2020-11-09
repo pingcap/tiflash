@@ -559,13 +559,13 @@ void Context::setPathPool( //
     const Strings & main_data_paths,
     const Strings & latest_data_paths,
     const Strings & kvstore_paths,
-    bool enable_raft_storage_compatibility_mode,
+    bool enable_raft_compatibility_mode,
     PathCapacityMetricsPtr global_capacity_,
     FileProviderPtr file_provider_)
 {
     auto lock = getLock();
     shared->path_pool = PathPool(
-        main_data_paths, latest_data_paths, kvstore_paths, global_capacity_, file_provider_, enable_raft_storage_compatibility_mode);
+        main_data_paths, latest_data_paths, kvstore_paths, global_capacity_, file_provider_, enable_raft_compatibility_mode);
 }
 
 void Context::setConfig(const ConfigurationPtr & config)

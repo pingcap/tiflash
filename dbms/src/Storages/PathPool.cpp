@@ -25,11 +25,11 @@ extern const int LOGICAL_ERROR;
 
 // Constructor to be used during initialization
 PathPool::PathPool(const Strings & main_data_paths_, const Strings & latest_data_paths_, const Strings & kvstore_paths_, //
-    PathCapacityMetricsPtr global_capacity_, FileProviderPtr file_provider_, bool enable_raft_storage_compatibility_mode_)
+    PathCapacityMetricsPtr global_capacity_, FileProviderPtr file_provider_, bool enable_raft_compatibility_mode_)
     : main_data_paths(main_data_paths_),
       latest_data_paths(latest_data_paths_),
       kvstore_paths(kvstore_paths_),
-      enable_raft_storage_compatibility_mode(enable_raft_storage_compatibility_mode_),
+      enable_raft_compatibility_mode(enable_raft_compatibility_mode_),
       global_capacity(global_capacity_),
       file_provider(file_provider_),
       log(&Poco::Logger::get("PathPool"))

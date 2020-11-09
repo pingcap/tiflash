@@ -170,7 +170,7 @@ struct TiFlashRaftConfig
     Strings kvstore_path;
     // Actually it is "flash.service_addr"
     std::string flash_server_addr;
-    bool enable_storage_compatibility_mode = true;
+    bool enable_compatibility_mode = true;
 
     static const TiDB::StorageEngine DEFAULT_ENGINE = TiDB::StorageEngine::DT;
     bool disable_bg_flush = false;
@@ -270,9 +270,10 @@ TiFlashRaftConfig::TiFlashRaftConfig(const Strings & latest_data_paths, Poco::Ut
             disable_bg_flush = true;
         }
 
-        if (config.has("raft.enable_storage_compatibility_mode"))
+        // just for test
+        if (config.has("raft.enable_compatibility_mode"))
         {
-            enable_storage_compatibility_mode = config.getBool("raft.enable_storage_compatibility_mode");
+            enable_compatibility_mode = config.getBool("raft.enable_compatibility_mode");
         }
     }
 }
@@ -541,7 +542,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     const std::string path = all_normal_path[0];
     TiFlashRaftConfig raft_config(latest_data_paths, config(), log);
     global_context->setPathPool(main_data_paths, latest_data_paths, raft_config.kvstore_path, //
-        raft_config.enable_storage_compatibility_mode,                                        //
+        raft_config.enable_compatibility_mode,                                                //
         global_context->getPathCapacity(), global_context->getFileProvider());
 
     // Use pd address to define which default_database we use by defauly.

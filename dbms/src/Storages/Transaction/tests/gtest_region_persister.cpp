@@ -22,8 +22,8 @@ namespace DB
 {
 namespace FailPoints
 {
-extern const char force_enable_region_persister_compatibility_mode[];
-extern const char force_disable_region_persister_compatibility_mode[];
+extern const char force_enable_region_persister_compatible_mode[];
+extern const char force_disable_region_persister_compatible_mode[];
 } // namespace FailPoints
 
 namespace tests
@@ -270,9 +270,9 @@ try
 {
     std::string path = dir_path + "/compatibility_mode";
 
-    // Force to run in compatibility mode for the default region persister
-    FailPointHelper::enableFailPoint(FailPoints::force_enable_region_persister_compatibility_mode);
-    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_enable_region_persister_compatibility_mode); });
+    // Force to run in compatible mode for the default region persister
+    FailPointHelper::enableFailPoint(FailPoints::force_enable_region_persister_compatible_mode);
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_enable_region_persister_compatible_mode); });
     auto & ctx = TiFlashTestEnv::getContext(DB::Settings(),
         Strings{
             path,
@@ -288,8 +288,8 @@ try
     DB::Timestamp tso = 0;
     {
         RegionPersister persister(ctx, region_manager);
-        // Force to run in compatibility mode
-        FailPointHelper::enableFailPoint(FailPoints::force_enable_region_persister_compatibility_mode);
+        // Force to run in compatible mode
+        FailPointHelper::enableFailPoint(FailPoints::force_enable_region_persister_compatible_mode);
         persister.restore(nullptr, config);
         ASSERT_EQ(persister.page_storage, nullptr);
         ASSERT_NE(persister.stable_page_storage, nullptr);
@@ -310,7 +310,7 @@ try
 
     {
         RegionPersister persister(ctx, region_manager);
-        // restore normally, should run in compatibility mode.
+        // restore normally, should run in compatible mode.
         RegionMap new_regions = persister.restore(nullptr, config);
         ASSERT_EQ(persister.page_storage, nullptr);
         ASSERT_NE(persister.stable_page_storage, nullptr);
@@ -329,7 +329,7 @@ try
     {
         RegionPersister persister(ctx, region_manager);
         // Force to run in normal mode
-        FailPointHelper::enableFailPoint(FailPoints::force_disable_region_persister_compatibility_mode);
+        FailPointHelper::enableFailPoint(FailPoints::force_disable_region_persister_compatible_mode);
         RegionMap new_regions = persister.restore(nullptr, config);
         ASSERT_NE(persister.page_storage, nullptr);
         ASSERT_EQ(persister.stable_page_storage, nullptr);
