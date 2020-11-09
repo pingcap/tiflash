@@ -29,7 +29,8 @@ PathPool::PathPool(const Strings & main_data_paths_, const Strings & latest_data
     : main_data_paths(main_data_paths_),
       latest_data_paths(latest_data_paths_),
       global_capacity(global_capacity_),
-      file_provider(file_provider_)
+      file_provider(file_provider_),
+      log(&Poco::Logger::get("PathPool"))
 {}
 
 StoragePathPool PathPool::withTable(const String & database_, const String & table_, bool path_need_database_name_) const
