@@ -147,9 +147,8 @@ grpc::Status MPPHandler::execute(mpp::DispatchTaskResponse * response)
             auto column_index = decodeDAGInt64(expr.val());
             partition_col_id.emplace_back(column_index);
         }
-        auto exchange_type = ExchangeType::BROADCAST;
         // construct writer
-        std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(tunnel_set,partition_col_id, exchange_type,
+        std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(tunnel_set,partition_col_id, exchangeSender.tp(),
         context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), dag_context, false, true);
         streams.out = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
 

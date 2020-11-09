@@ -15,7 +15,7 @@ extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 template <class StreamWriterPtr>
-StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWriterPtr writer_,  std::vector<Int64>partition_col_ids_, ExchangeType exchange_type_, Int64 records_per_chunk_,
+StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWriterPtr writer_,  std::vector<Int64>partition_col_ids_, tipb::ExchangeType exchange_type_, Int64 records_per_chunk_,
     tipb::EncodeType encode_type_, std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_,
     bool collect_execute_summary_, bool return_executor_id_)
     : DAGResponseWriter(records_per_chunk_, encode_type_, result_field_types_, dag_context_, collect_execute_summary_, return_executor_id_),
@@ -33,7 +33,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::ScheduleEncodeTask()
 {
     tipb::SelectResponse response;
     addExecuteSummaries(response);
-    if(exchange_type == ExchangeType::PARTITION)
+    if(exchange_type == tipb::ExchangeType::Hash)
     {
         thread_pool.schedule(getEncodePartitionTask(blocks, response));
     }
