@@ -23,6 +23,15 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
+inline String removeTrailingSlash(String s)
+{
+    if (s.back() == '/')
+        s.erase(s.begin() + s.size() - 1);
+    return s;
+}
+
+inline String getNormalizedPath(const String & s) { return removeTrailingSlash(Poco::Path{s}.toString()); }
+
 // Constructor to be used during initialization
 PathPool::PathPool(const Strings & main_data_paths_, const Strings & latest_data_paths_, const Strings & kvstore_paths_, //
     PathCapacityMetricsPtr global_capacity_, FileProviderPtr file_provider_, bool enable_raft_compatibility_mode_)
@@ -40,9 +49,7 @@ PathPool::PathPool(const Strings & main_data_paths_, const Strings & latest_data
         for (const auto & s : latest_data_paths)
         {
             // Get a normalized path without trailing '/'
-            auto p = Poco::Path{s + "/kvstore"}.toString();
-            if (p.back() == '/')
-                p.erase(p.begin() + p.size() - 1);
+            auto p = getNormalizedPath(s + "/kvstore");
             kvstore_paths.emplace_back(std::move(p));
         }
     }
@@ -57,9 +64,9 @@ Strings PathPool::listPaths() const
 {
     std::set<String> path_set;
     for (const auto & p : main_data_paths)
-        path_set.insert(Poco::Path{p + "/data"}.toString());
+        path_set.insert(getNormalizedPath(p + "/data"));
     for (const auto & p : latest_data_paths)
-        path_set.insert(Poco::Path{p + "/data"}.toString());
+        path_set.insert(getNormalizedPath(p + "/data"));
     Strings paths;
     for (const auto & p : path_set)
         paths.emplace_back(p);
@@ -237,9 +244,9 @@ void StoragePathPool::drop(bool recursive, bool must_success)
 String StoragePathPool::getStorePath(const String & extra_path_root, const String & database_name, const String & table_name)
 {
     if (likely(!path_need_database_name))
-        return Poco::Path{extra_path_root + "/" + escapeForFileName(table_name)}.toString();
+        return getNormalizedPath(extra_path_root + "/" + escapeForFileName(table_name));
     else
-        return Poco::Path{extra_path_root + "/" + escapeForFileName(database_name) + "/" + escapeForFileName(table_name)}.toString();
+        return getNormalizedPath(extra_path_root + "/" + escapeForFileName(database_name) + "/" + escapeForFileName(table_name));
 }
 
 void StoragePathPool::renamePath(const String & old_path, const String & new_path)
@@ -414,9 +421,7 @@ size_t PSDiskDelegatorMulti::addPageFileUsedSize(
     const PageFileIdAndLevel & id_lvl, size_t size_to_add, const String & pf_parent_path, bool need_insert_location)
 {
     // Get a normalized path without `path_prefix` and trailing '/'
-    String upper_path = Poco::Path(pf_parent_path).parent().toString();
-    if (upper_path.back() == '/')
-        upper_path.erase(upper_path.begin() + upper_path.size() - 1);
+    String upper_path = removeTrailingSlash(Poco::Path(pf_parent_path).parent().toString());
     UInt32 index = UINT32_MAX;
     for (size_t i = 0; i < pool.latest_path_infos.size(); i++)
     {
@@ -479,7 +484,10 @@ Strings PSDiskDelegatorSingle::listPaths() const
     return paths;
 }
 
-String PSDiskDelegatorSingle::choosePath(const PageFileIdAndLevel & /*id_lvl*/) { return pool.latest_path_infos[0].path + "/" + path_prefix; }
+String PSDiskDelegatorSingle::choosePath(const PageFileIdAndLevel & /*id_lvl*/)
+{
+    return pool.latest_path_infos[0].path + "/" + path_prefix;
+}
 
 size_t PSDiskDelegatorSingle::addPageFileUsedSize(
     const PageFileIdAndLevel & /*id_lvl*/, size_t size_to_add, const String & pf_parent_path, bool /*need_insert_location*/)
@@ -509,9 +517,7 @@ PSDiskDelegatorRaft::PSDiskDelegatorRaft(PathPool & pool_) : pool(pool_)
     {
         RaftPathInfo info;
         // Get a normalized path without trailing '/'
-        info.path = s;
-        if (info.path.back() == '/')
-            info.path.erase(info.path.begin() + info.path.size() - 1);
+        info.path = getNormalizedPath(s);
         info.total_size = 0;
         raft_path_infos.emplace_back(info);
     }
@@ -565,9 +571,7 @@ size_t PSDiskDelegatorRaft::addPageFileUsedSize(
     const PageFileIdAndLevel & id_lvl, size_t size_to_add, const String & pf_parent_path, bool need_insert_location)
 {
     // Get a normalized path without trailing '/'
-    String upper_path = Poco::Path(pf_parent_path).toString();
-    if (upper_path.back() == '/')
-        upper_path.erase(upper_path.begin() + upper_path.size() - 1);
+    String upper_path = getNormalizedPath(pf_parent_path);
     UInt32 index = UINT32_MAX;
     for (size_t i = 0; i < raft_path_infos.size(); i++)
     {
