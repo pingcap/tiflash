@@ -146,32 +146,45 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
 
         // partition tuples in blocks
         // 1) compute partition id
-        // 2) encode each tuple
-        ColumnRawPtrs col_ptrs;
+        // 2) partition each row
+        // 3) encode each chunk and send it
         for (auto & block : input_blocks)
         {
+            ColumnRawPtrs key_col_ptrs;
+            std::vector<Block> dest_blocks(partition_num);
+            std::vector<MutableColumns>dest_tbl_cols(partition_num);
+            for(auto i=0;i<partition_num;++i) {
+                dest_tbl_cols[i]= block.cloneEmptyColumns();
+            }
             size_t rows = block.rows();
             // get partition key column ids
             for(auto i : partition_col_ids)
             {
-                col_ptrs.emplace_back(block.getByPosition(i).column.get());
+                key_col_ptrs.emplace_back(block.getByPosition(i).column.get());
             }
+            // partition each row
             for (size_t row_index = 0; row_index < rows; ++row_index)
             {
-                UInt128 key = hash128(row_index, col_ptrs.size(), col_ptrs, TiDB::dummy_collators, TiDB::dummy_sort_key_contaners);
-                chunk_codec_stream[(key.low % partition_num)]->encode(block, row_index, row_index+1);
+                UInt128 key = hash128(row_index, key_col_ptrs.size(), key_col_ptrs, TiDB::dummy_collators, TiDB::dummy_sort_key_contaners);
+                auto part_id = (key.low % partition_num);
+                chunk_codec_stream[part_id]->encode(block, row_index, row_index+1);
+                // copy each field
+                for(size_t col_id=0; col_id < block.columns(); ++col_id) {
+                    dest_tbl_cols[part_id][col_id]->insert(block.getByPosition(col_id).column->operator[](row_index));
+                }
             }
-        }
-
-        // serialize each partitioned chunk and write it to its destination
-        for (auto i=0; i< partition_num; ++i)
-        {
-            auto dag_chunk = responses[i].add_chunks();
-            dag_chunk->set_rows_data(chunk_codec_stream[i]->getString());
-            chunk_codec_stream[i]->clear();
-            std::string select_resp;
-            responses[i].SerializeToString(&select_resp);
-            writer->write(select_resp, i);
+            // serialize each partitioned block and write it to its destination
+            for(auto part_id=0; part_id < partition_num; ++part_id)
+            {
+                dest_blocks[part_id].setColumns(std::move(dest_tbl_cols[part_id]));
+                chunk_codec_stream[part_id]->encode(dest_blocks[part_id],0, dest_blocks[part_id].rows());
+                auto dag_chunk = responses[part_id].add_chunks();
+                dag_chunk->set_rows_data(chunk_codec_stream[part_id]->getString());
+                chunk_codec_stream[part_id]->clear();
+                std::string select_resp;
+                responses[part_id].SerializeToString(&select_resp);
+                writer->write(select_resp, part_id);
+            }
         }
     };
 }
