@@ -17,7 +17,9 @@ struct FsStats;
 class PathCapacityMetrics : private boost::noncopyable
 {
 public:
-    PathCapacityMetrics(const std::vector<std::string> & all_paths, const size_t capacity_quota_);
+    PathCapacityMetrics(const size_t capacity_quota_, // will be ignored if `main_capacity_quota` is not empty
+        const Strings & main_paths_, const std::vector<size_t> main_capacity_quota_, //
+        const Strings & latest_paths_, const std::vector<size_t> latest_capacity_quota_);
 
     void addUsedSize(std::string_view file_path, size_t used_bytes);
 
@@ -34,14 +36,17 @@ private:
     struct CapacityInfo
     {
         std::string path;
+        // Max quota bytes can be use for this path
+        const uint64_t capacity_bytes = 0;
         // Used bytes for this path
         std::atomic<uint64_t> used_bytes = 0;
 
         FsStats getStats(Poco::Logger * log) const;
 
         CapacityInfo() = default;
+        CapacityInfo(String p, uint64_t c) : path(std::move(p)), capacity_bytes(c) {}
         CapacityInfo(const CapacityInfo & rhs)
-            : path(rhs.path), used_bytes(rhs.used_bytes.load())
+            : path(rhs.path), capacity_bytes(rhs.capacity_bytes), used_bytes(rhs.used_bytes.load())
         {}
     };
 

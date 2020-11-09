@@ -146,7 +146,7 @@ public:
             // FIXME: These paths are only set at the first time
             if (testdata_path.empty())
                 testdata_path.emplace_back(getTemporaryPath());
-            context.initializePathCapacityMetric(testdata_path, 0);
+            context.initializePathCapacityMetric(0, testdata_path, {}, {}, {});
             auto paths = getPathPool(testdata_path);
             context.setPathPool(paths.first, paths.second, Strings{}, true, context.getPathCapacity(), context.getFileProvider());
             context.createTMTContext({}, {"default"}, TiDB::StorageEngine::TMT, false);
