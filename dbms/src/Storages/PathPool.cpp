@@ -98,14 +98,12 @@ StoragePathPool::StoragePathPool(                                       //
     {
         MainPathInfo info;
         info.path = getStorePath(p + "/data", database, table);
-        info.total_size = 0;
         main_path_infos.emplace_back(info);
     }
     for (const auto & p : latest_data_paths)
     {
         LatestPathInfo info;
         info.path = getStorePath(p + "/data", database, table);
-        info.total_size = 0;
         latest_path_infos.emplace_back(info);
     }
 }
@@ -200,7 +198,13 @@ void StoragePathPool::drop(bool recursive, bool must_success)
                 file_provider->deleteDirectory(dir.path(), false, recursive);
 
                 // update global used size
-                global_capacity->freeUsedSize(path_info.path, path_info.total_size);
+                size_t total_bytes = 0;
+                for (const auto [file_id, file_size] : path_info.file_size_map)
+                {
+                    (void)file_id;
+                    total_bytes += file_size;
+                }
+                global_capacity->freeUsedSize(path_info.path, total_bytes);
             }
         }
         catch (Poco::DirectoryNotEmptyException & e)
@@ -221,8 +225,9 @@ void StoragePathPool::drop(bool recursive, bool must_success)
             if (Poco::File dir(path_info.path); dir.exists())
             {
                 file_provider->deleteDirectory(dir.path(), false, recursive);
-                // update global used size
-                global_capacity->freeUsedSize(path_info.path, path_info.total_size);
+
+                // When PageStorage is dropped, it will update the size in global_capacity.
+                // Don't need to update global_capacity here.
             }
         }
         catch (Poco::DirectoryNotEmptyException & e)
@@ -350,7 +355,6 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
     if (auto iter = pool.dt_file_path_map.find(file_id); iter != pool.dt_file_path_map.end())
     {
         auto & path_info = pool.main_path_infos[iter->second];
-        path_info.total_size -= path_info.file_size_map.at(file_id);
         pool.dt_file_path_map.erase(iter);
         path_info.file_size_map.erase(file_id);
     }
@@ -367,7 +371,6 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
         throw Exception("Unrecognized path " + String(path));
     pool.dt_file_path_map.emplace(file_id, index);
     pool.main_path_infos[index].file_size_map.emplace(file_id, file_size);
-    pool.main_path_infos[index].total_size += file_size;
     // update global used size
     pool.global_capacity->addUsedSize(path, file_size);
 }
@@ -380,7 +383,6 @@ void StableDiskDelegator::removeDTFile(UInt64 file_id)
         throw Exception("Cannot find DMFile for id " + toString(file_id));
     UInt32 index = iter->second;
     const auto file_size = pool.main_path_infos[index].file_size_map.at(file_id);
-    pool.main_path_infos[index].total_size -= file_size;
     pool.dt_file_path_map.erase(file_id);
     pool.main_path_infos[index].file_size_map.erase(file_id);
     // update global used size
@@ -443,7 +445,6 @@ size_t PSDiskDelegatorMulti::addPageFileUsedSize(
         std::lock_guard<std::mutex> lock{pool.mutex};
         if (need_insert_location)
             page_path_map[id_lvl] = index;
-        pool.latest_path_infos[index].total_size += size_to_add;
     }
 
     // update global used size
@@ -467,7 +468,6 @@ void PSDiskDelegatorMulti::removePageFile(const PageFileIdAndLevel & id_lvl, siz
     if (unlikely(iter == page_path_map.end()))
         return;
     auto index = iter->second;
-    pool.latest_path_infos[index].total_size -= file_size;
     page_path_map.erase(iter);
 
     pool.global_capacity->freeUsedSize(pool.latest_path_infos[index].path, file_size);
@@ -497,7 +497,7 @@ String PSDiskDelegatorSingle::choosePath(const PageFileIdAndLevel & /*id_lvl*/)
 size_t PSDiskDelegatorSingle::addPageFileUsedSize(
     const PageFileIdAndLevel & /*id_lvl*/, size_t size_to_add, const String & pf_parent_path, bool /*need_insert_location*/)
 {
-    // In this case, inserting to page_path_map or adding total_size for PathInfo seems useless.
+    // In this case, inserting to page_path_map seems useless.
     // Simply add used size for global capacity is OK.
     pool.global_capacity->addUsedSize(pf_parent_path, size_to_add);
     return 0;
@@ -523,7 +523,6 @@ PSDiskDelegatorRaft::PSDiskDelegatorRaft(PathPool & pool_) : pool(pool_)
         RaftPathInfo info;
         // Get a normalized path without trailing '/'
         info.path = getNormalizedPath(s);
-        info.total_size = 0;
         raft_path_infos.emplace_back(info);
     }
 }
@@ -572,7 +571,6 @@ size_t PSDiskDelegatorRaft::addPageFileUsedSize(
         std::lock_guard<std::mutex> lock{mutex};
         if (need_insert_location)
             page_path_map[id_lvl] = index;
-        raft_path_infos[index].total_size += size_to_add;
     }
 
     // update global used size
@@ -596,7 +594,6 @@ void PSDiskDelegatorRaft::removePageFile(const PageFileIdAndLevel & id_lvl, size
     if (unlikely(iter == page_path_map.end()))
         return;
     auto index = iter->second;
-    raft_path_infos[index].total_size -= file_size;
     page_path_map.erase(iter);
 
     pool.global_capacity->freeUsedSize(raft_path_infos[index].path, file_size);

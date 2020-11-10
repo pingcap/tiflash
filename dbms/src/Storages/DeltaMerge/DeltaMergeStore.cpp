@@ -283,8 +283,8 @@ void DeltaMergeStore::drop()
         (void)end;
         segment->drop(global_context.getFileProvider());
     }
-    // Drop data in extra path (stable data by default)
-    path_pool.drop(true);
+    // Drop data in storage path pool
+    path_pool.drop(true, false);
     LOG_INFO(log, "Drop DeltaMerge done [" << db_name << "." << table_name << "]");
 
 #if USE_TCMALLOC
