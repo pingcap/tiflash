@@ -94,6 +94,8 @@ static std::string getCanonicalPath(std::string path)
     return path;
 }
 
+static String getNormalizedPath(const String & s) { return getCanonicalPath(Poco::Path{s}.toString()); }
+
 void Server::uninitialize()
 {
     logger().information("shutting down");
@@ -167,45 +169,45 @@ public:
 
 void TiFlashStorageConfig::parse(const String & storage, Poco::Logger * log)
 {
-    LOG_DEBUG(log, "storage:" << storage);
     std::istringstream ss(storage);
     cpptoml::parser p(ss);
     auto table = p.parse();
 
     // main
-    if (auto main_paths = table->get_qualified_array_of<String>("storage.main.dir"); main_paths)
+    if (auto main_paths = table->get_qualified_array_of<String>("main.dir"); main_paths)
         main_data_paths = *main_paths;
-    if (auto main_capacity = table->get_qualified_array_of<int64_t>("storage.main.capacity"); main_capacity)
+    if (auto main_capacity = table->get_qualified_array_of<int64_t>("main.capacity"); main_capacity)
     {
         for (const auto & c : *main_capacity)
             main_capacity_quota.emplace_back((size_t)c);
     }
     if (main_data_paths.empty())
     {
-        String error_msg = "The configuration \"storage.main.dir\" is empty!";
+        String error_msg = "The configuration \"storage.main.dir\" is empty. Please check your configuration file.";
         LOG_ERROR(log, error_msg);
         throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
     if (!main_capacity_quota.empty() && main_capacity_quota.size() != main_data_paths.size())
     {
-        String error_msg = "The array size of \"storage.main.dir\"(" + toString(main_data_paths.size()) + ") and \"storage.main.capacity\"("
-            + toString(main_capacity_quota.size()) + ") is not equal";
+        String error_msg = "The array size of \"storage.main.dir\"[size=" + toString(main_data_paths.size())
+            + "] and \"storage.main.capacity\"[size=" + toString(main_capacity_quota.size())
+            + "] is not equal. Please check your configuration file.";
         LOG_ERROR(log, error_msg);
         throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
     for (size_t i = 0; i < main_data_paths.size(); ++i)
     {
         // normalized
-        main_data_paths[i] = getCanonicalPath(Poco::Path{main_data_paths[i]}.toString());
+        main_data_paths[i] = getNormalizedPath(main_data_paths[i]);
         if (main_capacity_quota.size() <= i)
             main_capacity_quota.emplace_back(0);
         LOG_INFO(log, "Main data candidate path: " << main_data_paths[i] << ", capacity_quota: " << main_capacity_quota[i]);
     }
 
     // latest
-    if (auto latest_paths = table->get_qualified_array_of<String>("storage.latest.dir"); latest_paths)
+    if (auto latest_paths = table->get_qualified_array_of<String>("latest.dir"); latest_paths)
         latest_data_paths = *latest_paths;
-    if (auto latest_capacity = table->get_qualified_array_of<int64_t>("storage.latest.capacity"); latest_capacity)
+    if (auto latest_capacity = table->get_qualified_array_of<int64_t>("latest.capacity"); latest_capacity)
     {
         for (const auto & c : *latest_capacity)
             latest_capacity_quota.emplace_back((size_t)c);
@@ -218,22 +220,23 @@ void TiFlashStorageConfig::parse(const String & storage, Poco::Logger * log)
     }
     if (!latest_capacity_quota.empty() && latest_capacity_quota.size() != latest_data_paths.size())
     {
-        String error_msg = "The array size of \"storage.main.dir\"(" + toString(latest_data_paths.size())
-            + ") and \"storage.main.capacity\"(" + toString(latest_capacity_quota.size()) + ") is not equal";
+        String error_msg = "The array size of \"storage.main.dir\"[size=" + toString(latest_data_paths.size())
+            + "] and \"storage.main.capacity\"[size=" + toString(latest_capacity_quota.size())
+            + "] is not equal. Please check your configuration file";
         LOG_ERROR(log, error_msg);
         throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
     for (size_t i = 0; i < latest_data_paths.size(); ++i)
     {
         // normalized
-        latest_data_paths[i] = getCanonicalPath(Poco::Path{latest_data_paths[i]}.toString());
+        latest_data_paths[i] = getNormalizedPath(latest_data_paths[i]);
         if (latest_capacity_quota.size() <= i)
             latest_capacity_quota.emplace_back(0);
         LOG_INFO(log, "Latest data candidate path: " << latest_data_paths[i] << ", capacity_quota: " << latest_capacity_quota[i]);
     }
 
     // kvstore
-    if (auto kvstore_paths = table->get_qualified_array_of<String>("storage.kvstore.dir"); kvstore_paths)
+    if (auto kvstore_paths = table->get_qualified_array_of<String>("kvstore.dir"); kvstore_paths)
         kvstore_data_path = *kvstore_paths;
     if (kvstore_data_path.empty())
     {
@@ -247,7 +250,7 @@ void TiFlashStorageConfig::parse(const String & storage, Poco::Logger * log)
     for (size_t i = 0; i < kvstore_data_path.size(); ++i)
     {
         // normalized
-        kvstore_data_path[i] = getCanonicalPath(Poco::Path{kvstore_data_path[i]}.toString());
+        kvstore_data_path[i] = getNormalizedPath(kvstore_data_path[i]);
         LOG_INFO(log, "Raft data candidate path: " << kvstore_data_path[i]);
     }
 }
@@ -520,8 +523,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
             Poco::StringTokenizer string_tokens(fast_paths, ",");
             for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
             {
-                all_fast_path.emplace_back(getCanonicalPath(std::string(*it)));
-                LOG_DEBUG(log, "Fast data part candidate path: " << getCanonicalPath(std::string(*it)));
+                all_fast_path.emplace_back(getNormalizedPath(std::string(*it)));
+                LOG_DEBUG(log, "Fast data part candidate path: " << all_fast_path.back());
             }
         }
     }
@@ -543,7 +546,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (config().has("capacity"))
             LOG_WARNING(log, "The configuration \"capacity\" is ignored when \"storage\" is defined.");
         if (config().has("raft.kvstore_path"))
-            LOG_WARNING(log, "The configuration \"raft.kvstore_path\" is ignored when \"storage\" is defined.");
+        {
+            LOG_WARNING(log, "The configuration \"raft.kvstore_path\" is deprecated, use \"storage.kvstore.dir\" instead.");
+            kvstore_paths.clear();
+            kvstore_paths.emplace_back(config().getString("raft.kvstore_path"));
+            for (size_t i = 0; i < kvstore_paths.size(); ++i)
+            {
+                // normalized
+                kvstore_paths[i] = getNormalizedPath(kvstore_paths[i]);
+                LOG_WARNING(log,
+                    "Raft data candidate path: " << kvstore_paths[i]
+                                                 << ". The path is overwritten by deprecated configuration for backward compatibility.");
+            }
+        }
     }
     else
     {
@@ -583,7 +598,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             Poco::StringTokenizer string_tokens(paths, ",");
             for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
             {
-                all_normal_path.emplace_back(getCanonicalPath(std::string(*it)));
+                all_normal_path.emplace_back(getNormalizedPath(*it));
             }
             // If you set `path_realtime_mode` to `true` and multiple directories are deployed in the path, the latest data is stored in the first directory and older data is stored in the rest directories.
             bool path_realtime_mode = config().getBool("path_realtime_mode", false);
@@ -605,15 +620,18 @@ int Server::main(const std::vector<std::string> & /*args*/)
             }
 
             // kvstore_path
+            String str_kvstore_path;
             if (config().has("raft.kvstore_path"))
             {
                 LOG_WARNING(log, "The configuration \"raft.kvstore_path\" is deprecated, use \"storage\" instead.");
-                kvstore_paths.emplace_back(config().getString("raft.kvstore_path"));
+                str_kvstore_path = config().getString("raft.kvstore_path");
             }
             else
             {
-                kvstore_paths.emplace_back(Poco::Path{all_normal_path[0] + "/kvstore"}.toString());
+                str_kvstore_path = all_normal_path[0] + "/kvstore";
             }
+            str_kvstore_path = getNormalizedPath(str_kvstore_path);
+            kvstore_paths.emplace_back(str_kvstore_path);
 
             // logging
             for (const auto & s : main_data_paths)
@@ -625,8 +643,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
         else
         {
-            LOG_ERROR(log, "The configuration \"storage\" is not defined.");
-            throw Exception("The configuration \"storage\" is not defined.", ErrorCodes::INVALID_CONFIG_PARAMETER);
+            String msg = "The configuration \"storage\" is not defined. Please check your configuration file.";
+            LOG_ERROR(log, msg);
+            throw Exception(msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
         }
     }
 
