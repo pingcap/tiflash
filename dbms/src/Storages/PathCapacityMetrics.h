@@ -27,6 +27,8 @@ public:
 
     FsStats getFsStats() const;
 
+    FsStats getFsStatsOfPath(std::string_view file_path) const;
+
 private:
     static constexpr ssize_t INVALID_INDEX = -1;
     // Return the index of the longest prefix matching path in `path_info`

@@ -142,6 +142,18 @@ FsStats PathCapacityMetrics::getFsStats() const
     return total_stat;
 }
 
+FsStats PathCapacityMetrics::getFsStatsOfPath(std::string_view file_path) const
+{
+    ssize_t path_idx = locatePath(file_path);
+    if (unlikely(path_idx == INVALID_INDEX))
+    {
+        LOG_ERROR(log, "Can not locate path in getFsStatsOfPath. File: " + String(file_path));
+        return FsStats{};
+    }
+
+    return path_infos[path_idx].getStats(nullptr);
+}
+
 // Return the index of the longest prefix matching path in `path_info`
 ssize_t PathCapacityMetrics::locatePath(std::string_view file_path) const
 {
@@ -204,7 +216,7 @@ FsStats PathCapacityMetrics::CapacityInfo::getStats(Poco::Logger * log) const
     uint64_t avail = 0;
     if (capacity > res.used_size)
         avail = capacity - res.used_size;
-    else
+    else if (log)
         LOG_WARNING(log,
             "No available space for path: " << path << ", capacity: " << formatReadableSizeWithBinarySuffix(capacity) //
                                             << ", used: " << formatReadableSizeWithBinarySuffix(used_bytes));

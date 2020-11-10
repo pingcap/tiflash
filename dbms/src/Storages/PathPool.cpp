@@ -8,6 +8,7 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
+#include <Storages/Transaction/ProxyFFIType.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
 
@@ -259,6 +260,57 @@ void StoragePathPool::renamePath(const String & old_path, const String & new_pat
 }
 
 //==========================================================================================
+// Generic functions
+//==========================================================================================
+
+template <typename T>
+String genericChoosePath(const std::vector<T> & paths, const PathCapacityMetricsPtr & global_capacity,
+    std::function<String(const std::vector<T> & paths, size_t idx)> path_generator, Poco::Logger * log, const String & log_msg)
+{
+    if (paths.size() == 1)
+        return path_generator(paths, 0);
+
+    UInt64 total_available_size = 0;
+    std::vector<FsStats> stats;
+    for (size_t i = 0; i < paths.size(); ++i)
+    {
+        stats.emplace_back(global_capacity->getFsStatsOfPath(paths[i].path));
+        total_available_size += stats.back().avail_size;
+    }
+
+    // We should choose path even if there is no available space.
+    // If the actual disk space is running out, let the later `write` to throw exception.
+    // If available space is limited by the quota, then write down a GC-ed file can make
+    // some files be deleted later.
+    if (total_available_size == 0)
+        LOG_WARNING(log, "No available space for all disks, choose randomly.");
+    std::vector<double> ratio;
+    for (size_t i = 0; i < stats.size(); ++i)
+    {
+        if (likely(total_available_size != 0))
+            ratio.push_back(1.0 * stats[i].avail_size / total_available_size);
+        else
+        {
+            // No available space for all disks, choose randomly
+            ratio.push_back(1.0 / paths.size());
+        }
+    }
+
+    double rand_number = (double)rand() / RAND_MAX;
+    double ratio_sum = 0.0;
+    for (size_t i = 0; i < ratio.size(); i++)
+    {
+        ratio_sum += ratio[i];
+        if ((rand_number < ratio_sum) || (i == ratio.size() - 1))
+        {
+            LOG_INFO(log, "Choose path [index=" << i << "] " << log_msg);
+            return path_generator(paths, i);
+        }
+    }
+    throw Exception("Should not reach here", ErrorCodes::LOGICAL_ERROR);
+}
+
+//==========================================================================================
 // Stable data
 //==========================================================================================
 
@@ -274,33 +326,12 @@ Strings StableDiskDelegator::listPaths() const
 
 String StableDiskDelegator::choosePath() const
 {
-    std::lock_guard<std::mutex> lock{pool.mutex};
-    UInt64 total_size = 0;
-    for (size_t i = 0; i < pool.main_path_infos.size(); ++i)
-    {
-        total_size += pool.main_path_infos[i].total_size;
-    }
-    if (total_size == 0)
-    {
-        return pool.main_path_infos[0].path + "/" + StoragePathPool::STABLE_FOLDER_NAME;
-    }
-
-    std::vector<double> ratio;
-    for (size_t i = 0; i < pool.main_path_infos.size(); ++i)
-    {
-        ratio.push_back((double)(total_size - pool.main_path_infos[i].total_size) / ((pool.main_path_infos.size() - 1) * total_size));
-    }
-    double rand_number = (double)rand() / RAND_MAX;
-    double ratio_sum = 0;
-    for (size_t i = 0; i < ratio.size(); i++)
-    {
-        ratio_sum += ratio[i];
-        if ((rand_number < ratio_sum) || (i == ratio.size() - 1))
-        {
-            return pool.main_path_infos[i].path + "/" + StoragePathPool::STABLE_FOLDER_NAME;
-        }
-    }
-    throw Exception("Should not reach here", ErrorCodes::LOGICAL_ERROR);
+    std::function<String(const StoragePathPool::MainPathInfos & paths, size_t idx)> path_generator
+        = [](const StoragePathPool::MainPathInfos & paths, size_t idx) -> String {
+        return paths[idx].path + "/" + StoragePathPool::STABLE_FOLDER_NAME;
+    };
+    const String log_msg = "[type=stable] [database=" + pool.database + "] [table=" + pool.table + "]";
+    return genericChoosePath(pool.main_path_infos, pool.global_capacity, path_generator, pool.log, log_msg);
 }
 
 String StableDiskDelegator::getDTFilePath(UInt64 file_id) const
@@ -377,44 +408,18 @@ Strings PSDiskDelegatorMulti::listPaths() const
 
 String PSDiskDelegatorMulti::choosePath(const PageFileIdAndLevel & id_lvl)
 {
-    auto return_path = [&](const size_t index) -> String { return pool.latest_path_infos[index].path + "/" + path_prefix; };
+    std::function<String(const StoragePathPool::LatestPathInfos & paths, size_t idx)> path_generator =
+        [this](const StoragePathPool::LatestPathInfos & paths, size_t idx) -> String { return paths[idx].path + "/" + this->path_prefix; };
 
-    std::lock_guard<std::mutex> lock{pool.mutex};
-    /// If id exists in page_path_map, just return the same path
-    if (auto iter = page_path_map.find(id_lvl); iter != page_path_map.end())
     {
-        return return_path(iter->second);
-    }
-
-    /// Else choose path randomly
-    UInt64 total_size = 0;
-    for (size_t i = 0; i < pool.latest_path_infos.size(); ++i)
-    {
-        total_size += pool.latest_path_infos[i].total_size;
-    }
-    if (total_size == 0)
-    {
-        LOG_DEBUG(pool.log, "database " + pool.database + " table " + pool.table + " no data currently. Choose path 0 for delta");
-        return return_path(0);
+        std::lock_guard<std::mutex> lock{pool.mutex};
+        /// If id exists in page_path_map, just return the same path
+        if (auto iter = page_path_map.find(id_lvl); iter != page_path_map.end())
+            return path_generator(pool.latest_path_infos, iter->second);
     }
 
-    std::vector<double> ratio;
-    for (size_t i = 0; i < pool.latest_path_infos.size(); ++i)
-    {
-        ratio.push_back((double)(total_size - pool.latest_path_infos[i].total_size) / ((pool.latest_path_infos.size() - 1) * total_size));
-    }
-    double rand_number = (double)rand() / RAND_MAX;
-    double ratio_sum = 0;
-    for (size_t i = 0; i < ratio.size(); i++)
-    {
-        ratio_sum += ratio[i];
-        if ((rand_number < ratio_sum) || (i == ratio.size() - 1))
-        {
-            LOG_DEBUG(pool.log, "database " + pool.database + " table " + pool.table + " choose path " + toString(i) + " for delta");
-            return return_path(i);
-        }
-    }
-    throw Exception("Should not reach here", ErrorCodes::LOGICAL_ERROR);
+    const String log_msg = "[type=ps_multi] [database=" + pool.database + "] [table=" + pool.table + "]";
+    return genericChoosePath(pool.latest_path_infos, pool.global_capacity, path_generator, pool.log, log_msg);
 }
 
 size_t PSDiskDelegatorMulti::addPageFileUsedSize(
@@ -531,40 +536,19 @@ Strings PSDiskDelegatorRaft::listPaths() const { return pool.kvstore_paths; }
 
 String PSDiskDelegatorRaft::choosePath(const PageFileIdAndLevel & id_lvl)
 {
-    std::lock_guard lock{mutex};
-    /// If id exists in page_path_map, just return the same path
-    if (auto iter = page_path_map.find(id_lvl); iter != page_path_map.end())
+    std::function<String(const RaftPathInfos & paths, size_t idx)> path_generator
+        = [](const RaftPathInfos & paths, size_t idx) -> String { return paths[idx].path; };
+
     {
-        return raft_path_infos[iter->second].path;
+        std::lock_guard lock{mutex};
+        /// If id exists in page_path_map, just return the same path
+        if (auto iter = page_path_map.find(id_lvl); iter != page_path_map.end())
+            return path_generator(raft_path_infos, iter->second);
     }
 
     // Else choose path randomly
-    UInt64 total_size = 0;
-    for (size_t i = 0; i < raft_path_infos.size(); ++i)
-        total_size += raft_path_infos[i].total_size;
-    if (total_size == 0)
-    {
-        LOG_DEBUG(pool.log, "PSDiskDelegatorRaft no data currently. Choose path 0 for Raft.");
-        return raft_path_infos[0].path;
-    }
-
-    std::vector<double> ratio;
-    for (size_t i = 0; i < raft_path_infos.size(); ++i)
-    {
-        ratio.push_back((double)(total_size - raft_path_infos[i].total_size) / ((raft_path_infos.size() - 1) * total_size));
-    }
-    double rand_number = (double)rand() / RAND_MAX;
-    double ratio_sum = 0;
-    for (size_t i = 0; i < ratio.size(); i++)
-    {
-        ratio_sum += ratio[i];
-        if ((rand_number < ratio_sum) || (i == ratio.size() - 1))
-        {
-            LOG_DEBUG(pool.log, "PSDiskDelegatorRaft choose path " + toString(i) + " for Raft");
-            return raft_path_infos[0].path;
-        }
-    }
-    throw Exception("Should not reach here", ErrorCodes::LOGICAL_ERROR);
+    const String log_msg = "[type=ps_raft]";
+    return genericChoosePath(raft_path_infos, pool.global_capacity, path_generator, pool.log, log_msg);
 }
 
 size_t PSDiskDelegatorRaft::addPageFileUsedSize(
