@@ -22,6 +22,7 @@
 #include <Storages/CompressionSettingsSelector.h>
 #include <Storages/IStorage.h>
 #include <Storages/MarkCache.h>
+#include <Storages/DeltaMerge/DeltaMergeTaskPool.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/MergeTree/MergeList.h>
@@ -163,6 +164,7 @@ struct ContextShared
     PathCapacityMetricsPtr path_capacity_ptr;               /// Path capacity metrics
     TiFlashMetricsPtr tiflash_metrics;                      /// TiFlash metrics registry.
     FileProviderPtr file_provider;                          /// File provider.
+    DM::DeltaMergeTaskPoolPtr delta_merge_task_pool;        /// Task Pool for StorageDeltaMerge
 
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
@@ -1532,6 +1534,20 @@ FileProviderPtr Context::getFileProvider() const
 {
     auto lock = getLock();
     return shared->file_provider;
+}
+
+void Context::initializeDeltaMergeTaskPool()
+{
+    auto lock = getLock();
+    if (shared->delta_merge_task_pool)
+        throw Exception("File provider has already been initialized.", ErrorCodes::LOGICAL_ERROR);
+    shared->delta_merge_task_pool = std::make_shared<DM::DeltaMergeTaskPool>(*this);
+}
+
+DM::DeltaMergeTaskPoolPtr Context::getDeltaMergeTaskPool() const
+{
+    auto lock = getLock();
+    return shared->delta_merge_task_pool;
 }
 
 zkutil::ZooKeeperPtr Context::getZooKeeper() const

@@ -129,7 +129,7 @@ struct RegionSplitRes
 // It is used to prevent hash conflict of file caches.
 static std::atomic<UInt64> DELTA_MERGE_STORE_HASH_SALT{0};
 
-class DeltaMergeStore : private boost::noncopyable
+class DeltaMergeStore : private boost::noncopyable, std::enable_shared_from_this<DeltaMergeStore>
 {
 public:
     struct Settings
@@ -151,16 +151,6 @@ public:
         BG_MergeDelta,
         BG_Compact,
         BG_Flush,
-    };
-
-    enum TaskType
-    {
-        Split,
-        Merge,
-        MergeDelta,
-        Compact,
-        Flush,
-        PlaceIndex,
     };
 
     static std::string toString(ThreadType type)
@@ -187,54 +177,6 @@ public:
             return "Unknown";
         }
     }
-
-    static std::string toString(TaskType type)
-    {
-        switch (type)
-        {
-        case Split:
-            return "Split";
-        case Merge:
-            return "Merge";
-        case MergeDelta:
-            return "MergeDelta";
-        case Compact:
-            return "Compact";
-        case Flush:
-            return "Flush";
-        case PlaceIndex:
-            return "PlaceIndex";
-        default:
-            return "Unknown";
-        }
-    }
-
-    struct BackgroundTask
-    {
-        TaskType type;
-
-        DMContextPtr dm_context;
-        SegmentPtr   segment;
-        SegmentPtr   next_segment;
-
-        explicit operator bool() { return (bool)segment; }
-    };
-
-    class MergeDeltaTaskPool
-    {
-    private:
-        using TaskQueue = std::queue<BackgroundTask, std::list<BackgroundTask>>;
-        TaskQueue tasks;
-
-        std::mutex mutex;
-
-    public:
-        size_t length() { return tasks.size(); }
-
-        void addTask(const BackgroundTask & task, const ThreadType & whom, Logger * log_);
-
-        BackgroundTask nextTask(Logger * log_);
-    };
 
     DeltaMergeStore(Context &             db_context, //
                     bool                  data_path_contains_database_name,
@@ -337,11 +279,12 @@ private:
 
     void checkSegmentUpdate(const DMContextPtr & context, const SegmentPtr & segment, ThreadType thread_type);
 
-    SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment);
-    void        segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right);
-    SegmentPtr  segmentMergeDelta(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
+    SegmentSnapshotPtr createSegmentSnapshot(DMContext & dm_context, const SegmentPtr & segment, bool is_update);
 
-    bool handleBackgroundTask();
+    SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, SegmentSnapshotPtr segment_snap);
+    void        segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right,
+                             SegmentSnapshotPtr left_snap, SegmentSnapshotPtr right_snap);
+    SegmentPtr  segmentMergeDelta(DMContext & dm_context, const SegmentPtr & segment, SegmentSnapshotPtr segment_snap, bool is_foreground);
 
     bool isSegmentValid(const SegmentPtr & segment);
 
@@ -351,6 +294,8 @@ private:
                                           const RowKeyRanges & sorted_ranges,
                                           size_t               expected_tasks_count = 1,
                                           const SegmentIdSet & read_segments        = {});
+
+    void updateLatestGcSafePoint(DB::Timestamp ts) { latest_gc_safe_point = ts; }
 
 private:
     Context &       global_context;
@@ -377,14 +322,13 @@ private:
 
     BackgroundProcessingPool &           background_pool;
     BackgroundProcessingPool::TaskHandle gc_handle;
-    BackgroundProcessingPool::TaskHandle background_task_handle;
 
     /// end of range -> segment
     SegmentSortedMap segments;
     /// Mainly for debug.
     SegmentMap id_to_segment;
 
-    MergeDeltaTaskPool background_tasks;
+    DM::DeltaMergeTaskPoolPtr task_pool;
 
     DB::Timestamp latest_gc_safe_point = 0;
 
@@ -393,6 +337,8 @@ private:
 
     UInt64   hash_salt;
     Logger * log;
+
+    friend class DeltaMergeTaskPool;
 }; // namespace DM
 
 using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
