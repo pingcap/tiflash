@@ -167,7 +167,6 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
             {
                 UInt128 key = hash128(row_index, key_col_ptrs.size(), key_col_ptrs, TiDB::dummy_collators, TiDB::dummy_sort_key_contaners);
                 auto part_id = (key.low % partition_num);
-                chunk_codec_stream[part_id]->encode(block, row_index, row_index+1);
                 // copy each field
                 for(size_t col_id=0; col_id < block.columns(); ++col_id) {
                     dest_tbl_cols[part_id][col_id]->insert(block.getByPosition(col_id).column->operator[](row_index));
