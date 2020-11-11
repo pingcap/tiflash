@@ -264,8 +264,8 @@ Strings TiFlashStorageConfig::getAllNormalPaths() const
     for (const auto & s : latest_data_paths)
         path_set.insert(s);
     // keep the first path
-    all_normal_path.emplace_back(main_data_paths[0]);
-    path_set.erase(main_data_paths[0]);
+    all_normal_path.emplace_back(latest_data_paths[0]);
+    path_set.erase(latest_data_paths[0]);
     for (const auto & s : path_set)
         all_normal_path.emplace_back(s);
     return all_normal_path;
