@@ -2,7 +2,6 @@
 
 #include <chrono>
 #include <cstddef>
-#include <mutex>
 
 #include <Storages/Transaction/Types.h>
 
