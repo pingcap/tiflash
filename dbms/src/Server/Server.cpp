@@ -190,8 +190,8 @@ void TiFlashStorageConfig::parse(const String & storage, Poco::Logger * log)
     if (!main_capacity_quota.empty() && main_capacity_quota.size() != main_data_paths.size())
     {
         String error_msg = "The array size of \"storage.main.dir\"[size=" + toString(main_data_paths.size())
-            + "] and \"storage.main.capacity\"[size=" + toString(main_capacity_quota.size())
-            + "] is not equal. Please check your configuration file.";
+            + "] is not equal to \"storage.main.capacity\"[size=" + toString(main_capacity_quota.size())
+            + "]. Please check your configuration file.";
         LOG_ERROR(log, error_msg);
         throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
@@ -221,8 +221,8 @@ void TiFlashStorageConfig::parse(const String & storage, Poco::Logger * log)
     if (!latest_capacity_quota.empty() && latest_capacity_quota.size() != latest_data_paths.size())
     {
         String error_msg = "The array size of \"storage.main.dir\"[size=" + toString(latest_data_paths.size())
-            + "] and \"storage.main.capacity\"[size=" + toString(latest_capacity_quota.size())
-            + "] is not equal. Please check your configuration file";
+            + "] is not euqal to \"storage.main.capacity\"[size=" + toString(latest_capacity_quota.size())
+            + "]. Please check your configuration file.";
         LOG_ERROR(log, error_msg);
         throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
@@ -279,7 +279,7 @@ struct TiFlashRaftConfig
     std::unordered_set<std::string> ignore_databases{"system"};
     // Actually it is "flash.service_addr"
     std::string flash_server_addr;
-    bool enable_compatibility_mode = true;
+    bool enable_compatible_mode = true;
 
     static const TiDB::StorageEngine DEFAULT_ENGINE = TiDB::StorageEngine::DT;
     bool disable_bg_flush = false;
@@ -364,9 +364,9 @@ TiFlashRaftConfig::TiFlashRaftConfig(Poco::Util::LayeredConfiguration & config, 
         }
 
         // just for test
-        if (config.has("raft.enable_compatibility_mode"))
+        if (config.has("raft.enable_compatible_mode"))
         {
-            enable_compatibility_mode = config.getBool("raft.enable_compatibility_mode");
+            enable_compatible_mode = config.getBool("raft.enable_compatible_mode");
         }
     }
 }
@@ -654,7 +654,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         main_data_paths, storage_config.main_capacity_quota, latest_data_paths, storage_config.latest_capacity_quota);
     TiFlashRaftConfig raft_config(config(), log);
     global_context->setPathPool(main_data_paths, latest_data_paths, kvstore_paths, //
-        raft_config.enable_compatibility_mode,                                     //
+        raft_config.enable_compatible_mode,                                        //
         global_context->getPathCapacity(), global_context->getFileProvider());
 
     // Use pd address to define which default_database we use by defauly.
@@ -899,11 +899,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_DEBUG(log, "Default storage engine: " << static_cast<Int64>(raft_config.engine));
         /// create TMTContext
         auto cluster_config = getClusterConfig(security_config, raft_config);
-        global_context->createTMTContext(raft_config.pd_addrs,
-            raft_config.ignore_databases,
-            raft_config.engine,
-            raft_config.disable_bg_flush,
-            cluster_config);
+        global_context->createTMTContext(
+            raft_config.pd_addrs, raft_config.ignore_databases, raft_config.engine, raft_config.disable_bg_flush, cluster_config);
         global_context->getTMTContext().reloadConfig(config());
     }
 

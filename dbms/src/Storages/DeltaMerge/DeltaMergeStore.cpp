@@ -110,7 +110,7 @@ ColumnDefinesPtr getStoreColumns(const ColumnDefines & table_columns, bool is_co
 
 DeltaMergeStore::Settings DeltaMergeStore::EMPTY_SETTINGS = DeltaMergeStore::Settings{.not_compress_columns = NotCompress{}};
 
-DeltaMergeStore::DeltaMergeStore(Context & db_context,
+DeltaMergeStore::DeltaMergeStore(Context &             db_context,
                                  bool                  data_path_contains_database_name,
                                  const String &        db_name_,
                                  const String &        table_name_,
@@ -284,7 +284,7 @@ void DeltaMergeStore::drop()
         segment->drop(global_context.getFileProvider());
     }
     // Drop data in storage path pool
-    path_pool.drop(true, false);
+    path_pool.drop(/*recursive=*/true, /*must_success=*/false);
     LOG_INFO(log, "Drop DeltaMerge done [" << db_name << "." << table_name << "]");
 
 #if USE_TCMALLOC

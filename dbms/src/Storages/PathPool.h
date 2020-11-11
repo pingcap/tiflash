@@ -45,12 +45,12 @@ public:
         const Strings & main_data_paths, const Strings & latest_data_paths,      //
         const Strings & kvstore_paths,                                           //
         PathCapacityMetricsPtr global_capacity_, FileProviderPtr file_provider_, //
-        bool enable_raft_compatibility_mode_ = false);
+        bool enable_raft_compatible_mode_ = false);
 
     // Constructor to create PathPool for one Storage
     StoragePathPool withTable(const String & database_, const String & table_, bool path_need_database_name_) const;
 
-    bool isRaftCompatibilityModeEnabled() const { return enable_raft_compatibility_mode; }
+    bool isRaftCompatibleModeEnabled() const { return enable_raft_compatible_mode; }
 
     // Generate a delegator for managing the paths of `RegionPersister`.
     // Those paths are generated from `kvstore_paths`.
@@ -78,7 +78,7 @@ private:
     Strings latest_data_paths;
     Strings kvstore_paths;
 
-    bool enable_raft_compatibility_mode;
+    bool enable_raft_compatible_mode;
 
     PathCapacityMetricsPtr global_capacity;
 

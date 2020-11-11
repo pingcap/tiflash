@@ -20,7 +20,7 @@ namespace FailPoints
 {
 extern const char force_enable_region_persister_compatible_mode[];
 extern const char force_disable_region_persister_compatible_mode[];
-}
+} // namespace FailPoints
 
 void RegionPersister::drop(RegionID region_id, const RegionTaskLock &)
 {
@@ -140,8 +140,7 @@ RegionMap RegionPersister::restore(IndexReaderCreateFunc * func, PageStorage::Co
         auto delegator = path_pool.getPSDiskDelegatorRaft();
         // If there is no PageFile with basic version binary format, use the latest version of PageStorage.
         auto detect_binary_version = PageStorage::getMaxDataVersion(global_context.getFileProvider(), delegator);
-        bool run_in_compatible_mode
-            = path_pool.isRaftCompatibilityModeEnabled() && (detect_binary_version == PageFile::VERSION_BASE);
+        bool run_in_compatible_mode = path_pool.isRaftCompatibleModeEnabled() && (detect_binary_version == PageFile::VERSION_BASE);
 
         fiu_do_on(FailPoints::force_enable_region_persister_compatible_mode, { run_in_compatible_mode = true; });
         fiu_do_on(FailPoints::force_disable_region_persister_compatible_mode, { run_in_compatible_mode = false; });
