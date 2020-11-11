@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mutex>
 #include <string>
 
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -93,8 +94,12 @@ public:
 
     void wake()
     {
-        std::scoped_lock lock{mutex};
-        if (processing_tasks.empty())
+        bool need_awake_background_pool = false;
+        {
+            std::scoped_lock lock{mutex};
+            need_awake_background_pool = processing_tasks.empty();
+        }
+        if (need_awake_background_pool)
             background_task_handle->wake();
     }
 

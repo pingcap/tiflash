@@ -771,6 +771,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     {
+        if (raft_config.engine == TiDB::StorageEngine::DT)
+        {
+            global_context->initializeDeltaMergeTaskPool();
+        }
+    }
+
+    {
         // Note that this must do before initialize schema sync service.
         do
         {
@@ -790,13 +797,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         loadMetadata(*global_context);
     }
     LOG_DEBUG(log, "Load metadata done.");
-
-    {
-        if (raft_config.engine == TiDB::StorageEngine::DT)
-        {
-            global_context->initializeDeltaMergeTaskPool();
-        }
-    }
 
     /// Then, sync schemas with TiDB, and initialize schema sync service.
     for (int i = 0; i < 60; i++) // retry for 3 mins

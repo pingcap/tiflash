@@ -129,7 +129,7 @@ struct RegionSplitRes
 // It is used to prevent hash conflict of file caches.
 static std::atomic<UInt64> DELTA_MERGE_STORE_HASH_SALT{0};
 
-class DeltaMergeStore : private boost::noncopyable, std::enable_shared_from_this<DeltaMergeStore>
+class DeltaMergeStore : public std::enable_shared_from_this<DeltaMergeStore>, private boost::noncopyable
 {
 public:
     struct Settings
@@ -188,6 +188,8 @@ public:
                     size_t                rowkey_column_size_,
                     const Settings &      settings_ = EMPTY_SETTINGS);
     ~DeltaMergeStore();
+
+    void restoreData();
 
     void setUpBackgroundTask(const DMContextPtr & dm_context);
 

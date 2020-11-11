@@ -14,6 +14,7 @@ DeltaMergeTaskPool::DeltaMergeTaskPool(Context & db_context)
       rate_limiter(std::make_shared<RateLimiter>(db_context.getSettingsRef().dt_bg_task_rate_bytes_per_sec)),
       log(&Logger::get("DeltaMergeTaskPool"))
 {
+    LOG_INFO(log, "Creating DeltaMergeTaskPool");
     background_task_handle = background_pool.addTask([this] { return handleBackgroundTask(); });
 }
 

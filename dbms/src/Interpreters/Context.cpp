@@ -1540,7 +1540,7 @@ void Context::initializeDeltaMergeTaskPool()
 {
     auto lock = getLock();
     if (shared->delta_merge_task_pool)
-        throw Exception("File provider has already been initialized.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("DeltaMergeTaskPool has already been initialized.", ErrorCodes::LOGICAL_ERROR);
     shared->delta_merge_task_pool = std::make_shared<DM::DeltaMergeTaskPool>(*this);
 }
 

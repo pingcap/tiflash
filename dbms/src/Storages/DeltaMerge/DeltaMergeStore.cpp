@@ -118,8 +118,20 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
 
     original_table_header = std::make_shared<Block>(toEmptyBlock(original_table_columns));
     store_columns         = getStoreColumns(original_table_columns, is_common_handle);
+}
 
-    auto dm_context = newDMContext(db_context, db_context.getSettingsRef());
+DeltaMergeStore::~DeltaMergeStore()
+{
+    LOG_INFO(log, "Release DeltaMerge Store start [" << db_name << "." << table_name << "]");
+
+    shutdown();
+
+    LOG_INFO(log, "Release DeltaMerge Store end [" << db_name << "." << table_name << "]");
+}
+
+void DeltaMergeStore::restoreData()
+{
+    auto dm_context = newDMContext(global_context, global_context.getSettingsRef());
 
     try
     {
@@ -156,15 +168,6 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     setUpBackgroundTask(dm_context);
 
     LOG_INFO(log, "Restore DeltaMerge Store end [" << db_name << "." << table_name << "]");
-}
-
-DeltaMergeStore::~DeltaMergeStore()
-{
-    LOG_INFO(log, "Release DeltaMerge Store start [" << db_name << "." << table_name << "]");
-
-    shutdown();
-
-    LOG_INFO(log, "Release DeltaMerge Store end [" << db_name << "." << table_name << "]");
 }
 
 void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
