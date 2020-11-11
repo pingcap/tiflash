@@ -123,7 +123,7 @@ private:
 
     void putTaskBackToHighPriorityQueue(BackgroundTaskHandle & task);
 
-    bool canTaskBeProcessed(BackgroundTaskHandle & task);
+    bool tryPrepareTask(BackgroundTaskHandle & task);
 
 private:
     using TaskQueue = std::deque<BackgroundTaskHandle>;

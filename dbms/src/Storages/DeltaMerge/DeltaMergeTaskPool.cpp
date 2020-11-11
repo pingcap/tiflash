@@ -107,7 +107,7 @@ bool DeltaMergeTaskPool::handleTaskImpl(bool high_priority)
             return true;
         }
 
-        if (!canTaskBeProcessed(task))
+        if (!tryPrepareTask(task))
         {
             putTaskBackToHighPriorityQueue(task);
             return !high_priority && !low_priority_tasks.empty();
@@ -215,7 +215,7 @@ void DeltaMergeTaskPool::putTaskBackToHighPriorityQueue(DeltaMergeTaskPool::Back
     high_priority_tasks.push_front(task);
 }
 
-bool DeltaMergeTaskPool::canTaskBeProcessed(DeltaMergeTaskPool::BackgroundTaskHandle & task)
+bool DeltaMergeTaskPool::tryPrepareTask(DeltaMergeTaskPool::BackgroundTaskHandle & task)
 {
     auto try_request_balance = [&](DeltaMergeTaskPool::BackgroundTaskHandle & task) {
         if (task->task_size <= 0)
