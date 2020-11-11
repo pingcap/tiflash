@@ -11,7 +11,7 @@ namespace DM
 DeltaMergeTaskPool::DeltaMergeTaskPool(Context & db_context)
     : global_context(db_context),
       background_pool(db_context.getBackgroundPool()),
-      rate_limiter(std::make_shared<RateLimiter>(db_context.getSettingsRef().dt_bg_task_rate_bytes_per_sec)),
+      rate_limiter(std::make_shared<RateLimiter>(db_context.getSettingsRef().dt_bg_task_max_rate_bytes_balance)),
       log(&Logger::get("DeltaMergeTaskPool"))
 {
     LOG_INFO(log, "Creating DeltaMergeTaskPool");
