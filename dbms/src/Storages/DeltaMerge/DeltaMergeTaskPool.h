@@ -79,6 +79,7 @@ public:
         SegmentSnapshotPtr next_snapshot;
 
         Int64      task_size = -1;
+        // guard `finished` field
         std::mutex task_mutex;
         bool       finished = false;
 
@@ -90,11 +91,7 @@ public:
 public:
     DeltaMergeTaskPool(Context & db_context);
 
-    ~DeltaMergeTaskPool()
-    {
-        background_pool.removeTask(background_task_handle);
-        background_task_handle = nullptr;
-    }
+    ~DeltaMergeTaskPool();
 
     using ThreadType = DeltaMergeStore::ThreadType;
     void addTask(const BackgroundTask & task, const ThreadType & whom);
@@ -126,6 +123,8 @@ private:
     bool tryPrepareTask(BackgroundTaskHandle & task);
 
 private:
+    Context & global_context;
+
     using TaskQueue = std::deque<BackgroundTaskHandle>;
     TaskQueue high_priority_tasks;
     TaskQueue low_priority_tasks;
@@ -133,7 +132,7 @@ private:
     using TaskSet = std::unordered_set<BackgroundTaskHandle>;
     TaskSet processing_tasks;
 
-    Context & global_context;
+    std::unordered_map<DeltaMergeStorePtr, size_t> task_counts;
 
     BackgroundProcessingPool &           background_pool;
     BackgroundProcessingPool::TaskHandle background_task_handle;

@@ -718,10 +718,10 @@ bool Segment::isPhysicalSplit(DMContext & dm_context, const SegmentSnapshotPtr &
         {
             LOG_INFO(log,
                      "Got bad split point [" << split_value.toString() << "] for segment " << info() << ", fall back to split physical.");
-            return false;
+            return true;
         }
         else
-            return true;
+            return false;
     }
 }
 

@@ -18,9 +18,15 @@ DeltaMergeTaskPool::DeltaMergeTaskPool(Context & db_context)
     background_task_handle = background_pool.addTask([this] { return handleBackgroundTask(); });
 }
 
+DeltaMergeTaskPool::~DeltaMergeTaskPool()
+{
+    LOG_INFO(log, "Destroying DeltaMergeTaskPool");
+    background_pool.removeTask(background_task_handle);
+    background_task_handle = nullptr;
+}
+
 void DeltaMergeTaskPool::addTask(const BackgroundTask & task, const ThreadType & whom)
 {
-    // TODO: refine log info (e.g. add info about DeltaMergeStore)
     LOG_DEBUG(log,
               "Database: [" << task.store->getDatabaseName() << "] Table: [" << task.store->getTableName() << "] Segment ["
                             << task.segment->segmentId() << "] task [" << toString(task.type) << "] add to background task pool by ["
@@ -28,6 +34,9 @@ void DeltaMergeTaskPool::addTask(const BackgroundTask & task, const ThreadType &
 
     std::scoped_lock lock(mutex);
     low_priority_tasks.push_back(std::make_shared<BackgroundTask>(task));
+    if (task_counts.find(task.store) == task_counts.end())
+        task_counts.emplace(task.store, 0);
+    task_counts[task.store] += 1;
 }
 
 void DeltaMergeTaskPool::removeAllTasksForStore(DeltaMergeStorePtr store)
@@ -47,6 +56,7 @@ void DeltaMergeTaskPool::removeAllTasksForStore(DeltaMergeStorePtr store)
         }
         for (auto & task : processing_tasks_to_wait)
             processing_tasks.erase(task);
+        task_counts.erase(store);
     }
 
     for (auto & task : processing_tasks_to_wait)
@@ -69,11 +79,9 @@ bool DeltaMergeTaskPool::handleBackgroundTask()
 size_t DeltaMergeTaskPool::getTaskNumForStore(DeltaMergeStorePtr store)
 {
     std::scoped_lock lock{mutex};
-    size_t           num            = 0;
-    auto             is_target_task = [&store](const BackgroundTaskHandle & task) { return task->store == store; };
-    num += std::count_if(high_priority_tasks.begin(), high_priority_tasks.end(), is_target_task);
-    num += std::count_if(low_priority_tasks.begin(), low_priority_tasks.end(), is_target_task);
-    return num;
+    if (task_counts.find(store) == task_counts.end())
+        return 0;
+    return task_counts[store];
 }
 
 bool DeltaMergeTaskPool::handleTaskImpl(bool high_priority)
@@ -186,6 +194,7 @@ bool DeltaMergeTaskPool::handleTaskImpl(bool high_priority)
     {
         std::scoped_lock lock{mutex};
         processing_tasks.erase(task);
+        task_counts[task->store] -= 1;
     }
 
     return true;
@@ -210,6 +219,9 @@ DeltaMergeTaskPool::BackgroundTaskHandle DeltaMergeTaskPool::nextTask(bool high_
 
 void DeltaMergeTaskPool::putTaskBackToHighPriorityQueue(DeltaMergeTaskPool::BackgroundTaskHandle & task)
 {
+    LOG_DEBUG(log,
+              "Database: [" << task->store->getDatabaseName() << "] Table: [" << task->store->getTableName() << "] Segment ["
+                            << task->segment->segmentId() << "] task [" << toString(task->type) << "] put back to background task pool");
     std::scoped_lock lock{mutex};
     processing_tasks.erase(task);
     high_priority_tasks.push_front(task);
@@ -239,7 +251,9 @@ bool DeltaMergeTaskPool::tryPrepareTask(DeltaMergeTaskPool::BackgroundTaskHandle
         task->snapshot = task->store->createSegmentSnapshot(*task->dm_context, task->segment, true);
         if (!task->snapshot)
         {
-            LOG_DEBUG(log, "Give up segment [" << task->segment->segmentId() << "] split");
+            LOG_DEBUG(log,
+                      "Database [" << task->store->getDatabaseName() << "] Table [" << task->store->getTableName() << "] give up segment ["
+                                   << task->segment->segmentId() << "] split");
             return true;
         }
         is_physical = task->segment->isPhysicalSplit(*task->dm_context, task->snapshot);
@@ -256,8 +270,9 @@ bool DeltaMergeTaskPool::tryPrepareTask(DeltaMergeTaskPool::BackgroundTaskHandle
         if (!task->snapshot || !task->next_snapshot)
         {
             LOG_DEBUG(log,
-                      "Give up merge segments left [" << task->segment->segmentId() << "], right [" << task->next_segment->segmentId()
-                                                      << "]");
+                      "Database [" << task->store->getDatabaseName() << "] Table [" << task->store->getTableName()
+                                   << "] give up merge segments left [" << task->segment->segmentId() << "], right ["
+                                   << task->next_segment->segmentId() << "]");
             return true;
         }
         task->task_size = task->snapshot->getBytes() + task->next_snapshot->getBytes();
@@ -266,7 +281,9 @@ bool DeltaMergeTaskPool::tryPrepareTask(DeltaMergeTaskPool::BackgroundTaskHandle
         task->snapshot = task->store->createSegmentSnapshot(*task->dm_context, task->segment, true);
         if (!task->snapshot)
         {
-            LOG_DEBUG(log, "Give up merge delta, segment [" << task->segment->segmentId() << "]");
+            LOG_DEBUG(log,
+                      "Database [" << task->store->getDatabaseName() << "] Table [" << task->store->getTableName()
+                                   << "] give up merge delta, segment [" << task->segment->segmentId() << "]");
             return true;
         }
         task->task_size = task->snapshot->getBytes();
