@@ -142,7 +142,7 @@ public:
     /// split(), merge() and mergeDelta() are only used in test cases.
 
     SegmentPair split(DMContext & dm_context) const;
-    bool isPhysicalSplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const;
+    bool        isPhysicalSplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const;
     SplitInfo   prepareSplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs) const;
     SegmentPair
     applySplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs, SplitInfo & split_info) const;

@@ -13,8 +13,8 @@ class RateLimiter
 {
 public:
     explicit RateLimiter(size_t rate_bytes_per_sec_)
-        : rate_bytes_per_sec{rate_bytes_per_sec_}, available_bytes{rate_bytes_per_sec_},
-          refilled_time{Clock::now()} {}
+        : rate_bytes_per_sec{rate_bytes_per_sec_}, available_bytes{rate_bytes_per_sec_}, refilled_time{Clock::now()}
+    {}
 
     size_t request(size_t bytes);
 
@@ -35,4 +35,4 @@ private:
 
 using RateLimiterPtr = std::shared_ptr<RateLimiter>;
 
-}
+} // namespace DB

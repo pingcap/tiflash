@@ -48,28 +48,39 @@ public:
 
     struct BackgroundTask
     {
-        BackgroundTask(TaskType type_, const DMContextPtr & dm_context_, const DeltaMergeStorePtr & store_,
-                       const SegmentPtr & segment_, const SegmentPtr & next_segment_)
-            : type{type_}, dm_context{dm_context_}, store{store_},
-              segment{segment_}, next_segment{next_segment_} {}
+        BackgroundTask(TaskType                   type_,
+                       const DMContextPtr &       dm_context_,
+                       const DeltaMergeStorePtr & store_,
+                       const SegmentPtr &         segment_,
+                       const SegmentPtr &         next_segment_)
+            : type{type_}, dm_context{dm_context_}, store{store_}, segment{segment_}, next_segment{next_segment_}
+        {
+        }
 
         BackgroundTask(const BackgroundTask & task) noexcept
-            : type{task.type}, dm_context{task.dm_context}, store{task.store},
-              segment{task.segment}, next_segment{task.next_segment},
-              snapshot{task.snapshot}, next_snapshot{task.next_snapshot}, task_size{task.task_size} {}
+            : type{task.type},
+              dm_context{task.dm_context},
+              store{task.store},
+              segment{task.segment},
+              next_segment{task.next_segment},
+              snapshot{task.snapshot},
+              next_snapshot{task.next_snapshot},
+              task_size{task.task_size}
+        {
+        }
 
         TaskType type;
 
-        DMContextPtr dm_context;
+        DMContextPtr       dm_context;
         DeltaMergeStorePtr store;
-        SegmentPtr   segment;
-        SegmentPtr   next_segment;
+        SegmentPtr         segment;
+        SegmentPtr         next_segment;
         SegmentSnapshotPtr snapshot;
         SegmentSnapshotPtr next_snapshot;
 
-        Int64 task_size = -1;
+        Int64      task_size = -1;
         std::mutex task_mutex;
-        bool finished = false;
+        bool       finished = false;
 
         explicit operator bool() { return (bool)segment; }
     };
@@ -134,5 +145,5 @@ private:
     std::mutex mutex;
 };
 
-}
-}
+} // namespace DM
+} // namespace DB

@@ -284,8 +284,11 @@ private:
     SegmentSnapshotPtr createSegmentSnapshot(DMContext & dm_context, const SegmentPtr & segment, bool is_update);
 
     SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, SegmentSnapshotPtr segment_snap);
-    void        segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right,
-                             SegmentSnapshotPtr left_snap, SegmentSnapshotPtr right_snap);
+    void        segmentMerge(DMContext &        dm_context,
+                             const SegmentPtr & left,
+                             const SegmentPtr & right,
+                             SegmentSnapshotPtr left_snap,
+                             SegmentSnapshotPtr right_snap);
     SegmentPtr  segmentMergeDelta(DMContext & dm_context, const SegmentPtr & segment, SegmentSnapshotPtr segment_snap, bool is_foreground);
 
     bool isSegmentValid(const SegmentPtr & segment);

@@ -706,8 +706,7 @@ RowKeyValue Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & 
 
 bool Segment::isPhysicalSplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const
 {
-    if (!dm_context.enable_logical_split
-        || segment_snap->stable->getPacks() <= 3
+    if (!dm_context.enable_logical_split || segment_snap->stable->getPacks() <= 3
         || segment_snap->delta->getRows() > segment_snap->stable->getRows())
         return true;
     else

@@ -1,5 +1,5 @@
-#include <Storages/DeltaMerge/DeltaMergeTaskPool.h>
 #include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/DeltaMergeTaskPool.h>
 #include <Storages/Transaction/TMTContext.h>
 
 namespace DB
@@ -22,8 +22,9 @@ void DeltaMergeTaskPool::addTask(const BackgroundTask & task, const ThreadType &
 {
     // TODO: refine log info (e.g. add info about DeltaMergeStore)
     LOG_DEBUG(log,
-              "Database: [" << task.store->getDatabaseName() << "] Table: [" << task.store->getTableName() << "] Segment [" << task.segment->segmentId() << "] task [" << toString(task.type) << "] add to background task pool by ["
-                          << DeltaMergeStore::toString(whom) << "]");
+              "Database: [" << task.store->getDatabaseName() << "] Table: [" << task.store->getTableName() << "] Segment ["
+                            << task.segment->segmentId() << "] task [" << toString(task.type) << "] add to background task pool by ["
+                            << DeltaMergeStore::toString(whom) << "]");
 
     std::scoped_lock lock(mutex);
     low_priority_tasks.push_back(std::make_shared<BackgroundTask>(task));
@@ -34,9 +35,11 @@ void DeltaMergeTaskPool::removeAllTasksForStore(DeltaMergeStorePtr store)
     TaskSet processing_tasks_to_wait;
     {
         std::scoped_lock lock{mutex};
-        auto is_target_task = [&store](const BackgroundTaskHandle & task) { return task->store == store; };
-        high_priority_tasks.erase(std::remove_if(high_priority_tasks.begin(), high_priority_tasks.end(), is_target_task), high_priority_tasks.end());
-        low_priority_tasks.erase(std::remove_if(low_priority_tasks.begin(), low_priority_tasks.end(), is_target_task), low_priority_tasks.end());
+        auto             is_target_task = [&store](const BackgroundTaskHandle & task) { return task->store == store; };
+        high_priority_tasks.erase(std::remove_if(high_priority_tasks.begin(), high_priority_tasks.end(), is_target_task),
+                                  high_priority_tasks.end());
+        low_priority_tasks.erase(std::remove_if(low_priority_tasks.begin(), low_priority_tasks.end(), is_target_task),
+                                 low_priority_tasks.end());
         for (auto & task : processing_tasks)
         {
             if (is_target_task(task))
@@ -66,8 +69,8 @@ bool DeltaMergeTaskPool::handleBackgroundTask()
 size_t DeltaMergeTaskPool::getTaskNumForStore(DeltaMergeStorePtr store)
 {
     std::scoped_lock lock{mutex};
-    size_t num = 0;
-    auto is_target_task = [&store](const BackgroundTaskHandle & task) { return task->store == store; };
+    size_t           num            = 0;
+    auto             is_target_task = [&store](const BackgroundTaskHandle & task) { return task->store == store; };
     num += std::count_if(high_priority_tasks.begin(), high_priority_tasks.end(), is_target_task);
     num += std::count_if(low_priority_tasks.begin(), low_priority_tasks.end(), is_target_task);
     return num;
@@ -88,7 +91,9 @@ bool DeltaMergeTaskPool::handleTaskImpl(bool high_priority)
                                                                   /* ignore_cache= */ false,
                                                                   global_context.getSettingsRef().safe_point_update_interval_seconds);
 
-        LOG_DEBUG(log, "Database: [" << task->store->getDatabaseName() << "] Table: [" << task->store->getTableName() << "] Task" << toString(task->type) << " GC safe point: " << safe_point);
+        LOG_DEBUG(log,
+                  "Database: [" << task->store->getDatabaseName() << "] Table: [" << task->store->getTableName() << "] Task"
+                                << toString(task->type) << " GC safe point: " << safe_point);
 
         // Foreground task don't get GC safe point from remote, but we better make it as up to date as possible.
         task->store->updateLatestGcSafePoint(safe_point);
@@ -135,13 +140,15 @@ bool DeltaMergeTaskPool::handleTaskImpl(bool high_priority)
                     type = ThreadType::BG_MergeDelta;
                 }
                 break;
-            case Compact: {
+            case Compact:
+            {
                 task->segment->compactDelta(*task->dm_context);
                 left = task->segment;
                 type = ThreadType::BG_Compact;
                 break;
             }
-            case Flush: {
+            case Flush:
+            {
                 task->segment->flushCache(*task->dm_context);
                 // After flush cache, better place delta index.
                 task->segment->placeDeltaIndex(*task->dm_context);
@@ -149,7 +156,8 @@ bool DeltaMergeTaskPool::handleTaskImpl(bool high_priority)
                 type = ThreadType::BG_Flush;
                 break;
             }
-            case PlaceIndex: {
+            case PlaceIndex:
+            {
                 task->segment->placeDeltaIndex(*task->dm_context);
                 break;
             }
@@ -160,9 +168,10 @@ bool DeltaMergeTaskPool::handleTaskImpl(bool high_priority)
         catch (const Exception & e)
         {
             LOG_ERROR(log,
-                      "Database: [" << task->store->getDatabaseName() << "] Table: [" << task->store->getTableName() << "] Task " << toString(task->type) << " on Segment [" << task->segment->segmentId()
-                              << ((bool)task->next_segment ? ("] and [" + DB::toString(task->next_segment->segmentId())) : "")
-                              << "] failed. Error msg: " << e.message());
+                      "Database: [" << task->store->getDatabaseName() << "] Table: [" << task->store->getTableName() << "] Task "
+                                    << toString(task->type) << " on Segment [" << task->segment->segmentId()
+                                    << ((bool)task->next_segment ? ("] and [" + DB::toString(task->next_segment->segmentId())) : "")
+                                    << "] failed. Error msg: " << e.message());
             e.rethrow();
         }
 
@@ -185,14 +194,16 @@ bool DeltaMergeTaskPool::handleTaskImpl(bool high_priority)
 DeltaMergeTaskPool::BackgroundTaskHandle DeltaMergeTaskPool::nextTask(bool high_priority)
 {
     std::scoped_lock lock{mutex};
-    auto & tasks = high_priority ? high_priority_tasks : low_priority_tasks;
+    auto &           tasks = high_priority ? high_priority_tasks : low_priority_tasks;
     if (tasks.empty())
         return {};
     auto task = tasks.front();
     tasks.pop_front();
     processing_tasks.insert(task);
 
-    LOG_DEBUG(log, "Database: [" << task->store->getDatabaseName() << "] Table: [" << task->store->getTableName() << "] Segment [" << task->segment->segmentId() << "] task [" << toString(task->type) << "] pop from background task pool");
+    LOG_DEBUG(log,
+              "Database: [" << task->store->getDatabaseName() << "] Table: [" << task->store->getTableName() << "] Segment ["
+                            << task->segment->segmentId() << "] task [" << toString(task->type) << "] pop from background task pool");
 
     return task;
 }
@@ -206,8 +217,7 @@ void DeltaMergeTaskPool::putTaskBackToHighPriorityQueue(DeltaMergeTaskPool::Back
 
 bool DeltaMergeTaskPool::canTaskBeProcessed(DeltaMergeTaskPool::BackgroundTaskHandle & task)
 {
-    auto try_request_balance = [&](DeltaMergeTaskPool::BackgroundTaskHandle & task)
-    {
+    auto try_request_balance = [&](DeltaMergeTaskPool::BackgroundTaskHandle & task) {
         if (task->task_size <= 0)
             return true;
         task->task_size = rate_limiter->request(task->task_size);
@@ -241,11 +251,13 @@ bool DeltaMergeTaskPool::canTaskBeProcessed(DeltaMergeTaskPool::BackgroundTaskHa
         else
             return true;
     case Merge:
-        task->snapshot = task->store->createSegmentSnapshot(*task->dm_context, task->segment, true);
+        task->snapshot      = task->store->createSegmentSnapshot(*task->dm_context, task->segment, true);
         task->next_snapshot = task->store->createSegmentSnapshot(*task->dm_context, task->next_segment, true);
         if (!task->snapshot || !task->next_snapshot)
         {
-            LOG_DEBUG(log, "Give up merge segments left [" << task->segment->segmentId() << "], right [" << task->next_segment->segmentId() << "]");
+            LOG_DEBUG(log,
+                      "Give up merge segments left [" << task->segment->segmentId() << "], right [" << task->next_segment->segmentId()
+                                                      << "]");
             return true;
         }
         task->task_size = task->snapshot->getBytes() + task->next_snapshot->getBytes();
@@ -268,5 +280,5 @@ bool DeltaMergeTaskPool::canTaskBeProcessed(DeltaMergeTaskPool::BackgroundTaskHa
     }
 }
 
-}
-}
+} // namespace DM
+} // namespace DB
