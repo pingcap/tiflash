@@ -235,8 +235,8 @@ void TiFlashStorageConfig::parse(const String & storage, Poco::Logger * log)
         LOG_INFO(log, "Latest data candidate path: " << latest_data_paths[i] << ", capacity_quota: " << latest_capacity_quota[i]);
     }
 
-    // kvstore
-    if (auto kvstore_paths = table->get_qualified_array_of<String>("kvstore.dir"); kvstore_paths)
+    // Raft
+    if (auto kvstore_paths = table->get_qualified_array_of<String>("raft.dir"); kvstore_paths)
         kvstore_data_path = *kvstore_paths;
     if (kvstore_data_path.empty())
     {
@@ -545,18 +545,22 @@ int Server::main(const std::vector<std::string> & /*args*/)
             LOG_WARNING(log, "The configuration \"path\" is ignored when \"storage\" is defined.");
         if (config().has("capacity"))
             LOG_WARNING(log, "The configuration \"capacity\" is ignored when \"storage\" is defined.");
+
         if (config().has("raft.kvstore_path"))
         {
-            LOG_WARNING(log, "The configuration \"raft.kvstore_path\" is deprecated, use \"storage.kvstore.dir\" instead.");
-            kvstore_paths.clear();
-            kvstore_paths.emplace_back(config().getString("raft.kvstore_path"));
-            for (size_t i = 0; i < kvstore_paths.size(); ++i)
+            String deprecated_kvstore_path = config().getString("raft.kvstore_path");
+            if (!deprecated_kvstore_path.empty())
             {
+                LOG_WARNING(log, "The configuration \"raft.kvstore_path\" is deprecated, use \"storage.raft.dir\" instead.");
+                kvstore_paths.clear();
                 // normalized
-                kvstore_paths[i] = getNormalizedPath(kvstore_paths[i]);
-                LOG_WARNING(log,
-                    "Raft data candidate path: " << kvstore_paths[i]
-                                                 << ". The path is overwritten by deprecated configuration for backward compatibility.");
+                kvstore_paths.emplace_back(getNormalizedPath(deprecated_kvstore_path));
+                for (size_t i = 0; i < kvstore_paths.size(); ++i)
+                {
+                    LOG_WARNING(log,
+                        "Raft data candidate path: "
+                            << kvstore_paths[i] << ". The path is overwritten by deprecated configuration for backward compatibility.");
+                }
             }
         }
     }

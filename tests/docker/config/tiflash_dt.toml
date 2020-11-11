@@ -3,19 +3,19 @@ display_name = "TiFlash"
 default_profile = "default"
 users_config = "users.toml"
 
-# old style storage paths
+## Deprecated storage path setting style. Check [storage] section for new style.
 path = "/tmp/tiflash/data/db"
 capacity = "10737418240"
-# old style multi-disks
+## Deprecated storage path setting style of multi-disks. Check [storage] section for new style.
 # path = "/tmp/tiflash/data/db,/tmp/tiflash1,/tmp/tiflash2"
-# capacity = "0,0,0"
+# capacity = "0"
 
 mark_cache_size = 5368709120
 minmax_index_cache_size = 5368709120
 tcp_port = 9000
 http_port = 8123
 
-# new style storage paths
+## Storage paths settings.
 # [storage]
     ## If there are multiple SSD disks on the machine,
     ## specify the path list on `storage.main.dir` can improve TiFlash performance.
@@ -34,8 +34,11 @@ http_port = 8123
     # dir = [ "/data0/tiflash", "/data1/tiflash" ]
 
     ## Store capacity of each path, i.e. max data size allowed.
-    ## If it is not set, or is set to 0s, disk capacity will be used.
-    # capacity = [ ]
+    ## If it is not set, or is set to 0s, the actual disk capacity is used.
+    ## Note that we don't support human-readable big numbers(like "10GB") yet.
+    ## Please set in the specified number of bytes.
+    # e.g.
+    # capacity = [ 10737418240, 10737418240 ]
 
     # [storage.latest]
     ## The path(s) to store latest data.
@@ -43,10 +46,11 @@ http_port = 8123
     # dir = [ ]
 
     ## Store capacity of each path, i.e. max data size allowed.
-    ## If it is not set, or is set to 0s, disk capacity will be used.
-    # capacity = [ ]
+    ## If it is not set, or is set to 0s, the actual disk capacity is used.
+    # e.g.
+    # capacity = [ 10737418240, 10737418240 ]
 
-    # [storage.kvstore]
+    # [storage.raft]
     ## The path(s) to store Raft data.
     ## If not set, it will be the paths in `storage.latest.dir` appended with "/kvstore".
     # dir = [ ]
@@ -79,3 +83,6 @@ http_port = 8123
   ignore_databases = "system,default"
 	# specify which storage engine we use. tmt or dt 
 	storage_engine = "dt"
+  # Deprecated Raft data storage path setting style. Check [storage.raft] section for new style.
+  # If it is not set, it will be the first path of "path" appended with "/kvstore".
+  # kvstore_path = ""
