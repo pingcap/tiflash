@@ -46,7 +46,7 @@ protected:
     {
         *db_context  = DMTestEnv::getContext(db_settings);
         auto & ctx   = DMTestEnv::getContext();
-        path_pool    = std::make_unique<StoragePathPool>(ctx.getExtraPaths().withTable("test", "t", false));
+        path_pool    = std::make_unique<StoragePathPool>(ctx.getPathPool().withTable("test", "t", false));
         storage_pool = std::make_unique<StoragePool>("test.t1", *path_pool, ctx, db_context->getSettingsRef());
         storage_pool->restore();
         ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns(is_common_handle) : pre_define_columns;

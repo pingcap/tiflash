@@ -19,8 +19,8 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-KVStore::KVStore(const std::string & data_dir, const FileProviderPtr & file_provider)
-    : region_persister(data_dir, region_manager, file_provider),
+KVStore::KVStore(Context & context)
+    : region_persister(context, region_manager),
       raft_cmd_res(std::make_unique<RaftCommandResult>()),
       log(&Logger::get("KVStore"))
 {}
