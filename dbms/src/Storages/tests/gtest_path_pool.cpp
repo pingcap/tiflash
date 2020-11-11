@@ -34,7 +34,7 @@ try
     Strings paths = getMultiTestPaths();
     auto & ctx = TiFlashTestEnv::getContext();
 
-    PathPool pool(paths, paths, ctx.getPathCapacity(), ctx.getFileProvider());
+    PathPool pool(paths, paths, Strings{}, ctx.getPathCapacity(), ctx.getFileProvider());
     auto spool = pool.withTable("test", "t", false);
 
     // Stable delegate
@@ -114,6 +114,33 @@ try
             delegate->removePageFile(id, bytes_written);
         }
     }
+    // Raft delegate
+    {
+        auto delegate = pool.getPSDiskDelegatorRaft();
+        auto res = delegate->listPaths();
+        EXPECT_EQ(res.size(), paths.size());
+        for (size_t i = 0; i < res.size(); ++i)
+        {
+            EXPECT_EQ(res[i], paths[i] + "/kvstore");
+        }
+        EXPECT_EQ(delegate->numPaths(), res.size());
+
+        size_t bytes_written = 200;
+        for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
+        {
+            PageFileIdAndLevel id{i, 0};
+            auto chosen = delegate->choosePath(id);
+            ASSERT_NE(std::find(res.begin(), res.end(), chosen), res.end());
+            delegate->addPageFileUsedSize(id, bytes_written, chosen, true);
+            auto path_get = delegate->getPageFilePath(id);
+            ASSERT_EQ(path_get, chosen);
+        }
+        for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
+        {
+            PageFileIdAndLevel id{i, 0};
+            delegate->removePageFile(id, bytes_written);
+        }
+    }
 }
 CATCH
 
@@ -124,7 +151,7 @@ try
     Strings latest_paths(paths.begin(), paths.begin() + 1);
     auto & ctx = TiFlashTestEnv::getContext();
 
-    PathPool pool(paths, latest_paths, ctx.getPathCapacity(), ctx.getFileProvider());
+    PathPool pool(paths, latest_paths, Strings{}, ctx.getPathCapacity(), ctx.getFileProvider());
     auto spool = pool.withTable("test", "t", false);
     // Stable delegate
     {
@@ -186,6 +213,33 @@ try
             EXPECT_EQ(res[i], paths[i] + DIR_PREFIX_OF_TABLE + "meta");
         }
         EXPECT_EQ(delegate->numPaths(), 1UL);
+
+        size_t bytes_written = 200;
+        for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
+        {
+            PageFileIdAndLevel id{i, 0};
+            auto chosen = delegate->choosePath(id);
+            ASSERT_NE(std::find(res.begin(), res.end(), chosen), res.end());
+            delegate->addPageFileUsedSize(id, bytes_written, chosen, true);
+            auto path_get = delegate->getPageFilePath(id);
+            ASSERT_EQ(path_get, chosen);
+        }
+        for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)
+        {
+            PageFileIdAndLevel id{i, 0};
+            delegate->removePageFile(id, bytes_written);
+        }
+    }
+    // Raft delegate
+    {
+        auto delegate = pool.getPSDiskDelegatorRaft();
+        auto res = delegate->listPaths();
+        EXPECT_EQ(res.size(), latest_paths.size());
+        for (size_t i = 0; i < res.size(); ++i)
+        {
+            EXPECT_EQ(res[i], latest_paths[i] + "/kvstore");
+        }
+        EXPECT_EQ(delegate->numPaths(), res.size());
 
         size_t bytes_written = 200;
         for (size_t i = 0; i < TEST_NUMBER_FOR_CHOOSE; ++i)

@@ -34,7 +34,7 @@ public:
     void SetUp() override
     {
         db_context        = std::make_unique<Context>(DMTestEnv::getContext(DB::Settings()));
-        storage_path_pool = std::make_unique<StoragePathPool>(db_context->getExtraPaths().withTable("test", "t1", false));
+        storage_path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
         storage_path_pool->drop(true);
         table_columns_ = std::make_shared<ColumnDefines>();
         dropDataOnDisk();
@@ -47,7 +47,7 @@ protected:
     SegmentPtr reload(const ColumnDefinesPtr & pre_define_columns = {}, DB::Settings && db_settings = DB::Settings())
     {
         *db_context       = DMTestEnv::getContext(db_settings);
-        storage_path_pool = std::make_unique<StoragePathPool>(db_context->getExtraPaths().withTable("test", "t1", false));
+        storage_path_pool = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
         storage_pool      = std::make_unique<StoragePool>("test.t1", *storage_path_pool, *db_context, db_context->getSettingsRef());
         storage_pool->restore();
         ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;

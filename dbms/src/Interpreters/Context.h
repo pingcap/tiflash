@@ -167,15 +167,17 @@ public:
     String getTemporaryPath() const;
     String getFlagsPath() const;
     String getUserFilesPath() const;
-    PathPool & getExtraPaths() const;
+    PathPool & getPathPool() const;
 
     void setPath(const String & path);
     void setTemporaryPath(const String & path);
     void setFlagsPath(const String & path);
     void setUserFilesPath(const String & path);
 
-    void setExtraPaths(const Strings & main_data_paths,
+    void setPathPool(const Strings & main_data_paths,
         const Strings & latest_data_paths,
+        const Strings & kvstore_paths,
+        bool enable_raft_compatibility_mode,
         PathCapacityMetricsPtr global_capacity_,
         FileProviderPtr file_provider);
 
@@ -392,7 +394,6 @@ public:
 
     void createTMTContext(const std::vector<std::string> & pd_addrs,
                           const std::unordered_set<std::string> & ignore_databases,
-                          const std::string & kvstore_path,
                           ::TiDB::StorageEngine engine,
                           bool disable_bg_tasks,
                           pingcap::ClusterConfig cluster_config = {});

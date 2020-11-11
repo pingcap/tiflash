@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Encryption/FileProvider.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageFile.h>
@@ -19,6 +18,8 @@
 namespace DB
 {
 
+class FileProvider;
+using FileProviderPtr = std::shared_ptr<FileProvider>;
 class TiFlashMetrics;
 using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 class PathCapacityMetrics;
@@ -154,6 +155,8 @@ public:
                                         PSDiskDelegatorPtr &        delegator,
                                         Poco::Logger *              page_file_log,
                                         const ListPageFilesOption & option = ListPageFilesOption());
+
+    static PageFile::Version getMaxDataVersion(const FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator);
 
 private:
     WriterPtr checkAndRenewWriter(PageFile &     page_file,
