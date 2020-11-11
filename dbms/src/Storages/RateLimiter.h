@@ -13,11 +13,11 @@ namespace DB
 class RateLimiter
 {
 public:
-    explicit RateLimiter(size_t rate_bytes_per_sec_)
+    explicit RateLimiter(Int64 rate_bytes_per_sec_)
         : rate_bytes_per_sec{rate_bytes_per_sec_}, available_bytes{rate_bytes_per_sec_}, refilled_time{Clock::now()}
     {}
 
-    size_t request(size_t bytes);
+    size_t request(Int64 bytes);
 
 private:
     void refillIfNeed();
@@ -25,9 +25,9 @@ private:
 private:
     const size_t refill_period_us = 100 * 1000;
 
-    size_t rate_bytes_per_sec;
+    Int64 rate_bytes_per_sec;
 
-    size_t available_bytes;
+    Int64 available_bytes;
 
     Timepoint refilled_time;
 
