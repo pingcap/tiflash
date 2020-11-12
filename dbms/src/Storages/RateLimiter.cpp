@@ -34,12 +34,12 @@ void RateLimiter::refillIfNeed()
     auto current_time = Clock::now();
     auto rate_bytes_per_refill_period = max_rate_bytes_balance / max_refill_period_count;
     size_t elapsed_refill_period_num
-        = std::chrono::duration_cast<std::chrono::microseconds>(current_time - refilled_time).count() / refill_period_us;
+        = std::chrono::duration_cast<std::chrono::microseconds>(current_time - prev_refilled_time).count() / refill_period_us;
     elapsed_refill_period_num = std::min(elapsed_refill_period_num, max_refill_period_count);
     available_bytes = available_bytes + elapsed_refill_period_num * rate_bytes_per_refill_period;
     if (available_bytes > max_rate_bytes_balance)
         available_bytes = max_rate_bytes_balance;
-    refilled_time = current_time;
+    prev_refilled_time = current_time;
 }
 
 } // namespace DB

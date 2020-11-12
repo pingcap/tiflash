@@ -14,7 +14,7 @@ class RateLimiter
 {
 public:
     explicit RateLimiter(Int64 max_rate_bytes_balance_)
-        : max_rate_bytes_balance{max_rate_bytes_balance_}, available_bytes{max_rate_bytes_balance}, refilled_time{Clock::now()}
+        : max_rate_bytes_balance{max_rate_bytes_balance_}, available_bytes{max_rate_bytes_balance}, prev_refilled_time{Clock::now()}
     {}
 
     size_t request(Int64 bytes);
@@ -32,7 +32,7 @@ private:
 
     Int64 available_bytes;
 
-    Timepoint refilled_time;
+    Timepoint prev_refilled_time;
 
     std::mutex mutex;
 };
