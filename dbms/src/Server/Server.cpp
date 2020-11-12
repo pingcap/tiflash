@@ -3,7 +3,6 @@
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/ClickHouseRevision.h>
 #include <Common/Config/ConfigReloader.h>
-#include <Common/Config/cpptoml.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Macros.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -32,6 +31,7 @@
 #include <Poco/Net/HTTPServer.h>
 #include <Poco/Net/NetException.h>
 #include <Poco/StringTokenizer.h>
+#include <Server/StorageConfigParser.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/StorageReplicatedMergeTree.h>
@@ -150,126 +150,6 @@ struct TiFlashProxyConfig
 };
 
 const std::string TiFlashProxyConfig::config_prefix = "flash.proxy";
-
-struct TiFlashStorageConfig
-{
-    Strings main_data_paths;
-    std::vector<size_t> main_capacity_quota;
-    Strings latest_data_paths;
-    std::vector<size_t> latest_capacity_quota;
-    Strings kvstore_data_path;
-
-public:
-    TiFlashStorageConfig() {}
-
-    void parse(const String & storage, Poco::Logger * log);
-
-    Strings getAllNormalPaths() const;
-};
-
-void TiFlashStorageConfig::parse(const String & storage, Poco::Logger * log)
-{
-    std::istringstream ss(storage);
-    cpptoml::parser p(ss);
-    auto table = p.parse();
-
-    // main
-    if (auto main_paths = table->get_qualified_array_of<String>("main.dir"); main_paths)
-        main_data_paths = *main_paths;
-    if (auto main_capacity = table->get_qualified_array_of<int64_t>("main.capacity"); main_capacity)
-    {
-        for (const auto & c : *main_capacity)
-            main_capacity_quota.emplace_back((size_t)c);
-    }
-    if (main_data_paths.empty())
-    {
-        String error_msg = "The configuration \"storage.main.dir\" is empty. Please check your configuration file.";
-        LOG_ERROR(log, error_msg);
-        throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
-    }
-    if (!main_capacity_quota.empty() && main_capacity_quota.size() != main_data_paths.size())
-    {
-        String error_msg = "The array size of \"storage.main.dir\"[size=" + toString(main_data_paths.size())
-            + "] is not equal to \"storage.main.capacity\"[size=" + toString(main_capacity_quota.size())
-            + "]. Please check your configuration file.";
-        LOG_ERROR(log, error_msg);
-        throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
-    }
-    for (size_t i = 0; i < main_data_paths.size(); ++i)
-    {
-        // normalized
-        main_data_paths[i] = getNormalizedPath(main_data_paths[i]);
-        if (main_capacity_quota.size() <= i)
-            main_capacity_quota.emplace_back(0);
-        LOG_INFO(log, "Main data candidate path: " << main_data_paths[i] << ", capacity_quota: " << main_capacity_quota[i]);
-    }
-
-    // latest
-    if (auto latest_paths = table->get_qualified_array_of<String>("latest.dir"); latest_paths)
-        latest_data_paths = *latest_paths;
-    if (auto latest_capacity = table->get_qualified_array_of<int64_t>("latest.capacity"); latest_capacity)
-    {
-        for (const auto & c : *latest_capacity)
-            latest_capacity_quota.emplace_back((size_t)c);
-    }
-    if (latest_data_paths.empty())
-    {
-        LOG_INFO(log, "The configuration \"storage.latest.dir\" is empty, use the same dir and capacity of \"storage.main.dir\"");
-        latest_data_paths = main_data_paths;
-        latest_capacity_quota = main_capacity_quota;
-    }
-    if (!latest_capacity_quota.empty() && latest_capacity_quota.size() != latest_data_paths.size())
-    {
-        String error_msg = "The array size of \"storage.main.dir\"[size=" + toString(latest_data_paths.size())
-            + "] is not euqal to \"storage.main.capacity\"[size=" + toString(latest_capacity_quota.size())
-            + "]. Please check your configuration file.";
-        LOG_ERROR(log, error_msg);
-        throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
-    }
-    for (size_t i = 0; i < latest_data_paths.size(); ++i)
-    {
-        // normalized
-        latest_data_paths[i] = getNormalizedPath(latest_data_paths[i]);
-        if (latest_capacity_quota.size() <= i)
-            latest_capacity_quota.emplace_back(0);
-        LOG_INFO(log, "Latest data candidate path: " << latest_data_paths[i] << ", capacity_quota: " << latest_capacity_quota[i]);
-    }
-
-    // Raft
-    if (auto kvstore_paths = table->get_qualified_array_of<String>("raft.dir"); kvstore_paths)
-        kvstore_data_path = *kvstore_paths;
-    if (kvstore_data_path.empty())
-    {
-        // generated from latest path
-        for (const auto & s : latest_data_paths)
-        {
-            String path = Poco::Path{s + "/kvstore"}.toString();
-            kvstore_data_path.emplace_back(std::move(path));
-        }
-    }
-    for (size_t i = 0; i < kvstore_data_path.size(); ++i)
-    {
-        // normalized
-        kvstore_data_path[i] = getNormalizedPath(kvstore_data_path[i]);
-        LOG_INFO(log, "Raft data candidate path: " << kvstore_data_path[i]);
-    }
-}
-
-Strings TiFlashStorageConfig::getAllNormalPaths() const
-{
-    Strings all_normal_path;
-    std::set<String> path_set;
-    for (const auto & s : main_data_paths)
-        path_set.insert(s);
-    for (const auto & s : latest_data_paths)
-        path_set.insert(s);
-    // keep the first path
-    all_normal_path.emplace_back(latest_data_paths[0]);
-    path_set.erase(latest_data_paths[0]);
-    for (const auto & s : path_set)
-        all_normal_path.emplace_back(s);
-    return all_normal_path;
-}
 
 struct TiFlashRaftConfig
 {
@@ -530,140 +410,25 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     size_t global_capacity_quota = 0; // "0" by default, means no quota, use the whole disk capacity.
-    Strings all_normal_path;
-    Strings main_data_paths, latest_data_paths, kvstore_paths;
     TiFlashStorageConfig storage_config;
-    if (config().has("storage"))
-    {
-        storage_config.parse(config().getString("storage"), log);
-        main_data_paths = storage_config.main_data_paths;
-        latest_data_paths = storage_config.latest_data_paths;
-        kvstore_paths = storage_config.kvstore_data_path;
-        all_normal_path = storage_config.getAllNormalPaths();
+    std::tie(global_capacity_quota, storage_config) = TiFlashStorageConfig::parseSettings(config(), log);
 
-        if (config().has("path"))
-            LOG_WARNING(log, "The configuration \"path\" is ignored when \"storage\" is defined.");
-        if (config().has("capacity"))
-            LOG_WARNING(log, "The configuration \"capacity\" is ignored when \"storage\" is defined.");
-
-        if (config().has("raft.kvstore_path"))
-        {
-            String deprecated_kvstore_path = config().getString("raft.kvstore_path");
-            if (!deprecated_kvstore_path.empty())
-            {
-                LOG_WARNING(log, "The configuration \"raft.kvstore_path\" is deprecated, use \"storage.raft.dir\" instead.");
-                kvstore_paths.clear();
-                // normalized
-                kvstore_paths.emplace_back(getNormalizedPath(deprecated_kvstore_path));
-                for (size_t i = 0; i < kvstore_paths.size(); ++i)
-                {
-                    LOG_WARNING(log,
-                        "Raft data candidate path: "
-                            << kvstore_paths[i] << ". The path is overwritten by deprecated configuration for backward compatibility.");
-                }
-            }
-        }
-    }
-    else
-    {
-        // capacity
-        if (config().has("capacity"))
-        {
-            LOG_WARNING(log, "The configuration \"capacity\" is deprecated, use \"storage\" instead.");
-            // TODO: support human readable format for capacity, mark_cache_size, minmax_index_cache_size
-            // eg. 100GiB, 10MiB
-            String capacities = config().getString("capacity");
-            Poco::trimInPlace(capacities);
-            Poco::StringTokenizer string_tokens(capacities, ",");
-            size_t num_token = 0;
-            for (auto it = string_tokens.begin(); it != string_tokens.end(); ++it)
-            {
-                if (num_token == 0)
-                {
-                    const std::string & s = *it;
-                    global_capacity_quota = parse<size_t>(s.data(), s.size());
-                }
-                num_token++;
-            }
-            if (num_token != 1)
-                LOG_WARNING(log, "Only the first number in configuration \"capacity\" take effect");
-            LOG_INFO(log, "The capacity limit is: " + formatReadableSizeWithBinarySuffix(global_capacity_quota));
-        }
-
-        if (config().has("path"))
-        {
-            LOG_WARNING(log, "The configuration \"path\" is deprecated, use \"storage\" instead.");
-
-            String paths = config().getString("path");
-            Poco::trimInPlace(paths);
-            if (paths.empty())
-                throw Exception("The configuration \"path\" is empty! [path=" + config().getString("paths") + "]",
-                    ErrorCodes::INVALID_CONFIG_PARAMETER);
-            Poco::StringTokenizer string_tokens(paths, ",");
-            for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
-            {
-                all_normal_path.emplace_back(getNormalizedPath(*it));
-            }
-            // If you set `path_realtime_mode` to `true` and multiple directories are deployed in the path, the latest data is stored in the first directory and older data is stored in the rest directories.
-            bool path_realtime_mode = config().getBool("path_realtime_mode", false);
-            for (size_t i = 0; i < all_normal_path.size(); ++i)
-            {
-                const String p = Poco::Path{all_normal_path[i]}.toString();
-                // Only use the first path for storing latest data
-                if (i == 0)
-                    latest_data_paths.emplace_back(p);
-                if (path_realtime_mode)
-                {
-                    if (i != 0)
-                        main_data_paths.emplace_back(p);
-                }
-                else
-                {
-                    main_data_paths.emplace_back(p);
-                }
-            }
-
-            // kvstore_path
-            String str_kvstore_path;
-            if (config().has("raft.kvstore_path"))
-            {
-                LOG_WARNING(log, "The configuration \"raft.kvstore_path\" is deprecated, use \"storage\" instead.");
-                str_kvstore_path = config().getString("raft.kvstore_path");
-            }
-            else
-            {
-                str_kvstore_path = all_normal_path[0] + "/kvstore";
-            }
-            str_kvstore_path = getNormalizedPath(str_kvstore_path);
-            kvstore_paths.emplace_back(str_kvstore_path);
-
-            // logging
-            for (const auto & s : main_data_paths)
-                LOG_INFO(log, "Main data candidate path: " << s);
-            for (const auto & s : latest_data_paths)
-                LOG_INFO(log, "Latest data candidate path: " << s);
-            for (const auto & s : kvstore_paths)
-                LOG_INFO(log, "Raft data candidate path: " << s);
-        }
-        else
-        {
-            String msg = "The configuration \"storage\" is not defined. Please check your configuration file.";
-            LOG_ERROR(log, msg);
-            throw Exception(msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
-        }
-    }
-
-    global_context->initializePathCapacityMetric( //
-        global_capacity_quota,                    // will be ignored if `main_capacity_quota` is not empty
-        main_data_paths, storage_config.main_capacity_quota, latest_data_paths, storage_config.latest_capacity_quota);
+    global_context->initializePathCapacityMetric(                           //
+        global_capacity_quota,                                              // will be ignored if `main_capacity_quota` is not empty
+        storage_config.main_data_paths, storage_config.main_capacity_quota, //
+        storage_config.latest_data_paths, storage_config.latest_capacity_quota);
     TiFlashRaftConfig raft_config(config(), log);
-    global_context->setPathPool(main_data_paths, latest_data_paths, kvstore_paths, //
-        raft_config.enable_compatible_mode,                                        //
+    global_context->setPathPool(            //
+        storage_config.main_data_paths,     //
+        storage_config.latest_data_paths,   //
+        storage_config.kvstore_data_path,   //
+        raft_config.enable_compatible_mode, //
         global_context->getPathCapacity(), global_context->getFileProvider());
 
     // Use pd address to define which default_database we use by defauly.
     // For mock test, we use "default". For deployed with pd/tidb/tikv use "system", which is always exist in TiFlash.
     std::string default_database = config().getString("default_database", raft_config.pd_addrs.empty() ? "default" : "system");
+    Strings all_normal_path = storage_config.getAllNormalPaths();
     const std::string path = all_normal_path[0];
     global_context->setPath(path);
     global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
