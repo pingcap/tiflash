@@ -11,6 +11,7 @@
 #include <Poco/PatternFormatter.h>
 #include <Poco/SortedDirectoryIterator.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Common/UnifiedLogPatternFormatter.h>
 #include <gtest/gtest.h>
 
 namespace DB
@@ -83,7 +84,7 @@ public:
     static void setupLogger(const String & level = "trace")
     {
         Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(std::cerr);
-        Poco::AutoPtr<Poco::PatternFormatter> formatter(new Poco::PatternFormatter);
+        Poco::AutoPtr<UnifiedLogPatternFormatter> formatter(new UnifiedLogPatternFormatter());
         formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i [%I] <%p> %s: %t");
         Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
         Logger::root().setChannel(formatting_channel);

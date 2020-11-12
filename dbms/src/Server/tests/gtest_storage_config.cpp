@@ -28,7 +28,7 @@ try
         // Deprecated style
         R"(
 path="/data0/tiflash,/data1/tiflash,/data2/tiflash"
-path_realtime_mode = false # 默认值
+path_realtime_mode = false # default value
 )",
         // New style
         R"(
