@@ -281,7 +281,8 @@ private:
 
     void checkSegmentUpdate(const DMContextPtr & context, const SegmentPtr & segment, ThreadType thread_type);
 
-    SegmentSnapshotPtr createSegmentSnapshot(DMContext & dm_context, const SegmentPtr & segment, bool is_update);
+    std::pair<SegmentSnapshotPtr, SegmentSnapshotPtr>
+    createSegmentSnapshot(DMContext & dm_context, const SegmentPtr & left_segment, const SegmentPtr & right_segment, bool is_update);
 
     SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, SegmentSnapshotPtr segment_snap);
     void        segmentMerge(DMContext &        dm_context,

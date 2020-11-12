@@ -102,8 +102,6 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
       hash_salt(++DELTA_MERGE_STORE_HASH_SALT),
       log(&Logger::get("DeltaMergeStore[" + db_name + "." + table_name + "]"))
 {
-    LOG_INFO(log, "Restore DeltaMerge Store start [" << db_name << "." << table_name << "]");
-
     // restore existing dm files and set capacity for path_pool.
     restoreStableFiles();
 
@@ -131,6 +129,7 @@ DeltaMergeStore::~DeltaMergeStore()
 
 void DeltaMergeStore::restoreData()
 {
+    LOG_INFO(log, "Restore DeltaMerge Store start [" << db_name << "." << table_name << "]");
     auto dm_context = newDMContext(global_context, global_context.getSettingsRef());
 
     try
@@ -994,13 +993,23 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         try_place_delta_index();
 }
 
-SegmentSnapshotPtr DeltaMergeStore::createSegmentSnapshot(DMContext & dm_context, const SegmentPtr & segment, bool is_update)
+std::pair<SegmentSnapshotPtr, SegmentSnapshotPtr> DeltaMergeStore::createSegmentSnapshot(DMContext &        dm_context,
+                                                                                         const SegmentPtr & left_segment,
+                                                                                         const SegmentPtr & right_segment,
+                                                                                         bool               is_update)
 {
-    std::shared_lock lock(read_write_mutex);
-    if (!isSegmentValid(segment))
-        return {};
+    std::shared_lock   lock(read_write_mutex);
+    SegmentSnapshotPtr left_snap, right_snap;
+    if (left_segment && !isSegmentValid(left_segment))
+        left_snap = {};
+    else
+        left_snap = left_segment->createSnapshot(dm_context, /* is_update */ is_update);
+    if (right_segment && !isSegmentValid(right_segment))
+        right_snap = {};
+    else
+        right_snap = right_segment->createSnapshot(dm_context, /* is_update */ is_update);
 
-    return segment->createSnapshot(dm_context, /* is_update */ is_update);
+    return std::make_pair(left_snap, right_snap);
 }
 
 SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentPtr & segment, SegmentSnapshotPtr segment_snap)
@@ -1009,7 +1018,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 
     if (!segment_snap)
     {
-        segment_snap = createSegmentSnapshot(dm_context, segment, true);
+        std::tie(segment_snap, std::ignore) = createSegmentSnapshot(dm_context, segment, nullptr, true);
 
         if (!segment_snap)
         {
@@ -1109,8 +1118,7 @@ void DeltaMergeStore::segmentMerge(
 
     if (!left_snap || !right_snap)
     {
-        left_snap  = createSegmentSnapshot(dm_context, left, true);
-        right_snap = createSegmentSnapshot(dm_context, right, true);
+        std::tie(left_snap, right_snap) = createSegmentSnapshot(dm_context, left, right, true);
 
         if (!left_snap || !right_snap)
         {
@@ -1193,7 +1201,7 @@ DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const SegmentPtr & se
 
     if (!segment_snap)
     {
-        segment_snap = createSegmentSnapshot(dm_context, segment, true);
+        std::tie(segment_snap, std::ignore) = createSegmentSnapshot(dm_context, segment, nullptr, true);
 
         if (!segment_snap)
         {
