@@ -409,12 +409,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     }
 
-    size_t global_capacity_quota = 0; // "0" by default, means no quota, use the whole disk capacity.
+    // Deprecated settings.
+    // `global_capacity_quota` will be ignored if `storage_config.main_capacity_quota` is not empty.
+    // "0" by default, means no quota, the actual disk capacity is used.
+    size_t global_capacity_quota = 0;
     TiFlashStorageConfig storage_config;
     std::tie(global_capacity_quota, storage_config) = TiFlashStorageConfig::parseSettings(config(), log);
 
     global_context->initializePathCapacityMetric(                           //
-        global_capacity_quota,                                              // will be ignored if `main_capacity_quota` is not empty
+        global_capacity_quota,                                              //
         storage_config.main_data_paths, storage_config.main_capacity_quota, //
         storage_config.latest_data_paths, storage_config.latest_capacity_quota);
     TiFlashRaftConfig raft_config(config(), log);
