@@ -4,7 +4,7 @@
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LearnerRead.h>
 #include <Storages/Transaction/LockException.h>
-#include <Storages/Transaction/RegionException.h>
+#include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <common/ThreadPool.h>
 #include <common/likely.h>
@@ -28,10 +28,9 @@ RegionException::RegionReadStatus isValidRegion(const RegionQueryInfo & region_t
     if (region_in_mem->peerState() != raft_serverpb::PeerState::Normal)
         return RegionException::RegionReadStatus::NOT_FOUND;
 
-    const auto & [version, conf_ver, key_range] = region_in_mem->dumpVersionRange();
-    (void)key_range;
-    if (version != region_to_query.version || conf_ver != region_to_query.conf_version)
-        return RegionException::RegionReadStatus::VERSION_ERROR;
+    const auto & meta_snap = region_in_mem->dumpRegionMetaSnapshot();
+    if (meta_snap.ver != region_to_query.version || meta_snap.conf_ver != region_to_query.conf_version)
+        return RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
 
     return RegionException::RegionReadStatus::OK;
 }
@@ -85,7 +84,7 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
     auto metrics = tmt.getContext().getTiFlashMetrics();
     const size_t num_regions = regions_info.size();
     const size_t batch_size = num_regions / concurrent_num;
-    std::atomic_uint8_t region_status = RegionException::RegionReadStatus::OK;
+    std::atomic<RegionException::RegionReadStatus> region_status = RegionException::RegionReadStatus::OK;
     std::atomic_uint64_t unavailable_region{InvalidRegionID};
     const auto batch_wait_index = [&, resolve_locks, start_ts](const size_t region_begin_idx) -> void {
         const size_t region_end_idx = std::min(region_begin_idx + batch_size, num_regions);
@@ -119,19 +118,27 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
             /// otherwise the desired index will be blocked by the lock of data read.
             auto read_index_result = region->learnerRead(start_ts);
             GET_METRIC(metrics, tiflash_raft_read_index_duration_seconds).Observe(read_index_watch.elapsedSeconds());
-            if (read_index_result.region_unavailable)
+
+            switch (read_index_result.status)
             {
-                // client-c detect region removed. Set region_status and continue.
-                region_status = RegionException::RegionReadStatus::NOT_FOUND;
-                unavailable_region = region_id;
-                continue;
+                case RegionException::RegionReadStatus::NOT_FOUND:
+                {
+                    region_status = read_index_result.status;
+                    unavailable_region = region_id;
+                    continue;
+                }
+                case RegionException::RegionReadStatus::EPOCH_NOT_MATCH:
+                {
+                    region_status = read_index_result.status;
+                    continue;
+                }
+                case RegionException::RegionReadStatus::OK:
+                {
+                    break;
+                }
             }
-            else if (read_index_result.region_epoch_not_match)
-            {
-                region_status = RegionException::RegionReadStatus::VERSION_ERROR;
-                continue;
-            }
-            else if (read_index_result.lock_info)
+
+            if (read_index_result.lock_info)
             {
                 throw LockException(region->id(), std::move(read_index_result.lock_info));
                 continue;
@@ -188,7 +195,7 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
 
     // Check if any region is invalid, TiDB / TiSpark should refresh region cache and retry.
     if (region_status != RegionException::RegionReadStatus::OK)
-        throwRetryRegion(regions_info, static_cast<RegionException::RegionReadStatus>(region_status.load()), unavailable_region);
+        throwRetryRegion(regions_info, region_status, unavailable_region);
 
     auto end_time = Clock::now();
     LOG_DEBUG(log,
@@ -218,7 +225,7 @@ void validateQueryInfo(
         {
             // ABA problem may cause because one region is removed and inserted back.
             // if the version of region is changed, the `streams` may has less data because of compaction.
-            status = RegionException::RegionReadStatus::VERSION_ERROR;
+            status = RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
         }
 
         if (status != RegionException::RegionReadStatus::OK)

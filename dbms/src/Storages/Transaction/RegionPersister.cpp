@@ -133,7 +133,7 @@ DB::stable::PageStorage::Config getStablePSConfig(const PageStorage::Config & co
 }
 } // namespace
 
-RegionMap RegionPersister::restore(IndexReaderCreateFunc * func, PageStorage::Config config)
+RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, PageStorage::Config config)
 {
     {
         auto & path_pool = global_context.getPathPool();
@@ -171,7 +171,7 @@ RegionMap RegionPersister::restore(IndexReaderCreateFunc * func, PageStorage::Co
     {
         auto acceptor = [&](const Page & page) {
             ReadBufferFromMemory buf(page.data.begin(), page.data.size());
-            auto region = Region::deserialize(buf, func);
+            auto region = Region::deserialize(buf, proxy_helper);
             if (page.page_id != region->id())
                 throw Exception("region id and page id not match!", ErrorCodes::LOGICAL_ERROR);
             regions.emplace(page.page_id, region);
@@ -182,7 +182,7 @@ RegionMap RegionPersister::restore(IndexReaderCreateFunc * func, PageStorage::Co
     {
         auto acceptor = [&](const DB::stable::Page & page) {
             ReadBufferFromMemory buf(page.data.begin(), page.data.size());
-            auto region = Region::deserialize(buf, func);
+            auto region = Region::deserialize(buf, proxy_helper);
             if (page.page_id != region->id())
                 throw Exception("region id and page id not match!", ErrorCodes::LOGICAL_ERROR);
             regions.emplace(page.page_id, region);
