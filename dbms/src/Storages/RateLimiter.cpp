@@ -1,7 +1,26 @@
+#include <Common/TiFlashMetrics.h>
 #include <Storages/RateLimiter.h>
 
 namespace DB
 {
+
+RateLimiter::RateLimiter(
+    Context & db_context, Int64 balance_increase_rate_, Int64 alloc_balance_soft_limit_, Int64 alloc_balance_hard_limit_)
+    : context{db_context},
+      balance_increase_rate{balance_increase_rate_},
+      alloc_balance_soft_limit{alloc_balance_soft_limit_},
+      alloc_balance_hard_limit{alloc_balance_hard_limit_},
+      available_bytes{alloc_balance_hard_limit_},
+      prev_refilled_time{Clock::now()},
+      prev_alloc_time{Clock::now()},
+      prev_alloc_balance{0},
+      log{&Logger::get("RateLimiter")}
+{
+    LOG_INFO(log,
+        "Creating RateLimiter with balance increase rate: " << balance_increase_rate << " allocate soft limit: " << alloc_balance_soft_limit
+                                                            << " allocate hard limit: " << alloc_balance_hard_limit);
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_storage_rate_limiter_balance, type_rate_limiter_balance).Set(available_bytes);
+}
 
 size_t RateLimiter::request(Int64 bytes)
 {
@@ -27,6 +46,8 @@ size_t RateLimiter::request(Int64 bytes)
     }
     prev_alloc_time = current_time;
     prev_alloc_balance = prev_alloc_working_balance + alloc_bytes;
+
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_storage_rate_limiter_balance, type_rate_limiter_balance).Set(available_bytes);
 
     return bytes - alloc_bytes;
 }

@@ -5,7 +5,9 @@
 #include <memory>
 #include <mutex>
 
+#include <Interpreters/Context.h>
 #include <Storages/Transaction/Types.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -23,15 +25,7 @@ namespace DB
 class RateLimiter
 {
 public:
-    RateLimiter(Int64 balance_increase_rate_, Int64 alloc_balance_soft_limit_, Int64 alloc_balance_hard_limit_)
-        : balance_increase_rate{balance_increase_rate_},
-          alloc_balance_soft_limit{alloc_balance_soft_limit_},
-          alloc_balance_hard_limit{alloc_balance_hard_limit_},
-          available_bytes{alloc_balance_hard_limit_},
-          prev_refilled_time{Clock::now()},
-          prev_alloc_time{Clock::now()},
-          prev_alloc_balance{0}
-    {}
+    RateLimiter(Context & db_context, Int64 balance_increase_rate_, Int64 alloc_balance_soft_limit_, Int64 alloc_balance_hard_limit_);
 
     // clients try to request balance through this method
     // it return `bytes` - <allocated_bytes>
@@ -45,6 +39,8 @@ private:
     void refillIfNeed();
 
 private:
+    Context & context;
+
     Int64 balance_increase_rate;
 
     Int64 alloc_balance_soft_limit;
@@ -55,6 +51,8 @@ private:
 
     Timepoint prev_alloc_time;
     Int64 prev_alloc_balance;
+
+    Logger * log;
 
     std::mutex mutex;
 };

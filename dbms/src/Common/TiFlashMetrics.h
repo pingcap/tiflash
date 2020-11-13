@@ -99,6 +99,11 @@ namespace DB
         F(type_low_write, {"type", "low_write"}))                                                                                         \
     M(tiflash_storage_page_gc_duration_seconds, "Bucketed histogram of page's gc task duration", Histogram,                               \
         F(type_exec, {{"type", "exec"}}, ExpBuckets{0.0005, 2, 20}), F(type_migrate, {{"type", "migrate"}}, ExpBuckets{0.0005, 2, 20}))   \
+    M(tiflash_storage_rate_limiter_balance, "RateLimiter balance", Gauge,                                                                 \
+        F(type_rate_limiter_balance, {{"type", "rate_limiter_balance"}}))                                                                 \
+    M(tiflash_storage_delta_merage_task_num, "Background task num in delta merge task pool", Gauge,                                       \
+        F(type_high_priority_task_num, {{"type", "high_priority_task_num"}}),                                                             \
+        F(type_low_priority_task_num, {{"type", "low_priority_task_num"}}))                                                               \
     M(tiflash_raft_command_duration_seconds, "Bucketed histogram of some raft command: apply snapshot",                                   \
         Histogram, /* these command usually cost servel seconds, increase the start bucket to 50ms */                                     \
         F(type_ingest_sst, {{"type", "ingest_sst"}}, ExpBuckets{0.05, 2, 10}),                                                            \
