@@ -18,6 +18,11 @@ error = '''
 TiFlash Coprocessor internal error.
 '''
 
+["FLASH:Coprocessor:MemoryLimitExceeded"]
+error = '''
+TiFlash memory limit exceeded.
+'''
+
 ["FLASH:Coprocessor:Unimplemented"]
 error = '''
 Some features are unimplemented.
