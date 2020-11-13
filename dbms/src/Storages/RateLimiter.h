@@ -10,6 +10,14 @@
 namespace DB
 {
 
+// RateLimiter is to control write rate of background tasks of StorageDeltaMerge
+// `max_rate_bytes_balance` TODO: meaning
+//
+// `request()` is the main interface used by clients.
+// It receives the task size as the parameter,
+// and return the remaining task size after allocate balance to it.
+// If the remaining task size is 0, then this task can be processed by clients.
+// Otherwise, this task must be hang up and request balance later.
 class RateLimiter
 {
 public:

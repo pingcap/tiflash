@@ -70,9 +70,18 @@ void DeltaMergeTaskPool::removeAllTasksForStore(DeltaMergeStorePtr store)
 
 bool DeltaMergeTaskPool::handleBackgroundTask()
 {
+    // try handle task from high_priority_queue first
     bool res = handleTaskImpl(true);
+    // if no task from high_priority_queue can be handled, try handle task from low_priority_queue
     if (!res)
         res = handleTaskImpl(false);
+    // if no task from low_priority_queue can be handled,
+    // return true when low_priority_tasks is not empty(meaning there is other task that can be handled)
+    if (!res)
+    {
+        std::scoped_lock lock{mutex};
+        return !low_priority_tasks.empty();
+    }
     return res;
 }
 
@@ -111,14 +120,14 @@ bool DeltaMergeTaskPool::handleTaskImpl(bool high_priority)
     {
         std::scoped_lock lock{task->task_mutex};
         if (task->finished)
-        {
             return true;
-        }
 
         if (!tryPrepareTask(task))
         {
-            putTaskBackToHighPriorityQueue(task);
-            return !high_priority && !low_priority_tasks.empty();
+            // if this task is taken from high_priority_queue, we should put this task back to the head
+            // otherwise append it to high_priority_queue
+            addTaskToHighPriorityQueue(task, /* front */ high_priority);
+            return false;
         }
 
         SegmentPtr left, right;
@@ -149,26 +158,20 @@ bool DeltaMergeTaskPool::handleTaskImpl(bool high_priority)
                 }
                 break;
             case Compact:
-            {
                 task->segment->compactDelta(*task->dm_context);
                 left = task->segment;
                 type = ThreadType::BG_Compact;
                 break;
-            }
             case Flush:
-            {
                 task->segment->flushCache(*task->dm_context);
                 // After flush cache, better place delta index.
                 task->segment->placeDeltaIndex(*task->dm_context);
                 left = task->segment;
                 type = ThreadType::BG_Flush;
                 break;
-            }
             case PlaceIndex:
-            {
                 task->segment->placeDeltaIndex(*task->dm_context);
                 break;
-            }
             default:
                 throw Exception("Unsupported task type: " + toString(task->type));
             }
@@ -217,15 +220,18 @@ DeltaMergeTaskPool::BackgroundTaskHandle DeltaMergeTaskPool::nextTask(bool high_
     return task;
 }
 
-void DeltaMergeTaskPool::putTaskBackToHighPriorityQueue(DeltaMergeTaskPool::BackgroundTaskHandle & task)
+void DeltaMergeTaskPool::addTaskToHighPriorityQueue(BackgroundTaskHandle & task, bool front)
 {
     LOG_DEBUG(log,
               "Database: [" << task->store->getDatabaseName() << "] Table: [" << task->store->getTableName() << "] Segment ["
                             << task->segment->segmentId() << "] task [" << toString(task->type) << "] remaining task size ["
-                            << task->task_size << "] put back to background task pool");
+                            << task->task_size << "] add to background task pool " << (front ? "head" : "tail"));
     std::scoped_lock lock{mutex};
     processing_tasks.erase(task);
-    high_priority_tasks.push_front(task);
+    if (front)
+        high_priority_tasks.push_front(task);
+    else
+        high_priority_tasks.push_back(task);
 }
 
 bool DeltaMergeTaskPool::tryPrepareTask(DeltaMergeTaskPool::BackgroundTaskHandle & task)

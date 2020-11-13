@@ -118,7 +118,7 @@ private:
 
     BackgroundTaskHandle nextTask(bool high_priority);
 
-    void putTaskBackToHighPriorityQueue(BackgroundTaskHandle & task);
+    void addTaskToHighPriorityQueue(BackgroundTaskHandle & task, bool front);
 
     bool tryPrepareTask(BackgroundTaskHandle & task);
 
