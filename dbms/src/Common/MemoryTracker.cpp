@@ -7,16 +7,6 @@
 
 #include <Common/MemoryTracker.h>
 
-
-namespace DB
-{
-    namespace ErrorCodes
-    {
-        extern const int MEMORY_LIMIT_EXCEEDED;
-    }
-}
-
-
 MemoryTracker::~MemoryTracker()
 {
     if (peak)
@@ -81,7 +71,7 @@ void MemoryTracker::alloc(Int64 size)
             << " (attempt to allocate chunk of " << size << " bytes)"
             << ", maximum: " << formatReadableSizeWithBinarySuffix(current_limit);
 
-        throw DB::Exception(message.str(), DB::ErrorCodes::MEMORY_LIMIT_EXCEEDED);
+        throw DB::TiFlashException(message.str(), DB::Errors::Coprocessor::MemoryLimitExceeded);
     }
 
     if (unlikely(current_limit && will_be > current_limit))
@@ -96,7 +86,7 @@ void MemoryTracker::alloc(Int64 size)
             << " (attempt to allocate chunk of " << size << " bytes)"
             << ", maximum: " << formatReadableSizeWithBinarySuffix(current_limit);
 
-        throw DB::Exception(message.str(), DB::ErrorCodes::MEMORY_LIMIT_EXCEEDED);
+        throw DB::TiFlashException(message.str(), DB::Errors::Coprocessor::MemoryLimitExceeded);
     }
 
     if (will_be > peak.load(std::memory_order_relaxed))        /// Races doesn't matter. Could rewrite with CAS, but not worth.
