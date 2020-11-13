@@ -91,8 +91,8 @@ try
 
     size_t          number_of_paths = GetParam();
     auto            all_paths       = getMultiTestPaths(number_of_paths);
-    auto            capacity        = std::make_shared<PathCapacityMetrics>(all_paths, 0);
-    StoragePathPool pool            = PathPool(all_paths, all_paths, Strings{}, capacity, file_provider).withTable("test", "table", false);
+    auto            capacity = std::make_shared<PathCapacityMetrics>(0, all_paths, std::vector<size_t>{}, Strings{}, std::vector<size_t>{});
+    StoragePathPool pool     = PathPool(all_paths, all_paths, Strings{}, capacity, file_provider).withTable("test", "table", false);
 
     storage = std::make_shared<PageStorage>("test.table", pool.getPSDiskDelegatorMulti("log"), config, file_provider);
     storage->restore();
