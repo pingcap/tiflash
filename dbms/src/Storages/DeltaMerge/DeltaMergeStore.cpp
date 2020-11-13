@@ -207,7 +207,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
     };
     storage_pool.data().registerExternalPagesCallbacks(dmfile_scanner, dmfile_remover);
 
-    gc_handle = background_pool.addTask([this] { return storage_pool.gc(); });
+    gc_handle = background_pool.addTask([this] { return storage_pool.gc(); }, /*multi=*/false);
 
     // Do place delta index.
     for (auto & [end, segment] : segments)
