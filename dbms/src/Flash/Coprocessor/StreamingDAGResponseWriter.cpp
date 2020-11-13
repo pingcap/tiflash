@@ -130,8 +130,8 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
 {
     /// todo find a way to avoid copying input_blocks
     return [this, input_blocks, response]() mutable {
-        std::vector<std::unique_ptr<ChunkCodecStream> > chunk_codec_stream;
-        std::vector<tipb::SelectResponse> responses;
+        std::vector<std::unique_ptr<ChunkCodecStream> > chunk_codec_stream(partition_num);
+        std::vector<tipb::SelectResponse> responses(partition_num);
         for(auto i=0; i < partition_num ; ++i) {
             if (encode_type == tipb::EncodeType::TypeDefault) {
                 chunk_codec_stream[i] = std::make_unique<DefaultChunkCodec>()->newCodecStream(result_field_types);
@@ -155,6 +155,7 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
             std::vector<MutableColumns>dest_tbl_cols(partition_num);
             for(auto i=0;i<partition_num;++i) {
                 dest_tbl_cols[i]= block.cloneEmptyColumns();
+                dest_blocks[i] = block.cloneEmpty();
             }
             size_t rows = block.rows();
             // get partition key column ids
