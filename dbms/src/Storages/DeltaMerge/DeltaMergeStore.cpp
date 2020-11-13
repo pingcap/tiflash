@@ -1000,11 +1000,11 @@ std::pair<SegmentSnapshotPtr, SegmentSnapshotPtr> DeltaMergeStore::createSegment
 {
     std::shared_lock   lock(read_write_mutex);
     SegmentSnapshotPtr left_snap, right_snap;
-    if (left_segment && !isSegmentValid(left_segment))
+    if (!left_segment || !isSegmentValid(left_segment))
         left_snap = {};
     else
         left_snap = left_segment->createSnapshot(dm_context, /* is_update */ is_update);
-    if (right_segment && !isSegmentValid(right_segment))
+    if (!right_segment || !isSegmentValid(right_segment))
         right_snap = {};
     else
         right_snap = right_segment->createSnapshot(dm_context, /* is_update */ is_update);

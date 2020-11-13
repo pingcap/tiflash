@@ -248,7 +248,7 @@ bool DeltaMergeTaskPool::tryPrepareTask(DeltaMergeTaskPool::BackgroundTaskHandle
     switch (task->type)
     {
     case Split:
-        std::tie(task->snapshot, std::ignore) = task->store->createSegmentSnapshot(*task->dm_context, task->segment, nullptr, true);
+        std::tie(task->snapshot, std::ignore) = task->store->createSegmentSnapshot(*task->dm_context, task->segment, {}, true);
         if (!task->snapshot)
         {
             LOG_DEBUG(log,
@@ -278,7 +278,7 @@ bool DeltaMergeTaskPool::tryPrepareTask(DeltaMergeTaskPool::BackgroundTaskHandle
         task->task_size = task->snapshot->getBytes() + task->next_snapshot->getBytes();
         return try_request_balance(task);
     case MergeDelta:
-        std::tie(task->snapshot, std::ignore) = task->store->createSegmentSnapshot(*task->dm_context, task->segment, nullptr, true);
+        std::tie(task->snapshot, std::ignore) = task->store->createSegmentSnapshot(*task->dm_context, task->segment, {}, true);
         if (!task->snapshot)
         {
             LOG_DEBUG(log,
