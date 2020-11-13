@@ -75,7 +75,7 @@ private:
     using Threads = std::vector<std::thread>;
 
     const size_t size;
-    static constexpr double sleep_seconds = 10;
+    static constexpr double sleep_seconds = 2;
     static constexpr double sleep_seconds_random_part = 1.0;
 
     Tasks tasks;         /// Ordered in priority.
