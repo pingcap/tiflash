@@ -221,7 +221,8 @@ void DeltaMergeTaskPool::putTaskBackToHighPriorityQueue(DeltaMergeTaskPool::Back
 {
     LOG_DEBUG(log,
               "Database: [" << task->store->getDatabaseName() << "] Table: [" << task->store->getTableName() << "] Segment ["
-                            << task->segment->segmentId() << "] task [" << toString(task->type) << "] put back to background task pool");
+                            << task->segment->segmentId() << "] task [" << toString(task->type) << "] remaining task size ["
+                            << task->task_size << "] put back to background task pool");
     std::scoped_lock lock{mutex};
     processing_tasks.erase(task);
     high_priority_tasks.push_front(task);
