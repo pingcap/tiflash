@@ -45,12 +45,12 @@ public:
         const Strings & main_data_paths, const Strings & latest_data_paths,      //
         const Strings & kvstore_paths,                                           //
         PathCapacityMetricsPtr global_capacity_, FileProviderPtr file_provider_, //
-        bool enable_raft_compatibility_mode_ = false);
+        bool enable_raft_compatible_mode_ = false);
 
     // Constructor to create PathPool for one Storage
     StoragePathPool withTable(const String & database_, const String & table_, bool path_need_database_name_) const;
 
-    bool isRaftCompatibilityModeEnabled() const { return enable_raft_compatibility_mode; }
+    bool isRaftCompatibleModeEnabled() const { return enable_raft_compatible_mode; }
 
     // Generate a delegator for managing the paths of `RegionPersister`.
     // Those paths are generated from `kvstore_paths`.
@@ -78,7 +78,7 @@ private:
     Strings latest_data_paths;
     Strings kvstore_paths;
 
-    bool enable_raft_compatibility_mode;
+    bool enable_raft_compatible_mode;
 
     PathCapacityMetricsPtr global_capacity;
 
@@ -204,7 +204,6 @@ private:
     struct RaftPathInfo
     {
         String path;
-        size_t total_size; // total used bytes
     };
     using RaftPathInfos = std::vector<RaftPathInfo>;
 
@@ -255,14 +254,13 @@ private:
     struct MainPathInfo
     {
         String path;
-        size_t total_size; // total used bytes
+        // DMFileID -> file size
         std::unordered_map<UInt64, size_t> file_size_map;
     };
     using MainPathInfos = std::vector<MainPathInfo>;
     struct LatestPathInfo
     {
         String path;
-        size_t total_size; // total used bytes
     };
     using LatestPathInfos = std::vector<LatestPathInfo>;
 
@@ -281,7 +279,7 @@ private:
     String table;
 
     // Note that we keep an assumption that the size of `main_path_infos` and `latest_path_infos` won't be changed during the whole runtime.
-    // This mutex mainly used to protect the `dt_file_path_map` , `page_path_map` and `total_size` of each path.
+    // This mutex mainly used to protect the `dt_file_path_map` , `page_path_map` of each path.
     mutable std::mutex mutex;
 
     bool path_need_database_name = false;

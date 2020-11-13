@@ -26,6 +26,7 @@ add_library (clickhouse-server-lib
     Server.cpp
     StatusFile.cpp
     TCPHandler.cpp
+    StorageConfigParser.cpp
     ClusterManagerService.cpp)
 
 set(TIFLASH_PROXY_LIB_PATH ${ClickHouse_SOURCE_DIR}/libs/libtiflash-proxy)
