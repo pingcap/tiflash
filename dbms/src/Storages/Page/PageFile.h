@@ -132,7 +132,7 @@ public:
     public:
         bool hasNext() const;
 
-        void moveNext();
+        void moveNext(PageFile::Version * v = nullptr);
 
         PageEntriesEdit getEdits() { return std::move(curr_edit); }
 

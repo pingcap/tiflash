@@ -18,10 +18,11 @@ namespace DB
 ///
 /// Example:
 ///   C(Foo, E(Bar, "Blabla", "Do nothing", "Bar error"); E(Baz, "Abaaba", "Do something", "Baz error");)
-/// 
+///
 /// Notice:
 ///   - Use clang-format to format your code
-///   - Use semicolon(;) to split errors 
+///   - Use semicolon(;) to split errors
+///   - After adding an error, please execute `tiflash errgen <tics-dir>/errors.toml`
 #define ERROR_CLASS_LIST                                                                                                    \
     C(PageStorage,                                                                                                          \
         E(FileSizeNotMatch, "Some files' size don't match their metadata.",                                                 \
@@ -29,10 +30,10 @@ namespace DB
             "better providing information about your cluster(log, topology information etc.).",                             \
             "");)                                                                                                           \
     C(DeltaTree,                                                                                                            \
-        E(Internal, "DeltaTree internal error.",                                                                          \
-                "Please contact with developer, \n"                                                                             \
-                "better providing information about your cluster(log, topology information etc.).",                             \
-                "");)                                                                                                            \
+        E(Internal, "DeltaTree internal error.",                                                                            \
+            "Please contact with developer, \n"                                                                             \
+            "better providing information about your cluster(log, topology information etc.).",                             \
+            "");)                                                                                                           \
     C(DDL,                                                                                                                  \
         E(MissingTable, "Table information is missing in TiFlash or TiKV.",                                                 \
             "This error will occur when there is difference of schema infomation between TiKV and TiFlash, \n"              \
@@ -70,7 +71,9 @@ namespace DB
         E(Internal, "TiFlash Coprocessor internal error.",                                                                  \
             "Please contact with developer, \n"                                                                             \
             "better providing information about your cluster(log, topology information etc.).",                             \
-            "");)                                                                                                           \
+            "");                                                                                                            \
+        E(MemoryLimitExceeded, "TiFlash memory limit exceeded.",                                                            \
+            "Please modify the config parameters 'max_memory_usage' and 'max_memory_usage_for_all_queries'.", "");)         \
     C(Table,                                                                                                                \
         E(SchemaVersionError, "Schema version of target table in TiFlash is different from that in query.",                 \
             "TiFlash will sync the newest schema from TiDB before processing every query. \n"                               \

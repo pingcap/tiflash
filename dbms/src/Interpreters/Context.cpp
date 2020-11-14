@@ -124,7 +124,7 @@ struct ContextShared
     String tmp_path;                                        /// The path to the temporary files that occur when processing the request.
     String flags_path;                                      /// Path to the directory with some control flags for server maintenance.
     String user_files_path;                                 /// Path to the directory with user provided files, usable by 'file' table function.
-    PathPool extra_paths;                                   /// The extra data directories. Some Storage Engine like DeltaMerge will store the main data in them if specified.
+    PathPool path_pool;                                     /// The data directories. RegionPersister and some Storage Engine like DeltaMerge will use this to manage data placement on disks.
     ConfigurationPtr config;                                /// Global configuration settings.
 
     Databases databases;                                    /// List of databases and tables in them.
@@ -515,10 +515,10 @@ String Context::getUserFilesPath() const
     return shared->user_files_path;
 }
 
-PathPool & Context::getExtraPaths() const
+PathPool & Context::getPathPool() const
 {
     auto lock = getLock();
-    return shared->extra_paths;
+    return shared->path_pool;
 }
 
 void Context::setPath(const String & path)
@@ -555,13 +555,17 @@ void Context::setUserFilesPath(const String & path)
     shared->user_files_path = path;
 }
 
-void Context::setExtraPaths(const Strings & main_data_paths,
+void Context::setPathPool( //
+    const Strings & main_data_paths,
     const Strings & latest_data_paths,
+    const Strings & kvstore_paths,
+    bool enable_raft_compatible_mode,
     PathCapacityMetricsPtr global_capacity_,
     FileProviderPtr file_provider_)
 {
     auto lock = getLock();
-    shared->extra_paths = PathPool(main_data_paths, latest_data_paths, global_capacity_, file_provider_);
+    shared->path_pool = PathPool(
+        main_data_paths, latest_data_paths, kvstore_paths, global_capacity_, file_provider_, enable_raft_compatible_mode);
 }
 
 void Context::setConfig(const ConfigurationPtr & config)
@@ -1449,7 +1453,6 @@ DDLWorker & Context::getDDLWorker() const
 
 void Context::createTMTContext(const std::vector<std::string> & pd_addrs,
                                const std::unordered_set<std::string> & ignore_databases,
-                               const std::string & kvstore_path,
                                ::TiDB::StorageEngine engine,
                                bool disable_bg_flush,
                                pingcap::ClusterConfig cluster_config)
@@ -1457,15 +1460,19 @@ void Context::createTMTContext(const std::vector<std::string> & pd_addrs,
     auto lock = getLock();
     if (shared->tmt_context)
         throw Exception("TMTContext has already existed", ErrorCodes::LOGICAL_ERROR);
-    shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, ignore_databases, kvstore_path, engine, disable_bg_flush, cluster_config);
+    shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, ignore_databases, engine, disable_bg_flush, cluster_config);
 }
 
-void Context::initializePathCapacityMetric(const std::vector<std::string> & all_path, size_t capacity_quota)
+void Context::initializePathCapacityMetric(                                           //
+    size_t global_capacity_quota,                                                     //
+    const Strings & main_data_paths, const std::vector<size_t> & main_capacity_quota, //
+    const Strings & latest_data_paths, const std::vector<size_t> & latest_capacity_quota)
 {
     auto lock = getLock();
     if (shared->path_capacity_ptr)
         throw Exception("PathCapacityMetrics instance has already existed", ErrorCodes::LOGICAL_ERROR);
-    shared->path_capacity_ptr = std::make_shared<PathCapacityMetrics>(all_path, capacity_quota);
+    shared->path_capacity_ptr = std::make_shared<PathCapacityMetrics>(
+        global_capacity_quota, main_data_paths, main_capacity_quota, latest_data_paths, latest_capacity_quota);
 }
 
 PathCapacityMetricsPtr Context::getPathCapacity() const
@@ -1943,6 +1950,4 @@ void SessionCleaner::run()
             break;
     }
 }
-
-
 }

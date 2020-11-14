@@ -11,6 +11,7 @@
 #include <Poco/PatternFormatter.h>
 #include <Poco/SortedDirectoryIterator.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Common/UnifiedLogPatternFormatter.h>
 #include <gtest/gtest.h>
 
 namespace DB
@@ -69,7 +70,7 @@ class TiFlashTestEnv
 public:
     static String getTemporaryPath() { return Poco::Path("./tmp/").absolute().toString(); }
 
-    static std::pair<Strings, Strings> getExtraPaths(const Strings & testdata_path = {})
+    static std::pair<Strings, Strings> getPathPool(const Strings & testdata_path = {})
     {
         Strings result;
         if (!testdata_path.empty())
@@ -83,7 +84,7 @@ public:
     static void setupLogger(const String & level = "trace")
     {
         Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(std::cerr);
-        Poco::AutoPtr<Poco::PatternFormatter> formatter(new Poco::PatternFormatter);
+        Poco::AutoPtr<UnifiedLogPatternFormatter> formatter(new UnifiedLogPatternFormatter());
         formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i [%I] <%p> %s: %t");
         Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
         Logger::root().setChannel(formatting_channel);
@@ -113,7 +114,7 @@ public:
         throw Exception("Can not find testdata with name[" + name + "]");
     }
 
-    static Context & getContext(const DB::Settings & settings = DB::Settings(), std::vector<String> testdata_path = {})
+    static Context & getContext(const DB::Settings & settings = DB::Settings(), Strings testdata_path = {})
     {
         static Context context = DB::Context::createGlobal();
         // Load `testdata_path` as path if it is set.
@@ -125,6 +126,8 @@ public:
         try
         {
             context.getTMTContext();
+            auto paths = getPathPool(testdata_path);
+            context.setPathPool(paths.first, paths.second, Strings{}, true, context.getPathCapacity(), context.getFileProvider());
         }
         catch (Exception & e)
         {
@@ -136,17 +139,22 @@ public:
             KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
             context.initializeFileProvider(key_manager, false);
 
+            // Theses global variables should be initialized by the following order
+            // 1. capacity
+            // 2. path pool
+            // 3. TMTContext
+
             // FIXME: These paths are only set at the first time
             if (testdata_path.empty())
                 testdata_path.emplace_back(getTemporaryPath());
-            context.initializePathCapacityMetric(testdata_path, 0);
-            context.createTMTContext({}, {"default"}, root_path + "/kvstore", TiDB::StorageEngine::TMT, false);
+            context.initializePathCapacityMetric(0, testdata_path, {}, {}, {});
+            auto paths = getPathPool(testdata_path);
+            context.setPathPool(paths.first, paths.second, Strings{}, true, context.getPathCapacity(), context.getFileProvider());
+            context.createTMTContext({}, {"default"}, TiDB::StorageEngine::TMT, false);
 
             context.getTMTContext().restore();
         }
         context.getSettingsRef() = settings;
-        auto paths = getExtraPaths(testdata_path);
-        context.setExtraPaths(paths.first, paths.second, context.getPathCapacity(), context.getFileProvider());
         return context;
     }
 };
