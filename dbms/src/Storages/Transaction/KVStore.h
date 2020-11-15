@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Storages/Transaction/IndexReaderCreate.h>
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/RegionPersister.h>
@@ -36,12 +35,15 @@ struct WriteCmdsView;
 
 enum class TiFlashApplyRes : uint32_t;
 
+struct TiFlashRaftProxyHelper;
+
 /// TODO: brief design document.
 class KVStore final : private boost::noncopyable
 {
 public:
     KVStore(Context & context);
-    void restore(const IndexReaderCreateFunc & index_reader_create);
+    void restore(const TiFlashRaftProxyHelper *);
+
     RegionPtr getRegion(const RegionID region_id) const;
 
     using RegionRange = std::pair<TiKVRangeKey, TiKVRangeKey>;
@@ -75,8 +77,8 @@ public:
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
     void setRegionCompactLogPeriod(Seconds period);
     TiFlashApplyRes handleIngestSST(UInt64 region_id, const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt);
-    RegionPtr preHandleSnapshot(
-        metapb::Region && region, UInt64 peer_id, const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt);
+    void preHandleSnapshot(RegionPtr new_region, const SnapshotViewArray snaps, TMTContext & tmt);
+    RegionPtr genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
 
 private:
     friend class MockTiDB;
@@ -125,6 +127,8 @@ private:
 
     mutable std::mutex bg_gc_region_data_mutex;
     std::list<RegionDataReadInfoList> bg_gc_region_data;
+
+    const TiFlashRaftProxyHelper * proxy_helper{nullptr};
 };
 
 /// Encapsulation of lock guard of task mutex in KVStore

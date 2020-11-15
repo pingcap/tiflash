@@ -2,10 +2,9 @@
 #include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/PDTiKVClient.h>
 #include <Storages/Transaction/ProxyFFIType.h>
-#include <Storages/Transaction/RaftCommandResult.h>
 #include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
@@ -70,13 +69,7 @@ UInt64 Region::appliedIndex() const { return meta.appliedIndex(); }
 
 RegionPtr Region::splitInto(RegionMeta && meta)
 {
-    RegionPtr new_region;
-    if (index_reader != nullptr)
-    {
-        new_region = std::make_shared<Region>(std::move(meta), [&]() { return std::make_shared<IndexReader>(index_reader->cluster); });
-    }
-    else
-        new_region = std::make_shared<Region>(std::move(meta));
+    RegionPtr new_region = std::make_shared<Region>(std::move(meta), proxy_helper);
 
     const auto range = new_region->getRange();
     data.splitInto(range->comparableKeys(), new_region->data);
@@ -96,7 +89,7 @@ void RegionRaftCommandDelegate::execChangePeer(
     LOG_INFO(log, "After execute change peer cmd, current region info: "; getDebugString(oss_internal_rare));
 }
 
-static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 store_id)
+static const metapb::Peer & findPeerByStore(const metapb::Region & region, UInt64 store_id)
 {
     for (const auto & peer : region.peers())
     {
@@ -127,7 +120,7 @@ Regions RegionRaftCommandDelegate::execBatchSplit(
             const auto & region_info = new_region_infos[i];
             if (region_info.id() != meta.regionId())
             {
-                const auto & peer = findPeer(region_info, meta.storeId());
+                const auto & peer = findPeerByStore(region_info, meta.storeId());
                 RegionMeta new_meta(peer, region_info, initialApplyState());
                 auto split_region = splitInto(std::move(new_meta));
                 split_regions.emplace_back(split_region);
@@ -350,7 +343,7 @@ std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
     return {total_size, applied_index};
 }
 
-RegionPtr Region::deserialize(ReadBuffer & buf, const IndexReaderCreateFunc * index_reader_create)
+RegionPtr Region::deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper)
 {
     auto version = readBinary2<UInt32>(buf);
     if (version != Region::CURRENT_VERSION)
@@ -359,8 +352,7 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const IndexReaderCreateFunc * in
             ErrorCodes::UNKNOWN_FORMAT_VERSION);
 
     auto meta = RegionMeta::deserialize(buf);
-    auto region = index_reader_create == nullptr ? std::make_shared<Region>(std::move(meta))
-                                                 : std::make_shared<Region>(std::move(meta), *index_reader_create);
+    auto region = std::make_shared<Region>(std::move(meta), proxy_helper);
 
     RegionData::deserialize(buf, region->data);
     return region;
@@ -371,10 +363,9 @@ std::string Region::getDebugString(std::stringstream & ss) const
     ss << "{region " << id();
     {
         UInt64 index = meta.appliedIndex();
-        const auto & [ver, conf_ver, range] = meta.dumpVersionRange();
-        std::ignore = range;
-        ss << ", index " << index << ", table " << mapped_table_id << ", ver " << ver << " conf_ver " << conf_ver << ", state "
-           << raft_serverpb::PeerState_Name(peerState());
+        const auto & meta_snap = meta.dumpRegionMetaSnapshot();
+        ss << ", index " << index << ", table " << mapped_table_id << ", ver " << meta_snap.ver << " conf_ver " << meta_snap.conf_ver
+           << ", state " << raft_serverpb::PeerState_Name(peerState()) << ", peer " << meta_snap.peer.ShortDebugString();
     }
     ss << "}";
     return ss.str();
@@ -439,20 +430,55 @@ std::string Region::toString(bool dump_status) const { return meta.toString(dump
 
 ImutRegionRangePtr Region::getRange() const { return meta.getRange(); }
 
+ReadIndexResult::ReadIndexResult(RegionException::RegionReadStatus status_, UInt64 read_index_, kvrpcpb::LockInfo * lock_info_)
+    : status(status_), read_index(read_index_), lock_info(lock_info_)
+{}
+
 ReadIndexResult Region::learnerRead(UInt64 start_ts)
 {
-    if (index_reader != nullptr)
+    if (proxy_helper != nullptr)
     {
-        auto [version, conf_ver, range] = dumpVersionRange();
-        return index_reader->getReadIndex(
-            {id(), conf_ver, version}, *range->rawKeys().first, *range->rawKeys().second, start_ts, meta.storeId());
+        auto meta_snap = dumpRegionMetaSnapshot();
+        kvrpcpb::ReadIndexRequest request;
+        {
+            auto context = request.mutable_context();
+            context->set_region_id(id());
+            *context->mutable_peer() = meta_snap.peer;
+            context->mutable_region_epoch()->set_version(meta_snap.ver);
+            context->mutable_region_epoch()->set_conf_ver(meta_snap.conf_ver);
+            // if start_ts is 0, only send read index request to proxy
+            if (start_ts)
+            {
+                request.set_start_ts(start_ts);
+                auto key_range = request.add_ranges();
+                key_range->set_start_key(*meta_snap.range->rawKeys().first);
+                key_range->set_end_key(*meta_snap.range->rawKeys().second);
+            }
+        }
+        auto response = proxy_helper->readIndex(request);
+        LOG_TRACE(log,
+            toString(false) << " send ReadIndexRequest { " << request.context().ShortDebugString() << " start_ts: " << start_ts << " }"
+                            << ", got ReadIndexResponse { " << response.ShortDebugString() << " }");
+
+        if (!start_ts)
+            return {};
+
+        if (response.has_region_error())
+        {
+            auto & region_error = response.region_error();
+            LOG_WARNING(log, toString(false) << " find error during ReadIndex: " << region_error.message());
+            auto status = region_error.has_epoch_not_match() ? RegionException::RegionReadStatus::EPOCH_NOT_MATCH
+                                                             : RegionException::RegionReadStatus::NOT_FOUND;
+            return ReadIndexResult(status);
+        }
+        return ReadIndexResult(RegionException::RegionReadStatus::OK, response.read_index(), response.release_locked());
     }
     return {};
 }
 
 TerminateWaitIndex Region::waitIndex(UInt64 index, const std::atomic_bool & terminated)
 {
-    if (index_reader != nullptr)
+    if (proxy_helper != nullptr)
     {
         if (!meta.checkIndex(index))
         {
@@ -700,15 +726,12 @@ RegionRaftCommandDelegate & Region::makeRaftCommandDelegate(const KVStoreTaskLoc
     return static_cast<RegionRaftCommandDelegate &>(*this);
 }
 
-std::tuple<RegionVersion, RegionVersion, ImutRegionRangePtr> Region::dumpVersionRange() const { return meta.dumpVersionRange(); }
+RegionMetaSnapshot Region::dumpRegionMetaSnapshot() const { return meta.dumpRegionMetaSnapshot(); }
 
-Region::Region(RegionMeta && meta_) : Region(std::move(meta_), []() { return nullptr; }) {}
+Region::Region(RegionMeta && meta_) : Region(std::move(meta_), nullptr) {}
 
-Region::Region(DB::RegionMeta && meta_, const DB::IndexReaderCreateFunc & index_reader_create)
-    : meta(std::move(meta_)),
-      index_reader(index_reader_create()),
-      log(&Logger::get(log_name)),
-      mapped_table_id(meta.getRange()->getMappedTableID())
+Region::Region(DB::RegionMeta && meta_, const TiFlashRaftProxyHelper * proxy_helper_)
+    : meta(std::move(meta_)), log(&Logger::get(log_name)), mapped_table_id(meta.getRange()->getMappedTableID()), proxy_helper(proxy_helper_)
 {}
 
 TableID Region::getMappedTableID() const { return mapped_table_id; }
