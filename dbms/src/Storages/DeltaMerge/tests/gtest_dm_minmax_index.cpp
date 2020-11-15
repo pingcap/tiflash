@@ -50,9 +50,12 @@ bool checkMatch(const String &        test_case, //
     String path = DB::tests::TiFlashTestEnv::getTemporaryPath() + name;
 
     auto clean_up = [&]() {
-        Poco::File file(path);
-        if (file.exists())
-            file.remove(true);
+        const String p = DB::tests::TiFlashTestEnv::getTemporaryPath();
+        if (Poco::File f{p}; f.exists())
+        {
+            f.remove(true);
+            f.createDirectories();
+        }
     };
 
     clean_up();
@@ -71,8 +74,8 @@ bool checkMatch(const String &        test_case, //
     Block header = toEmptyBlock(table_columns);
     Block block  = genBlock(header, block_tuples);
 
-    DeltaMergeStorePtr store = std::make_shared<DeltaMergeStore>(
-        context, path, false, "test_database", "test_table", table_columns, getExtraHandleColumnDefine());
+    DeltaMergeStorePtr store
+        = std::make_shared<DeltaMergeStore>(context, false, "test_database", "test_table", table_columns, getExtraHandleColumnDefine());
 
     store->write(context, context.getSettingsRef(), block);
     store->flushCache(context, all_range);

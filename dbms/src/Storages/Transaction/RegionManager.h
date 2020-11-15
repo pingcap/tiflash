@@ -2,6 +2,9 @@
 
 #include <Storages/Transaction/Types.h>
 
+#include <memory>
+#include <mutex>
+
 namespace DB
 {
 

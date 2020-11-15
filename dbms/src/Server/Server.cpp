@@ -30,6 +30,7 @@
 #include <Poco/Net/HTTPServer.h>
 #include <Poco/Net/NetException.h>
 #include <Poco/StringTokenizer.h>
+#include <Server/StorageConfigParser.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/StorageReplicatedMergeTree.h>
@@ -92,6 +93,8 @@ static std::string getCanonicalPath(std::string path)
     return path;
 }
 
+static String getNormalizedPath(const String & s) { return getCanonicalPath(Poco::Path{s}.toString()); }
+
 void Server::uninitialize()
 {
     logger().information("shutting down");
@@ -147,28 +150,26 @@ struct TiFlashProxyConfig
 
 const std::string TiFlashProxyConfig::config_prefix = "flash.proxy";
 
-
 struct TiFlashRaftConfig
 {
-    const std::string learner_key = "engine";
-    const std::string learner_value = "tiflash";
-    std::vector<std::string> pd_addrs;
+    const std::string engine_key = "engine";
+    const std::string engine_value = "tiflash";
+    Strings pd_addrs;
     std::unordered_set<std::string> ignore_databases{"system"};
-    std::string kvstore_path;
     // Actually it is "flash.service_addr"
     std::string flash_server_addr;
+    bool enable_compatible_mode = true;
 
     static const TiDB::StorageEngine DEFAULT_ENGINE = TiDB::StorageEngine::DT;
     bool disable_bg_flush = false;
     TiDB::StorageEngine engine = DEFAULT_ENGINE;
 
 public:
-    TiFlashRaftConfig(const std::string & path, Poco::Util::LayeredConfiguration & config, Poco::Logger * log);
+    TiFlashRaftConfig(Poco::Util::LayeredConfiguration & config, Poco::Logger * log);
 };
 
 /// Load raft related configs.
-TiFlashRaftConfig::TiFlashRaftConfig(const std::string & path, Poco::Util::LayeredConfiguration & config, Poco::Logger * log)
-    : ignore_databases{"system"}, kvstore_path{path + "kvstore/"}
+TiFlashRaftConfig::TiFlashRaftConfig(Poco::Util::LayeredConfiguration & config, Poco::Logger * log) : ignore_databases{"system"}
 {
     flash_server_addr = config.getString("flash.service_addr", "0.0.0.0:3930");
 
@@ -208,11 +209,6 @@ TiFlashRaftConfig::TiFlashRaftConfig(const std::string & path, Poco::Util::Layer
             LOG_INFO(log, "Found ignore databases:" << ss.str());
         }
 
-        if (config.has("raft.kvstore_path"))
-        {
-            kvstore_path = config.getString("raft.kvstore_path");
-        }
-
         if (config.has("raft.storage_engine"))
         {
             String s_engine = config.getString("raft.storage_engine");
@@ -245,14 +241,20 @@ TiFlashRaftConfig::TiFlashRaftConfig(const std::string & path, Poco::Util::Layer
                     ErrorCodes::INVALID_CONFIG_PARAMETER);
             disable_bg_flush = true;
         }
+
+        // just for test
+        if (config.has("raft.enable_compatible_mode"))
+        {
+            enable_compatible_mode = config.getBool("raft.enable_compatible_mode");
+        }
     }
 }
 
 pingcap::ClusterConfig getClusterConfig(const TiFlashSecurityConfig & security_config, const TiFlashRaftConfig & raft_config)
 {
     pingcap::ClusterConfig config;
-    config.learner_key = raft_config.learner_key;
-    config.learner_value = raft_config.learner_value;
+    config.learner_key = raft_config.engine_key;
+    config.learner_value = raft_config.engine_value;
     config.ca_path = security_config.ca_path;
     config.cert_path = security_config.cert_path;
     config.key_path = security_config.key_path;
@@ -382,8 +384,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->initializeFileProvider(key_manager, false);
     }
 
-    bool has_zookeeper = config().has("zookeeper");
+    /// ===== Paths related configuration initialized start ===== ///
+    /// Note that theses global variables should be initialized by the following order:
+    // 1. capacity
+    // 2. path pool
+    // 3. TMTContext
 
+
+    // TODO: remove this configuration left by ClickHouse
     std::vector<String> all_fast_path;
     if (config().has("fast_path"))
     {
@@ -394,64 +402,40 @@ int Server::main(const std::vector<std::string> & /*args*/)
             Poco::StringTokenizer string_tokens(fast_paths, ",");
             for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
             {
-                all_fast_path.emplace_back(getCanonicalPath(std::string(*it)));
-                LOG_DEBUG(log, "Fast data part candidate path: " << getCanonicalPath(std::string(*it)));
+                all_fast_path.emplace_back(getNormalizedPath(std::string(*it)));
+                LOG_DEBUG(log, "Fast data part candidate path: " << all_fast_path.back());
             }
         }
     }
-    std::vector<String> all_normal_path;
-    std::vector<size_t> all_capacity;
-    if (config().has("capacity"))
-    {
-        // TODO: support human readable format for capacity, mark_cache_size, minmax_index_cache_size
-        // eg. 100GiB, 10MiB
-        String capacities = config().getString("capacity");
-        Poco::trimInPlace(capacities);
-        Poco::StringTokenizer string_tokens(capacities, ",");
-        for (auto it = string_tokens.begin(); it != string_tokens.end(); ++it)
-        {
-            const std::string & s = *it;
-            size_t capacity = parse<size_t>(s.data(), s.size());
-            all_capacity.emplace_back(capacity);
-        }
-    }
-    {
 
-        String paths = config().getString("path");
-        Poco::trimInPlace(paths);
-        if (paths.empty())
-            throw Exception("path configuration parameter is empty");
-        Poco::StringTokenizer string_tokens(paths, ",");
-        size_t idx = 0;
-        for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
-        {
-            all_normal_path.emplace_back(getCanonicalPath(std::string(*it)));
-            if (all_capacity.size() < all_normal_path.size())
-                all_capacity.emplace_back(0);
-            LOG_DEBUG(log, "Data part candidate path: " << std::string(*it) << ", capacity: " << all_capacity[idx++]);
-        }
-    }
-    global_context->initializePathCapacityMetric(all_normal_path, std::move(all_capacity));
+    // Deprecated settings.
+    // `global_capacity_quota` will be ignored if `storage_config.main_capacity_quota` is not empty.
+    // "0" by default, means no quota, the actual disk capacity is used.
+    size_t global_capacity_quota = 0;
+    TiFlashStorageConfig storage_config;
+    std::tie(global_capacity_quota, storage_config) = TiFlashStorageConfig::parseSettings(config(), log);
 
-    bool path_realtime_mode = config().getBool("path_realtime_mode", false);
-    std::vector<String> extra_paths(all_normal_path.begin(), all_normal_path.end());
-    for (auto & p : extra_paths)
-        p += "/data";
+    global_context->initializePathCapacityMetric(                           //
+        global_capacity_quota,                                              //
+        storage_config.main_data_paths, storage_config.main_capacity_quota, //
+        storage_config.latest_data_paths, storage_config.latest_capacity_quota);
+    TiFlashRaftConfig raft_config(config(), log);
+    global_context->setPathPool(            //
+        storage_config.main_data_paths,     //
+        storage_config.latest_data_paths,   //
+        storage_config.kvstore_data_path,   //
+        raft_config.enable_compatible_mode, //
+        global_context->getPathCapacity(), global_context->getFileProvider());
 
-    if (path_realtime_mode && all_normal_path.size() > 1)
-        global_context->setExtraPaths(std::vector<String>(extra_paths.begin() + 1, extra_paths.end()),
-            global_context->getPathCapacity(),
-            global_context->getFileProvider());
-    else
-        global_context->setExtraPaths(extra_paths, global_context->getPathCapacity(), global_context->getFileProvider());
-
-    const std::string path = all_normal_path[0];
-    TiFlashRaftConfig raft_config(path, config(), log);
     // Use pd address to define which default_database we use by defauly.
     // For mock test, we use "default". For deployed with pd/tidb/tikv use "system", which is always exist in TiFlash.
     std::string default_database = config().getString("default_database", raft_config.pd_addrs.empty() ? "default" : "system");
+    Strings all_normal_path = storage_config.getAllNormalPaths();
+    const std::string path = all_normal_path[0];
     global_context->setPath(path);
     global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
+
+    /// ===== Paths related configuration initialized end ===== ///
 
     security_config = TiFlashSecurityConfig(config(), log);
 
@@ -679,18 +663,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// After attaching system databases we can initialize system log.
     global_context->initializeSystemLogs();
     /// After the system database is created, attach virtual system tables (in addition to query_log and part_log)
+    bool has_zookeeper = config().has("zookeeper");
     attachSystemTablesServer(*global_context->getDatabase("system"), has_zookeeper);
 
     {
         LOG_DEBUG(log, "Default storage engine: " << static_cast<Int64>(raft_config.engine));
         /// create TMTContext
         auto cluster_config = getClusterConfig(security_config, raft_config);
-        global_context->createTMTContext(raft_config.pd_addrs,
-            raft_config.ignore_databases,
-            raft_config.kvstore_path,
-            raft_config.engine,
-            raft_config.disable_bg_flush,
-            cluster_config);
+        global_context->createTMTContext(
+            raft_config.pd_addrs, raft_config.ignore_databases, raft_config.engine, raft_config.disable_bg_flush, cluster_config);
         global_context->getTMTContext().reloadConfig(config());
     }
 
@@ -918,13 +899,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
                         security_config.cert_path,
                         security_config.ca_path,
                         Poco::Net::Context::VerificationMode::VERIFY_STRICT);
-                    std::function<bool(const Poco::Crypto::X509Certificate &)> check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
-                        if (security_config.allowed_common_names.empty())
-                        {
-                            return true;
-                        }
-                        return security_config.allowed_common_names.count(cert.commonName()) > 0;
-                    };
+                    std::function<bool(const Poco::Crypto::X509Certificate &)> check_common_name
+                        = [&](const Poco::Crypto::X509Certificate & cert) {
+                              if (security_config.allowed_common_names.empty())
+                              {
+                                  return true;
+                              }
+                              return security_config.allowed_common_names.count(cert.commonName()) > 0;
+                          };
                     context->setAdhocVerification(check_common_name);
                     std::call_once(ssl_init_once, SSLInit);
 

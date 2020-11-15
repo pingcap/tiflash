@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Encryption/FileProvider.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageFile.h>
@@ -19,10 +18,14 @@
 namespace DB
 {
 
+class FileProvider;
+using FileProviderPtr = std::shared_ptr<FileProvider>;
 class TiFlashMetrics;
 using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 class PathCapacityMetrics;
 using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
+class PSDiskDelegator;
+using PSDiskDelegatorPtr = std::shared_ptr<PSDiskDelegator>;
 
 
 /**
@@ -38,7 +41,7 @@ class PageStorage
 public:
     struct Config
     {
-        Config() {}
+        Config() = default;
 
         bool sync_on_write = true;
 
@@ -108,12 +111,11 @@ public:
     };
 
 public:
-    PageStorage(String                 name,
-                const String &         storage_path,
-                const Config &         config_,
+    PageStorage(String                  name,
+                PSDiskDelegatorPtr      delegator, //
+                const Config &          config_,
                 const FileProviderPtr & file_provider_,
-                TiFlashMetricsPtr      metrics_         = nullptr,
-                PathCapacityMetricsPtr global_capacity_ = nullptr);
+                TiFlashMetricsPtr       metrics_ = nullptr);
 
     void restore();
 
@@ -149,13 +151,18 @@ public:
 
     FileProviderPtr getFileProvider() const { return file_provider; }
 
-    static PageFileSet listAllPageFiles(const String &              storage_path,
-                                        const FileProviderPtr &     file_provider,
+    static PageFileSet listAllPageFiles(const FileProviderPtr &     file_provider,
+                                        PSDiskDelegatorPtr &        delegator,
                                         Poco::Logger *              page_file_log,
                                         const ListPageFilesOption & option = ListPageFilesOption());
 
+    static PageFile::Version getMaxDataVersion(const FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator);
+
 private:
-    WriterPtr getWriter(PageFile & page_file);
+    WriterPtr checkAndRenewWriter(PageFile &     page_file,
+                                  const String & parent_path_hint,
+                                  WriterPtr &&   old_writer  = nullptr,
+                                  const String & logging_msg = "");
     ReaderPtr getReader(const PageFileIdAndLevel & file_id_level);
 
     static constexpr const char * ARCHIVE_SUBDIR = "archive";
@@ -173,13 +180,13 @@ private:
     friend class DataCompactor;
 
 private:
-    String storage_name; // Identify between different Storage
-    String storage_path;
-    Config config;
+    String             storage_name; // Identify between different Storage
+    PSDiskDelegatorPtr delegator;    // Get paths for storing data
+    Config             config;
 
     FileProviderPtr file_provider;
 
-    std::mutex              write_mutex; // A mutex protect `idle_writers`,`write_files` and `statistics`.
+    std::mutex write_mutex; // A mutex protect `idle_writers`,`write_files` and `statistics`.
 
     std::condition_variable write_mutex_cv;
     std::vector<PageFile>   write_files;
@@ -206,8 +213,6 @@ private:
 
     // For reporting metrics to prometheus
     TiFlashMetricsPtr metrics;
-
-    const PathCapacityMetricsPtr global_capacity;
 };
 
 class PageReader

@@ -87,8 +87,6 @@ DeltaMergeStore::BackgroundTask DeltaMergeStore::MergeDeltaTaskPool::nextTask(Lo
 //   DeltaMergeStore
 // ================================================
 
-DeltaMergeStore::Settings DeltaMergeStore::EMPTY_SETTINGS = DeltaMergeStore::Settings{.not_compress_columns = NotCompress{}};
-
 namespace
 {
 // Actually we will always store a column of `_tidb_rowid`, no matter it
@@ -110,18 +108,19 @@ ColumnDefinesPtr getStoreColumns(const ColumnDefines & table_columns)
 }
 } // namespace
 
+DeltaMergeStore::Settings DeltaMergeStore::EMPTY_SETTINGS = DeltaMergeStore::Settings{.not_compress_columns = NotCompress{}};
+
 DeltaMergeStore::DeltaMergeStore(Context &             db_context,
-                                 const String &        path_,
                                  bool                  data_path_contains_database_name,
                                  const String &        db_name_,
                                  const String &        table_name_,
                                  const ColumnDefines & columns,
                                  const ColumnDefine &  handle,
                                  const Settings &      settings_)
-    : path(path_),
-      global_context(db_context.getGlobalContext()),
+    : global_context(db_context.getGlobalContext()),
+      path_pool(global_context.getPathPool().withTable(db_name_, table_name_, data_path_contains_database_name)),
       settings(settings_),
-      storage_pool(db_name_ + "." + table_name_, path, global_context, db_context.getSettingsRef()),
+      storage_pool(db_name_ + "." + table_name_, path_pool, global_context, db_context.getSettingsRef()),
       db_name(db_name_),
       table_name(table_name_),
       original_table_handle_define(handle),
@@ -131,10 +130,8 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
 {
     LOG_INFO(log, "Restore DeltaMerge Store start [" << db_name << "." << table_name << "]");
 
-    auto & extra_paths_root = global_context.getExtraPaths();
-    extra_paths             = extra_paths_root.withTable(db_name, table_name_, data_path_contains_database_name);
-    // restore existing dm files and set capacity for extra_paths.
-    restoreExtraPathCapacity();
+    // restore existing dm files and set capacity for path_pool.
+    restoreStableFiles();
 
     original_table_columns.emplace_back(original_table_handle_define);
     original_table_columns.emplace_back(getVersionColumnDefine());
@@ -200,18 +197,19 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
 {
     auto dmfile_scanner = [=]() {
         PageStorage::PathAndIdsVec path_and_ids_vec;
-        for (auto & root_path : extra_paths.listPaths())
+        auto                       delegate = path_pool.getStableDiskDelegator();
+        for (auto & root_path : delegate.listPaths())
         {
-            auto & path_and_ids = path_and_ids_vec.emplace_back();
-            path_and_ids.first  = root_path;
-            auto file_ids_in_current_path
-                = DMFile::listAllInPath(global_context.getFileProvider(), root_path + "/" + STABLE_FOLDER_NAME, /* can_gc= */ true);
+            auto & path_and_ids           = path_and_ids_vec.emplace_back();
+            path_and_ids.first            = root_path;
+            auto file_ids_in_current_path = DMFile::listAllInPath(global_context.getFileProvider(), root_path, /* can_gc= */ true);
             for (auto id : file_ids_in_current_path)
                 path_and_ids.second.insert(id);
         }
         return path_and_ids_vec;
     };
     auto dmfile_remover = [&](const PageStorage::PathAndIdsVec & path_and_ids_vec, const std::set<PageId> & valid_ids) {
+        auto delegate = path_pool.getStableDiskDelegator();
         for (auto & [path, ids] : path_and_ids_vec)
         {
             for (auto id : ids)
@@ -220,11 +218,10 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
                     continue;
 
                 // Note that ref_id is useless here.
-                auto dmfile
-                    = DMFile::restore(global_context.getFileProvider(), id, /* ref_id= */ 0, path + "/" + STABLE_FOLDER_NAME, false);
+                auto dmfile = DMFile::restore(global_context.getFileProvider(), id, /* ref_id= */ 0, path, false);
                 if (dmfile->canGC())
                 {
-                    extra_paths.removeDMFile(dmfile->fileId());
+                    delegate.removeDTFile(dmfile->fileId());
                     dmfile->remove(global_context.getFileProvider());
                 }
 
@@ -248,11 +245,11 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
     background_task_handle->wake();
 }
 
-void DeltaMergeStore::rename(String new_path, bool clean_rename, String new_database_name, String new_table_name)
+void DeltaMergeStore::rename(String /*new_path*/, bool clean_rename, String new_database_name, String new_table_name)
 {
     if (clean_rename)
     {
-        extra_paths.rename(new_database_name, new_table_name, clean_rename);
+        path_pool.rename(new_database_name, new_table_name, clean_rename);
     }
     else
     {
@@ -262,15 +259,7 @@ void DeltaMergeStore::rename(String new_path, bool clean_rename, String new_data
 
         // Remove all background task first
         shutdown();
-        extra_paths.rename(new_database_name, new_table_name, clean_rename); // rename for multi-disk
-        // Check if path is covered by extra_paths, if not, rename
-        if (auto dir = Poco::File(path); dir.exists())
-        {
-            LOG_INFO(log, "Renaming " << path << " to " << new_path);
-            dir.renameTo(new_path);
-        }
-        // setting `path` is useless, we need to restore the whole DeltaMergeStore object after path is changed.
-        // path = new_path;
+        path_pool.rename(new_database_name, new_table_name, clean_rename); // rename for multi-disk
     }
 
     // TODO: replacing these two variables is not atomic, but could be good enough?
@@ -290,11 +279,8 @@ void DeltaMergeStore::drop()
         (void)end;
         segment->drop(global_context.getFileProvider());
     }
-    // Drop data in extra path (stable data by default)
-    extra_paths.drop(true);
-    // Check if path(delta && meta by default) is covered by extra_paths, if not, drop it.
-    if (Poco::File dir(path); dir.exists())
-        global_context.getFileProvider()->deleteDirectory(path, false, true);
+    // Drop data in storage path pool
+    path_pool.drop(/*recursive=*/true, /*must_success=*/false);
     LOG_INFO(log, "Drop DeltaMerge done [" << db_name << "." << table_name << "]");
 
 #if USE_TCMALLOC
@@ -326,8 +312,7 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
     // Because db_context could be a temporary object and won't last long enough during the query process.
     // Like the context created by InterpreterSelectWithUnionQuery.
     auto * ctx = new DMContext(db_context.getGlobalContext(),
-                               path,
-                               extra_paths,
+                               path_pool,
                                storage_pool,
                                hash_salt,
                                store_columns,
@@ -1507,17 +1492,17 @@ SortDescription DeltaMergeStore::getPrimarySortDescription() const
     return desc;
 }
 
-void DeltaMergeStore::restoreExtraPathCapacity()
+void DeltaMergeStore::restoreStableFiles()
 {
-    LOG_DEBUG(log, "Loading dm files");
+    LOG_DEBUG(log, "Loading dt files");
 
-    for (const auto & root_path : extra_paths.listPaths())
+    auto path_delegate = path_pool.getStableDiskDelegator();
+    for (const auto & root_path : path_delegate.listPaths())
     {
-        auto parent_path = root_path + "/" + STABLE_FOLDER_NAME;
-        for (auto & file_id : DMFile::listAllInPath(global_context.getFileProvider(), parent_path, false))
+        for (auto & file_id : DMFile::listAllInPath(global_context.getFileProvider(), root_path, false))
         {
-            auto dmfile = DMFile::restore(global_context.getFileProvider(), file_id, /* ref_id= */ 0, parent_path, true);
-            extra_paths.addDMFile(file_id, dmfile->getBytesOnDisk(), root_path);
+            auto dmfile = DMFile::restore(global_context.getFileProvider(), file_id, /* ref_id= */ 0, root_path, true);
+            path_delegate.addDTFile(file_id, dmfile->getBytesOnDisk(), root_path);
         }
     }
 }

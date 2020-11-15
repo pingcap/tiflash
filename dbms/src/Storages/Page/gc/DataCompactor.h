@@ -80,9 +80,9 @@ private:
 
 private:
     const String & storage_name;
-    const String & storage_path;
 
-    FileProviderPtr file_provider;
+    PSDiskDelegatorPtr delegator;
+    FileProviderPtr    file_provider;
 
     const PageStorage::Config & config;
 

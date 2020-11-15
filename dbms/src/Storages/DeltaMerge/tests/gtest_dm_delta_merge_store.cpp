@@ -21,7 +21,7 @@ namespace tests
 class DeltaMergeStore_test : public ::testing::Test
 {
 public:
-    DeltaMergeStore_test() : name("DeltaMergeStore_test"), path(DB::tests::TiFlashTestEnv::getTemporaryPath() + name) {}
+    DeltaMergeStore_test() : name("DeltaMergeStore_test") {}
 
 protected:
     static void SetUpTestCase() { DB::tests::TiFlashTestEnv::setupLogger(); }
@@ -29,13 +29,17 @@ protected:
     void cleanUp()
     {
         // drop former-gen table's data in disk
-        Poco::File file(path);
-        if (file.exists())
-            file.remove(true);
+        const String p = DB::tests::TiFlashTestEnv::getTemporaryPath();
+        if (Poco::File f{p}; f.exists())
+        {
+            f.remove(true);
+            f.createDirectories();
+        }
     }
 
     void SetUp() override
     {
+
         cleanUp();
 
         context = std::make_unique<Context>(DMTestEnv::getContext());
@@ -47,16 +51,14 @@ protected:
         auto         cols                 = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;
         ColumnDefine handle_column_define = (*cols)[0];
 
-        DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(
-            *context, path, false, "test", name, *cols, handle_column_define, DeltaMergeStore::Settings());
+        DeltaMergeStorePtr s
+            = std::make_shared<DeltaMergeStore>(*context, false, "test", name, *cols, handle_column_define, DeltaMergeStore::Settings());
         return s;
     }
 
 private:
     // the table name
     String name;
-    // the path to the dir of table
-    String path;
 
 protected:
     // a ptr to context, we can reload context with different settings if need.
