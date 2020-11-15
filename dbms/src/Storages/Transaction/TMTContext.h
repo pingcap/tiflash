@@ -57,9 +57,7 @@ public:
 
     MPPTaskManagerPtr getMPPTaskManager();
 
-    IndexReaderPtr createIndexReader() const;
-
-    void restore();
+    void restore(const TiFlashRaftProxyHelper * proxy_helper = nullptr);
 
     const std::unordered_set<std::string> & getIgnoreDatabases() const;
 

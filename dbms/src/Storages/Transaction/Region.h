@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Storages/Transaction/IndexReaderCreate.h>
 #include <Storages/Transaction/RegionData.h>
 #include <Storages/Transaction/RegionMeta.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
@@ -25,6 +24,9 @@ class TMTContext;
 struct WriteCmdsView;
 enum class TiFlashApplyRes : uint32_t;
 struct SnapshotViewArray;
+struct TiFlashRaftProxyHelper;
+
+struct ReadIndexResult;
 
 /// Store all kv data of one region. Including 'write', 'data' and 'lock' column families.
 class Region : public std::enable_shared_from_this<Region>
@@ -92,7 +94,7 @@ public:
 
 public:
     explicit Region(RegionMeta && meta_);
-    explicit Region(RegionMeta && meta_, const IndexReaderCreateFunc & index_reader_create);
+    explicit Region(RegionMeta && meta_, const TiFlashRaftProxyHelper *);
 
     void insert(const std::string & cf, TiKVKey && key, TiKVValue && value);
     void insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value);
@@ -102,7 +104,7 @@ public:
     CommittedRemover createCommittedRemover(bool use_lock = true);
 
     std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
-    static RegionPtr deserialize(ReadBuffer & buf, const IndexReaderCreateFunc * index_reader_create = nullptr);
+    static RegionPtr deserialize(ReadBuffer & buf, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
 
     std::string getDebugString(std::stringstream & ss) const;
     RegionID id() const;
@@ -144,8 +146,7 @@ public:
     RegionVersion version() const;
     RegionVersion confVer() const;
 
-    /// version, conf_version, range
-    std::tuple<RegionVersion, RegionVersion, ImutRegionRangePtr> dumpVersionRange() const;
+    RegionMetaSnapshot dumpRegionMetaSnapshot() const;
 
     void assignRegion(Region && new_region);
 
@@ -192,8 +193,6 @@ private:
 
     RegionMeta meta;
 
-    IndexReaderPtr index_reader;
-
     mutable std::atomic<Timepoint> last_persist_time = Timepoint::min();
     mutable std::atomic<Timepoint> last_compact_log_time = Timepoint::min();
 
@@ -205,6 +204,7 @@ private:
     const TableID mapped_table_id;
 
     std::atomic<UInt64> snapshot_event_flag{1};
+    const TiFlashRaftProxyHelper * proxy_helper{nullptr};
 };
 
 class RegionRaftCommandDelegate : public Region, private boost::noncopyable
