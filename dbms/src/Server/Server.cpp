@@ -298,7 +298,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     TiFlashServerHelper helper{
         // a special number, also defined in proxy
         .magic_number = 0x13579BDF,
-        .version = 401000,
+        .version = 401002,
         .inner = &tiflash_instance_wrap,
         .fn_gen_cpp_string = GenCppRawString,
         .fn_handle_write_raft_cmd = HandleWriteRaftCmd,
@@ -313,6 +313,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         .fn_apply_pre_handled_snapshot = ApplyPreHandledSnapshot,
         .fn_handle_get_table_sync_status = HandleGetTableSyncStatus,
         .gc_raw_cpp_ptr = GcRawCppPtr,
+        .fn_gen_batch_read_index_res = GenBatchReadIndexRes,
+        .fn_insert_batch_read_index_resp = InsertBatchReadIndexResp,
     };
 
     auto proxy_runner = std::thread([&proxy_conf, &log, &helper]() {
@@ -1113,11 +1115,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
             LOG_INFO(log, "proxy is ready to serve, try to wake up all region leader by sending read index request");
             {
-                std::deque<RegionPtr> regions;
-                tiflash_instance_wrap.tmt->getKVStore()->traverseRegions(
-                    [&regions](RegionID, const RegionPtr & region) { regions.emplace_back(region); });
-                for (const auto & region : regions)
-                    region->learnerRead(0);
+                std::vector<kvrpcpb::ReadIndexRequest> batch_read_index_req;
+                tiflash_instance_wrap.tmt->getKVStore()->traverseRegions([&batch_read_index_req](RegionID, const RegionPtr & region) {
+                    batch_read_index_req.emplace_back(GenRegionReadIndexReq(*region));
+                });
+                tiflash_instance_wrap.proxy_helper->batchReadIndex(batch_read_index_req);
             }
             LOG_INFO(log, "start to wait for terminal signal");
         }
