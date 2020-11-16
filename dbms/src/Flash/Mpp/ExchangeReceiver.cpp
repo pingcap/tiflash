@@ -134,5 +134,4 @@ void ExchangeReceiver::proceedAsyncReq()
     cv.notify_all();
     LOG_DEBUG(log, "async thread end!!!");
 }
-
 } // namespace DB
