@@ -21,30 +21,6 @@
 
 #pragma GCC diagnostic pop
 
-namespace pingcap
-{
-namespace kv
-{
-
-template <>
-struct RpcTypeTraits<::mpp::EstablishMPPConnectionRequest>
-{
-    using RequestType = ::mpp::EstablishMPPConnectionRequest;
-    using ResultType = ::mpp::MPPDataPacket;
-    static std::unique_ptr<::grpc::ClientReader<::mpp::MPPDataPacket>> doRPCCall(
-        grpc::ClientContext * context, std::shared_ptr<KvConnClient> client, const RequestType & req)
-    {
-        return client->stub->EstablishMPPConnection(context, req);
-    }
-    static std::unique_ptr<::grpc::ClientAsyncReader<::mpp::MPPDataPacket>> doAsyncRPCCall(grpc::ClientContext * context,
-        std::shared_ptr<KvConnClient> client, const RequestType & req, grpc::CompletionQueue & cq, void * call)
-    {
-        return client->stub->AsyncEstablishMPPConnection(context, req, &cq, call);
-    }
-};
-
-} // namespace kv
-} // namespace pingcap
 
 namespace DB
 {
@@ -59,19 +35,24 @@ class ExchangeReceiver
     std::vector<std::thread> workers;
     // async grpc
     grpc::CompletionQueue grpc_com_queue;
-
     DAGSchema schema;
 
     // TODO: should be a concurrency bounded queue.
     std::mutex rw_mu;
     std::condition_variable cv;
     std::queue<Block> block_buffer;
-    std::atomic_int live_workers;
+    std::atomic_int live_connections;
     bool inited;
     bool meet_error;
     Exception err;
-
     Logger * log;
+    class ExchangeCall;
+
+    // All calls should live until the receiver shuts down
+    std::vector<std::shared_ptr<ExchangeCall>> exchangeCalls;
+    void sendAsyncReq();
+
+    void proceedAsyncReq();
 
     void decodePacket(const mpp::MPPDataPacket & p)
     {
@@ -105,121 +86,13 @@ class ExchangeReceiver
         }
     }
 
-    // Each call owns contexts to proceed asynchronous requests
-    struct ExchangeCall
-    {
-        using RequestType = ::mpp::EstablishMPPConnectionRequest;
-        using ResultType = ::mpp::MPPDataPacket;
-        grpc::ClientContext client_context;
-        std::shared_ptr<RequestType> req;
-        mpp::MPPDataPacket packet;
-        std::unique_ptr<::grpc::ClientAsyncReader<::mpp::MPPDataPacket>> reader;
-        enum StateType
-        {
-            CONNECTED,
-            TOREAD,
-            DONE
-        };
-        StateType state_type;
-        ExchangeCall(TMTContext & tmtContext, std::string meta_str, ::mpp::TaskMeta & task_meta, grpc::CompletionQueue & cq)
-        {
-            auto sender_task = new mpp::TaskMeta();
-            sender_task->ParseFromString(meta_str);
-            req = std::make_shared<mpp::EstablishMPPConnectionRequest>();
-            req->set_allocated_receiver_meta(new mpp::TaskMeta(task_meta));
-            req->set_allocated_sender_meta(sender_task);
-            pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> call(req);
-            reader = tmtContext.getCluster()->rpc_client->sendStreamRequestAsync(
-                req->sender_meta().address(), &client_context, call, cq, (void *)this);
-            state_type = CONNECTED;
-        }
-    };
-    // All calls should live until the receiver shuts down
-    std::vector<std::shared_ptr<ExchangeCall>> exchangeCalls;
-    void sendAsyncReq()
-    {
-        for (auto & meta : pb_exchange_receiver.encoded_task_meta())
-        {
-            live_workers++;
-            auto ptr = std::make_shared<ExchangeCall>(context, meta, task_meta, grpc_com_queue);
-            exchangeCalls.emplace_back(ptr);
-            LOG_DEBUG(log, "begin to async read : " << ptr << " " << ptr->req->DebugString());
-        }
-    }
-    void proceedAsyncReq()
-    {
-        try
-        {
-            void * got_tag;
-            bool ok = false;
-
-            // Block until the next result is available in the completion queue "cq".
-            while (live_workers > 0 && grpc_com_queue.Next(&got_tag, &ok))
-            {
-                ExchangeCall * call = static_cast<ExchangeCall *>(got_tag);
-                if (!ok)
-                {
-                    call->state_type = ExchangeCall::DONE;
-                }
-                switch (call->state_type)
-                {
-                    case ExchangeCall::StateType::CONNECTED:
-                    {
-                        call->reader->Read(&call->packet, (void *)call);
-                        call->state_type = ExchangeCall::StateType::TOREAD;
-                    }
-                    break;
-                    case ExchangeCall::StateType::TOREAD:
-                    {
-                        // the last read() asynchronously succeed!
-                        if (call->packet.has_error()) // This is the only way that down stream pass an error.
-                        {
-                            throw TiFlashException("exchange receiver meet error : " + call->packet.error().msg(), Errors::MPP::Internal);
-                        }
-                        decodePacket(call->packet);
-                        // issue a new read request
-                        call->reader->Read(&call->packet, (void *)call);
-                    }
-                    break;
-                    case ExchangeCall::StateType::DONE:
-                    {
-                        live_workers--;
-                    }
-                    break;
-                    default:
-                    {
-                        throw TiFlashException("exchange receiver meet unknown msg", Errors::MPP::Internal);
-                    }
-                }
-            }
-        }
-        catch (Exception & e)
-        {
-            meet_error = true;
-            err = e;
-        }
-        catch (std::exception & e)
-        {
-            meet_error = true;
-            err = Exception(e.what());
-        }
-        catch (...)
-        {
-            meet_error = true;
-            err = Exception("fatal error");
-        }
-        live_workers = 0;
-        cv.notify_all();
-        LOG_INFO(log, "async thread end!!!");
-    }
-
 public:
     ExchangeReceiver(Context & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta)
         : context(context_.getTMTContext()),
           timeout(context_.getSettings().mpp_task_timeout),
           pb_exchange_receiver(exc),
           task_meta(meta),
-          live_workers(0),
+          live_connections(0),
           inited(false),
           meet_error(false),
           log(&Logger::get("exchange_receiver"))
@@ -260,7 +133,7 @@ public:
         if (!inited)
             init();
         std::unique_lock<std::mutex> lk(rw_mu);
-        cv.wait(lk, [&] { return block_buffer.size() > 0 || live_workers == 0 || meet_error; });
+        cv.wait(lk, [&] { return block_buffer.size() > 0 || live_connections == 0 || meet_error; });
         if (meet_error)
         {
             throw err;
