@@ -141,9 +141,9 @@ public:
     /// For those split, merge and mergeDelta methods, we should use prepareXXX/applyXXX combo in real production.
     /// split(), merge() and mergeDelta() are only used in test cases.
 
-    SegmentPair split(DMContext & dm_context) const;
-    bool        isPhysicalSplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const;
-    SplitInfo   prepareSplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs) const;
+    SegmentPair                  split(DMContext & dm_context) const;
+    std::pair<bool, RowKeyValue> isPhysicalSplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const;
+    SplitInfo                    prepareSplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs) const;
     SegmentPair
     applySplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs, SplitInfo & split_info) const;
 

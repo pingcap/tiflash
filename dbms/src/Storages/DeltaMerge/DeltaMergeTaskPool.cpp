@@ -39,7 +39,7 @@ void DeltaMergeTaskPool::addTask(const BackgroundTask & task, const ThreadType &
 
     std::scoped_lock lock(mutex);
     low_priority_tasks.push_back(std::make_shared<BackgroundTask>(task));
-    GET_METRIC(global_context.getTiFlashMetrics(), tiflash_storage_delta_merage_task_num, type_low_priority_task_num).Increment(1);
+    GET_METRIC(global_context.getTiFlashMetrics(), tiflash_storage_delta_merge_task_num, type_low_priority_task_num).Increment(1);
     if (task_counts.find(task.store) == task_counts.end())
         task_counts.emplace(task.store, 0);
     task_counts[task.store] += 1;
@@ -63,9 +63,9 @@ void DeltaMergeTaskPool::removeAllTasksForStore(DeltaMergeStorePtr store)
         for (auto & task : processing_tasks_to_wait)
             processing_tasks.erase(task);
         task_counts.erase(store);
-        GET_METRIC(global_context.getTiFlashMetrics(), tiflash_storage_delta_merage_task_num, type_high_priority_task_num)
+        GET_METRIC(global_context.getTiFlashMetrics(), tiflash_storage_delta_merge_task_num, type_high_priority_task_num)
             .Set(high_priority_tasks.size());
-        GET_METRIC(global_context.getTiFlashMetrics(), tiflash_storage_delta_merage_task_num, type_low_priority_task_num)
+        GET_METRIC(global_context.getTiFlashMetrics(), tiflash_storage_delta_merge_task_num, type_low_priority_task_num)
             .Set(low_priority_tasks.size());
     }
 
@@ -137,13 +137,6 @@ bool DeltaMergeTaskPool::handleTaskImpl(bool high_priority)
             // if this task is taken from high_priority_queue, we should put this task back to the head
             // otherwise append it to high_priority_queue
             addTaskToHighPriorityQueue(task, /* front */ high_priority);
-            if (!high_priority)
-            {
-                GET_METRIC(global_context.getTiFlashMetrics(), tiflash_storage_delta_merage_task_num, type_low_priority_task_num)
-                    .Decrement(1);
-                GET_METRIC(global_context.getTiFlashMetrics(), tiflash_storage_delta_merage_task_num, type_high_priority_task_num)
-                    .Increment(1);
-            }
             return false;
         }
 
@@ -193,13 +186,15 @@ bool DeltaMergeTaskPool::handleTaskImpl(bool high_priority)
                 throw Exception("Unsupported task type: " + toString(task->type));
             }
         }
-        catch (const Exception & e)
+        catch (Exception & e)
         {
             LOG_ERROR(log,
                       "Database: [" << task->store->getDatabaseName() << "] Table: [" << task->store->getTableName() << "] Task "
                                     << toString(task->type) << " on Segment [" << task->segment->segmentId()
                                     << ((bool)task->next_segment ? ("] and [" + DB::toString(task->next_segment->segmentId())) : "")
                                     << "] failed. Error msg: " << e.message());
+            e.addMessage("(Error while handling background task of Database: [" + task->store->getDatabaseName() + "] Table: ["
+                         + task->store->getTableName() + "])");
             e.rethrow();
         }
 
@@ -208,10 +203,6 @@ bool DeltaMergeTaskPool::handleTaskImpl(bool high_priority)
         if (right)
             task->store->checkSegmentUpdate(task->dm_context, right, type);
 
-        if (high_priority)
-            GET_METRIC(global_context.getTiFlashMetrics(), tiflash_storage_delta_merage_task_num, type_high_priority_task_num).Decrement(1);
-        else
-            GET_METRIC(global_context.getTiFlashMetrics(), tiflash_storage_delta_merage_task_num, type_low_priority_task_num).Decrement(1);
         task->finished = true;
     }
 
@@ -233,6 +224,10 @@ DeltaMergeTaskPool::BackgroundTaskHandle DeltaMergeTaskPool::nextTask(bool high_
     auto task = tasks.front();
     tasks.pop_front();
     processing_tasks.insert(task);
+    if (high_priority)
+        GET_METRIC(global_context.getTiFlashMetrics(), tiflash_storage_delta_merge_task_num, type_high_priority_task_num).Decrement(1);
+    else
+        GET_METRIC(global_context.getTiFlashMetrics(), tiflash_storage_delta_merge_task_num, type_low_priority_task_num).Decrement(1);
 
     LOG_DEBUG(log,
               "Database: [" << task->store->getDatabaseName() << "] Table: [" << task->store->getTableName() << "] Segment ["
@@ -249,6 +244,7 @@ void DeltaMergeTaskPool::addTaskToHighPriorityQueue(BackgroundTaskHandle & task,
                             << task->task_size << "] add to background task pool " << (front ? "head" : "tail"));
     std::scoped_lock lock{mutex};
     processing_tasks.erase(task);
+    GET_METRIC(global_context.getTiFlashMetrics(), tiflash_storage_delta_merge_task_num, type_high_priority_task_num).Increment(1);
     if (front)
         high_priority_tasks.push_front(task);
     else
@@ -284,7 +280,7 @@ bool DeltaMergeTaskPool::tryPrepareTask(DeltaMergeTaskPool::BackgroundTaskHandle
                                    << task->segment->segmentId() << "] split");
             return true;
         }
-        is_physical = task->segment->isPhysicalSplit(*task->dm_context, task->snapshot);
+        std::tie(is_physical, std::ignore) = task->segment->isPhysicalSplit(*task->dm_context, task->snapshot);
         if (is_physical)
         {
             task->task_size = task->snapshot->getBytes();

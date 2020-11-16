@@ -704,11 +704,11 @@ RowKeyValue Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & 
     return split_point;
 }
 
-bool Segment::isPhysicalSplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const
+std::pair<bool, RowKeyValue> Segment::isPhysicalSplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const
 {
     if (!dm_context.enable_logical_split || segment_snap->stable->getPacks() <= 3
         || segment_snap->delta->getRows() > segment_snap->stable->getRows())
-        return true;
+        return std::make_pair(true, RowKeyValue{});
     else
     {
         RowKeyValue    split_point     = getSplitPointFast(dm_context, segment_snap->stable);
@@ -718,19 +718,22 @@ bool Segment::isPhysicalSplit(DMContext & dm_context, const SegmentSnapshotPtr &
         {
             LOG_INFO(log,
                      "Got bad split point [" << split_value.toString() << "] for segment " << info() << ", fall back to split physical.");
-            return true;
+            return std::make_pair(true, RowKeyValue{});
         }
         else
-            return false;
+            return std::make_pair(false, split_point);
     }
 }
 
 Segment::SplitInfo Segment::prepareSplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs) const
 {
-    if (isPhysicalSplit(dm_context, segment_snap))
+    RowKeyValue split_point;
+    bool        is_physical;
+    std::tie(is_physical, split_point) = isPhysicalSplit(dm_context, segment_snap);
+    if (is_physical)
         return prepareSplitPhysical(dm_context, segment_snap, wbs);
     else
-        return prepareSplitPhysical(dm_context, segment_snap, wbs);
+        return prepareSplitLogical(dm_context, segment_snap, split_point, wbs);
 }
 
 Segment::SplitInfo Segment::prepareSplitLogical(DMContext &                dm_context,
