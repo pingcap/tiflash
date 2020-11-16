@@ -69,6 +69,9 @@ void DeltaMergeTaskPool::removeAllTasksForStore(DeltaMergeStorePtr store)
             .Set(low_priority_tasks.size());
     }
 
+    LOG_DEBUG(log,
+              "Remove all background tasks for database [" << store->getDatabaseName() << "] table [" << store->getTableName()
+                                                           << "] wait for " << processing_tasks_to_wait.size() << " tasks to finish");
     for (auto & task : processing_tasks_to_wait)
     {
         std::unique_lock lock{task->task_mutex};
@@ -76,6 +79,9 @@ void DeltaMergeTaskPool::removeAllTasksForStore(DeltaMergeStorePtr store)
             continue;
         task->finished = true;
     }
+    LOG_DEBUG(log,
+              "Remove all background tasks for database [" << store->getDatabaseName() << "] table [" << store->getTableName()
+                                                           << "] complete");
 }
 
 bool DeltaMergeTaskPool::handleBackgroundTask()
