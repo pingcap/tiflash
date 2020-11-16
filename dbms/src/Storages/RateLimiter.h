@@ -28,12 +28,16 @@ class RateLimiter
 public:
     RateLimiter(Context & db_context, Int64 balance_increase_rate_, Int64 alloc_balance_soft_limit_, Int64 alloc_balance_hard_limit_);
 
-    // clients try to request balance through this method
-    // it return `bytes` - <allocated_bytes>
+    // Clients try to request balance through this method,
+    // and its' return value means `bytes` - <allocated_bytes>.
+    //
+    // the current available balance is kept in member `available_bytes`,
+    // and `available_bytes` is always less than or equal `alloc_balance_hard_limit`
+    //
     // process to calculate <allocated_bytes>:
     //   1. if prev_alloc_balance - (current_time - prev_alloc_time) * balance_increase_rate >= alloc_balance_soft_limit,
     //      then <allocated_bytes> = 0
-    //   2. <allocated_bytes> = min(available_bytes, `bytes`)
+    //   2. else, <allocated_bytes> = min(`available_bytes`, `bytes`)
     size_t request(Int64 bytes);
 
 private:
