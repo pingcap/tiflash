@@ -229,7 +229,6 @@ public:
     };
 
     DeltaMergeStore(Context &             db_context, //
-                    const String &        path_,
                     bool                  data_path_contains_database_name,
                     const String &        db_name,
                     const String &        tbl_name,
@@ -321,7 +320,7 @@ private:
 
     bool isSegmentValid(const SegmentPtr & segment);
 
-    void restoreExtraPathCapacity();
+    void restoreStableFiles();
 
     SegmentReadTasks getReadTasksByRanges(DMContext &          dm_context,
                                           const HandleRanges & sorted_ranges,
@@ -329,11 +328,10 @@ private:
                                           const SegmentIdSet & read_segments = {});
 
 private:
-    String      path;
-    PathPool    extra_paths;
-    Context &   global_context;
-    Settings    settings;
-    StoragePool storage_pool;
+    Context &       global_context;
+    StoragePathPool path_pool;
+    Settings        settings;
+    StoragePool     storage_pool;
 
     String db_name;
     String table_name;

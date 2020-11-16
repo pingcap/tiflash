@@ -2009,7 +2009,7 @@ private:
         element_wrappers.reserve(from_element_types.size());
 
         /// Create conversion wrapper for each element in tuple
-        for (const auto & idx_type : ext::enumerate(from_type->getElements()))
+        for (const auto idx_type : ext::enumerate(from_type->getElements()))
             element_wrappers.push_back(prepare(idx_type.second, to_element_types[idx_type.first]));
 
         return [element_wrappers, from_element_types, to_element_types]
@@ -2035,7 +2035,7 @@ private:
             element_block.insert({ nullptr, std::make_shared<DataTypeTuple>(to_element_types), "" });
 
             /// invoke conversion for each element
-            for (const auto & idx_element_wrapper : ext::enumerate(element_wrappers))
+            for (const auto idx_element_wrapper : ext::enumerate(element_wrappers))
                 idx_element_wrapper.second(element_block, { idx_element_wrapper.first },
                     tuple_size + idx_element_wrapper.first);
 

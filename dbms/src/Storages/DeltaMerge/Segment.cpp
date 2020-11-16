@@ -111,15 +111,16 @@ DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
 
 StableValueSpacePtr createNewStable(DMContext & context, const BlockInputStreamPtr & input_stream, PageId stable_id, WriteBatches & wbs)
 {
-    auto & store_path = context.extra_paths.choosePath();
+    auto delegate   = context.path_pool.getStableDiskDelegator();
+    auto store_path = delegate.choosePath();
 
     PageId dmfile_id = context.storage_pool.newDataPageId();
-    auto   dmfile    = writeIntoNewDMFile(context, input_stream, dmfile_id, store_path + "/" + STABLE_FOLDER_NAME);
+    auto   dmfile    = writeIntoNewDMFile(context, input_stream, dmfile_id, store_path);
     auto   stable    = std::make_shared<StableValueSpace>(stable_id);
     stable->setFiles({dmfile});
     stable->saveMeta(wbs.meta);
     wbs.data.putExternal(dmfile_id, 0);
-    context.extra_paths.addDMFile(dmfile_id, dmfile->getBytesOnDisk(), store_path);
+    delegate.addDTFile(dmfile_id, dmfile->getBytesOnDisk(), store_path);
 
     return stable;
 }
@@ -715,11 +716,12 @@ Segment::prepareSplitLogical(DMContext & dm_context, const SegmentSnapshotPtr & 
     DMFiles my_stable_files;
     DMFiles other_stable_files;
 
+    auto delegate = dm_context.path_pool.getStableDiskDelegator();
     for (auto & dmfile : segment_snap->stable->getDMFiles())
     {
         auto ori_ref_id       = dmfile->refId();
         auto file_id          = segment_snap->delta->storage_snap->data_reader.getNormalPageId(ori_ref_id);
-        auto file_parent_path = dm_context.extra_paths.getPath(file_id) + "/" + STABLE_FOLDER_NAME;
+        auto file_parent_path = delegate.getDTFilePath(file_id);
 
         auto my_dmfile_id    = storage_pool.newDataPageId();
         auto other_dmfile_id = storage_pool.newDataPageId();

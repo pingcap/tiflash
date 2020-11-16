@@ -43,7 +43,7 @@ extern const int DIRECTORY_ALREADY_EXISTS;
 
 using namespace DM;
 
-StorageDeltaMerge::StorageDeltaMerge(const String & path_,
+StorageDeltaMerge::StorageDeltaMerge( //
     const String & db_engine,
     const String & db_name_,
     const String & table_name_,
@@ -53,7 +53,6 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
     Timestamp tombstone,
     Context & global_context_)
     : IManageableStorage{columns_, tombstone},
-      path(path_ + "/" + table_name_),
       data_path_contains_database_name(db_engine != "TiFlash"),
       max_column_id_used(0),
       global_context(global_context_.getGlobalContext()),
@@ -175,7 +174,7 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
             + ", but only these columns are found:" + columns_stream.str());
     }
     assert(!table_column_defines.empty());
-    store = std::make_shared<DeltaMergeStore>(global_context, path, data_path_contains_database_name, db_name_, table_name_,
+    store = std::make_shared<DeltaMergeStore>(global_context, data_path_contains_database_name, db_name_, table_name_,
         std::move(table_column_defines), std::move(handle_column_define), DeltaMergeStore::Settings());
 }
 
@@ -826,11 +825,9 @@ void StorageDeltaMerge::rename(
     store = {}; // reset store object
 
     // generate a new store
-    store = std::make_shared<DeltaMergeStore>(global_context,                          //
-        new_path, data_path_contains_database_name, new_database_name, new_table_name, //
+    store = std::make_shared<DeltaMergeStore>(global_context,                //
+        data_path_contains_database_name, new_database_name, new_table_name, //
         std::move(table_column_defines), std::move(handle_column_define), settings);
-
-    path = new_path;
 }
 
 String StorageDeltaMerge::getTableName() const { return store->getTableName(); }

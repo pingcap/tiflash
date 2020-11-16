@@ -167,13 +167,19 @@ public:
     String getTemporaryPath() const;
     String getFlagsPath() const;
     String getUserFilesPath() const;
-    PathPool & getExtraPaths() const;
+    PathPool & getPathPool() const;
 
     void setPath(const String & path);
     void setTemporaryPath(const String & path);
     void setFlagsPath(const String & path);
     void setUserFilesPath(const String & path);
-    void setExtraPaths(const std::vector<String> & extra_paths, PathCapacityMetricsPtr global_capacity, FileProviderPtr file_provider);
+
+    void setPathPool(const Strings & main_data_paths,
+        const Strings & latest_data_paths,
+        const Strings & kvstore_paths,
+        bool enable_raft_compatible_mode,
+        PathCapacityMetricsPtr global_capacity_,
+        FileProviderPtr file_provider);
 
     using ConfigurationPtr = Poco::AutoPtr<Poco::Util::AbstractConfiguration>;
 
@@ -388,7 +394,6 @@ public:
 
     void createTMTContext(const std::vector<std::string> & pd_addrs,
                           const std::unordered_set<std::string> & ignore_databases,
-                          const std::string & kvstore_path,
                           ::TiDB::StorageEngine engine,
                           bool disable_bg_tasks,
                           pingcap::ClusterConfig cluster_config = {});
@@ -396,7 +401,10 @@ public:
     void initializeSchemaSyncService();
     SchemaSyncServicePtr & getSchemaSyncService();
 
-    void initializePathCapacityMetric(const std::vector<std::string> & all_path, std::vector<size_t> && all_capacity);
+    void initializePathCapacityMetric(                                                    //
+        size_t global_capacity_quota,                                                     //
+        const Strings & main_data_paths, const std::vector<size_t> & main_capacity_quota, //
+        const Strings & latest_data_paths, const std::vector<size_t> & latest_capacity_quota);
     PathCapacityMetricsPtr getPathCapacity() const;
 
     void initializePartPathSelector(std::vector<std::string> && all_path, std::vector<std::string> && all_fast_path);
