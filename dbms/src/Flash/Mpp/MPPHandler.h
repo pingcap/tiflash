@@ -147,7 +147,7 @@ struct MPPTunnelSet
     {
         mpp::MPPDataPacket packet;
         packet.set_data(data);
-        tunnels[partition_id]->writer->Write(packet);
+        tunnels[partition_id]->write(packet);
     }
     void writeError(mpp::Error err)
     {
@@ -159,9 +159,7 @@ struct MPPTunnelSet
         }
     }
 
-    uint16_t getPartitionNum() {
-        return tunnels.size();
-    }
+    uint16_t getPartitionNum() { return tunnels.size(); }
 };
 
 using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;

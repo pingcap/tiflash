@@ -81,16 +81,17 @@ try
     BlockOutputStreamPtr dag_output_stream = nullptr;
     if constexpr (!batch)
     {
-        std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<UnaryDAGResponseWriter> (dag_response, context.getSettings().dag_records_per_chunk, dag.getEncodeType(),
-            dag.getResultFieldTypes(), dag_context, collect_exec_summary, dag_request.has_root_executor());
+        std::unique_ptr<DAGResponseWriter> response_writer
+            = std::make_unique<UnaryDAGResponseWriter>(dag_response, context.getSettings().dag_records_per_chunk, dag.getEncodeType(),
+                dag.getResultFieldTypes(), dag_context, collect_exec_summary, dag_request.has_root_executor());
         dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
         copyData(*streams.in, *dag_output_stream);
     }
     else
     {
         auto streaming_writer = std::make_shared<StreamWriter>(writer);
-        std::vector<Int64>empty;
-        std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<StreamWriterPtr> > (streaming_writer,empty,tipb::ExchangeType::PassThrough, context.getSettings().dag_records_per_chunk, dag.getEncodeType(),
+        std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<StreamWriterPtr>>(streaming_writer,
+            std::vector<Int64>(), tipb::ExchangeType::PassThrough, context.getSettings().dag_records_per_chunk, dag.getEncodeType(),
             dag.getResultFieldTypes(), dag_context, collect_exec_summary, dag_request.has_root_executor());
         dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
         copyData(*streams.in, *dag_output_stream);

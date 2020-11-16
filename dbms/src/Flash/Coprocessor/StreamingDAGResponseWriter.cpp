@@ -164,13 +164,13 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
                 dest_tbl_cols[i] = block.cloneEmptyColumns();
                 dest_blocks[i] = block.cloneEmpty();
             }
-            size_t rows = block.rows();
             // get partition key column ids
             for (auto i : partition_col_ids)
             {
                 key_col_ptrs.emplace_back(block.getByPosition(i).column.get());
             }
             // partition each row
+            size_t rows = block.rows();
             for (size_t row_index = 0; row_index < rows; ++row_index)
             {
                 UInt128 key = hash128(row_index, key_col_ptrs.size(), key_col_ptrs, TiDB::dummy_collators, TiDB::dummy_sort_key_contaners);
