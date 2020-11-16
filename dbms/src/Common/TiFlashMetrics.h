@@ -100,7 +100,8 @@ namespace DB
     M(tiflash_storage_page_gc_duration_seconds, "Bucketed histogram of page's gc task duration", Histogram,                               \
         F(type_exec, {{"type", "exec"}}, ExpBuckets{0.0005, 2, 20}), F(type_migrate, {{"type", "migrate"}}, ExpBuckets{0.0005, 2, 20}))   \
     M(tiflash_storage_rate_limiter_balance, "RateLimiter balance", Gauge)                                                                 \
-    M(tiflash_storage_delta_merge_task_num, "Background task num in delta merge task pool", Gauge,                                       \
+    M(tiflash_storage_rate_limiter_consume_balance, "RateLimiter balance consumed by background task", Counter)                           \
+    M(tiflash_storage_delta_merge_task_num, "Background task num in delta merge task pool", Gauge,                                        \
         F(type_high_priority_task_num, {{"type", "high_priority_task_num"}}),                                                             \
         F(type_low_priority_task_num, {{"type", "low_priority_task_num"}}))                                                               \
     M(tiflash_raft_command_duration_seconds, "Bucketed histogram of some raft command: apply snapshot",                                   \

@@ -40,6 +40,7 @@ size_t RateLimiter::request(Int64 bytes)
         alloc_bytes = bytes < available_bytes ? bytes : available_bytes;
         available_bytes = bytes < available_bytes ? available_bytes - bytes : 0;
     }
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_storage_rate_limiter_consume_balance).Increment(alloc_bytes);
     alloc_stop_watch.restart();
     prev_alloc_balance = prev_alloc_working_balance + alloc_bytes;
 
