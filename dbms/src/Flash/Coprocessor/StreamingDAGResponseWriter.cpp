@@ -15,9 +15,9 @@ extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 template <class StreamWriterPtr>
-StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWriterPtr writer_,  std::vector<Int64>partition_col_ids_, tipb::ExchangeType exchange_type_, Int64 records_per_chunk_,
-    tipb::EncodeType encode_type_, std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_,
-    bool collect_execute_summary_, bool return_executor_id_)
+StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWriterPtr writer_, std::vector<Int64> partition_col_ids_,
+    tipb::ExchangeType exchange_type_, Int64 records_per_chunk_, tipb::EncodeType encode_type_,
+    std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_, bool collect_execute_summary_, bool return_executor_id_)
     : DAGResponseWriter(records_per_chunk_, encode_type_, result_field_types_, dag_context_, collect_execute_summary_, return_executor_id_),
       exchange_type(exchange_type_),
       writer(writer_),
@@ -33,7 +33,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::ScheduleEncodeTask()
 {
     tipb::SelectResponse response;
     addExecuteSummaries(response);
-    if(exchange_type == tipb::ExchangeType::Hash)
+    if (exchange_type == tipb::ExchangeType::Hash)
     {
         thread_pool.schedule(getEncodePartitionTask(blocks, response));
     }
@@ -126,18 +126,24 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodeTask(
 
 template <class StreamWriterPtr>
 ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionTask(
-        std::vector<Block> & input_blocks, tipb::SelectResponse & response) const
+    std::vector<Block> & input_blocks, tipb::SelectResponse & response) const
 {
     /// todo find a way to avoid copying input_blocks
     return [this, input_blocks, response]() mutable {
-        std::vector<std::unique_ptr<ChunkCodecStream> > chunk_codec_stream(partition_num);
+        std::vector<std::unique_ptr<ChunkCodecStream>> chunk_codec_stream(partition_num);
         std::vector<tipb::SelectResponse> responses(partition_num);
-        for(auto i=0; i < partition_num ; ++i) {
-            if (encode_type == tipb::EncodeType::TypeDefault) {
+        for (auto i = 0; i < partition_num; ++i)
+        {
+            if (encode_type == tipb::EncodeType::TypeDefault)
+            {
                 chunk_codec_stream[i] = std::make_unique<DefaultChunkCodec>()->newCodecStream(result_field_types);
-            } else if (encode_type == tipb::EncodeType::TypeChunk) {
+            }
+            else if (encode_type == tipb::EncodeType::TypeChunk)
+            {
                 chunk_codec_stream[i] = std::make_unique<ArrowChunkCodec>()->newCodecStream(result_field_types);
-            } else if (encode_type == tipb::EncodeType::TypeCHBlock) {
+            }
+            else if (encode_type == tipb::EncodeType::TypeCHBlock)
+            {
                 chunk_codec_stream[i] = std::make_unique<CHBlockChunkCodec>()->newCodecStream(result_field_types);
             }
             responses[i] = response;
@@ -152,14 +158,15 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
         {
             ColumnRawPtrs key_col_ptrs;
             std::vector<Block> dest_blocks(partition_num);
-            std::vector<MutableColumns>dest_tbl_cols(partition_num);
-            for(auto i=0;i<partition_num;++i) {
-                dest_tbl_cols[i]= block.cloneEmptyColumns();
+            std::vector<MutableColumns> dest_tbl_cols(partition_num);
+            for (auto i = 0; i < partition_num; ++i)
+            {
+                dest_tbl_cols[i] = block.cloneEmptyColumns();
                 dest_blocks[i] = block.cloneEmpty();
             }
             size_t rows = block.rows();
             // get partition key column ids
-            for(auto i : partition_col_ids)
+            for (auto i : partition_col_ids)
             {
                 key_col_ptrs.emplace_back(block.getByPosition(i).column.get());
             }
@@ -169,15 +176,16 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
                 UInt128 key = hash128(row_index, key_col_ptrs.size(), key_col_ptrs, TiDB::dummy_collators, TiDB::dummy_sort_key_contaners);
                 auto part_id = (key.low % partition_num);
                 // copy each field
-                for(size_t col_id=0; col_id < block.columns(); ++col_id) {
+                for (size_t col_id = 0; col_id < block.columns(); ++col_id)
+                {
                     dest_tbl_cols[part_id][col_id]->insert(block.getByPosition(col_id).column->operator[](row_index));
                 }
             }
             // serialize each partitioned block and write it to its destination
-            for(auto part_id=0; part_id < partition_num; ++part_id)
+            for (auto part_id = 0; part_id < partition_num; ++part_id)
             {
                 dest_blocks[part_id].setColumns(std::move(dest_tbl_cols[part_id]));
-                chunk_codec_stream[part_id]->encode(dest_blocks[part_id],0, dest_blocks[part_id].rows());
+                chunk_codec_stream[part_id]->encode(dest_blocks[part_id], 0, dest_blocks[part_id].rows());
                 auto dag_chunk = responses[part_id].add_chunks();
                 dag_chunk->set_rows_data(chunk_codec_stream[part_id]->getString());
                 chunk_codec_stream[part_id]->clear();
@@ -188,7 +196,6 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
         }
     };
 }
-
 
 
 template <class StreamWriterPtr>
