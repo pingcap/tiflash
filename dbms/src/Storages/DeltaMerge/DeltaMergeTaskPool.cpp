@@ -138,8 +138,12 @@ bool DeltaMergeTaskPool::handleTaskImpl(bool high_priority)
             // otherwise append it to high_priority_queue
             addTaskToHighPriorityQueue(task, /* front */ high_priority);
             if (!high_priority)
+            {
+                GET_METRIC(global_context.getTiFlashMetrics(), tiflash_storage_delta_merage_task_num, type_low_priority_task_num)
+                    .Decrement(1);
                 GET_METRIC(global_context.getTiFlashMetrics(), tiflash_storage_delta_merage_task_num, type_high_priority_task_num)
                     .Increment(1);
+            }
             return false;
         }
 

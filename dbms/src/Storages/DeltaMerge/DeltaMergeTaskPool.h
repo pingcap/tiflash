@@ -78,7 +78,7 @@ public:
         SegmentSnapshotPtr snapshot;
         SegmentSnapshotPtr next_snapshot;
 
-        Int64      task_size = -1;
+        Int64 task_size = -1;
         // guard `finished` field
         std::mutex task_mutex;
         bool       finished = false;
@@ -120,6 +120,7 @@ private:
 
     void addTaskToHighPriorityQueue(BackgroundTaskHandle & task, bool front);
 
+    // create snapshot for segment in task and try request balance for some task if needed
     bool tryPrepareTask(BackgroundTaskHandle & task);
 
 private:
