@@ -247,7 +247,7 @@ void DeltaMergeTaskPool::addTaskToHighPriorityQueue(BackgroundTaskHandle & task,
     LOG_DEBUG(log,
               "Database: [" << task->store->getDatabaseName() << "] Table: [" << task->store->getTableName() << "] Segment ["
                             << task->segment->segmentId() << "] task [" << toString(task->type) << "] remaining task size ["
-                            << task->task_size << "] add to background task pool " << (front ? "head" : "tail"));
+                            << task->task_size << "] add back to background task pool high priority " << (front ? "head" : "tail"));
     std::scoped_lock lock{mutex};
     processing_tasks.erase(task);
     GET_METRIC(global_context.getTiFlashMetrics(), tiflash_storage_delta_merge_task_num, type_high_priority_task_num).Increment(1);
