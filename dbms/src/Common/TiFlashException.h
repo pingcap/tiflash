@@ -108,8 +108,12 @@ namespace DB
         E(Internal, "Encryption internal error.",                                                                           \
             "Please contact with developer, \n"                                                                             \
             "better providing information about your cluster(log, topology information etc.).",                             \
+            "");)                                                                                                           \
+    C(MPP,                                                                                                                  \
+        E(Internal, "MPP internal error.",                                                                                  \
+            "Please contact with developer, \n"                                                                             \
+            "better providing information about your cluster(log, topology information etc.).",                             \
             "");)
-
 
 /// TiFlashError is core struct of standard error,
 /// which contains all information about an error except message.
