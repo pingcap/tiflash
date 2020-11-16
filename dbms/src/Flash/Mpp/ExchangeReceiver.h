@@ -174,7 +174,7 @@ class ExchangeReceiver
                         // the last read() asynchronously succeed!
                         if (call->packet.has_error()) // This is the only way that down stream pass an error.
                         {
-                            throw Exception("exchange receiver meet error : " + call->packet.error().msg());
+                            throw TiFlashException("exchange receiver meet error : " + call->packet.error().msg(), Errors::MPP::Internal);
                         }
                         decodePacket(call->packet);
                         // issue a new read request
@@ -188,7 +188,7 @@ class ExchangeReceiver
                     break;
                     default:
                     {
-                        throw Exception("exchange receiver meet unknown msg");
+                        throw TiFlashException("exchange receiver meet unknown msg", Errors::MPP::Internal);
                     }
                 }
             }
