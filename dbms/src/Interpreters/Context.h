@@ -177,7 +177,7 @@ public:
     void setPathPool(const Strings & main_data_paths,
         const Strings & latest_data_paths,
         const Strings & kvstore_paths,
-        bool enable_raft_compatibility_mode,
+        bool enable_raft_compatible_mode,
         PathCapacityMetricsPtr global_capacity_,
         FileProviderPtr file_provider);
 
@@ -401,7 +401,10 @@ public:
     void initializeSchemaSyncService();
     SchemaSyncServicePtr & getSchemaSyncService();
 
-    void initializePathCapacityMetric(const std::vector<std::string> & all_path, size_t capacity_quota);
+    void initializePathCapacityMetric(                                                    //
+        size_t global_capacity_quota,                                                     //
+        const Strings & main_data_paths, const std::vector<size_t> & main_capacity_quota, //
+        const Strings & latest_data_paths, const std::vector<size_t> & latest_capacity_quota);
     PathCapacityMetricsPtr getPathCapacity() const;
 
     void initializePartPathSelector(std::vector<std::string> && all_path, std::vector<std::string> && all_fast_path);

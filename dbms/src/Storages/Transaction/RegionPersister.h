@@ -2,7 +2,6 @@
 
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Storages/Page/PageStorage.h>
-#include <Storages/Transaction/IndexReaderCreate.h>
 #include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
 
@@ -23,6 +22,8 @@ using RegionMap = std::unordered_map<RegionID, RegionPtr>;
 class RegionTaskLock;
 class RegionManager;
 
+struct TiFlashRaftProxyHelper;
+
 class RegionPersister final : private boost::noncopyable
 {
 public:
@@ -31,7 +32,7 @@ public:
     void drop(RegionID region_id, const RegionTaskLock &);
     void persist(const Region & region);
     void persist(const Region & region, const RegionTaskLock & lock);
-    RegionMap restore(IndexReaderCreateFunc * func = nullptr, DB::PageStorage::Config config = DB::PageStorage::Config{});
+    RegionMap restore(const TiFlashRaftProxyHelper * proxy_helper = nullptr, DB::PageStorage::Config config = DB::PageStorage::Config{});
     bool gc();
 
     using RegionCacheWriteElement = std::tuple<RegionID, MemoryWriteBuffer, size_t, UInt64>;

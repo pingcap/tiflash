@@ -3,7 +3,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/RaftCommandResult.h>
+#include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -14,8 +14,8 @@ namespace DB
 {
 
 TMTContext::TMTContext(Context & context_, const std::vector<std::string> & addrs,
-    const std::unordered_set<std::string> & ignore_databases_, ::TiDB::StorageEngine engine_,
-    bool disable_bg_flush_, const pingcap::ClusterConfig & cluster_config)
+    const std::unordered_set<std::string> & ignore_databases_, ::TiDB::StorageEngine engine_, bool disable_bg_flush_,
+    const pingcap::ClusterConfig & cluster_config)
     : context(context_),
       kvstore(std::make_shared<KVStore>(context)),
       region_table(context),
@@ -29,9 +29,9 @@ TMTContext::TMTContext(Context & context_, const std::vector<std::string> & addr
       disable_bg_flush(disable_bg_flush_)
 {}
 
-void TMTContext::restore()
+void TMTContext::restore(const TiFlashRaftProxyHelper * proxy_helper)
 {
-    kvstore->restore([&]() -> IndexReaderPtr { return this->createIndexReader(); });
+    kvstore->restore(proxy_helper);
     region_table.restore();
     initialized = true;
 
@@ -73,16 +73,6 @@ void TMTContext::setSchemaSyncer(SchemaSyncerPtr rhs)
 pingcap::pd::ClientPtr TMTContext::getPDClient() const { return cluster->pd_client; }
 
 MPPTaskManagerPtr TMTContext::getMPPTaskManager() { return mpp_task_manager; }
-
-IndexReaderPtr TMTContext::createIndexReader() const
-{
-    std::lock_guard<std::mutex> lock(mutex);
-    if (cluster->pd_client->isMock())
-    {
-        return nullptr;
-    }
-    return std::make_shared<IndexReader>(cluster);
-}
 
 const std::unordered_set<std::string> & TMTContext::getIgnoreDatabases() const { return ignore_databases; }
 

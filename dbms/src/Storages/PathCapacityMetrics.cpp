@@ -1,12 +1,14 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/formatReadable.h>
+#include <Core/Types.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/Transaction/ProxyFFIType.h>
 #include <common/logger_useful.h>
 #include <sys/statvfs.h>
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -19,14 +21,47 @@ extern const Metric StoreSizeUsed;
 
 namespace DB
 {
-PathCapacityMetrics::PathCapacityMetrics(const std::vector<std::string> & all_paths, const size_t capacity_quota_)
+PathCapacityMetrics::PathCapacityMetrics(                                        //
+    const size_t capacity_quota_,                                                // will be ignored if `main_capacity_quota` is not empty
+    const Strings & main_paths_, const std::vector<size_t> main_capacity_quota_, //
+    const Strings & latest_paths_, const std::vector<size_t> latest_capacity_quota_)
     : capacity_quota(capacity_quota_), log(&Poco::Logger::get("PathCapacityMetrics"))
 {
-    for (size_t i = 0; i < all_paths.size(); ++i)
+    if (main_capacity_quota_.empty())
     {
-        CapacityInfo info;
-        info.path = all_paths[i];
-        path_infos.emplace_back(info);
+        // The `capacity_quota_` is left for backward compatibility.
+        // If `main_capacity_quota_` is not empty, use the capacity for each path instead of global capacity.
+        capacity_quota = 0;
+    }
+
+    // Get unique <path, capacity> from `main_paths_` && `latest_paths_`
+    std::map<String, size_t> all_paths;
+    for (size_t i = 0; i < main_paths_.size(); ++i)
+    {
+        if (i >= main_capacity_quota_.size())
+            all_paths[main_paths_[i]] = 0;
+        else
+            all_paths[main_paths_[i]] = main_capacity_quota_[i];
+    }
+    for (size_t i = 0; i < latest_paths_.size(); ++i)
+    {
+        if (auto iter = all_paths.find(latest_paths_[i]); iter != all_paths.end())
+        {
+            if (iter->second == 0 || latest_capacity_quota_[i] == 0)
+                iter->second = 0;
+            else
+                iter->second = std::max(iter->second, latest_capacity_quota_[i]);
+        }
+        else
+        {
+            all_paths[latest_paths_[i]] = latest_capacity_quota_[i];
+        }
+    }
+
+    for (auto && [path, quota] : all_paths)
+    {
+        LOG_INFO(log, "Init capacity [path=" << path << "] [capacity=" << formatReadableSizeWithBinarySuffix(quota) << "]");
+        path_infos.emplace_back(CapacityInfo{path, quota});
     }
 }
 
@@ -80,7 +115,7 @@ FsStats PathCapacityMetrics::getFsStats() const
         total_stat.used_size += path_stat.used_size;
     }
 
-    // If user set quota on capacity, set the capacity to the quota.
+    // If user set quota on the global quota, set the capacity to the quota.
     if (capacity_quota != 0 && capacity_quota < total_stat.capacity_size)
         total_stat.capacity_size = capacity_quota;
 
@@ -105,6 +140,18 @@ FsStats PathCapacityMetrics::getFsStats() const
     CurrentMetrics::set(CurrentMetrics::StoreSizeUsed, total_stat.used_size);
 
     return total_stat;
+}
+
+FsStats PathCapacityMetrics::getFsStatsOfPath(std::string_view file_path) const
+{
+    ssize_t path_idx = locatePath(file_path);
+    if (unlikely(path_idx == INVALID_INDEX))
+    {
+        LOG_ERROR(log, "Can not locate path in getFsStatsOfPath. File: " + String(file_path));
+        return FsStats{};
+    }
+
+    return path_infos[path_idx].getStats(nullptr);
 }
 
 // Return the index of the longest prefix matching path in `path_info`
@@ -153,8 +200,13 @@ FsStats PathCapacityMetrics::CapacityInfo::getStats(Poco::Logger * log) const
         return res;
     }
 
-    // capacity
-    uint64_t capacity = vfs.f_blocks * vfs.f_frsize;
+    // capacity is limited by the actual disk capacity
+    uint64_t capacity = 0;
+    const uint64_t disk_capacity_size = vfs.f_blocks * vfs.f_frsize;
+    if (capacity_bytes == 0 || disk_capacity_size < capacity_bytes)
+        capacity = disk_capacity_size;
+    else
+        capacity = capacity_bytes;
     res.capacity_size = capacity;
 
     // used
@@ -164,7 +216,7 @@ FsStats PathCapacityMetrics::CapacityInfo::getStats(Poco::Logger * log) const
     uint64_t avail = 0;
     if (capacity > res.used_size)
         avail = capacity - res.used_size;
-    else
+    else if (log)
         LOG_WARNING(log,
             "No available space for path: " << path << ", capacity: " << formatReadableSizeWithBinarySuffix(capacity) //
                                             << ", used: " << formatReadableSizeWithBinarySuffix(used_bytes));
