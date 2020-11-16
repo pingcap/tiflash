@@ -278,6 +278,11 @@ void DeltaMergeStore::shutdown()
     LOG_TRACE(log, "Shutdown DeltaMerge end [" << db_name << "." << table_name << "]");
 }
 
+bool DeltaMergeStore::isShutdown()
+{
+    return shutdown_called.load(std::memory_order_acquire);
+}
+
 DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings)
 {
     std::shared_lock lock(read_write_mutex);

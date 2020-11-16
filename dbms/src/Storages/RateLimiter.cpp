@@ -11,8 +11,6 @@ RateLimiter::RateLimiter(
       alloc_balance_soft_limit{alloc_balance_soft_limit_},
       alloc_balance_hard_limit{alloc_balance_hard_limit_},
       available_bytes{alloc_balance_hard_limit_},
-      prev_refilled_time{Clock::now()},
-      prev_alloc_time{Clock::now()},
       prev_alloc_balance{0},
       log{&Logger::get("RateLimiter")}
 {
@@ -33,9 +31,7 @@ size_t RateLimiter::request(Int64 bytes)
     refillIfNeed();
 
     Int64 alloc_bytes = 0;
-    auto current_time = Clock::now();
-    size_t elapsed_alloc_seconds
-        = std::chrono::duration_cast<std::chrono::microseconds>(current_time - prev_alloc_time).count() / (1000 * 1000.0);
+    size_t elapsed_alloc_seconds = alloc_stop_watch.elapsedSeconds();
     //   1. if prev_alloc_balance - (current_time - prev_alloc_time) * balance_increase_rate >= alloc_balance_soft_limit,
     //      then <allocated_bytes> = 0
     Int64 prev_alloc_working_balance = prev_alloc_balance - elapsed_alloc_seconds * balance_increase_rate;
@@ -44,7 +40,7 @@ size_t RateLimiter::request(Int64 bytes)
         alloc_bytes = bytes < available_bytes ? bytes : available_bytes;
         available_bytes = bytes < available_bytes ? available_bytes - bytes : 0;
     }
-    prev_alloc_time = current_time;
+    alloc_stop_watch.restart();
     prev_alloc_balance = prev_alloc_working_balance + alloc_bytes;
 
     GET_METRIC(context.getTiFlashMetrics(), tiflash_storage_rate_limiter_balance).Set(available_bytes);
@@ -57,13 +53,11 @@ void RateLimiter::refillIfNeed()
     if (available_bytes >= alloc_balance_hard_limit)
         return;
 
-    auto current_time = Clock::now();
-    size_t elapsed_seconds
-        = std::chrono::duration_cast<std::chrono::microseconds>(current_time - prev_refilled_time).count() / (1000 * 1000.0);
+    size_t elapsed_seconds = refill_stop_watch.elapsedSeconds();
     available_bytes = available_bytes + elapsed_seconds * balance_increase_rate;
     if (available_bytes > alloc_balance_hard_limit)
         available_bytes = alloc_balance_hard_limit;
-    prev_refilled_time = current_time;
+    refill_stop_watch.restart();
 }
 
 } // namespace DB

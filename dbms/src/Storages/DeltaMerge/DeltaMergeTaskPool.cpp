@@ -137,6 +137,8 @@ bool DeltaMergeTaskPool::handleTaskImpl(bool high_priority)
         std::scoped_lock lock{task->task_mutex};
         if (task->finished)
             return true;
+        if (task->store->isShutdown())
+            return true;
 
         if (!tryPrepareTask(task))
         {

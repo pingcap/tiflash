@@ -203,6 +203,8 @@ public:
     // Stop all background tasks.
     void shutdown();
 
+    bool isShutdown();
+
     void write(const Context & db_context, const DB::Settings & db_settings, const Block & block);
 
     // Deprated

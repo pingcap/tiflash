@@ -5,6 +5,7 @@
 #include <memory>
 #include <mutex>
 
+#include <Common/Stopwatch.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
@@ -47,9 +48,9 @@ private:
     Int64 alloc_balance_hard_limit;
     Int64 available_bytes;
 
-    Timepoint prev_refilled_time;
+    AtomicStopwatch refill_stop_watch;
 
-    Timepoint prev_alloc_time;
+    AtomicStopwatch alloc_stop_watch;
     Int64 prev_alloc_balance;
 
     Logger * log;
