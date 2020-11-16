@@ -120,9 +120,6 @@ private:
 
     void addTaskToHighPriorityQueue(BackgroundTaskHandle & task, bool front);
 
-    // create snapshot for segment in task and try request balance for some task if needed
-    bool tryPrepareTask(BackgroundTaskHandle & task);
-
 private:
     Context & global_context;
 
@@ -139,6 +136,9 @@ private:
     BackgroundProcessingPool::TaskHandle background_task_handle;
 
     RateLimiterPtr rate_limiter;
+
+    // we can just handling task from high priority queue one at a time to avoid create too many snapshot
+    std::atomic<bool> handling_high_priority_task{false};
 
     Logger * log;
 

@@ -86,8 +86,13 @@ void DeltaMergeTaskPool::removeAllTasksForStore(DeltaMergeStorePtr store)
 
 bool DeltaMergeTaskPool::handleBackgroundTask()
 {
+    bool res = false;
     // try handle task from high_priority_queue first
-    bool res = handleTaskImpl(true);
+    if (!handling_high_priority_task.exchange(true))
+    {
+        res = handleTaskImpl(true);
+        handling_high_priority_task.exchange(false);
+    }
     // if no task from high_priority_queue can be handled, try handle task from low_priority_queue
     if (!res)
         res = handleTaskImpl(false);
@@ -134,46 +139,111 @@ bool DeltaMergeTaskPool::handleTaskImpl(bool high_priority)
     }
 
     {
-        std::scoped_lock lock{task->task_mutex};
+        std::scoped_lock task_lock{task->task_mutex};
         if (task->finished)
             return true;
         if (task->store->isShutdown())
             return true;
 
-        if (!tryPrepareTask(task))
+        auto try_request_balance = [&](DeltaMergeTaskPool::BackgroundTaskHandle & task, bool clear_snapshot) {
+            if (task->task_size <= 0)
+                return true;
+            task->task_size = rate_limiter->request(task->task_size);
+            if (task->task_size <= 0)
+                return true;
+            else
+            {
+                if (clear_snapshot)
+                {
+                    task->snapshot      = nullptr;
+                    task->next_snapshot = nullptr;
+                }
+                // if this task is taken from high_priority_queue, we should put this task back to the head
+                // otherwise append it to high_priority_queue
+                addTaskToHighPriorityQueue(task, /* front */ high_priority);
+                return false;
+            }
+        };
+
+        // `need_create_snapshot` is used to avoid create too many snapshot for tasks which may cause oom
+        // for the task from high priority queue, always create snapshot because no other tasks in the queue will be handled
+        //   until the first task completed
+        // for the task from low priority queue, create snapshot when high_priority_tasks is empty
+        bool need_create_snapshot = false;
+        if (high_priority)
+            need_create_snapshot = true;
+        else
         {
-            // if this task is taken from high_priority_queue, we should put this task back to the head
-            // otherwise append it to high_priority_queue
-            addTaskToHighPriorityQueue(task, /* front */ high_priority);
-            return false;
+            std::scoped_lock lock{mutex};
+            need_create_snapshot = high_priority_tasks.empty();
         }
 
         SegmentPtr left, right;
         ThreadType type = ThreadType::Write;
+        bool       is_physical;
         try
         {
             switch (task->type)
             {
             case Split:
-                if (task->snapshot)
+                if (!task->snapshot)
                 {
-                    std::tie(left, right) = task->store->segmentSplit(*task->dm_context, task->segment, task->snapshot);
-                    type                  = ThreadType::BG_Split;
+                    std::tie(task->snapshot, std::ignore) = task->store->createSegmentSnapshot(*task->dm_context, task->segment, {}, true);
+                    if (!task->snapshot)
+                    {
+                        LOG_DEBUG(log,
+                                  "Database [" << task->store->getDatabaseName() << "] Table [" << task->store->getTableName()
+                                               << "] give up segment [" << task->segment->segmentId() << "] split");
+                        return true;
+                    }
+                    task->task_size = task->snapshot->getBytes();
                 }
+                std::tie(is_physical, std::ignore) = task->segment->isPhysicalSplit(*task->dm_context, task->snapshot);
+                if (is_physical && !try_request_balance(task, !need_create_snapshot))
+                    return false;
+
+                std::tie(left, right) = task->store->segmentSplit(*task->dm_context, task->segment, task->snapshot);
+                type                  = ThreadType::BG_Split;
                 break;
             case Merge:
-                if (task->snapshot && task->next_snapshot)
+                if (!task->snapshot || !task->next_snapshot)
                 {
-                    task->store->segmentMerge(*task->dm_context, task->segment, task->next_segment, task->snapshot, task->next_snapshot);
-                    type = ThreadType::BG_Merge;
+                    std::tie(task->snapshot, task->next_snapshot)
+                        = task->store->createSegmentSnapshot(*task->dm_context, task->segment, task->next_segment, true);
+                    if (!task->snapshot || !task->next_snapshot)
+                    {
+                        LOG_DEBUG(log,
+                                  "Database [" << task->store->getDatabaseName() << "] Table [" << task->store->getTableName()
+                                               << "] give up merge segments left [" << task->segment->segmentId() << "], right ["
+                                               << task->next_segment->segmentId() << "]");
+                        return true;
+                    }
+                    task->task_size = task->snapshot->getBytes() + task->next_snapshot->getBytes();
                 }
+                if (!try_request_balance(task, !need_create_snapshot))
+                    return false;
+
+                task->store->segmentMerge(*task->dm_context, task->segment, task->next_segment, task->snapshot, task->next_snapshot);
+                type = ThreadType::BG_Merge;
                 break;
             case MergeDelta:
-                if (task->snapshot)
+                if (!task->snapshot)
                 {
-                    left = task->store->segmentMergeDelta(*task->dm_context, task->segment, task->snapshot, false);
-                    type = ThreadType::BG_MergeDelta;
+                    std::tie(task->snapshot, std::ignore) = task->store->createSegmentSnapshot(*task->dm_context, task->segment, {}, true);
+                    if (!task->snapshot)
+                    {
+                        LOG_DEBUG(log,
+                                  "Database [" << task->store->getDatabaseName() << "] Table [" << task->store->getTableName()
+                                               << "] give up merge delta, segment [" << task->segment->segmentId() << "]");
+                        return true;
+                    }
+                    task->task_size = task->snapshot->getBytes();
                 }
+                if (!try_request_balance(task, !need_create_snapshot))
+                    return false;
+
+                left = task->store->segmentMergeDelta(*task->dm_context, task->segment, task->snapshot, false);
+                type = ThreadType::BG_MergeDelta;
                 break;
             case Compact:
                 task->segment->compactDelta(*task->dm_context);
@@ -257,76 +327,6 @@ void DeltaMergeTaskPool::addTaskToHighPriorityQueue(BackgroundTaskHandle & task,
         high_priority_tasks.push_front(task);
     else
         high_priority_tasks.push_back(task);
-}
-
-bool DeltaMergeTaskPool::tryPrepareTask(DeltaMergeTaskPool::BackgroundTaskHandle & task)
-{
-    auto try_request_balance = [&](DeltaMergeTaskPool::BackgroundTaskHandle & task) {
-        if (task->task_size <= 0)
-            return true;
-        task->task_size = rate_limiter->request(task->task_size);
-        if (task->task_size <= 0)
-            return true;
-        else
-            return false;
-    };
-
-    // Task that has already been rate limited
-    if (task->task_size != -1)
-        return try_request_balance(task);
-
-    // Try to process this task for the first time
-    bool is_physical;
-    switch (task->type)
-    {
-    case Split:
-        std::tie(task->snapshot, std::ignore) = task->store->createSegmentSnapshot(*task->dm_context, task->segment, {}, true);
-        if (!task->snapshot)
-        {
-            LOG_DEBUG(log,
-                      "Database [" << task->store->getDatabaseName() << "] Table [" << task->store->getTableName() << "] give up segment ["
-                                   << task->segment->segmentId() << "] split");
-            return true;
-        }
-        std::tie(is_physical, std::ignore) = task->segment->isPhysicalSplit(*task->dm_context, task->snapshot);
-        if (is_physical)
-        {
-            task->task_size = task->snapshot->getBytes();
-            return try_request_balance(task);
-        }
-        else
-            return true;
-    case Merge:
-        std::tie(task->snapshot, task->next_snapshot)
-            = task->store->createSegmentSnapshot(*task->dm_context, task->segment, task->next_segment, true);
-        if (!task->snapshot || !task->next_snapshot)
-        {
-            LOG_DEBUG(log,
-                      "Database [" << task->store->getDatabaseName() << "] Table [" << task->store->getTableName()
-                                   << "] give up merge segments left [" << task->segment->segmentId() << "], right ["
-                                   << task->next_segment->segmentId() << "]");
-            return true;
-        }
-        task->task_size = task->snapshot->getBytes() + task->next_snapshot->getBytes();
-        return try_request_balance(task);
-    case MergeDelta:
-        std::tie(task->snapshot, std::ignore) = task->store->createSegmentSnapshot(*task->dm_context, task->segment, {}, true);
-        if (!task->snapshot)
-        {
-            LOG_DEBUG(log,
-                      "Database [" << task->store->getDatabaseName() << "] Table [" << task->store->getTableName()
-                                   << "] give up merge delta, segment [" << task->segment->segmentId() << "]");
-            return true;
-        }
-        task->task_size = task->snapshot->getBytes();
-        return try_request_balance(task);
-    case Compact:
-    case Flush:
-    case PlaceIndex:
-        return true;
-    default:
-        throw Exception("Unsupported task type: " + toString(task->type));
-    }
 }
 
 } // namespace DM
