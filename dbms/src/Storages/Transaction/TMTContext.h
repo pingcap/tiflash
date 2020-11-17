@@ -52,9 +52,7 @@ public:
 
     pingcap::kv::Cluster * getKVCluster() { return cluster.get(); }
 
-    IndexReaderPtr createIndexReader() const;
-
-    void restore();
+    void restore(const TiFlashRaftProxyHelper * proxy_helper = nullptr);
 
     const std::unordered_set<std::string> & getIgnoreDatabases() const;
 
@@ -66,6 +64,8 @@ public:
     void setTerminated();
 
     const KVClusterPtr & getCluster() const { return cluster; }
+
+    UInt64 replicaReadMaxThread() const { return replica_read_max_thread.load(std::memory_order::memory_order_relaxed); }
 
 private:
     Context & context;
@@ -88,6 +88,7 @@ private:
     bool disable_bg_flush;
 
     std::atomic_bool terminated{false};
+    std::atomic_uint64_t replica_read_max_thread{false};
 };
 
 } // namespace DB

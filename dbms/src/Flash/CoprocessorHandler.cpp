@@ -121,7 +121,7 @@ grpc::Status CoprocessorHandler::execute()
                 region_err = cop_response->mutable_region_error();
                 region_err->mutable_region_not_found()->set_region_id(cop_request->context().region_id());
                 break;
-            case RegionException::RegionReadStatus::VERSION_ERROR:
+            case RegionException::RegionReadStatus::EPOCH_NOT_MATCH:
                 GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_error, reason_epoch_not_match).Increment();
                 region_err = cop_response->mutable_region_error();
                 region_err->mutable_epoch_not_match();

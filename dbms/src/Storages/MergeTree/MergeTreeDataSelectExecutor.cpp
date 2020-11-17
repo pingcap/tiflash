@@ -62,7 +62,7 @@ struct numeric_limits<__uint128_t>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
-#include <Storages/Transaction/RegionException.h>
+#include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/VirtualColumnUtils.h>
 
@@ -440,7 +440,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
             auto start_time = Clock::now();
             const size_t mem_region_num = regions_executor_data.size();
             const size_t batch_size = mem_region_num / concurrent_num;
-            std::atomic_uint8_t region_status = RegionException::RegionReadStatus::OK;
+            std::atomic<RegionException::RegionReadStatus> region_status = RegionException::RegionReadStatus::OK;
 
             const auto func_run_learner_read = [&](const size_t region_begin) {
                 const size_t region_end = std::min(region_begin + batch_size, mem_region_num);
@@ -467,18 +467,20 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     GET_METRIC(const_cast<Context &>(context).getTiFlashMetrics(), tiflash_raft_read_index_duration_seconds)
                         .Observe(read_index_watch.elapsedSeconds());
 
-                    if (read_index_result.region_unavailable)
+                    switch (read_index_result.status)
                     {
-                        // client-c detect region removed. Set region_status and continue.
-                        region_status = RegionException::RegionReadStatus::NOT_FOUND;
-                        continue;
+                        case RegionException::RegionReadStatus::NOT_FOUND:
+                        case RegionException::RegionReadStatus::EPOCH_NOT_MATCH:
+                        {
+                            region_status = read_index_result.status;
+                            continue;
+                        }
+                        case RegionException::RegionReadStatus::OK:
+                        {
+                            break;
+                        }
                     }
-                    else if (read_index_result.region_epoch_not_match)
-                    {
-                        region_status = RegionException::RegionReadStatus::VERSION_ERROR;
-                        continue;
-                    }
-                    else
+
                     {
                         Stopwatch wait_index_watch;
                         if (region->waitIndex(read_index_result.read_index, tmt.getTerminated()))
@@ -523,7 +525,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
             }
 
             if (region_status != RegionException::RegionReadStatus::OK)
-                func_throw_retry_region(static_cast<RegionException::RegionReadStatus>(region_status.load()));
+                func_throw_retry_region(region_status);
 
             auto end_time = Clock::now();
             LOG_DEBUG(log,
@@ -992,7 +994,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                 if (region != kvstore_region[region_query_info.region_id])
                     status = RegionException::RegionReadStatus::NOT_FOUND;
                 else if (region->version() != region_query_info.version)
-                    status = RegionException::RegionReadStatus::VERSION_ERROR;
+                    status = RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
 
                 if (status != RegionException::RegionReadStatus::OK)
                 {

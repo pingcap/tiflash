@@ -18,6 +18,14 @@ class MetaRaftCommandDelegate;
 class RegionRaftCommandDelegate;
 using TerminateWaitIndex = bool;
 
+struct RegionMetaSnapshot
+{
+    RegionVersion ver;
+    RegionVersion conf_ver;
+    ImutRegionRangePtr range;
+    metapb::Peer peer;
+};
+
 class RegionMeta
 {
 public:
@@ -67,7 +75,8 @@ public:
 
     bool isPeerRemoved() const;
 
-    std::tuple<RegionVersion, RegionVersion, ImutRegionRangePtr> dumpVersionRange() const;
+    RegionMetaSnapshot dumpRegionMetaSnapshot() const;
+
     MetaRaftCommandDelegate & makeRaftCommandDelegate();
 
     metapb::Region getMetaRegion() const;

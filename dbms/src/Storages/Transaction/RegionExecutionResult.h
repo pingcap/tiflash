@@ -1,8 +1,14 @@
 #pragma once
 
+#include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/Types.h>
 
 #include <memory>
+
+namespace kvrpcpb
+{
+class LockInfo;
+} // namespace kvrpcpb
 
 namespace DB
 {
@@ -36,6 +42,15 @@ struct RegionMergeResult
 {
     bool source_at_left;
     UInt64 version;
+};
+
+struct ReadIndexResult
+{
+    RegionException::RegionReadStatus status{RegionException::RegionReadStatus::OK};
+    UInt64 read_index{0};
+
+    ReadIndexResult(RegionException::RegionReadStatus status_, UInt64 read_index_ = 0);
+    ReadIndexResult() = default;
 };
 
 } // namespace DB

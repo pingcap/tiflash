@@ -37,6 +37,7 @@
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFIType.h>
+#include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -296,12 +297,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     TiFlashServerHelper helper{
         // a special number, also defined in proxy
         .magic_number = 0x13579BDF,
-        .version = 11,
+        .version = 401002,
         .inner = &tiflash_instance_wrap,
         .fn_gen_cpp_string = GenCppRawString,
         .fn_handle_write_raft_cmd = HandleWriteRaftCmd,
         .fn_handle_admin_raft_cmd = HandleAdminRaftCmd,
-        .fn_handle_apply_snapshot = HandleApplySnapshot,
         .fn_atomic_update_proxy = AtomicUpdateProxy,
         .fn_handle_destroy = HandleDestroy,
         .fn_handle_ingest_sst = HandleIngestSST,
@@ -310,9 +310,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         .fn_handle_get_tiflash_status = HandleGetTiFlashStatus,
         .fn_pre_handle_snapshot = PreHandleSnapshot,
         .fn_apply_pre_handled_snapshot = ApplyPreHandledSnapshot,
-        .fn_gc_pre_handled_snapshot = GcPreHandledSnapshot,
         .fn_handle_get_table_sync_status = HandleGetTableSyncStatus,
-        .gc_cpp_string = GcCppString,
+        .gc_raw_cpp_ptr = GcRawCppPtr,
+        .fn_gen_batch_read_index_res = GenBatchReadIndexRes,
+        .fn_insert_batch_read_index_resp = InsertBatchReadIndexResp,
     };
 
     auto proxy_runner = std::thread([&proxy_conf, &log, &helper]() {
@@ -732,8 +733,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
     });
 
     {
+        if (proxy_conf.is_proxy_runnable && !tiflash_instance_wrap.proxy_helper)
+            throw Exception("Raft Proxy Helper is not set, should not happen");
         /// initialize TMTContext
-        global_context->getTMTContext().restore();
+        global_context->getTMTContext().restore(tiflash_instance_wrap.proxy_helper);
     }
 
     /// Then, startup grpc server to serve raft and/or flash services.
@@ -1107,6 +1110,17 @@ int Server::main(const std::vector<std::string> & /*args*/)
             tiflash_instance_wrap.tmt = &global_context->getTMTContext();
             LOG_INFO(log, "let tiflash proxy start all services");
             tiflash_instance_wrap.status = TiFlashStatus::Running;
+            while (tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Idle)
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            LOG_INFO(log, "proxy is ready to serve, try to wake up all region leader by sending read index request");
+            {
+                std::vector<kvrpcpb::ReadIndexRequest> batch_read_index_req;
+                tiflash_instance_wrap.tmt->getKVStore()->traverseRegions([&batch_read_index_req](RegionID, const RegionPtr & region) {
+                    batch_read_index_req.emplace_back(GenRegionReadIndexReq(*region));
+                });
+                tiflash_instance_wrap.proxy_helper->batchReadIndex(batch_read_index_req);
+            }
+            LOG_INFO(log, "start to wait for terminal signal");
         }
 
         waitForTerminationRequest();
@@ -1118,7 +1132,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             if (proxy_conf.is_proxy_runnable)
             {
                 LOG_INFO(log, "wait tiflash proxy to stop all services");
-                while (!tiflash_instance_wrap.proxy_helper->checkServiceStopped())
+                while (tiflash_instance_wrap.proxy_helper->getProxyStatus() != RaftProxyStatus::Stop)
                     std::this_thread::sleep_for(std::chrono::milliseconds(200));
                 LOG_INFO(log, "all services in tiflash proxy are stopped");
             }

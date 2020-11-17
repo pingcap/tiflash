@@ -144,8 +144,23 @@ static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 peer_
     throw Exception(std::string(__PRETTY_FUNCTION__) + ": peer " + DB::toString(peer_id) + " not found", ErrorCodes::LOGICAL_ERROR);
 }
 
-RegionPtr KVStore::preHandleSnapshot(
-    metapb::Region && region, UInt64 peer_id, const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt)
+RegionPtr KVStore::genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term)
+{
+    auto meta = ({
+        auto peer = findPeer(region, peer_id);
+        raft_serverpb::RaftApplyState apply_state;
+        {
+            apply_state.set_applied_index(index);
+            apply_state.mutable_truncated_state()->set_index(index);
+            apply_state.mutable_truncated_state()->set_term(term);
+        }
+        RegionMeta(std::move(peer), std::move(region), std::move(apply_state));
+    });
+
+    return std::make_shared<Region>(std::move(meta), proxy_helper);
+}
+
+void KVStore::preHandleSnapshot(RegionPtr new_region, const SnapshotViewArray snaps, TMTContext & tmt)
 {
     {
         decltype(bg_gc_region_data)::value_type tmp;
@@ -164,21 +179,9 @@ RegionPtr KVStore::preHandleSnapshot(
             .Observe(watch.elapsedSeconds());
     });
 
-    auto meta = ({
-        auto peer = findPeer(region, peer_id);
-        raft_serverpb::RaftApplyState apply_state;
-        {
-            apply_state.set_applied_index(index);
-            apply_state.mutable_truncated_state()->set_index(index);
-            apply_state.mutable_truncated_state()->set_term(term);
-        }
-        RegionMeta(std::move(peer), std::move(region), std::move(apply_state));
-    });
-    IndexReaderCreateFunc index_reader_create = [&]() -> IndexReaderPtr { return tmt.createIndexReader(); };
-    auto new_region = std::make_shared<Region>(std::move(meta), index_reader_create);
     {
         std::stringstream ss;
-        ss << "Generate snapshot " << new_region->toString(false);
+        ss << "Pre-handle snapshot " << new_region->toString(false);
         if (snaps.len)
             ss << " with data ";
         for (UInt64 i = 0; i < snaps.len; ++i)
@@ -199,7 +202,6 @@ RegionPtr KVStore::preHandleSnapshot(
         ss << " cost " << watch.elapsedMilliseconds() << "ms";
         LOG_INFO(log, ss.str());
     }
-    return new_region;
 }
 
 void KVStore::handleApplySnapshot(RegionPtr new_region, TMTContext & tmt)
@@ -221,7 +223,8 @@ void KVStore::handleApplySnapshot(RegionPtr new_region, TMTContext & tmt)
 void KVStore::handleApplySnapshot(
     metapb::Region && region, UInt64 peer_id, const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt)
 {
-    auto new_region = preHandleSnapshot(std::move(region), peer_id, snaps, index, term, tmt);
+    auto new_region = genRegionPtr(std::move(region), peer_id, index, term);
+    preHandleSnapshot(new_region, snaps, tmt);
     handleApplySnapshot(new_region, tmt);
 }
 
