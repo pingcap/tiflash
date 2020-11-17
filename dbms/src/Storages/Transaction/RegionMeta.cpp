@@ -1,4 +1,4 @@
-#include <Storages/Transaction/RaftCommandResult.h>
+#include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionMeta.h>
 
 #pragma GCC diagnostic push
@@ -344,10 +344,10 @@ bool operator==(const RegionMeta & meta1, const RegionMeta & meta2)
         && meta1.region_state == meta2.region_state;
 }
 
-std::tuple<RegionVersion, RegionVersion, ImutRegionRangePtr> RegionMeta::dumpVersionRange() const
+RegionMetaSnapshot RegionMeta::dumpRegionMetaSnapshot() const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    return {region_state.getVersion(), region_state.getConfVersion(), region_state.getRange()};
+    return {region_state.getVersion(), region_state.getConfVersion(), region_state.getRange(), peer};
 }
 
 MetaRaftCommandDelegate & RegionMeta::makeRaftCommandDelegate()
