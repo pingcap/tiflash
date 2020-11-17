@@ -818,7 +818,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     auto try_add_background_task = [&](const DeltaMergeTaskPool::BackgroundTask & task) {
         // Prevent too many tasks.
         if (task_pool->getTaskNumForStore(shared_from_this())
-            <= std::max(id_to_segment.size() * 2, background_pool.getNumberOfThreads() * 3))
+            <= std::max(id_to_segment.size() * 2, task_pool->getAdviseMaxTaskNumForEveryStore()))
         {
             if (shutdown_called.load(std::memory_order_relaxed))
                 return;

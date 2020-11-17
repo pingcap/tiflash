@@ -3,6 +3,8 @@
 #include <Storages/DeltaMerge/DeltaMergeTaskPool.h>
 #include <Storages/Transaction/TMTContext.h>
 
+#include <ext/scope_guard.h>
+
 namespace DB
 {
 
@@ -119,6 +121,8 @@ bool DeltaMergeTaskPool::handleTaskImpl(bool high_priority)
     auto task = nextTask(high_priority);
     if (!task)
         return false;
+
+    SCOPE_EXIT({ finishTask(task); });
 
     // Update GC safe point before background task
     /// Note that `task.dm_context->db_context` will be free after query is finish. We should not use that in background task.
@@ -284,12 +288,6 @@ bool DeltaMergeTaskPool::handleTaskImpl(bool high_priority)
         task->finished = true;
     }
 
-    {
-        std::scoped_lock lock{mutex};
-        processing_tasks.erase(task);
-        task_counts[task->store] -= 1;
-    }
-
     return true;
 }
 
@@ -327,6 +325,16 @@ void DeltaMergeTaskPool::addTaskToHighPriorityQueue(BackgroundTaskHandle & task,
         high_priority_tasks.push_front(task);
     else
         high_priority_tasks.push_back(task);
+}
+
+void DeltaMergeTaskPool::finishTask(DeltaMergeTaskPool::BackgroundTaskHandle & task)
+{
+    std::scoped_lock lock{mutex};
+    if (processing_tasks.find(task) != processing_tasks.end())
+    {
+        processing_tasks.erase(task);
+        task_counts[task->store] -= 1;
+    }
 }
 
 } // namespace DM

@@ -113,12 +113,17 @@ public:
 
     size_t getTaskNumForStore(DeltaMergeStorePtr store);
 
+    // a hint to suggest not add too many tasks to task pool
+    size_t getAdviseMaxTaskNumForEveryStore() { return background_pool.getNumberOfThreads() * 3; }
+
 private:
     bool handleTaskImpl(bool high_priority);
 
     BackgroundTaskHandle nextTask(bool high_priority);
 
     void addTaskToHighPriorityQueue(BackgroundTaskHandle & task, bool front);
+
+    void finishTask(BackgroundTaskHandle & task);
 
 private:
     Context & global_context;
