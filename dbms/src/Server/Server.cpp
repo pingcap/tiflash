@@ -37,7 +37,6 @@
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFIType.h>
-#include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTContext.h>
