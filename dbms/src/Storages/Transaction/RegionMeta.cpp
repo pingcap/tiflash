@@ -344,21 +344,6 @@ void MetaRaftCommandDelegate::execPrepareMerge(
     CheckRegionForMergeCmd(response, region_state);
 }
 
-bool RegionMeta::isPeerRemoved() const
-{
-    std::lock_guard<std::mutex> lock(mutex);
-
-    if (region_state.getState() == raft_serverpb::PeerState::Tombstone)
-        return true;
-
-    for (const auto & region_peer : region_state.getRegion().peers())
-    {
-        if (region_peer.id() == peer.id())
-            return false;
-    }
-    return true;
-}
-
 bool operator==(const RegionMeta & meta1, const RegionMeta & meta2)
 {
     std::lock_guard<std::mutex> lock1(meta1.mutex);

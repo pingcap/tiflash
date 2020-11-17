@@ -73,8 +73,6 @@ public:
     TerminateWaitIndex waitIndex(UInt64 index, const std::atomic_bool & terminated) const;
     bool checkIndex(UInt64 index) const;
 
-    bool isPeerRemoved() const;
-
     RegionMetaSnapshot dumpRegionMetaSnapshot() const;
 
     MetaRaftCommandDelegate & makeRaftCommandDelegate();

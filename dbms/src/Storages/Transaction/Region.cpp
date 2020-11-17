@@ -527,8 +527,6 @@ void Region::assignRegion(Region && new_region)
     meta.notifyAll();
 }
 
-bool Region::isPeerRemoved() const { return meta.isPeerRemoved(); }
-
 void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const Timestamp safe_point)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);

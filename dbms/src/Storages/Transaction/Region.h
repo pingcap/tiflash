@@ -120,7 +120,6 @@ public:
 
     bool isPendingRemove() const;
     void setPendingRemove();
-    bool isPeerRemoved() const;
     raft_serverpb::PeerState peerState() const;
 
     bool isMerging() const;

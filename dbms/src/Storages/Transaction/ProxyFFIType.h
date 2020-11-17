@@ -95,12 +95,12 @@ enum class RaftProxyStatus : uint8_t
 {
     Idle = 0,
     Running = 1,
-    Stop = 2,
+    Stopped = 2,
 };
 
 enum class TiFlashStatus : uint8_t
 {
-    IDLE = 0,
+    Idle = 0,
     Running,
     Stopped,
 };
@@ -219,7 +219,7 @@ struct TiFlashServer
 {
     TMTContext * tmt{nullptr};
     TiFlashRaftProxyHelper * proxy_helper{nullptr};
-    std::atomic<TiFlashStatus> status{TiFlashStatus::IDLE};
+    std::atomic<TiFlashStatus> status{TiFlashStatus::Idle};
 };
 
 RawCppPtr GenCppRawString(BaseBuffView);

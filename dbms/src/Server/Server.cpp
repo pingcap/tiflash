@@ -1132,7 +1132,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             if (proxy_conf.is_proxy_runnable)
             {
                 LOG_INFO(log, "wait tiflash proxy to stop all services");
-                while (tiflash_instance_wrap.proxy_helper->getProxyStatus() != RaftProxyStatus::Stop)
+                while (tiflash_instance_wrap.proxy_helper->getProxyStatus() != RaftProxyStatus::Stopped)
                     std::this_thread::sleep_for(std::chrono::milliseconds(200));
                 LOG_INFO(log, "all services in tiflash proxy are stopped");
             }
