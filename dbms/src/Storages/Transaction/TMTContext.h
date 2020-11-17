@@ -94,7 +94,7 @@ private:
     bool disable_bg_flush;
 
     std::atomic_bool terminated{false};
-    std::atomic_uint64_t replica_read_max_thread{false};
+    std::atomic_uint64_t replica_read_max_thread{1};
 };
 
 } // namespace DB
