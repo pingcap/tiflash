@@ -162,9 +162,12 @@ void DAGDriver<batch>::recordError(Int32 err_code, const String & err_msg)
 {
     if constexpr (batch)
     {
-        std::ignore = err_code;
+        tipb::SelectResponse dag_response;
+        tipb::Error * error = dag_response.mutable_error();
+        error->set_code(err_code);
+        error->set_msg(err_msg);
         coprocessor::BatchResponse err_response;
-        err_response.set_other_error(err_msg);
+        err_response.set_data(dag_response.SerializeAsString());
         writer->Write(err_response);
     }
     else
