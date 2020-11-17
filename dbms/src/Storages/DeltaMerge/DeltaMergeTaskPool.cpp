@@ -334,6 +334,10 @@ void DeltaMergeTaskPool::removeTaskFromProcessingQueue(DeltaMergeTaskPool::Backg
     {
         processing_tasks.erase(task);
         task_counts[task->store] -= 1;
+        LOG_TRACE(log,
+                  "Database: [" << task->store->getDatabaseName() << "] Table: [" << task->store->getTableName() << "] Segment ["
+                                << task->segment->segmentId() << "] task [" << toString(task->type)
+                                << "] removed from processing task set");
     }
 }
 
