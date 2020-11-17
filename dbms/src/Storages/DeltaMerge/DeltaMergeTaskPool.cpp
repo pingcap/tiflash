@@ -122,7 +122,7 @@ bool DeltaMergeTaskPool::handleTaskImpl(bool high_priority)
     if (!task)
         return false;
 
-    SCOPE_EXIT({ finishTask(task); });
+    SCOPE_EXIT({ removeTaskFromProcessingQueue(task); });
 
     // Update GC safe point before background task
     /// Note that `task.dm_context->db_context` will be free after query is finish. We should not use that in background task.
@@ -327,7 +327,7 @@ void DeltaMergeTaskPool::addTaskToHighPriorityQueue(BackgroundTaskHandle & task,
         high_priority_tasks.push_back(task);
 }
 
-void DeltaMergeTaskPool::finishTask(DeltaMergeTaskPool::BackgroundTaskHandle & task)
+void DeltaMergeTaskPool::removeTaskFromProcessingQueue(DeltaMergeTaskPool::BackgroundTaskHandle & task)
 {
     std::scoped_lock lock{mutex};
     if (processing_tasks.find(task) != processing_tasks.end())

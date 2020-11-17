@@ -123,7 +123,7 @@ private:
 
     void addTaskToHighPriorityQueue(BackgroundTaskHandle & task, bool front);
 
-    void finishTask(BackgroundTaskHandle & task);
+    void removeTaskFromProcessingQueue(BackgroundTaskHandle & task);
 
 private:
     Context & global_context;
