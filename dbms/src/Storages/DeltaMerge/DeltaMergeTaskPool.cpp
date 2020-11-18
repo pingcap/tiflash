@@ -122,8 +122,6 @@ bool DeltaMergeTaskPool::handleTaskImpl(bool high_priority)
     if (!task)
         return false;
 
-    SCOPE_EXIT({ removeTaskFromProcessingQueue(task); });
-
     // Update GC safe point before background task
     /// Note that `task.dm_context->db_context` will be free after query is finish. We should not use that in background task.
     auto pd_client = global_context.getTMTContext().getPDClient();
@@ -198,6 +196,7 @@ bool DeltaMergeTaskPool::handleTaskImpl(bool high_priority)
                         LOG_DEBUG(log,
                                   "Database [" << task->store->getDatabaseName() << "] Table [" << task->store->getTableName()
                                                << "] give up segment [" << task->segment->segmentId() << "] split");
+                        removeTaskFromProcessingQueue(task);
                         return true;
                     }
                     task->task_size = task->snapshot->getBytes();
@@ -220,6 +219,7 @@ bool DeltaMergeTaskPool::handleTaskImpl(bool high_priority)
                                   "Database [" << task->store->getDatabaseName() << "] Table [" << task->store->getTableName()
                                                << "] give up merge segments left [" << task->segment->segmentId() << "], right ["
                                                << task->next_segment->segmentId() << "]");
+                        removeTaskFromProcessingQueue(task);
                         return true;
                     }
                     task->task_size = task->snapshot->getBytes() + task->next_snapshot->getBytes();
@@ -239,6 +239,7 @@ bool DeltaMergeTaskPool::handleTaskImpl(bool high_priority)
                         LOG_DEBUG(log,
                                   "Database [" << task->store->getDatabaseName() << "] Table [" << task->store->getTableName()
                                                << "] give up merge delta, segment [" << task->segment->segmentId() << "]");
+                        removeTaskFromProcessingQueue(task);
                         return true;
                     }
                     task->task_size = task->snapshot->getBytes();
@@ -287,6 +288,7 @@ bool DeltaMergeTaskPool::handleTaskImpl(bool high_priority)
 
         task->finished = true;
     }
+    removeTaskFromProcessingQueue(task);
 
     return true;
 }
