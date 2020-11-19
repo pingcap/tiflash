@@ -159,6 +159,15 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
             ColumnRawPtrs key_col_ptrs;
             std::vector<Block> dest_blocks(partition_num);
             std::vector<MutableColumns> dest_tbl_cols(partition_num);
+
+            for (size_t i = 0; i < block.columns(); ++i)
+            {
+                if (ColumnPtr converted = block.getByPosition(i).column->convertToFullColumnIfConst())
+                {
+                    block.getByPosition(i).column = converted;
+                }
+            }
+
             for (auto i = 0; i < partition_num; ++i)
             {
                 dest_tbl_cols[i] = block.cloneEmptyColumns();
