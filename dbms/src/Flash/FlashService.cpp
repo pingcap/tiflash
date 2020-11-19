@@ -141,10 +141,12 @@ grpc::Status FlashService::Coprocessor(
     MPPTaskPtr sender_task = task_manager->findTaskWithRetry(request->sender_meta(), 1000);
     if (sender_task == nullptr)
     {
-        LOG_DEBUG(log, "can't find task");
+        auto errMsg = "can't find task ( " + toString(request->sender_meta().start_ts()) + " , "
+            + toString(request->sender_meta().task_id()) + " )";
+        LOG_DEBUG(log, errMsg);
         mpp::MPPDataPacket packet;
         auto err = new mpp::Error();
-        err->set_msg("can't find task");
+        err->set_msg(errMsg);
         packet.set_allocated_error(err);
         writer->Write(packet);
         return grpc::Status::OK;
@@ -152,10 +154,12 @@ grpc::Status FlashService::Coprocessor(
     MPPTunnelPtr tunnel = sender_task->getTunnel(request->receiver_meta());
     if (tunnel == nullptr)
     {
-        LOG_DEBUG(log, "can't find tunnel");
+        auto errMsg = "can't find tunnel ( " + toString(request->receiver_meta().start_ts()) + " , "
+            + toString(request->receiver_meta().task_id()) + " )";
+        LOG_DEBUG(log, errMsg);
         mpp::MPPDataPacket packet;
         auto err = new mpp::Error();
-        err->set_msg("can't find tunnel");
+        err->set_msg(errMsg);
         packet.set_allocated_error(err);
         writer->Write(packet);
         return grpc::Status::OK;
