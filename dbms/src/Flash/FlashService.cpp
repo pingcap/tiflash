@@ -138,7 +138,7 @@ grpc::Status FlashService::Coprocessor(
 
     auto & tmt_context = context.getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
-    MPPTaskPtr sender_task = task_manager->findTask(request->sender_meta());
+    MPPTaskPtr sender_task = task_manager->findTaskWithRetry(request->sender_meta(), 1000);
     if (sender_task == nullptr)
     {
         LOG_DEBUG(log, "can't find task");

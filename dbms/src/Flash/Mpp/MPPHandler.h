@@ -294,6 +294,25 @@ public:
         return it->second;
     }
 
+    MPPTaskPtr findTaskWithRetry(const mpp::TaskMeta & meta, uint16_t max_retry_10ms)
+    {
+        MPPTaskPtr rt = nullptr;
+        assert(max_retry_10ms > 0);
+        for (auto retry = 0; retry < max_retry_10ms; ++retry)
+        {
+            rt = findTask(meta);
+            if (rt == nullptr)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+            else
+            {
+                break;
+            }
+        }
+        return rt;
+    }
+
     String toString()
     {
         std::lock_guard<std::mutex> lock(mu);
