@@ -45,8 +45,8 @@ public:
 
     // TODO: get flusher args from config file
     explicit TMTContext(Context & context, const std::vector<std::string> & addrs,
-        const std::unordered_set<std::string> & ignore_databases_, const std::string & kv_store_path, TiDB::StorageEngine engine_,
-        bool disable_bg_flush_, const pingcap::ClusterConfig & cluster_config);
+        const std::unordered_set<std::string> & ignore_databases_, TiDB::StorageEngine engine_, bool disable_bg_flush_,
+        const pingcap::ClusterConfig & cluster_config);
 
     SchemaSyncerPtr getSchemaSyncer() const;
     void setSchemaSyncer(SchemaSyncerPtr);
@@ -57,9 +57,7 @@ public:
 
     MPPTaskManagerPtr getMPPTaskManager();
 
-    IndexReaderPtr createIndexReader() const;
-
-    void restore();
+    void restore(const TiFlashRaftProxyHelper * proxy_helper = nullptr);
 
     const std::unordered_set<std::string> & getIgnoreDatabases() const;
 

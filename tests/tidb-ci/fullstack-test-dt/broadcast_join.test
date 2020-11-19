@@ -101,13 +101,13 @@ mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session 
 +------+-------+------+-------+
 
 # tiflash inner join with other condition
-#mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ t1.id,t1.value,t2.id,t2.value from t2 join t1 on t2.id = t1.id and t1.value > t2.value;
-#+------+-------+------+-------+
-#| id   | value | id   | value |
-#+------+-------+------+-------+
-#|    3 |     5 |    3 |     4 |
-#|    3 |     6 |    3 |     4 |
-#+------+-------+------+-------+
+mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ t1.id,t1.value,t2.id,t2.value from t2 join t1 on t2.id = t1.id and t1.value > t2.value;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    3 |     5 |    3 |     4 |
+|    3 |     6 |    3 |     4 |
++------+-------+------+-------+
 
 # tiflash left join
 mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ t1.id,t1.value,t2.id,t2.value from t2 left join t1 on t2.id = t1.id;
@@ -125,30 +125,30 @@ mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session 
 +------+-------+------+-------+
 
 # tiflash left join with left condition
-#mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ t1.id,t1.value,t2.id,t2.value from t2 left join t1 on t2.id = t1.id and t2.value > 5;
-#+------+-------+------+-------+
-#| id   | value | id   | value |
-#+------+-------+------+-------+
-#|    5 |     6 |    5 |     8 |
-#|    5 |     6 |    5 |     7 |
-#|    5 |     6 |    5 |     6 |
-#| NULL |  NULL |    3 |     4 |
-#| NULL |  NULL | NULL |     7 |
-#| NULL |  NULL | NULL |     8 |
-#+------+-------+------+-------+
+mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ t1.id,t1.value,t2.id,t2.value from t2 left join t1 on t2.id = t1.id and t2.value > 5;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    5 |     6 |    5 |     8 |
+|    5 |     6 |    5 |     7 |
+|    5 |     6 |    5 |     6 |
+| NULL |  NULL |    3 |     4 |
+| NULL |  NULL | NULL |     7 |
+| NULL |  NULL | NULL |     8 |
++------+-------+------+-------+
 
 # tiflash left join with left condition and other condition
-#mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ t1.id,t1.value,t2.id,t2.value from t2 left join t1 on t2.id = t1.id and t2.value > 5 and t1.value >= t2.value;
-#+------+-------+------+-------+
-#| id   | value | id   | value |
-#+------+-------+------+-------+
-#|    5 |     6 |    5 |     6 |
-#| NULL |  NULL |    3 |     4 |
-#| NULL |  NULL |    5 |     7 |
-#| NULL |  NULL |    5 |     8 |
-#| NULL |  NULL | NULL |     7 |
-#| NULL |  NULL | NULL |     8 |
-#+------+-------+------+-------+
+mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ t1.id,t1.value,t2.id,t2.value from t2 left join t1 on t2.id = t1.id and t2.value > 5 and t1.value >= t2.value;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    5 |     6 |    5 |     6 |
+| NULL |  NULL |    3 |     4 |
+| NULL |  NULL |    5 |     7 |
+| NULL |  NULL |    5 |     8 |
+| NULL |  NULL | NULL |     7 |
+| NULL |  NULL | NULL |     8 |
++------+-------+------+-------+
 
 # tiflash right join
 mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ t1.id,t1.value,t2.id,t2.value from t2 right join t1 on t2.id = t1.id;
@@ -169,90 +169,90 @@ mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session 
 +------+-------+------+-------+
 
 # tiflash right join with right condition
-#mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ t1.id,t1.value,t2.id,t2.value from t2 right join t1 on t2.id = t1.id and t1.value < 6;
-#+------+-------+------+-------+
-#| id   | value | id   | value |
-#+------+-------+------+-------+
-#|    1 |     2 | NULL |  NULL |
-#|    3 |     4 |    3 |     4 |
-#|    3 |     5 |    3 |     4 |
-#|    3 |     6 | NULL |  NULL |
-#|    5 |     6 | NULL |  NULL |
-#|    7 |     8 | NULL |  NULL |
-#|    9 |    10 | NULL |  NULL |
-#| NULL |    11 | NULL |  NULL |
-#| NULL |    12 | NULL |  NULL |
-#+------+-------+------+-------+
+mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ t1.id,t1.value,t2.id,t2.value from t2 right join t1 on t2.id = t1.id and t1.value < 6;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    1 |     2 | NULL |  NULL |
+|    3 |     4 |    3 |     4 |
+|    3 |     5 |    3 |     4 |
+|    3 |     6 | NULL |  NULL |
+|    5 |     6 | NULL |  NULL |
+|    7 |     8 | NULL |  NULL |
+|    9 |    10 | NULL |  NULL |
+| NULL |    11 | NULL |  NULL |
+| NULL |    12 | NULL |  NULL |
++------+-------+------+-------+
 
 # tiflash left join with left condition and other condition
-#mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ t1.id,t1.value,t2.id,t2.value from t2 right join t1 on t2.id = t1.id and t1.value < 6 and t1.value > t2.value;
-#+------+-------+------+-------+
-#| id   | value | id   | value |
-#+------+-------+------+-------+
-#|    1 |     2 | NULL |  NULL |
-#|    3 |     4 | NULL |  NULL |
-#|    3 |     5 |    3 |     4 |
-#|    3 |     6 | NULL |  NULL |
-#|    5 |     6 | NULL |  NULL |
-#|    7 |     8 | NULL |  NULL |
-#|    9 |    10 | NULL |  NULL |
-#| NULL |    11 | NULL |  NULL |
-#| NULL |    12 | NULL |  NULL |
-#+------+-------+------+-------+
+mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ t1.id,t1.value,t2.id,t2.value from t2 right join t1 on t2.id = t1.id and t1.value < 6 and t1.value > t2.value;
++------+-------+------+-------+
+| id   | value | id   | value |
++------+-------+------+-------+
+|    1 |     2 | NULL |  NULL |
+|    3 |     4 | NULL |  NULL |
+|    3 |     5 |    3 |     4 |
+|    3 |     6 | NULL |  NULL |
+|    5 |     6 | NULL |  NULL |
+|    7 |     8 | NULL |  NULL |
+|    9 |    10 | NULL |  NULL |
+| NULL |    11 | NULL |  NULL |
+| NULL |    12 | NULL |  NULL |
++------+-------+------+-------+
 
 # tiflash semi join, can not use hint to force broadcast join, and tidb cbo has some bugs so set tidb_opt_cpu_factor=1000000 to make the optimizer choose broadcast join
-#mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; set session tidb_opt_cpu_factor=1000000; select * from t1 where exists (select id from  t2 where t2.value = t1.value);
-#+------+-------+
-#| id   | value |
-#+------+-------+
-#|    3 |     4 |
-#|    3 |     6 |
-#|    5 |     6 |
-#|    7 |     8 |
-#+------+-------+
+mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; set session tidb_opt_cpu_factor=1000000; select * from t1 where exists (select id from  t2 where t2.value = t1.value);
++------+-------+
+| id   | value |
++------+-------+
+|    3 |     4 |
+|    3 |     6 |
+|    5 |     6 |
+|    7 |     8 |
++------+-------+
 
 # tiflash semi join with other condition 
-#mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; set session tidb_opt_cpu_factor=1000000; select * from t1 where exists (select id from  t2 where t2.value = t1.value and t2.id > t1.id);
-#+------+-------+
-#| id   | value |
-#+------+-------+
-#|    3 |     6 |
-#+------+-------+
+mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; set session tidb_opt_cpu_factor=1000000; select * from t1 where exists (select id from  t2 where t2.value = t1.value and t2.id > t1.id);
++------+-------+
+| id   | value |
++------+-------+
+|    3 |     6 |
++------+-------+
 
 # tiflash anti semi join 
-#mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; set session tidb_opt_cpu_factor=1000000; select * from t1 where not exists (select id from  t2 where t2.value = t1.value);
-#+------+-------+
-#| id   | value |
-#+------+-------+
-#|    1 |     2 |
-#|    3 |     5 |
-#|    9 |    10 |
-#| NULL |    11 |
-#| NULL |    12 |
-#+------+-------+
+mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; set session tidb_opt_cpu_factor=1000000; select * from t1 where not exists (select id from  t2 where t2.value = t1.value);
++------+-------+
+| id   | value |
++------+-------+
+|    1 |     2 |
+|    3 |     5 |
+|    9 |    10 |
+| NULL |    11 |
+| NULL |    12 |
++------+-------+
 
 # tiflash anti semi join with other condition 
-#mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; set session tidb_opt_cpu_factor=1000000; select * from t1 where not exists (select id from  t2 where t2.value = t1.value and t2.id < t1.id);
-#+------+-------+
-#| id   | value |
-#+------+-------+
-#|    1 |     2 |
-#|    3 |     4 |
-#|    3 |     5 |
-#|    3 |     6 |
-#|    5 |     6 |
-#|    9 |    10 |
-#| NULL |    11 |
-#| NULL |    12 |
-#+------+-------+
+mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; set session tidb_opt_cpu_factor=1000000; select * from t1 where not exists (select id from  t2 where t2.value = t1.value and t2.id < t1.id);
++------+-------+
+| id   | value |
++------+-------+
+|    1 |     2 |
+|    3 |     4 |
+|    3 |     5 |
+|    3 |     6 |
+|    5 |     6 |
+|    9 |    10 |
+| NULL |    11 |
+| NULL |    12 |
++------+-------+
 
 # complex query(tpch query 21)
-#mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; set session tidb_opt_cpu_factor=1000000; select * from t1 t1 where value > 5 and exists (select * from t1 t2 where t1.id = t2.id and t1.value <> t2.value) and not exists (select * from t1 t3 where t1.id = t3.id and t1.value <> t3.value and t3.value > 5);
-#+------+-------+
-#| id   | value |
-#+------+-------+
-#|    3 |     6 |
-#+------+-------+
+mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; set session tidb_opt_cpu_factor=1000000; select * from t1 t1 where value > 5 and exists (select * from t1 t2 where t1.id = t2.id and t1.value <> t2.value) and not exists (select * from t1 t3 where t1.id = t3.id and t1.value <> t3.value and t3.value > 5);
++------+-------+
+| id   | value |
++------+-------+
+|    3 |     6 |
++------+-------+
 
 # out join for not null table
 mysql> use test; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ * from t1_not_null t1 left join t2_not_null t2 on t2.id = t1.id;

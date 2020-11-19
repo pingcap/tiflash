@@ -47,7 +47,7 @@ public:
         std::shared_mutex rwlock;
         std::atomic<bool> removed {false};
 
-        /// only can be involked by one thread at same time.
+        /// only can be invoked by one thread at same time.
         const bool multi;
         std::atomic_bool occupied {false};
 
