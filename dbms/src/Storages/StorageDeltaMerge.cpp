@@ -861,6 +861,7 @@ void StorageDeltaMerge::rename(
     store = std::make_shared<DeltaMergeStore>(global_context,                //
         data_path_contains_database_name, new_database_name, new_table_name, //
         std::move(table_column_defines), std::move(handle_column_define), rowkey_column_size, is_common_handle, settings);
+    store->restoreData();
 }
 
 String StorageDeltaMerge::getTableName() const { return store->getTableName(); }

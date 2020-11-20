@@ -52,15 +52,9 @@ protected:
         auto         cols                 = (!pre_define_columns) ? DMTestEnv::getDefaultColumns(is_common_handle) : pre_define_columns;
         ColumnDefine handle_column_define = (*cols)[0];
 
-        DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(*context,
-                                                                 false,
-                                                                 "test",
-                                                                 name,
-                                                                 *cols,
-                                                                 handle_column_define,
-                                                                 is_common_handle,
-                                                                 rowkey_column_size,
-                                                                 DeltaMergeStore::Settings());
+        DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(
+            *context, false, "test", name, *cols, handle_column_define, is_common_handle, rowkey_column_size, DeltaMergeStore::Settings());
+        s->restoreData();
         return s;
     }
 

@@ -76,6 +76,7 @@ bool checkMatch(const String &        test_case, //
 
     DeltaMergeStorePtr store = std::make_shared<DeltaMergeStore>(
         context, false, "test_database", "test_table", table_columns, getExtraHandleColumnDefine(false), false, 1);
+    store->restoreData();
 
     store->write(context, context.getSettingsRef(), block);
     store->flushCache(context, all_range);
