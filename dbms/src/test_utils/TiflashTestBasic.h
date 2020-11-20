@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/UnifiedLogPatternFormatter.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/IDataType.h>
 #include <Encryption/MockKeyManager.h>
@@ -11,7 +12,6 @@
 #include <Poco/PatternFormatter.h>
 #include <Poco/SortedDirectoryIterator.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <Common/UnifiedLogPatternFormatter.h>
 #include <gtest/gtest.h>
 
 namespace DB
@@ -136,6 +136,7 @@ public:
             context.setApplicationType(DB::Context::ApplicationType::SERVER);
 
             context.initializeTiFlashMetrics();
+            context.initializeDeltaMergeTaskPool();
             KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
             context.initializeFileProvider(key_manager, false);
 
