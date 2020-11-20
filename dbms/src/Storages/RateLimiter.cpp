@@ -15,8 +15,9 @@ RateLimiter::RateLimiter(
       log{&Logger::get("RateLimiter")}
 {
     LOG_INFO(log,
-        "Creating RateLimiter with balance increase rate: " << balance_increase_rate << " allocate soft limit: " << alloc_balance_soft_limit
-                                                            << " allocate hard limit: " << alloc_balance_hard_limit);
+        "Creating RateLimiter with balance increase rate: " << balance_increase_rate
+                                                            << ", allocate soft limit: " << alloc_balance_soft_limit
+                                                            << ", allocate hard limit: " << alloc_balance_hard_limit);
     GET_METRIC(context.getTiFlashMetrics(), tiflash_storage_rate_limiter_balance).Set(available_bytes);
 }
 
