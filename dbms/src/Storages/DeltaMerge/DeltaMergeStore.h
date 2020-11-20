@@ -191,6 +191,8 @@ public:
                     const Settings &      settings_ = EMPTY_SETTINGS);
     ~DeltaMergeStore();
 
+    void restoreData();
+
     void setUpBackgroundTask(const DMContextPtr & dm_context);
 
     const String & getDatabaseName() const { return db_name; }
