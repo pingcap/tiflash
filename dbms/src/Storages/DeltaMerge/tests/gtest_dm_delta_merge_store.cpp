@@ -54,7 +54,6 @@ protected:
 
         DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(
             *context, false, "test", name, *cols, handle_column_define, is_common_handle, rowkey_column_size, DeltaMergeStore::Settings());
-        s->restoreData();
         return s;
     }
 

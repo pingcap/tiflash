@@ -20,6 +20,7 @@ DeltaMergeTaskPool::DeltaMergeTaskPool(Context & db_context)
                                                      * db_context.getSettingsRef().dt_bg_task_balance_soft_limit_in_second,
                                                  db_context.getSettingsRef().dt_bg_task_balance_increase_rate_per_second
                                                      * db_context.getSettingsRef().dt_bg_task_full_balance_capacity_second)),
+      next_store_id{0},
       log(&Logger::get("DeltaMergeTaskPool"))
 {
     background_task_handle = background_pool.addTask([this] { return handleBackgroundTask(); });
@@ -32,6 +33,12 @@ DeltaMergeTaskPool::~DeltaMergeTaskPool()
     background_task_handle = nullptr;
 }
 
+DeltaMergeTaskPoolHandle DeltaMergeTaskPool::registerStore()
+{
+    std::scoped_lock lock(mutex);
+    return next_store_id++;
+}
+
 void DeltaMergeTaskPool::addTask(const BackgroundTask & task, const ThreadType & whom)
 {
     LOG_DEBUG(log,
@@ -42,17 +49,17 @@ void DeltaMergeTaskPool::addTask(const BackgroundTask & task, const ThreadType &
     std::scoped_lock lock(mutex);
     low_priority_tasks.push_back(std::make_shared<BackgroundTask>(task));
     GET_METRIC(global_context.getTiFlashMetrics(), tiflash_storage_delta_merge_task_num, type_low_priority_task_num).Increment(1);
-    if (task_counts.find(task.store) == task_counts.end())
-        task_counts.emplace(task.store, 0);
-    task_counts[task.store] += 1;
+    if (task_counts.find(task.handle) == task_counts.end())
+        task_counts.emplace(task.handle, 0);
+    task_counts[task.handle] += 1;
 }
 
-void DeltaMergeTaskPool::removeAllTasksForStore(DeltaMergeStorePtr store)
+void DeltaMergeTaskPool::removeAllTasksForStore(DeltaMergeTaskPoolHandle handle, const String & database_name, const String & table_name)
 {
     TaskSet processing_tasks_to_wait;
     {
         std::scoped_lock lock{mutex};
-        auto             is_target_task = [&store](const BackgroundTaskHandle & task) { return task->store == store; };
+        auto             is_target_task = [&handle](const BackgroundTaskHandle & task) { return task->handle == handle; };
         high_priority_tasks.erase(std::remove_if(high_priority_tasks.begin(), high_priority_tasks.end(), is_target_task),
                                   high_priority_tasks.end());
         low_priority_tasks.erase(std::remove_if(low_priority_tasks.begin(), low_priority_tasks.end(), is_target_task),
@@ -64,7 +71,7 @@ void DeltaMergeTaskPool::removeAllTasksForStore(DeltaMergeStorePtr store)
         }
         for (auto & task : processing_tasks_to_wait)
             processing_tasks.erase(task);
-        task_counts.erase(store);
+        task_counts.erase(handle);
         GET_METRIC(global_context.getTiFlashMetrics(), tiflash_storage_delta_merge_task_num, type_high_priority_task_num)
             .Set(high_priority_tasks.size());
         GET_METRIC(global_context.getTiFlashMetrics(), tiflash_storage_delta_merge_task_num, type_low_priority_task_num)
@@ -72,8 +79,8 @@ void DeltaMergeTaskPool::removeAllTasksForStore(DeltaMergeStorePtr store)
     }
 
     LOG_DEBUG(log,
-              "Remove all background tasks for database [" << store->getDatabaseName() << "] table [" << store->getTableName()
-                                                           << "] wait for " << processing_tasks_to_wait.size() << " tasks to finish");
+              "Remove all background tasks for database [" << database_name << "] table [" << table_name << "] wait for "
+                                                           << processing_tasks_to_wait.size() << " tasks to finish");
     for (auto & task : processing_tasks_to_wait)
     {
         std::unique_lock lock{task->task_mutex};
@@ -81,9 +88,7 @@ void DeltaMergeTaskPool::removeAllTasksForStore(DeltaMergeStorePtr store)
             continue;
         task->finished = true;
     }
-    LOG_DEBUG(log,
-              "Remove all background tasks for database [" << store->getDatabaseName() << "] table [" << store->getTableName()
-                                                           << "] complete");
+    LOG_DEBUG(log, "Remove all background tasks for database [" << database_name << "] table [" << table_name << "] complete");
 }
 
 bool DeltaMergeTaskPool::handleBackgroundTask()
@@ -108,12 +113,12 @@ bool DeltaMergeTaskPool::handleBackgroundTask()
     return res;
 }
 
-size_t DeltaMergeTaskPool::getTaskNumForStore(DeltaMergeStorePtr store)
+size_t DeltaMergeTaskPool::getTaskNumForStore(DeltaMergeTaskPoolHandle handle)
 {
     std::scoped_lock lock{mutex};
-    if (task_counts.find(store) == task_counts.end())
+    if (task_counts.find(handle) == task_counts.end())
         return 0;
-    return task_counts[store];
+    return task_counts[handle];
 }
 
 bool DeltaMergeTaskPool::handleTaskImpl(bool high_priority)
@@ -335,7 +340,7 @@ void DeltaMergeTaskPool::removeTaskFromProcessingQueue(DeltaMergeTaskPool::Backg
     if (processing_tasks.find(task) != processing_tasks.end())
     {
         processing_tasks.erase(task);
-        task_counts[task->store] -= 1;
+        task_counts[task->handle] -= 1;
         LOG_TRACE(log,
                   "Database: [" << task->store->getDatabaseName() << "] Table: [" << task->store->getTableName() << "] Segment ["
                                 << task->segment->segmentId() << "] task [" << toString(task->type)

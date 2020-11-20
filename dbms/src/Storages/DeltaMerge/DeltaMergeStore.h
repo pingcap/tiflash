@@ -30,6 +30,8 @@ using DMContextPtr = std::shared_ptr<DMContext>;
 using NotCompress  = std::unordered_set<ColId>;
 using SegmentIdSet = std::unordered_set<UInt64>;
 
+using DeltaMergeTaskPoolHandle = UInt64;
+
 static const PageId DELTA_MERGE_FIRST_SEGMENT_ID = 1;
 
 struct SegmentStat
@@ -189,8 +191,6 @@ public:
                     const Settings &      settings_ = EMPTY_SETTINGS);
     ~DeltaMergeStore();
 
-    void restoreData();
-
     void setUpBackgroundTask(const DMContextPtr & dm_context);
 
     const String & getDatabaseName() const { return db_name; }
@@ -336,7 +336,8 @@ private:
     /// Mainly for debug.
     SegmentMap id_to_segment;
 
-    DM::DeltaMergeTaskPoolPtr task_pool;
+    DeltaMergeTaskPoolPtr    task_pool;
+    DeltaMergeTaskPoolHandle task_pool_handle;
 
     DB::Timestamp latest_gc_safe_point = 0;
 

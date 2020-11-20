@@ -99,6 +99,7 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
       original_table_handle_define(handle),
       background_pool(db_context.getBackgroundPool()),
       task_pool(db_context.getDeltaMergeTaskPool()),
+      task_pool_handle(task_pool->registerStore()),
       hash_salt(++DELTA_MERGE_STORE_HASH_SALT),
       log(&Logger::get("DeltaMergeStore[" + db_name + "." + table_name + "]"))
 {
@@ -116,19 +117,6 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
 
     original_table_header = std::make_shared<Block>(toEmptyBlock(original_table_columns));
     store_columns         = getStoreColumns(original_table_columns, is_common_handle);
-}
-
-DeltaMergeStore::~DeltaMergeStore()
-{
-    LOG_INFO(log, "Release DeltaMerge Store start [" << db_name << "." << table_name << "]");
-
-    shutdown();
-
-    LOG_INFO(log, "Release DeltaMerge Store end [" << db_name << "." << table_name << "]");
-}
-
-void DeltaMergeStore::restoreData()
-{
     LOG_INFO(log, "Restore DeltaMerge Store start [" << db_name << "." << table_name << "]");
     auto dm_context = newDMContext(global_context, global_context.getSettingsRef());
 
@@ -167,6 +155,15 @@ void DeltaMergeStore::restoreData()
     setUpBackgroundTask(dm_context);
 
     LOG_INFO(log, "Restore DeltaMerge Store end [" << db_name << "." << table_name << "]");
+}
+
+DeltaMergeStore::~DeltaMergeStore()
+{
+    LOG_INFO(log, "Release DeltaMerge Store start [" << db_name << "." << table_name << "]");
+
+    shutdown();
+
+    LOG_INFO(log, "Release DeltaMerge Store end [" << db_name << "." << table_name << "]");
 }
 
 void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
@@ -274,7 +271,7 @@ void DeltaMergeStore::shutdown()
     background_pool.removeTask(gc_handle);
     gc_handle = nullptr;
 
-    task_pool->removeAllTasksForStore(shared_from_this());
+    task_pool->removeAllTasksForStore(task_pool_handle, db_name, table_name);
     LOG_TRACE(log, "Shutdown DeltaMerge end [" << db_name << "." << table_name << "]");
 }
 
@@ -817,7 +814,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
 
     auto try_add_background_task = [&](const DeltaMergeTaskPool::BackgroundTask & task) {
         // Prevent too many tasks.
-        if (task_pool->getTaskNumForStore(shared_from_this())
+        if (task_pool->getTaskNumForStore(task_pool_handle)
             <= std::max(id_to_segment.size() * 2, task_pool->getAdviseMaxTaskNumForEveryStore()))
         {
             if (shutdown_called.load(std::memory_order_relaxed))
@@ -840,8 +837,8 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         else if (should_background_flush)
         {
             delta_last_try_flush_rows = delta_rows;
-            try_add_background_task(
-                DeltaMergeTaskPool::BackgroundTask{DeltaMergeTaskPool::TaskType::Flush, dm_context, shared_from_this(), segment, {}});
+            try_add_background_task(DeltaMergeTaskPool::BackgroundTask{
+                DeltaMergeTaskPool::TaskType::Flush, task_pool_handle, dm_context, shared_from_this(), segment, {}});
         }
     }
 
@@ -905,8 +902,8 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         if (should_background_merge_delta)
         {
             delta_last_try_merge_delta_rows = delta_rows;
-            try_add_background_task(
-                DeltaMergeTaskPool::BackgroundTask{DeltaMergeTaskPool::TaskType::MergeDelta, dm_context, shared_from_this(), segment, {}});
+            try_add_background_task(DeltaMergeTaskPool::BackgroundTask{
+                DeltaMergeTaskPool::TaskType::MergeDelta, task_pool_handle, dm_context, shared_from_this(), segment, {}});
             return true;
         }
         return false;
@@ -915,8 +912,8 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         if (should_split)
         {
             delta_last_try_split_rows = delta_rows;
-            try_add_background_task(
-                DeltaMergeTaskPool::BackgroundTask{DeltaMergeTaskPool::TaskType::Split, dm_context, shared_from_this(), seg, {}});
+            try_add_background_task(DeltaMergeTaskPool::BackgroundTask{
+                DeltaMergeTaskPool::TaskType::Split, task_pool_handle, dm_context, shared_from_this(), seg, {}});
             return true;
         }
         return false;
@@ -937,7 +934,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         if (should_merge && (merge_sibling = getMergeSibling()))
         {
             try_add_background_task(DeltaMergeTaskPool::BackgroundTask{
-                DeltaMergeTaskPool::TaskType::Merge, dm_context, shared_from_this(), segment, merge_sibling});
+                DeltaMergeTaskPool::TaskType::Merge, task_pool_handle, dm_context, shared_from_this(), segment, merge_sibling});
             return true;
         }
         return false;
@@ -946,8 +943,8 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         if (should_compact)
         {
             delta_last_try_compact_packs = pack_count;
-            try_add_background_task(
-                DeltaMergeTaskPool::BackgroundTask{DeltaMergeTaskPool::TaskType::Compact, dm_context, shared_from_this(), segment, {}});
+            try_add_background_task(DeltaMergeTaskPool::BackgroundTask{
+                DeltaMergeTaskPool::TaskType::Compact, task_pool_handle, dm_context, shared_from_this(), segment, {}});
             return true;
         }
         return false;
@@ -956,8 +953,8 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         if (should_place_delta_index)
         {
             delta_last_try_place_delta_index_rows = delta_rows;
-            try_add_background_task(
-                DeltaMergeTaskPool::BackgroundTask{DeltaMergeTaskPool::TaskType::PlaceIndex, dm_context, shared_from_this(), segment, {}});
+            try_add_background_task(DeltaMergeTaskPool::BackgroundTask{
+                DeltaMergeTaskPool::TaskType::PlaceIndex, task_pool_handle, dm_context, shared_from_this(), segment, {}});
             return true;
         }
         return false;
@@ -1528,7 +1525,7 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
         stat.storage_meta_max_page_id          = meta_snapshot->version()->maxId();
     }
 
-    stat.background_tasks_length = task_pool->getTaskNumForStore(shared_from_this());
+    stat.background_tasks_length = task_pool->getTaskNumForStore(task_pool_handle);
 
     return stat;
 }

@@ -49,16 +49,18 @@ public:
     struct BackgroundTask
     {
         BackgroundTask(TaskType                   type_,
+                       DeltaMergeTaskPoolHandle   handle_,
                        const DMContextPtr &       dm_context_,
                        const DeltaMergeStorePtr & store_,
                        const SegmentPtr &         segment_,
                        const SegmentPtr &         next_segment_)
-            : type{type_}, dm_context{dm_context_}, store{store_}, segment{segment_}, next_segment{next_segment_}
+            : type{type_}, handle{handle_}, dm_context{dm_context_}, store{store_}, segment{segment_}, next_segment{next_segment_}
         {
         }
 
         BackgroundTask(const BackgroundTask & task) noexcept
             : type{task.type},
+              handle{task.handle},
               dm_context{task.dm_context},
               store{task.store},
               segment{task.segment},
@@ -70,6 +72,8 @@ public:
         }
 
         TaskType type;
+
+        DeltaMergeTaskPoolHandle handle;
 
         DMContextPtr       dm_context;
         DeltaMergeStorePtr store;
@@ -93,10 +97,12 @@ public:
 
     ~DeltaMergeTaskPool();
 
+    DeltaMergeTaskPoolHandle registerStore();
+
     using ThreadType = DeltaMergeStore::ThreadType;
     void addTask(const BackgroundTask & task, const ThreadType & whom);
 
-    void removeAllTasksForStore(DeltaMergeStorePtr store);
+    void removeAllTasksForStore(DeltaMergeTaskPoolHandle handle, const String & database_name, const String & table_name);
 
     bool handleBackgroundTask();
 
@@ -111,7 +117,7 @@ public:
             background_task_handle->wake();
     }
 
-    size_t getTaskNumForStore(DeltaMergeStorePtr store);
+    size_t getTaskNumForStore(DeltaMergeTaskPoolHandle handle);
 
     // a hint to suggest not add too many tasks to task pool
     size_t getAdviseMaxTaskNumForEveryStore() { return background_pool.getNumberOfThreads() * 3; }
@@ -135,12 +141,14 @@ private:
     using TaskSet = std::unordered_set<BackgroundTaskHandle>;
     TaskSet processing_tasks;
 
-    std::unordered_map<DeltaMergeStorePtr, size_t> task_counts;
+    std::unordered_map<DeltaMergeTaskPoolHandle, size_t> task_counts;
 
     BackgroundProcessingPool &           background_pool;
     BackgroundProcessingPool::TaskHandle background_task_handle;
 
     RateLimiterPtr rate_limiter;
+
+    DeltaMergeTaskPoolHandle next_store_id;
 
     // we can just handling task from high priority queue one at a time to avoid create too many snapshot
     std::atomic<bool> handling_high_priority_task{false};

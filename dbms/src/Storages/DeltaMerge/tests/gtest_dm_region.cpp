@@ -49,7 +49,6 @@ protected:
         context = std::make_unique<Context>(DMTestEnv::getContext(settings));
         store   = std::make_shared<DeltaMergeStore>(
             *context, false, "test_database", "test_table", table_columns, getExtraHandleColumnDefine(false), false, 1);
-        store->restoreData();
     }
 
 private:
