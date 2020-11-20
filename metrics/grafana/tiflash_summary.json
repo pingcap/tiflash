@@ -3364,118 +3364,6 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "decimals": 1,
-          "description": "The flow of different kinds of read operations",
-          "fill": 1,
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 39
-          },
-          "height": "",
-          "id": 59,
-          "legend": {
-            "alignAsTable": true,
-            "avg": false,
-            "current": true,
-            "hideEmpty": false,
-            "hideZero": false,
-            "max": true,
-            "min": false,
-            "rightSide": true,
-            "show": true,
-            "sideWidth": null,
-            "sort": "current",
-            "sortDesc": true,
-            "total": false,
-            "values": true
-          },
-          "lines": true,
-          "linewidth": 1,
-          "links": [],
-          "nullPointMode": "null",
-          "percentage": false,
-          "pointradius": 5,
-          "points": false,
-          "renderer": "flot",
-          "repeatedByRow": true,
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
-          "targets": [
-            {
-              "expr": "sum(rate(tiflash_system_profile_event_ReadBufferFromFileDescriptorReadBytes{instance=~\"$instance\"}[1m]))",
-              "format": "time_series",
-              "hide": false,
-              "intervalFactor": 2,
-              "legendFormat": "File Descriptor",
-              "refId": "A",
-              "step": 10
-            },
-            {
-              "expr": "sum(rate(tiflash_system_profile_event_PSMReadBytes{instance=~\"$instance\"}[1m]))",
-              "format": "time_series",
-              "intervalFactor": 1,
-              "legendFormat": "Page",
-              "refId": "B"
-            },
-            {
-              "expr": "sum(rate(tiflash_system_profile_event_ReadBufferAIOReadBytes{instance=~\"$instance\"}[1m]))",
-              "format": "time_series",
-              "intervalFactor": 1,
-              "legendFormat": "AIO",
-              "refId": "C"
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "Read flow",
-          "tooltip": {
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "format": "Bps",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": "0",
-              "show": true
-            },
-            {
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": "0",
-              "show": true
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
-        },
-        {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "${DS_TEST-CLUSTER}",
           "description": "Num of tasks in DeltaMerge background task pool.",
           "fill": 1,
           "gridPos": {
@@ -3486,6 +3374,7 @@
           },
           "id": 84,
           "legend": {
+            "alignAsTable": true,
             "avg": false,
             "current": false,
             "max": false,
@@ -3511,14 +3400,14 @@
               "expr": "tiflash_storage_delta_merge_task_num{instance=~\"$instance\", type=\"high_priority_task_num\"}",
               "format": "time_series",
               "intervalFactor": 1,
-              "legendFormat": "high priority {{instance}}",
+              "legendFormat": "high_priority_queue-{{instance}}",
               "refId": "A"
             },
             {
               "expr": "tiflash_storage_delta_merge_task_num{instance=~\"$instance\", type=\"low_priority_task_num\"}",
               "format": "time_series",
               "intervalFactor": 1,
-              "legendFormat": "low priority {{instance}}",
+              "legendFormat": "low_priority_queue-{{instance}}",
               "refId": "B"
             }
           ],
@@ -3568,6 +3457,112 @@
         {
           "aliasColors": {},
           "bars": false,
+          "cacheTimeout": null,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The current processing number of segments' background management",
+          "fill": 0,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 47
+          },
+          "id": 67,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": false,
+            "min": false,
+            "rightSide": false,
+            "show": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "percentage": false,
+          "pluginVersion": "6.1.6",
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "avg(tiflash_system_current_metric_DT_DeltaMerge{instance=~\"$instance\"}) by (instance)",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 1,
+              "legendFormat": "delta_merge-{{instance}}",
+              "refId": "A"
+            },
+            {
+              "expr": "avg(tiflash_system_current_metric_DT_SegmentSplit{instance=~\"$instance\"}) by (instance)",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "seg_split-{{instance}}",
+              "refId": "B"
+            },
+            {
+              "expr": "avg(tiflash_system_current_metric_DT_SegmentMerge{instance=~\"$instance\"}) by (instance)",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "seg_merge-{{instance}}",
+              "refId": "C"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Current Data Management Tasks",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 0,
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "none",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
@@ -3575,11 +3570,12 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 12,
-            "y": 47
+            "x": 0,
+            "y": 55
           },
           "id": 86,
           "legend": {
+            "alignAsTable": true,
             "avg": false,
             "current": false,
             "max": false,
@@ -3605,14 +3601,14 @@
               "expr": "tiflash_storage_rate_limiter_balance{instance=~\"$instance\"}",
               "format": "time_series",
               "intervalFactor": 1,
-              "legendFormat": "total {{instance}}",
+              "legendFormat": "total-{{instance}}",
               "refId": "A"
             },
             {
               "expr": "rate(tiflash_storage_rate_limiter_consume_balance{instance=~\"$instance\"}[30s])",
               "format": "time_series",
               "intervalFactor": 1,
-              "legendFormat": "consume {{instance}}",
+              "legendFormat": "consume-{{instance}}",
               "refId": "B"
             }
           ],
@@ -3882,105 +3878,6 @@
               "logBase": 1,
               "max": null,
               "min": "0",
-              "show": true
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
-        },
-        {
-          "aliasColors": {},
-          "bars": false,
-          "cacheTimeout": null,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The current processing number of  segments' background management",
-          "fill": 0,
-          "gridPos": {
-            "h": 7,
-            "w": 12,
-            "x": 12,
-            "y": 14
-          },
-          "id": 67,
-          "legend": {
-            "alignAsTable": true,
-            "avg": false,
-            "current": true,
-            "max": false,
-            "min": false,
-            "rightSide": false,
-            "show": true,
-            "total": false,
-            "values": true
-          },
-          "lines": true,
-          "linewidth": 1,
-          "links": [],
-          "nullPointMode": "null as zero",
-          "percentage": false,
-          "pluginVersion": "6.1.6",
-          "pointradius": 5,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
-          "targets": [
-            {
-              "expr": "avg(tiflash_system_current_metric_DT_DeltaMerge{instance=~\"$instance\"}) by (instance)",
-              "format": "time_series",
-              "hide": false,
-              "intervalFactor": 1,
-              "legendFormat": "delta_merge-{{instance}}",
-              "refId": "A"
-            },
-            {
-              "expr": "avg(tiflash_system_current_metric_DT_SegmentSplit{instance=~\"$instance\"}) by (instance)",
-              "format": "time_series",
-              "intervalFactor": 1,
-              "legendFormat": "seg_split-{{instance}}",
-              "refId": "B"
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "Current Data Management Tasks",
-          "tooltip": {
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "decimals": null,
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": "0",
-              "show": true
-            },
-            {
-              "format": "none",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
