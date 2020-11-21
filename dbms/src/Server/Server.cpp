@@ -676,10 +676,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     {
-        if (raft_config.engine == TiDB::StorageEngine::DT)
-        {
-            global_context->initializeDeltaMergeTaskPool();
-        }
+        global_context->initializeDeltaMergeTaskPool();
     }
 
     {
