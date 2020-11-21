@@ -28,6 +28,9 @@ protected:
 
     void cleanUp()
     {
+        // we need shutdown store explicitly, because it may be referenced by background task
+        if (store)
+            store->shutdown();
         // drop former-gen table's data in disk
         const String p = DB::tests::TiFlashTestEnv::getTemporaryPath();
         if (Poco::File f{p}; f.exists())
@@ -713,6 +716,8 @@ try
 
             // Let's reload the store to check the persistence system.
             // Note: store must be released before load another, because some background task could be still running.
+            // we need shutdown store explicitly, because it may be referenced by background task
+            store->shutdown();
             store.reset();
             store = reload();
 
