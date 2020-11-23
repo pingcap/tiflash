@@ -16,15 +16,15 @@ RegionException::RegionReadStatus GetRegionReadStatus(
     const RegionInfo & check_info, const RegionPtr & current_region, ImutRegionRangePtr & region_range)
 {
     if (!current_region)
-        return RegionException::NOT_FOUND;
-    auto [version, conf_ver, range] = current_region->dumpVersionRange();
-    if (version != check_info.region_version || conf_ver != check_info.region_conf_version)
-        return RegionException::VERSION_ERROR;
+        return RegionException::RegionReadStatus::NOT_FOUND;
+    auto meta_snap = current_region->dumpRegionMetaSnapshot();
+    if (meta_snap.ver != check_info.region_version || meta_snap.conf_ver != check_info.region_conf_version)
+        return RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
     if (current_region->peerState() != raft_serverpb::PeerState::Normal)
-        return RegionException::NOT_FOUND;
+        return RegionException::RegionReadStatus::NOT_FOUND;
 
-    region_range = std::move(range);
-    return RegionException::OK;
+    region_range = std::move(meta_snap.range);
+    return RegionException::RegionReadStatus::OK;
 }
 
 std::tuple<std::optional<std::unordered_map<RegionID, const RegionInfo &>>, RegionException::RegionReadStatus> //
@@ -43,11 +43,12 @@ MakeRegionQueryInfos(const std::unordered_map<RegionID, RegionInfo> & dag_region
         if (region_force_retry.count(id))
         {
             region_need_retry.emplace(id, r);
-            status_res = RegionException::NOT_FOUND;
+            status_res = RegionException::RegionReadStatus::NOT_FOUND;
             continue;
         }
         ImutRegionRangePtr region_range{nullptr};
-        if (auto status = GetRegionReadStatus(r, tmt.getKVStore()->getRegion(id), region_range); status != RegionException::OK)
+        if (auto status = GetRegionReadStatus(r, tmt.getKVStore()->getRegion(id), region_range);
+            status != RegionException::RegionReadStatus::OK)
         {
             region_need_retry.emplace(id, r);
             status_res = status;

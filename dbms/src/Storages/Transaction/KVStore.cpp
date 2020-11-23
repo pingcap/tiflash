@@ -4,8 +4,8 @@
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFIType.h>
-#include <Storages/Transaction/RaftCommandResult.h>
 #include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
 
@@ -23,12 +23,13 @@ KVStore::KVStore(Context & context)
     : region_persister(context, region_manager), raft_cmd_res(std::make_unique<RaftCommandResult>()), log(&Logger::get("KVStore"))
 {}
 
-void KVStore::restore(const IndexReaderCreateFunc & index_reader_create)
+void KVStore::restore(const TiFlashRaftProxyHelper * proxy_helper)
 {
     auto task_lock = genTaskLock();
     auto manage_lock = genRegionManageLock();
 
-    regionsMut() = region_persister.restore(const_cast<IndexReaderCreateFunc *>(&index_reader_create));
+    this->proxy_helper = proxy_helper;
+    regionsMut() = region_persister.restore(proxy_helper);
 
     std::stringstream ss;
     ss << "Restored " << regions().size() << " regions. ";

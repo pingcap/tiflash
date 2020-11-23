@@ -1,4 +1,4 @@
-#include <Storages/Transaction/RaftCommandResult.h>
+#include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionMeta.h>
 
 #pragma GCC diagnostic push
@@ -344,21 +344,6 @@ void MetaRaftCommandDelegate::execPrepareMerge(
     CheckRegionForMergeCmd(response, region_state);
 }
 
-bool RegionMeta::isPeerRemoved() const
-{
-    std::lock_guard<std::mutex> lock(mutex);
-
-    if (region_state.getState() == raft_serverpb::PeerState::Tombstone)
-        return true;
-
-    for (const auto & region_peer : region_state.getRegion().peers())
-    {
-        if (region_peer.id() == peer.id())
-            return false;
-    }
-    return true;
-}
-
 bool operator==(const RegionMeta & meta1, const RegionMeta & meta2)
 {
     std::lock_guard<std::mutex> lock1(meta1.mutex);
@@ -368,10 +353,10 @@ bool operator==(const RegionMeta & meta1, const RegionMeta & meta2)
         && meta1.region_state == meta2.region_state;
 }
 
-std::tuple<RegionVersion, RegionVersion, ImutRegionRangePtr> RegionMeta::dumpVersionRange() const
+RegionMetaSnapshot RegionMeta::dumpRegionMetaSnapshot() const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    return {region_state.getVersion(), region_state.getConfVersion(), region_state.getRange()};
+    return {region_state.getVersion(), region_state.getConfVersion(), region_state.getRange(), peer};
 }
 
 MetaRaftCommandDelegate & RegionMeta::makeRaftCommandDelegate()
