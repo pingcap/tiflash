@@ -70,6 +70,8 @@ public:
 
     const KVClusterPtr & getCluster() const { return cluster; }
 
+    UInt64 replicaReadMaxThread() const { return replica_read_max_thread.load(std::memory_order::memory_order_relaxed); }
+
 private:
     Context & context;
     KVStorePtr kvstore;
@@ -92,6 +94,7 @@ private:
     bool disable_bg_flush;
 
     std::atomic_bool terminated{false};
+    std::atomic_uint64_t replica_read_max_thread{1};
 };
 
 } // namespace DB

@@ -434,27 +434,33 @@ ReadIndexResult::ReadIndexResult(RegionException::RegionReadStatus status_, UInt
     : status(status_), read_index(read_index_), lock_info(lock_info_)
 {}
 
+kvrpcpb::ReadIndexRequest GenRegionReadIndexReq(const Region & region, UInt64 start_ts)
+{
+    auto meta_snap = region.dumpRegionMetaSnapshot();
+    kvrpcpb::ReadIndexRequest request;
+    {
+        auto context = request.mutable_context();
+        context->set_region_id(region.id());
+        *context->mutable_peer() = meta_snap.peer;
+        context->mutable_region_epoch()->set_version(meta_snap.ver);
+        context->mutable_region_epoch()->set_conf_ver(meta_snap.conf_ver);
+        // if start_ts is 0, only send read index request to proxy
+        if (start_ts)
+        {
+            request.set_start_ts(start_ts);
+            auto key_range = request.add_ranges();
+            key_range->set_start_key(*meta_snap.range->rawKeys().first);
+            key_range->set_end_key(*meta_snap.range->rawKeys().second);
+        }
+    }
+    return request;
+}
+
 ReadIndexResult Region::learnerRead(UInt64 start_ts)
 {
     if (proxy_helper != nullptr)
     {
-        auto meta_snap = dumpRegionMetaSnapshot();
-        kvrpcpb::ReadIndexRequest request;
-        {
-            auto context = request.mutable_context();
-            context->set_region_id(id());
-            *context->mutable_peer() = meta_snap.peer;
-            context->mutable_region_epoch()->set_version(meta_snap.ver);
-            context->mutable_region_epoch()->set_conf_ver(meta_snap.conf_ver);
-            // if start_ts is 0, only send read index request to proxy
-            if (start_ts)
-            {
-                request.set_start_ts(start_ts);
-                auto key_range = request.add_ranges();
-                key_range->set_start_key(*meta_snap.range->rawKeys().first);
-                key_range->set_end_key(*meta_snap.range->rawKeys().second);
-            }
-        }
+        kvrpcpb::ReadIndexRequest request = GenRegionReadIndexReq(*this, start_ts);
         auto response = proxy_helper->readIndex(request);
         LOG_TRACE(log,
             toString(false) << " send ReadIndexRequest { " << request.context().ShortDebugString() << " start_ts: " << start_ts << " }"
