@@ -131,7 +131,7 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
             /// otherwise the desired index will be blocked by the lock of data read.
             if (auto proxy_helper = kvstore->getProxyHelper(); proxy_helper)
             {
-                batch_read_index_result = kvstore->getProxyHelper()->batchReadIndex(batch_read_index_req);
+                batch_read_index_result = proxy_helper->batchReadIndex(batch_read_index_req);
             }
             else
             {
