@@ -15,8 +15,8 @@ namespace DB
 
 // RateLimiter is to control write rate of background tasks of StorageDeltaMerge
 // constructor parameters:
-// `balance_increase_rate_`: the increase rate of available balance per second, 0 means no limit
-// `alloc_balance_soft_limit_` and `alloc_balance_hard_limit_`: usage explained in the comments of `request()` method
+// `rate_limit_`: the increase rate of available balance per second, 0 means no limit
+// `burst_rate_limit_` and `max_balance_`: usage explained in the comments of `request()` method
 //
 // `request()` is the main interface used by clients.
 // It receives the task size as the parameter,
@@ -26,16 +26,16 @@ namespace DB
 class RateLimiter
 {
 public:
-    RateLimiter(Context & db_context, Int64 balance_increase_rate_, Int64 alloc_balance_soft_limit_, Int64 alloc_balance_hard_limit_);
+    RateLimiter(Context & db_context, Int64 rate_limit_, Int64 burst_rate_limit_, Int64 max_balance_);
 
     // Clients try to request balance through this method,
     // and its' return value means `bytes` - <allocated_bytes>.
     //
     // the current available balance is kept in member `available_bytes`,
-    // and `available_bytes` is always less than or equal `alloc_balance_hard_limit`
+    // and `available_bytes` is always less than or equal `max_balance`
     //
     // process to calculate <allocated_bytes>:
-    //   1. if prev_alloc_balance - (current_time - prev_alloc_time) * balance_increase_rate >= alloc_balance_soft_limit,
+    //   1. if prev_alloc_balance - (current_time - prev_alloc_time) * rate_limit >= burst_rate_limit,
     //      then <allocated_bytes> = 0
     //   2. else, <allocated_bytes> = min(`available_bytes`, `bytes`)
     size_t request(Int64 bytes);
@@ -46,10 +46,10 @@ private:
 private:
     Context & context;
 
-    Int64 balance_increase_rate;
+    Int64 rate_limit;
 
-    Int64 alloc_balance_soft_limit;
-    Int64 alloc_balance_hard_limit;
+    Int64 burst_rate_limit;
+    Int64 max_balance;
     Int64 available_bytes;
 
     AtomicStopwatch refill_stop_watch;
