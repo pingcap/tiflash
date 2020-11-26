@@ -25,7 +25,7 @@ public:
         PlaceIndex,
     };
 
-    static std::string toString(TaskType type)
+    static std::string TaskToString(TaskType type)
     {
         switch (type)
         {
@@ -148,7 +148,7 @@ private:
 
     RateLimiterPtr rate_limiter;
 
-    DeltaMergeTaskPoolHandle next_store_id;
+    std::atomic<UInt64> next_store_id;
 
     // we can just handling task from high priority queue one at a time to avoid create too many snapshot
     std::atomic<bool> handling_high_priority_task{false};

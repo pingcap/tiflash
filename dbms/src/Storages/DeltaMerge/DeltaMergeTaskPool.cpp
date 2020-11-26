@@ -34,7 +34,6 @@ DeltaMergeTaskPool::~DeltaMergeTaskPool()
 
 DeltaMergeTaskPoolHandle DeltaMergeTaskPool::registerStore()
 {
-    std::scoped_lock lock(mutex);
     return next_store_id++;
 }
 
@@ -42,7 +41,7 @@ void DeltaMergeTaskPool::addTask(const BackgroundTask & task, const ThreadType &
 {
     LOG_DEBUG(log,
               "Database: [" << task.store->getDatabaseName() << "] Table: [" << task.store->getTableName() << "] Segment ["
-                            << task.segment->segmentId() << "] task [" << toString(task.type) << "] add to background task pool by ["
+                            << task.segment->segmentId() << "] task [" << TaskToString(task.type) << "] add to background task pool by ["
                             << DeltaMergeStore::toString(whom) << "]");
 
     std::scoped_lock lock(mutex);
@@ -137,7 +136,7 @@ bool DeltaMergeTaskPool::handleTaskImpl(bool high_priority)
 
         LOG_DEBUG(log,
                   "Database: [" << task->store->getDatabaseName() << "] Table: [" << task->store->getTableName() << "] Task"
-                                << toString(task->type) << " GC safe point: " << safe_point);
+                                << TaskToString(task->type) << " GC safe point: " << safe_point);
 
         // Foreground task don't get GC safe point from remote, but we better make it as up to date as possible.
         task->store->updateLatestGcSafePoint(safe_point);
@@ -270,14 +269,14 @@ bool DeltaMergeTaskPool::handleTaskImpl(bool high_priority)
                 task->segment->placeDeltaIndex(*task->dm_context);
                 break;
             default:
-                throw Exception("Unsupported task type: " + toString(task->type));
+                throw Exception("Unsupported task type: " + TaskToString(task->type));
             }
         }
         catch (Exception & e)
         {
             LOG_ERROR(log,
                       "Database: [" << task->store->getDatabaseName() << "] Table: [" << task->store->getTableName() << "] Task "
-                                    << toString(task->type) << " on Segment [" << task->segment->segmentId()
+                                    << TaskToString(task->type) << " on Segment [" << task->segment->segmentId()
                                     << ((bool)task->next_segment ? ("] and [" + DB::toString(task->next_segment->segmentId())) : "")
                                     << "] failed. Error msg: " << e.message());
             e.addMessage("(Error while handling background task of Database: [" + task->store->getDatabaseName() + "] Table: ["
@@ -313,7 +312,7 @@ DeltaMergeTaskPool::BackgroundTaskHandle DeltaMergeTaskPool::nextTask(bool high_
 
     LOG_DEBUG(log,
               "Database: [" << task->store->getDatabaseName() << "] Table: [" << task->store->getTableName() << "] Segment ["
-                            << task->segment->segmentId() << "] task [" << toString(task->type) << "] pop from background task pool");
+                            << task->segment->segmentId() << "] task [" << TaskToString(task->type) << "] pop from background task pool");
 
     return task;
 }
@@ -322,7 +321,7 @@ void DeltaMergeTaskPool::addTaskToHighPriorityQueue(BackgroundTaskHandle & task,
 {
     LOG_DEBUG(log,
               "Database: [" << task->store->getDatabaseName() << "] Table: [" << task->store->getTableName() << "] Segment ["
-                            << task->segment->segmentId() << "] task [" << toString(task->type) << "] remaining task size ["
+                            << task->segment->segmentId() << "] task [" << TaskToString(task->type) << "] remaining task size ["
                             << task->task_size << "] add back to background task pool high priority " << (front ? "head" : "tail"));
     std::scoped_lock lock{mutex};
     processing_tasks.erase(task);
@@ -342,7 +341,7 @@ void DeltaMergeTaskPool::removeTaskFromProcessingQueue(DeltaMergeTaskPool::Backg
         task_counts[task->handle] -= 1;
         LOG_TRACE(log,
                   "Database: [" << task->store->getDatabaseName() << "] Table: [" << task->store->getTableName() << "] Segment ["
-                                << task->segment->segmentId() << "] task [" << toString(task->type)
+                                << task->segment->segmentId() << "] task [" << TaskToString(task->type)
                                 << "] removed from processing task set");
     }
 }
