@@ -1,4 +1,6 @@
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
+#include <Flash/Coprocessor/DAGCodec.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/CoprocessorHandler.h>
 #include <Flash/Mpp/MPPHandler.h>
@@ -133,13 +135,22 @@ grpc::Status MPPHandler::execute(mpp::DispatchTaskResponse * response)
             task->registerTunnel(MPPTaskId{meta.start_ts(), meta.task_id()}, tunnel);
             tunnel_set->tunnels.emplace_back(tunnel);
         }
-
         // read index , this may take a long time.
         BlockIO streams = executeQuery(dag, context, false, QueryProcessingStage::Complete);
 
+        // get partition column ids
+        auto part_keys = exchangeSender.partition_keys();
+        std::vector<Int64> partition_col_id;
+        for (const auto & expr : part_keys)
+        {
+            assert(isColumnExpr(expr));
+            auto column_index = decodeDAGInt64(expr.val());
+            partition_col_id.emplace_back(column_index);
+        }
         // construct writer
-        std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(tunnel_set,
-            context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), dag_context, false, true);
+        std::unique_ptr<DAGResponseWriter> response_writer
+            = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(tunnel_set, partition_col_id, exchangeSender.tp(),
+                context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), dag_context, false, true);
         streams.out = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
 
         task->run(streams);
