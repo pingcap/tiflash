@@ -1,9 +1,7 @@
 #include <Common/Exception.h>
 #include <Flash/DiagnosticsService.h>
 #include <Flash/LogSearch.h>
-
 #include <Poco/Path.h>
-
 #include <re2/re2.h>
 
 #ifdef __linux__
@@ -725,26 +723,46 @@ void DiagnosticsService::diskHardwareInfo(std::vector<diagnosticspb::ServerInfoI
     std::vector<std::string> data_dirs;
     boost::split(data_dirs, data_path, boost::is_any_of(","));
 
-    std::vector<Disk> disks_in_use;
+    std::unordered_map<std::string, Disk> disks_in_use;
     disks_in_use.reserve(all_disks.size());
 
-    for (auto disk : all_disks)
+    //    for (auto disk : all_disks)
+    //    {
+    //        bool is_in_use = false;
+    //        for (auto & dir : data_dirs)
+    //        {
+    //            if (boost::starts_with(dir, disk.mount_point))
+    //            {
+    //                is_in_use = true;
+    //                break;
+    //            }
+    //        }
+    //
+    //        if (is_in_use)
+    //            disks_in_use.emplace_back(std::move(disk));
+    //    }
+    for (auto & dir : data_dirs)
     {
-        bool is_in_use = false;
-        for (auto dir : data_dirs)
+        size_t max_prefix_length = 0;
+        int mount_disk_index = -1;
+        for (size_t i = 0; i < all_disks.size(); i++)
         {
-            if (boost::starts_with(dir, disk.mount_point))
+            auto & disk = all_disks[i];
+            if (boost::starts_with(dir, disk.mount_point) && disk.mount_point.size() > max_prefix_length)
             {
-                is_in_use = true;
-                break;
+                max_prefix_length = disk.mount_point.size();
+                mount_disk_index = i;
             }
         }
-
-        if (is_in_use)
-            disks_in_use.emplace_back(std::move(disk));
+        if (mount_disk_index < 0)
+        {
+            LOG_WARNING(log, "Cannot find mounted disk of path: " + dir);
+        }
+        auto & disk = all_disks[mount_disk_index];
+        disks_in_use.try_emplace(disk.mount_point, disk);
     }
 
-    for (auto disk : disks_in_use)
+    for (auto & [mount_point, disk] : disks_in_use)
     {
         size_t total = disk.total_space;
         size_t free = disk.available_space;
@@ -759,7 +777,7 @@ void DiagnosticsService::diskHardwareInfo(std::vector<diagnosticspb::ServerInfoI
         std::string used_percent_str(buffer);
 
         std::vector<std::pair<std::string, std::string>> infos{{"type", disk.disk_type == disk.HDD ? "HDD" : "SSD"},
-            {"fstype", disk.fs_type}, {"path", disk.mount_point}, {"total", std::to_string(total)}, {"free", std::to_string(free)},
+            {"fstype", disk.fs_type}, {"path", mount_point}, {"total", std::to_string(total)}, {"free", std::to_string(free)},
             {"used", std::to_string(used)}, {"free-percent", free_percent_str}, {"used-percent", used_percent_str}};
 
         ServerInfoItem item;
@@ -789,7 +807,8 @@ void DiagnosticsService::systemInfo(std::vector<diagnosticspb::ServerInfoItem> &
 void DiagnosticsService::processInfo(std::vector<diagnosticspb::ServerInfoItem> & server_info_items) { (void)server_info_items; }
 
 ::grpc::Status DiagnosticsService::server_info(
-    ::grpc::ServerContext * context, const ::diagnosticspb::ServerInfoRequest * request, ::diagnosticspb::ServerInfoResponse * response) try
+    ::grpc::ServerContext * context, const ::diagnosticspb::ServerInfoRequest * request, ::diagnosticspb::ServerInfoResponse * response)
+try
 {
     (void)context;
 
