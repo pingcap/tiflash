@@ -2,6 +2,7 @@
 #include <Flash/DiagnosticsService.h>
 #include <Flash/LogSearch.h>
 #include <Poco/Path.h>
+#include <Storages/PathPool.h>
 #include <re2/re2.h>
 
 #ifdef __linux__
@@ -719,9 +720,8 @@ void DiagnosticsService::diskHardwareInfo(std::vector<diagnosticspb::ServerInfoI
 {
     std::vector<Disk> all_disks = getAllDisks();
 
-    std::string data_path = server.config().getString("path");
-    std::vector<std::string> data_dirs;
-    boost::split(data_dirs, data_path, boost::is_any_of(","));
+    auto & path_pool = server.context().getPathPool();
+    std::vector<std::string> data_dirs = path_pool.listPaths();
 
     std::unordered_map<std::string, Disk> disks_in_use;
     disks_in_use.reserve(all_disks.size());
