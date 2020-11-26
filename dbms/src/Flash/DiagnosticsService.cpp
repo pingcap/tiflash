@@ -91,7 +91,7 @@ DiagnosticsService::NICInfo getNICInfo()
 
     std::vector<Poco::File> devices;
     net_dir.list(devices);
-    for (auto device : devices)
+    for (auto & device : devices)
     {
         std::vector<Poco::File> device_infos;
         device.list(device_infos);
@@ -102,7 +102,7 @@ DiagnosticsService::NICInfo getNICInfo()
         std::vector<Poco::File> stat_files;
         statistics->list(stat_files);
         DiagnosticsService::NICLoad load_info;
-        for (auto stat : stat_files)
+        for (auto & stat : stat_files)
         {
             Poco::Path path(stat.path());
             std::ifstream file(path.toString());
@@ -144,7 +144,7 @@ DiagnosticsService::IOInfo getIOInfo()
 
     std::vector<Poco::File> devices;
     io_dir.list(devices);
-    for (auto device : devices)
+    for (auto & device : devices)
     {
         Poco::Path stat_file_path(device.path());
         stat_file_path.append("stat");
@@ -409,7 +409,7 @@ void DiagnosticsService::cpuLoadInfo(
             pairs.emplace_back(std::move(pair));
         }
         ServerInfoItem item;
-        for (auto pair : pairs)
+        for (auto & pair : pairs)
         {
             auto added_pair = item.add_pairs();
             added_pair->set_key(pair.key());
@@ -455,7 +455,7 @@ void DiagnosticsService::cpuLoadInfo(
             {"guest_nice", static_cast<double>(delta.guest_nice) / delta_total}};
 
         std::vector<ServerInfoPair> pairs;
-        for (auto p : data)
+        for (auto & p : data)
         {
             ServerInfoPair pair;
             pair.set_key(p.first);
@@ -467,7 +467,7 @@ void DiagnosticsService::cpuLoadInfo(
         ServerInfoItem item;
         item.set_tp("cpu");
         item.set_name("usage");
-        for (auto pair : pairs)
+        for (auto & pair : pairs)
         {
             auto added_pair = item.add_pairs();
             added_pair->set_key(pair.key());
@@ -526,7 +526,7 @@ void DiagnosticsService::memLoadInfo(std::vector<diagnosticspb::ServerInfoItem> 
     // Add pairs for memory_infos
     {
         std::vector<ServerInfoPair> pairs;
-        for (auto info : memory_infos)
+        for (auto & info : memory_infos)
         {
             ServerInfoPair pair;
             pair.set_key(info.first);
@@ -549,7 +549,7 @@ void DiagnosticsService::memLoadInfo(std::vector<diagnosticspb::ServerInfoItem> 
     // Add pairs for swap_infos
     {
         std::vector<ServerInfoPair> pairs;
-        for (auto info : swap_infos)
+        for (auto & info : swap_infos)
         {
             ServerInfoPair pair;
             pair.set_key(info.first);
@@ -590,7 +590,7 @@ void DiagnosticsService::nicLoadInfo(const NICInfo & prev_nic, std::vector<diagn
             {"tx-comp/s", rate(cur.tx_compressed, prev->second.tx_compressed)},
         };
         std::vector<ServerInfoPair> pairs;
-        for (auto info : infos)
+        for (auto & info : infos)
         {
             ServerInfoPair pair;
             pair.set_key(info.first);
@@ -600,7 +600,7 @@ void DiagnosticsService::nicLoadInfo(const NICInfo & prev_nic, std::vector<diagn
             pairs.emplace_back(std::move(pair));
         }
         ServerInfoItem item;
-        for (auto pair : pairs)
+        for (auto & pair : pairs)
         {
             auto added_pair = item.add_pairs();
             added_pair->set_key(pair.key());
@@ -636,7 +636,7 @@ void DiagnosticsService::ioLoadInfo(
             {"time_in_queue/s", rate(cur.time_in_queue, prev->second.time_in_queue)},
         };
         std::vector<ServerInfoPair> pairs;
-        for (auto info : infos)
+        for (auto & info : infos)
         {
             ServerInfoPair pair;
             pair.set_key(info.first);
@@ -646,7 +646,7 @@ void DiagnosticsService::ioLoadInfo(
             pairs.emplace_back(std::move(pair));
         }
         ServerInfoItem item;
-        for (auto pair : pairs)
+        for (auto & pair : pairs)
         {
             auto added_pair = item.add_pairs();
             added_pair->set_key(pair.key());
@@ -689,7 +689,7 @@ void DiagnosticsService::cpuHardwareInfo(std::vector<diagnosticspb::ServerInfoIt
     }
 
     ServerInfoItem item;
-    for (auto info : infos)
+    for (auto & info : infos)
     {
         auto pair = item.add_pairs();
         pair->set_key(info.first);
@@ -721,6 +721,7 @@ void DiagnosticsService::diskHardwareInfo(std::vector<diagnosticspb::ServerInfoI
     std::vector<Disk> all_disks = getAllDisks();
 
     auto & path_pool = server.context().getPathPool();
+    // TODO: Maybe add deploy path of both TiFlash and Proxy
     std::vector<std::string> data_dirs = path_pool.listPaths();
 
     std::unordered_map<std::string, Disk> disks_in_use;
@@ -766,7 +767,7 @@ void DiagnosticsService::diskHardwareInfo(std::vector<diagnosticspb::ServerInfoI
             {"used", std::to_string(used)}, {"free-percent", free_percent_str}, {"used-percent", used_percent_str}};
 
         ServerInfoItem item;
-        for (auto info : infos)
+        for (auto & info : infos)
         {
             auto added_pair = item.add_pairs();
             added_pair->set_key(info.first);
@@ -854,7 +855,7 @@ try
         auto added_item = resp.add_items();
         added_item->set_name(item.name());
         added_item->set_tp(item.tp());
-        for (auto pair : item.pairs())
+        for (auto & pair : item.pairs())
         {
             auto added_pair = added_item->add_pairs();
             added_pair->set_key(pair.key());
@@ -896,7 +897,7 @@ catch (const Exception & e)
     }
 
     std::vector<std::string> patterns;
-    for (auto pattern : request->patterns())
+    for (auto && pattern : request->patterns())
     {
         patterns.push_back(pattern);
     }
