@@ -726,21 +726,6 @@ void DiagnosticsService::diskHardwareInfo(std::vector<diagnosticspb::ServerInfoI
     std::unordered_map<std::string, Disk> disks_in_use;
     disks_in_use.reserve(all_disks.size());
 
-    //    for (auto disk : all_disks)
-    //    {
-    //        bool is_in_use = false;
-    //        for (auto & dir : data_dirs)
-    //        {
-    //            if (boost::starts_with(dir, disk.mount_point))
-    //            {
-    //                is_in_use = true;
-    //                break;
-    //            }
-    //        }
-    //
-    //        if (is_in_use)
-    //            disks_in_use.emplace_back(std::move(disk));
-    //    }
     for (auto & dir : data_dirs)
     {
         size_t max_prefix_length = 0;
