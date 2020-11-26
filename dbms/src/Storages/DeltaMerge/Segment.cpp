@@ -7,6 +7,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMDecoratorStreams.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
+#include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/DeltaMerge.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaPlace.h>
@@ -1127,6 +1128,9 @@ Segment::ReadInfo Segment::getReadInfo(const DMContext &          dm_context,
         if (ok)
             LOG_DEBUG(log, simpleInfo() << " Updated delta index");
     }
+
+    // Refresh the reference in DeltaIndexManager, so that the index can be properly managed.
+    dm_context.db_context.getDeltaIndexManager()->refreshRef(segment_snap->delta->shared_delta_index);
 
     return {
         .index_begin  = compacted_index->begin(),
