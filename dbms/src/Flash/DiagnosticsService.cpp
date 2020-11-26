@@ -743,6 +743,7 @@ void DiagnosticsService::diskHardwareInfo(std::vector<diagnosticspb::ServerInfoI
         if (mount_disk_index < 0)
         {
             LOG_WARNING(log, "Cannot find mounted disk of path: " + dir);
+            continue;
         }
         auto & disk = all_disks[mount_disk_index];
         disks_in_use.try_emplace(disk.mount_point, disk);
