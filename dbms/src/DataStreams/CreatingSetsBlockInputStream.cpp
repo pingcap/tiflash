@@ -92,9 +92,13 @@ void CreatingSetsBlockInputStream::createAll()
                     if (isCancelledOrThrowIfKilled())
                         return;
 
-                    createOne(elem.second);
+                    workers.push_back(std::thread(&CreatingSetsBlockInputStream::createOne, this, std::ref(elem.second)));
                 }
             }
+        }
+        for (auto & work : workers)
+        {
+            work.join();
         }
 
         created = true;
@@ -163,6 +167,9 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
             break;
         }
     }
+
+    if (subquery.join)
+        subquery.join->finishBuildTable();
 
     if (table_out)
         table_out->writeSuffix();

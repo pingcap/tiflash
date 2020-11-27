@@ -281,6 +281,7 @@ public:
     bool useNulls() const { return use_nulls; }
     const Names & getLeftJoinKeys() const { return key_names_left; }
 
+    void finishBuildTable();
 
     /// Reference to the row in block.
     struct RowRef
@@ -423,6 +424,10 @@ private:
     Block sample_block_with_columns_to_add;
     /// Block with key columns in the same order they appear in the right-side table.
     Block sample_block_with_keys;
+
+    mutable std::mutex build_table_mutex;
+    mutable std::condition_variable build_table_cv;
+    bool have_finish_build;
 
     Poco::Logger * log;
 
