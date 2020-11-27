@@ -41,7 +41,6 @@
 #include <Poco/FormattingChannel.h>
 #include <Poco/PatternFormatter.h>
 #include <Poco/ConsoleChannel.h>
-#include <Poco/TaskManager.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <Poco/Message.h>
@@ -61,6 +60,7 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Common/getMultipleKeysFromConfig.h>
+#include <Common/setThreadName.h>
 #include <Common/ClickHouseRevision.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/UnifiedLogPatternFormatter.h>
@@ -248,6 +248,8 @@ public:
 
     void run()
     {
+        setThreadName("SignalListener");
+
         char buf[buf_size];
         DB::ReadBufferFromFileDescriptor in(signal_pipe.read_fd, buf_size, buf);
 
@@ -685,7 +687,6 @@ BaseDaemon::~BaseDaemon()
 
 void BaseDaemon::terminate()
 {
-    getTaskManager().cancelAll();
     if (::kill(Poco::Process::id(), SIGTERM) != 0)
     {
         throw Poco::SystemException("cannot terminate process");
@@ -840,7 +841,6 @@ std::string BaseDaemon::getDefaultCorePath() const
 
 void BaseDaemon::initialize(Application & self)
 {
-    task_manager.reset(new Poco::TaskManager);
     ServerApplication::initialize(self);
 
     {
@@ -1080,13 +1080,6 @@ void BaseDaemon::logRevision() const
     std::stringstream ss;
     TiFlashBuildInfo::outputDetail(ss);
     Logger::root().information("TiFlash build info: " + ss.str());
-}
-
-/// Makes server shutdown if at least one Poco::Task have failed.
-void BaseDaemon::exitOnTaskError()
-{
-    Observer<BaseDaemon, Poco::TaskFailedNotification> obs(*this, &BaseDaemon::handleNotification);
-    getTaskManager().addObserver(obs);
 }
 
 /// Used for exitOnTaskError()

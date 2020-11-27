@@ -111,7 +111,11 @@ BackgroundProcessingPool::~BackgroundProcessingPool()
 
 void BackgroundProcessingPool::threadFunction()
 {
-    setThreadName("BackgrProcPool");
+    {
+        static std::atomic_uint64_t tid{0};
+        const auto name = "BackgrPool" + std::to_string(tid++);
+        setThreadName(name.data());
+    }
 
     MemoryTracker memory_tracker;
     memory_tracker.setMetric(CurrentMetrics::MemoryTrackingInBackgroundProcessingPool);

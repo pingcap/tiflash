@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Poco/Util/Timer.h>
+#include <Common/Timer.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <common/logger_useful.h>
 
@@ -19,7 +19,7 @@ public:
 private:
     static void run(const std::string & command, const std::vector<std::string> & args);
     Context & context;
-    Poco::Util::Timer timer;
+    Timer timer;
     Logger * log;
 };
 
