@@ -34,6 +34,7 @@ const static String AGG_NAME("aggregation");
 const static String TOPN_NAME("topN");
 const static String LIMIT_NAME("limit");
 const static String EXCHANGE_SENDER_NAME("exchange_sender");
+const static String PROJ_NAME("projection");
 
 static void assignOrThrowException(const tipb::Executor ** to, const tipb::Executor * from, const String & name)
 {
@@ -105,6 +106,12 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_, TiFlashMe
                 assignOrThrowException(&exchangeSender, current, EXCHANGE_SENDER_NAME);
                 exchangeServer_name = current->executor_id();
                 current = &current->exchange_sender().child();
+                break;
+            case tipb::ExecType::TypeProjection:
+                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_projection).Increment();
+                assignOrThrowException(&projection, current, PROJ_NAME);
+                projection_name = current->executor_id();
+                current = &current->projection().child();
                 break;
             case tipb::ExecType::TypeIndexScan:
                 throw TiFlashException("Unsupported executor in DAG request: " + current->DebugString(), Errors::Coprocessor::Internal);
@@ -192,6 +199,11 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
                 else
                     limitOrTopN_name = std::to_string(i) + "_limitOrTopN";
                 break;
+            case tipb::ExecType::TypeProjection:
+                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_projection).Increment();
+                assignOrThrowException(&projection, &executors[i], PROJ_NAME);
+                projection_name = std::to_string(i) + "_projection";
+                break;
             default:
                 throw TiFlashException(
                     "Unsupported executor in DAG request: " + executors[i].DebugString(), Errors::Coprocessor::Unimplemented);
@@ -200,6 +212,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
     fillOutputFieldTypes();
 }
 
+//TODO: need to update this according to projection?
 void DAGQueryBlock::fillOutputFieldTypes()
 {
     if (source->tp() == tipb::ExecType::TypeJoin)

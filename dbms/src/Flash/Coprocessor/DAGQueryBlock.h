@@ -40,6 +40,8 @@ public:
     String limitOrTopN_name;
     const tipb::Executor * exchangeSender = nullptr;
     String exchangeServer_name;
+    const tipb::Executor * projection = nullptr;
+    String projection_name;
     UInt32 id;
     const tipb::Executor * root;
     String qb_column_prefix;

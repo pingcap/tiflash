@@ -807,8 +807,23 @@ AnalysisResult DAGQueryBlockInterpreter::analyzeExpressions()
         res.has_order_by = true;
         analyzer->appendOrderBy(chain, query_block.limitOrTopN->topn(), res.order_columns);
     }
-    // Append final project results if needed.
-    analyzer->appendFinalProject(chain, final_project);
+
+    // projection
+    if (query_block.projection != nullptr)
+    {
+        std::vector<const tipb::Expr *> exprs;
+        for (auto & expr : query_block.projection->projection().exprs())
+        {
+            exprs.emplace_back(&expr);
+        }
+        final_project = analyzer->appendProjection(chain, exprs);
+    }
+    else
+    {
+        // Append final project results if needed.
+        analyzer->appendFinalProject(chain, final_project);
+    }
+
     res.before_order_and_select = chain.getLastActions();
     chain.finalize();
     chain.clear();
