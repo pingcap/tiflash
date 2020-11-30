@@ -11,14 +11,10 @@ namespace DB
 namespace DM
 {
 
-DeltaMergeTaskPool::DeltaMergeTaskPool(Context & db_context)
+DeltaMergeTaskPool::DeltaMergeTaskPool(Context & db_context, Int64 rate_limit, Int64 burst_rate_limit, Int64 max_balance)
     : global_context(db_context),
       background_pool(db_context.getBackgroundPool()),
-      rate_limiter(std::make_shared<RateLimiter>(
-          db_context,
-          db_context.getSettingsRef().dt_bg_task_rate_limit,
-          db_context.getSettingsRef().dt_bg_task_rate_limit * db_context.getSettingsRef().dt_bg_task_burst_rate_limit_ratio,
-          db_context.getSettingsRef().dt_bg_task_rate_limit * db_context.getSettingsRef().dt_bg_task_max_balance_ratio)),
+      rate_limiter(std::make_shared<RateLimiter>(db_context, rate_limit, burst_rate_limit, max_balance)),
       next_store_id{0},
       log(&Logger::get("DeltaMergeTaskPool"))
 {

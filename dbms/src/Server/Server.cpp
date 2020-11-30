@@ -676,7 +676,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     {
-        global_context->initializeDeltaMergeTaskPool();
+        global_context->initializeDeltaMergeTaskPool(storage_config.bg_task_rate_limit, storage_config.bg_task_burst_rate_limit, storage_config.bg_task_max_balance);
     }
 
     {

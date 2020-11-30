@@ -44,6 +44,9 @@ private:
     void refillIfNeed();
 
 private:
+    const Int64 default_burst_rate_limit_ratio = 2;
+    const Int64 default_max_balance_ratio = 10;
+
     Context & context;
 
     Int64 rate_limit;

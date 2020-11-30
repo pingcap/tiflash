@@ -419,7 +419,7 @@ public:
     void initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption);
     FileProviderPtr getFileProvider() const;
 
-    void initializeDeltaMergeTaskPool();
+    void initializeDeltaMergeTaskPool(Int64 rate_limit, Int64 burst_rate_limit, Int64 max_balance);
     DM::DeltaMergeTaskPoolPtr getDeltaMergeTaskPool() const;
 
     Clusters & getClusters() const;

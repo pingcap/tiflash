@@ -245,9 +245,6 @@ struct Settings
     M(SettingUInt64, dt_segment_delta_small_pack_rows, 512, "Determine whether a pack in delta is small or not")\
     M(SettingUInt64, dt_segment_stable_pack_rows, DEFAULT_MERGE_BLOCK_SIZE, "Expected stable pack rows in DeltaTree Engine")\
     M(SettingUInt64, dt_insert_max_rows, 0, "Max rows of insert blocks when write into DeltaTree Engine. By default 0 means no limit.")\
-    M(SettingUInt64, dt_bg_task_rate_limit, 0, "Balance increase rate of dt background tasks in bytes per second. By default 0 means no limit.")\
-    M(SettingUInt64, dt_bg_task_burst_rate_limit_ratio, 2, "Burst rate limit ratio to dt_bg_task_rate_limit")\
-    M(SettingUInt64, dt_bg_task_max_balance_ratio, 10, "Max balance ratio to dt_bg_task_rate_limit")\
     M(SettingBool, dt_enable_rough_set_filter, true, "Whether to parse where expression as Rough Set Index filter or not") \
     M(SettingBool, dt_raw_filter_range, true, "Do range filter or not when read data in raw mode in DeltaTree Engine.")\
     M(SettingBool, dt_read_delta_only, false, "Only read delta data in DeltaTree Engine.")\

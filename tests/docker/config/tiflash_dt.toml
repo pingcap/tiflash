@@ -17,6 +17,16 @@ http_port = 8123
 
 ## Storage paths settings.
 # [storage]
+    ## Balance increase rate of dt background tasks in bytes per second.
+    ## By default 0 means no limit.
+    bg_task_rate_limit = 0
+	## Burst rate limit
+	## By default 0 means using the default value(2 * bg_task_rate_limit)
+    bg_task_burst_rate_limit = 0
+    ## Max balance
+    ## By default 0 means using the default value(10 * bg_task_rate_limit)
+    bg_task_max_balance = 0
+
     ## If there are multiple SSD disks on the machine,
     ## specify the path list on `storage.main.dir` can improve TiFlash performance.
 

@@ -7,8 +7,8 @@ namespace DB
 RateLimiter::RateLimiter(Context & db_context, Int64 rate_limit_, Int64 burst_rate_limit_, Int64 max_balance_)
     : context{db_context},
       rate_limit{rate_limit_},
-      burst_rate_limit{burst_rate_limit_},
-      max_balance{max_balance_},
+      burst_rate_limit{burst_rate_limit_ == 0 ? default_burst_rate_limit_ratio * rate_limit_ : burst_rate_limit_},
+      max_balance{max_balance_ == 0 ? default_max_balance_ratio * rate_limit_ : max_balance_},
       available_bytes{max_balance_},
       prev_alloc_balance{0},
       log{&Logger::get("RateLimiter")}

@@ -1543,12 +1543,12 @@ FileProviderPtr Context::getFileProvider() const
     return shared->file_provider;
 }
 
-void Context::initializeDeltaMergeTaskPool()
+void Context::initializeDeltaMergeTaskPool(Int64 rate_limit, Int64 burst_rate_limit, Int64 max_balance)
 {
     auto lock = getLock();
     if (shared->delta_merge_task_pool)
         throw Exception("DeltaMergeTaskPool has already been initialized.", ErrorCodes::LOGICAL_ERROR);
-    shared->delta_merge_task_pool = std::make_shared<DM::DeltaMergeTaskPool>(*this);
+    shared->delta_merge_task_pool = std::make_shared<DM::DeltaMergeTaskPool>(*this, rate_limit, burst_rate_limit, max_balance);
 }
 
 DM::DeltaMergeTaskPoolPtr Context::getDeltaMergeTaskPool() const

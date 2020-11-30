@@ -93,7 +93,7 @@ public:
     using BackgroundTaskHandle = std::shared_ptr<BackgroundTask>;
 
 public:
-    explicit DeltaMergeTaskPool(Context & db_context);
+    DeltaMergeTaskPool(Context & db_context, Int64 rate_limit, Int64 burst_rate_limit, Int64 max_balance);
 
     ~DeltaMergeTaskPool();
 
