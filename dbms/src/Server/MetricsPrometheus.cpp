@@ -4,6 +4,7 @@
 #include <Common/FunctionTimerTask.h>
 #include <Common/ProfileEvents.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/setThreadName.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/Context.h>
 #include <Poco/Crypto/X509Certificate.h>
@@ -18,7 +19,6 @@
 #include <prometheus/exposer.h>
 #include <prometheus/gauge.h>
 #include <prometheus/text_serializer.h>
-
 
 namespace DB
 {
@@ -85,8 +85,8 @@ private:
 std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
     const TiFlashSecurityConfig & security_config, const std::weak_ptr<prometheus::Collectable> & collectable, const String & metrics_port)
 {
-    Poco::Net::Context::Ptr context = new Poco::Net::Context(
-        Poco::Net::Context::TLSV1_2_SERVER_USE, security_config.key_path, security_config.cert_path, security_config.ca_path, Poco::Net::Context::VerificationMode::VERIFY_STRICT);
+    Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE, security_config.key_path,
+        security_config.cert_path, security_config.ca_path, Poco::Net::Context::VerificationMode::VERIFY_STRICT);
 
     std::function<bool(const Poco::Crypto::X509Certificate &)> check_common_name = [&](const Poco::Crypto::X509Certificate & cert) {
         if (security_config.allowed_common_names.empty())
@@ -114,7 +114,7 @@ constexpr long INIT_DELAY = 5;
 
 MetricsPrometheus::MetricsPrometheus(
     Context & context, const AsynchronousMetrics & async_metrics_, const TiFlashSecurityConfig & security_config)
-    : timer(), tiflash_metrics(context.getTiFlashMetrics()), async_metrics(async_metrics_), log(&Logger::get("Prometheus"))
+    : timer("Prometheus"), tiflash_metrics(context.getTiFlashMetrics()), async_metrics(async_metrics_), log(&Logger::get("Prometheus"))
 {
     auto & conf = context.getConfigRef();
 
