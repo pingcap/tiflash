@@ -184,6 +184,9 @@ template
 >
 using HashMapWithSavedHash = HashMapTable<Key, HashMapCellWithSavedHash<Key, Mapped, Hash>, Hash, Grower, Allocator>;
 
+/// ConcurrentHashTable is the base class, it contains a vector of HashTableWithLock, ConcurrentHashMapTable is a derived
+/// class from ConcurrentHashTable, it makes hash table to be a hash map, and ConcurrentHashMap/ConcurrentHashMapWithSavedHash
+/// is just name alias for ConcurrentHashMapTable
 template
 <
     typename Key,
@@ -203,7 +206,7 @@ public:
 
     mapped_type & ALWAYS_INLINE operator[](Key x)
     {
-        typename ConcurrentHashMapTable::segment_type::iterator it;
+        typename ConcurrentHashMapTable::SegmentType::HashTableType::iterator it;
         bool inserted;
         this->emplace(x, it, inserted);
 

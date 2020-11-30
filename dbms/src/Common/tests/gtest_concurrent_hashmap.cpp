@@ -32,7 +32,7 @@ TEST(TestConcurrentHashMap, ConcurrentInsert)
         {
             for (size_t insert_value = 0; insert_value < 10000; insert_value++)
             {
-                typename ConcurrentMap::segment_type::iterator it;
+                typename ConcurrentMap::SegmentType::HashTableType::iterator it;
                 bool inserted;
                 map.emplace(insert_value, it, inserted);
                 it->second.value++;
@@ -42,7 +42,7 @@ TEST(TestConcurrentHashMap, ConcurrentInsert)
     insert_pool.wait();
     for (size_t insert_value = 0; insert_value < 10000; insert_value++)
     {
-        typename ConcurrentMap::segment_type::iterator it = map.find(insert_value);
+        typename ConcurrentMap::SegmentType::HashTableType::iterator it = map.find(insert_value);
         ASSERT_EQ(it->second.value.load(), (int)test_concurrency);
     }
 }
