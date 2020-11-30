@@ -79,6 +79,7 @@ public:
     TiFlashApplyRes handleIngestSST(UInt64 region_id, const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt);
     void preHandleSnapshot(RegionPtr new_region, const SnapshotViewArray snaps, TMTContext & tmt);
     RegionPtr genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
+    const TiFlashRaftProxyHelper * getProxyHelper() const { return proxy_helper; }
 
 private:
     friend class MockTiDB;

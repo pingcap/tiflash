@@ -199,7 +199,7 @@ void StoragePathPool::drop(bool recursive, bool must_success)
 
                 // update global used size
                 size_t total_bytes = 0;
-                for (const auto [file_id, file_size] : path_info.file_size_map)
+                for (const auto & [file_id, file_size] : path_info.file_size_map)
                 {
                     (void)file_id;
                     total_bytes += file_size;

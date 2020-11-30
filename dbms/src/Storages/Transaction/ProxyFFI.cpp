@@ -154,10 +154,22 @@ FileEncryptionInfo TiFlashRaftProxyHelper::renameFile(std::string_view src, std:
 
 kvrpcpb::ReadIndexResponse TiFlashRaftProxyHelper::readIndex(const kvrpcpb::ReadIndexRequest & req) const
 {
-    kvrpcpb::ReadIndexResponse res;
-    auto req_str = req.SerializeAsString();
-    std::unique_ptr<std::string> str(fn_handle_read_index(proxy_ptr, req_str));
-    res.ParseFromString(*str);
+    auto res = batchReadIndex({req});
+    return std::move(res->at(0).first);
+}
+
+BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> & req) const
+{
+    std::vector<std::string> req_strs;
+    req_strs.reserve(req.size());
+    for (auto & r : req)
+    {
+        req_strs.emplace_back(r.SerializeAsString());
+    }
+    CppStrVec data(std::move(req_strs));
+    assert(req_strs.empty());
+    auto outer_view = data.intoOuterView();
+    BatchReadIndexRes res(fn_handle_batch_read_index(proxy_ptr, outer_view));
     return res;
 }
 
@@ -250,4 +262,17 @@ const char * IntoEncryptionMethodName(EncryptionMethod method)
     return EncryptionMethodName[static_cast<uint8_t>(method)];
 }
 
+BatchReadIndexRes::pointer GenBatchReadIndexRes(uint64_t cap)
+{
+    auto res = new BatchReadIndexRes::element_type();
+    res->reserve(cap);
+    return res;
+}
+
+void InsertBatchReadIndexResp(BatchReadIndexRes::pointer resp, BaseBuffView view, uint64_t region_id)
+{
+    kvrpcpb::ReadIndexResponse res;
+    res.ParseFromArray(view.data, view.len);
+    resp->emplace_back(std::move(res), region_id);
+}
 } // namespace DB
