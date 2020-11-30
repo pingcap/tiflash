@@ -45,6 +45,7 @@
 #include <Storages/registerStorages.h>
 #include <TableFunctions/registerTableFunctions.h>
 #include <common/ErrorHandlers.h>
+#include <common/config_common.h>
 #include <common/getMemoryAmount.h>
 #include <common/logger_useful.h>
 #include <sys/resource.h>
@@ -66,6 +67,10 @@
 #include <Poco/Net/Context.h>
 #include <Poco/Net/SecureServerSocket.h>
 #include <grpc++/grpc++.h>
+#endif
+
+#if USE_JEMALLOC
+#include <jemalloc/jemalloc.h>
 #endif
 
 namespace CurrentMetrics
@@ -312,11 +317,61 @@ protected:
     }
 };
 
+void UpdateMallocConfig([[maybe_unused]] Logger * log)
+{
+#ifdef RUN_FAIL_RETURN
+    static_assert(false);
+#endif
+#define RUN_FAIL_RETURN(f)                                    \
+    do                                                        \
+    {                                                         \
+        if (f)                                                \
+        {                                                     \
+            LOG_ERROR(log, "Fail to update jemalloc config"); \
+            return;                                           \
+        }                                                     \
+    } while (0)
+#if USE_JEMALLOC
+    bool old_b, new_b = true;
+    size_t old_max_thd, new_max_thd = 1;
+    size_t sz_b = sizeof(bool), sz_st = sizeof(size_t);
+
+    auto malloc_conf = getenv("MALLOC_CONF");
+    if (malloc_conf)
+    {
+        LOG_INFO(log, "Got environment variable MALLOC_CONF: " << malloc_conf);
+    }
+    else
+    {
+        LOG_INFO(log, "Not found environment variable MALLOC_CONF");
+    }
+
+    RUN_FAIL_RETURN(je_mallctl("opt.background_thread", (void *)&old_b, &sz_b, nullptr, 0));
+    RUN_FAIL_RETURN(je_mallctl("opt.max_background_threads", (void *)&old_max_thd, &sz_st, nullptr, 0));
+
+    LOG_INFO(log, "Got jemalloc config: opt.background_thread " << old_b << ", opt.max_background_threads " << old_max_thd);
+
+    if (!malloc_conf && !old_b)
+    {
+        LOG_INFO(log, "Try to use background_thread of jemalloc to handle purging asynchronously");
+
+        RUN_FAIL_RETURN(je_mallctl("max_background_threads", nullptr, nullptr, (void *)&new_max_thd, sz_st));
+        LOG_INFO(log, "Set jemalloc.max_background_threads " << new_max_thd);
+
+        RUN_FAIL_RETURN(je_mallctl("background_thread", nullptr, nullptr, (void *)&new_b, sz_b));
+        LOG_INFO(log, "Set jemalloc.background_thread " << new_b);
+    }
+#endif
+#undef RUN_FAIL_RETURN
+}
+
 int Server::main(const std::vector<std::string> & /*args*/)
 {
     setThreadName("TiFlashMain");
 
     Logger * log = &logger();
+
+    UpdateMallocConfig(log);
 
     registerFunctions();
     registerAggregateFunctions();
