@@ -113,7 +113,7 @@ void BackgroundProcessingPool::threadFunction()
 {
     {
         static std::atomic_uint64_t tid{0};
-        const auto name = "BackgrPool" + std::to_string(tid++);
+        const auto name = "BkgPool" + std::to_string(tid++);
         setThreadName(name.data());
     }
 
