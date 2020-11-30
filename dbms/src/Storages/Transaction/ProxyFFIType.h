@@ -95,38 +95,12 @@ enum class RaftProxyStatus : uint8_t
 {
     Idle = 0,
     Running = 1,
-    Stop = 2,
-};
-
-struct TiFlashRaftProxyHelper
-{
-public:
-    RaftProxyStatus getProxyStatus() const;
-    bool checkEncryptionEnabled() const;
-    EncryptionMethod getEncryptionMethod() const;
-    FileEncryptionInfo getFile(std::string_view) const;
-    FileEncryptionInfo newFile(std::string_view) const;
-    FileEncryptionInfo deleteFile(std::string_view) const;
-    FileEncryptionInfo linkFile(std::string_view, std::string_view) const;
-    FileEncryptionInfo renameFile(std::string_view, std::string_view) const;
-    kvrpcpb::ReadIndexResponse readIndex(const kvrpcpb::ReadIndexRequest &) const;
-
-private:
-    TiFlashRaftProxyPtr proxy_ptr;
-    uint8_t (*fn_handle_get_proxy_status)(TiFlashRaftProxyPtr);
-    uint8_t (*fn_is_encryption_enabled)(TiFlashRaftProxyPtr);
-    EncryptionMethod (*fn_encryption_method)(TiFlashRaftProxyPtr);
-    FileEncryptionInfoRaw (*fn_handle_get_file)(TiFlashRaftProxyPtr, BaseBuffView);
-    FileEncryptionInfoRaw (*fn_handle_new_file)(TiFlashRaftProxyPtr, BaseBuffView);
-    FileEncryptionInfoRaw (*fn_handle_delete_file)(TiFlashRaftProxyPtr, BaseBuffView);
-    FileEncryptionInfoRaw (*fn_handle_link_file)(TiFlashRaftProxyPtr, BaseBuffView, BaseBuffView);
-    FileEncryptionInfoRaw (*fn_handle_rename_file)(TiFlashRaftProxyPtr, BaseBuffView, BaseBuffView);
-    TiFlashRawString (*fn_handle_read_index)(TiFlashRaftProxyPtr, BaseBuffView);
+    Stopped = 2,
 };
 
 enum class TiFlashStatus : uint8_t
 {
-    IDLE = 0,
+    Idle = 0,
     Running,
     Stopped,
 };
@@ -157,6 +131,61 @@ struct CppStrWithView
     CppStrWithView(std::string && v)
         : inner(new std::string(std::move(v)), RawCppPtrType::String), view(*reinterpret_cast<TiFlashRawString>(inner.ptr))
     {}
+    CppStrWithView(const CppStrWithView &) = delete;
+};
+
+struct CppStrVecView
+{
+    const BaseBuffView * view;
+    uint64_t len;
+};
+
+struct CppStrVec
+{
+    std::vector<std::string> data;
+    std::vector<BaseBuffView> view;
+    CppStrVec(std::vector<std::string> && data_) : data(std::move(data_)) { updateView(); }
+    CppStrVec(const CppStrVec &) = delete;
+    void updateView()
+    {
+        view.clear();
+        view.reserve(data.size());
+        for (const auto & e : data)
+        {
+            view.emplace_back(e);
+        }
+    }
+    CppStrVecView intoOuterView() const { return {view.data(), view.size()}; }
+};
+
+using BatchReadIndexRes = std::unique_ptr<std::vector<std::pair<kvrpcpb::ReadIndexResponse, uint64_t>>>;
+static_assert(std::is_same_v<BatchReadIndexRes::pointer, BatchReadIndexRes::element_type *>);
+
+struct TiFlashRaftProxyHelper
+{
+public:
+    RaftProxyStatus getProxyStatus() const;
+    bool checkEncryptionEnabled() const;
+    EncryptionMethod getEncryptionMethod() const;
+    FileEncryptionInfo getFile(std::string_view) const;
+    FileEncryptionInfo newFile(std::string_view) const;
+    FileEncryptionInfo deleteFile(std::string_view) const;
+    FileEncryptionInfo linkFile(std::string_view, std::string_view) const;
+    FileEncryptionInfo renameFile(std::string_view, std::string_view) const;
+    kvrpcpb::ReadIndexResponse readIndex(const kvrpcpb::ReadIndexRequest &) const;
+    BatchReadIndexRes batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> &) const;
+
+private:
+    TiFlashRaftProxyPtr proxy_ptr;
+    uint8_t (*fn_handle_get_proxy_status)(TiFlashRaftProxyPtr);
+    uint8_t (*fn_is_encryption_enabled)(TiFlashRaftProxyPtr);
+    EncryptionMethod (*fn_encryption_method)(TiFlashRaftProxyPtr);
+    FileEncryptionInfoRaw (*fn_handle_get_file)(TiFlashRaftProxyPtr, BaseBuffView);
+    FileEncryptionInfoRaw (*fn_handle_new_file)(TiFlashRaftProxyPtr, BaseBuffView);
+    FileEncryptionInfoRaw (*fn_handle_delete_file)(TiFlashRaftProxyPtr, BaseBuffView);
+    FileEncryptionInfoRaw (*fn_handle_link_file)(TiFlashRaftProxyPtr, BaseBuffView, BaseBuffView);
+    FileEncryptionInfoRaw (*fn_handle_rename_file)(TiFlashRaftProxyPtr, BaseBuffView, BaseBuffView);
+    BatchReadIndexRes::pointer (*fn_handle_batch_read_index)(TiFlashRaftProxyPtr, CppStrVecView);
 };
 
 struct TiFlashServerHelper
@@ -179,6 +208,8 @@ struct TiFlashServerHelper
     void (*fn_apply_pre_handled_snapshot)(TiFlashServer *, void *, RawCppPtrType);
     CppStrWithView (*fn_handle_get_table_sync_status)(TiFlashServer *, uint64_t);
     void (*gc_raw_cpp_ptr)(TiFlashServer *, void *, RawCppPtrType);
+    BatchReadIndexRes::pointer (*fn_gen_batch_read_index_res)(uint64_t);
+    void (*fn_insert_batch_read_index_resp)(BatchReadIndexRes::pointer, BaseBuffView, uint64_t);
 };
 
 void run_tiflash_proxy_ffi(int argc, const char ** argv, const TiFlashServerHelper *);
@@ -188,7 +219,7 @@ struct TiFlashServer
 {
     TMTContext * tmt{nullptr};
     TiFlashRaftProxyHelper * proxy_helper{nullptr};
-    std::atomic<TiFlashStatus> status{TiFlashStatus::IDLE};
+    std::atomic<TiFlashStatus> status{TiFlashStatus::Idle};
 };
 
 RawCppPtr GenCppRawString(BaseBuffView);
@@ -205,4 +236,6 @@ RawCppPtr PreHandleSnapshot(
 void ApplyPreHandledSnapshot(TiFlashServer * server, void * res, RawCppPtrType type);
 CppStrWithView HandleGetTableSyncStatus(TiFlashServer *, uint64_t);
 void GcRawCppPtr(TiFlashServer *, void * ptr, RawCppPtrType type);
+BatchReadIndexRes::pointer GenBatchReadIndexRes(uint64_t cap);
+void InsertBatchReadIndexResp(BatchReadIndexRes::pointer, BaseBuffView, uint64_t);
 } // namespace DB

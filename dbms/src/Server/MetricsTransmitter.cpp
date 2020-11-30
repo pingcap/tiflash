@@ -41,8 +41,7 @@ void MetricsTransmitter::run()
     const auto & config = context.getConfigRef();
     auto interval = config.getInt(config_name + ".interval", 60);
 
-    const std::string thread_name = "MericsTrns " + std::to_string(interval) + "s";
-    setThreadName(thread_name.c_str());
+    setThreadName("CHMetricsTrns");
 
     const auto get_next_time = [](size_t seconds)
     {

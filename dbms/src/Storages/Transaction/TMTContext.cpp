@@ -80,9 +80,11 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
 {
     static const std::string & TABLE_OVERLAP_THRESHOLD = "flash.overlap_threshold";
     static const std::string & COMPACT_LOG_MIN_PERIOD = "flash.compact_log_min_period";
+    static const std::string & REPLICA_READ_MAX_THREAD = "flash.replica_read_max_thread";
 
     getRegionTable().setTableCheckerThreshold(config.getDouble(TABLE_OVERLAP_THRESHOLD, 0.6));
     getKVStore()->setRegionCompactLogPeriod(Seconds{config.getUInt64(COMPACT_LOG_MIN_PERIOD, 0)});
+    replica_read_max_thread = std::max(config.getUInt64(REPLICA_READ_MAX_THREAD, 1), 1);
 }
 
 const std::atomic_bool & TMTContext::getTerminated() const { return terminated; }

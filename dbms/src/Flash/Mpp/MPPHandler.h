@@ -131,7 +131,7 @@ struct MPPTunnelSet
 {
     std::vector<MPPTunnelPtr> tunnels;
 
-    // this is a broadcast writting.
+    // this is a broadcast writing.
     void write(const std::string & data)
     {
         mpp::MPPDataPacket packet;
@@ -140,6 +140,14 @@ struct MPPTunnelSet
         {
             tunnel->write(packet);
         }
+    }
+
+    // this is a partition writing.
+    void write(const std::string & data, int16_t partition_id)
+    {
+        mpp::MPPDataPacket packet;
+        packet.set_data(data);
+        tunnels[partition_id]->write(packet);
     }
     void writeError(mpp::Error err)
     {
@@ -150,6 +158,8 @@ struct MPPTunnelSet
             tunnel->write(packet);
         }
     }
+
+    uint16_t getPartitionNum() { return tunnels.size(); }
 };
 
 using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;

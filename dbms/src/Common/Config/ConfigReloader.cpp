@@ -1,9 +1,10 @@
 #include "ConfigReloader.h"
 
-#include <Poco/Util/Application.h>
-#include <Poco/File.h>
-#include <common/logger_useful.h>
 #include <Common/setThreadName.h>
+#include <Poco/File.h>
+#include <Poco/Util/Application.h>
+#include <common/logger_useful.h>
+
 #include "ConfigProcessor.h"
 
 
@@ -12,21 +13,15 @@ namespace DB
 
 constexpr decltype(ConfigReloader::reload_interval) ConfigReloader::reload_interval;
 
-ConfigReloader::ConfigReloader(
-        const std::string & path_,
-        Updater && updater_,
-        bool already_loaded)
-    : path(path_), updater(std::move(updater_))
+ConfigReloader::ConfigReloader(const std::string & path_, Updater && updater_, bool already_loaded, const char * name_)
+    : name(name_), path(path_), updater(std::move(updater_))
 {
     if (!already_loaded)
         reloadIfNewer(/* force = */ true, /* throw_on_error = */ true);
 }
 
 
-void ConfigReloader::start()
-{
-    thread = std::thread(&ConfigReloader::run, this);
-}
+void ConfigReloader::start() { thread = std::thread(&ConfigReloader::run, this); }
 
 
 ConfigReloader::~ConfigReloader()
@@ -47,7 +42,7 @@ ConfigReloader::~ConfigReloader()
 
 void ConfigReloader::run()
 {
-    setThreadName("ConfigReloader");
+    setThreadName(name);
 
     while (true)
     {
@@ -110,13 +105,9 @@ struct ConfigReloader::FileWithTimestamp
     std::string path;
     time_t modification_time;
 
-    FileWithTimestamp(const std::string & path_, time_t modification_time_)
-        : path(path_), modification_time(modification_time_) {}
+    FileWithTimestamp(const std::string & path_, time_t modification_time_) : path(path_), modification_time(modification_time_) {}
 
-    bool operator < (const FileWithTimestamp & rhs) const
-    {
-        return path < rhs.path;
-    }
+    bool operator<(const FileWithTimestamp & rhs) const { return path < rhs.path; }
 
     static bool isTheSame(const FileWithTimestamp & lhs, const FileWithTimestamp & rhs)
     {
@@ -135,8 +126,7 @@ void ConfigReloader::FilesChangesTracker::addIfExists(const std::string & path)
 
 bool ConfigReloader::FilesChangesTracker::isDifferOrNewerThan(const FilesChangesTracker & rhs)
 {
-    return (files.size() != rhs.files.size()) ||
-        !std::equal(files.begin(), files.end(), rhs.files.begin(), FileWithTimestamp::isTheSame);
+    return (files.size() != rhs.files.size()) || !std::equal(files.begin(), files.end(), rhs.files.begin(), FileWithTimestamp::isTheSame);
 }
 
 ConfigReloader::FilesChangesTracker ConfigReloader::getNewFileList() const
@@ -148,4 +138,4 @@ ConfigReloader::FilesChangesTracker ConfigReloader::getNewFileList() const
     return file_list;
 }
 
-}
+} // namespace DB

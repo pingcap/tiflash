@@ -7,6 +7,12 @@
 
 #include <shared_mutex>
 
+namespace kvrpcpb
+{
+class ReadIndexResponse;
+class ReadIndexRequest;
+} // namespace kvrpcpb
+
 namespace DB
 {
 
@@ -230,5 +236,7 @@ private:
     void execRollbackMerge(
         const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
 };
+
+kvrpcpb::ReadIndexRequest GenRegionReadIndexReq(const Region & region, UInt64 start_ts = 0);
 
 } // namespace DB
