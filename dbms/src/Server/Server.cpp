@@ -332,9 +332,13 @@ void UpdateMallocConfig([[maybe_unused]] Logger * log)
         }                                                     \
     } while (0)
 #if USE_JEMALLOC
+    const char * version;
     bool old_b, new_b = true;
     size_t old_max_thd, new_max_thd = 1;
-    size_t sz_b = sizeof(bool), sz_st = sizeof(size_t);
+    size_t sz_b = sizeof(bool), sz_st = sizeof(size_t), sz_ver = sizeof(version);
+
+    RUN_FAIL_RETURN(je_mallctl("version", &version, &sz_ver, nullptr, 0));
+    LOG_INFO(log, "Got jemalloc version: " << version);
 
     auto malloc_conf = getenv("MALLOC_CONF");
     if (malloc_conf)
