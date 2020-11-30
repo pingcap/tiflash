@@ -4199,7 +4199,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_proxy_thread_cpu_seconds_total{instance=~\"$instance\", name=~\"unified_read_po*\"}[1m])) by (instance)",
+              "expr": "sum(rate(tiflash_proxy_thread_cpu_seconds_total{instance=~\"$instance\", name=~\"unf_rd_pool.*\"}[1m])) by (instance)",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 2,
@@ -4889,7 +4889,7 @@
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
           "decimals": 1,
-          "description": "The CPU utilization of snapshot worker",
+          "description": "The CPU utilization of background worker",
           "editable": true,
           "error": false,
           "fill": 0,
@@ -4931,7 +4931,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_proxy_thread_cpu_seconds_total{instance=~\"$instance\", name=~\"snapshot_worker\"}[1m])) by (instance)",
+              "expr": "sum(rate(tiflash_proxy_thread_cpu_seconds_total{instance=~\"$instance\", name=~\"background.*\"}[1m])) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{instance}}",
@@ -4944,7 +4944,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Snapshot worker CPU",
+          "title": "Background worker CPU",
           "tooltip": {
             "msResolution": false,
             "shared": true,
@@ -11544,7 +11544,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(tiflash_proxy_tikv_threads_state{instance=~\"$instance\"}) by (instance, state)",
+              "expr": "sum(tiflash_proxy_threads_state{instance=~\"$instance\"}) by (instance, state)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{instance}}-{{state}}",
@@ -11552,7 +11552,7 @@
               "step": 4
             },
             {
-              "expr": "sum(tiflash_proxy_tikv_threads_state{instance=~\"$instance\"}) by (instance)",
+              "expr": "sum(tiflash_proxy_threads_state{instance=~\"$instance\"}) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{instance}}-total",
