@@ -1938,7 +1938,7 @@ SessionCleaner::~SessionCleaner()
 
 void SessionCleaner::run()
 {
-    setThreadName("HTTPSessionCleaner");
+    setThreadName("SessionCleaner");
 
     std::unique_lock<std::mutex> lock{mutex};
 

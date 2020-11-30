@@ -1,8 +1,8 @@
 #pragma once
 
 #include <Common/TiFlashSecurity.h>
+#include <Common/Timer.h>
 #include <Poco/Net/HTTPServer.h>
-#include <Poco/Util/Timer.h>
 #include <common/logger_useful.h>
 #include <prometheus/exposer.h>
 #include <prometheus/gateway.h>
@@ -34,7 +34,7 @@ private:
 
     void run();
 
-    Poco::Util::Timer timer;
+    Timer timer;
     TiFlashMetricsPtr tiflash_metrics;
     const AsynchronousMetrics & async_metrics;
     Logger * log;
