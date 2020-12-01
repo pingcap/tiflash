@@ -414,7 +414,7 @@ namespace
             }
 
             auto key = key_getter.getKey(key_columns, keys_size, i, key_sizes, sort_key_containers);
-            Inserter<STRICTNESS, typename Map::SegmentType::HashTableType, KeyGetter, typename Map::mapped_type>::insert(map.getSegmentTable(0), key, stored_block, i, *pools[0]);
+            Inserter<STRICTNESS, typename Map::SegmentType::HashTable, KeyGetter, typename Map::mapped_type>::insert(map.getSegmentTable(0), key, stored_block, i, *pools[0]);
         }
     }
 
@@ -490,7 +490,7 @@ namespace
                 for (size_t i = 0; i < segment_index_info[segment_index].size(); i++)
                 {
                     auto key = key_getter.getKey(key_columns, keys_size, segment_index_info[segment_index][i], key_sizes, sort_key_containers);
-                    Inserter<STRICTNESS, typename Map::SegmentType::HashTableType, KeyGetter, typename Map::mapped_type>::insert(map.getSegmentTable(segment_index), key, stored_block, segment_index_info[segment_index][i], *pools[segment_index]);
+                    Inserter<STRICTNESS, typename Map::SegmentType::HashTable, KeyGetter, typename Map::mapped_type>::insert(map.getSegmentTable(segment_index), key, stored_block, segment_index_info[segment_index][i], *pools[segment_index]);
                 }
             }
         }
@@ -749,7 +749,7 @@ namespace
     template <typename Map>
     struct Adder<ASTTableJoin::Kind::Left, ASTTableJoin::Strictness::Any, Map>
     {
-        static void addFound(const typename Map::SegmentType::HashTableType::const_iterator & it, size_t num_columns_to_add, MutableColumns & added_columns,
+        static void addFound(const typename Map::SegmentType::HashTable::const_iterator & it, size_t num_columns_to_add, MutableColumns & added_columns,
             size_t /*i*/, IColumn::Filter * /*filter*/, IColumn::Offset & /*current_offset*/, IColumn::Offsets * /*offsets*/,
             const std::vector<size_t> & right_indexes)
         {
@@ -768,7 +768,7 @@ namespace
     template <typename Map>
     struct Adder<ASTTableJoin::Kind::Inner, ASTTableJoin::Strictness::Any, Map>
     {
-        static void addFound(const typename Map::SegmentType::HashTableType::const_iterator & it, size_t num_columns_to_add, MutableColumns & added_columns,
+        static void addFound(const typename Map::SegmentType::HashTable::const_iterator & it, size_t num_columns_to_add, MutableColumns & added_columns,
             size_t i, IColumn::Filter * filter, IColumn::Offset & /*current_offset*/, IColumn::Offsets * /*offsets*/,
             const std::vector<size_t> & right_indexes)
         {
@@ -788,7 +788,7 @@ namespace
     template <typename Map>
     struct Adder<ASTTableJoin::Kind::Anti, ASTTableJoin::Strictness::Any, Map>
     {
-        static void addFound(const typename Map::SegmentType::HashTableType::const_iterator & /*it*/, size_t /*num_columns_to_add*/, MutableColumns & /*added_columns*/,
+        static void addFound(const typename Map::SegmentType::HashTable::const_iterator & /*it*/, size_t /*num_columns_to_add*/, MutableColumns & /*added_columns*/,
                              size_t i, IColumn::Filter * filter, IColumn::Offset & /*current_offset*/, IColumn::Offsets * /*offsets*/,
                              const std::vector<size_t> & /*right_indexes*/)
         {
@@ -807,7 +807,7 @@ namespace
     template <ASTTableJoin::Kind KIND, typename Map>
     struct Adder<KIND, ASTTableJoin::Strictness::All, Map>
     {
-        static void addFound(const typename Map::SegmentType::HashTableType::const_iterator & it, size_t num_columns_to_add, MutableColumns & added_columns,
+        static void addFound(const typename Map::SegmentType::HashTable::const_iterator & it, size_t num_columns_to_add, MutableColumns & added_columns,
             size_t i, IColumn::Filter * filter, IColumn::Offset & current_offset, IColumn::Offsets * offsets,
             const std::vector<size_t> & right_indexes)
         {
@@ -882,7 +882,7 @@ namespace
                 }
                 auto & internalMap = map.getSegmentTable(segment_index);
                 /// do not require segment lock because in join, the hash table can not be changed in probe stage.
-                typename Map::SegmentType::HashTableType::const_iterator it = map.getSegmentSize() > 0 ? internalMap.find(key, hash_value) : internalMap.find(key);
+                typename Map::SegmentType::HashTable::const_iterator it = map.getSegmentSize() > 0 ? internalMap.find(key, hash_value) : internalMap.find(key);
 
                 if (it != internalMap.end())
                 {
@@ -1537,12 +1537,12 @@ private:
         {
             current_segment = 0;
             position = decltype(position)(
-                    static_cast<void *>(new typename Map::SegmentType::HashTableType::const_iterator(map.getSegmentTable(current_segment).begin())),
-                    [](void *ptr) { delete reinterpret_cast<typename Map::SegmentType::HashTableType::const_iterator *>(ptr); });
+                    static_cast<void *>(new typename Map::SegmentType::HashTable::const_iterator(map.getSegmentTable(current_segment).begin())),
+                    [](void *ptr) { delete reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(ptr); });
         }
 
         /// use pointer instead of reference because `it` need to be re-assigned latter
-        auto it = reinterpret_cast<typename Map::SegmentType::HashTableType::const_iterator *>(position.get());
+        auto it = reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(position.get());
         auto end = map.getSegmentTable(current_segment).end();
 
         for (; *it != end || current_segment < map.getSegmentSize() - 1; ++(*it))
@@ -1553,10 +1553,10 @@ private:
                 do {
                     current_segment++;
                     position = decltype(position)(
-                            static_cast<void *>(new typename Map::SegmentType::HashTableType::const_iterator(
+                            static_cast<void *>(new typename Map::SegmentType::HashTable::const_iterator(
                                     map.getSegmentTable(current_segment).begin())),
-                            [](void *ptr) { delete reinterpret_cast<typename Map::SegmentType::HashTableType::const_iterator *>(ptr); });
-                    it = reinterpret_cast<typename Map::SegmentType::HashTableType::const_iterator *>(position.get());
+                            [](void *ptr) { delete reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(ptr); });
+                    it = reinterpret_cast<typename Map::SegmentType::HashTable::const_iterator *>(position.get());
                     end = map.getSegmentTable(current_segment).end();
                 } while (*it == end && current_segment < map.getSegmentSize() - 1);
                 if (*it == end)

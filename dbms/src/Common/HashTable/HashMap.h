@@ -120,15 +120,20 @@ struct HashMapCellWithSavedHash : public HashMapCell<Key, TMapped, Hash, TState>
 
 template
 <
-    typename Key,
-    typename Cell,
-    typename Hash = DefaultHash<Key>,
-    typename Grower = HashTableGrower<>,
-    typename Allocator = HashTableAllocator
+    typename KeyType,
+    typename CellType,
+    typename HashType = DefaultHash<KeyType>,
+    typename GrowerType = HashTableGrower<>,
+    typename AllocatorType = HashTableAllocator
 >
-class HashMapTable : public HashTable<Key, Cell, Hash, Grower, Allocator>
+class HashMapTable : public HashTable<KeyType, CellType, HashType, GrowerType, AllocatorType>
 {
 public:
+    using Key = KeyType;
+    using Cell = CellType;
+    using Hash = HashType;
+    using Grower = GrowerType;
+    using Allocator = AllocatorType;
     using key_type = Key;
     using mapped_type = typename Cell::Mapped;
     using value_type = typename Cell::value_type;
@@ -195,14 +200,14 @@ template
     typename Grower = HashTableGrower<>,
     typename Allocator = HashTableAllocator
 >
-class ConcurrentHashMapTable : public ConcurrentHashTable<Key, Cell, Hash, Grower, Allocator>
+class ConcurrentHashMapTable : public ConcurrentHashTable<HashMapTable<Key, Cell, Hash, Grower, Allocator>>
 {
 public:
     using key_type = Key;
     using mapped_type = typename Cell::Mapped;
     using value_type = typename Cell::value_type;
 
-    using ConcurrentHashTable<Key, Cell, Hash, Grower, Allocator>::ConcurrentHashTable;
+    using ConcurrentHashTable<HashMapTable<Key, Cell, Hash, Grower, Allocator>>::ConcurrentHashTable;
 
     mapped_type & ALWAYS_INLINE operator[](Key x)
     {
