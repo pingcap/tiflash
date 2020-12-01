@@ -25,7 +25,7 @@ using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 bool isSourceNode(const tipb::Executor * root)
 {
     return root->tp() == tipb::ExecType::TypeJoin || root->tp() == tipb::ExecType::TypeTableScan
-        || root->tp() == tipb::ExecType::TypeExchangeReceiver;
+        || root->tp() == tipb::ExecType::TypeExchangeReceiver || root->tp() == tipb::ExecType::TypeProjection;
 }
 
 const static String SOURCE_NAME("source");
@@ -43,18 +43,6 @@ static void assignOrThrowException(const tipb::Executor ** to, const tipb::Execu
         throw TiFlashException("Duplicated " + name + " in DAG request", Errors::Coprocessor::Internal);
     }
     *to = from;
-}
-
-void collectOutPutFieldTypesFromProjection(std::vector<tipb::FieldType> & field_type, const tipb::Projection & proj)
-{
-    for (auto & expr : proj.exprs())
-    {
-        if (!exprHasValidFieldType(expr))
-        {
-            throw TiFlashException("Proj expression without valid field type", Errors::Coprocessor::BadRequest);
-        }
-        field_type.push_back(expr.field_type());
-    }
 }
 
 void collectOutPutFieldTypesFromAgg(std::vector<tipb::FieldType> & field_type, const tipb::Aggregation & agg)
@@ -119,13 +107,6 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_, TiFlashMe
                 exchangeServer_name = current->executor_id();
                 current = &current->exchange_sender().child();
                 break;
-            case tipb::ExecType::TypeProjection:
-                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_projection).Increment();
-                assignOrThrowException(&projection, current, PROJ_NAME);
-                projection_name = current->executor_id();
-                collectOutPutFieldTypesFromProjection(output_field_types, current->projection());
-                current = &current->projection().child();
-                break;
             case tipb::ExecType::TypeIndexScan:
                 throw TiFlashException("Unsupported executor in DAG request: " + current->DebugString(), Errors::Coprocessor::Internal);
             default:
@@ -149,6 +130,11 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_, TiFlashMe
     else if (current->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
         GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_exchange_receiver).Increment();
+    }
+    else if (current->tp() == tipb::ExecType::TypeProjection)
+    {
+        GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_projection).Increment();
+        children.push_back(std::make_shared<DAGQueryBlock>(id * 2, source->projection().child(), metrics));
     }
     else if (current->tp() == tipb::ExecType::TypeTableScan)
     {
@@ -212,12 +198,6 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
                 else
                     limitOrTopN_name = std::to_string(i) + "_limitOrTopN";
                 break;
-            case tipb::ExecType::TypeProjection:
-                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_projection).Increment();
-                assignOrThrowException(&projection, &executors[i], PROJ_NAME);
-                projection_name = std::to_string(i) + "_projection";
-                collectOutPutFieldTypesFromProjection(output_field_types, executors[i].projection());
-                break;
             default:
                 throw TiFlashException(
                     "Unsupported executor in DAG request: " + executors[i].DebugString(), Errors::Coprocessor::Unimplemented);
@@ -226,7 +206,6 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
     fillOutputFieldTypes();
 }
 
-//TODO: need to update this according to projection?
 void DAGQueryBlock::fillOutputFieldTypes()
 {
     if (source->tp() == tipb::ExecType::TypeJoin)
@@ -274,6 +253,22 @@ void DAGQueryBlock::fillOutputFieldTypes()
         {
             for (auto & ci : source->exchange_receiver().field_types())
             {
+                tipb::FieldType field_type;
+                field_type.set_tp(ci.tp());
+                field_type.set_flag(ci.flag());
+                field_type.set_flen(ci.flen());
+                field_type.set_decimal(ci.decimal());
+                output_field_types.push_back(field_type);
+            }
+        }
+    }
+    else if (source->tp() == tipb::ExecType::TypeProjection)
+    {
+        if (output_field_types.empty())
+        {
+            for (auto & expr : source->projection().exprs())
+            {
+                auto & ci = expr.field_type();
                 tipb::FieldType field_type;
                 field_type.set_tp(ci.tp());
                 field_type.set_flag(ci.flag());
