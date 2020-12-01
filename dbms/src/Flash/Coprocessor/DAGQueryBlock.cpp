@@ -45,6 +45,18 @@ static void assignOrThrowException(const tipb::Executor ** to, const tipb::Execu
     *to = from;
 }
 
+void collectOutPutFieldTypesFromProjection(std::vector<tipb::FieldType> & field_type, const tipb::Projection & proj)
+{
+    for (auto & expr : proj.exprs())
+    {
+        if (!exprHasValidFieldType(expr))
+        {
+            throw TiFlashException("Proj expression without valid field type", Errors::Coprocessor::BadRequest);
+        }
+        field_type.push_back(expr.field_type());
+    }
+}
+
 void collectOutPutFieldTypesFromAgg(std::vector<tipb::FieldType> & field_type, const tipb::Aggregation & agg)
 {
     for (auto & expr : agg.agg_func())
@@ -111,6 +123,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_, TiFlashMe
                 GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_projection).Increment();
                 assignOrThrowException(&projection, current, PROJ_NAME);
                 projection_name = current->executor_id();
+                collectOutPutFieldTypesFromProjection(output_field_types, current->projection());
                 current = &current->projection().child();
                 break;
             case tipb::ExecType::TypeIndexScan:
@@ -203,6 +216,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
                 GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_projection).Increment();
                 assignOrThrowException(&projection, &executors[i], PROJ_NAME);
                 projection_name = std::to_string(i) + "_projection";
+                collectOutPutFieldTypesFromProjection(output_field_types, executors[i].projection());
                 break;
             default:
                 throw TiFlashException(
