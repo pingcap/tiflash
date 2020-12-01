@@ -330,6 +330,13 @@ void Join::setSampleBlock(const Block & block)
 
 namespace
 {
+    void insertRowToList(Join::RowRefList * list, Join::RowRefList * elem, Block * stored_block, size_t index) {
+        elem->next = list->next;
+        list->next = elem;
+        elem->block = stored_block;
+        elem->row_num = index;
+    }
+
     /// Inserting an element into a hash table of the form `key -> reference to a string`, which will then be used by JOIN.
     template <ASTTableJoin::Strictness STRICTNESS, typename Map, typename KeyGetter>
     struct Inserter
@@ -377,11 +384,7 @@ namespace
                  * That is, the former second element, if it was, will be the third, and so on.
                  */
                 auto elem = reinterpret_cast<MappedType *>(pool.alloc(sizeof(MappedType)));
-
-                elem->next = it->second.next;
-                it->second.next = elem;
-                elem->block = stored_block;
-                elem->row_num = i;
+                insertRowToList(&it->second, elem, stored_block, i);
             }
         }
     };
@@ -406,11 +409,7 @@ namespace
                 {
                     /// for right/full out join, need to record the rows not inserted to map
                     auto elem = reinterpret_cast<Join::RowRefList *>(pools[0]->alloc(sizeof(Join::RowRefList)));
-
-                    elem->next = rows_not_inserted_to_map->next;
-                    rows_not_inserted_to_map->next = elem;
-                    elem->block = stored_block;
-                    elem->row_num = i;
+                    insertRowToList(rows_not_inserted_to_map, elem, stored_block, i);
                 }
                 continue;
             }
@@ -480,10 +479,7 @@ namespace
                 {
                     /// for right/full out join, need to record the rows not inserted to map
                     auto elem = reinterpret_cast<Join::RowRefList *>(pools[segment_index]->alloc(sizeof(Join::RowRefList)));
-                    elem->next = rows_not_inserted_to_map->next;
-                    rows_not_inserted_to_map->next = elem;
-                    elem->block = stored_block;
-                    elem->row_num = segment_index_info[segment_index][i];
+                    insertRowToList(rows_not_inserted_to_map, elem, stored_block, segment_index_info[segment_index][i]);
                 }
             }
             else
@@ -523,7 +519,7 @@ namespace
             }
         }
         else {
-            if (insert_concurrency > 0)
+            if (insert_concurrency > 1)
             {
                 insertFromBlockImplTypeCaseWithLock<STRICTNESS, KeyGetter, Map, false>(map, rows, key_columns, keys_size, key_sizes,
                                                                                collators,
@@ -863,7 +859,7 @@ namespace
 
         KeyGetter key_getter(key_columns, collators);
         std::vector<std::string> sort_key_containers;
-        sort_key_containers.resize(key_columns.size(), "");
+        sort_key_containers.resize(key_columns.size());
 
         for (size_t i = 0; i < rows; ++i)
         {
