@@ -331,15 +331,16 @@ void Join::setSampleBlock(const Block & block)
 namespace
 {
     /// Inserting an element into a hash table of the form `key -> reference to a string`, which will then be used by JOIN.
-    template <ASTTableJoin::Strictness STRICTNESS, typename Map, typename KeyGetter, typename MappedType>
+    template <ASTTableJoin::Strictness STRICTNESS, typename Map, typename KeyGetter>
     struct Inserter
     {
         static void insert(Map & map, const typename Map::key_type & key, Block * stored_block, size_t i, Arena & pool);
     };
 
-    template <typename Map, typename KeyGetter, typename MappedType>
-    struct Inserter<ASTTableJoin::Strictness::Any, Map, KeyGetter, MappedType>
+    template <typename Map, typename KeyGetter>
+    struct Inserter<ASTTableJoin::Strictness::Any, Map, KeyGetter>
     {
+        using MappedType = typename Map::mapped_type;
         static void insert(Map & map, const typename Map::key_type & key, Block * stored_block, size_t i, Arena & pool)
         {
             typename Map::iterator it;
@@ -354,9 +355,10 @@ namespace
         }
     };
 
-    template <typename Map, typename KeyGetter, typename MappedType>
-    struct Inserter<ASTTableJoin::Strictness::All, Map, KeyGetter, MappedType>
+    template <typename Map, typename KeyGetter>
+    struct Inserter<ASTTableJoin::Strictness::All, Map, KeyGetter>
     {
+        using MappedType = typename Map::mapped_type;
         static void insert(Map & map, const typename Map::key_type & key, Block * stored_block, size_t i, Arena & pool)
         {
             typename Map::iterator it;
@@ -414,7 +416,7 @@ namespace
             }
 
             auto key = key_getter.getKey(key_columns, keys_size, i, key_sizes, sort_key_containers);
-            Inserter<STRICTNESS, typename Map::SegmentType::HashTable, KeyGetter, typename Map::mapped_type>::insert(map.getSegmentTable(0), key, stored_block, i, *pools[0]);
+            Inserter<STRICTNESS, typename Map::SegmentType::HashTable, KeyGetter>::insert(map.getSegmentTable(0), key, stored_block, i, *pools[0]);
         }
     }
 
@@ -490,7 +492,7 @@ namespace
                 for (size_t i = 0; i < segment_index_info[segment_index].size(); i++)
                 {
                     auto key = key_getter.getKey(key_columns, keys_size, segment_index_info[segment_index][i], key_sizes, sort_key_containers);
-                    Inserter<STRICTNESS, typename Map::SegmentType::HashTable, KeyGetter, typename Map::mapped_type>::insert(map.getSegmentTable(segment_index), key, stored_block, segment_index_info[segment_index][i], *pools[segment_index]);
+                    Inserter<STRICTNESS, typename Map::SegmentType::HashTable, KeyGetter>::insert(map.getSegmentTable(segment_index), key, stored_block, segment_index_info[segment_index][i], *pools[segment_index]);
                 }
             }
         }
