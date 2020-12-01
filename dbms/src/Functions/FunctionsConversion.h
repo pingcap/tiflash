@@ -439,6 +439,15 @@ struct FormatImpl<DataTypeMyDateTime>
 };
 
 template <typename FieldType>
+struct FormatImpl<DataTypeDecimal<FieldType>>
+{
+    static void execute(const FieldType & v, ScaleType scale, WriteBuffer & wb)
+    {
+        writeText(v, scale, wb);
+    }
+};
+
+template <typename FieldType>
 struct FormatImpl<DataTypeEnum<FieldType>>
 {
     static void execute(const FieldType x, WriteBuffer & wb, const DataTypeEnum<FieldType> * type, const DateLUTImpl *)
