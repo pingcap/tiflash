@@ -26,6 +26,7 @@ constexpr char tls_err_msg[] = "common name check is failed";
 FlashService::FlashService(IServer & server_)
     : server(server_),
       metrics(server.context().getTiFlashMetrics()),
+      copThreadPool(ThreadPool(server_.context().getSettingsRef().max_threads)),
       security_config(server_.securityConfig()),
       log(&Logger::get("FlashService"))
 {}
@@ -49,17 +50,23 @@ grpc::Status FlashService::Coprocessor(
         GET_METRIC(metrics, tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
     });
 
+    std::promise<grpc::Status> promise;
+    std::future<grpc::Status> future = promise.get_future();
+    copThreadPool.schedule([&]() {
+        auto [context, status] = createDBContext(grpc_context);
+        if (!status.ok())
+        {
+            promise.set_value(status);
+        }
+        else
+        {
+            CoprocessorContext cop_context(context, request->context(), *grpc_context);
+            CoprocessorHandler cop_handler(cop_context, request, response);
+            promise.set_value(cop_handler.execute());
+        }
+    });
 
-    auto [context, status] = createDBContext(grpc_context);
-    if (!status.ok())
-    {
-        return status;
-    }
-
-    CoprocessorContext cop_context(context, request->context(), *grpc_context);
-    CoprocessorHandler cop_handler(cop_context, request, response);
-
-    auto ret = cop_handler.execute();
+    auto ret = future.get();
 
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle coprocessor request done: " << ret.error_code() << ", " << ret.error_message());
     return ret;
@@ -81,19 +88,26 @@ grpc::Status FlashService::Coprocessor(
     SCOPE_EXIT({
         GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_super_batch).Decrement();
         GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_super_batch).Observe(watch.elapsedSeconds());
-        // TODO: modify the value of metric tiflash_coprocessor_response_bytes.
+        // TODO: update the value of metric tiflash_coprocessor_response_bytes.
     });
 
-    auto [context, status] = createDBContext(grpc_context);
-    if (!status.ok())
-    {
-        return status;
-    }
+    std::promise<grpc::Status> promise;
+    std::future<grpc::Status> future = promise.get_future();
+    copThreadPool.schedule([&]() {
+        auto [context, status] = createDBContext(grpc_context);
+        if (!status.ok())
+        {
+            promise.set_value(status);
+        }
+        else
+        {
+            CoprocessorContext cop_context(context, request->context(), *grpc_context);
+            BatchCoprocessorHandler cop_handler(cop_context, request, writer);
+            promise.set_value(cop_handler.execute());
+        }
+    });
 
-    CoprocessorContext cop_context(context, request->context(), *grpc_context);
-    BatchCoprocessorHandler cop_handler(cop_context, request, writer);
-
-    auto ret = cop_handler.execute();
+    auto ret = future.get();
 
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle coprocessor request done: " << ret.error_code() << ", " << ret.error_message());
     return ret;

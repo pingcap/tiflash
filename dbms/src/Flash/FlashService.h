@@ -2,6 +2,7 @@
 
 #include <Common/TiFlashSecurity.h>
 #include <Interpreters/Context.h>
+#include <common/ThreadPool.h>
 #include <common/logger_useful.h>
 
 #include <boost/noncopyable.hpp>
@@ -42,6 +43,7 @@ private:
 private:
     IServer & server;
     TiFlashMetricsPtr metrics;
+    ThreadPool copThreadPool;
 
     const TiFlashSecurityConfig & security_config;
 
