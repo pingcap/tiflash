@@ -52,7 +52,7 @@ grpc::Status FlashService::Coprocessor(
 
     std::promise<grpc::Status> promise;
     std::future<grpc::Status> future = promise.get_future();
-    copThreadPool.schedule([&]() {
+    cop_thread_pool.schedule([&]() {
         auto [context, status] = createDBContext(grpc_context);
         if (!status.ok())
         {
@@ -93,7 +93,7 @@ grpc::Status FlashService::Coprocessor(
 
     std::promise<grpc::Status> promise;
     std::future<grpc::Status> future = promise.get_future();
-    copThreadPool.schedule([&]() {
+    cop_thread_pool.schedule([&]() {
         auto [context, status] = createDBContext(grpc_context);
         if (!status.ok())
         {

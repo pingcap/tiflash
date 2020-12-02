@@ -43,7 +43,7 @@ private:
 private:
     IServer & server;
     TiFlashMetricsPtr metrics;
-    ThreadPool copThreadPool;
+    ThreadPool cop_thread_pool;
 
     const TiFlashSecurityConfig & security_config;
 
