@@ -8,7 +8,7 @@ namespace DB
 class ImmutableConfigReloader : public ConfigReloader
 {
 public:
-    ImmutableConfigReloader(ConfigReloader::Updater && updater) : ConfigReloader("", std::move(updater), true)
+    ImmutableConfigReloader(ConfigReloader::Updater && updater, const char * name_) : ConfigReloader("", std::move(updater), true, name_)
     {
         reloadIfNewer(/* force = */ true, /* throw_on_error = */ true);
     }
@@ -72,6 +72,6 @@ private:
 
 private:
     std::mutex reload_mutex;
-    Poco::Logger * log = &Logger::get("ImmutableConfigReloader");
+    Poco::Logger * log = &Logger::get(name);
 };
 } // namespace DB

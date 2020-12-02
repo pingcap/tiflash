@@ -36,7 +36,7 @@ public:
 
     /** include_from_path is usually /etc/metrika.xml (i.e. value of <include_from> tag)
       */
-    ConfigReloader(const std::string & path, Updater && updater, bool already_loaded);
+    ConfigReloader(const std::string & path, Updater && updater, bool already_loaded, const char * name = "CfgReloader");
 
     virtual ~ConfigReloader();
 
@@ -65,10 +65,13 @@ private:
 
     FilesChangesTracker getNewFileList() const;
 
+protected:
+    const char * name;
+
 private:
     static constexpr auto reload_interval = std::chrono::seconds(2);
 
-    Poco::Logger * log = &Logger::get("ConfigReloader");
+    Poco::Logger * log = &Logger::get(name);
 
     std::string path;
     FilesChangesTracker files;
