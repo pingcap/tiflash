@@ -33,21 +33,22 @@ FlashService::FlashService(IServer & server_)
 grpc::Status FlashService::Coprocessor(
     grpc::ServerContext * grpc_context, const coprocessor::Request * request, coprocessor::Response * response)
 {
-    GET_METRIC(metrics, tiflash_coprocessor_request_count, type_cop).Increment();
-    GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_cop).Increment();
-    SCOPE_EXIT({ GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_cop).Decrement(); });
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling coprocessor request: " << request->DebugString());
+
     if (!security_config.checkGrpcContext(grpc_context))
     {
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
     }
-    auto start_time = std::chrono::system_clock::now();
+
+    GET_METRIC(metrics, tiflash_coprocessor_request_count, type_cop).Increment();
+    GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_cop).Increment();
+    Stopwatch watch;
     SCOPE_EXIT({
-        std::chrono::duration<double> duration_sec = std::chrono::system_clock::now() - start_time;
-        GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_cop).Observe(duration_sec.count());
+        GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_cop).Decrement();
+        GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_cop).Observe(watch.elapsedSeconds());
         GET_METRIC(metrics, tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
     });
 
-    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling coprocessor request: " << request->DebugString());
 
     auto [context, status] = createDBContext(grpc_context);
     if (!status.ok())
@@ -76,9 +77,12 @@ grpc::Status FlashService::Coprocessor(
 
     GET_METRIC(metrics, tiflash_coprocessor_request_count, type_super_batch).Increment();
     GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_super_batch).Increment();
-    SCOPE_EXIT({ GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_super_batch).Decrement(); });
     Stopwatch watch;
-    SCOPE_EXIT({ GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_super_batch).Observe(watch.elapsedSeconds()); });
+    SCOPE_EXIT({
+        GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_super_batch).Decrement();
+        GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_super_batch).Observe(watch.elapsedSeconds());
+        // TODO: modify the value of metric tiflash_coprocessor_response_bytes.
+    });
 
     auto [context, status] = createDBContext(grpc_context);
     if (!status.ok())
