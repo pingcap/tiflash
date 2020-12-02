@@ -25,9 +25,6 @@
 #include <daemon/GraphiteWriter.h>
 #include <Common/Config/ConfigProcessor.h>
 
-namespace Poco { class TaskManager; }
-
-
 /// \brief Базовый класс для демонов
 ///
 /// \code
@@ -71,9 +68,6 @@ public:
 
     /// Определяет параметр командной строки
     void defineOptions(Poco::Util::OptionSet & _options) override;
-
-    /// Заставляет демон завершаться, если хотя бы одна задача завершилась неудачно
-    void exitOnTaskError();
 
     /// Завершение демона ("мягкое")
     void terminate();
@@ -146,11 +140,6 @@ public:
     }
 
 protected:
-    /// Возвращает TaskManager приложения
-    /// все методы task_manager следует вызывать из одного потока
-    /// иначе возможен deadlock, т.к. joinAll выполняется под локом, а любой метод тоже берет лок
-    Poco::TaskManager & getTaskManager() { return *task_manager; }
-
     virtual void logRevision() const;
 
     /// Используется при exitOnTaskError()
@@ -172,8 +161,6 @@ protected:
     static std::optional<std::reference_wrapper<Daemon>> tryGetInstance();
 
     virtual std::string getDefaultCorePath() const;
-
-    std::unique_ptr<Poco::TaskManager> task_manager;
 
     /// Создание и автоматическое удаление pid файла.
     struct PID

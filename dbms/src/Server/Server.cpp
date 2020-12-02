@@ -10,9 +10,11 @@
 #include <Common/TiFlashException.h>
 #include <Common/config.h>
 #include <Common/escapeForFileName.h>
+#include <Common/formatReadable.h>
 #include <Common/getFQDNOrHostName.h>
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
+#include <Common/setThreadName.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
@@ -34,7 +36,6 @@
 #include <Server/StorageConfigParser.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/PathCapacityMetrics.h>
-#include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFIType.h>
@@ -281,8 +282,40 @@ void printGRPCLog(gpr_log_func_args * args)
     }
 }
 
+struct HTTPServer : Poco::Net::HTTPServer
+{
+    HTTPServer(Poco::Net::HTTPRequestHandlerFactory::Ptr pFactory, Poco::ThreadPool & threadPool, const Poco::Net::ServerSocket & socket,
+        Poco::Net::HTTPServerParams::Ptr pParams)
+        : Poco::Net::HTTPServer(pFactory, threadPool, socket, pParams)
+    {}
+
+protected:
+    void run() override
+    {
+        setThreadName("HTTPServer");
+        Poco::Net::HTTPServer::run();
+    }
+};
+
+struct TCPServer : Poco::Net::TCPServer
+{
+    TCPServer(Poco::Net::TCPServerConnectionFactory::Ptr pFactory, Poco::ThreadPool & threadPool, const Poco::Net::ServerSocket & socket,
+        Poco::Net::TCPServerParams::Ptr pParams)
+        : Poco::Net::TCPServer(pFactory, threadPool, socket, pParams)
+    {}
+
+protected:
+    void run() override
+    {
+        setThreadName("TCPServer");
+        Poco::Net::TCPServer::run();
+    }
+};
+
 int Server::main(const std::vector<std::string> & /*args*/)
 {
+    setThreadName("TiFlashMain");
+
     Logger * log = &logger();
 
     registerFunctions();
@@ -319,8 +352,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     auto proxy_runner = std::thread([&proxy_conf, &log, &helper]() {
         if (!proxy_conf.is_proxy_runnable)
             return;
-
-        LOG_INFO(log, "start tiflash proxy");
+        setThreadName("RaftStoreProxy");
+        LOG_INFO(log, "Start raft store proxy");
         run_tiflash_proxy_ffi((int)proxy_conf.args.size(), proxy_conf.args.data(), &helper);
     });
 
@@ -605,8 +638,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         ? std::make_unique<ConfigReloader>(
             users_config_path,
             [&](ConfigurationPtr config) { global_context->setUsersConfig(config); },
-            /* already_loaded = */ false)
-        : std::make_unique<ImmutableConfigReloader>([&](ConfigurationPtr config) { global_context->setUsersConfig(config); });
+            /* already_loaded = */ false,
+            "UserCfgReloader")
+        : std::make_unique<ImmutableConfigReloader>(
+            [&](ConfigurationPtr config) { global_context->setUsersConfig(config); }, "UserCfgReloader");
 
     /// Reload config in SYSTEM RELOAD CONFIG query.
     global_context->setConfigReloadCallback([&]() {
@@ -664,8 +699,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// After attaching system databases we can initialize system log.
     global_context->initializeSystemLogs();
     /// After the system database is created, attach virtual system tables (in addition to query_log and part_log)
-    bool has_zookeeper = config().has("zookeeper");
-    attachSystemTablesServer(*global_context->getDatabase("system"), has_zookeeper);
+    attachSystemTablesServer(*global_context->getDatabase("system"), false);
 
     {
         LOG_DEBUG(log, "Default storage engine: " << static_cast<Int64>(raft_config.engine));
@@ -793,17 +827,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_INFO(log, "Shut down flash service");
     });
 
-    if (has_zookeeper && config().has("distributed_ddl"))
-    {
-        /// DDL worker should be started after all tables were loaded
-        String ddl_zookeeper_path = config().getString("distributed_ddl.path", "/clickhouse/task_queue/ddl/");
-        global_context->setDDLWorker(std::make_shared<DDLWorker>(ddl_zookeeper_path, *global_context, &config(), "distributed_ddl"));
-    }
-
     {
         Poco::Timespan keep_alive_timeout(config().getUInt("keep_alive_timeout", 10), 0);
 
-        Poco::ThreadPool server_pool(3, config().getUInt("max_connections", 1024));
+        Poco::ThreadPool server_pool(1, config().getUInt("max_connections", 1024));
         Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams;
         http_params->setTimeout(settings.receive_timeout);
         http_params->setKeepAliveTimeout(keep_alive_timeout);
@@ -884,7 +911,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     socket.setReceiveTimeout(settings.http_receive_timeout);
                     socket.setSendTimeout(settings.http_send_timeout);
                     servers.emplace_back(
-                        new Poco::Net::HTTPServer(new HTTPHandlerFactory(*this, "HTTPHandler-factory"), server_pool, socket, http_params));
+                        new HTTPServer(new HTTPHandlerFactory(*this, "HTTPHandler-factory"), server_pool, socket, http_params));
 
                     LOG_INFO(log, "Listening http://" + address.toString());
                 }
@@ -918,7 +945,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     socket.setReceiveTimeout(settings.http_receive_timeout);
                     socket.setSendTimeout(settings.http_send_timeout);
                     servers.emplace_back(
-                        new Poco::Net::HTTPServer(new HTTPHandlerFactory(*this, "HTTPSHandler-factory"), server_pool, socket, http_params));
+                        new HTTPServer(new HTTPHandlerFactory(*this, "HTTPSHandler-factory"), server_pool, socket, http_params));
 
                     LOG_INFO(log, "Listening https://" + address.toString());
 #else
@@ -939,8 +966,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     auto address = socket_bind_listen(socket, listen_host, config().getInt("tcp_port"));
                     socket.setReceiveTimeout(settings.receive_timeout);
                     socket.setSendTimeout(settings.send_timeout);
-                    servers.emplace_back(
-                        new Poco::Net::TCPServer(new TCPHandlerFactory(*this), server_pool, socket, new Poco::Net::TCPServerParams));
+                    servers.emplace_back(new TCPServer(new TCPHandlerFactory(*this), server_pool, socket, new Poco::Net::TCPServerParams));
 
                     LOG_INFO(log, "Listening tcp: " + address.toString());
                 }
@@ -961,7 +987,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     auto address = socket_bind_listen(socket, listen_host, config().getInt("tcp_port_secure"), /* secure = */ true);
                     socket.setReceiveTimeout(settings.receive_timeout);
                     socket.setSendTimeout(settings.send_timeout);
-                    servers.emplace_back(new Poco::Net::TCPServer(
+                    servers.emplace_back(new TCPServer(
                         new TCPHandlerFactory(*this, /* secure= */ true), server_pool, socket, new Poco::Net::TCPServerParams));
                     LOG_INFO(log, "Listening tcp_secure: " + address.toString());
 #else
@@ -985,7 +1011,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     auto address = socket_bind_listen(socket, listen_host, config().getInt("interserver_http_port"));
                     socket.setReceiveTimeout(settings.http_receive_timeout);
                     socket.setSendTimeout(settings.http_send_timeout);
-                    servers.emplace_back(new Poco::Net::HTTPServer(
+                    servers.emplace_back(new HTTPServer(
                         new InterserverIOHTTPHandlerFactory(*this, "InterserverIOHTTPHandler-factory"), server_pool, socket, http_params));
 
                     LOG_INFO(log, "Listening interserver http: " + address.toString());
