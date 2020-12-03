@@ -1329,6 +1329,13 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
             last_step.required_output.emplace_back(expr_name);
             auto & col = last_step.actions->getSampleBlock().getByName(expr_name);
             output_columns.emplace_back(col.name, col.type);
+            if (query_block.aggregation == nullptr)
+            {
+                if (query_block.isRootQueryBlock())
+                    final_project.emplace_back(col.name, "");
+                else
+                    final_project.emplace_back(col.name, query_block.qb_column_prefix + col.name);
+            }
         }
         pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions()); });
         analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(output_columns), context);
