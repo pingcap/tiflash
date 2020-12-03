@@ -76,7 +76,7 @@ void ReorderRegionDataReadList(RegionDataReadInfoList & data_list)
         {
             const auto & h1 = std::get<0>(data_list.front());
             const auto & h2 = std::get<0>(data_list.back());
-            if ((h1 ^ h2) & SIGN_MASK)
+            if ((h1 & SIGN_MASK) && !(h2 & SIGN_MASK))
                 need_check = true;
         }
 
@@ -167,8 +167,7 @@ template <TMTPKType pk_type>
 bool setColumnValues(ColumnUInt8 & delmark_col,
     ColumnUInt64 & version_col,
     std::vector<ColumnID> & pk_column_ids,
-    std::vector<std::pair<ColumnID, size_t>>
-        visible_column_to_read_lut,
+    const std::vector<std::pair<ColumnID, size_t>> & visible_column_to_read_lut,
     ColumnIdToIndex & column_lut,
     ColumnDataInfoMap & column_map,
     const RegionDataReadInfoList & data_list,
@@ -185,7 +184,7 @@ bool setColumnValues(ColumnUInt8 & delmark_col,
     version_data.reserve(data_list.size());
 
     DecodedRecordData decoded_data(visible_column_to_read_lut.size());
-    RowPreDecoder pre_decoder{table_info, column_lut};
+    std::unique_ptr<const DecodedRow> tmp_row; // decode row into Field list here for temporary use if necessary.
     size_t index = 0;
     for (const auto & [pk, write_type, commit_ts, value_ptr] : data_list)
     {
@@ -235,8 +234,9 @@ bool setColumnValues(ColumnUInt8 & delmark_col,
                 const DecodedRow * row = value.getDecodedRow().load();
                 if (!row)
                 {
-                    pre_decoder.preDecodeRow(value);
-                    row = value.getDecodedRow().load();
+                    // not like old logic, do not store Field cache with value in order to reduce memory cost.
+                    tmp_row.reset(decodeRow(value.getStr(), table_info, column_lut));
+                    row = tmp_row.get();
                 }
 
                 const DecodedFields & decoded_fields = row->decoded_fields;
