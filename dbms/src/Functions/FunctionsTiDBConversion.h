@@ -150,7 +150,7 @@ struct TiDBConvertToString
             {
                 WriteBufferFromVector<ColumnString::Chars_t> element_write_buffer(container_per_element);
                 FormatImpl<FromDataType>::execute(
-                    vec_from[i], reinterpret_cast<const DataTypeDecimal<FromFieldType> &>(type).getScale(), element_write_buffer);
+                    vec_from[i], element_write_buffer, dynamic_cast<const DataTypeDecimal<FromFieldType> *>(&type), nullptr);
                 size_t byte_length = element_write_buffer.count();
                 if (tp.flen() > 0)
                     byte_length = std::min(byte_length, tp.flen());

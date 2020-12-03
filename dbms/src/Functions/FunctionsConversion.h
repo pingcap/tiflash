@@ -438,12 +438,12 @@ struct FormatImpl<DataTypeMyDateTime>
     }
 };
 
-template <typename FieldType>
-struct FormatImpl<DataTypeDecimal<FieldType>>
+template <typename DecimalType>
+struct FormatImpl<DataTypeDecimal<DecimalType>>
 {
-    static void execute(const FieldType & v, ScaleType scale, WriteBuffer & wb)
+    static void execute(const typename DataTypeDecimal<DecimalType>::FieldType v, WriteBuffer & wb, const DataTypeDecimal<DecimalType> * tp, const DateLUTImpl *)
     {
-        writeText(v, scale, wb);
+        writeText(v, tp->getScale(), wb);
     }
 };
 
