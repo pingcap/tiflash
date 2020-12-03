@@ -431,14 +431,14 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
     {
         /// use tidb_cast to make it compatible with TiDB
         tipb::FieldType field_type;
-        field_type.set_tp(TiDB::TypeLongLong);
+        field_type.set_tp(TiDB::TypeDouble);
         tipb::Expr type_expr;
-        constructStringLiteralTiExpr(type_expr, "Nullable(Int64)");
+        constructStringLiteralTiExpr(type_expr, "Nullable(Float64)");
         auto type_expr_name = getActions(type_expr, actions);
         String num_col_name = buildCastFunctionInternal(this, {column_name, type_expr_name}, false, field_type, actions);
 
         tipb::Expr const_expr;
-        constructInt64LiteralTiExpr(const_expr, 0);
+        constructFloat64LiteralTiExpr(const_expr, 0);
         auto const_expr_name = getActions(const_expr, actions);
         return applyFunction("notEquals", {num_col_name, const_expr_name}, actions, nullptr);
     }
