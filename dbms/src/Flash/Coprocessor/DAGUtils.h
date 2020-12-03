@@ -30,6 +30,7 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
 bool exprHasValidFieldType(const tipb::Expr & expr);
 void constructStringLiteralTiExpr(tipb::Expr & expr, const String & value);
 void constructInt64LiteralTiExpr(tipb::Expr & expr, Int64 value);
+void constructFloat64LiteralTiExpr(tipb::Expr & expr, Float64 value);
 void constructDateTimeLiteralTiExpr(tipb::Expr & expr, UInt64 packed_value);
 void constructNULLLiteralTiExpr(tipb::Expr & expr);
 extern std::unordered_map<tipb::ExprType, String> agg_func_map;

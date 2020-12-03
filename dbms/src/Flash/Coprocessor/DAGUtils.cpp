@@ -356,6 +356,17 @@ void constructInt64LiteralTiExpr(tipb::Expr & expr, Int64 value)
     field_type->set_flag(TiDB::ColumnFlagNotNull);
 }
 
+void constructFloat64LiteralTiExpr(tipb::Expr & expr, Float64 value)
+{
+    expr.set_tp(tipb::ExprType::Float64);
+    std::stringstream ss;
+    encodeDAGFloat64(value, ss);
+    expr.set_val(ss.str());
+    auto * field_type = expr.mutable_field_type();
+    field_type->set_tp(TiDB::TypeDouble);
+    field_type->set_flag(TiDB::ColumnFlagNotNull);
+}
+
 void constructDateTimeLiteralTiExpr(tipb::Expr & expr, UInt64 packed_value)
 {
     expr.set_tp(tipb::ExprType::MysqlTime);

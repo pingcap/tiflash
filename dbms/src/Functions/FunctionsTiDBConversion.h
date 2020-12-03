@@ -144,8 +144,6 @@ struct TiDBConvertToString
             const typename ColumnDecimal<FromFieldType>::Container & vec_from = col_from->getData();
             ColumnString::Chars_t container_per_element;
 
-            data_to.resize(size * decimal_max_prec + size);
-            container_per_element.resize(decimal_max_prec);
             offsets_to.resize(size);
 
             for (size_t i = 0; i < size; ++i)
