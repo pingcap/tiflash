@@ -168,6 +168,7 @@ public:
     metapb::Region getMetaRegion() const;
     raft_serverpb::MergeState getMergeState() const;
 
+    template <bool skip = false>
     void tryPreDecodeTiKVValue(TMTContext & tmt);
 
     TableID getMappedTableID() const;

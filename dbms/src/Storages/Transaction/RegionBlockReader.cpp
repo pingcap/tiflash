@@ -74,9 +74,9 @@ void ReorderRegionDataReadList(RegionDataReadInfoList & data_list)
     {
         bool need_check = false;
         {
-            const auto h1 = std::get<0>(data_list.front());
-            const auto h2 = std::get<0>(data_list.back());
-            if ((h1 ^ h2) & SIGN_MASK)
+            const auto & h1 = std::get<0>(data_list.front());
+            const auto & h2 = std::get<0>(data_list.back());
+            if ((h1 & SIGN_MASK) && !(h2 & SIGN_MASK))
                 need_check = true;
         }
 
@@ -131,7 +131,7 @@ void setPKVersionDel(ColumnUInt8 & delmark_col,
         {
             should_skip = scan_filter != nullptr && scan_filter->filter(static_cast<Int64>(handle));
         }
-        if(should_skip)
+        if (should_skip)
             continue;
 
         delmark_data.emplace_back(write_type == Region::DelFlag);
@@ -254,7 +254,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
     if (column_names_to_read.size() > MustHaveColCnt)
     {
         DecodedRecordData decoded_data(visible_column_to_read_lut.size());
-        RowPreDecoder pre_decoder{table_info, column_lut};
+        std::unique_ptr<const DecodedRow> tmp_row;
 
         // TODO: optimize columns' insertion, use better implementation rather than Field, it's terrible.
 
@@ -282,8 +282,9 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                 const DecodedRow * row = value.getDecodedRow().load();
                 if (!row)
                 {
-                    pre_decoder.preDecodeRow(value);
-                    row = value.getDecodedRow().load();
+                    // not like old logic, do not store Field cache with value in order to reduce memory cost.
+                    tmp_row.reset(decodeRow(value.getStr(), table_info, column_lut));
+                    row = tmp_row.get();
                 }
 
                 const DecodedFields & decoded_fields = row->decoded_fields;

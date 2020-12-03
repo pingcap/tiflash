@@ -34,6 +34,7 @@ class Block;
 struct MockTiDBTable;
 class RegionRangeKeys;
 class RegionTaskLock;
+struct RegionPtrWrap;
 
 class RegionTable : private boost::noncopyable
 {
@@ -116,7 +117,7 @@ public:
 
     bool tryFlushRegions();
     RegionDataReadInfoList tryFlushRegion(RegionID region_id, bool try_persist = false);
-    RegionDataReadInfoList tryFlushRegion(const RegionPtr & region, bool try_persist);
+    RegionDataReadInfoList tryFlushRegion(const RegionPtrWrap & region, bool try_persist);
 
     void waitTillRegionFlushed(RegionID region_id);
 
@@ -127,8 +128,11 @@ public:
     /// Will trigger schema sync on read error for only once,
     /// assuming that newer schema can always apply to older data by setting force_decode to true in readRegionBlock.
     /// Note that table schema must be keep unchanged throughout the process of read then write, we take good care of the lock.
-    static void writeBlockByRegion(
-        Context & context, const RegionPtr & region, RegionDataReadInfoList & data_list_to_remove, Logger * log, bool lock_region = true);
+    static void writeBlockByRegion(Context & context,
+        const RegionPtrWrap & region,
+        RegionDataReadInfoList & data_list_to_remove,
+        Logger * log,
+        bool lock_region = true);
 
     /// Read the data of the given region into block, take good care of learner read and locks.
     /// Assuming that the schema has been properly synced by outer, i.e. being new enough to decode data before start_ts,
@@ -177,7 +181,7 @@ private:
     InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, const RegionID region_id);
     InternalRegion & doGetInternalRegion(TableID table_id, RegionID region_id);
 
-    RegionDataReadInfoList flushRegion(const RegionPtr & region, bool try_persist) const;
+    RegionDataReadInfoList flushRegion(const RegionPtrWrap & region, bool try_persist) const;
     bool shouldFlush(const InternalRegion & region) const;
     RegionID pickRegionToFlush();
 
@@ -205,6 +209,45 @@ private:
     Logger * log;
 };
 
-using RegionPartitionPtr = std::shared_ptr<RegionTable>;
+// Block cache of region data with schema version.
+struct RegionPreDecodeBlockData
+{
+    Block block;
+    Int64 schema_version;
+    RegionDataReadInfoList data_list_read; // if schema version changed, use kv data to rebuild block cache
+
+    RegionPreDecodeBlockData(Block && block_, Int64 schema_version_, RegionDataReadInfoList && data_list_read_)
+        : block(std::move(block_)), schema_version(schema_version_), data_list_read(std::move(data_list_read_))
+    {}
+    RegionPreDecodeBlockData(const RegionPreDecodeBlockData &) = delete;
+    void toString(std::stringstream & ss) const
+    {
+        ss << " {";
+        ss << " schema_version: " << schema_version;
+        ss << ", data_list size: " << data_list_read.size();
+        ss << ", block row: " << block.rows() << " col: " << block.columns() << " bytes: " << block.bytes();
+        ss << " }";
+    }
+};
+
+// A wrap of RegionPtr, could try to use its block cache while writing region data to storage.
+struct RegionPtrWrap
+{
+    using Base = RegionPtr;
+    using CachePtr = std::unique_ptr<RegionPreDecodeBlockData>;
+
+    /// can accept const ref of RegionPtr without cache
+    RegionPtrWrap(const Base & base_, CachePtr cache = nullptr) : base(base_), pre_decode_cache(std::move(cache)) {}
+
+    /// to be compatible with usage as RegionPtr.
+    Base::element_type * operator->() const { return base.operator->(); }
+    const Base::element_type & operator*() const { return base.operator*(); }
+
+    /// make it could be cast into RegionPtr implicitly.
+    operator const Base &() const { return base; }
+
+    const Base & base;
+    CachePtr pre_decode_cache;
+};
 
 } // namespace DB

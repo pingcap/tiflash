@@ -101,7 +101,7 @@ void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Pri
     output(ss.str());
 }
 
-void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvoker::Printer output)
+RegionPtr GenDbgRegionSnapshotWithData(Context & context, const ASTs & args)
 {
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
@@ -120,9 +120,6 @@ void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvo
 
     if ((args_end - args_begin) % len)
         throw Exception("Number of insert values and columns do not match.", ErrorCodes::LOGICAL_ERROR);
-
-    TMTContext & tmt = context.getTMTContext();
-    size_t cnt = 0;
 
     for (auto it = args_begin; it != args_end; it += len)
     {
@@ -150,12 +147,21 @@ void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvo
 
             region->insert(ColumnFamilyType::Write, std::move(commit_key), std::move(commit_value));
         }
-        ++cnt;
         MockTiKV::instance().getRaftIndex(region_id);
     }
+    return region;
+}
 
-    tmt.getKVStore()->tryApplySnapshot(region, context);
-
+void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    auto region = GenDbgRegionSnapshotWithData(context, args);
+    auto & rawkeys = region->getRange()->rawKeys();
+    auto region_id = region->id();
+    auto table_id = region->getMappedTableID();
+    auto start = TiKVRange::getRangeHandle<true>(rawkeys.first, table_id).handle_id;
+    auto end = TiKVRange::getRangeHandle<false>(rawkeys.second, table_id).handle_id;
+    auto cnt = region->writeCFCount();
+    context.getTMTContext().getKVStore()->tryApplySnapshot(region, context);
     std::stringstream ss;
     ss << "put region #" << region_id << ", range[" << start << ", " << end << ")"
        << " to table #" << table_id << " with " << cnt << " records";
