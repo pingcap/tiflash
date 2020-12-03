@@ -8,6 +8,7 @@ namespace DB
 
 class DataTypeMyDateTime final : public DataTypeMyTimeBase
 {
+public:
     int fraction;
 
 public:

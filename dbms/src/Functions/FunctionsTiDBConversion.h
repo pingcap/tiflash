@@ -1171,6 +1171,20 @@ struct TiDBConvertToTime
         const auto & col_with_type_and_name = block.getByPosition(arguments[0]);
         const auto & type = static_cast<const FromDataType &>(*col_with_type_and_name.type);
 
+        // Use to truncate fraction part(microseconds) of DATE
+        // Result microseconds should be (micro - micro % fraction_trunc)
+        int fraction_trunc = 1;
+        if constexpr (std::is_same_v<ToDataType, DataTypeMyDateTime>)
+        {
+            auto * to_type = block.getByPosition(result).type.get();
+            if constexpr (return_nullable)
+            {
+                to_type = dynamic_cast<const DataTypeNullable *>(to_type)->getNestedType().get();
+            }
+            const auto * tp = dynamic_cast<const DataTypeMyDateTime *>(to_type);
+            fraction_trunc = std::pow(10, 6 - tp->fraction);
+        }
+
         if constexpr (return_nullable)
         {
             col_null_map_to = ColumnUInt8::create(size, 0);
@@ -1197,6 +1211,7 @@ struct TiDBConvertToTime
                     Field packed_uint_value = parseMyDateTime(string_value);
                     UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
                     MyDateTime datetime(packed_uint);
+                    datetime.micro_second = datetime.micro_second - datetime.micro_second % fraction_trunc;
                     if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
                     {
                         MyDate date(datetime.year, datetime.month, datetime.day);
@@ -1218,6 +1233,7 @@ struct TiDBConvertToTime
         }
         else if constexpr (std::is_same_v<FromDataType, DataTypeMyDate> || std::is_same_v<FromDataType, DataTypeMyDateTime>)
         {
+            // cast time as time
             const auto * col_from = checkAndGetColumn<ColumnUInt64>(block.getByPosition(arguments[0]).column.get());
             const ColumnUInt64::Container & vec_from = col_from->getData();
 
@@ -1232,6 +1248,7 @@ struct TiDBConvertToTime
                 }
                 else
                 {
+                    datetime.micro_second = datetime.micro_second - datetime.micro_second % fraction_trunc;
                     vec_to[i] = datetime.toPackedUInt();
                 }
             }
@@ -1256,6 +1273,7 @@ struct TiDBConvertToTime
                     }
                     else
                     {
+                        datetime.micro_second = datetime.micro_second - datetime.micro_second % fraction_trunc;
                         vec_to[i] = datetime.toPackedUInt();
                     }
                 }
@@ -1301,6 +1319,7 @@ struct TiDBConvertToTime
                         }
                         else
                         {
+                            datetime.micro_second = datetime.micro_second - datetime.micro_second % fraction_trunc;
                             vec_to[i] = packed_uint;
                         }
                     }
@@ -1333,6 +1352,7 @@ struct TiDBConvertToTime
                     }
                     else
                     {
+                        datetime.micro_second = datetime.micro_second - datetime.micro_second % fraction_trunc;
                         vec_to[i] = datetime.toPackedUInt();
                     }
                 }
