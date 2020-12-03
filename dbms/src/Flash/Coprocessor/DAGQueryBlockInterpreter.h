@@ -105,7 +105,7 @@ private:
     void executeLimit(Pipeline & pipeline);
     void executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, Names & aggregation_keys,
         TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions);
-    void executeProject(Pipeline & pipeline, NamesWithAliases & projection_list);
+    void executeFinalProject(Pipeline & pipeline);
 
     void readFromLocalStorage( //
         const TableID table_id, const Names & required_columns, SelectQueryInfo & query_info, const size_t max_block_size,

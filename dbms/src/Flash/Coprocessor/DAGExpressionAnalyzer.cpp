@@ -491,6 +491,8 @@ const std::vector<NameAndTypePair> & DAGExpressionAnalyzer::getCurrentInputColum
 
 void DAGExpressionAnalyzer::appendFinalProject(ExpressionActionsChain & chain, const NamesWithAliases & final_project)
 {
+    if (final_project.empty())
+        return;
     initChain(chain, getCurrentInputColumns());
     for (const auto & name : final_project)
     {

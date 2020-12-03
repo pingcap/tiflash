@@ -808,21 +808,8 @@ AnalysisResult DAGQueryBlockInterpreter::analyzeExpressions()
         analyzer->appendOrderBy(chain, query_block.limitOrTopN->topn(), res.order_columns);
     }
 
-    // projection
-    //    if (query_block.projection != nullptr)
-    //    {
-    //        std::vector<const tipb::Expr *> exprs;
-    //        for (auto & expr : query_block.projection->projection().exprs())
-    //        {
-    //            exprs.emplace_back(&expr);
-    //        }
-    //        final_project = analyzer->appendProjection(chain, exprs);
-    //    }
-    //    else
-    //    {
     // Append final project results if needed.
     analyzer->appendFinalProject(chain, final_project);
-    //    }
 
     res.before_order_and_select = chain.getLastActions();
     chain.finalize();
@@ -1240,7 +1227,7 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
     }
 
     if (need_append_final_project)
-        executeProject(pipeline);
+        executeFinalProject(pipeline);
 }
 
 void DAGQueryBlockInterpreter::executeRemoteQueryImpl(Pipeline & pipeline,
@@ -1328,11 +1315,12 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     else if (query_block.source->tp() == tipb::ExecType::TypeProjection)
     {
         std::vector<NameAndTypePair> input_columns;
+        pipeline.streams = input_streams_vec[0];
         for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
             input_columns.emplace_back(p.name, p.type);
         DAGExpressionAnalyzer dag_analyzer(std::move(input_columns), context);
         ExpressionActionsChain chain;
-        dag_analyzer.initChain(chain, input_columns);
+        dag_analyzer.initChain(chain, dag_analyzer.getCurrentInputColumns());
         ExpressionActionsChain::Step & last_step = chain.steps.back();
         std::vector<NameAndTypePair> output_columns;
         for (auto & expr : query_block.source->projection().exprs())
@@ -1381,7 +1369,7 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     }
 
     // execute projection
-    executeProject(pipeline, final_project);
+    executeFinalProject(pipeline);
 
     // execute limit
     if (query_block.limitOrTopN != nullptr && query_block.limitOrTopN->tp() == tipb::TypeLimit)
@@ -1398,9 +1386,9 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     }
 }
 
-void DAGQueryBlockInterpreter::executeProject(Pipeline & pipeline, NamesWithAliases & projection_list)
+void DAGQueryBlockInterpreter::executeFinalProject(Pipeline & pipeline)
 {
-    if (projection_list.empty())
+    if (final_project.empty())
         return;
     auto columns = pipeline.firstStream()->getHeader();
     NamesAndTypesList input_column;
@@ -1409,7 +1397,7 @@ void DAGQueryBlockInterpreter::executeProject(Pipeline & pipeline, NamesWithAlia
         input_column.emplace_back(column.name, column.type);
     }
     ExpressionActionsPtr project = std::make_shared<ExpressionActions>(input_column, context.getSettingsRef());
-    project->add(ExpressionAction::project(projection_list));
+    project->add(ExpressionAction::project(final_project));
     // add final project
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, project); });
 }
