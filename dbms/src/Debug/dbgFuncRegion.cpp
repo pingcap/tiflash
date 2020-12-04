@@ -157,7 +157,7 @@ void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Pri
     output(ss.str());
 }
 
-void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvoker::Printer output)
+RegionPtr GenDbgRegionSnapshotWithData(Context & context, const ASTs & args)
 {
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
@@ -192,9 +192,6 @@ void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvo
         }
         region = RegionBench::createRegion(table_info, region_id, start_keys, end_keys);
     }
-    auto & rawkeys = region->getRange()->rawKeys();
-    auto start_string = RecordKVFormat::DecodedTiKVKeyToReadableHandleString<true>(*rawkeys.first);
-    auto end_string = RecordKVFormat::DecodedTiKVKeyToReadableHandleString<false>(*rawkeys.second);
 
     auto args_begin = args.begin() + 3 + handle_column_size * 2;
     auto args_end = args.end();
@@ -203,9 +200,6 @@ void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvo
 
     if ((args_end - args_begin) % len)
         throw Exception("Number of insert values and columns do not match.", ErrorCodes::LOGICAL_ERROR);
-
-    TMTContext & tmt = context.getTMTContext();
-    size_t cnt = 0;
 
     for (auto it = args_begin; it != args_end; it += len)
     {
@@ -248,12 +242,21 @@ void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvo
 
             region->insert(ColumnFamilyType::Write, std::move(commit_key), std::move(commit_value));
         }
-        ++cnt;
         MockTiKV::instance().getRaftIndex(region_id);
     }
+    return region;
+}
 
-    tmt.getKVStore()->tryApplySnapshot(region, context);
-
+void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    auto region = GenDbgRegionSnapshotWithData(context, args);
+    auto & rawkeys = region->getRange()->rawKeys();
+    auto start_string = RecordKVFormat::DecodedTiKVKeyToReadableHandleString<true>(*rawkeys.first);
+    auto end_string = RecordKVFormat::DecodedTiKVKeyToReadableHandleString<false>(*rawkeys.second);
+    auto region_id = region->id();
+    auto table_id = region->getMappedTableID();
+    auto cnt = region->writeCFCount();
+    context.getTMTContext().getKVStore()->tryApplySnapshot(region, context);
     std::stringstream ss;
     ss << "put region #" << region_id << ", range[" << start_string << ", " << end_string << ")"
        << " to table #" << table_id << " with " << cnt << " records";

@@ -207,7 +207,11 @@ RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshot(RegionPtr new_region, con
         {
             LOG_INFO(log, "Start to pre-decode " << new_region->toString() << " into block");
             auto block_cache = GenRegionPreDecodeBlockData(new_region, tmt.getContext());
-            LOG_INFO(log, "Got pre-decode block cache"; block_cache->toString(oss_internal_rare));
+            if (block_cache)
+                LOG_INFO(log, "Got pre-decode block cache"; block_cache->toString(oss_internal_rare));
+            else
+                LOG_INFO(log, "Got empty pre-decode block cache");
+
             cache = std::move(block_cache);
         }
         ss << " cost " << watch.elapsedMilliseconds() << "ms";

@@ -30,7 +30,9 @@ struct MockRaftCommand
     //   ./storages-client.sh "DBGInvoke region_rollback_merge(region_id, database_name, table_name, start1, end1, start2, end2)"
     static void dbgFuncRollbackMerge(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
-    static void dbgFuncIngestSST(Context & context, const ASTs & args, DBGInvoker::Printer output);
+    static void dbgFuncStorePreHandleSnapshot(Context & context, const ASTs & args, DBGInvoker::Printer output);
+
+    static void dbgFuncApplyPreHandleSnapshot(Context & context, const ASTs & args, DBGInvoker::Printer output);
 };
 
 } // namespace DB

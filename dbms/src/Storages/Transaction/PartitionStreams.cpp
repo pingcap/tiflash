@@ -68,8 +68,6 @@ static void writeRegionDataToStorage(Context & context, const RegionPtrWrap & re
                       region.pre_decode_cache->toString(oss_internal_rare);
                       oss_internal_rare << ", storage schema version: " << schema_version);
 
-            data_list_read = std::move(region.pre_decode_cache->data_list_read); // update data list
-
             if (region.pre_decode_cache->schema_version == schema_version)
             {
                 block = std::move(region.pre_decode_cache->block);
@@ -225,33 +223,31 @@ std::pair<RegionDataReadInfoList, RegionException::RegionReadStatus> resolveLock
     return {std::move(data_list_read), RegionException::RegionReadStatus::OK};
 }
 
-RegionDataReadInfoList ReadRegionCommitCache(const RegionPtr & region, bool lock_region = true)
+std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & region, bool lock_region = true)
 {
-    RegionDataReadInfoList data_list_read;
+    auto scanner = region->createCommittedScanner(lock_region);
+
+    /// Some sanity checks for region meta.
     {
-        auto scanner = region->createCommittedScanner(lock_region);
-
-        /// Some sanity checks for region meta.
-        {
-            if (region->isPendingRemove())
-                return {};
-        }
-
-        /// Read raw KVs from region cache.
-        {
-            // Shortcut for empty region.
-            if (!scanner.hasNext())
-                return {};
-
-            data_list_read.reserve(scanner.writeMapSize());
-
-            do
-            {
-                data_list_read.emplace_back(scanner.next());
-            } while (scanner.hasNext());
-        }
+        if (region->isPendingRemove())
+            return std::nullopt;
     }
-    return data_list_read;
+
+    /// Read raw KVs from region cache.
+    {
+        // Shortcut for empty region.
+        if (!scanner.hasNext())
+            return std::nullopt;
+
+        RegionDataReadInfoList data_list_read;
+        data_list_read.reserve(scanner.writeMapSize());
+
+        do
+        {
+            data_list_read.emplace_back(scanner.next());
+        } while (scanner.hasNext());
+        return std::move(data_list_read);
+    }
 }
 
 void RemoveRegionCommitCache(const RegionPtr & region, const RegionDataReadInfoList & data_list_read, bool lock_region = true)
@@ -270,14 +266,20 @@ void RemoveRegionCommitCache(const RegionPtr & region, const RegionDataReadInfoL
 void RegionTable::writeBlockByRegion(
     Context & context, const RegionPtrWrap & region, RegionDataReadInfoList & data_list_to_remove, Logger * log, bool lock_region)
 {
-    RegionDataReadInfoList data_list_read = ReadRegionCommitCache(region, lock_region);
+    auto data_list_read = ReadRegionCommitCache(region, lock_region);
 
-    writeRegionDataToStorage(context, region, data_list_read, log);
+    if (region.pre_decode_cache)
+        data_list_read = std::move(region.pre_decode_cache->data_list_read); // update data list
 
-    RemoveRegionCommitCache(region, data_list_read, lock_region);
+    if (!data_list_read)
+        return;
+
+    writeRegionDataToStorage(context, region, *data_list_read, log);
+
+    RemoveRegionCommitCache(region, *data_list_read, lock_region);
 
     /// Save removed data to outer.
-    data_list_to_remove = std::move(data_list_read);
+    data_list_to_remove = std::move(*data_list_read);
 }
 
 std::tuple<Block, RegionException::RegionReadStatus> RegionTable::readBlockByRegion(const TiDB::TableInfo & table_info,
@@ -349,14 +351,16 @@ RegionException::RegionReadStatus RegionTable::resolveLocksAndWriteRegion(TMTCon
 /// pre-decode region data into block cache and remove
 RegionPtrWrap::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & region, Context & context)
 {
-    auto metrics = context.getTiFlashMetrics();
+    auto data_list_read = ReadRegionCommitCache(region);
 
+    if (!data_list_read)
+        return nullptr;
+
+    auto metrics = context.getTiFlashMetrics();
     const auto & tmt = context.getTMTContext();
     TableID table_id = region->getMappedTableID();
     Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
     Block res_block;
-
-    auto data_list_read = ReadRegionCommitCache(region);
 
     const auto atomicReadWrite = [&](bool force_decode) -> bool {
         Stopwatch watch;
@@ -368,7 +372,7 @@ RegionPtrWrap::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & region, Co
             return true;
         }
         auto lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
-        auto [block, ok] = readRegionBlock(storage, data_list_read, force_decode);
+        auto [block, ok] = readRegionBlock(storage, *data_list_read, force_decode);
         if (!ok)
             return false;
         schema_version = storage->getTableInfo().schema_version;
@@ -387,9 +391,9 @@ RegionPtrWrap::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & region, Co
                 ErrorCodes::LOGICAL_ERROR);
     }
 
-    RemoveRegionCommitCache(region, data_list_read);
+    RemoveRegionCommitCache(region, *data_list_read);
 
-    return std::make_unique<RegionPreDecodeBlockData>(std::move(res_block), schema_version, std::move(data_list_read));
+    return std::make_unique<RegionPreDecodeBlockData>(std::move(res_block), schema_version, std::move(*data_list_read));
 }
 
 } // namespace DB
