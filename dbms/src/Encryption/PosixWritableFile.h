@@ -22,7 +22,8 @@ protected:
     CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForWrite};
 
 public:
-    PosixWritableFile(const std::string & file_name_, bool truncate_when_exists_, int flags, mode_t mode, const RateLimiterPtr & rate_limiter_ = nullptr);
+    PosixWritableFile(
+        const std::string & file_name_, bool truncate_when_exists_, int flags, mode_t mode, const RateLimiterPtr & rate_limiter_ = nullptr);
 
     ~PosixWritableFile() override;
 

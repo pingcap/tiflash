@@ -17,7 +17,7 @@ namespace FailPoints
 {
 extern const char exception_before_dmfile_remove_encryption[];
 extern const char exception_before_dmfile_remove_from_disk[];
-}
+} // namespace FailPoints
 
 namespace DM
 {
@@ -392,7 +392,7 @@ std::set<UInt64> DMFile::listAllInPath(const FileProviderPtr & file_provider, co
         if (ss.size() != 2)
             return std::nullopt;
         size_t pos;
-        auto id = std::stoull(ss[1], &pos);
+        auto   id = std::stoull(ss[1], &pos);
         // pos < ss[1].size() means that ss[1] is not an invalid integer
         return pos < ss[1].size() ? std::nullopt : std::make_optional(id);
     };

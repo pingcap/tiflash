@@ -324,7 +324,7 @@ void DeltaMergeStore::shutdown()
 
     background_pool.removeTask(background_task_handle);
     heavy_task_background_pool.removeTask(heavy_task_background_task_handle);
-    background_task_handle = nullptr;
+    background_task_handle            = nullptr;
     heavy_task_background_task_handle = nullptr;
     LOG_TRACE(log, "Shutdown DeltaMerge end [" << db_name << "." << table_name << "]");
 }
@@ -1080,13 +1080,15 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
             left = segmentMergeDelta(*task.dm_context, task.segment, false);
             type = ThreadType::BG_MergeDelta;
             break;
-        case Compact: {
+        case Compact:
+        {
             task.segment->compactDelta(*task.dm_context);
             left = task.segment;
             type = ThreadType::BG_Compact;
             break;
         }
-        case Flush: {
+        case Flush:
+        {
             task.segment->flushCache(*task.dm_context);
             // After flush cache, better place delta index.
             task.segment->placeDeltaIndex(*task.dm_context);
@@ -1094,7 +1096,8 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
             type = ThreadType::BG_Flush;
             break;
         }
-        case PlaceIndex: {
+        case PlaceIndex:
+        {
             task.segment->placeDeltaIndex(*task.dm_context);
             break;
         }

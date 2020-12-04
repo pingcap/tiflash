@@ -11,7 +11,10 @@ namespace DM
 class DMFileBlockOutputStream
 {
 public:
-    DMFileBlockOutputStream(const Context & context, const DMFilePtr & dmfile, const ColumnDefines & write_columns, bool need_rate_limit = false)
+    DMFileBlockOutputStream(const Context &       context,
+                            const DMFilePtr &     dmfile,
+                            const ColumnDefines & write_columns,
+                            bool                  need_rate_limit = false)
         : writer(dmfile,
                  write_columns,
                  context.getSettingsRef().min_compress_block_size,

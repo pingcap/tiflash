@@ -1,19 +1,19 @@
-#include <Common/ProfileEvents.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/ProfileEvents.h>
 
 #include <Encryption/WriteBufferFromFileProvider.h>
 
 
 namespace ProfileEvents
 {
-    extern const Event WriteBufferFromFileDescriptorWrite;
-    extern const Event WriteBufferFromFileDescriptorWriteFailed;
-    extern const Event WriteBufferFromFileDescriptorWriteBytes;
-}
+extern const Event WriteBufferFromFileDescriptorWrite;
+extern const Event WriteBufferFromFileDescriptorWriteFailed;
+extern const Event WriteBufferFromFileDescriptorWriteBytes;
+} // namespace ProfileEvents
 
 namespace CurrentMetrics
 {
-    extern const Metric Write;
+extern const Metric Write;
 }
 
 namespace DB

@@ -35,12 +35,11 @@ private:
     // Pending request
     struct Request
     {
-      explicit Request(UInt64 bytes)
-          : request_bytes(bytes), bytes(bytes), granted(false) {}
-      UInt64 request_bytes;
-      UInt64 bytes;
-      std::condition_variable cv;
-      bool granted;
+        explicit Request(UInt64 bytes) : request_bytes(bytes), bytes(bytes), granted(false) {}
+        UInt64 request_bytes;
+        UInt64 bytes;
+        std::condition_variable cv;
+        bool granted;
     };
 
 private:
@@ -61,4 +60,4 @@ private:
 
 using RateLimiterPtr = std::shared_ptr<RateLimiter>;
 
-}
+} // namespace DB

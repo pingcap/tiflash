@@ -22,7 +22,8 @@ extern const int CANNOT_OPEN_FILE;
 extern const int CANNOT_CLOSE_FILE;
 } // namespace ErrorCodes
 
-PosixWritableFile::PosixWritableFile(const std::string & file_name_, bool truncate_when_exists_, int flags, mode_t mode, const RateLimiterPtr & rate_limiter_)
+PosixWritableFile::PosixWritableFile(
+    const std::string & file_name_, bool truncate_when_exists_, int flags, mode_t mode, const RateLimiterPtr & rate_limiter_)
     : file_name{file_name_}, rate_limiter{rate_limiter_}
 {
     doOpenFile(truncate_when_exists_, flags, mode);

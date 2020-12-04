@@ -1,9 +1,10 @@
 #include <Encryption/RateLimiter.h>
 
 DB::RateLimiter::RateLimiter(UInt64 rate_limit_per_sec_, UInt64 refill_period_ms_)
-: refill_period_ms{refill_period_ms_},
+    : refill_period_ms{refill_period_ms_},
       refill_balance_per_period{calculateRefillBalancePerPeriod(rate_limit_per_sec_)},
-      available_balance{refill_balance_per_period}, stop{false}
+      available_balance{refill_balance_per_period},
+      stop{false}
 {}
 
 DB::RateLimiter::~RateLimiter()

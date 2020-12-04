@@ -78,11 +78,12 @@ DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
                              const BlockInputStreamPtr & input_stream,
                              UInt64                      file_id,
                              const String &              parent_path,
-                             bool need_rate_limit)
+                             bool                        need_rate_limit)
 {
-    auto   dmfile        = DMFile::create(file_id, parent_path, dm_context.db_context.getSettingsRef().dt_enable_single_file_mode_dmfile);
-    auto   output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.db_context, dmfile, *dm_context.store_columns, need_rate_limit);
-    auto * mvcc_stream   = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(input_stream.get());
+    auto dmfile = DMFile::create(file_id, parent_path, dm_context.db_context.getSettingsRef().dt_enable_single_file_mode_dmfile);
+    auto output_stream
+        = std::make_shared<DMFileBlockOutputStream>(dm_context.db_context, dmfile, *dm_context.store_columns, need_rate_limit);
+    auto * mvcc_stream = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(input_stream.get());
 
     input_stream->readPrefix();
     output_stream->writePrefix();
@@ -111,7 +112,8 @@ DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
     return dmfile;
 }
 
-StableValueSpacePtr createNewStable(DMContext & context, const BlockInputStreamPtr & input_stream, PageId stable_id, WriteBatches & wbs, bool need_rate_limit)
+StableValueSpacePtr
+createNewStable(DMContext & context, const BlockInputStreamPtr & input_stream, PageId stable_id, WriteBatches & wbs, bool need_rate_limit)
 {
     auto delegate   = context.path_pool.getStableDiskDelegator();
     auto store_path = delegate.choosePath();
@@ -494,7 +496,8 @@ SegmentPtr Segment::mergeDelta(DMContext & dm_context) const
     return new_segment;
 }
 
-StableValueSpacePtr Segment::prepareMergeDelta(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs, bool need_rate_limit) const
+StableValueSpacePtr
+Segment::prepareMergeDelta(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs, bool need_rate_limit) const
 {
     LOG_INFO(log,
              "Segment [" << DB::toString(segment_id)
@@ -705,7 +708,8 @@ RowKeyValue Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & 
     return split_point;
 }
 
-Segment::SplitInfo Segment::prepareSplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs, bool need_rate_limit) const
+Segment::SplitInfo
+Segment::prepareSplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs, bool need_rate_limit) const
 {
     if (!dm_context.enable_logical_split         //
         || segment_snap->stable->getPacks() <= 3 //
@@ -785,7 +789,10 @@ Segment::SplitInfo Segment::prepareSplitLogical(DMContext &                dm_co
     return {true, split_point, my_stable, other_stable};
 }
 
-Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs, bool need_rate_limit) const
+Segment::SplitInfo Segment::prepareSplitPhysical(DMContext &                dm_context,
+                                                 const SegmentSnapshotPtr & segment_snap,
+                                                 WriteBatches &             wbs,
+                                                 bool                       need_rate_limit) const
 {
     LOG_INFO(log, "Segment [" << segment_id << "] prepare split physical start");
 
@@ -953,7 +960,7 @@ StableValueSpacePtr Segment::prepareMerge(DMContext &                dm_context,
                                           const SegmentPtr &         right,
                                           const SegmentSnapshotPtr & right_snap,
                                           WriteBatches &             wbs,
-                                          bool need_rate_limit)
+                                          bool                       need_rate_limit)
 {
     LOG_INFO(left->log, "Segment [" << left->segmentId() << "] and [" << right->segmentId() << "] prepare merge start");
 
