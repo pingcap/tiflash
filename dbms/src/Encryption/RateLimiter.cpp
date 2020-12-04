@@ -1,3 +1,5 @@
+#include <cassert>
+
 #include <Encryption/RateLimiter.h>
 
 DB::RateLimiter::RateLimiter(UInt64 rate_limit_per_sec_, UInt64 refill_period_ms_)
