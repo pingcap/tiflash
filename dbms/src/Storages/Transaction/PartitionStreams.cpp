@@ -362,7 +362,7 @@ RegionPtrWrap::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & region, Co
     Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
     Block res_block;
 
-    const auto atomicReadWrite = [&](bool force_decode) -> bool {
+    const auto atomicDecode = [&](bool force_decode) -> bool {
         Stopwatch watch;
         auto storage = tmt.getStorages().get(table_id);
         if (storage == nullptr || storage->isTombstone())
