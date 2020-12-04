@@ -266,10 +266,16 @@ void RemoveRegionCommitCache(const RegionPtr & region, const RegionDataReadInfoL
 void RegionTable::writeBlockByRegion(
     Context & context, const RegionPtrWrap & region, RegionDataReadInfoList & data_list_to_remove, Logger * log, bool lock_region)
 {
-    auto data_list_read = ReadRegionCommitCache(region, lock_region);
-
+    std::optional<RegionDataReadInfoList> data_list_read = std::nullopt;
     if (region.pre_decode_cache)
-        data_list_read = std::move(region.pre_decode_cache->data_list_read); // update data list
+    {
+        // if schema version changed, use the kv data to rebuild block cache
+        data_list_read = std::move(region.pre_decode_cache->data_list_read);
+    }
+    else
+    {
+        data_list_read = ReadRegionCommitCache(region, lock_region);
+    }
 
     if (!data_list_read)
         return;
