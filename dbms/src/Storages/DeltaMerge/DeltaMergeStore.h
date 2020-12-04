@@ -224,16 +224,17 @@ public:
     {
     private:
         using TaskQueue = std::queue<BackgroundTask, std::list<BackgroundTask>>;
-        TaskQueue tasks;
+        TaskQueue light_tasks;
+        TaskQueue heavy_tasks;
 
         std::mutex mutex;
 
     public:
-        size_t length() { return tasks.size(); }
+        size_t length() { return light_tasks.size() + heavy_tasks.size(); }
 
-        void addTask(const BackgroundTask & task, const ThreadType & whom, Logger * log_);
+        bool addTask(const BackgroundTask & task, const ThreadType & whom, Logger * log_);
 
-        BackgroundTask nextTask(Logger * log_);
+        BackgroundTask nextTask(bool is_heavy, Logger * log_);
     };
 
     DeltaMergeStore(Context &             db_context, //
@@ -337,11 +338,11 @@ private:
 
     void checkSegmentUpdate(const DMContextPtr & context, const SegmentPtr & segment, ThreadType thread_type);
 
-    SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment);
-    void        segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right);
+    SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
+    void        segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right, bool is_foreground);
     SegmentPtr  segmentMergeDelta(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
 
-    bool handleBackgroundTask();
+    bool handleBackgroundTask(bool heavy);
 
     bool isSegmentValid(const SegmentPtr & segment);
 
@@ -378,6 +379,9 @@ private:
     BackgroundProcessingPool &           background_pool;
     BackgroundProcessingPool::TaskHandle gc_handle;
     BackgroundProcessingPool::TaskHandle background_task_handle;
+
+    BackgroundProcessingPool &           heavy_task_background_pool;
+    BackgroundProcessingPool::TaskHandle heavy_task_background_task_handle;
 
     /// end of range -> segment
     SegmentSortedMap segments;

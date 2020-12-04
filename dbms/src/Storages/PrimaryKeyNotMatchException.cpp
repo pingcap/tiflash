@@ -48,7 +48,7 @@ String fixCreateStatementWithPriKeyNotMatchException( //
             EncryptionPath encryption_path
                 = use_target_encrypt_info ? EncryptionPath(table_metadata_path, "") : EncryptionPath(table_metadata_tmp_path, "");
             bool create_new_encryption_info = !use_target_encrypt_info && statement.size();
-            WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, encryption_path, create_new_encryption_info,
+            WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, encryption_path, create_new_encryption_info, nullptr, statement.size(),
                 O_WRONLY | O_CREAT | O_EXCL);
             writeString(statement, out);
             out.next();

@@ -528,6 +528,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setPath(path);
     global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
 
+    {
+        global_context->initializeRateLimiter(storage_config.bg_task_io_rate_limit);
+    }
+
     /// ===== Paths related configuration initialized end ===== ///
 
     security_config = TiFlashSecurityConfig(config(), log);

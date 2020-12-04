@@ -164,7 +164,7 @@ void DatabaseTiFlash::createTable(const Context & context, const String & table_
         const String statement = getTableDefinitionFromCreateQuery(query);
 
         /// Exclusive flags guarantees, that table is not created right now in another thread. Otherwise, exception will be thrown.
-        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""),
+        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""), true, nullptr,
             statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
@@ -283,7 +283,7 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
                 = use_target_encrypt_info ? EncryptionPath(new_tbl_meta_file, "") : EncryptionPath(new_tbl_meta_file_tmp, "");
             bool create_new_encryption_info = !use_target_encrypt_info && statement.size();
             WriteBufferFromFileProvider out(
-                context.getFileProvider(), new_tbl_meta_file_tmp, encryption_path, create_new_encryption_info, O_WRONLY | O_CREAT | O_EXCL);
+                context.getFileProvider(), new_tbl_meta_file_tmp, encryption_path, create_new_encryption_info, nullptr, O_WRONLY | O_CREAT | O_EXCL);
             writeString(statement, out);
             out.next();
             if (context.getSettingsRef().fsync_metadata)
@@ -377,7 +377,7 @@ void DatabaseTiFlash::alterTable(
             = use_target_encrypt_info ? EncryptionPath(table_metadata_path, "") : EncryptionPath(table_metadata_tmp_path, "");
         bool create_new_encryption_info = !use_target_encrypt_info && statement.size();
         WriteBufferFromFileProvider out(
-            context.getFileProvider(), table_metadata_tmp_path, encryption_path, create_new_encryption_info, O_WRONLY | O_CREAT | O_EXCL);
+            context.getFileProvider(), table_metadata_tmp_path, encryption_path, create_new_encryption_info, nullptr, O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
         if (context.getSettingsRef().fsync_metadata)

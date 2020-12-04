@@ -11,7 +11,7 @@ namespace DM
 class DMFileBlockOutputStream
 {
 public:
-    DMFileBlockOutputStream(const Context & context, const DMFilePtr & dmfile, const ColumnDefines & write_columns)
+    DMFileBlockOutputStream(const Context & context, const DMFilePtr & dmfile, const ColumnDefines & write_columns, bool need_rate_limit = false)
         : writer(dmfile,
                  write_columns,
                  context.getSettingsRef().min_compress_block_size,
@@ -19,6 +19,7 @@ public:
                  // context.chooseCompressionSettings(0, 0), TODO: should enable this, and make unit testes work.
                  CompressionSettings(CompressionMethod::LZ4),
                  context.getFileProvider(),
+                 need_rate_limit ? context.getRateLimiter() : nullptr,
                  context.getSettingsRef().dt_enable_single_file_mode_dmfile)
     {
     }

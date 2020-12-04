@@ -28,11 +28,13 @@ public:
                CompressionSettings compression_settings,
                size_t              max_compress_block_size,
                FileProviderPtr &   file_provider,
+               const RateLimiterPtr & rate_limiter_,
                bool                do_index)
             : plain_file(createWriteBufferFromFileBaseByFileProvider(file_provider,
                                                                      dmfile->colDataPath(file_base_name),
                                                                      dmfile->encryptionDataPath(file_base_name),
                                                                      false,
+                                                                     rate_limiter_,
                                                                      0,
                                                                      0,
                                                                      max_compress_block_size)),
@@ -40,7 +42,7 @@ public:
               compressed_buf(plain_hashing, compression_settings),
               original_hashing(compressed_buf),
               minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr),
-              mark_file(file_provider, dmfile->colMarkPath(file_base_name), dmfile->encryptionMarkPath(file_base_name), false)
+              mark_file(file_provider, dmfile->colMarkPath(file_base_name), dmfile->encryptionMarkPath(file_base_name), false, rate_limiter_)
         {
         }
 
@@ -78,9 +80,11 @@ public:
         SingleFileStream(const DMFilePtr &       dmfile,
                          CompressionSettings     compression_settings,
                          size_t                  max_compress_block_size,
-                         const FileProviderPtr & file_provider)
+                         const FileProviderPtr & file_provider,
+                         const RateLimiterPtr & rate_limiter_
+                         )
             : plain_file(createWriteBufferFromFileBaseByFileProvider(
-                file_provider, dmfile->path(), EncryptionPath(dmfile->encryptionBasePath(), ""), true, 0, 0, max_compress_block_size)),
+                file_provider, dmfile->path(), EncryptionPath(dmfile->encryptionBasePath(), ""), true, rate_limiter_, 0, 0, max_compress_block_size)),
               plain_hashing(*plain_file),
               compressed_buf(plain_hashing, compression_settings),
               original_hashing(compressed_buf)
@@ -126,6 +130,7 @@ public:
                  size_t                      max_compress_block_size_,
                  const CompressionSettings & compression_settings_,
                  const FileProviderPtr &     file_provider_,
+                 const RateLimiterPtr & rate_limiter_,
                  bool                        single_file_mode_ = false);
 
     void write(const Block & block, size_t not_clean_rows);
@@ -154,6 +159,8 @@ private:
     SingleFileStreamPtr single_file_stream;
 
     FileProviderPtr file_provider;
+    RateLimiterPtr  rate_limiter;
+
     bool            single_file_mode;
 };
 

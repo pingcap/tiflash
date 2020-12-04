@@ -59,20 +59,35 @@ namespace DM
 //   MergeDeltaTaskPool
 // ================================================
 
-void DeltaMergeStore::MergeDeltaTaskPool::addTask(const BackgroundTask & task, const ThreadType & whom, Logger * log_)
+bool DeltaMergeStore::MergeDeltaTaskPool::addTask(const BackgroundTask & task, const ThreadType & whom, Logger * log_)
 {
     LOG_DEBUG(log_,
               "Segment [" << task.segment->segmentId() << "] task [" << toString(task.type) << "] add to background task pool by ["
                           << toString(whom) << "]");
 
     std::scoped_lock lock(mutex);
-    tasks.push(task);
+    switch (task.type)
+    {
+    case Split:
+    case Merge:
+    case MergeDelta:
+        heavy_tasks.push(task);
+        return true;
+    case Compact:
+    case Flush:
+    case PlaceIndex:
+        light_tasks.push(task);
+        return false;
+    default:
+        throw Exception("Unsupported task type: " + DeltaMergeStore::toString(task.type));
+    }
 }
 
-DeltaMergeStore::BackgroundTask DeltaMergeStore::MergeDeltaTaskPool::nextTask(Logger * log_)
+DeltaMergeStore::BackgroundTask DeltaMergeStore::MergeDeltaTaskPool::nextTask(bool is_heavy, Logger * log_)
 {
     std::scoped_lock lock(mutex);
 
+    auto & tasks = is_heavy ? heavy_tasks : light_tasks;
     if (tasks.empty())
         return {};
     auto task = tasks.front();
@@ -129,6 +144,7 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
       rowkey_column_size(rowkey_column_size_),
       original_table_handle_define(handle),
       background_pool(db_context.getBackgroundPool()),
+      heavy_task_background_pool(db_context.getDeltaMergeHeavyTaskBackgroundPool()),
       hash_salt(++DELTA_MERGE_STORE_HASH_SALT),
       log(&Logger::get("DeltaMergeStore[" + db_name + "." + table_name + "]"))
 {
@@ -236,7 +252,9 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
     storage_pool.data().registerExternalPagesCallbacks(dmfile_scanner, dmfile_remover);
 
     gc_handle              = background_pool.addTask([this] { return storage_pool.gc(); });
-    background_task_handle = background_pool.addTask([this] { return handleBackgroundTask(); });
+    background_task_handle = background_pool.addTask([this] { return handleBackgroundTask(false); });
+
+    heavy_task_background_task_handle = heavy_task_background_pool.addTask([this] { return handleBackgroundTask(true); });
 
     // Do place delta index.
     for (auto & [end, segment] : segments)
@@ -247,6 +265,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
 
     // Wake up to do place delta index tasks.
     background_task_handle->wake();
+    heavy_task_background_task_handle->wake();
 }
 
 void DeltaMergeStore::rename(String /*new_path*/, bool clean_rename, String new_database_name, String new_table_name)
@@ -304,7 +323,9 @@ void DeltaMergeStore::shutdown()
     gc_handle = nullptr;
 
     background_pool.removeTask(background_task_handle);
+    heavy_task_background_pool.removeTask(heavy_task_background_task_handle);
     background_task_handle = nullptr;
+    heavy_task_background_task_handle = nullptr;
     LOG_TRACE(log, "Shutdown DeltaMerge end [" << db_name << "." << table_name << "]");
 }
 
@@ -847,8 +868,11 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
             if (shutdown_called.load(std::memory_order_relaxed))
                 return;
 
-            background_tasks.addTask(task, thread_type, log);
-            background_task_handle->wake();
+            auto heavy = background_tasks.addTask(task, thread_type, log);
+            if (heavy)
+                heavy_task_background_task_handle->wake();
+            else
+                background_task_handle->wake();
         }
     };
 
@@ -947,7 +971,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         auto my_should_split = my_segment_rows >= dm_context->segment_limit_rows * 3;
         if (my_should_split)
         {
-            if (segmentSplit(*dm_context, my_segment).first)
+            if (segmentSplit(*dm_context, my_segment, true).first)
                 return true;
             else
                 return false;
@@ -1016,9 +1040,9 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         try_place_delta_index();
 }
 
-bool DeltaMergeStore::handleBackgroundTask()
+bool DeltaMergeStore::handleBackgroundTask(bool heavy)
 {
-    auto task = background_tasks.nextTask(log);
+    auto task = background_tasks.nextTask(heavy, log);
     if (!task)
         return false;
 
@@ -1045,11 +1069,11 @@ bool DeltaMergeStore::handleBackgroundTask()
         switch (task.type)
         {
         case Split:
-            std::tie(left, right) = segmentSplit(*task.dm_context, task.segment);
+            std::tie(left, right) = segmentSplit(*task.dm_context, task.segment, false);
             type                  = ThreadType::BG_Split;
             break;
         case Merge:
-            segmentMerge(*task.dm_context, task.segment, task.next_segment);
+            segmentMerge(*task.dm_context, task.segment, task.next_segment, false);
             type = ThreadType::BG_Merge;
             break;
         case MergeDelta:
@@ -1095,7 +1119,7 @@ bool DeltaMergeStore::handleBackgroundTask()
     return true;
 }
 
-SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentPtr & segment)
+SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground)
 {
     LOG_DEBUG(log, "Split segment " << segment->info() << ", safe point:" << dm_context.min_version);
 
@@ -1134,7 +1158,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 
     WriteBatches wbs(storage_pool);
     auto         range      = segment->getRowKeyRange();
-    auto         split_info = segment->prepareSplit(dm_context, segment_snap, wbs);
+    auto         split_info = segment->prepareSplit(dm_context, segment_snap, wbs, !is_foreground);
 
     wbs.writeLogAndData();
     split_info.my_stable->enableDMFilesGC();
@@ -1202,7 +1226,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     return {new_left, new_right};
 }
 
-void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right)
+void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right, bool is_foreground)
 {
     LOG_DEBUG(log, "Merge Segment [" << left->info() << "] and [" << right->info() << "], safe point:" << dm_context.min_version);
 
@@ -1248,7 +1272,7 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
     auto right_range = right->getRowKeyRange();
 
     WriteBatches wbs(storage_pool);
-    auto         merged_stable = Segment::prepareMerge(dm_context, left, left_snap, right, right_snap, wbs);
+    auto         merged_stable = Segment::prepareMerge(dm_context, left, left_snap, right, right_snap, wbs, !is_foreground);
     wbs.writeLogAndData();
     merged_stable->enableDMFilesGC();
 
@@ -1340,7 +1364,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
 
     WriteBatches wbs(storage_pool);
 
-    auto new_stable = segment->prepareMergeDelta(dm_context, segment_snap, wbs);
+    auto new_stable = segment->prepareMergeDelta(dm_context, segment_snap, wbs, !is_foreground);
     wbs.writeLogAndData();
     new_stable->enableDMFilesGC();
 
