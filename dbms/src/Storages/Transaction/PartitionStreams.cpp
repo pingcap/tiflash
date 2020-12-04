@@ -387,13 +387,13 @@ RegionPtrWrap::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & region, Co
         return true;
     };
 
-    if (!atomicReadWrite(false))
+    if (!atomicDecode(false))
     {
         GET_METRIC(metrics, tiflash_schema_trigger_count, type_raft_decode).Increment();
         tmt.getSchemaSyncer()->syncSchemas(context);
 
-        if (!atomicReadWrite(true))
-            throw Exception("Write region " + std::to_string(region->id()) + " to table " + std::to_string(table_id) + " failed",
+        if (!atomicDecode(true))
+            throw Exception("Pre-decode " + region->toString() + " cache to table " + std::to_string(table_id) + " block failed",
                 ErrorCodes::LOGICAL_ERROR);
     }
 
