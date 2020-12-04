@@ -90,6 +90,16 @@ public:
     {
     }
 
+    /// Note that we don't swap the id.
+    void swap(DeltaIndex & other)
+    {
+        std::scoped_lock lock1(mutex);
+        std::scoped_lock lock2(other.mutex);
+        delta_tree.swap(other.delta_tree);
+        std::swap(placed_rows, other.placed_rows);
+        std::swap(placed_deletes, other.placed_deletes);
+    }
+
     String toString()
     {
         std::stringstream s;
@@ -170,15 +180,6 @@ public:
         auto new_index = std::make_shared<DeltaIndex>(*this);
         new_index->applyUpdates(updates);
         return new_index;
-    }
-
-    void clear()
-    {
-        std::scoped_lock lock(mutex);
-
-        delta_tree     = std::make_shared<DefaultDeltaTree>();
-        placed_rows    = 0;
-        placed_deletes = 0;
     }
 };
 

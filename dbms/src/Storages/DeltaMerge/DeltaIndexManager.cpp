@@ -10,16 +10,7 @@ namespace DB
 namespace DM
 {
 
-void DeltaIndexManager::onRemove(const Holder & holder)
-{
-    if (auto p = holder.index.lock(); p)
-    {
-        LOG_TRACE(log, String(__FUNCTION__) << "Free DeltaIndex, [size " << p->getBytes() << "]");
-        p->clear();
-    }
-}
-
-void DeltaIndexManager::removeOverflow()
+void DeltaIndexManager::removeOverflow(std::vector<DeltaIndex> & removed)
 {
     size_t queue_size = index_map.size();
     while ((current_size > max_size) && (queue_size > 1))
@@ -32,13 +23,19 @@ void DeltaIndexManager::removeOverflow()
 
         const auto & holder = it->second;
 
-        current_size -= holder.size;
+        if (auto p = holder.index.lock(); p)
+        {
+            LOG_TRACE(log, String(__FUNCTION__) << "Free DeltaIndex, [size " << p->getBytes() << "]");
+
+            // We put the evicted index into removed list, and free them later.
+            auto & empty = removed.emplace_back();
+            p->swap(empty);
+        }
 
         index_map.erase(it);
         lru_queue.pop_front();
+        current_size -= holder.size;
         --queue_size;
-
-        onRemove(holder);
     }
 
     if (current_size > (1ull << 63))
@@ -51,6 +48,10 @@ void DeltaIndexManager::refreshRef(const DeltaIndexPtr & index)
 {
     if (max_size == 0)
         return;
+
+    // Don't free the removed DeltaIndexs inside the lock scope.
+    // Instead, use a removed list to actually free them in current thread, so that we don't block other threads.
+    std::vector<DeltaIndex> removed;
 
     std::lock_guard lock(mutex);
 
@@ -74,7 +75,7 @@ void DeltaIndexManager::refreshRef(const DeltaIndexPtr & index)
     holder.size  = index->getBytes();
     current_size += holder.size;
 
-    removeOverflow();
+    removeOverflow(removed);
 
     CurrentMetrics::set(CurrentMetrics::DT_DeltaIndexCacheSize, current_size);
 }
@@ -84,12 +85,23 @@ void DeltaIndexManager::deleteRef(const DeltaIndexPtr & index)
     if (max_size == 0)
         return;
 
+    DeltaIndex empty;
+
     std::lock_guard lock(mutex);
 
     auto it = index_map.find(index->getId());
     if (it == index_map.end())
         return;
+
     Holder & holder = it->second;
+    if (auto p = holder.index.lock(); p)
+    {
+        LOG_TRACE(log, String(__FUNCTION__) << "Free DeltaIndex, [size " << p->getBytes() << "]");
+
+        // Free it out of lock scope.
+        p->swap(empty);
+    }
+
     index_map.erase(it);
     lru_queue.erase(holder.queue_it);
     current_size -= holder.size;

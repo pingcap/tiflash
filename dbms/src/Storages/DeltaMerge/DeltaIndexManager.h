@@ -43,11 +43,13 @@ private:
     std::mutex mutex;
 
 private:
-    void onRemove(const Holder & holder);
-    void removeOverflow();
+    void removeOverflow(std::vector<DeltaIndex> & removed);
 
 public:
     explicit DeltaIndexManager(size_t max_size_) : max_size(max_size_), log(&Logger::get("DeltaIndexManager")) {}
+
+    /// Note that if isLimit() is false, than this method always return 0.
+    size_t currentSize() { return current_size; }
 
     bool isLimit() { return max_size != 0; }
 
@@ -59,6 +61,7 @@ public:
     void deleteRef(const DeltaIndexPtr & index);
 
     /// Try to get the DeltaIndex from this manager. Return empty if not found.
+    /// Used by test cases.
     DeltaIndexPtr getRef(UInt64 index_id);
 };
 

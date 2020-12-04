@@ -1,7 +1,4 @@
-#define private public
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
-#undef private
-
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <gtest/gtest.h>
 #include <test_utils/TiflashTestBasic.h>
@@ -47,42 +44,42 @@ try
     }
     for (int i = 0; i < 100; ++i)
     {
-        ASSERT_EQ(manager.current_size, one_node_size * i);
-        manager.refresh(indies[i]);
+        ASSERT_EQ(manager.currentSize(), one_node_size * i);
+        manager.refreshRef(indies[i]);
     }
 
-    ASSERT_EQ(manager.current_size, one_node_size * (100));
+    ASSERT_EQ(manager.currentSize(), one_node_size * (100));
 
     for (int i = 0; i < 100; ++i)
     {
-        ASSERT_EQ(manager.get(indies[i]->getId()), indies[i]);
+        ASSERT_EQ(manager.getRef(indies[i]->getId()), indies[i]);
     }
 
 
     for (int i = 100; i < 200; ++i)
     {
-        ASSERT_EQ(manager.current_size, one_node_size * 100);
-        manager.refresh(indies[i]);
+        ASSERT_EQ(manager.currentSize(), one_node_size * 100);
+        manager.refreshRef(indies[i]);
     }
     for (int i = 0; i < 100; ++i)
     {
-        ASSERT_EQ(manager.get(indies[i]->getId()), DeltaIndexPtr());
+        ASSERT_EQ(manager.getRef(indies[i]->getId()), DeltaIndexPtr());
         ASSERT_EQ(indies[i]->getPlacedStatus(), std::make_pair((size_t)0, (size_t)0));
     }
     for (int i = 100; i < 200; ++i)
     {
-        ASSERT_EQ(manager.get(indies[i]->getId()), indies[i]);
+        ASSERT_EQ(manager.getRef(indies[i]->getId()), indies[i]);
     }
 
     for (int i = 100; i < 150; ++i)
     {
-        manager.remove(indies[i]);
+        manager.deleteRef(indies[i]);
     }
-    ASSERT_EQ(manager.current_size, one_node_size * (50));
+    ASSERT_EQ(manager.currentSize(), one_node_size * (50));
 
     for (int i = 100; i < 150; ++i)
     {
-        ASSERT_EQ(manager.get(indies[i]->getId()), DeltaIndexPtr());
+        ASSERT_EQ(manager.getRef(indies[i]->getId()), DeltaIndexPtr());
     }
 }
 CATCH
