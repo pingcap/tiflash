@@ -101,7 +101,6 @@ struct TiDBConvertToString
         auto col_to = ColumnString::create();
         ColumnString::Chars_t & data_to = col_to->getChars();
         ColumnString::Offsets & offsets_to = col_to->getOffsets();
-        WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
 
         if constexpr (std::is_same_v<FromDataType, DataTypeString>)
         {
@@ -112,6 +111,8 @@ struct TiDBConvertToString
             const IColumn::Offsets * offsets_from = &col_from_string->getOffsets();
 
             offsets_to.resize(size);
+
+            WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
 
             size_t current_offset = 0;
             for (size_t i = 0; i < size; i++)
@@ -144,7 +145,11 @@ struct TiDBConvertToString
             const typename ColumnDecimal<FromFieldType>::Container & vec_from = col_from->getData();
             ColumnString::Chars_t container_per_element;
 
+            data_to.resize(size * decimal_max_prec + size);
+            container_per_element.resize(decimal_max_prec);
             offsets_to.resize(size);
+
+            WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
 
             for (size_t i = 0; i < size; ++i)
             {
@@ -187,6 +192,8 @@ struct TiDBConvertToString
                 container_per_element.resize(3);
             }
             offsets_to.resize(size);
+
+            WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
 
             for (size_t i = 0; i < size; ++i)
             {
