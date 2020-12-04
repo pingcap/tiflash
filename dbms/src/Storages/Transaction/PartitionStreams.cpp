@@ -258,10 +258,16 @@ void RemoveRegionCommitCache(const RegionPtr & region, const RegionDataReadInfoL
 void RegionTable::writeBlockByRegion(
     Context & context, const RegionPtrWrap & region, RegionDataReadInfoList & data_list_to_remove, Logger * log, bool lock_region)
 {
-    auto data_list_read = ReadRegionCommitCache(region, lock_region);
-
+    std::optional<RegionDataReadInfoList> data_list_read = std::nullopt;
     if (region.pre_decode_cache)
-        data_list_read = std::move(region.pre_decode_cache->data_list_read); // update data list
+    {
+        // if schema version changed, use the kv data to rebuild block cache
+        data_list_read = std::move(region.pre_decode_cache->data_list_read);
+    }
+    else
+    {
+        data_list_read = ReadRegionCommitCache(region, lock_region);
+    }
 
     if (!data_list_read)
         return;
@@ -354,7 +360,7 @@ RegionPtrWrap::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & region, Co
     Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
     Block res_block;
 
-    const auto atomicReadWrite = [&](bool force_decode) -> bool {
+    const auto atomicDecode = [&](bool force_decode) -> bool {
         Stopwatch watch;
         auto storage = tmt.getStorages().get(table_id);
         if (storage == nullptr || storage->isTombstone())
@@ -373,13 +379,13 @@ RegionPtrWrap::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & region, Co
         return true;
     };
 
-    if (!atomicReadWrite(false))
+    if (!atomicDecode(false))
     {
         GET_METRIC(metrics, tiflash_schema_trigger_count, type_raft_decode).Increment();
         tmt.getSchemaSyncer()->syncSchemas(context);
 
-        if (!atomicReadWrite(true))
-            throw Exception("Write region " + std::to_string(region->id()) + " to table " + std::to_string(table_id) + " failed",
+        if (!atomicDecode(true))
+            throw Exception("Pre-decode " + region->toString() + " cache to table " + std::to_string(table_id) + " block failed",
                 ErrorCodes::LOGICAL_ERROR);
     }
 
