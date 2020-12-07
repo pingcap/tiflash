@@ -46,7 +46,7 @@ function run_file()
 	local ext=${path##*.}
 
 	if [ "$ext" == "test" ]; then
-		python run-test.py "$dbc" "$path" "$fuzz" "$mysql_client" "$verbose"
+		python2 run-test.py "$dbc" "$path" "$fuzz" "$mysql_client" "$verbose"
 	else
 		if [ "$ext" == "visual" ]; then
 			python run-test-gen-from-visual.py "$path" "$skip_raw_test" "$verbose"

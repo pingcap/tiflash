@@ -36,6 +36,9 @@ struct WriteCmdsView;
 enum class TiFlashApplyRes : uint32_t;
 
 struct TiFlashRaftProxyHelper;
+struct RegionPtrWrap;
+struct RegionPreDecodeBlockData;
+using RegionPreDecodeBlockDataPtr = std::unique_ptr<RegionPreDecodeBlockData>;
 
 /// TODO: brief design document.
 class KVStore final : private boost::noncopyable
@@ -52,7 +55,7 @@ public:
 
     void traverseRegions(std::function<void(RegionID, const RegionPtr &)> && callback) const;
 
-    void onSnapshot(RegionPtr new_region, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt);
+    void onSnapshot(const RegionPtrWrap &, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt);
 
     void gcRegionCache(Seconds gc_persist_period = REGION_CACHE_GC_PERIOD);
 
@@ -72,12 +75,12 @@ public:
     TiFlashApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
     void handleApplySnapshot(
         metapb::Region && region, uint64_t peer_id, const SnapshotViewArray snaps, uint64_t index, uint64_t term, TMTContext & tmt);
-    void handleApplySnapshot(RegionPtr new_region, TMTContext & tmt);
-    void tryApplySnapshot(RegionPtr new_region, Context & context);
+    void handleApplySnapshot(const RegionPtrWrap &, TMTContext & tmt);
+    void tryApplySnapshot(const RegionPtrWrap &, Context & context);
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
     void setRegionCompactLogPeriod(Seconds period);
     TiFlashApplyRes handleIngestSST(UInt64 region_id, const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt);
-    void preHandleSnapshot(RegionPtr new_region, const SnapshotViewArray snaps, TMTContext & tmt);
+    RegionPreDecodeBlockDataPtr preHandleSnapshot(RegionPtr new_region, const SnapshotViewArray snaps, TMTContext & tmt);
     RegionPtr genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
     const TiFlashRaftProxyHelper * getProxyHelper() const { return proxy_helper; }
 
