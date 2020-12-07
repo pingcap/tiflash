@@ -11,11 +11,14 @@
 namespace DB
 {
 
+class TiFlashMetrics;
+using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
+
 // TODO: add comment to explain the whole class
 class RateLimiter
 {
 public:
-    RateLimiter(UInt64 rate_limit_per_sec_, UInt64 refill_period_ms_ = 100);
+    RateLimiter(TiFlashMetricsPtr metrics_, UInt64 rate_limit_per_sec_, UInt64 refill_period_ms_ = 100);
 
     ~RateLimiter();
 
@@ -51,10 +54,12 @@ private:
 
     bool stop;
     std::condition_variable exit_cv;
+    UInt32 requests_to_wait;
 
     using RequestQueue = std::deque<Request *>;
     RequestQueue req_queue;
 
+    TiFlashMetricsPtr metrics;
     std::mutex request_mutex;
 };
 

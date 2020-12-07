@@ -528,10 +528,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setPath(path);
     global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
 
-    {
-        global_context->initializeRateLimiter(storage_config.bg_task_io_rate_limit);
-    }
-
     /// ===== Paths related configuration initialized end ===== ///
 
     security_config = TiFlashSecurityConfig(config(), log);
@@ -751,6 +747,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();
+
+    /// Init Rate Limiter
+    {
+        global_context->initializeRateLimiter(global_context->getTiFlashMetrics(), storage_config.bg_task_io_rate_limit);
+    }
 
     /// Set path for format schema files
     auto format_schema_path = Poco::File(config().getString("format_schema_path", path + "format_schemas/"));

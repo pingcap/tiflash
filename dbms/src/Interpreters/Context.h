@@ -422,7 +422,7 @@ public:
     void initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption);
     FileProviderPtr getFileProvider() const;
 
-    void initializeRateLimiter(UInt64 rate_limit_per_sec);
+    void initializeRateLimiter(TiFlashMetricsPtr metrics, UInt64 rate_limit_per_sec);
     RateLimiterPtr getRateLimiter() const;
 
     Clusters & getClusters() const;

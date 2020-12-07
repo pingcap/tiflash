@@ -1,21 +1,24 @@
 #include <cassert>
 
+#include <Common/TiFlashMetrics.h>
 #include <Encryption/RateLimiter.h>
 
-DB::RateLimiter::RateLimiter(UInt64 rate_limit_per_sec_, UInt64 refill_period_ms_)
+DB::RateLimiter::RateLimiter(TiFlashMetricsPtr metrics_, UInt64 rate_limit_per_sec_, UInt64 refill_period_ms_)
     : refill_period_ms{refill_period_ms_},
       refill_balance_per_period{calculateRefillBalancePerPeriod(rate_limit_per_sec_)},
       available_balance{refill_balance_per_period},
-      stop{false}
+      stop{false},
+      metrics{metrics_}
 {}
 
 DB::RateLimiter::~RateLimiter()
 {
     std::unique_lock<std::mutex> lock(request_mutex);
     stop = true;
+    requests_to_wait = req_queue.size();
     for (auto * r : req_queue)
         r->cv.notify_one();
-    while (!req_queue.empty())
+    while (requests_to_wait > 0)
         exit_cv.wait(lock);
 }
 
@@ -26,8 +29,11 @@ void DB::RateLimiter::request(UInt64 bytes)
     if (stop)
         return;
 
+    GET_METRIC(metrics, tiflash_storage_rate_limiter_total_request_bytes).Increment(bytes);
+
     if (available_balance >= bytes)
     {
+        GET_METRIC(metrics, tiflash_storage_rate_limiter_total_alloc_bytes).Increment(bytes);
         available_balance -= bytes;
         return;
     }
@@ -67,6 +73,7 @@ void DB::RateLimiter::request(UInt64 bytes)
         // request_mutex is held from now on
         if (stop)
         {
+            requests_to_wait--;
             exit_cv.notify_one();
             return;
         }
@@ -106,6 +113,7 @@ void DB::RateLimiter::refillAndAlloc()
             break;
         }
         available_balance -= next_req->request_bytes;
+        GET_METRIC(metrics, tiflash_storage_rate_limiter_total_alloc_bytes).Increment(next_req->bytes);
         next_req->request_bytes = 0;
         next_req->granted = true;
         req_queue.pop_front();
