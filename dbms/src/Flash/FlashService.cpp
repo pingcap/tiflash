@@ -26,7 +26,7 @@ constexpr char tls_err_msg[] = "common name check is failed";
 FlashService::FlashService(IServer & server_)
     : server(server_),
       metrics(server.context().getTiFlashMetrics()),
-      copThreadPool(ThreadPool(server_.context().getSettingsRef().max_threads)),
+      cop_thread_pool(ThreadPool(server_.context().getSettingsRef().max_threads)),
       security_config(server_.securityConfig()),
       log(&Logger::get("FlashService"))
 {}
