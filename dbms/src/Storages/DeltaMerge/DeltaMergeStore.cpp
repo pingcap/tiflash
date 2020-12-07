@@ -1232,10 +1232,10 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
         }
     }
 
-    // Not counting the early give up action.
     auto delta_bytes = (Int64)left_snap->delta->getBytes() + right_snap->getBytes();
     auto delta_rows  = (Int64)left_snap->delta->getRows() + right_snap->getRows();
 
+    // Not counting the early give up action.
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_SegmentMerge};
     GET_METRIC(dm_context.metrics, tiflash_storage_subtask_count, type_seg_merge).Increment();
     Stopwatch watch_seg_merge;

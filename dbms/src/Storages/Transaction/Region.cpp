@@ -1,3 +1,4 @@
+#include <Common/CurrentMetrics.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
@@ -11,6 +12,12 @@
 
 #include <ext/scope_guard.h>
 #include <memory>
+
+namespace CurrentMetrics
+{
+extern const Metric EngineTotalKeysWritten;
+extern const Metric EngineTotalBytesWritten;
+} // namespace CurrentMetrics
 
 namespace DB
 {
@@ -671,7 +678,13 @@ TiFlashApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 in
 
         std::lock_guard<std::mutex> predecode_lock(predecode_mutex);
 
+        const auto size_before_written = this->dataSize();
         handle_write_cmd_func();
+
+        // Report the rows(keys) and bytes written
+        const auto size_after_written = this->dataSize();
+        CurrentMetrics::add(CurrentMetrics::EngineTotalKeysWritten, cmds.len);
+        CurrentMetrics::add(CurrentMetrics::EngineTotalBytesWritten, size_after_written - size_before_written);
 
         if (tmt.isBgFlushDisabled())
         {

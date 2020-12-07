@@ -50,6 +50,11 @@ namespace CurrentMetrics
         add(metric, -value);
     }
 
+    inline Value swap(Metric metric, Value value)
+    {
+        return values[metric].exchange(value);
+    }
+
     /// For lifetime of object, add amount for specified metric. Then subtract.
     class Increment
     {

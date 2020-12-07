@@ -155,8 +155,8 @@ public:
 
     size_t getBytesOnDisk() const
     {
-        // This include column data & its index bytes in disk.
-        // Not counting DMFile's meta and pack stat, they are usally small enough to ignore.
+        // This include column data & its index bytes on disk.
+        // Not counting DMFile's meta and pack stat, they are usually small enough to ignore.
         size_t bytes = 0;
         for (const auto & c : column_stats)
             bytes += c.second.serialized_bytes;

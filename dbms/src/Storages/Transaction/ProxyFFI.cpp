@@ -10,6 +10,8 @@
 namespace CurrentMetrics
 {
 extern const Metric RaftNumSnapshotsPendingApply;
+extern const Metric EngineTotalKeysWritten;
+extern const Metric EngineTotalBytesWritten;
 }
 
 namespace DB
@@ -124,7 +126,14 @@ StoreStats HandleComputeStoreStats(TiFlashServer * server)
     {
         auto global_capacity = server->tmt->getContext().getPathCapacity();
         res.fs_stats = global_capacity->getFsStats();
-        // TODO: set engine read/write stats
+        if (res.fs_stats.ok)
+        {
+            res.engine_bytes_written = (uint64_t)CurrentMetrics::swap(CurrentMetrics::EngineTotalBytesWritten, 0);
+            res.engine_keys_written = (uint64_t)CurrentMetrics::swap(CurrentMetrics::EngineTotalKeysWritten, 0);
+            // Read stats is useless by now
+            // res.engine_bytes_read;
+            // res.engine_keys_read;
+        }
     }
     catch (...)
     {

@@ -56,6 +56,8 @@
     M(DT_DeltaIndexCacheSize) \
     M(RaftNumSnapshotsPendingApply) \
     M(RateLimiterPendingWriteRequest) \
+    M(EngineTotalKeysWritten) \
+    M(EngineTotalBytesWritten) \
 
 
 namespace CurrentMetrics
