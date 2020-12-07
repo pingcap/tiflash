@@ -856,9 +856,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         flash_service = std::make_unique<FlashService>(*this);
         diagnostics_service = std::make_unique<DiagnosticsService>(*this);
         grpc::ResourceQuota quota;
-        quota.SetMaxThreads(
-            settings.max_coprocessor_threads ? static_cast<size_t>(settings.max_threads) : 4 * getNumberOfPhysicalCPUCores());
+        size_t max_coprocessor_threads
+            = settings.max_coprocessor_threads ? static_cast<size_t>(settings.max_threads) : 4 * getNumberOfPhysicalCPUCores();
+        quota.SetMaxThreads(max_coprocessor_threads);
         builder.SetResourceQuota(quota);
+        LOG_INFO(log, "Use " << max_coprocessor_threads << " threads to handling coprocessor requests.");
         builder.SetOption(grpc::MakeChannelArgumentOption("grpc.http2.min_ping_interval_without_data_ms", 10 * 1000));
         builder.SetOption(grpc::MakeChannelArgumentOption("grpc.http2.min_time_between_pings_ms", 10 * 1000));
         builder.RegisterService(flash_service.get());
