@@ -105,30 +105,31 @@ void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
     }
 }
 
-void KVStore::onSnapshot(RegionPtr new_region, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt)
+void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt)
 {
-    RegionID region_id = new_region->id();
+    RegionID region_id = new_region_wrap->id();
 
     {
-        const auto range = new_region->getRange();
+        const auto range = new_region_wrap->getRange();
         auto & region_table = tmt.getRegionTable();
         // extend region to make sure data won't be removed.
         region_table.extendRegionRange(region_id, *range);
         // try to flush data into ch first.
         try
         {
-            auto tmp = region_table.tryFlushRegion(new_region, false);
+            auto tmp = region_table.tryFlushRegion(new_region_wrap, false);
             {
                 std::lock_guard<std::mutex> lock(bg_gc_region_data_mutex);
                 bg_gc_region_data.push_back(std::move(tmp));
             }
-            tryFlushRegionCacheInStorage(tmt, *new_region, log);
+            tryFlushRegionCacheInStorage(tmt, *new_region_wrap, log);
         }
         catch (...)
         {
         }
     }
 
+    RegionPtr new_region = new_region_wrap.base;
     {
         auto task_lock = genTaskLock();
         auto region_lock = region_manager.genRegionTaskLock(region_id);
