@@ -750,7 +750,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// Init Rate Limiter
     {
-        global_context->initializeRateLimiter(global_context->getTiFlashMetrics(), storage_config.bg_task_io_rate_limit, storage_config.bg_task_refill_period);
+        global_context->initializeRateLimiter(global_context->getTiFlashMetrics(), storage_config.bg_task_io_rate_limit);
     }
 
     /// Set path for format schema files

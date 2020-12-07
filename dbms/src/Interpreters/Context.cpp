@@ -1554,12 +1554,12 @@ FileProviderPtr Context::getFileProvider() const
     return shared->file_provider;
 }
 
-void Context::initializeRateLimiter(TiFlashMetricsPtr metrics, UInt64 rate_limit_per_sec, UInt64 bg_task_refill_period)
+void Context::initializeRateLimiter(TiFlashMetricsPtr metrics, UInt64 rate_limit_per_sec)
 {
     auto lock = getLock();
     if (shared->rate_limiter)
         throw Exception("RateLimiter has already been initialized.", ErrorCodes::LOGICAL_ERROR);
-    shared->rate_limiter = std::make_shared<RateLimiter>(metrics, rate_limit_per_sec, bg_task_refill_period);
+    shared->rate_limiter = std::make_shared<RateLimiter>(metrics, rate_limit_per_sec);
 }
 
 RateLimiterPtr Context::getRateLimiter() const
