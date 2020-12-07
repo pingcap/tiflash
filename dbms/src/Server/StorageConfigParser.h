@@ -25,6 +25,8 @@ public:
     Strings kvstore_data_path;
 
     UInt64 bg_task_io_rate_limit = 0;
+    // TODO: remove this config, or use a better name
+    UInt64 bg_task_refill_period = 100;
 
 public:
     TiFlashStorageConfig() {}

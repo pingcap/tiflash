@@ -124,6 +124,8 @@ void TiFlashStorageConfig::parse(const String & storage, Poco::Logger * log)
     // rate limiter
     if (auto rate_limit = table->get_qualified_as<UInt64>("bg_task_io_rate_limit"); rate_limit)
         bg_task_io_rate_limit = *rate_limit;
+    if (auto refill_period = table->get_qualified_as<UInt64>("bg_task_refill_period"); refill_period)
+        bg_task_refill_period = *refill_period;
 }
 
 Strings TiFlashStorageConfig::getAllNormalPaths() const
