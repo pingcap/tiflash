@@ -25,6 +25,9 @@ public:
     // TODO: add comment to explain this method
     void request(UInt64 bytes);
 
+    // The following method is just for test purpose now
+    inline UInt64 getTotalBytesThrough() { return total_bytes_through; }
+
 private:
     void refillAndAlloc();
 
@@ -38,8 +41,8 @@ private:
     // Pending request
     struct Request
     {
-        explicit Request(UInt64 bytes) : request_bytes(bytes), bytes(bytes), granted(false) {}
-        UInt64 request_bytes;
+        explicit Request(UInt64 bytes) : remaining_bytes(bytes), bytes(bytes), granted(false) {}
+        UInt64 remaining_bytes;
         UInt64 bytes;
         std::condition_variable cv;
         bool granted;
@@ -51,6 +54,8 @@ private:
 
     UInt64 refill_balance_per_period;
     UInt64 available_balance;
+
+    UInt64 total_bytes_through;
 
     bool stop;
     std::condition_variable exit_cv;

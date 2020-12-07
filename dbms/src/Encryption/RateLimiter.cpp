@@ -7,6 +7,7 @@ DB::RateLimiter::RateLimiter(TiFlashMetricsPtr metrics_, UInt64 rate_limit_per_s
     : refill_period_ms{refill_period_ms_},
       refill_balance_per_period{calculateRefillBalancePerPeriod(rate_limit_per_sec_)},
       available_balance{refill_balance_per_period},
+      total_bytes_through{0},
       stop{false},
       metrics{metrics_}
 {}
@@ -29,11 +30,18 @@ void DB::RateLimiter::request(UInt64 bytes)
     if (stop)
         return;
 
-    GET_METRIC(metrics, tiflash_storage_rate_limiter_total_request_bytes).Increment(bytes);
+    // 0 means no limit
+    if (!refill_balance_per_period)
+        return;
+
+    if (metrics)
+        GET_METRIC(metrics, tiflash_storage_rate_limiter_total_request_bytes).Increment(bytes);
 
     if (available_balance >= bytes)
     {
-        GET_METRIC(metrics, tiflash_storage_rate_limiter_total_alloc_bytes).Increment(bytes);
+        if (metrics)
+            GET_METRIC(metrics, tiflash_storage_rate_limiter_total_alloc_bytes).Increment(bytes);
+        total_bytes_through += bytes;
         available_balance -= bytes;
         return;
     }
@@ -105,18 +113,21 @@ void DB::RateLimiter::refillAndAlloc()
     while (!req_queue.empty())
     {
         auto * next_req = req_queue.front();
-        if (available_balance < next_req->request_bytes)
+        if (available_balance < next_req->remaining_bytes)
         {
             // avoid starvation
-            next_req->request_bytes -= available_balance;
+            next_req->remaining_bytes -= available_balance;
+            total_bytes_through += available_balance;
             available_balance = 0;
             break;
         }
-        available_balance -= next_req->request_bytes;
-        GET_METRIC(metrics, tiflash_storage_rate_limiter_total_alloc_bytes).Increment(next_req->bytes);
-        next_req->request_bytes = 0;
+        available_balance -= next_req->remaining_bytes;
+        total_bytes_through += next_req->remaining_bytes;
+        next_req->remaining_bytes = 0;
         next_req->granted = true;
         req_queue.pop_front();
+        if (metrics)
+            GET_METRIC(metrics, tiflash_storage_rate_limiter_total_alloc_bytes).Increment(next_req->bytes);
         // quota granted, signal the thread
         if (next_req != head_req)
             next_req->cv.notify_one();
