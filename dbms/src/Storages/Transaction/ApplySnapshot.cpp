@@ -22,7 +22,7 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-void KVStore::tryApplySnapshot(RegionPtr new_region, Context & context)
+void KVStore::tryApplySnapshot(const RegionPtrWrap & new_region, Context & context)
 {
     auto & tmt = context.getTMTContext();
 
@@ -160,8 +160,11 @@ RegionPtr KVStore::genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64
     return std::make_shared<Region>(std::move(meta), proxy_helper);
 }
 
-void KVStore::preHandleSnapshot(RegionPtr new_region, const SnapshotViewArray snaps, TMTContext & tmt)
+extern RegionPtrWrap::CachePtr GenRegionPreDecodeBlockData(const RegionPtr &, Context &);
+
+RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshot(RegionPtr new_region, const SnapshotViewArray snaps, TMTContext & tmt)
 {
+    RegionPreDecodeBlockDataPtr cache{nullptr};
     {
         decltype(bg_gc_region_data)::value_type tmp;
         std::lock_guard<std::mutex> lock(bg_gc_region_data_mutex);
@@ -198,13 +201,25 @@ void KVStore::preHandleSnapshot(RegionPtr new_region, const SnapshotViewArray sn
             // Note that number of keys in different cf will be aggregated into one metrics
             GET_METRIC(ctx.getTiFlashMetrics(), tiflash_raft_process_keys, type_apply_snapshot).Increment(snapshot.len);
         }
-        new_region->tryPreDecodeTiKVValue(tmt);
+        // do not really pre-decode value into Field list.
+        new_region->tryPreDecodeTiKVValue<true>(tmt);
+        {
+            LOG_INFO(log, "Start to pre-decode " << new_region->toString() << " into block");
+            auto block_cache = GenRegionPreDecodeBlockData(new_region, tmt.getContext());
+            if (block_cache)
+                LOG_INFO(log, "Got pre-decode block cache"; block_cache->toString(oss_internal_rare));
+            else
+                LOG_INFO(log, "Got empty pre-decode block cache");
+
+            cache = std::move(block_cache);
+        }
         ss << " cost " << watch.elapsedMilliseconds() << "ms";
         LOG_INFO(log, ss.str());
     }
+    return cache;
 }
 
-void KVStore::handleApplySnapshot(RegionPtr new_region, TMTContext & tmt)
+void KVStore::handleApplySnapshot(const RegionPtrWrap & new_region, TMTContext & tmt)
 {
     LOG_INFO(log, "Try to apply snapshot: " << new_region->toString(true));
 
@@ -224,8 +239,7 @@ void KVStore::handleApplySnapshot(
     metapb::Region && region, UInt64 peer_id, const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt)
 {
     auto new_region = genRegionPtr(std::move(region), peer_id, index, term);
-    preHandleSnapshot(new_region, snaps, tmt);
-    handleApplySnapshot(new_region, tmt);
+    handleApplySnapshot(RegionPtrWrap{new_region, preHandleSnapshot(new_region, snaps, tmt)}, tmt);
 }
 
 TiFlashApplyRes KVStore::handleIngestSST(UInt64 region_id, const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt)

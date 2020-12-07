@@ -202,4 +202,60 @@ void MockRaftCommand::dbgFuncRollbackMerge(Context & context, const ASTs & args,
     output(ss.str());
 }
 
+extern RegionPtr GenDbgRegionSnapshotWithData(Context &, const ASTs &);
+extern RegionPtrWrap::CachePtr GenRegionPreDecodeBlockData(const RegionPtr &, Context &);
+struct GlobalRegionMap
+{
+    using Key = std::string;
+    using Val = std::pair<RegionPtr, RegionPtrWrap::CachePtr>;
+    std::unordered_map<Key, Val> regions;
+    std::mutex mutex;
+    void insertRegionCache(const Key & name, Val && val)
+    {
+        auto _ = std::lock_guard(mutex);
+        regions[name] = std::move(val);
+    }
+    Val popRegionCache(const Key & name)
+    {
+        auto _ = std::lock_guard(mutex);
+        auto it = regions.find(name);
+        if (it == regions.end())
+            throw Exception(std::string(__PRETTY_FUNCTION__) + " ... " + name);
+        return std::move(it->second);
+    }
+};
+static GlobalRegionMap GLOBAL_REGION_MAP;
+
+void MockRaftCommand::dbgFuncStorePreHandleSnapshot(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    std::stringstream ss;
+    auto region = GenDbgRegionSnapshotWithData(context, args);
+    const auto region_name = "__snap_" + std::to_string(region->id());
+    ss << "pre-handle " << region->toString(false) << " snapshot with data " << region->dataInfo();
+    auto & tmt = context.getTMTContext();
+    region->tryPreDecodeTiKVValue<true>(tmt);
+    auto block_cache = GenRegionPreDecodeBlockData(region, tmt.getContext());
+    ss << ", pre-decode block cache";
+    {
+        ss << " {";
+        ss << " schema_version: ?";
+        ss << ", data_list size: " << block_cache->data_list_read.size();
+        ss << ", block row: " << block_cache->block.rows() << " col: " << block_cache->block.columns()
+           << " bytes: " << block_cache->block.bytes();
+        ss << " }";
+    }
+    GLOBAL_REGION_MAP.insertRegionCache(region_name, {region, std::move(block_cache)});
+    output(ss.str());
+}
+
+void MockRaftCommand::dbgFuncApplyPreHandleSnapshot(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    std::stringstream ss;
+    RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args.front()).value);
+    auto [region, block_cache] = GLOBAL_REGION_MAP.popRegionCache("__snap_" + std::to_string(region_id));
+    context.getTMTContext().getKVStore()->tryApplySnapshot({region, std::move(block_cache)}, context);
+    ss << "success apply " << region->id() << " with block cache";
+    output(ss.str());
+}
+
 } // namespace DB
