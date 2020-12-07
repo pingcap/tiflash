@@ -242,7 +242,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
     for (auto & [end, segment] : segments)
     {
         (void)end;
-        checkSegmentUpdate(dm_context, segment, ThreadType::Init, true);
+        checkSegmentUpdate(dm_context, segment, ThreadType::Init);
     }
 
     // Wake up to do place delta index tasks.
@@ -792,7 +792,7 @@ void DeltaMergeStore::waitForDeleteRange(const DB::DM::DMContextPtr &, const DB:
     // TODO: maybe we should wait, if there are too many delete ranges?
 }
 
-void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const SegmentPtr & segment, ThreadType thread_type, bool start_up)
+void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const SegmentPtr & segment, ThreadType thread_type)
 {
     if (segment->hasAbandoned())
         return;
@@ -836,10 +836,10 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     bool should_merge = segment_rows < segment_limit_rows / 3;
 
     // Don't do compact on starting up.
-    bool should_compact = !start_up && std::max((Int64)pack_count - delta_last_try_compact_packs, 0) >= 10;
+    bool should_compact = (thread_type != ThreadType::Init) && std::max((Int64)pack_count - delta_last_try_compact_packs, 0) >= 10;
 
     // Don't do background place index if we limit DeltaIndex cache.
-    bool should_place_delta_index = !dm_context->db_context.isLimitDeltaIndex()
+    bool should_place_delta_index = !dm_context->db_context.isDeltaIndexLimited()
         && (delta_rows - placed_delta_rows >= delta_cache_limit_rows * 3
             && delta_rows - delta_last_try_place_delta_index_rows >= delta_cache_limit_rows);
 

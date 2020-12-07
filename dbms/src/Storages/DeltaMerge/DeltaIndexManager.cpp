@@ -53,29 +53,31 @@ void DeltaIndexManager::refreshRef(const DeltaIndexPtr & index)
     // Instead, use a removed list to actually free them in current thread, so that we don't block other threads.
     std::vector<DeltaIndex> removed;
 
-    std::lock_guard lock(mutex);
-
-    auto id  = index->getId();
-    auto res = index_map.emplace(std::piecewise_construct, std::forward_as_tuple(id), std::forward_as_tuple());
-
-    Holder & holder   = res.first->second;
-    bool     inserted = res.second;
-
-    if (inserted)
     {
-        holder.queue_it = lru_queue.insert(lru_queue.end(), id);
-    }
-    else
-    {
-        current_size -= holder.size;
-        lru_queue.splice(lru_queue.end(), lru_queue, holder.queue_it);
-    }
+        std::lock_guard lock(mutex);
 
-    holder.index = index;
-    holder.size  = index->getBytes();
-    current_size += holder.size;
+        auto id  = index->getId();
+        auto res = index_map.emplace(std::piecewise_construct, std::forward_as_tuple(id), std::forward_as_tuple());
 
-    removeOverflow(removed);
+        Holder & holder   = res.first->second;
+        bool     inserted = res.second;
+
+        if (inserted)
+        {
+            holder.queue_it = lru_queue.insert(lru_queue.end(), id);
+        }
+        else
+        {
+            current_size -= holder.size;
+            lru_queue.splice(lru_queue.end(), lru_queue, holder.queue_it);
+        }
+
+        holder.index = index;
+        holder.size  = index->getBytes();
+        current_size += holder.size;
+
+        removeOverflow(removed);
+    }
 
     CurrentMetrics::set(CurrentMetrics::DT_DeltaIndexCacheSize, current_size);
 }
@@ -87,24 +89,26 @@ void DeltaIndexManager::deleteRef(const DeltaIndexPtr & index)
 
     DeltaIndex empty;
 
-    std::lock_guard lock(mutex);
-
-    auto it = index_map.find(index->getId());
-    if (it == index_map.end())
-        return;
-
-    Holder & holder = it->second;
-    if (auto p = holder.index.lock(); p)
     {
-        LOG_TRACE(log, String(__FUNCTION__) << "Free DeltaIndex, [size " << p->getBytes() << "]");
+        std::lock_guard lock(mutex);
 
-        // Free it out of lock scope.
-        p->swap(empty);
+        auto it = index_map.find(index->getId());
+        if (it == index_map.end())
+            return;
+
+        Holder & holder = it->second;
+        if (auto p = holder.index.lock(); p)
+        {
+            LOG_TRACE(log, String(__FUNCTION__) << "Free DeltaIndex, [size " << p->getBytes() << "]");
+
+            // Free it out of lock scope.
+            p->swap(empty);
+        }
+
+        index_map.erase(it);
+        lru_queue.erase(holder.queue_it);
+        current_size -= holder.size;
     }
-
-    index_map.erase(it);
-    lru_queue.erase(holder.queue_it);
-    current_size -= holder.size;
 
     CurrentMetrics::set(CurrentMetrics::DT_DeltaIndexCacheSize, current_size);
 }

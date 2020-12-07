@@ -93,8 +93,7 @@ public:
     /// Note that we don't swap the id.
     void swap(DeltaIndex & other)
     {
-        std::scoped_lock lock1(mutex);
-        std::scoped_lock lock2(other.mutex);
+        std::scoped_lock lock(mutex, other.mutex);
         delta_tree.swap(other.delta_tree);
         std::swap(placed_rows, other.placed_rows);
         std::swap(placed_deletes, other.placed_deletes);

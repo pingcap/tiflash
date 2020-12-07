@@ -377,7 +377,7 @@ public:
     std::shared_ptr<DM::MinMaxIndexCache> getMinMaxIndexCache() const;
     void dropMinMaxIndexCache() const;
 
-    bool isLimitDeltaIndex() const;
+    bool isDeltaIndexLimited() const;
     void setDeltaIndexManager(size_t cache_size_in_bytes);
     std::shared_ptr<DM::DeltaIndexManager> getDeltaIndexManager() const;
 
