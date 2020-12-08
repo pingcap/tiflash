@@ -43,7 +43,7 @@ private:
     std::mutex mutex;
 
 private:
-    void removeOverflow(std::vector<DeltaIndex> & removed);
+    void removeOverflow(std::vector<DeltaIndexPtr> & removed);
 
 public:
     explicit DeltaIndexManager(size_t max_size_) : max_size(max_size_), log(&Logger::get("DeltaIndexManager")) {}

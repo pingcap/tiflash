@@ -10,7 +10,7 @@ namespace DB
 namespace DM
 {
 
-void DeltaIndexManager::removeOverflow(std::vector<DeltaIndex> & removed)
+void DeltaIndexManager::removeOverflow(std::vector<DeltaIndexPtr> & removed)
 {
     size_t queue_size = index_map.size();
     while ((current_size > max_size) && (queue_size > 1))
@@ -21,26 +21,27 @@ void DeltaIndexManager::removeOverflow(std::vector<DeltaIndex> & removed)
         if (it == index_map.end())
             throw Exception(String(__FUNCTION__) + " inconsistent", ErrorCodes::LOGICAL_ERROR);
 
-        const auto & holder = it->second;
-
+        const Holder & holder = it->second;
         if (auto p = holder.index.lock(); p)
         {
             LOG_TRACE(log, String(__FUNCTION__) << "Free DeltaIndex, [size " << p->getBytes() << "]");
 
             // We put the evicted index into removed list, and free them later.
-            auto & empty = removed.emplace_back();
-            p->swap(empty);
+            auto tmp = std::make_shared<DeltaIndex>();
+            p->swap(*tmp);
+            removed.push_back(tmp);
         }
+
+        current_size -= holder.size;
+        --queue_size;
 
         index_map.erase(it);
         lru_queue.pop_front();
-        current_size -= holder.size;
-        --queue_size;
     }
 
     if (current_size > (1ull << 63))
     {
-        throw Exception(String(__FUNCTION__) + " inconsistent", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(String(__FUNCTION__) + " inconsistent, current_size < 0", ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -51,7 +52,7 @@ void DeltaIndexManager::refreshRef(const DeltaIndexPtr & index)
 
     // Don't free the removed DeltaIndexs inside the lock scope.
     // Instead, use a removed list to actually free them in current thread, so that we don't block other threads.
-    std::vector<DeltaIndex> removed;
+    std::vector<DeltaIndexPtr> removed;
 
     {
         std::lock_guard lock(mutex);
