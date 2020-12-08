@@ -155,7 +155,7 @@ struct TiDBConvertToString
             {
                 WriteBufferFromVector<ColumnString::Chars_t> element_write_buffer(container_per_element);
                 FormatImpl<FromDataType>::execute(
-                    vec_from[i], element_write_buffer, dynamic_cast<const DataTypeDecimal<FromFieldType> *>(&type), nullptr);
+                    vec_from[i], element_write_buffer, &type, nullptr);
                 size_t byte_length = element_write_buffer.count();
                 if (tp.flen() > 0)
                     byte_length = std::min(byte_length, tp.flen());
@@ -1183,12 +1183,7 @@ struct TiDBConvertToTime
         int fraction_trunc = 1;
         if constexpr (std::is_same_v<ToDataType, DataTypeMyDateTime>)
         {
-            auto * to_type = block.getByPosition(result).type.get();
-            if constexpr (return_nullable)
-            {
-                to_type = dynamic_cast<const DataTypeNullable *>(to_type)->getNestedType().get();
-            }
-            const auto * tp = dynamic_cast<const DataTypeMyDateTime *>(to_type);
+            const auto * tp = dynamic_cast<const DataTypeMyDateTime *>(removeNullable(block.getByPosition(result).type).get());
             fraction_trunc = std::pow(10, 6 - tp->fraction);
         }
 
