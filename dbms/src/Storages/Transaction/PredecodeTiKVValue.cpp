@@ -7,6 +7,7 @@
 namespace DB
 {
 
+template <bool skip>
 void Region::tryPreDecodeTiKVValue(TMTContext & tmt)
 {
     auto table_id = getMappedTableID();
@@ -21,9 +22,16 @@ void Region::tryPreDecodeTiKVValue(TMTContext & tmt)
         write_val = data.writeCF().getCFDataPreDecode().popAll();
     }
 
+    /// just clean up pre-decode queue
+    if (skip)
+        return;
+
     DB::tryPreDecodeTiKVValue(std::move(default_val), storage);
     DB::tryPreDecodeTiKVValue(std::move(write_val), storage);
 }
+
+template void Region::tryPreDecodeTiKVValue<true>(TMTContext &);
+template void Region::tryPreDecodeTiKVValue<false>(TMTContext &);
 
 void RowPreDecoder::preDecodeRow(const TiKVValue & value)
 {
