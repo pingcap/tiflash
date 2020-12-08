@@ -19,3 +19,18 @@ mysql> select * from test.t where cast(a as datetime(4)) = '2020-12-08 11:11:12.
 +-----------------------+
 | 20201208111111.999999 |
 +-----------------------+
+
+mysql> drop table if exists test.t
+mysql> create table test.t(a datetime(6))
+mysql> alter table test.t set tiflash replica 1 location labels 'rack', 'host', 'abc'
+
+func> wait_table test t
+
+mysql> insert into test.t values('2020-12-08 11:11:11.999999')
+mysql> set @@tidb_isolation_read_engines='tiflash'
+mysql> select * from test.t where cast(a as datetime(4)) = '2020-12-08 11:11:12.0000'
++-----------------------+
+| a                     |
++-----------------------+
+| 20201208111111.999999 |
++-----------------------+

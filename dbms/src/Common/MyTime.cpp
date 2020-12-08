@@ -1,4 +1,5 @@
 #include <Common/MyTime.h>
+#include <Functions/FunctionsDateTime.h>
 #include <Poco/String.h>
 
 #include <cctype>
@@ -671,17 +672,9 @@ Field parseMyDateTime(const String & str, int8_t fsp)
         // Overflow
         if (micro_second >= std::pow(10, fsp))
         {
-            micro_second = 0;
-            // TODO: Maybe consider DST
-            std::tm t{second, minute, hour, day, month - 1, year - 1900, 0, 0, 0, 0, 0};
-            t.tm_sec += 1;
-            std::mktime(&t);
-            second = t.tm_sec;
-            minute = t.tm_min;
-            hour = t.tm_hour;
-            day = t.tm_mday;
-            month = t.tm_mon + 1;
-            year = t.tm_year + 1900;
+            MyDateTime datetime(year, month, day, hour, minute, second, 0);
+            UInt64 result = AddSecondsImpl::execute(datetime.toPackedUInt(), 1, DateLUT::instance());
+            return result;
         }
         else
         {

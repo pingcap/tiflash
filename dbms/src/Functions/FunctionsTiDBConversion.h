@@ -1177,11 +1177,11 @@ struct TiDBConvertToTime
         const auto & col_with_type_and_name = block.getByPosition(arguments[0]);
         const auto & type = static_cast<const FromDataType &>(*col_with_type_and_name.type);
 
-        int fsp [[maybe_unused]] = 0;
+        int to_fsp [[maybe_unused]] = 0;
         if constexpr (std::is_same_v<ToDataType, DataTypeMyDateTime>)
         {
             const auto * tp = dynamic_cast<const DataTypeMyDateTime *>(removeNullable(block.getByPosition(result).type).get());
-            fsp = tp->fraction;
+            to_fsp = tp->getFraction();
         }
 
         if constexpr (return_nullable)
@@ -1207,7 +1207,7 @@ struct TiDBConvertToTime
                 String string_value = string_ref.toString();
                 try
                 {
-                    Field packed_uint_value = parseMyDateTime(string_value, fsp);
+                    Field packed_uint_value = parseMyDateTime(string_value, to_fsp);
                     UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
                     MyDateTime datetime(packed_uint);
                     if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
@@ -1246,9 +1246,31 @@ struct TiDBConvertToTime
                 }
                 else
                 {
-                    auto string_value = datetime.toString(fsp);
-                    Field packed_uint_value = parseMyDateTime(string_value, fsp);
-                    UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
+                    int from_fsp = 0;
+                    if constexpr (std::is_same_v<FromDataType, DataTypeMyDateTime>)
+                    {
+                        auto & from_type = static_cast<const DataTypeMyDateTime &>(type);
+                        from_fsp = from_type.getFraction();
+                    }
+                    UInt32 micro_second = datetime.micro_second;
+                    UInt64 packed_uint = vec_from[i];
+                    if (to_fsp < from_fsp)
+                    {
+                        micro_second = micro_second / std::pow(10, 6 - to_fsp - 1);
+                        micro_second = (micro_second + 5) / 10;
+                        // Overflow
+                        if (micro_second >= std::pow(10, to_fsp))
+                        {
+                            datetime.micro_second = 0;
+                            packed_uint = datetime.toPackedUInt();
+                            packed_uint = AddSecondsImpl::execute(packed_uint, 1, DateLUT::instance());
+                        }
+                        else
+                        {
+                            datetime.micro_second = micro_second * std::pow(10, 6 - to_fsp);
+                            packed_uint = datetime.toPackedUInt();
+                        }
+                    }
                     vec_to[i] = packed_uint;
                 }
             }
@@ -1308,7 +1330,7 @@ struct TiDBConvertToTime
                 {
                     try
                     {
-                        Field packed_uint_value = parseMyDateTime(value_str, fsp);
+                        Field packed_uint_value = parseMyDateTime(value_str, to_fsp);
                         UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
                         MyDateTime datetime(packed_uint);
                         if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
@@ -1341,7 +1363,7 @@ struct TiDBConvertToTime
                 String value_str = vec_from[i].toString(type.getScale());
                 try
                 {
-                    Field value = parseMyDateTime(value_str, fsp);
+                    Field value = parseMyDateTime(value_str, to_fsp);
                     MyDateTime datetime(value.template safeGet<UInt64>());
                     if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
                     {

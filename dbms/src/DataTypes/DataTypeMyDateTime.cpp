@@ -1,16 +1,13 @@
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
-
 #include <Columns/ColumnsNumber.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeMyDateTime.h>
-#include <common/DateLUT.h>
-
 #include <IO/Operators.h>
+#include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromString.h>
-
+#include <IO/WriteHelpers.h>
 #include <Parsers/ASTLiteral.h>
+#include <common/DateLUT.h>
 
 
 namespace DB
@@ -102,7 +99,7 @@ bool DataTypeMyDateTime::equals(const IDataType & rhs) const
 {
     /// DateTime with different timezones are equal, because:
     /// "all types with different time zones are equivalent and may be used interchangingly."
-    return typeid(rhs) == typeid(*this);
+    return typeid(rhs) == typeid(*this) && getFraction() == dynamic_cast<const DataTypeMyDateTime *>(&rhs)->getFraction();
 }
 
 
