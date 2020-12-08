@@ -2,6 +2,7 @@
 #include <Poco/String.h>
 
 #include <cctype>
+#include <chrono>
 #include <initializer_list>
 #include <vector>
 
@@ -576,7 +577,7 @@ void MyTimeBase::convertDateFormat(char c, String & result) const
     }
 }
 
-Field parseMyDateTime(const String & str)
+Field parseMyDateTime(const String & str, int8_t fsp)
 {
     Int32 year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0;
 
@@ -657,16 +658,34 @@ Field parseMyDateTime(const String & str)
 
     UInt32 micro_second = 0;
     // TODO This is a simple implement, without processing overflow.
-    if (frac_str.size() > 6)
-    {
-        frac_str = frac_str.substr(0, 6);
-    }
-
-    if (frac_str.size() > 0)
+    if (fsp >= frac_str.size())
     {
         micro_second = std::stoul(frac_str);
-        for (size_t i = frac_str.size(); i < 6; i++)
-            micro_second *= 10;
+        micro_second = micro_second * std::pow(10, 6 - frac_str.size());
+    }
+    else
+    {
+        auto result_frac = frac_str.sub_str(0, fsp + 1);
+        micro_second = std::stoul(result_frac);
+        // Overflow
+        if ((micro_second + 5) / 10 > std::pow(10, fsp))
+        {
+            micro_second = 0;
+            std::tm t{second, minute, hour, day, month - 1, year - 1900};
+            t.tm_sec += 1;
+            std::mktime(&t);
+            second = t.tm_sec;
+            minute = t.tm_min;
+            hour = t.tm_hour;
+            day = t.tm_mday;
+            month = t.tm_mon + 1;
+            year = t.tm_year + 1900;
+
+        }
+        else
+        {
+            micro_second = micro_second * std::pow(10, 6 - fsp);
+        }
     }
 
     return MyDateTime(year, month, day, hour, minute, second, micro_second).toPackedUInt();
