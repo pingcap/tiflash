@@ -857,7 +857,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         diagnostics_service = std::make_unique<DiagnosticsService>(*this);
         grpc::ResourceQuota quota;
         size_t max_coprocessor_threads
-            = settings.max_coprocessor_threads ? static_cast<size_t>(settings.max_threads) : 4 * getNumberOfPhysicalCPUCores();
+            = settings.max_coprocessor_threads ? static_cast<size_t>(settings.max_coprocessor_threads) : 4 * getNumberOfPhysicalCPUCores();
         quota.SetMaxThreads(max_coprocessor_threads);
         builder.SetResourceQuota(quota);
         LOG_INFO(log, "Use " << max_coprocessor_threads << " threads to handling coprocessor requests.");
