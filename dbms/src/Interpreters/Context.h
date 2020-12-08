@@ -393,7 +393,7 @@ public:
     bool useL0Opt() const;
 
     BackgroundProcessingPool & getBackgroundPool();
-    BackgroundProcessingPool & getDeltaMergeHeavyTaskBackgroundPool();
+    BackgroundProcessingPool & getBlockableBackgroundPool();
 
     void setDDLWorker(std::shared_ptr<DDLWorker> ddl_worker);
     DDLWorker & getDDLWorker() const;

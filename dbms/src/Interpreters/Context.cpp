@@ -149,7 +149,7 @@ struct ContextShared
     ConfigurationPtr users_config;                          /// Config with the users, profiles and quotas sections.
     InterserverIOHandler interserver_io_handler;            /// Handler for interserver communication.
     BackgroundProcessingPoolPtr background_pool;            /// The thread pool for the background work performed by the tables.
-    BackgroundProcessingPoolPtr delta_merge_heavy_task_background_pool;            /// The thread pool for the background work performed by the tables.
+    BackgroundProcessingPoolPtr blockable_background_pool;  /// The thread pool for the blockable background work performed by the tables.
     mutable TMTContextPtr tmt_context;                      /// Context of TiFlash. Note that this should be free before background_pool.
     MultiVersion<Macros> macros;                            /// Substitutions extracted from config.
     std::unique_ptr<Compiler> compiler;                     /// Used for dynamic compilation of queries' parts if it necessary.
@@ -1439,13 +1439,13 @@ BackgroundProcessingPool & Context::getBackgroundPool()
     return *shared->background_pool;
 }
 
-BackgroundProcessingPool & Context::getDeltaMergeHeavyTaskBackgroundPool()
+BackgroundProcessingPool & Context::getBlockableBackgroundPool()
 {
     // TODO: choose a better thread pool size and maybe a better name for the pool
     auto lock = getLock();
-    if (!shared->delta_merge_heavy_task_background_pool)
-        shared->delta_merge_heavy_task_background_pool = std::make_shared<BackgroundProcessingPool>(settings.background_pool_size);
-    return *shared->delta_merge_heavy_task_background_pool;
+    if (!shared->blockable_background_pool)
+        shared->blockable_background_pool = std::make_shared<BackgroundProcessingPool>(settings.background_pool_size);
+    return *shared->blockable_background_pool;
 }
 
 void Context::setDDLWorker(std::shared_ptr<DDLWorker> ddl_worker)

@@ -380,8 +380,8 @@ private:
     BackgroundProcessingPool::TaskHandle gc_handle;
     BackgroundProcessingPool::TaskHandle background_task_handle;
 
-    BackgroundProcessingPool &           heavy_task_background_pool;
-    BackgroundProcessingPool::TaskHandle heavy_task_background_task_handle;
+    BackgroundProcessingPool &           blockable_background_pool;
+    BackgroundProcessingPool::TaskHandle blockable_background_pool_handle;
 
     /// end of range -> segment
     SegmentSortedMap segments;

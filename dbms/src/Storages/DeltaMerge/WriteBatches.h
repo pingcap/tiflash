@@ -57,7 +57,7 @@ struct WriteBatches : private boost::noncopyable
 
     void setRollback() { should_roll_back = true; }
 
-    void writeLogAndData()
+    void writeLogAndData(const RateLimiterPtr & rate_limiter = nullptr)
     {
         PageIds log_write_pages, data_write_pages;
 
@@ -84,8 +84,8 @@ struct WriteBatches : private boost::noncopyable
         for (auto & w : data.getWrites())
             data_write_pages.push_back(w.page_id);
 
-        storage_pool.log().write(std::move(log));
-        storage_pool.data().write(std::move(data));
+        storage_pool.log().write(std::move(log), rate_limiter);
+        storage_pool.data().write(std::move(data), rate_limiter);
 
         for (auto page_id : log_write_pages)
             writtenLog.push_back(page_id);
@@ -124,14 +124,14 @@ struct WriteBatches : private boost::noncopyable
             check(data_wb, "data_wb", logger);
         }
 
-        storage_pool.log().write(std::move(log_wb));
-        storage_pool.data().write(std::move(data_wb));
+        storage_pool.log().write(std::move(log_wb), nullptr);
+        storage_pool.data().write(std::move(data_wb), nullptr);
 
         writtenLog.clear();
         writtenData.clear();
     }
 
-    void writeMeta()
+    void writeMeta(const RateLimiterPtr & rate_limiter = nullptr)
     {
         if constexpr (DM_RUN_CHECK)
         {
@@ -151,11 +151,11 @@ struct WriteBatches : private boost::noncopyable
             check(meta, "meta", logger);
         }
 
-        storage_pool.meta().write(std::move(meta));
+        storage_pool.meta().write(std::move(meta), rate_limiter);
         meta.clear();
     }
 
-    void writeRemoves()
+    void writeRemoves(const RateLimiterPtr & rate_limiter = nullptr)
     {
         if constexpr (DM_RUN_CHECK)
         {
@@ -177,20 +177,20 @@ struct WriteBatches : private boost::noncopyable
             check(removed_meta, "removed_meta", logger);
         }
 
-        storage_pool.log().write(std::move(removed_log));
-        storage_pool.data().write(std::move(removed_data));
-        storage_pool.meta().write(std::move(removed_meta));
+        storage_pool.log().write(std::move(removed_log), rate_limiter);
+        storage_pool.data().write(std::move(removed_data), rate_limiter);
+        storage_pool.meta().write(std::move(removed_meta), rate_limiter);
 
         removed_log.clear();
         removed_data.clear();
         removed_meta.clear();
     }
 
-    void writeAll()
+    void writeAll(const RateLimiterPtr & rate_limiter = nullptr)
     {
-        writeLogAndData();
-        writeMeta();
-        writeRemoves();
+        writeLogAndData(rate_limiter);
+        writeMeta(rate_limiter);
+        writeRemoves(rate_limiter);
     }
 
     void clear()

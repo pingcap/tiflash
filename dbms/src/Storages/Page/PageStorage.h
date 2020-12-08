@@ -121,7 +121,7 @@ public:
 
     PageId getMaxId();
 
-    void write(WriteBatch && write_batch);
+    void write(WriteBatch && write_batch, const RateLimiterPtr & rate_limiter);
 
     SnapshotPtr getSnapshot();
     size_t      getNumSnapshots() const;
