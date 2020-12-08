@@ -1,7 +1,13 @@
 #include <cassert>
 
+#include <Common/CurrentMetrics.h>
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/RateLimiter.h>
+
+namespace CurrentMetrics
+{
+extern const Metric RateLimiterPendingWriteRequest;
+}
 
 DB::RateLimiter::RateLimiter(TiFlashMetricsPtr metrics_, UInt64 rate_limit_per_sec_, UInt64 refill_period_ms_)
     : refill_period_ms{refill_period_ms_},
@@ -35,7 +41,10 @@ void DB::RateLimiter::request(UInt64 bytes)
         return;
 
     if (metrics)
+    {
         GET_METRIC(metrics, tiflash_storage_rate_limiter_total_request_bytes).Increment(bytes);
+        GET_METRIC(metrics, tiflash_storage_rate_limiter_request_sizes).Observe(bytes);
+    }
 
     if (available_balance >= bytes)
     {
@@ -45,6 +54,8 @@ void DB::RateLimiter::request(UInt64 bytes)
         available_balance -= bytes;
         return;
     }
+
+    CurrentMetrics::Increment pending_request{CurrentMetrics::RateLimiterPendingWriteRequest};
 
     // request cannot be satisfied at this moment, enqueue
     Request r(bytes);
