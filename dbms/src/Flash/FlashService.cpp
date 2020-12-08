@@ -138,7 +138,7 @@ grpc::Status FlashService::Coprocessor(
 
     auto & tmt_context = context.getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
-    MPPTaskPtr sender_task = task_manager->findTaskWithRetry(request->sender_meta(), 1000);
+    MPPTaskPtr sender_task = task_manager->findTaskWithRetry(request->sender_meta(), 10);
     if (sender_task == nullptr)
     {
         auto errMsg = "can't find task ( " + toString(request->sender_meta().start_ts()) + " , "
@@ -151,7 +151,7 @@ grpc::Status FlashService::Coprocessor(
         writer->Write(packet);
         return grpc::Status::OK;
     }
-    MPPTunnelPtr tunnel = sender_task->getTunnel(request->receiver_meta());
+    MPPTunnelPtr tunnel = sender_task->getTunnelWithRetry(request->receiver_meta(), 10);
     if (tunnel == nullptr)
     {
         auto errMsg = "can't find tunnel ( " + toString(request->receiver_meta().start_ts()) + " , "

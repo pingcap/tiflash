@@ -181,6 +181,8 @@ struct MPPTask : private boost::noncopyable
 
     Exception err;
 
+    std::condition_variable cv;
+
     MPPTask(const mpp::TaskMeta & meta_) : meta(meta_), log(&Logger::get("task " + std::to_string(meta_.task_id())))
     {
         id.start_ts = meta.start_ts();
@@ -222,17 +224,18 @@ struct MPPTask : private boost::noncopyable
 
     void registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel)
     {
-        std::lock_guard<std::mutex> lk(tunnel_mutex);
+        std::unique_lock<std::mutex> lk(tunnel_mutex);
         if (tunnel_map.find(id) != tunnel_map.end())
         {
             throw Exception("the tunnel " + tunnel->tunnel_id + " has been registered");
         }
         tunnel_map[id] = tunnel;
+        cv.notify_all();
     }
 
     MPPTunnelPtr getTunnel(const mpp::TaskMeta & meta)
     {
-        std::lock_guard<std::mutex> lk(tunnel_mutex);
+        std::unique_lock<std::mutex> lk(tunnel_mutex);
         MPPTaskId id{meta.start_ts(), meta.task_id()};
         const auto & it = tunnel_map.find(id);
         if (it == tunnel_map.end())
@@ -240,6 +243,25 @@ struct MPPTask : private boost::noncopyable
             return nullptr;
         }
         return it->second;
+    }
+
+    MPPTunnelPtr getTunnelWithRetry(const mpp::TaskMeta & meta, uint16_t max_retry_sec)
+    {
+        std::unique_lock<std::mutex> lk(tunnel_mutex);
+        MPPTaskId id{meta.start_ts(), meta.task_id()};
+        std::map<MPPTaskId, MPPTunnelPtr>::iterator it;
+        auto ret = cv.wait_for(lk, std::chrono::seconds(max_retry_sec), [&] {
+            it = tunnel_map.find(id);
+            return it == tunnel_map.end();
+        });
+        if (ret)
+        {
+            return nullptr;
+        }
+        else
+        {
+            return it->second;
+        }
     }
 };
 
@@ -254,23 +276,26 @@ class MPPTaskManager : private boost::noncopyable
 
     Logger * log;
 
+    std::condition_variable cv;
+
 public:
     MPPTaskManager() : log(&Logger::get("TaskManager")) {}
 
     void registerTask(MPPTaskPtr task)
     {
-        std::lock_guard<std::mutex> lock(mu);
+        std::unique_lock<std::mutex> lock(mu);
         if (task_map.find(task->id) != task_map.end())
         {
             throw Exception("The task " + task->id.toString() + " has been registered");
         }
         task_map.emplace(task->id, task);
         task->manager = this;
+        cv.notify_all();
     }
 
     void unregisterTask(MPPTask * task)
     {
-        std::lock_guard<std::mutex> lock(mu);
+        std::unique_lock<std::mutex> lock(mu);
         auto it = task_map.find(task->id);
         if (it != task_map.end())
         {
@@ -284,7 +309,7 @@ public:
 
     MPPTaskPtr findTask(const mpp::TaskMeta & meta)
     {
-        std::lock_guard<std::mutex> lock(mu);
+        std::unique_lock<std::mutex> lock(mu);
         MPPTaskId id{meta.start_ts(), meta.task_id()};
         const auto & it = task_map.find(id);
         if (it == task_map.end())
@@ -294,23 +319,23 @@ public:
         return it->second;
     }
 
-    MPPTaskPtr findTaskWithRetry(const mpp::TaskMeta & meta, uint16_t max_retry_10ms)
+    MPPTaskPtr findTaskWithRetry(const mpp::TaskMeta & meta, uint16_t max_retry_sec)
     {
-        MPPTaskPtr rt = nullptr;
-        assert(max_retry_10ms > 0);
-        for (auto retry = 0; retry < max_retry_10ms; ++retry)
+        std::unique_lock<std::mutex> lock(mu);
+        MPPTaskId id{meta.start_ts(), meta.task_id()};
+        std::map<MPPTaskId, MPPTaskPtr>::iterator it;
+        auto ret = cv.wait_for(lock, std::chrono::seconds(max_retry_sec), [&] {
+            it = task_map.find(id);
+            return it == task_map.end();
+        });
+        if (ret)
         {
-            rt = findTask(meta);
-            if (rt == nullptr)
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            }
-            else
-            {
-                break;
-            }
+            return nullptr;
         }
-        return rt;
+        else
+        {
+            return it->second;
+        }
     }
 
     String toString()
