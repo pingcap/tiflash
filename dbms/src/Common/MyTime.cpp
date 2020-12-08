@@ -667,11 +667,12 @@ Field parseMyDateTime(const String & str, int8_t fsp)
     {
         auto result_frac = frac_str.substr(0, fsp + 1);
         micro_second = std::stoul(result_frac);
-        // Overflow
         micro_second = (micro_second + 5) / 10;
+        // Overflow
         if (micro_second >= std::pow(10, fsp))
         {
             micro_second = 0;
+            // TODO: Maybe consider DST
             std::tm t{second, minute, hour, day, month - 1, year - 1900, 0, 0, 0, 0, 0};
             t.tm_sec += 1;
             std::mktime(&t);
