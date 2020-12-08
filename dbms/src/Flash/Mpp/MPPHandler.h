@@ -242,14 +242,7 @@ struct MPPTask : private boost::noncopyable
             it = tunnel_map.find(id);
             return it == tunnel_map.end();
         });
-        if (ret)
-        {
-            return nullptr;
-        }
-        else
-        {
-            return it->second;
-        }
+        return ret ? nullptr : it->second;
     }
 };
 
@@ -304,14 +297,7 @@ public:
             it = task_map.find(id);
             return it == task_map.end();
         });
-        if (ret)
-        {
-            return nullptr;
-        }
-        else
-        {
-            return it->second;
-        }
+        return ret ? nullptr : it->second;
     }
 
     String toString()
