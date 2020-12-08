@@ -1118,7 +1118,9 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
 
 SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground)
 {
-    LOG_DEBUG(log, "Split segment " << segment->info() << ", safe point:" << dm_context.min_version);
+    LOG_DEBUG(log,
+              (is_foreground ? "Foreground" : "Background")
+                  << " split segment " << segment->info() << ", safe point:" << dm_context.min_version);
 
     SegmentSnapshotPtr segment_snap;
 
@@ -1225,7 +1227,9 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 
 void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right, bool is_foreground)
 {
-    LOG_DEBUG(log, "Merge Segment [" << left->info() << "] and [" << right->info() << "], safe point:" << dm_context.min_version);
+    LOG_DEBUG(log,
+              (is_foreground ? "Foreground" : "Background")
+                  << " merge Segment [" << left->info() << "] and [" << right->info() << "], safe point:" << dm_context.min_version);
 
     SegmentSnapshotPtr left_snap;
     SegmentSnapshotPtr right_snap;

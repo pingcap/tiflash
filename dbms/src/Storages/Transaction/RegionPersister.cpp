@@ -28,7 +28,7 @@ void RegionPersister::drop(RegionID region_id, const RegionTaskLock &)
     {
         WriteBatch wb;
         wb.delPage(region_id);
-        page_storage->write(std::move(wb), nullptr);
+        page_storage->write(std::move(wb));
     }
     else
     {
@@ -98,7 +98,7 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
     {
         WriteBatch wb;
         wb.putPage(region_id, applied_index, read_buf, region_size);
-        page_storage->write(std::move(wb), nullptr);
+        page_storage->write(std::move(wb));
     }
     else
     {
