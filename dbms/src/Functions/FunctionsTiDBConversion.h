@@ -154,8 +154,7 @@ struct TiDBConvertToString
             for (size_t i = 0; i < size; ++i)
             {
                 WriteBufferFromVector<ColumnString::Chars_t> element_write_buffer(container_per_element);
-                FormatImpl<FromDataType>::execute(
-                    vec_from[i], element_write_buffer, &type, nullptr);
+                FormatImpl<FromDataType>::execute(vec_from[i], element_write_buffer, &type, nullptr);
                 size_t byte_length = element_write_buffer.count();
                 if (tp.flen() > 0)
                     byte_length = std::min(byte_length, tp.flen());
@@ -1178,13 +1177,11 @@ struct TiDBConvertToTime
         const auto & col_with_type_and_name = block.getByPosition(arguments[0]);
         const auto & type = static_cast<const FromDataType &>(*col_with_type_and_name.type);
 
-        // Use to truncate fraction part(microseconds) of DATE
-        // Result microseconds should be (micro - micro % fraction_trunc)
-        int fraction_trunc = 1;
+        int fsp [[maybe_unused]] = 0;
         if constexpr (std::is_same_v<ToDataType, DataTypeMyDateTime>)
         {
             const auto * tp = dynamic_cast<const DataTypeMyDateTime *>(removeNullable(block.getByPosition(result).type).get());
-            fraction_trunc = std::pow(10, 6 - tp->fraction);
+            fsp = tp->fraction;
         }
 
         if constexpr (return_nullable)
@@ -1210,10 +1207,9 @@ struct TiDBConvertToTime
                 String string_value = string_ref.toString();
                 try
                 {
-                    Field packed_uint_value = parseMyDateTime(string_value);
+                    Field packed_uint_value = parseMyDateTime(string_value, fsp);
                     UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
                     MyDateTime datetime(packed_uint);
-                    datetime.micro_second = datetime.micro_second - datetime.micro_second % fraction_trunc;
                     if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
                     {
                         MyDate date(datetime.year, datetime.month, datetime.day);
@@ -1250,8 +1246,10 @@ struct TiDBConvertToTime
                 }
                 else
                 {
-                    datetime.micro_second = datetime.micro_second - datetime.micro_second % fraction_trunc;
-                    vec_to[i] = datetime.toPackedUInt();
+                    auto string_value = datetime.toString(fsp);
+                    Field packed_uint_value = parseMyDateTime(string_value, fsp);
+                    UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
+                    vec_to[i] = packed_uint;
                 }
             }
         }
@@ -1275,7 +1273,6 @@ struct TiDBConvertToTime
                     }
                     else
                     {
-                        datetime.micro_second = datetime.micro_second - datetime.micro_second % fraction_trunc;
                         vec_to[i] = datetime.toPackedUInt();
                     }
                 }
@@ -1311,7 +1308,7 @@ struct TiDBConvertToTime
                 {
                     try
                     {
-                        Field packed_uint_value = parseMyDateTime(value_str);
+                        Field packed_uint_value = parseMyDateTime(value_str, fsp);
                         UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
                         MyDateTime datetime(packed_uint);
                         if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
@@ -1321,7 +1318,6 @@ struct TiDBConvertToTime
                         }
                         else
                         {
-                            datetime.micro_second = datetime.micro_second - datetime.micro_second % fraction_trunc;
                             vec_to[i] = packed_uint;
                         }
                     }
@@ -1345,7 +1341,7 @@ struct TiDBConvertToTime
                 String value_str = vec_from[i].toString(type.getScale());
                 try
                 {
-                    Field value = parseMyDateTime(value_str);
+                    Field value = parseMyDateTime(value_str, fsp);
                     MyDateTime datetime(value.template safeGet<UInt64>());
                     if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
                     {
@@ -1354,7 +1350,6 @@ struct TiDBConvertToTime
                     }
                     else
                     {
-                        datetime.micro_second = datetime.micro_second - datetime.micro_second % fraction_trunc;
                         vec_to[i] = datetime.toPackedUInt();
                     }
                 }
