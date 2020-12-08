@@ -399,7 +399,7 @@ namespace
     {
         KeyGetter key_getter(key_columns, collators);
         std::vector<std::string> sort_key_containers;
-        sort_key_containers.resize(key_columns.size(), "");
+        sort_key_containers.resize(key_columns.size());
 
         for (size_t i = 0; i < rows; ++i)
         {
@@ -428,7 +428,7 @@ namespace
     {
         KeyGetter key_getter(key_columns, collators);
         std::vector<std::string> sort_key_containers;
-        sort_key_containers.resize(key_columns.size(), "");
+        sort_key_containers.resize(key_columns.size());
         size_t segment_size = map.getSegmentSize();
         /// when inserting with lock, first calculate and save the segment index for each row, then
         /// insert the rows segment by segment to avoid too much conflict. This will introduce some overheads:
@@ -502,7 +502,8 @@ namespace
         Block * stored_block, ConstNullMapPtr null_map, Join::RowRefList * rows_not_inserted_to_map,
         std::mutex & not_inserted_rows_mutex, size_t block_index, size_t insert_concurrency, Arenas & pools)
     {
-        if (null_map) {
+        if (null_map)
+        {
             if (insert_concurrency > 1)
             {
                 insertFromBlockImplTypeCaseWithLock<STRICTNESS, KeyGetter, Map, true>(map, rows, key_columns, keys_size, key_sizes,
@@ -518,7 +519,8 @@ namespace
                                                                               rows_not_inserted_to_map, not_inserted_rows_mutex, block_index, pools);
             }
         }
-        else {
+        else
+        {
             if (insert_concurrency > 1)
             {
                 insertFromBlockImplTypeCaseWithLock<STRICTNESS, KeyGetter, Map, false>(map, rows, key_columns, keys_size, key_sizes,
@@ -718,20 +720,24 @@ bool Join::insertFromBlockInternal(Block * stored_block, size_t block_index)
         if (!getFullness(kind))
         {
             if (strictness == ASTTableJoin::Strictness::Any)
-                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any, rows, key_columns, keys_size, key_sizes, collators, stored_block, null_map,
-                                                                   nullptr, not_inserted_rows_mutex, block_index, build_concurrency, pools);
+                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any, rows, key_columns, keys_size,
+                        key_sizes, collators, stored_block, null_map, nullptr,
+                        not_inserted_rows_mutex, block_index, build_concurrency, pools);
             else
-                insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all, rows, key_columns, keys_size, key_sizes, collators, stored_block, null_map,
-                                                                   nullptr, not_inserted_rows_mutex, block_index, build_concurrency, pools);
+                insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all, rows, key_columns, keys_size,
+                        key_sizes, collators, stored_block, null_map, nullptr,
+                        not_inserted_rows_mutex, block_index, build_concurrency, pools);
         }
         else
         {
             if (strictness == ASTTableJoin::Strictness::Any)
-                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any_full, rows, key_columns, keys_size, key_sizes, collators, stored_block, null_map,
-                                                                   &rows_not_inserted_to_map, not_inserted_rows_mutex, block_index, build_concurrency, pools);
+                insertFromBlockImpl<ASTTableJoin::Strictness::Any>(type, maps_any_full, rows, key_columns, keys_size,
+                        key_sizes, collators, stored_block, null_map, &rows_not_inserted_to_map,
+                        not_inserted_rows_mutex, block_index, build_concurrency, pools);
             else
-                insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all_full, rows, key_columns, keys_size, key_sizes, collators, stored_block, null_map,
-                                                                   &rows_not_inserted_to_map, not_inserted_rows_mutex, block_index, build_concurrency, pools);
+                insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all_full, rows, key_columns, keys_size,
+                        key_sizes, collators, stored_block, null_map, &rows_not_inserted_to_map,
+                        not_inserted_rows_mutex, block_index, build_concurrency, pools);
         }
     }
 
