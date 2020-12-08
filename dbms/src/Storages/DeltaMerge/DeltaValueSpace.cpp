@@ -103,7 +103,8 @@ void DeltaValueSpace::abandon(DMContext & context)
     if (!abandoned.compare_exchange_strong(v, true))
         throw Exception("Try to abandon a already abandoned DeltaValueSpace", ErrorCodes::LOGICAL_ERROR);
 
-    context.db_context.getDeltaIndexManager()->deleteRef(delta_index);
+    if (auto manager = context.db_context.getDeltaIndexManager())
+        manager->deleteRef(delta_index);
 }
 
 void DeltaValueSpace::restore(DMContext & context)

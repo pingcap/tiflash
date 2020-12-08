@@ -1130,7 +1130,8 @@ Segment::ReadInfo Segment::getReadInfo(const DMContext &          dm_context,
     }
 
     // Refresh the reference in DeltaIndexManager, so that the index can be properly managed.
-    dm_context.db_context.getDeltaIndexManager()->refreshRef(segment_snap->delta->shared_delta_index);
+    if (auto manager = dm_context.db_context.getDeltaIndexManager())
+        manager->refreshRef(segment_snap->delta->shared_delta_index);
 
     return {
         .index_begin  = compacted_index->begin(),

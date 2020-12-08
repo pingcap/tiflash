@@ -1420,6 +1420,8 @@ void Context::dropMinMaxIndexCache() const
 bool Context::isDeltaIndexLimited() const
 {
     // Don't need to use a lock here, as delta_index_manager should be set at starting up.
+    if(!shared->delta_index_manager)
+        return false;
     return shared->delta_index_manager->isLimit();
 }
 
