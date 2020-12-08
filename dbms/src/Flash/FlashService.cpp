@@ -138,11 +138,12 @@ grpc::Status FlashService::Coprocessor(
 
     auto & tmt_context = context.getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
-    MPPTaskPtr sender_task = task_manager->findTaskWithRetry(request->sender_meta(), 10);
+    std::chrono::seconds timeout(10);
+    MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout);
     if (sender_task == nullptr)
     {
-        auto errMsg = "can't find task ( " + toString(request->sender_meta().start_ts()) + " , "
-            + toString(request->sender_meta().task_id()) + " )";
+        auto errMsg = "can't find task [" + toString(request->sender_meta().start_ts()) + "," + toString(request->sender_meta().task_id())
+            + "] within " + toString(timeout.count()) + " s";
         LOG_DEBUG(log, errMsg);
         mpp::MPPDataPacket packet;
         auto err = new mpp::Error();
@@ -151,11 +152,11 @@ grpc::Status FlashService::Coprocessor(
         writer->Write(packet);
         return grpc::Status::OK;
     }
-    MPPTunnelPtr tunnel = sender_task->getTunnelWithRetry(request->receiver_meta(), 10);
+    MPPTunnelPtr tunnel = sender_task->getTunnelWithTimeout(request->receiver_meta(), timeout);
     if (tunnel == nullptr)
     {
-        auto errMsg = "can't find tunnel ( " + toString(request->receiver_meta().start_ts()) + " , "
-            + toString(request->receiver_meta().task_id()) + " )";
+        auto errMsg = "can't find tunnel ( " + toString(request->receiver_meta().task_id()) + " + "
+            + toString(request->sender_meta().task_id()) + " ) within " + toString(timeout.count()) + " s";
         LOG_DEBUG(log, errMsg);
         mpp::MPPDataPacket packet;
         auto err = new mpp::Error();

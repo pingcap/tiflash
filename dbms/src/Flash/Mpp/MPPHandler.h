@@ -233,24 +233,12 @@ struct MPPTask : private boost::noncopyable
         cv.notify_all();
     }
 
-    MPPTunnelPtr getTunnel(const mpp::TaskMeta & meta)
+    MPPTunnelPtr getTunnelWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout)
     {
-        std::unique_lock<std::mutex> lk(tunnel_mutex);
-        MPPTaskId id{meta.start_ts(), meta.task_id()};
-        const auto & it = tunnel_map.find(id);
-        if (it == tunnel_map.end())
-        {
-            return nullptr;
-        }
-        return it->second;
-    }
-
-    MPPTunnelPtr getTunnelWithRetry(const mpp::TaskMeta & meta, uint16_t max_retry_sec)
-    {
-        std::unique_lock<std::mutex> lk(tunnel_mutex);
         MPPTaskId id{meta.start_ts(), meta.task_id()};
         std::map<MPPTaskId, MPPTunnelPtr>::iterator it;
-        auto ret = cv.wait_for(lk, std::chrono::seconds(max_retry_sec), [&] {
+        std::unique_lock<std::mutex> lk(tunnel_mutex);
+        auto ret = cv.wait_for(lk, timeout, [&] {
             it = tunnel_map.find(id);
             return it == tunnel_map.end();
         });
@@ -307,24 +295,12 @@ public:
         }
     }
 
-    MPPTaskPtr findTask(const mpp::TaskMeta & meta)
+    MPPTaskPtr findTaskWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout)
     {
-        std::unique_lock<std::mutex> lock(mu);
-        MPPTaskId id{meta.start_ts(), meta.task_id()};
-        const auto & it = task_map.find(id);
-        if (it == task_map.end())
-        {
-            return nullptr;
-        }
-        return it->second;
-    }
-
-    MPPTaskPtr findTaskWithRetry(const mpp::TaskMeta & meta, uint16_t max_retry_sec)
-    {
-        std::unique_lock<std::mutex> lock(mu);
         MPPTaskId id{meta.start_ts(), meta.task_id()};
         std::map<MPPTaskId, MPPTaskPtr>::iterator it;
-        auto ret = cv.wait_for(lock, std::chrono::seconds(max_retry_sec), [&] {
+        std::unique_lock<std::mutex> lock(mu);
+        auto ret = cv.wait_for(lock, timeout, [&] {
             it = task_map.find(id);
             return it == task_map.end();
         });
