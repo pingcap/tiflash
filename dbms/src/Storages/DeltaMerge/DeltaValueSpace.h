@@ -144,6 +144,9 @@ public:
         size_t bytes;
         size_t deletes;
 
+        bool   is_common_handle;
+        size_t rowkey_column_size;
+
         /// TODO: The members below are not part of the Snapshot, they should not be here.
         /// They are used by the reader of this Snapshot.
 
@@ -157,9 +160,6 @@ public:
         // The data of packs when reading.
         std::vector<Columns> packs_data;
 
-        bool   is_common_handle;
-        size_t rowkey_column_size;
-
         SnapshotPtr clone()
         {
             auto c                = std::make_shared<Snapshot>();
@@ -171,6 +171,8 @@ public:
             c->rows               = rows;
             c->bytes              = bytes;
             c->deletes            = deletes;
+            c->is_common_handle   = is_common_handle;
+            c->rowkey_column_size = rowkey_column_size;
             return c;
         }
 

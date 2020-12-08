@@ -1,6 +1,7 @@
 => DBGInvoke __enable_schema_sync_service('false')
 
 ## clean up
+=> DBGInvoke __clean_up_region()
 => DBGInvoke __drop_tidb_table(default, test_dm)
 => drop table if exists default.test_dm
 
@@ -48,6 +49,28 @@
 │    13 │           1 │
 │    11 │           2 │
 └───────┴─────────────┘
+
+=> DBGInvoke __enable_schema_sync_service('false')
+=> DBGInvoke store_pre_handle_region_snap(default, test_dm, 5, 1000, 2000, 1002, 30, 0, 110, 1003, 31, 0, 130)
+┌─store_pre_handle_region_snap(default, test, 5, 1000, 2000, 1002, 30, 0, 110, 1003, 31, 0, 130)──────────────────────────────────────────────────────┐
+│ pre-handle [region 5] snapshot with data [write 2 ], pre-decode block cache { schema_version: ?, data_list size: 2, block row: 2 col: 4 bytes: 50 } │
+└─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+=> DBGInvoke __add_column_to_tidb_table(default, test_dm, 'col_2 Nullable(Int64) default 23333')
+=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __apply_pre_handle_region_snap(5)
+=> select (*) from default.test_dm order by col_1
+┌─col_1─┬─_tidb_rowid─┬─col_2─┐
+│    11 │           2 │ 23333 │
+│    13 │           1 │ 23333 │
+│   110 │        1002 │ 23333 │
+│   130 │        1003 │ 23333 │
+└───────┴─────────────┴───────┘
+
+=> DBGInvoke store_pre_handle_region_snap(default, test_dm, 5, 1000, 2000, 1002, 34, 0, 110, 888)
+┌─store_pre_handle_region_snap(default, test_dm, 5, 1000, 2000, 1002, 30, 0, 110, 888)───────────────────────────────────────────────────────────────────┐
+│ pre-handle [region 5] snapshot with data [write 1 ], pre-decode block cache { schema_version: ?, data_list size: 1, block row: 1 col: 5 bytes: 34 } │
+└─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
 ## clean up
 => DBGInvoke __drop_tidb_table(default, test_dm)
