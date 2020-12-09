@@ -22,7 +22,6 @@ using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 //   then 1MB is refilled every 100ms internally.
 //   Larger value can lead to burstier writes while smaller value introduces more CPU overhead.
 //   The default should work for most cases.
-//
 class RateLimiter
 {
 public:
