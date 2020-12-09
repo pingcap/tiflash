@@ -2,6 +2,7 @@
 
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
+#include <Storages/Page/PageDefines.h>
 
 namespace DB
 {
@@ -11,9 +12,14 @@ namespace DM
 class DeltaIndex;
 using DeltaIndexPtr = std::shared_ptr<DeltaIndex>;
 
+static std::atomic_uint64_t NEXT_DELTA_INDEX_ID{0};
+
 class DeltaIndex
 {
 private:
+    // This id is only used as Key in LRUCache.
+    const UInt64 id;
+
     DeltaTreePtr delta_tree;
 
     size_t placed_rows;
@@ -64,8 +70,9 @@ private:
     }
 
 public:
-    DeltaIndex() : delta_tree(std::make_shared<DefaultDeltaTree>()), placed_rows(0), placed_deletes(0) {}
-    DeltaIndex(const DeltaIndex & o)
+    DeltaIndex() : id(++NEXT_DELTA_INDEX_ID), delta_tree(std::make_shared<DefaultDeltaTree>()), placed_rows(0), placed_deletes(0) {}
+
+    DeltaIndex(const DeltaIndex & o) : id(++NEXT_DELTA_INDEX_ID)
     {
         DeltaTreePtr delta_tree_copy;
         {
@@ -76,12 +83,36 @@ public:
         }
         delta_tree = std::make_shared<DefaultDeltaTree>(*delta_tree_copy);
     }
+
+    // For test cases.
+    DeltaIndex(const DeltaTreePtr & delta_tree_, size_t placed_rows_, size_t placed_deletes_)
+        : id(++NEXT_DELTA_INDEX_ID), delta_tree(delta_tree_), placed_rows(placed_rows_), placed_deletes(placed_deletes_)
+    {
+    }
+
+    /// Note that we don't swap the id.
+    void swap(DeltaIndex & other)
+    {
+        std::scoped_lock lock(mutex, other.mutex);
+        delta_tree.swap(other.delta_tree);
+        std::swap(placed_rows, other.placed_rows);
+        std::swap(placed_deletes, other.placed_deletes);
+    }
+
     String toString()
     {
         std::stringstream s;
         s << "{placed rows:" << placed_rows << ", deletes:" << placed_deletes << ", delta tree: " << delta_tree->numEntries() << "|"
           << delta_tree->numInserts() << "|" << delta_tree->numDeletes() << "}";
         return s.str();
+    }
+
+    UInt64 getId() const { return id; }
+
+    size_t getBytes() const
+    {
+        std::scoped_lock lock(mutex);
+        return delta_tree->getBytes();
     }
 
     std::pair<size_t, size_t> getPlacedStatus()
