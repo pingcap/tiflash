@@ -15,7 +15,7 @@ DB::RateLimiter::RateLimiter(TiFlashMetricsPtr metrics_, UInt64 rate_limit_per_s
       available_balance{refill_balance_per_period},
       total_bytes_through{0},
       stop{false},
-      metrics{metrics_}
+      metrics{std::move(metrics_)}
 {}
 
 DB::RateLimiter::~RateLimiter()

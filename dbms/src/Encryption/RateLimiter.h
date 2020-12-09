@@ -14,7 +14,15 @@ namespace DB
 class TiFlashMetrics;
 using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 
-// TODO: add comment to explain the whole class
+// RateLimiter is to control write rate of background tasks
+// constructor parameters:
+// `rate_limit_per_sec_`: controls the total write rate of background tasks in bytes per second, 0 means no limit
+// `refill_period_us`: this controls how often balance are refilled.
+//   For example, when rate_limit_per_sec_ is set to 10MB/s and refill_period_us is set to 100ms,
+//   then 1MB is refilled every 100ms internally.
+//   Larger value can lead to burstier writes while smaller value introduces more CPU overhead.
+//   The default should work for most cases.
+//
 class RateLimiter
 {
 public:
@@ -22,11 +30,13 @@ public:
 
     ~RateLimiter();
 
-    // TODO: add comment to explain this method
+    // `request()` is the main interface used by clients.
+    // It receives the requested balance as the parameter,
+    // and blocks until the request balance is satisfied.
     void request(UInt64 bytes);
 
-    // The following method is just for test purpose now
-    inline UInt64 getTotalBytesThrough() { return total_bytes_through; }
+    // just for test purpose
+    inline UInt64 getTotalBytesThrough() const { return total_bytes_through; }
 
 private:
     void refillAndAlloc();
@@ -38,7 +48,7 @@ private:
     }
 
 private:
-    // Pending request
+    // used to represent pending request
     struct Request
     {
         explicit Request(UInt64 bytes) : remaining_bytes(bytes), bytes(bytes), granted(false) {}

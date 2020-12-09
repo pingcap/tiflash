@@ -37,7 +37,7 @@ TEST(RateLimiter_test, Rate)
             thread.join();
         auto elapsed = watch.elapsedSeconds();
         auto actual_rate = rate_limiter->getTotalBytesThrough() / elapsed;
-        // make sure that 0.8 * target <= actual_rate <= 1.25
+        // make sure that 0.8 * target <= actual_rate <= 1.25 * target
         // hint: the range [0.8, 1.25] is copied from rocksdb,
         // if tests fail, try to enlarge this range.
         EXPECT_GE(actual_rate / target, 0.80);
