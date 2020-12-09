@@ -101,9 +101,6 @@ namespace DB
         F(type_exec, {{"type", "exec"}}, ExpBuckets{0.0005, 2, 20}), F(type_migrate, {{"type", "migrate"}}, ExpBuckets{0.0005, 2, 20}))   \
     M(tiflash_storage_rate_limiter_total_request_bytes, "RateLimiter total requested bytes", Counter)                                     \
     M(tiflash_storage_rate_limiter_total_alloc_bytes, "RateLimiter total allocated bytes", Counter)                                       \
-    M(tiflash_storage_rate_limiter_request_sizes, "RateLimiter request size",                                                             \
-        Histogram, /* request size should be at least several bytes, increase the start bucket to 1 byte  */                              \
-        F(type_request_size, {{"type", "request_size"}}, ExpBuckets{1, 2, 10}))                                                           \
     M(tiflash_raft_command_duration_seconds, "Bucketed histogram of some raft command: apply snapshot",                                   \
         Histogram, /* these command usually cost servel seconds, increase the start bucket to 50ms */                                     \
         F(type_ingest_sst, {{"type", "ingest_sst"}}, ExpBuckets{0.05, 2, 10}),                                                            \

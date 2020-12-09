@@ -41,10 +41,7 @@ void DB::RateLimiter::request(UInt64 bytes)
         return;
 
     if (metrics)
-    {
         GET_METRIC(metrics, tiflash_storage_rate_limiter_total_request_bytes).Increment(bytes);
-        GET_METRIC(metrics, tiflash_storage_rate_limiter_request_sizes).Observe(bytes);
-    }
 
     if (available_balance >= bytes)
     {
