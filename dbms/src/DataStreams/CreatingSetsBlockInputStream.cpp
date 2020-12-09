@@ -125,6 +125,9 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
 
     if (table_out)
         table_out->writePrefix();
+    std::unique_ptr<ThreadPool> join_build_thread_pool = nullptr;
+    if (subquery.join != nullptr && subquery.join->getBuildConcurrency() > 1)
+        join_build_thread_pool = std::make_unique<ThreadPool>(subquery.join->getBuildConcurrency());
 
     while (Block block = subquery.source->read())
     {
@@ -142,8 +145,17 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
 
         if (!done_with_join)
         {
-            if (!subquery.join->insertFromBlock(block))
-                done_with_join = true;
+            if (join_build_thread_pool == nullptr)
+            {
+                if (!subquery.join->insertFromBlock(block))
+                    done_with_join = true;
+            }
+            else
+            {
+                subquery.join->insertFromBlockASync(block, *join_build_thread_pool);
+                if (subquery.join->isBuildSetExceeded())
+                    done_with_join = true;
+            }
         }
 
         if (!done_with_table)
@@ -173,6 +185,8 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
 
     if (table_out)
         table_out->writeSuffix();
+    if (join_build_thread_pool != nullptr)
+        join_build_thread_pool->wait();
 
     watch.stop();
 
@@ -200,7 +214,8 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
         if (subquery.table)
             msg << "Table with " << head_rows << " rows. ";
 
-        msg << "In " << watch.elapsedSeconds() << " sec.";
+        msg << "In " << watch.elapsedSeconds() << " sec. ";
+        msg << "using " << std::to_string(subquery.join == nullptr ? 1 : subquery.join->getBuildConcurrency()) << " threads.";
         LOG_DEBUG(log, msg.rdbuf());
     }
     else

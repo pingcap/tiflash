@@ -59,7 +59,6 @@ class ExchangeReceiver
         tipb::SelectResponse resp;
         resp.ParseFromString(p.data());
         int chunks_size = resp.chunks_size();
-        LOG_DEBUG(log, "get chunk size " + std::to_string(chunks_size));
         if (chunks_size == 0)
             return;
         for (int i = 0; i < chunks_size; i++)

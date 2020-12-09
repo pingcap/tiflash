@@ -138,25 +138,29 @@ grpc::Status FlashService::Coprocessor(
 
     auto & tmt_context = context.getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
-    MPPTaskPtr sender_task = task_manager->findTask(request->sender_meta());
+    std::chrono::seconds timeout(10);
+    MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout);
     if (sender_task == nullptr)
     {
-        LOG_DEBUG(log, "can't find task " << std::to_string(request->sender_meta().task_id()));
+        auto errMsg = "can't find task [" + toString(request->sender_meta().start_ts()) + "," + toString(request->sender_meta().task_id())
+            + "] within " + toString(timeout.count()) + " s";
+        LOG_ERROR(log, errMsg);
         mpp::MPPDataPacket packet;
         auto err = new mpp::Error();
-        err->set_msg("can't find task" + std::to_string(request->sender_meta().task_id()));
+        err->set_msg(errMsg);
         packet.set_allocated_error(err);
         writer->Write(packet);
         return grpc::Status::OK;
     }
-    MPPTunnelPtr tunnel = sender_task->getTunnel(request->receiver_meta());
+    MPPTunnelPtr tunnel = sender_task->getTunnelWithTimeout(request->receiver_meta(), timeout);
     if (tunnel == nullptr)
     {
-        std::string tunnel_id = std::to_string(request->sender_meta().task_id()) + "+" + std::to_string(request->receiver_meta().task_id());
-        LOG_DEBUG(log, "can't find tunnel " << tunnel_id);
+        auto errMsg = "can't find tunnel ( " + toString(request->receiver_meta().task_id()) + " + "
+            + toString(request->sender_meta().task_id()) + " ) within " + toString(timeout.count()) + " s";
+        LOG_ERROR(log, errMsg);
         mpp::MPPDataPacket packet;
         auto err = new mpp::Error();
-        err->set_msg("can't find tunnel " + tunnel_id);
+        err->set_msg(errMsg);
         packet.set_allocated_error(err);
         writer->Write(packet);
         return grpc::Status::OK;

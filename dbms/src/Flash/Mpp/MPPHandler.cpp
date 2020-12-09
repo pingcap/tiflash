@@ -39,7 +39,6 @@ void MPPTask::runImpl(BlockIO io)
 
         while (Block block = from->read())
         {
-            LOG_DEBUG(log, "write block " + std::to_string(block.rows()));
             to->write(block);
         }
 
@@ -55,8 +54,6 @@ void MPPTask::runImpl(BlockIO io)
 
         from->readSuffix();
         to->writeSuffix();
-
-        LOG_DEBUG(log, "begin write ");
 
         finishWrite();
 

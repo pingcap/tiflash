@@ -67,18 +67,16 @@ struct MPPTunnel
     void write(const mpp::MPPDataPacket & data)
     {
 
-        LOG_DEBUG(log, "ready to write");
+        LOG_TRACE(log, "ready to write");
         std::unique_lock<std::mutex> lk(mu);
 
         if (timeout.count() > 0)
         {
             if (cv_for_connected.wait_for(lk, timeout, [&]() { return connected; }))
             {
-                LOG_DEBUG(log, "begin to write");
-
                 writer->Write(data);
 
-                LOG_DEBUG(log, "finish write");
+                LOG_TRACE(log, "finish write");
             }
             else
             {
@@ -181,6 +179,8 @@ struct MPPTask : private boost::noncopyable
 
     Exception err;
 
+    std::condition_variable cv;
+
     MPPTask(const mpp::TaskMeta & meta_) : meta(meta_), log(&Logger::get("task " + std::to_string(meta_.task_id())))
     {
         id.start_ts = meta.start_ts();
@@ -222,24 +222,25 @@ struct MPPTask : private boost::noncopyable
 
     void registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel)
     {
-        std::lock_guard<std::mutex> lk(tunnel_mutex);
+        std::unique_lock<std::mutex> lk(tunnel_mutex);
         if (tunnel_map.find(id) != tunnel_map.end())
         {
             throw Exception("the tunnel " + tunnel->tunnel_id + " has been registered");
         }
         tunnel_map[id] = tunnel;
+        cv.notify_all();
     }
 
-    MPPTunnelPtr getTunnel(const mpp::TaskMeta & meta)
+    MPPTunnelPtr getTunnelWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout)
     {
-        std::lock_guard<std::mutex> lk(tunnel_mutex);
         MPPTaskId id{meta.start_ts(), meta.task_id()};
-        const auto & it = tunnel_map.find(id);
-        if (it == tunnel_map.end())
-        {
-            return nullptr;
-        }
-        return it->second;
+        std::map<MPPTaskId, MPPTunnelPtr>::iterator it;
+        std::unique_lock<std::mutex> lk(tunnel_mutex);
+        auto ret = cv.wait_for(lk, timeout, [&] {
+            it = tunnel_map.find(id);
+            return it == tunnel_map.end();
+        });
+        return ret ? nullptr : it->second;
     }
 };
 
@@ -254,23 +255,26 @@ class MPPTaskManager : private boost::noncopyable
 
     Logger * log;
 
+    std::condition_variable cv;
+
 public:
     MPPTaskManager() : log(&Logger::get("TaskManager")) {}
 
     void registerTask(MPPTaskPtr task)
     {
-        std::lock_guard<std::mutex> lock(mu);
+        std::unique_lock<std::mutex> lock(mu);
         if (task_map.find(task->id) != task_map.end())
         {
             throw Exception("The task " + task->id.toString() + " has been registered");
         }
         task_map.emplace(task->id, task);
         task->manager = this;
+        cv.notify_all();
     }
 
     void unregisterTask(MPPTask * task)
     {
-        std::lock_guard<std::mutex> lock(mu);
+        std::unique_lock<std::mutex> lock(mu);
         auto it = task_map.find(task->id);
         if (it != task_map.end())
         {
@@ -282,16 +286,16 @@ public:
         }
     }
 
-    MPPTaskPtr findTask(const mpp::TaskMeta & meta)
+    MPPTaskPtr findTaskWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout)
     {
-        std::lock_guard<std::mutex> lock(mu);
         MPPTaskId id{meta.start_ts(), meta.task_id()};
-        const auto & it = task_map.find(id);
-        if (it == task_map.end())
-        {
-            return nullptr;
-        }
-        return it->second;
+        std::map<MPPTaskId, MPPTaskPtr>::iterator it;
+        std::unique_lock<std::mutex> lock(mu);
+        auto ret = cv.wait_for(lock, timeout, [&] {
+            it = task_map.find(id);
+            return it == task_map.end();
+        });
+        return ret ? nullptr : it->second;
     }
 
     String toString()
