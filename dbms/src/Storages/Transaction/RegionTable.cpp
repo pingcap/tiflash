@@ -205,7 +205,7 @@ void RegionTable::updateRegion(const Region & region)
     auto & internal_region = getOrInsertRegion(region);
     internal_region.cache_bytes = region.dataSize();
     if (internal_region.cache_bytes)
-        incrDirtyFlag(internal_region.region_id);
+        dirty_regions.insert(internal_region.region_id);
 }
 
 TableID RegionTable::popOneTableToOptimize()
@@ -365,9 +365,9 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtrWrap & region,
         internal_region.pause_flush = false;
         internal_region.cache_bytes = region->dataSize();
         if (internal_region.cache_bytes)
-            incrDirtyFlag(region_id);
+            dirty_regions.insert(region_id);
         else
-            clearDirtyFlag(region_id);
+            dirty_regions.erase(region_id);
 
         internal_region.last_flush_time = Clock::now();
         return true;
@@ -382,7 +382,6 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtrWrap & region,
 RegionID RegionTable::pickRegionToFlush()
 {
     std::lock_guard<std::mutex> lock(mutex);
-    std::lock_guard<std::mutex> dirty_regions_lock(dirty_regions_mutex);
 
     for (auto dirty_it = dirty_regions.begin(); dirty_it != dirty_regions.end();)
     {
@@ -401,7 +400,7 @@ RegionID RegionTable::pickRegionToFlush()
         else
         {
             // Region{region_id} is removed, remove its dirty flag
-            dirty_it = clearDirtyFlag(dirty_it, dirty_regions_lock);
+            dirty_it = dirty_regions.erase(dirty_it);
         }
     }
     return InvalidRegionID;
@@ -416,37 +415,6 @@ bool RegionTable::tryFlushRegions()
     }
 
     return false;
-}
-
-void RegionTable::incrDirtyFlag(RegionID region_id)
-{
-    std::lock_guard lock(dirty_regions_mutex);
-    dirty_regions.insert(region_id);
-}
-
-void RegionTable::clearDirtyFlag(RegionID region_id)
-{
-    std::lock_guard lock(dirty_regions_mutex);
-    if (auto iter = dirty_regions.find(region_id); iter != dirty_regions.end())
-        clearDirtyFlag(iter, lock);
-}
-
-RegionTable::DirtyRegions::iterator RegionTable::clearDirtyFlag(
-    const RegionTable::DirtyRegions::iterator & region_iter, std::lock_guard<std::mutex> &)
-{
-    // Removing invalid iterator will cause segment fault.
-    if (unlikely(region_iter == dirty_regions.end()))
-        return region_iter;
-
-    auto next_iter = dirty_regions.erase(region_iter);
-    dirty_regions_cv.notify_all();
-    return next_iter;
-}
-
-void RegionTable::waitTillRegionFlushed(const RegionID region_id)
-{
-    std::unique_lock lock(dirty_regions_mutex);
-    dirty_regions_cv.wait(lock, [this, region_id] { return dirty_regions.count(region_id) == 0; });
 }
 
 void RegionTable::handleInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegions &)> && callback) const
