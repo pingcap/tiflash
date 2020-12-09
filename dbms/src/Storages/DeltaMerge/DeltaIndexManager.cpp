@@ -34,9 +34,9 @@ void DeltaIndexManager::removeOverflow(std::vector<DeltaIndexPtr> & removed)
 
         current_size -= holder.size;
         --queue_size;
-
-        index_map.erase(it);
         lru_queue.pop_front();
+        // Remove it later
+        index_map.erase(it);
     }
 
     if (current_size > (1ull << 63))
@@ -106,9 +106,10 @@ void DeltaIndexManager::deleteRef(const DeltaIndexPtr & index)
             p->swap(empty);
         }
 
-        index_map.erase(it);
-        lru_queue.erase(holder.queue_it);
         current_size -= holder.size;
+        lru_queue.erase(holder.queue_it);
+        // Remove it later
+        index_map.erase(it);
     }
 
     CurrentMetrics::set(CurrentMetrics::DT_DeltaIndexCacheSize, current_size);
