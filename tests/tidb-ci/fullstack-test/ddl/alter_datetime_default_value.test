@@ -14,7 +14,7 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 
 mysql> alter table test.t add date_0 DATE NULL DEFAULT '1000-01-01' 
 mysql> alter table test.t add date_1 DATE NULL DEFAULT '9999-12-31' 
-mysql> alter table test.t add date_a DATE NOT NULL
+mysql> SET sql_mode=""; alter table test.t add date_a DATE NOT NULL
 
 mysql> alter table test.t add time_0 TIME NULL DEFAULT '59' 
 mysql> alter table test.t add time_1 TIME(6) NULL DEFAULT '-838:59:59.000000' 
@@ -25,8 +25,8 @@ mysql> alter table test.t add time_b TIME(6) NOT NULL
 
 mysql> alter table test.t add datetime_0 DATETIME(6) NULL DEFAULT '1000-01-01 00:00:00.000000' 
 mysql> alter table test.t add datetime_1 DATETIME(6) NULL DEFAULT '9999-12-31 23:59:59.000000' 
-mysql> alter table test.t add datetime_a DATETIME NOT NULL
-mysql> alter table test.t add datetime_b DATETIME(6) NOT NULL
+mysql> SET sql_mode=""; alter table test.t add datetime_a DATETIME NOT NULL
+mysql> SET sql_mode=""; alter table test.t add datetime_b DATETIME(6) NOT NULL
 
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 +------+------------+------------+------------+----------+-------------------+------------------+-----------------+----------+-----------------+----------------------------+----------------------------+---------------------+----------------------------+
