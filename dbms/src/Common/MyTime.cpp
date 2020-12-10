@@ -920,7 +920,7 @@ Field parseMyDateTime(const String & str, int8_t fsp)
     }
 
     UInt32 micro_second = 0;
-    if (hhmmss)
+    if (hhmmss && !frac_str.empty())
     {
         // If input string is "20170118.999", without hhmmss, fsp is meaningless.
         // TODO: this case is not only meaningless, but erroneous, please confirm.
