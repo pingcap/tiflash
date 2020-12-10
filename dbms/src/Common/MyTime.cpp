@@ -722,7 +722,7 @@ Field parseMyDateTime(const String & str, int8_t fsp)
 
     auto [seps, frac_str, has_tz, tz_sign, tz_hour, tz_sep, tz_minute] = splitDatetime(str);
 
-    bool truncated_or_incorrect = true;
+    bool truncated_or_incorrect = false;
 
     // noAbsorb tests if can absorb FSP or TZ
     auto noAbsorb = [](std::vector<String> seps) {
@@ -821,7 +821,7 @@ Field parseMyDateTime(const String & str, int8_t fsp)
                 }
                 default:
                 {
-                    throw Exception("Wrong datetime format");
+                    throw TiFlashException("Wrong datetime format: " + str, Errors::Types::WrongValue);
                 }
             }
             if (l == 5 || l == 6 || l == 8)
@@ -834,6 +834,7 @@ Field parseMyDateTime(const String & str, int8_t fsp)
                 switch (frac_str.size())
                 {
                     case 0:
+                        ret = 1;
                         break;
                     case 1:
                     case 2:
