@@ -143,11 +143,8 @@ public:
 
     SegmentPair split(DMContext & dm_context) const;
     SplitInfo prepareSplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs, bool need_rate_limit) const;
-    SegmentPair applySplit(DMContext &                dm_context,
-                           const SegmentSnapshotPtr & segment_snap,
-                           WriteBatches &             wbs,
-                           SplitInfo &                split_info,
-                           bool                       need_rate_limit) const;
+    SegmentPair
+    applySplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs, SplitInfo & split_info) const;
 
     static SegmentPtr          merge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right);
     static StableValueSpacePtr prepareMerge(DMContext &                dm_context, //
@@ -163,8 +160,7 @@ public:
                                           const SegmentPtr &          right,
                                           const SegmentSnapshotPtr &  right_snap,
                                           WriteBatches &              wbs,
-                                          const StableValueSpacePtr & merged_stable,
-                                          bool                        need_rate_limit);
+                                          const StableValueSpacePtr & merged_stable);
 
     SegmentPtr mergeDelta(DMContext & dm_context) const;
     StableValueSpacePtr
@@ -172,8 +168,7 @@ public:
     SegmentPtr applyMergeDelta(DMContext &                 dm_context,
                                const SegmentSnapshotPtr &  segment_snap,
                                WriteBatches &              wbs,
-                               const StableValueSpacePtr & new_stable,
-                               bool                        need_rate_limit) const;
+                               const StableValueSpacePtr & new_stable) const;
 
     /// Flush delta's cache packs.
     bool flushCache(DMContext & dm_context);

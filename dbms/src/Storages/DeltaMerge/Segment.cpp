@@ -490,7 +490,7 @@ SegmentPtr Segment::mergeDelta(DMContext & dm_context) const
     new_stable->enableDMFilesGC();
 
     auto lock        = mustGetUpdateLock();
-    auto new_segment = applyMergeDelta(dm_context, segment_snap, wbs, new_stable, false);
+    auto new_segment = applyMergeDelta(dm_context, segment_snap, wbs, new_stable);
 
     wbs.writeAll();
     return new_segment;
@@ -519,14 +519,13 @@ Segment::prepareMergeDelta(DMContext & dm_context, const SegmentSnapshotPtr & se
 SegmentPtr Segment::applyMergeDelta(DMContext &                 context,
                                     const SegmentSnapshotPtr &  segment_snap,
                                     WriteBatches &              wbs,
-                                    const StableValueSpacePtr & new_stable,
-                                    bool                        need_rate_limit) const
+                                    const StableValueSpacePtr & new_stable) const
 {
     LOG_INFO(log, "Before apply merge delta: " << info());
 
     auto later_packs = delta->checkHeadAndCloneTail(context, rowkey_range, segment_snap->delta->packs, wbs);
     // Created references to tail pages' pages in "log" storage, we need to write them down.
-    wbs.writeLogAndData(need_rate_limit ? context.db_context.getRateLimiter() : nullptr);
+    wbs.writeLogAndData();
 
     auto new_delta = std::make_shared<DeltaValueSpace>(delta->getId(), is_common_handle, rowkey_column_size, later_packs);
     new_delta->saveMeta(wbs);
@@ -565,7 +564,7 @@ SegmentPair Segment::split(DMContext & dm_context) const
     split_info.other_stable->enableDMFilesGC();
 
     auto lock         = mustGetUpdateLock();
-    auto segment_pair = applySplit(dm_context, segment_snap, wbs, split_info, false);
+    auto segment_pair = applySplit(dm_context, segment_snap, wbs, split_info);
 
     wbs.writeAll();
 
@@ -879,8 +878,7 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext &                dm_c
 SegmentPair Segment::applySplit(DMContext &                dm_context, //
                                 const SegmentSnapshotPtr & segment_snap,
                                 WriteBatches &             wbs,
-                                SplitInfo &                split_info,
-                                bool                       need_rate_limit) const
+                                SplitInfo &                split_info) const
 {
     LOG_INFO(log, "Segment [" << segment_id << "] apply split");
 
@@ -893,7 +891,7 @@ SegmentPair Segment::applySplit(DMContext &                dm_context, //
     auto other_delta_packs = delta->checkHeadAndCloneTail(dm_context, other_range, *head_packs, wbs);
 
     // Created references to tail pages' pages in "log" storage, we need to write them down.
-    wbs.writeLogAndData(need_rate_limit ? dm_context.db_context.getRateLimiter() : nullptr);
+    wbs.writeLogAndData();
 
     auto other_segment_id = dm_context.storage_pool.newMetaPageId();
     auto other_delta_id   = dm_context.storage_pool.newMetaPageId();
@@ -950,7 +948,7 @@ SegmentPtr Segment::merge(DMContext & dm_context, const SegmentPtr & left, const
     auto left_lock  = left->mustGetUpdateLock();
     auto right_lock = right->mustGetUpdateLock();
 
-    auto merged = applyMerge(dm_context, left, left_snap, right, right_snap, wbs, merged_stable, false);
+    auto merged = applyMerge(dm_context, left, left_snap, right, right_snap, wbs, merged_stable);
 
     wbs.writeAll();
     return merged;
@@ -1010,8 +1008,7 @@ SegmentPtr Segment::applyMerge(DMContext &                 dm_context, //
                                const SegmentPtr &          right,
                                const SegmentSnapshotPtr &  right_snap,
                                WriteBatches &              wbs,
-                               const StableValueSpacePtr & merged_stable,
-                               bool                        need_rate_limit)
+                               const StableValueSpacePtr & merged_stable)
 {
     LOG_INFO(left->log, "Segment [" << left->segmentId() << "] and [" << right->segmentId() << "] apply merge");
 
@@ -1021,7 +1018,7 @@ SegmentPtr Segment::applyMerge(DMContext &                 dm_context, //
     auto right_tail_packs = right->delta->checkHeadAndCloneTail(dm_context, merged_range, right_snap->delta->packs, wbs);
 
     // Created references to tail pages' pages in "log" storage, we need to write them down.
-    wbs.writeLogAndData(need_rate_limit ? dm_context.db_context.getRateLimiter() : nullptr);
+    wbs.writeLogAndData();
 
     /// Make sure saved packs are appended before unsaved packs.
     Packs merged_packs;
