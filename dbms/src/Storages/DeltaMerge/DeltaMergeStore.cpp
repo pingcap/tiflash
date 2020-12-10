@@ -835,10 +835,13 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     bool should_split = segment_rows >= segment_limit_rows * 2 && delta_rows - delta_last_try_split_rows >= delta_cache_limit_rows;
     bool should_merge = segment_rows < segment_limit_rows / 3;
 
-    bool should_compact = std::max((Int64)pack_count - delta_last_try_compact_packs, 0) >= 10;
+    // Don't do compact on starting up.
+    bool should_compact = (thread_type != ThreadType::Init) && std::max((Int64)pack_count - delta_last_try_compact_packs, 0) >= 10;
 
-    bool should_place_delta_index = delta_rows - placed_delta_rows >= delta_cache_limit_rows * 3
-        && delta_rows - delta_last_try_place_delta_index_rows >= delta_cache_limit_rows;
+    // Don't do background place index if we limit DeltaIndex cache.
+    bool should_place_delta_index = !dm_context->db_context.isDeltaIndexLimited()
+        && (delta_rows - placed_delta_rows >= delta_cache_limit_rows * 3
+            && delta_rows - delta_last_try_place_delta_index_rows >= delta_cache_limit_rows);
 
     auto try_add_background_task = [&](const BackgroundTask & task) {
         // Prevent too many tasks.
@@ -1159,7 +1162,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 
         wbs.writeMeta();
 
-        segment->abandon();
+        segment->abandon(dm_context);
         segments.erase(range.getEnd());
         id_to_segment.erase(segment->segmentId());
 
@@ -1271,8 +1274,8 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
 
         wbs.writeMeta();
 
-        left->abandon();
-        right->abandon();
+        left->abandon(dm_context);
+        right->abandon(dm_context);
         segments.erase(left_range.getEnd());
         segments.erase(right_range.getEnd());
         id_to_segment.erase(left->segmentId());
@@ -1372,7 +1375,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
         segments[new_segment->getRowKeyRange().getEnd()] = new_segment;
         id_to_segment[new_segment->segmentId()]          = new_segment;
 
-        segment->abandon();
+        segment->abandon(dm_context);
 
         if constexpr (DM_RUN_CHECK)
         {

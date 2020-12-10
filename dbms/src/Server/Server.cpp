@@ -740,10 +740,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->setMarkCache(mark_cache_size);
 
     /// Size of cache for minmax index, used by DeltaMerge engine.
-    size_t minmax_index_cache_size
-        = config().has("minmax_index_cache_size") ? config().getUInt64("minmax_index_cache_size") : mark_cache_size;
+    size_t minmax_index_cache_size = config().getUInt64("minmax_index_cache_size", mark_cache_size) ;
     if (minmax_index_cache_size)
         global_context->setMinMaxIndexCache(minmax_index_cache_size);
+
+    /// Size of max memory usage of DeltaIndex, used by DeltaMerge engine.
+    size_t delta_index_cache_size = config().getUInt64("delta_index_cache_size", 0);
+    global_context->setDeltaIndexManager(delta_index_cache_size);
 
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();

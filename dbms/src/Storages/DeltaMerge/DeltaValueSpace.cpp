@@ -3,6 +3,7 @@
 #include <IO/ReadHelpers.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/Pack.h>
+#include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/PathPool.h>
@@ -94,6 +95,16 @@ DeltaValueSpace::DeltaValueSpace(PageId id_, bool is_common_handle_, size_t rowk
       log(&Logger::get("DeltaValueSpace"))
 {
     setUp();
+}
+
+void DeltaValueSpace::abandon(DMContext & context)
+{
+    bool v = false;
+    if (!abandoned.compare_exchange_strong(v, true))
+        throw Exception("Try to abandon a already abandoned DeltaValueSpace", ErrorCodes::LOGICAL_ERROR);
+
+    if (auto manager = context.db_context.getDeltaIndexManager(); manager)
+        manager->deleteRef(delta_index);
 }
 
 void DeltaValueSpace::restore(DMContext & context)

@@ -94,6 +94,7 @@ using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
 namespace DM
 {
 class MinMaxIndexCache;
+class DeltaIndexManager;
 }
 
 class TiFlashMetrics;
@@ -375,6 +376,10 @@ public:
     void setMinMaxIndexCache(size_t cache_size_in_bytes);
     std::shared_ptr<DM::MinMaxIndexCache> getMinMaxIndexCache() const;
     void dropMinMaxIndexCache() const;
+
+    bool isDeltaIndexLimited() const;
+    void setDeltaIndexManager(size_t cache_size_in_bytes);
+    std::shared_ptr<DM::DeltaIndexManager> getDeltaIndexManager() const;
 
     /** Clear the caches of the uncompressed blocks and marks.
       * This is usually done when renaming tables, changing the type of columns, deleting a table.
