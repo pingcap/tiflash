@@ -1155,11 +1155,11 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
         GET_METRIC(dm_context.metrics, tiflash_storage_subtask_duration_seconds, type_seg_split).Observe(watch_seg_split.elapsedSeconds());
     });
 
-    WriteBatches wbs(storage_pool);
+    WriteBatches wbs(storage_pool, is_foreground ? nullptr : dm_context.db_context.getRateLimiter());
     auto         range      = segment->getRowKeyRange();
     auto         split_info = segment->prepareSplit(dm_context, segment_snap, wbs, !is_foreground);
 
-    wbs.writeLogAndData(is_foreground ? nullptr : dm_context.db_context.getRateLimiter());
+    wbs.writeLogAndData();
     split_info.my_stable->enableDMFilesGC();
     split_info.other_stable->enableDMFilesGC();
 
@@ -1180,7 +1180,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 
         std::tie(new_left, new_right) = segment->applySplit(dm_context, segment_snap, wbs, split_info, !is_foreground);
 
-        wbs.writeMeta(is_foreground ? nullptr : dm_context.db_context.getRateLimiter());
+        wbs.writeMeta();
 
         segment->abandon();
         segments.erase(range.getEnd());
@@ -1204,7 +1204,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
         LOG_DEBUG(log, "Apply split done. Segment [" << segment->segmentId() << "]");
     }
 
-    wbs.writeRemoves(is_foreground ? nullptr : dm_context.db_context.getRateLimiter());
+    wbs.writeRemoves();
 
     if (!split_info.is_logical)
     {
@@ -1272,9 +1272,9 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
     auto left_range  = left->getRowKeyRange();
     auto right_range = right->getRowKeyRange();
 
-    WriteBatches wbs(storage_pool);
+    WriteBatches wbs(storage_pool, is_foreground ? nullptr : dm_context.db_context.getRateLimiter());
     auto         merged_stable = Segment::prepareMerge(dm_context, left, left_snap, right, right_snap, wbs, !is_foreground);
-    wbs.writeLogAndData(is_foreground ? nullptr : dm_context.db_context.getRateLimiter());
+    wbs.writeLogAndData();
     merged_stable->enableDMFilesGC();
 
     {
@@ -1294,7 +1294,7 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
 
         auto merged = Segment::applyMerge(dm_context, left, left_snap, right, right_snap, wbs, merged_stable, !is_foreground);
 
-        wbs.writeMeta(is_foreground ? nullptr : dm_context.db_context.getRateLimiter());
+        wbs.writeMeta();
 
         left->abandon();
         right->abandon();
@@ -1314,7 +1314,7 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
         LOG_DEBUG(log, "Apply merge done. [" << left->info() << "] and [" << right->info() << "]");
     }
 
-    wbs.writeRemoves(is_foreground ? nullptr : dm_context.db_context.getRateLimiter());
+    wbs.writeRemoves();
 
     GET_METRIC(dm_context.metrics, tiflash_storage_throughput_bytes, type_merge).Increment(delta_bytes);
     GET_METRIC(dm_context.metrics, tiflash_storage_throughput_rows, type_merge).Increment(delta_rows);
@@ -1363,10 +1363,10 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
             .Observe(watch_delta_merge.elapsedSeconds());
     });
 
-    WriteBatches wbs(storage_pool);
+    WriteBatches wbs(storage_pool, is_foreground ? nullptr : dm_context.db_context.getRateLimiter());
 
     auto new_stable = segment->prepareMergeDelta(dm_context, segment_snap, wbs, !is_foreground);
-    wbs.writeLogAndData(is_foreground ? nullptr : dm_context.db_context.getRateLimiter());
+    wbs.writeLogAndData();
     new_stable->enableDMFilesGC();
 
     SegmentPtr new_segment;
@@ -1386,7 +1386,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
 
         new_segment = segment->applyMergeDelta(dm_context, segment_snap, wbs, new_stable, !is_foreground);
 
-        wbs.writeMeta(is_foreground ? nullptr : dm_context.db_context.getRateLimiter());
+        wbs.writeMeta();
 
 
         // The instance of PKRange::End is closely linked to instance of PKRange. So we cannot reuse it.
@@ -1407,7 +1407,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
         LOG_DEBUG(log, "Apply merge delta done. Segment [" << segment->segmentId() << "]");
     }
 
-    wbs.writeRemoves(is_foreground ? nullptr : dm_context.db_context.getRateLimiter());
+    wbs.writeRemoves();
 
     GET_METRIC(dm_context.metrics, tiflash_storage_throughput_bytes, type_delta_merge).Increment(delta_bytes);
     GET_METRIC(dm_context.metrics, tiflash_storage_throughput_rows, type_delta_merge).Increment(delta_rows);

@@ -24,7 +24,12 @@ struct WriteBatches : private boost::noncopyable
     StoragePool & storage_pool;
     bool          should_roll_back = false;
 
-    WriteBatches(StoragePool & storage_pool_) : storage_pool(storage_pool_) {}
+    RateLimiterPtr rate_limiter;
+
+    WriteBatches(StoragePool & storage_pool_, const RateLimiterPtr & rate_limiter_ = nullptr)
+        : storage_pool(storage_pool_), rate_limiter(rate_limiter_)
+    {
+    }
 
     ~WriteBatches()
     {
@@ -57,7 +62,7 @@ struct WriteBatches : private boost::noncopyable
 
     void setRollback() { should_roll_back = true; }
 
-    void writeLogAndData(const RateLimiterPtr & rate_limiter = nullptr)
+    void writeLogAndData()
     {
         PageIds log_write_pages, data_write_pages;
 
@@ -131,7 +136,7 @@ struct WriteBatches : private boost::noncopyable
         writtenData.clear();
     }
 
-    void writeMeta(const RateLimiterPtr & rate_limiter = nullptr)
+    void writeMeta()
     {
         if constexpr (DM_RUN_CHECK)
         {
@@ -155,7 +160,7 @@ struct WriteBatches : private boost::noncopyable
         meta.clear();
     }
 
-    void writeRemoves(const RateLimiterPtr & rate_limiter = nullptr)
+    void writeRemoves()
     {
         if constexpr (DM_RUN_CHECK)
         {
@@ -186,11 +191,11 @@ struct WriteBatches : private boost::noncopyable
         removed_meta.clear();
     }
 
-    void writeAll(const RateLimiterPtr & rate_limiter = nullptr)
+    void writeAll()
     {
-        writeLogAndData(rate_limiter);
-        writeMeta(rate_limiter);
-        writeRemoves(rate_limiter);
+        writeLogAndData();
+        writeMeta();
+        writeRemoves();
     }
 
     void clear()
