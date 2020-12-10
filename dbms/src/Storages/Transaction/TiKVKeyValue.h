@@ -3,23 +3,10 @@
 #include <Storages/Transaction/AtomicDecodedRow.h>
 #include <Storages/Transaction/SerializationHelper.h>
 #include <Storages/Transaction/Types.h>
+#include <Common/RedactHelpers.h>
 
 namespace DB
 {
-
-inline std::string ToHex(const char * data, const size_t size)
-{
-    std::stringstream ss;
-    ss << "[" << std::hex;
-    for (size_t i = 0; i < size; ++i)
-    {
-        ss << Int32(UInt8(data[i]));
-        if (i + 1 != size)
-            ss << ' ';
-    }
-    ss << "]";
-    return ss.str();
-}
 
 template <bool is_key>
 struct StringObject : std::string
@@ -54,7 +41,7 @@ public:
     std::string toString() const { return *this; }
 
     // For debug
-    std::string toHex() const { return ToHex(data(), dataSize()); }
+    std::string toDebugString() const { return Redact::keyToDebugString(data(), dataSize()); }
 
     explicit operator bool() const { return !empty(); }
 
@@ -110,10 +97,10 @@ struct RawTiDBPK : std::shared_ptr<const std::string>
 
     RawTiDBPK(const Base & o) : Base(o), handle(o->size() == 8 ? getHandleID() : 0) {}
 
-    std::string toHex() const
+    std::string toDebugString() const
     {
         auto & p = *this;
-        return ToHex(p->data(), p->size());
+        return Redact::keyToDebugString(p->data(), p->size());
     }
 
     // Make this struct can be casted into HandleID implicitly.

@@ -515,15 +515,15 @@ BlockInputStreams StorageDeltaMerge::read( //
                 if (!region.required_handle_ranges.empty())
                 {
                     for (const auto & range : region.required_handle_ranges)
-                        ss << region.region_id << "[" << RecordKVFormat::DecodedTiKVKeyToReadableHandleString<true>(*range.first) << ","
-                           << RecordKVFormat::DecodedTiKVKeyToReadableHandleString<false>(*range.second) << "),";
+                        ss << region.region_id << "[" << RecordKVFormat::DecodedTiKVKeyToDebugString<true>(*range.first) << ","
+                           << RecordKVFormat::DecodedTiKVKeyToDebugString<false>(*range.second) << "),";
                 }
                 else
                 {
                     /// only used for test cases
                     const auto & range = region.range_in_table;
-                    ss << region.region_id << "[" << RecordKVFormat::DecodedTiKVKeyToReadableHandleString<true>(*range.first) << ","
-                       << RecordKVFormat::DecodedTiKVKeyToReadableHandleString<false>(*range.second) << "),";
+                    ss << region.region_id << "[" << RecordKVFormat::DecodedTiKVKeyToDebugString<true>(*range.first) << ","
+                       << RecordKVFormat::DecodedTiKVKeyToDebugString<false>(*range.second) << "),";
                 }
             }
             str_query_ranges = ss.str();

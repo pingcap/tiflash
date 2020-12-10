@@ -108,8 +108,8 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
 
         std::stringstream ss;
         ss << "put region #" << region_id << ", range["
-           << RecordKVFormat::DecodedTiKVKeyToReadableHandleString<true>(*region->getRange()->rawKeys().first) << ", "
-           << RecordKVFormat::DecodedTiKVKeyToReadableHandleString<false>(*region->getRange()->rawKeys().second) << ")"
+           << RecordKVFormat::DecodedTiKVKeyToDebugString<true>(*region->getRange()->rawKeys().first) << ", "
+           << RecordKVFormat::DecodedTiKVKeyToDebugString<false>(*region->getRange()->rawKeys().second) << ")"
            << " to table #" << table_id << " with kvstore.onSnapshot";
         output(ss.str());
     }
@@ -251,8 +251,8 @@ void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvo
 {
     auto region = GenDbgRegionSnapshotWithData(context, args);
     auto & rawkeys = region->getRange()->rawKeys();
-    auto start_string = RecordKVFormat::DecodedTiKVKeyToReadableHandleString<true>(*rawkeys.first);
-    auto end_string = RecordKVFormat::DecodedTiKVKeyToReadableHandleString<false>(*rawkeys.second);
+    auto start_string = RecordKVFormat::DecodedTiKVKeyToDebugString<true>(*rawkeys.first);
+    auto end_string = RecordKVFormat::DecodedTiKVKeyToDebugString<false>(*rawkeys.second);
     auto region_id = region->id();
     auto table_id = region->getMappedTableID();
     auto cnt = region->writeCFCount();
@@ -328,8 +328,8 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
         std::move(region_info), peer_id, SnapshotViewArray(), MockTiKV::instance().getRaftIndex(region_id), RAFT_INIT_LOG_TERM, tmt);
 
     std::stringstream ss;
-    ss << "put region #" << region_id << ", range[" << RecordKVFormat::DecodedTiKVKeyToReadableHandleString<true>(start_decoded_key) << ", "
-       << RecordKVFormat::DecodedTiKVKeyToReadableHandleString<false>(end_decoded_key) << ")"
+    ss << "put region #" << region_id << ", range[" << RecordKVFormat::DecodedTiKVKeyToDebugString<true>(start_decoded_key) << ", "
+       << RecordKVFormat::DecodedTiKVKeyToDebugString<false>(end_decoded_key) << ")"
        << " to table #" << table_id << " with raft commands";
     output(ss.str());
 }
@@ -358,7 +358,7 @@ std::string getRegionKeyString(const TiKVRange::Handle s, const TiKVKey & k)
     }
     catch (...)
     {
-        return "e:" + k.toHex();
+        return "e:" + k.toDebugString();
     }
 }
 
@@ -371,7 +371,7 @@ std::string getStartKeyString(TableID table_id, const TiKVKey & start_key)
     }
     catch (...)
     {
-        return "e: " + start_key.toHex();
+        return "e: " + start_key.toDebugString();
     }
 }
 
@@ -384,7 +384,7 @@ std::string getEndKeyString(TableID table_id, const TiKVKey & end_key)
     }
     catch (...)
     {
-        return "e: " + end_key.toHex();
+        return "e: " + end_key.toDebugString();
     }
 }
 
@@ -422,8 +422,8 @@ void dbgFuncDumpAllRegion(Context & context, TableID table_id, bool ignore_none,
             if (*rawkeys.first >= *rawkeys.second)
                 ss << " [none], ";
             else
-                ss << " ranges: [" << RecordKVFormat::DecodedTiKVKeyToReadableHandleString<true>(*rawkeys.first) << ", "
-                   << RecordKVFormat::DecodedTiKVKeyToReadableHandleString<false>(*rawkeys.second) << "), ";
+                ss << " ranges: [" << RecordKVFormat::DecodedTiKVKeyToDebugString<true>(*rawkeys.first) << ", "
+                   << RecordKVFormat::DecodedTiKVKeyToDebugString<false>(*rawkeys.second) << "), ";
         }
         ss << "state: " << raft_serverpb::PeerState_Name(region->peerState());
         if (auto s = region->dataInfo(); s.size() > 2)

@@ -10,6 +10,7 @@
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
 #include <Storages/Transaction/Types.h>
+#include <Common/RedactHelpers.h>
 
 namespace DB::DM
 {
@@ -47,7 +48,7 @@ struct RowKeyValueRef
     String toString() const
     {
         if (is_common_handle)
-            return ToHex(data, size);
+            return Redact::keyToDebugString(data, size);
         return std::to_string(int_value);
     }
     RowKeyValue toRowKeyValue() const;
@@ -89,7 +90,7 @@ struct RowKeyValue
     String toString() const
     {
         if (is_common_handle)
-            return ToHex(value->data(), value->size());
+            return Redact::keyToDebugString(value->data(), value->size());
         return std::to_string(int_value);
     }
 
@@ -658,7 +659,7 @@ struct RowKeyRange
 template <bool right_open = true>
 inline String rangeToString(const String & start, const String & end, bool)
 {
-    String s = "[" + ToHex(start.data(), start.size()) + "," + ToHex(end.data(), end.size());
+    String s = "[" + Redact::keyToDebugString(start.data(), start.size()) + "," + Redact::keyToDebugString(end.data(), end.size());
     if constexpr (right_open)
         s += ")";
     else

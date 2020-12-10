@@ -380,7 +380,7 @@ inline TiKVValue encodeWriteCfValue(UInt8 write_type, Timestamp ts, std::string_
 }
 
 template <bool start>
-inline std::string DecodedTiKVKeyToReadableHandleString(const DecodedTiKVKey & decoded_key)
+inline std::string DecodedTiKVKeyToDebugString(const DecodedTiKVKey & decoded_key)
 {
     if (decoded_key.size() <= RAW_KEY_NO_HANDLE_SIZE)
     {
@@ -393,7 +393,7 @@ inline std::string DecodedTiKVKeyToReadableHandleString(const DecodedTiKVKey & d
             return "+INF";
         }
     }
-    return ToHex(decoded_key.data() + RAW_KEY_NO_HANDLE_SIZE, decoded_key.size() - RAW_KEY_NO_HANDLE_SIZE);
+    return Redact::keyToDebugString(decoded_key.data() + RAW_KEY_NO_HANDLE_SIZE, decoded_key.size() - RAW_KEY_NO_HANDLE_SIZE);
 }
 
 } // namespace RecordKVFormat

@@ -1,0 +1,21 @@
+#pragma once
+
+#include <atomic>
+#include <ostream>
+
+class Redact
+{
+public:
+    static void setRedactLog(bool v);
+
+    static std::string keyToDebugString(const char * key, size_t size);
+
+    static void keyToDebugString(const char * key, size_t size, std::ostream & oss);
+
+protected:
+    Redact() {}
+
+private:
+    // Log user data to log only when this flag is set to false.
+    static std::atomic<bool> REDACT_LOG;
+};
