@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/UnifiedLogPatternFormatter.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/IDataType.h>
 #include <Encryption/MockKeyManager.h>
@@ -11,7 +12,6 @@
 #include <Poco/PatternFormatter.h>
 #include <Poco/SortedDirectoryIterator.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <Common/UnifiedLogPatternFormatter.h>
 #include <gtest/gtest.h>
 
 namespace DB
@@ -151,6 +151,8 @@ public:
             auto paths = getPathPool(testdata_path);
             context.setPathPool(paths.first, paths.second, Strings{}, true, context.getPathCapacity(), context.getFileProvider());
             context.createTMTContext({}, {"default"}, TiDB::StorageEngine::TMT, false);
+
+            context.setDeltaIndexManager(1024 * 1024 * 100 /*100MB*/);
 
             context.getTMTContext().restore();
         }
