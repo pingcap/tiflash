@@ -985,8 +985,7 @@ Field parseMyDateTime(const String & str, int8_t fsp)
         {
             offset = -offset;
         }
-        auto lut = DateLUT::instance("UTC" + tz_sign + tz_hour + ":" + tz_minute);
-        auto tmp = AddMinutesImpl::execute(result.toPackedUInt(), offset, lut);
+        auto tmp = AddSecondsImpl::execute(result.toPackedUInt(), -offset, DateLUT::instance());
         result = MyDateTime(tmp);
     }
 
@@ -1167,7 +1166,7 @@ MyDateTime numberToDateTime(Int64 number)
     // check MMDD
     if (number < 101)
     {
-        throw Exception("Cannot convert " + std::to_string(number) + " to Datetime");
+        throw TiFlashException("Cannot convert " + std::to_string(number) + " to Datetime", Errors::Types::WrongValue);
     }
 
     // check YYMMDD: 2000-2069
@@ -1187,7 +1186,7 @@ MyDateTime numberToDateTime(Int64 number)
     // check YYYYMMDD
     if (number <= 10000101)
     {
-        throw Exception("Cannot convert " + std::to_string(number) + " to Datetime");
+        throw TiFlashException("Cannot convert " + std::to_string(number) + " to Datetime", Errors::Types::WrongValue);
     }
 
     // check hhmmss
@@ -1200,7 +1199,7 @@ MyDateTime numberToDateTime(Int64 number)
     // check MMDDhhmmss
     if (number < 101000000)
     {
-        throw Exception("Cannot convert " + std::to_string(number) + " to Datetime");
+        throw TiFlashException("Cannot convert " + std::to_string(number) + " to Datetime", Errors::Types::WrongValue);
     }
 
     // check YYMMDDhhmmss: 2000-2069
@@ -1213,7 +1212,7 @@ MyDateTime numberToDateTime(Int64 number)
     // check YYMMDDhhmmss
     if (number < 70 * 10000000000 + 101000000)
     {
-        throw Exception("Cannot convert " + std::to_string(number) + " to Datetime");
+        throw TiFlashException("Cannot convert " + std::to_string(number) + " to Datetime", Errors::Types::WrongValue);
     }
 
     if (number <= 991231235959)
