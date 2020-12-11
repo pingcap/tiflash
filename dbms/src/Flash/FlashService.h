@@ -40,7 +40,7 @@ public:
 private:
     std::tuple<Context, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
 
-    grpc::Status execute_in_thread_pool(std::function<grpc::Status()> &&);
+    grpc::Status execute_in_thread_pool(std::function<grpc::Status()>);
 
 private:
     IServer & server;

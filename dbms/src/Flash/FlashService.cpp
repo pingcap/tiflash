@@ -251,7 +251,7 @@ String getClientMetaVarWithDefault(const grpc::ServerContext * grpc_context, con
     return default_val;
 }
 
-grpc::Status FlashService::execute_in_thread_pool(std::function<grpc::Status()> && job)
+grpc::Status FlashService::execute_in_thread_pool(std::function<grpc::Status()> job)
 {
     std::packaged_task<grpc::Status()> task(job);
     std::future<grpc::Status> future = task.get_future();
