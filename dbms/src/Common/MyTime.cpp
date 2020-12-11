@@ -3,7 +3,6 @@
 #include <Poco/String.h>
 
 #include <cctype>
-#include <chrono>
 #include <initializer_list>
 #include <vector>
 
@@ -90,7 +89,7 @@ std::vector<String> parseDateFormat(String format)
 //     see https://www.cl.cam.ac.uk/~mgk25/iso-time.html
 std::tuple<int, String, String, String, String> getTimeZone(String literal)
 {
-    static auto valid_idx_combinations = std::map<int, std::tuple<int, int>>{
+    static const std::map<int, std::tuple<int, int>> valid_idx_combinations{
         {100, {0, 0}}, // 23:59:59Z
         {30, {2, 0}},  // 23:59:59+08
         {50, {4, 2}},  // 23:59:59+0800
@@ -146,7 +145,7 @@ std::tuple<int, String, String, String, String> getTimeZone(String literal)
     }
     if (auto tmp = valid_idx_combinations.find(k); tmp != valid_idx_combinations.end())
     {
-        auto [h, m] = valid_idx_combinations[k];
+        auto [h, m] = valid_idx_combinations.at(k);
         int hidx = l - h;
         int midx = l - m;
         auto validate = [](const String & v) { return '0' <= v[0] && v[0] <= '9' && '0' <= v[1] && v[1] <= '9'; };
@@ -718,7 +717,7 @@ Field parseMyDateTime(const String & str, int8_t fsp)
 {
     // Since we only use DateLUTImpl as parameter placeholder of AddSecondsImpl::execute
     // and it's costly to construct a DateLUTImpl, a shared static instance is enough.
-    static DateLUTImpl lut = DateLUT::instance("UTC");
+    static const DateLUTImpl lut = DateLUT::instance("UTC");
 
     Int32 year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0, delta_hour = 0, delta_minute = 0;
 

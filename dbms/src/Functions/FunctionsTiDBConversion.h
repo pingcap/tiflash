@@ -1261,9 +1261,10 @@ struct TiDBConvertToTime
                         // Overflow
                         if (micro_second >= std::pow(10, to_fsp))
                         {
+                            static const auto lut = DateLUT::instance("UTC");
                             datetime.micro_second = 0;
                             packed_uint = datetime.toPackedUInt();
-                            packed_uint = AddSecondsImpl::execute(packed_uint, 1, DateLUT::instance());
+                            packed_uint = AddSecondsImpl::execute(packed_uint, 1, lut);
                         }
                         else
                         {
