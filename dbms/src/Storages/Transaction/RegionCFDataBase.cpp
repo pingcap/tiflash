@@ -6,6 +6,8 @@
 namespace DB
 {
 
+using CFModifyFlag = RecordKVFormat::CFModifyFlag;
+
 template <typename Trait>
 const TiKVKey & RegionCFDataBase<Trait>::getTiKVKey(const Value & val)
 {
@@ -28,26 +30,20 @@ template <typename Trait>
 RegionDataRes RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value)
 {
     const auto & raw_key = RecordKVFormat::decodeTiKVKey(key);
-    return insert(std::move(key), std::move(value), raw_key);
+    auto kv_pair = Trait::genKVPair(std::move(key), raw_key, std::move(value));
+    if (!kv_pair)
+        return 0;
+
+    return insert(std::move(*kv_pair));
 }
 
 template <>
 RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, TiKVValue && value)
 {
-    Pair kv_pair = RegionLockCFDataTrait::genKVPair(std::move(key), DecodedTiKVKey{}, std::move(value));
+    Pair kv_pair = RegionLockCFDataTrait::genKVPair(std::move(key), std::move(value));
     // according to the process of pessimistic lock, just overwrite.
     data.insert_or_assign(std::move(kv_pair.first), std::move(kv_pair.second));
     return 0;
-}
-
-template <typename Trait>
-RegionDataRes RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value, const DecodedTiKVKey & raw_key)
-{
-    Pair kv_pair = Trait::genKVPair(std::move(key), raw_key, std::move(value));
-    if (shouldIgnoreInsert(kv_pair.second))
-        return 0;
-
-    return insert(std::move(kv_pair));
 }
 
 template <typename Trait>
@@ -136,20 +132,6 @@ template <>
 bool RegionCFDataBase<RegionWriteCFDataTrait>::shouldIgnoreRemove(const RegionCFDataBase::Value & value)
 {
     return RegionWriteCFDataTrait::getWriteType(value) == CFModifyFlag::DelFlag;
-}
-
-template <typename Trait>
-bool RegionCFDataBase<Trait>::shouldIgnoreInsert(const RegionCFDataBase::Value &)
-{
-    return false;
-}
-
-template <>
-bool RegionCFDataBase<RegionWriteCFDataTrait>::shouldIgnoreInsert(const RegionCFDataBase::Value & value)
-{
-    // only keep records with DelFlag or PutFlag.
-    const auto flag = RegionWriteCFDataTrait::getWriteType(value);
-    return flag != CFModifyFlag::DelFlag && flag != CFModifyFlag::PutFlag;
 }
 
 template <typename Trait>
