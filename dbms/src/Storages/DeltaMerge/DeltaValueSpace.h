@@ -25,9 +25,9 @@ using DeltaIndexCompacted    = DefaultDeltaTree::CompactedEntries;
 using DeltaIndexCompactedPtr = DefaultDeltaTree::CompactedEntriesPtr;
 using DeltaIndexIterator     = DeltaIndexCompacted::Iterator;
 
+struct DMContext;
 struct WriteBatches;
 class StoragePool;
-struct DMContext;
 
 static std::atomic_uint64_t NEXT_PACK_ID{0};
 
@@ -144,6 +144,9 @@ public:
         size_t bytes;
         size_t deletes;
 
+        bool   is_common_handle;
+        size_t rowkey_column_size;
+
         /// TODO: The members below are not part of the Snapshot, they should not be here.
         /// They are used by the reader of this Snapshot.
 
@@ -157,9 +160,6 @@ public:
         // The data of packs when reading.
         std::vector<Columns> packs_data;
 
-        bool   is_common_handle;
-        size_t rowkey_column_size;
-
         SnapshotPtr clone()
         {
             auto c                = std::make_shared<Snapshot>();
@@ -171,6 +171,8 @@ public:
             c->rows               = rows;
             c->bytes              = bytes;
             c->deletes            = deletes;
+            c->is_common_handle   = is_common_handle;
+            c->rowkey_column_size = rowkey_column_size;
             return c;
         }
 
@@ -269,12 +271,7 @@ public:
     }
 
     /// Abandon this instance.
-    void abandon()
-    {
-        bool v = false;
-        if (!abandoned.compare_exchange_strong(v, true))
-            throw Exception("Try to abandon a already abandoned DeltaValueSpace", ErrorCodes::LOGICAL_ERROR);
-    }
+    void abandon(DMContext & context);
 
     bool hasAbandoned() const { return abandoned.load(std::memory_order_relaxed); }
 
