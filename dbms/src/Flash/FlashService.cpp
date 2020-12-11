@@ -54,23 +54,16 @@ grpc::Status FlashService::Coprocessor(
         GET_METRIC(metrics, tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
     });
 
-    std::promise<grpc::Status> promise;
-    std::future<grpc::Status> future = promise.get_future();
-    cop_thread_pool->schedule([&]() {
+    grpc::Status ret = execute_in_thread_pool([&] {
         auto [context, status] = createDBContext(grpc_context);
         if (!status.ok())
         {
-            promise.set_value(status);
+            return status;
         }
-        else
-        {
-            CoprocessorContext cop_context(context, request->context(), *grpc_context);
-            CoprocessorHandler cop_handler(cop_context, request, response);
-            promise.set_value(cop_handler.execute());
-        }
+        CoprocessorContext cop_context(context, request->context(), *grpc_context);
+        CoprocessorHandler cop_handler(cop_context, request, response);
+        return cop_handler.execute();
     });
-
-    auto ret = future.get();
 
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle coprocessor request done: " << ret.error_code() << ", " << ret.error_message());
     return ret;
@@ -95,23 +88,16 @@ grpc::Status FlashService::Coprocessor(
         // TODO: update the value of metric tiflash_coprocessor_response_bytes.
     });
 
-    std::promise<grpc::Status> promise;
-    std::future<grpc::Status> future = promise.get_future();
-    cop_thread_pool->schedule([&]() {
+    grpc::Status ret = execute_in_thread_pool([&] {
         auto [context, status] = createDBContext(grpc_context);
         if (!status.ok())
         {
-            promise.set_value(status);
+            return status;
         }
-        else
-        {
-            CoprocessorContext cop_context(context, request->context(), *grpc_context);
-            BatchCoprocessorHandler cop_handler(cop_context, request, writer);
-            promise.set_value(cop_handler.execute());
-        }
+        CoprocessorContext cop_context(context, request->context(), *grpc_context);
+        BatchCoprocessorHandler cop_handler(cop_context, request, writer);
+        return cop_handler.execute();
     });
-
-    auto ret = future.get();
 
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle coprocessor request done: " << ret.error_code() << ", " << ret.error_message());
     return ret;
@@ -120,7 +106,6 @@ grpc::Status FlashService::Coprocessor(
 ::grpc::Status FlashService::DispatchMPPTask(
     ::grpc::ServerContext * grpc_context, const ::mpp::DispatchTaskRequest * request, ::mpp::DispatchTaskResponse * response)
 {
-
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling mpp dispatch request: " << request->DebugString());
 
     if (!security_config.checkGrpcContext(grpc_context))
@@ -129,14 +114,17 @@ grpc::Status FlashService::Coprocessor(
     }
     // TODO: Add metric.
 
-    auto [context, status] = createDBContext(grpc_context);
-    if (!status.ok())
-    {
-        return status;
-    }
+    grpc::Status ret = execute_in_thread_pool([&] {
+        auto [context, status] = createDBContext(grpc_context);
+        if (!status.ok())
+        {
+            return status;
+        }
+        MPPHandler mpp_handler(context, *request);
+        return mpp_handler.execute(response);
+    });
 
-    MPPHandler mpp_handler(context, *request);
-    return mpp_handler.execute(response);
+    return ret;
 }
 
 ::grpc::Status FlashService::EstablishMPPConnection(::grpc::ServerContext * grpc_context,
@@ -152,50 +140,56 @@ grpc::Status FlashService::Coprocessor(
     }
     // TODO: Add metric.
 
-    auto [context, status] = createDBContext(grpc_context);
-    if (!status.ok())
-    {
-        return status;
-    }
+    grpc::Status ret = execute_in_thread_pool([&] {
+        auto [context, status] = createDBContext(grpc_context);
+        if (!status.ok())
+        {
+            return status;
+        }
 
-    auto & tmt_context = context.getTMTContext();
-    auto task_manager = tmt_context.getMPPTaskManager();
-    std::chrono::seconds timeout(10);
-    MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout);
-    if (sender_task == nullptr)
-    {
-        auto errMsg = "can't find task [" + toString(request->sender_meta().start_ts()) + "," + toString(request->sender_meta().task_id())
-            + "] within " + toString(timeout.count()) + " s";
-        LOG_DEBUG(log, errMsg);
-        mpp::MPPDataPacket packet;
-        auto err = new mpp::Error();
-        err->set_msg(errMsg);
-        packet.set_allocated_error(err);
-        writer->Write(packet);
+        auto & tmt_context = context.getTMTContext();
+        auto task_manager = tmt_context.getMPPTaskManager();
+        std::chrono::seconds timeout(10);
+        MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout);
+        if (sender_task == nullptr)
+        {
+            auto errMsg = "can't find task [" + toString(request->sender_meta().start_ts()) + ","
+                + toString(request->sender_meta().task_id()) + "] within " + toString(timeout.count()) + " s";
+            LOG_DEBUG(log, errMsg);
+            mpp::MPPDataPacket packet;
+            auto err = new mpp::Error();
+            err->set_msg(errMsg);
+            packet.set_allocated_error(err);
+            writer->Write(packet);
+            return grpc::Status::OK;
+        }
+        MPPTunnelPtr tunnel = sender_task->getTunnelWithTimeout(request->receiver_meta(), timeout);
+        if (tunnel == nullptr)
+        {
+            auto errMsg = "can't find tunnel ( " + toString(request->receiver_meta().task_id()) + " + "
+                + toString(request->sender_meta().task_id()) + " ) within " + toString(timeout.count()) + " s";
+            LOG_DEBUG(log, errMsg);
+            mpp::MPPDataPacket packet;
+            auto err = new mpp::Error();
+            err->set_msg(errMsg);
+            packet.set_allocated_error(err);
+            writer->Write(packet);
+            return grpc::Status::OK;
+        }
+        Stopwatch stopwatch;
+        tunnel->connect(writer);
+        LOG_DEBUG(log, "connect tunnel successfully and begin to wait");
+        tunnel->waitForFinish();
+        LOG_INFO(log, "connection for " << tunnel->tunnel_id << " cost " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
+        // TODO: Check if there are errors in task.
+
         return grpc::Status::OK;
-    }
-    MPPTunnelPtr tunnel = sender_task->getTunnelWithTimeout(request->receiver_meta(), timeout);
-    if (tunnel == nullptr)
-    {
-        auto errMsg = "can't find tunnel ( " + toString(request->receiver_meta().task_id()) + " + "
-            + toString(request->sender_meta().task_id()) + " ) within " + toString(timeout.count()) + " s";
-        LOG_DEBUG(log, errMsg);
-        mpp::MPPDataPacket packet;
-        auto err = new mpp::Error();
-        err->set_msg(errMsg);
-        packet.set_allocated_error(err);
-        writer->Write(packet);
-        return grpc::Status::OK;
-    }
-    Stopwatch stopwatch;
-    tunnel->connect(writer);
-    LOG_DEBUG(log, "connect tunnel successfully and begin to wait");
-    tunnel->waitForFinish();
-    LOG_INFO(log, "connection for " << tunnel->tunnel_id << " cost " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
-    // TODO: Check if there are errors in task.
-    return grpc::Status::OK;
+    });
+
+    return ret;
 }
 
+// This function is deprecated.
 grpc::Status FlashService::BatchCommands(
     grpc::ServerContext * grpc_context, grpc::ServerReaderWriter<::tikvpb::BatchCommandsResponse, tikvpb::BatchCommandsRequest> * stream)
 {
@@ -255,6 +249,14 @@ String getClientMetaVarWithDefault(const grpc::ServerContext * grpc_context, con
     if (auto it = grpc_context->client_metadata().find(name); it != grpc_context->client_metadata().end())
         return it->second.data();
     return default_val;
+}
+
+grpc::Status FlashService::execute_in_thread_pool(std::function<grpc::Status()> && job)
+{
+    std::packaged_task<grpc::Status()> task(job);
+    std::future<grpc::Status> future = task.get_future();
+    cop_thread_pool->schedule([&task] { task(); });
+    return future.get();
 }
 
 std::tuple<Context, grpc::Status> FlashService::createDBContext(const grpc::ServerContext * grpc_context) const

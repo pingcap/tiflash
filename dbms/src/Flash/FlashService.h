@@ -38,12 +38,14 @@ public:
     ::grpc::Status EstablishMPPConnection(::grpc::ServerContext* context, const ::mpp::EstablishMPPConnectionRequest* request, ::grpc::ServerWriter< ::mpp::MPPDataPacket>* writer) override;
 
 private:
-    std::tuple<Context, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_contex) const;
+    std::tuple<Context, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
+
+    grpc::Status execute_in_thread_pool(std::function<grpc::Status()> &&);
 
 private:
     IServer & server;
     TiFlashMetricsPtr metrics;
-    std::unique_ptr<ThreadPool> cop_thread_pool;
+    std::unique_ptr<ThreadPool> cop_thread_pool; // Use execute_in_thread_pool to submit job to thread pool which return grpc::Status.
 
     const TiFlashSecurityConfig & security_config;
 
