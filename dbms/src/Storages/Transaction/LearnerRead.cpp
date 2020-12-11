@@ -115,11 +115,9 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
             {
                 region_status = status;
                 LOG_WARNING(log,
-                    "Check memory cache, region "
-                        << region_id << ", version " << region_to_query.version << ", handle range ["
-                        << RecordKVFormat::DecodedTiKVKeyToDebugString<true>(*region_to_query.range_in_table.first) << ", "
-                        << RecordKVFormat::DecodedTiKVKeyToDebugString<false>(*region_to_query.range_in_table.second) << ") , status "
-                        << RegionException::RegionReadStatusString(status));
+                    "Check memory cache, region " << region_id << ", version " << region_to_query.version << ", handle range "
+                                                  << RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region_to_query.range_in_table)
+                                                  << ", status " << RegionException::RegionReadStatusString(status));
                 return;
             }
 
@@ -209,9 +207,8 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
                 {
                     LOG_WARNING(log,
                         "Check memory cache, region "
-                            << region_to_query.region_id << ", version " << region_to_query.version << ", handle range ["
-                            << RecordKVFormat::DecodedTiKVKeyToDebugString<true>(*region_to_query.range_in_table.first) << ", "
-                            << RecordKVFormat::DecodedTiKVKeyToDebugString<false>(*region_to_query.range_in_table.second) << ") , status "
+                            << region_to_query.region_id << ", version " << region_to_query.version << ", handle range "
+                            << RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region_to_query.range_in_table) << ", status "
                             << RegionException::RegionReadStatusString(status));
                     region_status = status;
                 }
@@ -280,9 +277,8 @@ void validateQueryInfo(
             LOG_WARNING(log,
                 "Check after read from Storage, region "
                     << region_query_info.region_id << ", version " << region_query_info.version //
-                    << ", handle range [" << RecordKVFormat::DecodedTiKVKeyToDebugString<true>(*region_query_info.range_in_table.first)
-                    << ", " << RecordKVFormat::DecodedTiKVKeyToDebugString<false>(*region_query_info.range_in_table.second) << "), status "
-                    << RegionException::RegionReadStatusString(status));
+                    << ", handle range " << RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region_query_info.range_in_table)
+                    << ", status " << RegionException::RegionReadStatusString(status));
         }
     }
 

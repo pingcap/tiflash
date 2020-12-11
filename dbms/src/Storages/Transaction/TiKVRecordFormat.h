@@ -396,6 +396,18 @@ inline std::string DecodedTiKVKeyToDebugString(const DecodedTiKVKey & decoded_ke
     return Redact::keyToDebugString(decoded_key.data() + RAW_KEY_NO_HANDLE_SIZE, decoded_key.size() - RAW_KEY_NO_HANDLE_SIZE);
 }
 
+using DecodedTiKVKeyPtr = std::shared_ptr<DecodedTiKVKey>;
+inline std::string DecodedTiKVKeyRangeToDebugString(const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & key_range)
+{
+    if (unlikely(*key_range.first >= *key_range.second))
+        return "[none]";
+
+    return std::string("[") //
+        + RecordKVFormat::DecodedTiKVKeyToDebugString<true>(*key_range.first) + ", "
+        + RecordKVFormat::DecodedTiKVKeyToDebugString<false>(*key_range.second) //
+        + ")";
+}
+
 } // namespace RecordKVFormat
 
 } // namespace DB

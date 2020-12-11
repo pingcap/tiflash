@@ -107,9 +107,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
         tmt.getKVStore()->onSnapshot(region, nullptr, 0, tmt);
 
         std::stringstream ss;
-        ss << "put region #" << region_id << ", range["
-           << RecordKVFormat::DecodedTiKVKeyToDebugString<true>(*region->getRange()->rawKeys().first) << ", "
-           << RecordKVFormat::DecodedTiKVKeyToDebugString<false>(*region->getRange()->rawKeys().second) << ")"
+        ss << "put region #" << region_id << ", range" << RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region->getRange()->rawKeys())
            << " to table #" << table_id << " with kvstore.onSnapshot";
         output(ss.str());
     }
@@ -250,16 +248,13 @@ RegionPtr GenDbgRegionSnapshotWithData(Context & context, const ASTs & args)
 void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     auto region = GenDbgRegionSnapshotWithData(context, args);
-    auto & rawkeys = region->getRange()->rawKeys();
-    auto start_string = RecordKVFormat::DecodedTiKVKeyToDebugString<true>(*rawkeys.first);
-    auto end_string = RecordKVFormat::DecodedTiKVKeyToDebugString<false>(*rawkeys.second);
+    auto range_string = RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region->getRange()->rawKeys());
     auto region_id = region->id();
     auto table_id = region->getMappedTableID();
     auto cnt = region->writeCFCount();
     context.getTMTContext().getKVStore()->tryApplySnapshot(region, context);
     std::stringstream ss;
-    ss << "put region #" << region_id << ", range[" << start_string << ", " << end_string << ")"
-       << " to table #" << table_id << " with " << cnt << " records";
+    ss << "put region #" << region_id << ", range" << range_string << " to table #" << table_id << " with " << cnt << " records";
     output(ss.str());
 }
 
@@ -409,7 +404,7 @@ void dbgFuncDumpAllRegion(Context & context, TableID table_id, bool ignore_none,
 
             ss << region->toString(dump_status);
             if (range.first >= range.second)
-                ss << " [none], ";
+                ss << " ranges: [none], ";
             else
                 ss << " ranges: [" << range.first.toString() << ", " << range.second.toString() << "), ";
         }
@@ -419,11 +414,7 @@ void dbgFuncDumpAllRegion(Context & context, TableID table_id, bool ignore_none,
                 return;
 
             ss << region->toString(dump_status);
-            if (*rawkeys.first >= *rawkeys.second)
-                ss << " [none], ";
-            else
-                ss << " ranges: [" << RecordKVFormat::DecodedTiKVKeyToDebugString<true>(*rawkeys.first) << ", "
-                   << RecordKVFormat::DecodedTiKVKeyToDebugString<false>(*rawkeys.second) << "), ";
+            ss << " ranges: " << RecordKVFormat::DecodedTiKVKeyRangeToDebugString(rawkeys) << ", ";
         }
         ss << "state: " << raft_serverpb::PeerState_Name(region->peerState());
         if (auto s = region->dataInfo(); s.size() > 2)
