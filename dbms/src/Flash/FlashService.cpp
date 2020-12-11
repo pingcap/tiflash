@@ -26,10 +26,14 @@ constexpr char tls_err_msg[] = "common name check is failed";
 FlashService::FlashService(IServer & server_)
     : server(server_),
       metrics(server.context().getTiFlashMetrics()),
-      cop_thread_pool(ThreadPool(server_.context().getSettingsRef().max_threads)),
       security_config(server_.securityConfig()),
       log(&Logger::get("FlashService"))
-{}
+{
+    size_t max_coprocessor_threads = static_cast<size_t>(server_.context().getSettingsRef().max_coprocessor_threads);
+    max_coprocessor_threads = max_coprocessor_threads ? max_coprocessor_threads : 4 * getNumberOfPhysicalCPUCores();
+    LOG_INFO(log, "Use a thread pool with " << max_coprocessor_threads << " threads to handling coprocessor requests.");
+    cop_thread_pool = std::make_unique<ThreadPool>(max_coprocessor_threads);
+}
 
 grpc::Status FlashService::Coprocessor(
     grpc::ServerContext * grpc_context, const coprocessor::Request * request, coprocessor::Response * response)
@@ -52,7 +56,7 @@ grpc::Status FlashService::Coprocessor(
 
     std::promise<grpc::Status> promise;
     std::future<grpc::Status> future = promise.get_future();
-    cop_thread_pool.schedule([&]() {
+    cop_thread_pool->schedule([&]() {
         auto [context, status] = createDBContext(grpc_context);
         if (!status.ok())
         {
@@ -93,7 +97,7 @@ grpc::Status FlashService::Coprocessor(
 
     std::promise<grpc::Status> promise;
     std::future<grpc::Status> future = promise.get_future();
-    cop_thread_pool.schedule([&]() {
+    cop_thread_pool->schedule([&]() {
         auto [context, status] = createDBContext(grpc_context);
         if (!status.ok())
         {
