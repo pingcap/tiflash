@@ -152,7 +152,7 @@ std::tuple<int, String, String, String, String> getTimeZone(String literal)
         auto validate = [](const String & v) { return '0' <= v[0] && v[0] <= '9' && '0' <= v[1] && v[1] <= '9'; };
         if (sidx != -1)
         {
-            tz_sign = literal.substr(sidx, sidx + 1);
+            tz_sign = literal.substr(sidx, 1);
             idx = sidx;
         }
         if (zidx != -1)
@@ -161,11 +161,11 @@ std::tuple<int, String, String, String, String> getTimeZone(String literal)
         }
         if ((l - spidx) == 3)
         {
-            tz_sep = literal.substr(spidx, spidx + 1);
+            tz_sep = literal.substr(spidx, 1);
         }
         if (h != 0)
         {
-            tz_hour = literal.substr(hidx, hidx + 2);
+            tz_hour = literal.substr(hidx, 2);
             if (!validate(tz_hour))
             {
                 return std::make_tuple(-1, "", "", "", "");
@@ -173,7 +173,7 @@ std::tuple<int, String, String, String, String> getTimeZone(String literal)
         }
         if (m != 0)
         {
-            tz_minute = literal.substr(midx, midx + 2);
+            tz_minute = literal.substr(midx, 2);
             if (!validate(tz_minute))
             {
                 return std::make_tuple(-1, "", "", "", "");
@@ -716,6 +716,10 @@ void MyTimeBase::convertDateFormat(char c, String & result) const
 // TODO: support parse time from float string
 Field parseMyDateTime(const String & str, int8_t fsp)
 {
+    // Since we only use DateLUTImpl as parameter placeholder of AddSecondsImpl::execute
+    // and it's costly to construct a DateLUTImpl, a shared static instance is enough.
+    static DateLUTImpl lut = DateLUT::instance("UTC");
+
     Int32 year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0, delta_hour = 0, delta_minute = 0;
 
     bool hhmmss = false;
@@ -939,7 +943,7 @@ Field parseMyDateTime(const String & str, int8_t fsp)
             if (micro_second >= std::pow(10, fsp))
             {
                 MyDateTime datetime(year, month, day, hour, minute, second, 0);
-                UInt64 result = AddSecondsImpl::execute(datetime.toPackedUInt(), 1, DateLUT::instance());
+                UInt64 result = AddSecondsImpl::execute(datetime.toPackedUInt(), 1, lut);
                 MyDateTime result_datetime(result);
                 year = result_datetime.year;
                 month = result_datetime.month;
@@ -986,7 +990,7 @@ Field parseMyDateTime(const String & str, int8_t fsp)
         {
             offset = -offset;
         }
-        auto tmp = AddSecondsImpl::execute(result.toPackedUInt(), -offset, DateLUT::instance());
+        auto tmp = AddSecondsImpl::execute(result.toPackedUInt(), -offset, lut);
         result = MyDateTime(tmp);
     }
 

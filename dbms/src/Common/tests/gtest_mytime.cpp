@@ -27,7 +27,28 @@ public:
             UInt64 res = parseMyDateTime(str, type.getFraction()).template safeGet<UInt64>();
             MyDateTime datetime(res);
             std::string actual = datetime.toString(type.getFraction());
-            ASSERT_EQ(actual, expected) << "Original datetime string: " << str;
+            EXPECT_EQ(actual, expected) << "Original datetime string: " << str;
+        }
+        catch (...)
+        {
+            std::cerr << "Error occurs when parsing: \"" << str << "\"" << std::endl;
+            throw;
+        }
+    }
+
+    static void checkParseMyDateTime(const std::string & str, MyDateTime & expected, const DataTypeMyDateTime & type)
+    {
+        try
+        {
+            UInt64 res = parseMyDateTime(str, type.getFraction()).template safeGet<UInt64>();
+            MyDateTime source(res);
+            EXPECT_EQ(source.year, expected.year) << "Original datetime string: " << str;
+            EXPECT_EQ(source.month, expected.month) << "Original datetime string: " << str;
+            EXPECT_EQ(source.day, expected.day) << "Original datetime string: " << str;
+            EXPECT_EQ(source.hour, expected.hour) << "Original datetime string: " << str;
+            EXPECT_EQ(source.minute, expected.minute) << "Original datetime string: " << str;
+            EXPECT_EQ(source.second, expected.second) << "Original datetime string: " << str;
+            EXPECT_EQ(source.micro_second, expected.micro_second) << "Original datetime string: " << str;
         }
         catch (...)
         {
@@ -37,7 +58,7 @@ public:
     }
 };
 
-TEST_F(TestMyTime, ParseMyDateTime)
+TEST_F(TestMyTime, ParseMyDateTimeWithFraction)
 try
 {
     std::vector<std::tuple<std::string, std::string>> cases_with_fsp{
@@ -52,6 +73,21 @@ try
         {"2020-10-10 10.10", "2020-10-10 10:10:00.000000"},
         {"2018.01.01", "2018-01-01 00:00:00.000000"},
     };
+    DataTypeMyDateTime type_with_fraction(6);
+    for (auto & [str, expected] : cases_with_fsp)
+    {
+        checkParseMyDateTime(str, expected, type_with_fraction);
+    }
+}
+catch (Exception & e)
+{
+    std::cerr << e.displayText() << std::endl;
+    GTEST_FAIL();
+}
+
+TEST_F(TestMyTime, ParseMyDateTimeWithoutFraction)
+try
+{
     std::vector<std::tuple<std::string, std::string>> cases_without_fsp{
         {"2012-12-31 11:30:45", "2012-12-31 11:30:45"},
         {"0000-00-00 00:00:00", "0000-00-00 00:00:00"},
@@ -79,15 +115,35 @@ try
         {"2018/01/01-00:00:00", "2018-01-01 00:00:00"},
         {"4710072", "2047-10-07 02:00:00"},
     };
-    DataTypeMyDateTime type_with_fraction(6);
     DataTypeMyDateTime type_without_fraction(0);
-    for (auto & [str, expected] : cases_with_fsp)
-    {
-        checkParseMyDateTime(str, expected, type_with_fraction.getFraction());
-    }
     for (auto & [str, expected] : cases_without_fsp)
     {
-        checkParseMyDateTime(str, expected, type_without_fraction.getFraction());
+        checkParseMyDateTime(str, expected, type_without_fraction);
+    }
+}
+catch (Exception & e)
+{
+    std::cerr << e.displayText() << std::endl;
+    GTEST_FAIL();
+}
+
+TEST_F(TestMyTime, ParseMyDateTimeWithTimezone)
+try
+{
+    std::vector<std::tuple<std::string, MyDateTime>> cases{
+        {"2006-01-02T15:04:05Z", MyDateTime(2006, 1, 2, 15, 4, 5, 0)},
+        {"2020-10-21T16:05:10Z", MyDateTime(2020, 10, 21, 16, 5, 10, 0)},
+        {"2020-10-21T16:05:10.50+08", MyDateTime(2020, 10, 21, 8, 5, 10, 500 * 1000)},
+        {"2020-10-21T16:05:10.50-0700", MyDateTime(2020, 10, 21, 23, 5, 10, 500 * 1000)},
+        {"2020-10-21T16:05:10.50+09:00", MyDateTime(2020, 10, 21, 7, 5, 10, 500 * 1000)},
+        {"2006-01-02T15:04:05+09:00", MyDateTime(2006, 1, 2, 6, 4, 5, 0)},
+        {"2006-01-02T15:04:05-02:00", MyDateTime(2006, 1, 2, 17, 4, 5, 0)},
+        {"2006-01-02T15:04:05-14:00", MyDateTime(2006, 1, 3, 5, 4, 5, 0)},
+    };
+    DataTypeMyDateTime type(6);
+    for (auto & [str, expected] : cases)
+    {
+        checkParseMyDateTime(str, expected, type);
     }
 }
 catch (Exception & e)
