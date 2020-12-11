@@ -23,6 +23,8 @@ struct TiFlashSecurityConfig
     String cert_path;
     String key_path;
 
+    bool redact_info_log = false;
+
     std::set<String> allowed_common_names;
 
     bool inited = false;
@@ -68,11 +70,14 @@ public:
                 LOG_INFO(
                     log, "security config is set: ca path is " << ca_path << " cert path is " << cert_path << " key path is " << key_path);
             }
+
             if (config.has("security.cert_allowed_cn") && has_tls_config)
             {
                 String verify_cns = config.getString("security.cert_allowed_cn");
                 parseAllowedCN(verify_cns);
             }
+
+            redact_info_log = config.getBool("security.redact-info-log", false);
         }
     }
 

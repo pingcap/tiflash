@@ -11,21 +11,14 @@ void Redact::setRedactLog(bool v) { Redact::REDACT_LOG.store(v, std::memory_orde
 std::string Redact::handleToDebugString(const DB::HandleID handle)
 {
     if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
-    {
         return "?";
-    }
 
     // Encode as string
     return DB::toString(handle);
 }
 
-std::string Redact::keyToDebugString(const char * key, const size_t size)
+std::string Redact::keyToHexString(const char *key, size_t size)
 {
-    if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
-    {
-        return "?";
-    }
-
     // Encode as upper hex string
     std::string buf(size * 2, '\0');
     char * pos = buf.data();
@@ -35,6 +28,14 @@ std::string Redact::keyToDebugString(const char * key, const size_t size)
         pos += 2;
     }
     return buf;
+}
+
+std::string Redact::keyToDebugString(const char * key, const size_t size)
+{
+    if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
+        return "?";
+
+    return Redact::keyToHexString(key, size);
 }
 
 void Redact::keyToDebugString(const char * key, const size_t size, std::ostream & oss)
