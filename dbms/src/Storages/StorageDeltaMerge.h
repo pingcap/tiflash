@@ -8,6 +8,7 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
+#include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TiDB.h>
 #include <common/logger_useful.h>
 

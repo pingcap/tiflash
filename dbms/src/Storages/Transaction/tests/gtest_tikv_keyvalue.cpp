@@ -103,13 +103,23 @@ TEST(TiKVKeyValue_test, PortedTests)
 
     {
         auto write_value = RecordKVFormat::encodeWriteCfValue(Region::DelFlag, std::numeric_limits<UInt64>::max(), "value");
-        auto [write_type, ts, short_value] = RecordKVFormat::decodeWriteCfValue(write_value);
-        ASSERT_TRUE(Region::DelFlag == write_type);
-        ASSERT_TRUE(std::numeric_limits<UInt64>::max() == ts);
-        ASSERT_TRUE("value" == *short_value);
+        auto write_record = RecordKVFormat::decodeWriteCfValue(write_value);
+        ASSERT_TRUE(write_record);
+        ASSERT_TRUE(Region::DelFlag == write_record->write_type);
+        ASSERT_TRUE(std::numeric_limits<UInt64>::max() == write_record->prewrite_ts);
+        ASSERT_TRUE("value" == *write_record->short_value);
         RegionWriteCFData d;
         d.insert(RecordKVFormat::genKey(1, 2, 3), RecordKVFormat::encodeWriteCfValue(Region::PutFlag, 4, "value"));
         ASSERT_TRUE(d.getSize() == 1);
+
+        ASSERT_TRUE(d.insert(RecordKVFormat::genKey(1, 2, 3), RecordKVFormat::encodeWriteCfValue(Region::PutFlag, 4, "value", true)) == 0);
+        ASSERT_TRUE(d.getSize() == 1);
+
+        ASSERT_TRUE(d.insert(RecordKVFormat::genKey(1, 2, 3),
+                        RecordKVFormat::encodeWriteCfValue(RecordKVFormat::UselessCFModifyFlag::LockFlag, 4, "value"))
+            == 0);
+        ASSERT_TRUE(d.getSize() == 1);
+
         auto pk = RecordKVFormat::getRawTiDBPK(RecordKVFormat::genRawKey(1, 2));
         d.remove(RegionWriteCFData::Key{pk, 3});
         ASSERT_TRUE(d.getSize() == 0);
@@ -117,10 +127,23 @@ TEST(TiKVKeyValue_test, PortedTests)
 
     {
         auto write_value = RecordKVFormat::encodeWriteCfValue(Region::DelFlag, std::numeric_limits<UInt64>::max());
-        auto [write_type, ts, short_value] = RecordKVFormat::decodeWriteCfValue(write_value);
-        ASSERT_TRUE(Region::DelFlag == write_type);
-        ASSERT_TRUE(std::numeric_limits<UInt64>::max() == ts);
-        ASSERT_TRUE(nullptr == short_value);
+        auto write_record = RecordKVFormat::decodeWriteCfValue(write_value);
+        ASSERT_TRUE(write_record);
+        ASSERT_TRUE(Region::DelFlag == write_record->write_type);
+        ASSERT_TRUE(std::numeric_limits<UInt64>::max() == write_record->prewrite_ts);
+        ASSERT_TRUE(nullptr == write_record->short_value);
+    }
+
+    {
+        auto write_value = RecordKVFormat::encodeWriteCfValue(RecordKVFormat::UselessCFModifyFlag::RollbackFlag, 8888, "test");
+        auto write_record = RecordKVFormat::decodeWriteCfValue(write_value);
+        ASSERT_TRUE(!write_record);
+    }
+
+    {
+        auto write_value = RecordKVFormat::encodeWriteCfValue(Region::PutFlag, 8888, "qwer", true);
+        auto write_record = RecordKVFormat::decodeWriteCfValue(write_value);
+        ASSERT_TRUE(!write_record);
     }
 
     {
