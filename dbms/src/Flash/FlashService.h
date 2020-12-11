@@ -45,11 +45,9 @@ private:
 private:
     IServer & server;
     TiFlashMetricsPtr metrics;
-    std::unique_ptr<ThreadPool> cop_thread_pool; // Use execute_in_thread_pool to submit job to thread pool which return grpc::Status.
-
     const TiFlashSecurityConfig & security_config;
-
     Logger * log;
+    std::unique_ptr<ThreadPool> cop_thread_pool; // Use execute_in_thread_pool to submit job to thread pool which return grpc::Status.
 };
 
 } // namespace DB
