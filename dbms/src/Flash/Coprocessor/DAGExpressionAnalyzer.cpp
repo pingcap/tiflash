@@ -370,20 +370,6 @@ String DAGExpressionAnalyzer::applyFunction(
     actions->add(apply_function);
     return result_name;
 }
-NamesWithAliases DAGExpressionAnalyzer::appendProjection(
-    ExpressionActionsChain & chain, const std::vector<const tipb::Expr *> & expressions)
-{
-    initChain(chain, getCurrentInputColumns());
-    ExpressionActionsChain::Step & last_step = chain.steps.back();
-    NamesWithAliases names;
-    for (const auto * expr : expressions)
-    {
-        auto expr_name = getActions(*expr, last_step.actions);
-        names.emplace_back(expr_name, "");
-        last_step.required_output.emplace_back(expr_name);
-    }
-    return names;
-}
 void DAGExpressionAnalyzer::appendWhere(
     ExpressionActionsChain & chain, const std::vector<const tipb::Expr *> & conditions, String & filter_column_name)
 {
