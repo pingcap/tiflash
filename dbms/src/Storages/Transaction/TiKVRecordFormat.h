@@ -24,6 +24,24 @@ extern const int LOGICAL_ERROR;
 namespace RecordKVFormat
 {
 
+enum CFModifyFlag : UInt8
+{
+    PutFlag = 'P',
+    DelFlag = 'D',
+    // useless for TiFLASH
+    /*
+    LockFlag = 'L',
+    // In write_cf, only raft leader will use RollbackFlag in txn mode. Learner should ignore it.
+    RollbackFlag = 'R',
+    */
+};
+
+enum UselessCFModifyFlag : UInt8
+{
+    LockFlag = 'L',
+    RollbackFlag = 'R',
+};
+
 static const char TABLE_PREFIX = 't';
 static const char * RECORD_PREFIX_SEP = "_r";
 static const char SHORT_VALUE_PREFIX = 'v';
@@ -32,6 +50,8 @@ static const char FOR_UPDATE_TS_PREFIX = 'f';
 static const char TXN_SIZE_PREFIX = 't';
 static const char ASYNC_COMMIT_PREFIX = 'a';
 static const char ROLLBACK_TS_PREFIX = 'r';
+static const char FLAG_OVERLAPPED_ROLLBACK = 'R';
+static const char GC_FENCE_PREFIX = 'F';
 
 static const size_t SHORT_VALUE_MAX_LEN = 64;
 
@@ -59,6 +79,18 @@ inline UInt64 decodeUInt64(const UInt64 x) { return toBigEndian(x); }
 inline UInt64 decodeUInt64Desc(const UInt64 x) { return ~decodeUInt64(x); }
 
 inline Int64 decodeInt64(const UInt64 x) { return static_cast<Int64>(decodeUInt64(x) ^ SIGN_MASK); }
+
+inline void encodeInt64(const Int64 x, std::stringstream & ss)
+{
+    auto u = RecordKVFormat::encodeInt64(x);
+    ss.write(reinterpret_cast<const char *>(&u), sizeof(u));
+}
+
+inline void encodeUInt64(const UInt64 x, std::stringstream & ss)
+{
+    auto u = RecordKVFormat::encodeUInt64(x);
+    ss.write(reinterpret_cast<const char *>(&u), sizeof(u));
+}
 
 template <typename T>
 inline T read(const char * s)
@@ -185,8 +217,7 @@ inline TiKVValue encodeLockCfValue(
     if (min_commit_ts)
     {
         res.put(MIN_COMMIT_TS_PREFIX);
-        auto tmp = encodeUInt64(min_commit_ts);
-        res.write(reinterpret_cast<const char *>(&tmp), sizeof(UInt64));
+        encodeUInt64(min_commit_ts, res);
     }
     return TiKVValue(res.str());
 }
@@ -272,51 +303,81 @@ enum LockType : UInt8
     Pessimistic = 'S',
 };
 
-using DecodedWriteCFValue = std::tuple<UInt8, Timestamp, std::shared_ptr<const TiKVValue>>;
+struct InnerDecodedWriteCFValue
+{
+    UInt8 write_type;
+    Timestamp prewrite_ts;
+    std::shared_ptr<const TiKVValue> short_value;
+};
+
+typedef std::optional<InnerDecodedWriteCFValue> DecodedWriteCFValue;
 
 inline DecodedWriteCFValue decodeWriteCfValue(const TiKVValue & value)
 {
     const char * data = value.data();
     size_t len = value.dataSize();
 
-    auto write_type = readUInt8(data, len); //write type
+    auto write_type = RecordKVFormat::readUInt8(data, len); //write type
 
-    Timestamp ts = readVarUInt(data, len); // ts
+    bool can_ignore = write_type != CFModifyFlag::DelFlag && write_type != CFModifyFlag::PutFlag;
 
-    if (len == 0)
-        return std::make_tuple(write_type, ts, nullptr);
-    auto flag = readUInt8(data, len);
-    std::ignore = flag;
-    assert(flag == SHORT_VALUE_PREFIX);
-    size_t slen = readUInt8(data, len);
-    if (slen != len)
-        throw Exception("content len not equal to short value len", ErrorCodes::LOGICAL_ERROR);
-    return std::make_tuple(write_type, ts, std::make_shared<const TiKVValue>(data, len));
+    if (can_ignore)
+        return std::nullopt;
+
+    Timestamp prewrite_ts = RecordKVFormat::readVarUInt(data, len); // ts
+
+    std::string_view short_value;
+    while (len)
+    {
+        auto flag = RecordKVFormat::readUInt8(data, len);
+        switch (flag)
+        {
+            case RecordKVFormat::SHORT_VALUE_PREFIX:
+            {
+                size_t slen = RecordKVFormat::readUInt8(data, len);
+                if (slen > len)
+                    throw Exception("content len not equal to short value len", ErrorCodes::LOGICAL_ERROR);
+                short_value = RecordKVFormat::readRawString<std::string_view>(data, len, slen);
+                break;
+            }
+            case RecordKVFormat::FLAG_OVERLAPPED_ROLLBACK:
+                // ignore
+                break;
+            case RecordKVFormat::GC_FENCE_PREFIX:
+                /**
+                 * according to https://github.com/tikv/tikv/pull/9207, when meet `GC fence` flag, it is definitely a
+                 * rewriting record and there must be a complete row written to tikv, just ignore it in tiflash.
+                 */
+                return std::nullopt;
+            default:
+                throw Exception("invalid flag " + std::to_string(flag) + " in write cf", ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+
+    return InnerDecodedWriteCFValue{write_type, prewrite_ts,
+        short_value.empty() ? nullptr : std::make_shared<const TiKVValue>(short_value.data(), short_value.length())};
 }
 
-
-inline TiKVValue internalEncodeWriteCfValue(UInt8 write_type, Timestamp ts, const String * short_value)
+inline TiKVValue encodeWriteCfValue(UInt8 write_type, Timestamp ts, std::string_view short_value = {}, bool gc_fence = false)
 {
     std::stringstream res;
     res.put(write_type);
     TiKV::writeVarUInt(ts, res);
-    if (short_value)
+    if (!short_value.empty())
     {
         res.put(SHORT_VALUE_PREFIX);
-        res.put(static_cast<char>(short_value->size()));
-        res.write(short_value->data(), short_value->size());
+        res.put(static_cast<char>(short_value.size()));
+        res.write(short_value.data(), short_value.size());
+    }
+    // just for test
+    res.put(FLAG_OVERLAPPED_ROLLBACK);
+    if (gc_fence)
+    {
+        res.put(GC_FENCE_PREFIX);
+        encodeUInt64(8888, res);
     }
     return TiKVValue(res.str());
 }
-
-
-inline TiKVValue encodeWriteCfValue(UInt8 write_type, Timestamp ts, const String & short_value)
-{
-    return internalEncodeWriteCfValue(write_type, ts, &short_value);
-}
-
-
-inline TiKVValue encodeWriteCfValue(UInt8 write_type, Timestamp ts) { return internalEncodeWriteCfValue(write_type, ts, nullptr); }
 
 template <bool start>
 inline std::string DecodedTiKVKeyToReadableHandleString(const DecodedTiKVKey & decoded_key)

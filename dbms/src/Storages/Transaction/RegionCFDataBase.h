@@ -7,19 +7,6 @@
 namespace DB
 {
 
-// In both lock_cf and write_cf.
-enum CFModifyFlag : UInt8
-{
-    PutFlag = 'P',
-    DelFlag = 'D',
-    // useless for TiFLASH
-    /*
-    LockFlag = 'L',
-    // In write_cf, only raft leader will use RollbackFlag in txn mode. Learner should ignore it.
-    RollbackFlag = 'R',
-    */
-};
-
 struct TiKVRangeKey;
 using RegionRange = std::pair<TiKVRangeKey, TiKVRangeKey>;
 using RegionDataRes = size_t;
@@ -72,10 +59,8 @@ struct RegionCFDataBase
     CFDataPreDecode<Trait> & getCFDataPreDecode();
 
 private:
-    static bool shouldIgnoreInsert(const Value & value);
     static bool shouldIgnoreRemove(const Value & value);
     RegionDataRes insert(std::pair<Key, Value> && kv_pair);
-    RegionDataRes insert(TiKVKey && key, TiKVValue && value, const DecodedTiKVKey & raw_key);
 
 private:
     Data data;
