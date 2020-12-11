@@ -274,6 +274,22 @@ std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
     {"cast_decimal_decimal", tipb::ScalarFuncSig::CastDecimalAsDecimal},
     {"cast_time_decimal", tipb::ScalarFuncSig::CastTimeAsDecimal},
     {"cast_string_decimal", tipb::ScalarFuncSig::CastStringAsDecimal},
+    {"cast_int_string", tipb::ScalarFuncSig::CastIntAsString},
+    {"cast_real_string", tipb::ScalarFuncSig::CastRealAsString},
+    {"cast_decimal_string", tipb::ScalarFuncSig::CastDecimalAsString},
+    {"cast_time_string", tipb::ScalarFuncSig::CastTimeAsString},
+    {"cast_string_string", tipb::ScalarFuncSig::CastStringAsString},
+    {"cast_int_date", tipb::ScalarFuncSig::CastIntAsTime},
+    {"cast_real_date", tipb::ScalarFuncSig::CastRealAsTime},
+    {"cast_decimal_date", tipb::ScalarFuncSig::CastDecimalAsTime},
+    {"cast_time_date", tipb::ScalarFuncSig::CastTimeAsTime},
+    {"cast_string_date", tipb::ScalarFuncSig::CastStringAsTime},
+    {"cast_int_datetime", tipb::ScalarFuncSig::CastIntAsTime},
+    {"cast_real_datetime", tipb::ScalarFuncSig::CastRealAsTime},
+    {"cast_decimal_datetime", tipb::ScalarFuncSig::CastDecimalAsTime},
+    {"cast_time_datetime", tipb::ScalarFuncSig::CastTimeAsTime},
+    {"cast_string_datetime", tipb::ScalarFuncSig::CastStringAsTime},
+
 });
 
 void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::unordered_set<String> & referred_columns,
@@ -399,6 +415,24 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
                 expr->set_sig(tipb::ScalarFuncSig::DateFormatSig);
                 expr->mutable_field_type()->set_tp(TiDB::TypeString);
                 break;
+            case tipb::ScalarFuncSig::CastIntAsTime:
+            case tipb::ScalarFuncSig::CastRealAsTime:
+            case tipb::ScalarFuncSig::CastTimeAsTime:
+            case tipb::ScalarFuncSig::CastDecimalAsTime:
+            case tipb::ScalarFuncSig::CastStringAsTime:
+            {
+                expr->set_sig(it_sig->second);
+                auto * ft = expr->mutable_field_type();
+                if (it_sig->first.find("datetime"))
+                {
+                    ft->set_tp(TiDB::TypeDatetime);
+                }
+                else
+                {
+                    ft->set_tp(TiDB::TypeDate);
+                }
+                break;
+            }
             default:
             {
                 expr->set_sig(it_sig->second);
