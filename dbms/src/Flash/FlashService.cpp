@@ -29,10 +29,10 @@ FlashService::FlashService(IServer & server_)
       security_config(server_.securityConfig()),
       log(&Logger::get("FlashService"))
 {
-    size_t max_coprocessor_threads = static_cast<size_t>(server_.context().getSettingsRef().max_coprocessor_threads);
-    max_coprocessor_threads = max_coprocessor_threads ? max_coprocessor_threads : 4 * getNumberOfPhysicalCPUCores();
-    LOG_INFO(log, "Use a thread pool with " << max_coprocessor_threads << " threads to handling coprocessor requests.");
-    cop_thread_pool = std::make_unique<ThreadPool>(max_coprocessor_threads);
+    size_t threads = static_cast<size_t>(server_.context().getSettingsRef().coprocessor_thread_pool_size);
+    threads = threads ? threads : 4 * getNumberOfPhysicalCPUCores();
+    LOG_INFO(log, "Use a thread pool with " << threads << " threads to handling coprocessor requests.");
+    cop_thread_pool = std::make_unique<ThreadPool>(threads);
 }
 
 grpc::Status FlashService::Coprocessor(
