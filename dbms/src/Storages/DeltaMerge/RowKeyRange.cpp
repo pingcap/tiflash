@@ -72,4 +72,50 @@ const RowKeyRange::TableRangeMinMax & RowKeyRange::getTableMinMaxData(TableID ta
     return table_min_max_data.try_emplace(table_id, table_id, is_common_handle, rowkey_column_size).first->second;
 }
 
+template <bool enable_redact = true, bool right_open = true>
+inline String rangeToString(const String & start, const String & end, bool)
+{
+    String s = "[";
+    if constexpr (enable_redact)
+        s += Redact::keyToDebugString(start.data(), start.size()) + "," + Redact::keyToDebugString(end.data(), end.size());
+    else
+        s += Redact::keyToHexString(start.data(), start.size()) + "," + Redact::keyToHexString(end.data(), end.size());
+
+    if constexpr (right_open)
+        s += ")";
+    else
+        s += "]";
+    return s;
+}
+
+template <bool enable_redact>
+inline String rangeToString(const RowKeyRange & range)
+{
+    return rangeToString<enable_redact, true>(*range.start.value, *range.end.value, range.is_common_handle);
+}
+
+String RowKeyValueRef::toDebugString() const
+{
+    if (is_common_handle)
+        return Redact::keyToDebugString(data, size);
+    return Redact::handleToDebugString(int_value);
+}
+
+String RowKeyValue::toDebugString() const
+{
+    if (is_common_handle)
+        return Redact::keyToDebugString(value->data(), value->size());
+    return Redact::handleToDebugString(int_value);
+}
+
+String RowKeyRange::toDebugString() const
+{
+    return rangeToString</*enable_redact*/ true>(*this);
+}
+
+String RowKeyRange::toString() const
+{
+    return rangeToString</*enable_redact*/ false>(*this);
+}
+
 } // namespace DB::DM

@@ -19,7 +19,6 @@ using RowKeyColumnsPtr = std::shared_ptr<RowKeyColumns>;
 using HandleValuePtr   = std::shared_ptr<String>;
 
 struct RowKeyRange;
-String rangeToDebugString(const RowKeyRange & range);
 
 inline int compare(const char * a, size_t a_size, const char * b, size_t b_size)
 {
@@ -45,12 +44,9 @@ struct RowKeyValueRef
     size_t       size;
     Int64        int_value;
 
-    String toDebugString() const
-    {
-        if (is_common_handle)
-            return Redact::keyToDebugString(data, size);
-        return Redact::handleToDebugString(int_value);
-    }
+    // For debugging, the value will be converted to '?' if redact-log is on
+    String toDebugString() const;
+
     RowKeyValue toRowKeyValue() const;
 };
 
@@ -87,12 +83,8 @@ struct RowKeyValue
         int_value = rowkey_value.int_value;
     }
 
-    String toDebugString() const
-    {
-        if (is_common_handle)
-            return Redact::keyToDebugString(value->data(), value->size());
-        return std::to_string(int_value);
-    }
+    // For debugging, the value will be converted to '?' if redact-log is on
+    String toDebugString() const;
 
     RowKeyValueRef    toRowKeyValueRef() const { return RowKeyValueRef{is_common_handle, value->data(), value->size(), int_value}; }
     DecodedTiKVKeyPtr toRegionKey(TableID table_id) const
@@ -108,7 +100,7 @@ struct RowKeyValue
     }
 
     bool is_common_handle;
-    /// In case of non common handle, the value field is redundant in most cases, except taht int_value == Int64::max_value,
+    /// In case of non common handle, the value field is redundant in most cases, except that int_value == Int64::max_value,
     /// because RowKeyValue is an end point of RowKeyRange, assuming that RowKeyRange = [start_value, end_value), since the
     /// end_value of RowKeyRange is always exclusive, if we want to construct a RowKeyRange that include Int64::max_value,
     /// just set end_value.int_value to Int64::max_value is not enough, we still need to set end_value.value a carefully
@@ -646,35 +638,21 @@ struct RowKeyRange
         }
     }
 
+    // Format as a string
+    String toString() const;
 
-    inline String toDebugString() const { return rangeToDebugString(*this); }
+    // For debugging, the value will be converted to '?' if redact-log is on
+    String toDebugString() const;
 
     bool operator==(const RowKeyRange & rhs) const
     {
         return start.value->compare(*rhs.start.value) == 0 && end.value->compare(*rhs.end.value) == 0;
     }
     bool operator!=(const RowKeyRange & rhs) const { return !(*this == rhs); }
-};
-
-template <bool right_open = true>
-inline String rangeToDebugString(const String & start, const String & end, bool)
-{
-    String s = "[" + Redact::keyToDebugString(start.data(), start.size()) + "," + Redact::keyToDebugString(end.data(), end.size());
-    if constexpr (right_open)
-        s += ")";
-    else
-        s += "]";
-    return s;
-}
-
-inline String rangeToDebugString(const RowKeyRange & range)
-{
-    return rangeToDebugString<true>(*range.start.value, *range.end.value, range.is_common_handle);
-}
-
-// DB::DM::Handle
+}; // struct RowKeyRange
 using RowKeyRanges = std::vector<RowKeyRange>;
 
+// For debugging, the value will be converted to '?' if redact-log is on
 inline String toDebugString(const RowKeyRanges & ranges)
 {
     String s = "{";
