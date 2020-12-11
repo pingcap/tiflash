@@ -1,3 +1,4 @@
+#include <Common/RedactHelpers.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 
 namespace DB::DM

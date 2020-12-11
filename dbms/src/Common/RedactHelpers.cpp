@@ -1,5 +1,6 @@
 #include <Common/RedactHelpers.h>
 #include <Common/hex.h>
+#include <IO/WriteHelpers.h>
 #include <common/Types.h>
 
 #include <iomanip>
@@ -17,7 +18,7 @@ std::string Redact::handleToDebugString(const DB::HandleID handle)
     return DB::toString(handle);
 }
 
-std::string Redact::keyToHexString(const char *key, size_t size)
+std::string Redact::keyToHexString(const char * key, size_t size)
 {
     // Encode as upper hex string
     std::string buf(size * 2, '\0');

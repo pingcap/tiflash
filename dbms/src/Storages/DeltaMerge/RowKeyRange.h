@@ -1,5 +1,4 @@
 #pragma once
-#include <Common/RedactHelpers.h>
 #include <Core/Types.h>
 #include <Functions/FunctionHelpers.h>
 #include <IO/WriteHelpers.h>
