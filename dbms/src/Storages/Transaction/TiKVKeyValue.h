@@ -1,9 +1,9 @@
 #pragma once
 
+#include <Common/RedactHelpers.h>
 #include <Storages/Transaction/AtomicDecodedRow.h>
 #include <Storages/Transaction/SerializationHelper.h>
 #include <Storages/Transaction/Types.h>
-#include <Common/RedactHelpers.h>
 
 namespace DB
 {
@@ -40,7 +40,6 @@ public:
     size_t dataSize() const { return Base::size(); }
     std::string toString() const { return *this; }
 
-    // For debug
     std::string toDebugString() const { return Redact::keyToDebugString(data(), dataSize()); }
 
     explicit operator bool() const { return !empty(); }

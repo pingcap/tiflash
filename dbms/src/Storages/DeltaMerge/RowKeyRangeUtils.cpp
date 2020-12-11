@@ -56,7 +56,7 @@ public:
             }
             else
             {
-                throw Exception("Found overlap ranges: " + prev.toString() + ", " + current.toString());
+                throw Exception("Found overlap ranges: " + prev.toDebugString() + ", " + current.toDebugString());
             }
         }
         merged_stats.emplace_back(offset, count);

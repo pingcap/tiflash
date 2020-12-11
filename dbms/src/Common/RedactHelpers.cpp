@@ -8,6 +8,17 @@ std::atomic<bool> Redact::REDACT_LOG = false;
 
 void Redact::setRedactLog(bool v) { Redact::REDACT_LOG.store(v, std::memory_order_relaxed); }
 
+std::string Redact::handleToDebugString(const DB::HandleID handle)
+{
+    if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
+    {
+        return "?";
+    }
+
+    // Encode as string
+    return DB::toString(handle);
+}
+
 std::string Redact::keyToDebugString(const char * key, const size_t size)
 {
     if (Redact::REDACT_LOG.load(std::memory_order_relaxed))
@@ -16,7 +27,7 @@ std::string Redact::keyToDebugString(const char * key, const size_t size)
     }
 
     // Encode as upper hex string
-    std::string buf(size * 2 + 1, '\0');
+    std::string buf(size * 2, '\0');
     char * pos = buf.data();
     for (size_t i = 0; i < size; ++i)
     {
@@ -42,5 +53,5 @@ void Redact::keyToDebugString(const char * key, const size_t size, std::ostream 
         // width need to be set for each output (https://stackoverflow.com/questions/405039/permanent-stdsetw)
         oss << std::setw(2) << Int32(UInt8(key[i]));
     }
-    oss.flags(flags);
+    oss.flags(flags); // restore flags
 }

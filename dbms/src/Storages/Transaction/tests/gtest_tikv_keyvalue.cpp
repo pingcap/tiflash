@@ -312,7 +312,7 @@ TEST(TiKVKeyValue_test, PortedTests)
         s[0] = char(1);
         s[3] = char(111);
         const auto & key = TiKVKey(s.data(), s.size());
-        ASSERT_TRUE(key.toDebugString() == "[1 32 33 6f]");
+        ASSERT_EQ(key.toDebugString(), "0132336F");
     }
 
     {

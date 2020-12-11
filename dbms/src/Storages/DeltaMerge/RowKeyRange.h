@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/RedactHelpers.h>
 #include <Core/Types.h>
 #include <Functions/FunctionHelpers.h>
 #include <IO/WriteHelpers.h>
@@ -10,7 +11,6 @@
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
 #include <Storages/Transaction/Types.h>
-#include <Common/RedactHelpers.h>
 
 namespace DB::DM
 {
@@ -19,7 +19,7 @@ using RowKeyColumnsPtr = std::shared_ptr<RowKeyColumns>;
 using HandleValuePtr   = std::shared_ptr<String>;
 
 struct RowKeyRange;
-String rangeToString(const RowKeyRange & range);
+String rangeToDebugString(const RowKeyRange & range);
 
 inline int compare(const char * a, size_t a_size, const char * b, size_t b_size)
 {
@@ -45,11 +45,11 @@ struct RowKeyValueRef
     size_t       size;
     Int64        int_value;
 
-    String toString() const
+    String toDebugString() const
     {
         if (is_common_handle)
             return Redact::keyToDebugString(data, size);
-        return std::to_string(int_value);
+        return Redact::handleToDebugString(int_value);
     }
     RowKeyValue toRowKeyValue() const;
 };
@@ -87,7 +87,7 @@ struct RowKeyValue
         int_value = rowkey_value.int_value;
     }
 
-    String toString() const
+    String toDebugString() const
     {
         if (is_common_handle)
             return Redact::keyToDebugString(value->data(), value->size());
@@ -647,7 +647,7 @@ struct RowKeyRange
     }
 
 
-    inline String toString() const { return rangeToString(*this); }
+    inline String toDebugString() const { return rangeToDebugString(*this); }
 
     bool operator==(const RowKeyRange & rhs) const
     {
@@ -657,7 +657,7 @@ struct RowKeyRange
 };
 
 template <bool right_open = true>
-inline String rangeToString(const String & start, const String & end, bool)
+inline String rangeToDebugString(const String & start, const String & end, bool)
 {
     String s = "[" + Redact::keyToDebugString(start.data(), start.size()) + "," + Redact::keyToDebugString(end.data(), end.size());
     if constexpr (right_open)
@@ -667,20 +667,20 @@ inline String rangeToString(const String & start, const String & end, bool)
     return s;
 }
 
-inline String rangeToString(const RowKeyRange & range)
+inline String rangeToDebugString(const RowKeyRange & range)
 {
-    return rangeToString<true>(*range.start.value, *range.end.value, range.is_common_handle);
+    return rangeToDebugString<true>(*range.start.value, *range.end.value, range.is_common_handle);
 }
 
 // DB::DM::Handle
 using RowKeyRanges = std::vector<RowKeyRange>;
 
-inline String toString(const RowKeyRanges & ranges)
+inline String toDebugString(const RowKeyRanges & ranges)
 {
     String s = "{";
     for (auto & r : ranges)
     {
-        s += r.toString() + ",";
+        s += r.toDebugString() + ",";
     }
     if (!ranges.empty())
         s.erase(s.size() - 1);

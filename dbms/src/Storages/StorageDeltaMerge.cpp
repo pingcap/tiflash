@@ -536,7 +536,7 @@ BlockInputStreams StorageDeltaMerge::read( //
         {
             std::stringstream ss_merged_range;
             for (const auto & range : ranges)
-                ss_merged_range << range.toString() << ",";
+                ss_merged_range << range.toDebugString() << ",";
             LOG_TRACE(log, "reading ranges: orig, " << str_query_ranges << " merged, " << ss_merged_range.str());
         }
 

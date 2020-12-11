@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Core/Types.h>
+#include <IO/WriteHelpers.h>
 
 #include <chrono>
 #include <unordered_set>
