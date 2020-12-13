@@ -425,6 +425,7 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
     {
         /// use tidb_cast to make it compatible with TiDB
         tipb::FieldType field_type;
+        // TODO: Use TypeDouble as return type, to be compatible with TiDB
         field_type.set_tp(TiDB::TypeLongLong);
         tipb::Expr type_expr;
         constructStringLiteralTiExpr(type_expr, "Nullable(Int64)");
