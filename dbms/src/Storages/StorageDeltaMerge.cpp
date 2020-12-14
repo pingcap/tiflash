@@ -18,6 +18,7 @@
 #include <Storages/AlterCommands.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/PrimaryKeyNotMatchException.h>
@@ -499,8 +500,8 @@ BlockInputStreams StorageDeltaMerge::read( //
                     /* ignore_cache= */ false,
                     global_context.getSettingsRef().safe_point_update_interval_seconds);
                 if (read_tso < safe_point)
-                    throw Exception("query id: " + context.getCurrentQueryId() + ", read tso: " + toString(read_tso)
-                            + " is smaller than tidb gc safe point: " + toString(safe_point),
+                    throw Exception("query id: " + context.getCurrentQueryId() + ", read tso: " + DB::toString(read_tso)
+                            + " is smaller than tidb gc safe point: " + DB::toString(safe_point),
                         ErrorCodes::LOGICAL_ERROR);
             }
         };
@@ -574,7 +575,7 @@ BlockInputStreams StorageDeltaMerge::read( //
                 rs_operator = FilterParser::parseSelectQuery(select_query, std::move(create_attr_by_column_id), log);
             }
             if (likely(rs_operator != DM::EMPTY_FILTER))
-                LOG_DEBUG(log, "Rough set filter: " << rs_operator->toString());
+                LOG_DEBUG(log, "Rough set filter: " << rs_operator->toDebugString());
         }
         else
             LOG_DEBUG(log, "Rough set filter is disabled.");
@@ -811,7 +812,7 @@ catch (Exception & e)
 {
     String table_info_msg;
     if (table_info)
-        table_info_msg = " table name: " + table_name_ + ", table id: " + toString(table_info.value().get().id);
+        table_info_msg = " table name: " + table_name_ + ", table id: " + DB::toString(table_info.value().get().id);
     else
         table_info_msg = " table name: " + table_name_ + ", table id: unknown";
     e.addMessage(table_info_msg);
