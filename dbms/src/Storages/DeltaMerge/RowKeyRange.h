@@ -43,7 +43,7 @@ struct RowKeyValueRef
     size_t       size;
     Int64        int_value;
 
-    // For debugging, the value will be converted to '?' if redact-log is on
+    // Format as a hex string for debugging. The value will be converted to '?' if redact-log is on
     String toDebugString() const;
 
     RowKeyValue toRowKeyValue() const;
@@ -85,7 +85,7 @@ struct RowKeyValue
     // Format as a string
     String toString() const;
 
-    // For debugging, the value will be converted to '?' if redact-log is on
+    // Format as a hex string for debugging. The value will be converted to '?' if redact-log is on
     String toDebugString() const;
 
     RowKeyValueRef    toRowKeyValueRef() const { return RowKeyValueRef{is_common_handle, value->data(), value->size(), int_value}; }
@@ -643,7 +643,7 @@ struct RowKeyRange
     // Format as a string
     String toString() const;
 
-    // For debugging, the value will be converted to '?' if redact-log is on
+    // Format as a hex string for debugging. The value will be converted to '?' if redact-log is on
     String toDebugString() const;
 
     bool operator==(const RowKeyRange & rhs) const
@@ -654,7 +654,7 @@ struct RowKeyRange
 }; // struct RowKeyRange
 using RowKeyRanges = std::vector<RowKeyRange>;
 
-// For debugging, the value will be converted to '?' if redact-log is on
+// Format as a hex string for debugging. The value will be converted to '?' if redact-log is on
 inline String toDebugString(const RowKeyRanges & ranges)
 {
     String s = "{";

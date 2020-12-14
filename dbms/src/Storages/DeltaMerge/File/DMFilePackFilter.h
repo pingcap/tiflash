@@ -109,8 +109,8 @@ public:
             LOG_DEBUG(log,
                       "RSFilter exclude rate is nan, after_pk: "
                           << after_pk << ", after_read_packs: " << after_read_packs << ", after_filter: " << after_filter
-                          << ", handle_range: " << rowkey_range.toDebugString() << ", read_packs: " << ((!read_packs) ? 0 : read_packs->size())
-                          << ", pack_count: " << pack_count);
+                          << ", handle_range: " << rowkey_range.toDebugString()
+                          << ", read_packs: " << ((!read_packs) ? 0 : read_packs->size()) << ", pack_count: " << pack_count);
         }
         else
         {

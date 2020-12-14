@@ -386,7 +386,7 @@ inline void decodeLockCfValue(DecodedLockCFValue & res)
                 }
                 default:
                 {
-                    std::string msg = std::string() + "invalid flag " + flag + " in lock value " + value.toDebugString();
+                    std::string msg = std::string("invalid flag ") + flag + " in lock value " + value.toDebugString();
                     throw Exception(msg, ErrorCodes::LOGICAL_ERROR);
                 }
             }

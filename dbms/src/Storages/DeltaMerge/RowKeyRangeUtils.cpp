@@ -1,3 +1,4 @@
+#include <Common/TiFlashException.h>
 #include <Storages/DeltaMerge/RowKeyRangeUtils.h>
 
 namespace DB
@@ -56,7 +57,8 @@ public:
             }
             else
             {
-                throw Exception("Found overlap ranges: " + prev.toDebugString() + ", " + current.toDebugString());
+                throw TiFlashException("Found overlap ranges: " + prev.toDebugString() + ", " + current.toDebugString(),
+                                       Errors::Coprocessor::BadRequest);
             }
         }
         merged_stats.emplace_back(offset, count);

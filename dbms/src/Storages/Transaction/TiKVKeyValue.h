@@ -40,6 +40,7 @@ public:
     size_t dataSize() const { return Base::size(); }
     std::string toString() const { return *this; }
 
+    // Format as a hex string for debugging. The value will be converted to '?' if redact-log is on
     std::string toDebugString() const { return Redact::keyToDebugString(data(), dataSize()); }
 
     explicit operator bool() const { return !empty(); }
@@ -96,6 +97,7 @@ struct RawTiDBPK : std::shared_ptr<const std::string>
 
     RawTiDBPK(const Base & o) : Base(o), handle(o->size() == 8 ? getHandleID() : 0) {}
 
+    // Format as a hex string for debugging. The value will be converted to '?' if redact-log is on
     std::string toDebugString() const
     {
         auto & p = *this;
