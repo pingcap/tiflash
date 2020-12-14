@@ -82,6 +82,9 @@ struct RowKeyValue
         int_value = rowkey_value.int_value;
     }
 
+    // Format as a string
+    String toString() const;
+
     // For debugging, the value will be converted to '?' if redact-log is on
     String toDebugString() const;
 
@@ -567,7 +570,7 @@ struct RowKeyRange
     {
         if (handle_range.all())
         {
-            return RowKeyRange(RowKeyValue::INT_HANDLE_MIN_KEY, RowKeyValue::INT_HANDLE_MAX_KEY, false, 1);
+            return RowKeyRange(RowKeyValue::INT_HANDLE_MIN_KEY, RowKeyValue::INT_HANDLE_MAX_KEY, /*is_common_handle=*/false, 1);
         }
         std::stringstream ss;
         DB::EncodeInt64(handle_range.start, ss);
@@ -579,7 +582,7 @@ struct RowKeyRange
         return RowKeyRange(RowKeyValue(false, std::make_shared<String>(start), handle_range.start),
                            handle_range.end == HandleRange::MAX ? RowKeyValue::INT_HANDLE_MAX_KEY
                                                                 : RowKeyValue(false, std::make_shared<String>(end), handle_range.end),
-                           false,
+                           /*is_common_handle=*/false,
                            1);
     }
 
