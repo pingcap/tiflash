@@ -184,9 +184,9 @@ private:
                 int  cmp_result   = compare(rowkey_value, last_value_ref);
                 if (cmp_result < 0 || (cmp_result == 0 && version < last_version))
                 {
-                    throw Exception("DeltaMerge return wrong result, current handle[" + rowkey_value.toString() + "]version["
+                    throw Exception("DeltaMerge return wrong result, current handle[" + rowkey_value.toDebugString() + "]version["
                                     + DB::toString(version) + "]@read[" + DB::toString(num_read) + "]@pos[" + DB::toString(i)
-                                    + "] is expected >= last_handle[" + last_value_ref.toString() + "]last_version["
+                                    + "] is expected >= last_handle[" + last_value_ref.toDebugString() + "]last_version["
                                     + DB::toString(last_version) + "]@read[" + DB::toString(last_handle_read_num) + "]@pos["
                                     + DB::toString(last_handle_pos) + "]");
                 }
