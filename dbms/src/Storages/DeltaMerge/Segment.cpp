@@ -265,11 +265,11 @@ bool Segment::write(DMContext & dm_context, const RowKeyRange & delete_range)
     auto new_range = delete_range.shrink(rowkey_range);
     if (new_range.none())
     {
-        LOG_WARNING(log, "Try to write an invalid delete range " << delete_range.toString() << " into " << simpleInfo());
+        LOG_WARNING(log, "Try to write an invalid delete range " << delete_range.toDebugString() << " into " << simpleInfo());
         return true;
     }
 
-    LOG_TRACE(log, "Segment [" << segment_id << "] write delete range: " << delete_range.toString());
+    LOG_TRACE(log, "Segment [" << segment_id << "] write delete range: " << delete_range.toDebugString());
     return delta->appendDeleteRange(dm_context, delete_range);
 }
 
@@ -340,7 +340,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
     {
         LOG_TRACE(log,
                   "Segment [" << DB::toString(segment_id) << "] is read by max_version: " << max_version << ", 1"
-                              << " range: " << toString(read_ranges));
+                              << " range: " << DB::DM::toDebugString(read_ranges));
         RowKeyRange real_range = rowkey_range.shrink(read_ranges[0]);
         if (real_range.none())
             stream = std::make_shared<EmptyBlockInputStream>(toEmptyBlock(read_info.read_columns));
@@ -359,7 +359,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_contex
 
         LOG_TRACE(log,
                   "Segment [" << DB::toString(segment_id) << "] is read by max_version: " << max_version << ", "
-                              << DB::toString(streams.size()) << " ranges: " << toString(read_ranges));
+                              << DB::toString(streams.size()) << " ranges: " << DB::DM::toDebugString(read_ranges));
 
         if (streams.empty())
             stream = std::make_shared<EmptyBlockInputStream>(toEmptyBlock(read_info.read_columns));
@@ -703,8 +703,8 @@ RowKeyValue Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & 
     stream->readSuffix();
 
     if (!rowkey_range.check(split_point.toRowKeyValueRef()))
-        throw Exception("getSplitPointSlow unexpected split_handle: " + split_point.toRowKeyValueRef().toString() + ", should be in range "
-                        + rowkey_range.toString());
+        throw Exception("getSplitPointSlow unexpected split_handle: " + split_point.toRowKeyValueRef().toDebugString()
+                        + ", should be in range " + rowkey_range.toDebugString());
 
     return split_point;
 }
@@ -724,8 +724,10 @@ Segment::prepareSplit(DMContext & dm_context, const SegmentSnapshotPtr & segment
         if (bad_split_point)
         {
             LOG_INFO(log,
-                     "Got bad split point [" << split_value.toString() << "] for segment " << info() << ", fall back to split physical.");
+                     "Got bad split point [" << split_value.toDebugString() << "] for segment " << info()
+                                             << ", fall back to split physical.");
             return prepareSplitPhysical(dm_context, segment_snap, wbs, need_rate_limit);
+
         }
         else
             return prepareSplitLogical(dm_context, segment_snap, split_point, wbs);
@@ -747,8 +749,8 @@ Segment::SplitInfo Segment::prepareSplitLogical(DMContext &                dm_co
     RowKeyRange other_range(split_point, rowkey_range.end, is_common_handle, rowkey_column_size);
 
     if (my_range.none() || other_range.none())
-        throw Exception("prepareSplitLogical: unexpected range! my_range: " + my_range.toString()
-                        + ", other_range: " + other_range.toString());
+        throw Exception("prepareSplitLogical: unexpected range! my_range: " + my_range.toDebugString()
+                        + ", other_range: " + other_range.toDebugString());
 
     GenPageId log_gen_page_id = std::bind(&StoragePool::newLogPageId, &storage_pool);
 
@@ -807,8 +809,8 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext &                dm_c
     RowKeyRange other_range(split_point, rowkey_range.end, is_common_handle, rowkey_column_size);
 
     if (my_range.none() || other_range.none())
-        throw Exception("prepareSplitPhysical: unexpected range! my_range: " + my_range.toString()
-                        + ", other_range: " + other_range.toString());
+        throw Exception("prepareSplitPhysical: unexpected range! my_range: " + my_range.toDebugString()
+                        + ", other_range: " + other_range.toDebugString());
 
     StableValueSpacePtr my_new_stable;
     StableValueSpacePtr other_stable;
@@ -966,8 +968,8 @@ StableValueSpacePtr Segment::prepareMerge(DMContext &                dm_context,
     LOG_INFO(left->log, "Segment [" << left->segmentId() << "] and [" << right->segmentId() << "] prepare merge start");
 
     if (unlikely(compare(left->rowkey_range.getEnd(), right->rowkey_range.getStart()) != 0 || left->next_segment_id != right->segment_id))
-        throw Exception("The ranges of merge segments are not consecutive: first end: " + left->rowkey_range.getEnd().toString()
-                        + ", second start: " + right->rowkey_range.getStart().toString());
+        throw Exception("The ranges of merge segments are not consecutive: first end: " + left->rowkey_range.getEnd().toDebugString()
+                        + ", second start: " + right->rowkey_range.getStart().toDebugString());
 
     auto getStream = [&](const SegmentPtr & segment, const SegmentSnapshotPtr & segment_snap) {
         auto read_info = segment->getReadInfo(
@@ -1100,14 +1102,14 @@ void Segment::placeDeltaIndex(DMContext & dm_context)
 
 String Segment::simpleInfo() const
 {
-    return "{" + DB::toString(segment_id) + ":" + rowkey_range.toString() + "}";
+    return "{" + DB::toString(segment_id) + ":" + rowkey_range.toDebugString() + "}";
 }
 
 String Segment::info() const
 {
     std::stringstream s;
-    s << "{[id:" << segment_id << "], [next:" << next_segment_id << "], [epoch:" << epoch << "], [range:" << rowkey_range.toString()
-      << "], [rowkey_range:" << rowkey_range.toString() << "], [delta rows:" << delta->getRows()
+    s << "{[id:" << segment_id << "], [next:" << next_segment_id << "], [epoch:" << epoch << "], [range:" << rowkey_range.toDebugString()
+      << "], [rowkey_range:" << rowkey_range.toDebugString() << "], [delta rows:" << delta->getRows()
       << "], [delete ranges:" << delta->getDeletes() << "], [stable(" << stable->getDMFilesString() << "):" << stable->getRows() << "]}";
     return s.str();
 }
@@ -1254,7 +1256,7 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(const DMContext &         dm
     my_delta_index->update(my_delta_tree, my_placed_rows, my_placed_deletes);
 
     LOG_DEBUG(log,
-              __FUNCTION__ << simpleInfo() << " read_ranges:" << toString(read_ranges) << ", blocks.size:" << blocks.size()
+              __FUNCTION__ << simpleInfo() << " read_ranges:" << DB::DM::toDebugString(read_ranges) << ", blocks.size:" << blocks.size()
                            << ", shared delta index: " << delta_snap->shared_delta_index->toString()
                            << ", my delta index: " << my_delta_index->toString());
 

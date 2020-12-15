@@ -7,6 +7,7 @@
 #include <Storages/DeltaMerge/DMSegmentThreadInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/SchemaUpdate.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
@@ -408,21 +409,6 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             stableSortBlock(block, sort);
     }
 
-    if (false && log->trace())
-    {
-        std::shared_lock lock(read_write_mutex);
-
-        String msg = "Before insert block(with " + DB::toString(rows) + " rows). All segments:{";
-        for (auto & [end, segment] : segments)
-        {
-            (void)end;
-            msg += DB::toString(segment->segmentId()) + ":" + segment->getRowKeyRange().toString() + ",";
-        }
-        msg.pop_back();
-        msg += "}";
-        LOG_TRACE(log, msg);
-    }
-
     Segments updated_segments;
 
     size_t     offset = 0;
@@ -448,7 +434,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
                 if (segment_it == segments.end())
                 {
                     // todo print meaningful start row key
-                    throw Exception("Failed to locate segment begin with start: " + start_key.toString(), ErrorCodes::LOGICAL_ERROR);
+                    throw Exception("Failed to locate segment begin with start: " + start_key.toDebugString(), ErrorCodes::LOGICAL_ERROR);
                 }
                 segment = segment_it->second;
             }
@@ -512,7 +498,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
 
 void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings & db_settings, const RowKeyRange & delete_range)
 {
-    LOG_INFO(log, "Write into " << db_name << "." << table_name << " delete range " << delete_range.toString());
+    LOG_INFO(log, "Write into " << db_name << "." << table_name << " delete range " << delete_range.toDebugString());
 
     EventRecorder write_block_recorder(ProfileEvents::DMDeleteRange, ProfileEvents::DMDeleteRangeNS);
 
@@ -520,21 +506,6 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
         return;
 
     auto dm_context = newDMContext(db_context, db_settings);
-
-    if (log->trace())
-    {
-        std::shared_lock lock(read_write_mutex);
-
-        String msg = "Before delete range" + delete_range.toString() + ". All segments:{";
-        for (auto & [end, segment] : segments)
-        {
-            (void)end;
-            msg += DB::toString(segment->segmentId()) + ":" + segment->getRowKeyRange().toString() + ",";
-        }
-        msg.pop_back();
-        msg += "}";
-        LOG_TRACE(log, msg);
-    }
 
     Segments updated_segments;
 
@@ -554,7 +525,7 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
                 auto segment_it = segments.upper_bound(cur_range.getStart());
                 if (segment_it == segments.end())
                 {
-                    throw Exception("Failed to locate segment begin with start in range: " + cur_range.toString(),
+                    throw Exception("Failed to locate segment begin with start in range: " + cur_range.toDebugString(),
                                     ErrorCodes::LOGICAL_ERROR);
                 }
                 segment = segment_it->second;
@@ -599,7 +570,7 @@ void DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRa
                 auto segment_it = segments.upper_bound(cur_range.getStart());
                 if (segment_it == segments.end())
                 {
-                    throw Exception("Failed to locate segment begin with start in range: " + cur_range.toString(),
+                    throw Exception("Failed to locate segment begin with start in range: " + cur_range.toDebugString(),
                                     ErrorCodes::LOGICAL_ERROR);
                 }
                 segment = segment_it->second;
@@ -655,7 +626,7 @@ void DeltaMergeStore::compact(const Context & db_context, const RowKeyRange & ra
                 auto segment_it = segments.upper_bound(cur_range.getStart());
                 if (segment_it == segments.end())
                 {
-                    throw Exception("Failed to locate segment begin with start in range: " + cur_range.toString(),
+                    throw Exception("Failed to locate segment begin with start in range: " + cur_range.toDebugString(),
                                     ErrorCodes::LOGICAL_ERROR);
                 }
                 segment = segment_it->second;
@@ -1480,15 +1451,15 @@ void DeltaMergeStore::check(const Context & /*db_context*/)
             throw Exception("Segment [" + DB::toString(segment_id) + "] is expected to have id [" + DB::toString(next_segment_id) + "]");
         }
         if (compare(last_end.data, last_end.size, range.getStart().data, range.getStart().size) != 0)
-            throw Exception("Segment [" + DB::toString(segment_id) + ":" + range.toString()
-                            + "] is expected to have the same start edge value like the end edge value in " + last_range.toString());
+            throw Exception("Segment [" + DB::toString(segment_id) + ":" + range.toDebugString()
+                            + "] is expected to have the same start edge value like the end edge value in " + last_range.toDebugString());
 
         last_range      = range;
         last_end        = last_range.getEnd();
         next_segment_id = segment->nextSegmentId();
     }
     if (!last_range.isEndInfinite())
-        throw Exception("Last range " + last_range.toString() + " is expected to have infinite end edge");
+        throw Exception("Last range " + last_range.toDebugString() + " is expected to have infinite end edge");
 }
 
 BlockPtr DeltaMergeStore::getHeader() const
@@ -1721,7 +1692,7 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(DMContext &          dm_c
 
     if (seg_it == segments.end())
     {
-        throw Exception("Failed to locate segment begin with start in range: " + range_it->toString(), ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Failed to locate segment begin with start in range: " + range_it->toDebugString(), ErrorCodes::LOGICAL_ERROR);
     }
 
     while (range_it != sorted_ranges.end() && seg_it != segments.end())

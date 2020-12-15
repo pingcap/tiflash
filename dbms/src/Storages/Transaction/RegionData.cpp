@@ -114,8 +114,8 @@ RegionDataReadInfo RegionData::readDataByWriteIt(const ConstWriteCFIter & write_
         if (auto data_it = map.find({pk, decoded_val.prewrite_ts}); data_it != map.end())
             return std::make_tuple(pk, decoded_val.write_type, ts, RegionDefaultCFDataTrait::getTiKVValue(data_it));
         else
-            throw Exception("Raw TiDB PK: " + (pk.toHex()) + ", Prewrite ts: " + std::to_string(decoded_val.prewrite_ts)
-                    + " can not found in default cf for key: " + key->toHex(),
+            throw Exception("Raw TiDB PK: " + (pk.toDebugString()) + ", Prewrite ts: " + std::to_string(decoded_val.prewrite_ts)
+                    + " can not found in default cf for key: " + key->toDebugString(),
                 ErrorCodes::LOGICAL_ERROR);
     }
 
