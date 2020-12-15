@@ -404,6 +404,8 @@ try
     EXPECT_EQ(raw_pk1.toDebugString(), "?");
     EXPECT_EQ(raw_pk2.toDebugString(), "?");
     EXPECT_EQ(RecordKVFormat::DecodedTiKVKeyRangeToDebugString(raw_keys), "[?, ?)");
+
+    Redact::setRedactLog(false); // restore flags
 }
 CATCH
 
@@ -475,14 +477,4 @@ try
 
     // clang-format on
 }
-catch (const Exception & e)
-{
-    std::string text = e.displayText();
-
-    auto embedded_stack_trace_pos = text.find("Stack trace");
-    std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
-    if (std::string::npos == embedded_stack_trace_pos)
-        std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl;
-
-    throw;
-}
+CATCH

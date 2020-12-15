@@ -22,6 +22,8 @@ TEST(RedactLog_test, Basic)
     EXPECT_EQ(Redact::keyToDebugString(test_key, key_sz), "?");
     EXPECT_EQ(Redact::keyToHexString(test_key, key_sz), "010AFF"); // Unaffected by readact-log status
     EXPECT_EQ(Redact::handleToDebugString(test_handle), "?");
+
+    Redact::setRedactLog(false); // restore flags
 }
 
 }

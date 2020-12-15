@@ -18,6 +18,8 @@ TEST(HandleRange_test, Redact)
 
     Redact::setRedactLog(true);
     EXPECT_EQ(range.toDebugString(), "[?,?)");
+
+    Redact::setRedactLog(false); // restore flags
 }
 
 namespace
@@ -56,6 +58,8 @@ TEST(RowKeyRange_test, RedactRangeFromHandle)
 
     Redact::setRedactLog(true);
     EXPECT_EQ(range.toDebugString(), "[?,?)");
+
+    Redact::setRedactLog(false); // restore flags
 }
 
 TEST(RowKeyRange_test, RedactRangeFromCommonHandle)
@@ -77,6 +81,8 @@ TEST(RowKeyRange_test, RedactRangeFromCommonHandle)
     EXPECT_EQ(range.toDebugString(), "[?,?)");
     EXPECT_EQ(all_range.toDebugString(), "[?,?)");
     EXPECT_EQ(none_range.toDebugString(), "[?,?)");
+
+    Redact::setRedactLog(false); // restore flags
 }
 
 } // namespace tests
