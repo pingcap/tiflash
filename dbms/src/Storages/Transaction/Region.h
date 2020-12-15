@@ -42,8 +42,8 @@ public:
 
     const static std::string log_name;
 
-    static const auto PutFlag = CFModifyFlag::PutFlag;
-    static const auto DelFlag = CFModifyFlag::DelFlag;
+    static const auto PutFlag = RecordKVFormat::CFModifyFlag::PutFlag;
+    static const auto DelFlag = RecordKVFormat::CFModifyFlag::DelFlag;
 
     class CommittedScanner : private boost::noncopyable
     {
@@ -166,6 +166,7 @@ public:
     metapb::Region getMetaRegion() const;
     raft_serverpb::MergeState getMergeState() const;
 
+    template <bool skip = false>
     void tryPreDecodeTiKVValue(TMTContext & tmt);
 
     TableID getMappedTableID() const;

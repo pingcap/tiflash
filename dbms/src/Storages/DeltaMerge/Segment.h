@@ -203,10 +203,10 @@ public:
         return lock;
     }
 
-    void abandon()
+    void abandon(DMContext & context)
     {
         LOG_DEBUG(log, "Abandon segment [" << segment_id << "]");
-        delta->abandon();
+        delta->abandon(context);
     }
     bool hasAbandoned() { return delta->hasAbandoned(); }
 

@@ -73,18 +73,16 @@ RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & writ
 {
     const auto & [key, value, decoded_val] = write_it->second;
     const auto & [pk, ts] = write_it->first;
-    const auto & [write_type, prewrite_ts, short_str] = decoded_val;
 
     std::ignore = ts;
     std::ignore = value;
     std::ignore = key;
-    std::ignore = short_str;
 
-    if (write_type == PutFlag)
+    if (decoded_val.write_type == RecordKVFormat::CFModifyFlag::PutFlag)
     {
         auto & map = default_cf.getDataMut();
 
-        if (auto data_it = map.find({pk, prewrite_ts}); data_it != map.end())
+        if (auto data_it = map.find({pk, decoded_val.prewrite_ts}); data_it != map.end())
         {
             cf_data_size -= RegionDefaultCFData::calcTiKVKeyValueSize(data_it->second);
             map.erase(data_it);
@@ -102,30 +100,26 @@ RegionDataReadInfo RegionData::readDataByWriteIt(const ConstWriteCFIter & write_
     const auto & [pk, ts] = write_it->first;
 
     std::ignore = value;
-
-    const auto & [write_type, prewrite_ts, short_value] = decoded_val;
-
     std::ignore = value;
-    std::ignore = prewrite_ts;
 
     if (!need_value)
-        return std::make_tuple(pk, write_type, ts, nullptr);
+        return std::make_tuple(pk, decoded_val.write_type, ts, nullptr);
 
-    if (write_type != PutFlag)
-        return std::make_tuple(pk, write_type, ts, nullptr);
+    if (decoded_val.write_type != RecordKVFormat::CFModifyFlag::PutFlag)
+        return std::make_tuple(pk, decoded_val.write_type, ts, nullptr);
 
-    if (!short_value)
+    if (!decoded_val.short_value)
     {
         const auto & map = default_cf.getData();
-        if (auto data_it = map.find({pk, prewrite_ts}); data_it != map.end())
-            return std::make_tuple(pk, write_type, ts, RegionDefaultCFDataTrait::getTiKVValue(data_it));
+        if (auto data_it = map.find({pk, decoded_val.prewrite_ts}); data_it != map.end())
+            return std::make_tuple(pk, decoded_val.write_type, ts, RegionDefaultCFDataTrait::getTiKVValue(data_it));
         else
-            throw Exception("Raw TiDB PK: " + (pk.toHex()) + ", Prewrite ts: " + std::to_string(prewrite_ts)
+            throw Exception("Raw TiDB PK: " + (pk.toHex()) + ", Prewrite ts: " + std::to_string(decoded_val.prewrite_ts)
                     + " can not found in default cf for key: " + key->toHex(),
                 ErrorCodes::LOGICAL_ERROR);
     }
 
-    return std::make_tuple(pk, write_type, ts, short_value);
+    return std::make_tuple(pk, decoded_val.write_type, ts, decoded_val.short_value);
 }
 
 DecodedLockCFValuePtr RegionData::getLockInfo(const RegionLockReadQuery & query) const

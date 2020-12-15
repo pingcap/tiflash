@@ -101,7 +101,6 @@ struct TiDBConvertToString
         auto col_to = ColumnString::create();
         ColumnString::Chars_t & data_to = col_to->getChars();
         ColumnString::Offsets & offsets_to = col_to->getOffsets();
-        WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
 
         if constexpr (std::is_same_v<FromDataType, DataTypeString>)
         {
@@ -112,6 +111,8 @@ struct TiDBConvertToString
             const IColumn::Offsets * offsets_from = &col_from_string->getOffsets();
 
             offsets_to.resize(size);
+
+            WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
 
             size_t current_offset = 0;
             for (size_t i = 0; i < size; i++)
@@ -147,6 +148,8 @@ struct TiDBConvertToString
             data_to.resize(size * decimal_max_prec + size);
             container_per_element.resize(decimal_max_prec);
             offsets_to.resize(size);
+
+            WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
 
             for (size_t i = 0; i < size; ++i)
             {
@@ -188,6 +191,8 @@ struct TiDBConvertToString
                 container_per_element.resize(3);
             }
             offsets_to.resize(size);
+
+            WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
 
             for (size_t i = 0; i < size; ++i)
             {
@@ -1172,6 +1177,13 @@ struct TiDBConvertToTime
         const auto & col_with_type_and_name = block.getByPosition(arguments[0]);
         const auto & type = static_cast<const FromDataType &>(*col_with_type_and_name.type);
 
+        int to_fsp [[maybe_unused]] = 0;
+        if constexpr (std::is_same_v<ToDataType, DataTypeMyDateTime>)
+        {
+            const auto * tp = dynamic_cast<const DataTypeMyDateTime *>(removeNullable(block.getByPosition(result).type).get());
+            to_fsp = tp->getFraction();
+        }
+
         if constexpr (return_nullable)
         {
             col_null_map_to = ColumnUInt8::create(size, 0);
@@ -1195,7 +1207,7 @@ struct TiDBConvertToTime
                 String string_value = string_ref.toString();
                 try
                 {
-                    Field packed_uint_value = parseMyDateTime(string_value);
+                    Field packed_uint_value = parseMyDateTime(string_value, to_fsp);
                     UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
                     MyDateTime datetime(packed_uint);
                     if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
@@ -1219,6 +1231,7 @@ struct TiDBConvertToTime
         }
         else if constexpr (std::is_same_v<FromDataType, DataTypeMyDate> || std::is_same_v<FromDataType, DataTypeMyDateTime>)
         {
+            // cast time as time
             const auto * col_from = checkAndGetColumn<ColumnUInt64>(block.getByPosition(arguments[0]).column.get());
             const ColumnUInt64::Container & vec_from = col_from->getData();
 
@@ -1233,7 +1246,33 @@ struct TiDBConvertToTime
                 }
                 else
                 {
-                    vec_to[i] = datetime.toPackedUInt();
+                    int from_fsp = 0;
+                    if constexpr (std::is_same_v<FromDataType, DataTypeMyDateTime>)
+                    {
+                        auto & from_type = static_cast<const DataTypeMyDateTime &>(type);
+                        from_fsp = from_type.getFraction();
+                    }
+                    UInt32 micro_second = datetime.micro_second;
+                    UInt64 packed_uint = vec_from[i];
+                    if (to_fsp < from_fsp)
+                    {
+                        micro_second = micro_second / std::pow(10, 6 - to_fsp - 1);
+                        micro_second = (micro_second + 5) / 10;
+                        // Overflow
+                        if (micro_second >= std::pow(10, to_fsp))
+                        {
+                            static const auto lut = DateLUT::instance("UTC");
+                            datetime.micro_second = 0;
+                            packed_uint = datetime.toPackedUInt();
+                            packed_uint = AddSecondsImpl::execute(packed_uint, 1, lut);
+                        }
+                        else
+                        {
+                            datetime.micro_second = micro_second * std::pow(10, 6 - to_fsp);
+                            packed_uint = datetime.toPackedUInt();
+                        }
+                    }
+                    vec_to[i] = packed_uint;
                 }
             }
         }
@@ -1292,7 +1331,7 @@ struct TiDBConvertToTime
                 {
                     try
                     {
-                        Field packed_uint_value = parseMyDateTime(value_str);
+                        Field packed_uint_value = parseMyDateTime(value_str, to_fsp);
                         UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
                         MyDateTime datetime(packed_uint);
                         if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
@@ -1325,7 +1364,7 @@ struct TiDBConvertToTime
                 String value_str = vec_from[i].toString(type.getScale());
                 try
                 {
-                    Field value = parseMyDateTime(value_str);
+                    Field value = parseMyDateTime(value_str, to_fsp);
                     MyDateTime datetime(value.template safeGet<UInt64>());
                     if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
                     {

@@ -23,6 +23,7 @@
 #include <Storages/IStorage.h>
 #include <Storages/MarkCache.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
+#include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/MergeTree/MergeList.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
@@ -143,6 +144,7 @@ struct ContextShared
     mutable DBGInvoker dbg_invoker;                         /// Execute inner functions, debug only.
     mutable MarkCachePtr mark_cache;                        /// Cache of marks in compressed files.
     mutable DM::MinMaxIndexCachePtr minmax_index_cache;     /// Cache of minmax index in compressed files.
+    mutable DM::DeltaIndexManagerPtr delta_index_manager;   /// Manage the Delta Indies of Segments.
     ProcessList process_list;                               /// Executing queries at the moment.
     MergeList merge_list;                                   /// The list of executable merge (for (Replicated)?MergeTree)
     ViewDependencies view_dependencies;                     /// Current dependencies
@@ -1419,6 +1421,29 @@ void Context::dropMinMaxIndexCache() const
         shared->minmax_index_cache->reset();
 }
 
+bool Context::isDeltaIndexLimited() const
+{
+    // Don't need to use a lock here, as delta_index_manager should be set at starting up.
+    if(!shared->delta_index_manager)
+        return false;
+    return shared->delta_index_manager->isLimit();
+}
+
+void Context::setDeltaIndexManager(size_t cache_size_in_bytes)
+{
+    auto lock = getLock();
+
+    if (shared->delta_index_manager)
+        throw Exception("DeltaIndexManager has been already created.", ErrorCodes::LOGICAL_ERROR);
+
+    shared->delta_index_manager = std::make_shared<DM::DeltaIndexManager>(cache_size_in_bytes);
+}
+
+DM::DeltaIndexManagerPtr Context::getDeltaIndexManager() const
+{
+    auto lock = getLock();
+    return shared->delta_index_manager;
+}
 
 void Context::dropCaches() const
 {

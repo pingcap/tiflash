@@ -117,13 +117,14 @@ TiFlashApplyRes HandleIngestSST(TiFlashServer * server, SnapshotViewArray snaps,
 
 uint8_t HandleCheckTerminated(TiFlashServer * server) { return server->tmt->getTerminated().load(std::memory_order_relaxed) ? 1 : 0; }
 
-FsStats HandleComputeFsStats(TiFlashServer * server)
+StoreStats HandleComputeStoreStats(TiFlashServer * server)
 {
-    FsStats res; // res.ok = false by default
+    StoreStats res; // res.fs_stats.ok = false by default
     try
     {
         auto global_capacity = server->tmt->getContext().getPathCapacity();
-        res = global_capacity->getFsStats();
+        res.fs_stats = global_capacity->getFsStats();
+        // TODO: set engine read/write stats
     }
     catch (...)
     {
@@ -176,8 +177,12 @@ BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex(const std::vector<kvrpc
 struct PreHandledSnapshot
 {
     ~PreHandledSnapshot() { CurrentMetrics::sub(CurrentMetrics::RaftNumSnapshotsPendingApply); }
-    PreHandledSnapshot(const RegionPtr & region_) : region(region_) { CurrentMetrics::add(CurrentMetrics::RaftNumSnapshotsPendingApply); }
+    PreHandledSnapshot(const RegionPtr & region_, RegionPtrWrap::CachePtr && cache_) : region(region_), cache(std::move(cache_))
+    {
+        CurrentMetrics::add(CurrentMetrics::RaftNumSnapshotsPendingApply);
+    }
     RegionPtr region;
+    RegionPtrWrap::CachePtr cache;
 };
 
 RawCppPtr PreHandleSnapshot(
@@ -190,8 +195,8 @@ RawCppPtr PreHandleSnapshot(
         auto & tmt = *server->tmt;
         auto & kvstore = tmt.getKVStore();
         auto new_region = kvstore->genRegionPtr(std::move(region), peer_id, index, term);
-        kvstore->preHandleSnapshot(new_region, snaps, tmt);
-        auto res = new PreHandledSnapshot{new_region};
+        auto new_region_block_cache = kvstore->preHandleSnapshot(new_region, snaps, tmt);
+        auto res = new PreHandledSnapshot{new_region, std::move(new_region_block_cache)};
         return RawCppPtr{res, RawCppPtrType::PreHandledSnapshot};
     }
     catch (...)
@@ -206,7 +211,7 @@ void ApplyPreHandledSnapshot(TiFlashServer * server, PreHandledSnapshot * snap)
     try
     {
         auto & kvstore = server->tmt->getKVStore();
-        kvstore->handleApplySnapshot(snap->region, *server->tmt);
+        kvstore->handleApplySnapshot(RegionPtrWrap{snap->region, std::move(snap->cache)}, *server->tmt);
     }
     catch (...)
     {
