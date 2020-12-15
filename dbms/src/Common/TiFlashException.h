@@ -113,7 +113,8 @@ namespace DB
         E(Internal, "MPP internal error.",                                                                                  \
             "Please contact with developer, \n"                                                                             \
             "better providing information about your cluster(log, topology information etc.).",                             \
-            "");)
+            "");)                                                                                                           \
+    C(Types, E(Truncated, "Data is truncated during conversion.", "", ""); E(WrongValue, "Input value is in wrong format", "", "");)
 
 /// TiFlashError is core struct of standard error,
 /// which contains all information about an error except message.

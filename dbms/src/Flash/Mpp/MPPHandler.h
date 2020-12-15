@@ -238,9 +238,9 @@ struct MPPTask : private boost::noncopyable
         std::unique_lock<std::mutex> lk(tunnel_mutex);
         auto ret = cv.wait_for(lk, timeout, [&] {
             it = tunnel_map.find(id);
-            return it == tunnel_map.end();
+            return it != tunnel_map.end();
         });
-        return ret ? nullptr : it->second;
+        return ret ? it->second : nullptr;
     }
 };
 
@@ -293,9 +293,9 @@ public:
         std::unique_lock<std::mutex> lock(mu);
         auto ret = cv.wait_for(lock, timeout, [&] {
             it = task_map.find(id);
-            return it == task_map.end();
+            return it != task_map.end();
         });
-        return ret ? nullptr : it->second;
+        return ret ? it->second : nullptr;
     }
 
     String toString()

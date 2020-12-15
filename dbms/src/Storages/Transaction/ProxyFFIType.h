@@ -91,6 +91,18 @@ struct FsStats
     FsStats() { memset(this, 0, sizeof(*this)); }
 };
 
+struct StoreStats
+{
+    FsStats fs_stats;
+
+    uint64_t engine_bytes_written;
+    uint64_t engine_keys_written;
+    uint64_t engine_bytes_read;
+    uint64_t engine_keys_read;
+
+    StoreStats() : fs_stats(), engine_bytes_written(0), engine_keys_written(0), engine_bytes_read(0), engine_keys_read(0) {}
+};
+
 enum class RaftProxyStatus : uint8_t
 {
     Idle = 0,
@@ -202,7 +214,7 @@ struct TiFlashServerHelper
     void (*fn_handle_destroy)(TiFlashServer *, RegionId);
     TiFlashApplyRes (*fn_handle_ingest_sst)(TiFlashServer *, SnapshotViewArray, RaftCmdHeader);
     uint8_t (*fn_handle_check_terminated)(TiFlashServer *);
-    FsStats (*fn_handle_compute_fs_stats)(TiFlashServer *);
+    StoreStats (*fn_handle_compute_store_stats)(TiFlashServer *);
     TiFlashStatus (*fn_handle_get_tiflash_status)(TiFlashServer *);
     RawCppPtr (*fn_pre_handle_snapshot)(TiFlashServer *, BaseBuffView, uint64_t, SnapshotViewArray, uint64_t, uint64_t);
     void (*fn_apply_pre_handled_snapshot)(TiFlashServer *, void *, RawCppPtrType);
@@ -229,7 +241,7 @@ void AtomicUpdateProxy(TiFlashServer * server, TiFlashRaftProxyHelper * proxy);
 void HandleDestroy(TiFlashServer * server, RegionId region_id);
 TiFlashApplyRes HandleIngestSST(TiFlashServer * server, SnapshotViewArray snaps, RaftCmdHeader header);
 uint8_t HandleCheckTerminated(TiFlashServer * server);
-FsStats HandleComputeFsStats(TiFlashServer * server);
+StoreStats HandleComputeStoreStats(TiFlashServer * server);
 TiFlashStatus HandleGetTiFlashStatus(TiFlashServer * server);
 RawCppPtr PreHandleSnapshot(
     TiFlashServer * server, BaseBuffView region_buff, uint64_t peer_id, SnapshotViewArray snaps, uint64_t index, uint64_t term);

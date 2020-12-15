@@ -25,9 +25,9 @@ using DeltaIndexCompacted    = DefaultDeltaTree::CompactedEntries;
 using DeltaIndexCompactedPtr = DefaultDeltaTree::CompactedEntriesPtr;
 using DeltaIndexIterator     = DeltaIndexCompacted::Iterator;
 
+struct DMContext;
 struct WriteBatches;
 class StoragePool;
-struct DMContext;
 
 static std::atomic_uint64_t NEXT_PACK_ID{0};
 
@@ -271,12 +271,7 @@ public:
     }
 
     /// Abandon this instance.
-    void abandon()
-    {
-        bool v = false;
-        if (!abandoned.compare_exchange_strong(v, true))
-            throw Exception("Try to abandon a already abandoned DeltaValueSpace", ErrorCodes::LOGICAL_ERROR);
-    }
+    void abandon(DMContext & context);
 
     bool hasAbandoned() const { return abandoned.load(std::memory_order_relaxed); }
 

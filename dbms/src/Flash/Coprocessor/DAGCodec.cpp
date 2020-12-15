@@ -5,17 +5,9 @@
 namespace DB
 {
 
-void encodeDAGInt64(Int64 i, std::stringstream & ss)
-{
-    auto u = RecordKVFormat::encodeInt64(i);
-    ss.write(reinterpret_cast<const char *>(&u), sizeof(u));
-}
+void encodeDAGInt64(Int64 i, std::stringstream & ss) { RecordKVFormat::encodeInt64(i, ss); }
 
-void encodeDAGUInt64(UInt64 i, std::stringstream & ss)
-{
-    auto u = RecordKVFormat::encodeUInt64(i);
-    ss.write(reinterpret_cast<const char *>(&u), sizeof(u));
-}
+void encodeDAGUInt64(UInt64 i, std::stringstream & ss) { RecordKVFormat::encodeUInt64(i, ss); }
 
 void encodeDAGFloat32(Float32 f, std::stringstream & ss) { EncodeFloat64(f, ss); }
 
