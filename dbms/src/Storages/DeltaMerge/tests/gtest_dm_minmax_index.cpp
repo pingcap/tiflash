@@ -1,6 +1,7 @@
 #include <Core/BlockGen.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/tests/dm_basic_include.h>
 #include <test_utils/TiflashTestBasic.h>
