@@ -30,7 +30,7 @@ namespace DB
 
 void ExchangeReceiver::init()
 {
-    std::lock_guard<std::mutex> lk(rw_mu);
+    std::lock_guard<std::mutex> lk(mu);
     if (inited)
     {
         return;
@@ -70,9 +70,7 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw)
             {
                 throw Exception("exchange receiver meet error : " + packet.error().msg());
             }
-            std::unique_lock<std::mutex> lk(rw_mu);
-            block_buffer.push(packet);
-            cv.notify_all();
+            decodePacket(packet);
         }
     }
     catch (Exception & e)

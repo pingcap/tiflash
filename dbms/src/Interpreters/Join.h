@@ -288,7 +288,7 @@ public:
     size_t getBuildConcurrency() const { return build_concurrency; }
     bool isBuildSetExceeded() const { return build_set_exceeded.load(); }
 
-    void finishBuildTable();
+    void setFinishBuildTable(bool);
 
     /// Reference to the row in block.
     struct RowRef

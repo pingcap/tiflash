@@ -37,9 +37,9 @@ class ExchangeReceiver
     DAGSchema schema;
 
     // TODO: should be a concurrency bounded queue.
-    std::mutex rw_mu;
+    std::mutex mu;
     std::condition_variable cv;
-    std::queue<mpp::MPPDataPacket> block_buffer;
+    std::queue<Block> block_buffer;
     std::atomic_int live_connections;
     bool inited;
     bool meet_error;
@@ -49,7 +49,7 @@ class ExchangeReceiver
 
     void ReadLoop(const String & meta_raw);
 
-    Block decodePacket(const mpp::MPPDataPacket & p)
+    void decodePacket(const mpp::MPPDataPacket & p)
     {
         tipb::SelectResponse resp;
         resp.ParseFromString(p.data());
@@ -72,10 +72,11 @@ class ExchangeReceiver
                 default:
                     throw Exception("Unsupported encode type", ErrorCodes::LOGICAL_ERROR);
             }
-            LOG_DEBUG(log, "decode packet" << std::to_string(block.rows()));
-            return block;
+            std::lock_guard<std::mutex> lock(mu);
+            block_buffer.push(std::move(block));
+            cv.notify_all();
+            LOG_TRACE(log, "decode packet" << std::to_string(block.rows()));
         }
-        return {};
     }
 
 public:
@@ -113,7 +114,7 @@ public:
     {
         if (!inited)
             init();
-        std::unique_lock<std::mutex> lk(rw_mu);
+        std::unique_lock<std::mutex> lk(mu);
         cv.wait(lk, [&] { return block_buffer.size() > 0 || live_connections == 0 || meet_error; });
         if (meet_error)
         {
@@ -123,9 +124,9 @@ public:
         {
             return {};
         }
-        auto packet = block_buffer.front();
+        auto block = block_buffer.front();
         block_buffer.pop();
-        return decodePacket(packet);
+        return block;
     }
 };
 } // namespace DB

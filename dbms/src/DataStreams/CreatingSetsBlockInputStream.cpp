@@ -85,6 +85,14 @@ void CreatingSetsBlockInputStream::createAll()
     {
         for (auto & subqueries_for_sets : subqueries_for_sets_list)
         {
+            for (auto &elem : subqueries_for_sets)
+            {
+                if (elem.second.join)
+                    elem.second.join->setFinishBuildTable(false);
+            }
+        }
+        for (auto & subqueries_for_sets : subqueries_for_sets_list)
+        {
             for (auto & elem : subqueries_for_sets)
             {
                 if (elem.second.source) /// There could be prepared in advance Set/Join - no source is specified for them.
@@ -115,6 +123,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
     BlockOutputStreamPtr table_out;
     if (subquery.table)
         table_out = subquery.table->write({}, {});
+
 
     bool done_with_set = !subquery.set;
     bool done_with_join = !subquery.join;
@@ -181,7 +190,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
     }
 
     if (subquery.join)
-        subquery.join->finishBuildTable();
+        subquery.join->setFinishBuildTable(true);
 
     if (table_out)
         table_out->writeSuffix();
