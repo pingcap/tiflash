@@ -123,7 +123,7 @@ void DB::RateLimiter::refillAndAlloc()
         auto * next_req = req_queue.front();
         if (available_balance < next_req->remaining_bytes)
         {
-            // avoid starvation
+            // Decrease remaining_bytes to avoid starvation of this request
             next_req->remaining_bytes -= available_balance;
             total_bytes_through += available_balance;
             available_balance = 0;
