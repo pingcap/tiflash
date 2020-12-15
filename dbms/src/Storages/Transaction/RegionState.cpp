@@ -78,8 +78,8 @@ RegionRangeKeys::RegionRangeKeys(TiKVKey && start_key, TiKVKey && end_key)
 {
     if (!computeMappedTableID(raw.first, mapped_table_id))
     {
-        throw Exception(
-            "Can't tell table id for region, should not happen, start key: " + ori.first.key.toHex(), ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Illegal region range, should not happen, start key: " + ori.first.key.toDebugString()
+                + ", end key: " + ori.second.key.toDebugString(), ErrorCodes::LOGICAL_ERROR);
     }
     mapped_handle_range = TiKVRange::getHandleRangeByTable(rawKeys().first, rawKeys().second, mapped_table_id);
 

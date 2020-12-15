@@ -91,7 +91,7 @@ RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair)
     auto & map = data;
     auto [it, ok] = map.emplace(std::move(kv_pair));
     if (!ok)
-        throw Exception("Found existing key in hex: " + getTiKVKey(it->second).toHex(), ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Found existing key in hex: " + getTiKVKey(it->second).toDebugString(), ErrorCodes::LOGICAL_ERROR);
 
     finishInsert(it);
     return calcTiKVKeyValueSize(it->second);

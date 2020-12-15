@@ -115,10 +115,9 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
             {
                 region_status = status;
                 LOG_WARNING(log,
-                    "Check memory cache, region " << region_id << ", version " << region_to_query.version << ", handle range ["
-                                                  << region_to_query.range_in_table.first.toString() << ", "
-                                                  << region_to_query.range_in_table.second.toString() << ") , status "
-                                                  << RegionException::RegionReadStatusString(status));
+                    "Check memory cache, region " << region_id << ", version " << region_to_query.version << ", handle range "
+                                                  << RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region_to_query.range_in_table)
+                                                  << ", status " << RegionException::RegionReadStatusString(status));
                 return;
             }
 
@@ -203,10 +202,10 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
                 if (status != RegionException::RegionReadStatus::OK)
                 {
                     LOG_WARNING(log,
-                        "Check memory cache, region " << region_to_query.region_id << ", version " << region_to_query.version
-                                                      << ", handle range [" << region_to_query.range_in_table.first.toString() << ", "
-                                                      << region_to_query.range_in_table.second.toString() << ") , status "
-                                                      << RegionException::RegionReadStatusString(status));
+                        "Check memory cache, region "
+                            << region_to_query.region_id << ", version " << region_to_query.version << ", handle range "
+                            << RecordKVFormat::DecodedTiKVKeyRangeToDebugString(region_to_query.range_in_table) << ", status "
+                            << RegionException::RegionReadStatusString(status));
                     region_status = status;
                 }
             }
