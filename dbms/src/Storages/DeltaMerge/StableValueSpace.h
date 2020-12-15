@@ -13,6 +13,8 @@ namespace DM
 {
 struct WriteBatches;
 struct DMContext;
+class RSOperator;
+using RSOperatorPtr = std::shared_ptr<RSOperator>;
 
 class StableValueSpace;
 using StableValueSpacePtr = std::shared_ptr<StableValueSpace>;

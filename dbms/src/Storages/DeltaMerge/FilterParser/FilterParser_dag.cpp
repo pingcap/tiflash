@@ -3,6 +3,7 @@
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Poco/Logger.h>
+#include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/Transaction/TiDB.h>
 #include <common/logger_useful.h>
@@ -77,8 +78,8 @@ ColumnID getColumnIDForColumnExpr(const tipb::Expr & expr, const ColumnDefines &
     if (column_index < 0 || column_index >= static_cast<Int64>(columns_to_read.size()))
     {
         throw TiFlashException("Column index out of bound: " + DB::toString(column_index) + ", should in [0,"
-                            + DB::toString(columns_to_read.size()) + ")",
-                        Errors::Coprocessor::BadRequest);
+                                   + DB::toString(columns_to_read.size()) + ")",
+                               Errors::Coprocessor::BadRequest);
     }
     return columns_to_read[column_index].id;
 }

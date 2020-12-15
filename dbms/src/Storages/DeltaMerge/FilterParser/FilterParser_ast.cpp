@@ -1,15 +1,14 @@
-#include <Storages/DeltaMerge/FilterParser/FilterParser.h>
-
-#include <cassert>
-
-#include <common/logger_useful.h>
-#include <tipb/expression.pb.h>
-
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Poco/Logger.h>
+#include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/FilterParser/FilterParser.h>
+#include <common/logger_useful.h>
+#include <tipb/expression.pb.h>
+
+#include <cassert>
 
 
 namespace DB
