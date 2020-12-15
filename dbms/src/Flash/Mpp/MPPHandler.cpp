@@ -151,9 +151,7 @@ grpc::Status MPPHandler::execute(mpp::DispatchTaskResponse * response)
         streams.out = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
 
         task->run(streams);
-        LOG_INFO(log,
-                 "processing dispatch is over; the time cost is "
-                                             << std::to_string(stopwatch.elapsedMilliseconds()) << " ms");
+        LOG_INFO(log, "processing dispatch is over; the time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms");
     }
     catch (Exception & e)
     {
