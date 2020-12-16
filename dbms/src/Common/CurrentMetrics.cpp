@@ -55,6 +55,7 @@
     M(DT_DeltaMergeTotalRows) \
     M(DT_DeltaIndexCacheSize) \
     M(RaftNumSnapshotsPendingApply) \
+    M(RateLimiterPendingWriteRequest) \
 
 
 namespace CurrentMetrics

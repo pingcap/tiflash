@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/CurrentMetrics.h>
+#include <Encryption/RateLimiter.h>
 #include <Encryption/WritableFile.h>
 #include <string>
 
@@ -21,7 +22,8 @@ protected:
     CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForWrite};
 
 public:
-    PosixWritableFile(const std::string & file_name_, bool truncate_when_exists_, int flags, mode_t mode);
+    PosixWritableFile(
+        const std::string & file_name_, bool truncate_when_exists_, int flags, mode_t mode, const RateLimiterPtr & rate_limiter_ = nullptr);
 
     ~PosixWritableFile() override;
 
@@ -47,6 +49,7 @@ private:
 private:
     std::string file_name;
     int fd;
+    RateLimiterPtr rate_limiter;
 };
 
 } // namespace DB
