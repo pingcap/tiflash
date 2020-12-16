@@ -67,18 +67,16 @@ struct MPPTunnel
     void write(const mpp::MPPDataPacket & data)
     {
 
-        LOG_DEBUG(log, "ready to write");
+        LOG_TRACE(log, "ready to write");
         std::unique_lock<std::mutex> lk(mu);
 
         if (timeout.count() > 0)
         {
             if (cv_for_connected.wait_for(lk, timeout, [&]() { return connected; }))
             {
-                LOG_DEBUG(log, "begin to write");
-
                 writer->Write(data);
 
-                LOG_DEBUG(log, "finish write");
+                LOG_TRACE(log, "finish write");
             }
             else
             {
