@@ -6,7 +6,6 @@
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
-#include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/MarkCache.h>
 
@@ -14,6 +13,8 @@ namespace DB
 {
 namespace DM
 {
+class RSOperator;
+using RSOperatorPtr = std::shared_ptr<RSOperator>;
 
 static const size_t DMFILE_READ_ROWS_THRESHOLD = DEFAULT_MERGE_BLOCK_SIZE * 3;
 
