@@ -36,7 +36,7 @@ namespace FailPoints
 {
 extern const char exception_drop_table_during_remove_meta[];
 extern const char exception_before_rename_table_old_meta_removed[];
-}
+} // namespace FailPoints
 
 static constexpr size_t METADATA_FILE_BUFFER_SIZE = 32768;
 
@@ -165,7 +165,7 @@ void DatabaseTiFlash::createTable(const Context & context, const String & table_
 
         /// Exclusive flags guarantees, that table is not created right now in another thread. Otherwise, exception will be thrown.
         WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""),
-            statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+            true, nullptr, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
         if (settings.fsync_metadata)
@@ -282,8 +282,8 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
             EncryptionPath encryption_path
                 = use_target_encrypt_info ? EncryptionPath(new_tbl_meta_file, "") : EncryptionPath(new_tbl_meta_file_tmp, "");
             bool create_new_encryption_info = !use_target_encrypt_info && statement.size();
-            WriteBufferFromFileProvider out(
-                context.getFileProvider(), new_tbl_meta_file_tmp, encryption_path, create_new_encryption_info, O_WRONLY | O_CREAT | O_EXCL);
+            WriteBufferFromFileProvider out(context.getFileProvider(), new_tbl_meta_file_tmp, encryption_path, create_new_encryption_info,
+                nullptr, O_WRONLY | O_CREAT | O_EXCL);
             writeString(statement, out);
             out.next();
             if (context.getSettingsRef().fsync_metadata)
@@ -376,8 +376,8 @@ void DatabaseTiFlash::alterTable(
         EncryptionPath encryption_path
             = use_target_encrypt_info ? EncryptionPath(table_metadata_path, "") : EncryptionPath(table_metadata_tmp_path, "");
         bool create_new_encryption_info = !use_target_encrypt_info && statement.size();
-        WriteBufferFromFileProvider out(
-            context.getFileProvider(), table_metadata_tmp_path, encryption_path, create_new_encryption_info, O_WRONLY | O_CREAT | O_EXCL);
+        WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, encryption_path, create_new_encryption_info,
+            nullptr, O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
         if (context.getSettingsRef().fsync_metadata)

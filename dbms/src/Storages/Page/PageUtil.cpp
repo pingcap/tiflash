@@ -3,6 +3,7 @@
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashException.h>
+#include <Encryption/RateLimiter.h>
 
 #include <IO/WriteHelpers.h>
 
@@ -46,11 +47,13 @@ void syncFile(WritableFilePtr & file)
         DB::throwFromErrno("Cannot fsync file: " + file->getFileName(), ErrorCodes::CANNOT_FSYNC);
 }
 
-void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write)
+void writeFile(WritableFilePtr & file, UInt64 offset, char * data, size_t to_write, const RateLimiterPtr & rate_limiter)
 {
     ProfileEvents::increment(ProfileEvents::PSMWriteCalls);
     ProfileEvents::increment(ProfileEvents::PSMWriteBytes, to_write);
 
+    if (rate_limiter)
+        rate_limiter->request(to_write);
     size_t bytes_written = 0;
     while (bytes_written != to_write)
     {

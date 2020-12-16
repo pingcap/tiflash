@@ -120,6 +120,10 @@ void TiFlashStorageConfig::parse(const String & storage, Poco::Logger * log)
         kvstore_data_path[i] = getNormalizedPath(kvstore_data_path[i]);
         LOG_INFO(log, "Raft data candidate path: " << kvstore_data_path[i]);
     }
+
+    // rate limiter
+    if (auto rate_limit = table->get_qualified_as<UInt64>("bg_task_io_rate_limit"); rate_limit)
+        bg_task_io_rate_limit = *rate_limit;
 }
 
 Strings TiFlashStorageConfig::getAllNormalPaths() const

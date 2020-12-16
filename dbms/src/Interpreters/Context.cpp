@@ -52,6 +52,8 @@
 #include <Interpreters/Context.h>
 #include <Common/DNSCache.h>
 #include <Encryption/DataKeyManager.h>
+#include <Encryption/FileProvider.h>
+#include <Encryption/RateLimiter.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
 #include <IO/PersistedCache.h>
@@ -149,6 +151,7 @@ struct ContextShared
     ConfigurationPtr users_config;                          /// Config with the users, profiles and quotas sections.
     InterserverIOHandler interserver_io_handler;            /// Handler for interserver communication.
     BackgroundProcessingPoolPtr background_pool;            /// The thread pool for the background work performed by the tables.
+    BackgroundProcessingPoolPtr blockable_background_pool;  /// The thread pool for the blockable background work performed by the tables.
     mutable TMTContextPtr tmt_context;                      /// Context of TiFlash. Note that this should be free before background_pool.
     MultiVersion<Macros> macros;                            /// Substitutions extracted from config.
     std::unique_ptr<Compiler> compiler;                     /// Used for dynamic compilation of queries' parts if it necessary.
@@ -165,6 +168,7 @@ struct ContextShared
     PathCapacityMetricsPtr path_capacity_ptr;               /// Path capacity metrics
     TiFlashMetricsPtr tiflash_metrics;                      /// TiFlash metrics registry.
     FileProviderPtr file_provider;                          /// File provider.
+    RateLimiterPtr rate_limiter;                            /// Rate Limiter.
 
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
@@ -1460,6 +1464,15 @@ BackgroundProcessingPool & Context::getBackgroundPool()
     return *shared->background_pool;
 }
 
+BackgroundProcessingPool & Context::getBlockableBackgroundPool()
+{
+    // TODO: choose a better thread pool size and maybe a better name for the pool
+    auto lock = getLock();
+    if (!shared->blockable_background_pool)
+        shared->blockable_background_pool = std::make_shared<BackgroundProcessingPool>(settings.background_pool_size);
+    return *shared->blockable_background_pool;
+}
+
 void Context::setDDLWorker(std::shared_ptr<DDLWorker> ddl_worker)
 {
     auto lock = getLock();
@@ -1564,6 +1577,20 @@ FileProviderPtr Context::getFileProvider() const
 {
     auto lock = getLock();
     return shared->file_provider;
+}
+
+void Context::initializeRateLimiter(TiFlashMetricsPtr metrics, UInt64 rate_limit_per_sec)
+{
+    auto lock = getLock();
+    if (shared->rate_limiter)
+        throw Exception("RateLimiter has already been initialized.", ErrorCodes::LOGICAL_ERROR);
+    shared->rate_limiter = std::make_shared<RateLimiter>(metrics, rate_limit_per_sec);
+}
+
+RateLimiterPtr Context::getRateLimiter() const
+{
+    auto lock = getLock();
+    return shared->rate_limiter;
 }
 
 zkutil::ZooKeeperPtr Context::getZooKeeper() const

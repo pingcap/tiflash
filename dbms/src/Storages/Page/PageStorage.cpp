@@ -458,7 +458,7 @@ PageStorage::ReaderPtr PageStorage::getReader(const PageFileIdAndLevel & file_id
     return pages_reader;
 }
 
-void PageStorage::write(WriteBatch && wb)
+void PageStorage::write(WriteBatch && wb, const RateLimiterPtr & rate_limiter)
 {
     if (unlikely(wb.empty()))
         return;
@@ -474,7 +474,7 @@ void PageStorage::write(WriteBatch && wb)
 
     PageEntriesEdit edit;
     wb.setSequence(++write_batch_seq); // Set sequence number to keep ordering between writers.
-    size_t bytes_written = file_to_write->write(wb, edit);
+    size_t bytes_written = file_to_write->write(wb, edit, rate_limiter);
     delegator->addPageFileUsedSize(file_to_write->fileIdLevel(),
                                    bytes_written,
                                    file_to_write->parentPath(),
