@@ -22,8 +22,9 @@ extern const int CANNOT_OPEN_FILE;
 extern const int CANNOT_CLOSE_FILE;
 } // namespace ErrorCodes
 
-PosixWritableFile::PosixWritableFile(const std::string & file_name_, bool truncate_when_exists_, int flags, mode_t mode)
-    : file_name{file_name_}
+PosixWritableFile::PosixWritableFile(
+    const std::string & file_name_, bool truncate_when_exists_, int flags, mode_t mode, const RateLimiterPtr & rate_limiter_)
+    : file_name{file_name_}, rate_limiter{rate_limiter_}
 {
     doOpenFile(truncate_when_exists_, flags, mode);
 }
@@ -52,9 +53,19 @@ void PosixWritableFile::close()
     fd = -1;
 }
 
-ssize_t PosixWritableFile::write(char * buf, size_t size) { return ::write(fd, buf, size); }
+ssize_t PosixWritableFile::write(char * buf, size_t size)
+{
+    if (rate_limiter)
+        rate_limiter->request((UInt64)size);
+    return ::write(fd, buf, size);
+}
 
-ssize_t PosixWritableFile::pwrite(char * buf, size_t size, off_t offset) const { return ::pwrite(fd, buf, size, offset); }
+ssize_t PosixWritableFile::pwrite(char * buf, size_t size, off_t offset) const
+{
+    if (rate_limiter)
+        rate_limiter->request((UInt64)size);
+    return ::pwrite(fd, buf, size, offset);
+}
 
 void PosixWritableFile::doOpenFile(bool truncate_when_exists_, int flags, mode_t mode)
 {
