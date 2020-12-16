@@ -119,8 +119,6 @@ public:
     RegionDataReadInfoList tryFlushRegion(RegionID region_id, bool try_persist = false);
     RegionDataReadInfoList tryFlushRegion(const RegionPtrWrap & region, bool try_persist);
 
-    void waitTillRegionFlushed(RegionID region_id);
-
     void handleInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegions &)> && callback) const;
     std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(const TableID table_id) const;
 
@@ -185,18 +183,11 @@ private:
     bool shouldFlush(const InternalRegion & region) const;
     RegionID pickRegionToFlush();
 
-    void incrDirtyFlag(RegionID region_id);
-    void clearDirtyFlag(RegionID region_id);
-    DirtyRegions::iterator clearDirtyFlag(const RegionTable::DirtyRegions::iterator & region_iter, std::lock_guard<std::mutex> &);
-
 private:
     TableMap tables;
     RegionInfoMap regions;
     DirtyRegions dirty_regions;
     TableToOptimize table_to_optimize;
-
-    std::mutex dirty_regions_mutex;
-    std::condition_variable dirty_regions_cv;
 
     FlushThresholds flush_thresholds;
 
