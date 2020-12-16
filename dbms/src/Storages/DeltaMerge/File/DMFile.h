@@ -202,7 +202,7 @@ private:
     std::tuple<size_t, size_t> writeMeta(WriteBuffer & buffer);
     std::tuple<size_t, size_t> writePack(WriteBuffer & buffer);
 
-    void writeMeta(const FileProviderPtr & file_provider);
+    void writeMeta(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter);
     void readMeta(const FileProviderPtr & file_provider);
 
     void upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileVersion ver);
@@ -212,7 +212,7 @@ private:
 
     void initializeSubFileStatIfNeeded(const FileProviderPtr & file_provider);
 
-    void finalizeForFolderMode(const FileProviderPtr & file_provider);
+    void finalizeForFolderMode(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter);
     void finalizeForSingleFileMode(WriteBuffer & buffer);
 
     void addSubFileStat(const String & name, UInt64 offset, UInt64 size) { sub_file_stats.emplace(name, SubFileStat{offset, size}); }
