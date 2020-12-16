@@ -144,7 +144,7 @@ grpc::Status FlashService::Coprocessor(
     {
         auto errMsg = "can't find task [" + toString(request->sender_meta().start_ts()) + "," + toString(request->sender_meta().task_id())
             + "] within " + toString(timeout.count()) + " s";
-        LOG_DEBUG(log, errMsg);
+        LOG_ERROR(log, errMsg);
         mpp::MPPDataPacket packet;
         auto err = new mpp::Error();
         err->set_msg(errMsg);
@@ -157,7 +157,7 @@ grpc::Status FlashService::Coprocessor(
     {
         auto errMsg = "can't find tunnel ( " + toString(request->receiver_meta().task_id()) + " + "
             + toString(request->sender_meta().task_id()) + " ) within " + toString(timeout.count()) + " s";
-        LOG_DEBUG(log, errMsg);
+        LOG_ERROR(log, errMsg);
         mpp::MPPDataPacket packet;
         auto err = new mpp::Error();
         err->set_msg(errMsg);
