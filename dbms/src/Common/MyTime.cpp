@@ -48,27 +48,52 @@ int getFracIndex(const String & format)
     return idx;
 }
 
+// helper for date part splitting, punctuation characters are valid separators anywhere,
+// while space and 'T' are valid separators only between date and time.
+bool isValidSeperator(char c, int previous_parts)
+{
+    if (isPunctuation(c))
+        return true;
+
+    return previous_parts == 2 && (c == ' ' || c == 'T');
+}
+
 std::vector<String> parseDateFormat(String format)
 {
     format = Poco::trimInPlace(format);
 
+    if (format.size() == 0)
+        return {};
+
+    if (!std::isdigit(format[0]) || !std::isdigit(format[format.size() - 1]))
+    {
+        return {};
+    }
+
     std::vector<String> seps;
+    seps.reserve(6);
     size_t start = 0;
     for (size_t i = 0; i < format.size(); i++)
     {
-        if (i == 0 || i + 1 == format.size())
+        if (isValidSeperator(format[i], seps.size()))
         {
-            if (!std::isdigit(format[i]))
-                return {};
+            int previous_parts = seps.size();
+            seps.push_back(format.substr(start, i - start));
+            start = i + 1;
+
+            for (size_t j = i + 1; j < format.size(); j++)
+            {
+                if (!isValidSeperator(format[j], previous_parts))
+                    break;
+                start++;
+                i++;
+            }
             continue;
         }
 
         if (!std::isdigit(format[i]))
         {
-            if (!std::isdigit(format[i - 1]))
-                return {};
-            seps.push_back(format.substr(start, i - start));
-            start = i + 1;
+            return {};
         }
     }
     seps.push_back(format.substr(start));
@@ -87,7 +112,7 @@ std::vector<String> parseDateFormat(String format)
 //     second link specified that for string literal, "hour values less than than 10, a leading zero is required.".
 //   ISO-8601: Z|((((?P<tz_sign>[-+])(?P<tz_hour>[0-9]{2})(:(?P<tz_minute>[0-9]{2}){0,1}){0,1})|((?P<tz_minute>[0-9]{2}){0,1}){0,1}))$
 //     see https://www.cl.cam.ac.uk/~mgk25/iso-time.html
-std::tuple<int, String, String, String, String> getTimeZone(String literal)
+std::tuple<int, String, String, String, String> getTimeZone(const String & literal)
 {
     static const std::map<int, std::tuple<int, int>> valid_idx_combinations{
         {100, {0, 0}}, // 23:59:59Z
@@ -209,9 +234,9 @@ std::tuple<std::vector<String>, String, bool, String, String, String, String> sp
     if (frac_idx > 0)
     {
         frac = format.substr(frac_idx + 1);
-        while (frac_idx > 0 && isPunctuation(format[tz_idx - 1]))
+        while (frac_idx > 0 && isPunctuation(format[frac_idx - 1]))
         {
-            // in case of multiple separators, e.g. 2020-10--10
+            // in case of multiple separators, e.g. 2020-10-10 11:00:00..123456
             frac_idx--;
         }
         format = format.substr(0, frac_idx);
@@ -728,7 +753,7 @@ Field parseMyDateTime(const String & str, int8_t fsp)
     bool truncated_or_incorrect = false;
 
     // noAbsorb tests if can absorb FSP or TZ
-    auto noAbsorb = [](std::vector<String> seps) {
+    auto noAbsorb = [](const std::vector<String> & seps) {
         // if we have more than 5 parts (i.e. 6), the tailing part can't be absorbed
         // or if we only have 1 part, but its length is longer than 4, then it is at least YYMMD, in this case, FSP can
         // not be absorbed, and it will be handled later, and the leading sign prevents TZ from being absorbed, because
