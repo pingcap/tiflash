@@ -8,7 +8,9 @@
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <Flash/Coprocessor/DAGContext.h>
 #include <pingcap/coprocessor/Client.h>
+
 #pragma GCC diagnostic pop
 
 namespace DB
@@ -29,10 +31,11 @@ class CoprocessorBlockInputStream : public IProfilingBlockInputStream
     }
 
 public:
-    CoprocessorBlockInputStream(
-        pingcap::kv::Cluster * cluster_, std::vector<pingcap::coprocessor::copTask> tasks, const DAGSchema & schema_, int concurrency)
+    CoprocessorBlockInputStream(pingcap::kv::Cluster * cluster_, std::vector<pingcap::coprocessor::copTask> tasks,
+        const DAGSchema & schema_, int concurrency, DAGContext & dag_context_)
         : resp_iter(std::move(tasks), cluster_, concurrency, &Logger::get("pingcap/coprocessor")),
           schema(schema_),
+          dag_context(dag_context_),
           sample_block(getSampleBlock()),
           log(&Logger::get("pingcap/coprocessor"))
     {
@@ -87,6 +90,7 @@ private:
 
         resp = std::make_shared<tipb::SelectResponse>();
         resp->ParseFromString(data);
+        dag_context.addRemoteExecutionSummariesForUnaryCall(*resp);
         int chunks_size = resp->chunks_size();
 
         if (chunks_size == 0)
@@ -101,6 +105,8 @@ private:
 
     pingcap::coprocessor::ResponseIter resp_iter;
     DAGSchema schema;
+
+    DAGContext & dag_context;
 
     std::shared_ptr<tipb::SelectResponse> resp;
 

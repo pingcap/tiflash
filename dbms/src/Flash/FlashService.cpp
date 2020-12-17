@@ -113,8 +113,8 @@ grpc::Status FlashService::Coprocessor(
         return status;
     }
 
-    MPPHandler mpp_handler(context, *request);
-    return mpp_handler.execute(response);
+    MPPHandler mpp_handler(*request);
+    return mpp_handler.execute(context, response);
 }
 
 ::grpc::Status FlashService::EstablishMPPConnection(::grpc::ServerContext * grpc_context,

@@ -17,12 +17,13 @@ extern const int LOGICAL_ERROR;
 template <class StreamWriterPtr>
 StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWriterPtr writer_, std::vector<Int64> partition_col_ids_,
     tipb::ExchangeType exchange_type_, Int64 records_per_chunk_, tipb::EncodeType encode_type_,
-    std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_, bool collect_execute_summary_, bool return_executor_id_)
-    : DAGResponseWriter(records_per_chunk_, encode_type_, result_field_types_, dag_context_, collect_execute_summary_, return_executor_id_),
+    std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_, bool collect_execution_summary_, bool return_executor_id_)
+    : DAGResponseWriter(
+        records_per_chunk_, encode_type_, result_field_types_, dag_context_, collect_execution_summary_, return_executor_id_),
       exchange_type(exchange_type_),
       writer(writer_),
-      partition_col_ids(partition_col_ids_),
-      thread_pool(dag_context.final_concurency)
+      partition_col_ids(std::move(partition_col_ids_)),
+      thread_pool(dag_context.final_concurrency)
 {
     rows_in_blocks = 0;
     partition_num = writer_->getPartitionNum();
@@ -117,10 +118,7 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodeTask(
             chunk_codec_stream->clear();
         }
 
-        std::string select_resp;
-        response.SerializeToString(&select_resp);
-
-        writer->write(select_resp);
+        writer->write(response);
     };
 }
 
@@ -199,9 +197,7 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
                 auto dag_chunk = responses[part_id].add_chunks();
                 dag_chunk->set_rows_data(chunk_codec_stream[part_id]->getString());
                 chunk_codec_stream[part_id]->clear();
-                std::string select_resp;
-                responses[part_id].SerializeToString(&select_resp);
-                writer->write(select_resp, part_id);
+                writer->write(responses[part_id], part_id);
             }
         }
     };

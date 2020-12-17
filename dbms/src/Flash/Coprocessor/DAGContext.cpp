@@ -87,4 +87,46 @@ void DAGContext::handleInvalidTime(const String & msg)
 
 bool DAGContext::shouldClipToZero() { return flags & Flag::IN_INSERT_STMT || flags & Flag::IN_LOAD_DATA_STMT; }
 
+void DAGContext::addRemoteExecutionSummariesImpl(tipb::SelectResponse & resp, size_t index, size_t concurrency, bool is_streaming_call)
+{
+    for (auto & execution_summary : resp.execution_summaries())
+    {
+        if (execution_summary.has_executor_id())
+        {
+            auto & executor_id = execution_summary.executor_id();
+            if (remote_execution_summaries.find(executor_id) == remote_execution_summaries.end())
+            {
+                std::lock_guard<std::mutex> lock(remote_execution_summaries_lock);
+                if (remote_execution_summaries.find(executor_id) == remote_execution_summaries.end())
+                {
+                    for (size_t i = 0; i < concurrency; i++)
+                        remote_execution_summaries[executor_id].emplace_back();
+                }
+            }
+            auto & current_execution_summary = remote_execution_summaries[executor_id][index];
+            if (is_streaming_call)
+            {
+                current_execution_summary.time_processed_ns.fetch_add(execution_summary.time_processed_ns());
+            }
+            else
+            {
+                auto current_time_processed_ns = current_execution_summary.time_processed_ns.load();
+                auto new_comming_time_processed_ns = execution_summary.time_processed_ns();
+                while (current_time_processed_ns < new_comming_time_processed_ns)
+                {
+                    /// use cas to update time_processed_ns to the bigger one
+                    if (current_execution_summary.time_processed_ns.compare_exchange_weak(
+                            current_time_processed_ns, new_comming_time_processed_ns))
+                    {
+                        break;
+                    }
+                }
+            }
+            current_execution_summary.num_produced_rows.fetch_add(execution_summary.num_produced_rows());
+            current_execution_summary.num_iterations.fetch_add(execution_summary.num_iterations());
+            current_execution_summary.concurrency.fetch_add(execution_summary.concurrency());
+        }
+    }
+}
+
 } // namespace DB

@@ -4,26 +4,54 @@
 namespace DB
 {
 
+void DAGResponseWriter::fillTiExecutionSummary(
+    tipb::ExecutorExecutionSummary * execution_summary, ExecutionSummary & current, const String & executor_id)
+{
+    auto & prev_stats = previous_execution_stats[executor_id];
+
+    execution_summary->set_time_processed_ns(current.time_processed_ns - prev_stats.time_processed_ns);
+    execution_summary->set_num_produced_rows(current.num_produced_rows - prev_stats.num_produced_rows);
+    execution_summary->set_num_iterations(current.num_iterations - prev_stats.num_iterations);
+    execution_summary->set_concurrency(current.concurrency - prev_stats.concurrency);
+    prev_stats = current;
+    if (return_executor_id)
+        execution_summary->set_executor_id(executor_id);
+}
+
 void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response)
 {
-    if (!collect_execute_summary)
+    if (!collect_execution_summary)
         return;
+    auto & remote_execution_summaries = dag_context.getRemoteExecutionSummaries();
     // add ExecutorExecutionSummary info
+    /// first add execution_summary for local executor
     for (auto & p : dag_context.getProfileStreamsMap())
     {
-        auto * executeSummary = response.add_execution_summaries();
-        UInt64 time_processed_ns = 0;
-        UInt64 num_produced_rows = 0;
-        UInt64 num_iterations = 0;
+        ExecutionSummary current;
+        /// part 1: local execution info
         for (auto & streamPtr : p.second.input_streams)
         {
             if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streamPtr.get()))
             {
-                time_processed_ns = std::max(time_processed_ns, p_stream->getProfileInfo().execution_time);
-                num_produced_rows += p_stream->getProfileInfo().rows;
-                num_iterations += p_stream->getProfileInfo().blocks;
+                current.time_processed_ns = std::max(current.time_processed_ns, p_stream->getProfileInfo().execution_time);
+                current.num_produced_rows += p_stream->getProfileInfo().rows;
+                current.num_iterations += p_stream->getProfileInfo().blocks;
+            }
+            current.concurrency++;
+        }
+        /// part 2: remote execution info
+        const auto & remote_execution_info = remote_execution_summaries.find(p.first);
+        if (remote_execution_info != remote_execution_summaries.end())
+        {
+            for (const auto & remote_execution_summary : remote_execution_info->second)
+            {
+                current.time_processed_ns = std::max(current.time_processed_ns, remote_execution_summary.time_processed_ns.load());
+                current.num_produced_rows += remote_execution_summary.num_produced_rows.load();
+                current.num_iterations += remote_execution_summary.num_iterations.load();
+                current.concurrency += remote_execution_summary.concurrency.load();
             }
         }
+        /// part 3: for join need to add the build time
         for (auto & join_alias : dag_context.getQBIdToJoinAliasMap()[p.second.qb_id])
         {
             if (dag_context.getProfileStreamsMapForJoinBuildSide().find(join_alias)
@@ -35,36 +63,49 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response)
                     if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(join_stream.get()))
                         process_time_for_build = std::max(process_time_for_build, p_stream->getProfileInfo().execution_time);
                 }
-                time_processed_ns += process_time_for_build;
+                /// now hash table is build serially, so add all the time together
+                current.time_processed_ns += process_time_for_build;
             }
         }
 
-        time_processed_ns += dag_context.compile_time_ns;
-        auto & prev_stats = previous_execute_stats[p.first];
-
-        executeSummary->set_time_processed_ns(time_processed_ns - std::get<0>(prev_stats));
-        executeSummary->set_num_produced_rows(num_produced_rows - std::get<1>(prev_stats));
-        executeSummary->set_num_iterations(num_iterations - std::get<2>(prev_stats));
-        std::get<0>(prev_stats) = time_processed_ns;
-        std::get<1>(prev_stats) = num_produced_rows;
-        std::get<2>(prev_stats) = num_iterations;
-        if (return_executor_id)
-            executeSummary->set_executor_id(p.first);
+        current.time_processed_ns += dag_context.compile_time_ns;
+        fillTiExecutionSummary(response.add_execution_summaries(), current, p.first);
+        if (dag_context.isMPPTask() && p.first == dag_context.exchange_sender_execution_summary_key)
+        {
+            current.concurrency = dag_context.final_concurrency;
+            fillTiExecutionSummary(response.add_execution_summaries(), current, dag_context.exchange_sender_executor_id);
+        }
+    }
+    /// second add executionSummary for remote executor
+    for (auto & p : dag_context.getRemoteExecutionSummaries())
+    {
+        if (local_executors.find(p.first) == local_executors.end())
+        {
+            ExecutionSummary current;
+            for (const auto & remote_execution_summary : p.second)
+            {
+                current.time_processed_ns = std::max(current.time_processed_ns, remote_execution_summary.time_processed_ns.load());
+                current.num_produced_rows += remote_execution_summary.num_produced_rows.load();
+                current.num_iterations += remote_execution_summary.num_iterations.load();
+                current.concurrency += remote_execution_summary.concurrency.load();
+            }
+            fillTiExecutionSummary(response.add_execution_summaries(), current, p.first);
+        }
     }
 }
 
 DAGResponseWriter::DAGResponseWriter(Int64 records_per_chunk_, tipb::EncodeType encode_type_,
-    std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_, bool collect_execute_summary_, bool return_executor_id_)
+    std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_, bool collect_execution_summary_, bool return_executor_id_)
     : records_per_chunk(records_per_chunk_),
       encode_type(encode_type_),
       result_field_types(std::move(result_field_types_)),
       dag_context(dag_context_),
-      collect_execute_summary(collect_execute_summary_),
+      collect_execution_summary(collect_execution_summary_),
       return_executor_id(return_executor_id_)
 {
     for (auto & p : dag_context.getProfileStreamsMap())
     {
-        previous_execute_stats[p.first] = std::make_tuple(0, 0, 0);
+        local_executors.insert(p.first);
     }
     if (encode_type == tipb::EncodeType::TypeCHBlock)
     {

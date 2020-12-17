@@ -20,7 +20,7 @@ class UnaryDAGResponseWriter : public DAGResponseWriter
 {
 public:
     UnaryDAGResponseWriter(tipb::SelectResponse * response_, Int64 records_per_chunk_, tipb::EncodeType encodeType_,
-        std::vector<tipb::FieldType> result_field_types, DAGContext & dag_context_, bool collect_execute_summary_,
+        std::vector<tipb::FieldType> result_field_types, DAGContext & dag_context_, bool collect_execution_summary_,
         bool return_executor_id_);
 
     void write(const Block & block) override;

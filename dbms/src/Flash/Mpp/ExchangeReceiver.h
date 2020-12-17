@@ -25,12 +25,26 @@
 namespace DB
 {
 
+struct ExchangeReceiverResult
+{
+    std::shared_ptr<tipb::SelectResponse> resp;
+    size_t call_index;
+    bool meet_error;
+    String error_msg;
+    bool eof;
+    ExchangeReceiverResult(std::shared_ptr<tipb::SelectResponse> resp_, size_t call_index_, bool meet_error_ = false,
+        const String & error_msg_ = "", bool eof_ = false)
+        : resp(resp_), call_index(call_index_), meet_error(meet_error_), error_msg(error_msg_), eof(eof_)
+    {}
+};
+
 class ExchangeReceiver
 {
     TMTContext & context;
     std::chrono::seconds timeout;
 
     tipb::ExchangeReceiver pb_exchange_receiver;
+    size_t source_num;
     ::mpp::TaskMeta task_meta;
     std::vector<std::thread> workers;
     // async grpc
@@ -40,6 +54,7 @@ class ExchangeReceiver
     std::mutex mu;
     std::condition_variable cv;
     std::queue<Block> block_buffer;
+    std::queue<ExchangeReceiverResult> result_buffer;
     std::atomic_int live_connections;
     bool inited;
     bool meet_error;
@@ -47,12 +62,24 @@ class ExchangeReceiver
     Logger * log;
     class ExchangeCall;
 
-    void ReadLoop(const String & meta_raw);
+    void ReadLoop(const String & meta_raw, size_t source_index);
 
-    void decodePacket(const mpp::MPPDataPacket & p)
+    void decodePacket(const mpp::MPPDataPacket & p, size_t source_index)
     {
-        tipb::SelectResponse resp;
-        resp.ParseFromString(p.data());
+        std::shared_ptr<tipb::SelectResponse> resp_ptr = std::make_shared<tipb::SelectResponse>();
+        if (!resp_ptr->ParseFromString(p.data()))
+        {
+            resp_ptr = nullptr;
+        }
+        std::lock_guard<std::mutex> lock(mu);
+        if (resp_ptr != nullptr)
+            result_buffer.emplace(resp_ptr, source_index);
+        else
+            result_buffer.emplace(resp_ptr, source_index, true, "Error while decoding MPPDataPacket");
+        cv.notify_all();
+        /*
+        //todo should move this to ExchangeReceiverInputStream
+        context.getDAGContext()->addRemoteExecutionSummariesForStreamingCall(resp, source_index, source_num);
         int chunks_size = resp.chunks_size();
         for (int i = 0; i < chunks_size; i++)
         {
@@ -72,11 +99,9 @@ class ExchangeReceiver
                 default:
                     throw Exception("Unsupported encode type", ErrorCodes::LOGICAL_ERROR);
             }
-            std::lock_guard<std::mutex> lock(mu);
-            block_buffer.push(std::move(block));
-            cv.notify_all();
             LOG_TRACE(log, "decode packet" << std::to_string(block.rows()));
         }
+         */
     }
 
 public:
@@ -84,6 +109,7 @@ public:
         : context(context_.getTMTContext()),
           timeout(context_.getSettings().mpp_task_timeout),
           pb_exchange_receiver(exc),
+          source_num(pb_exchange_receiver.encoded_task_meta_size()),
           task_meta(meta),
           live_connections(0),
           inited(false),
@@ -110,23 +136,25 @@ public:
 
     void init();
 
-    Block nextBlock()
+    ExchangeReceiverResult nextResult()
     {
         if (!inited)
             init();
         std::unique_lock<std::mutex> lk(mu);
-        cv.wait(lk, [&] { return block_buffer.size() > 0 || live_connections == 0 || meet_error; });
+        cv.wait(lk, [&] { return result_buffer.size() > 0 || live_connections == 0 || meet_error; });
         if (meet_error)
         {
-            throw err;
+            return {nullptr, 0, true, err.message(), false};
         }
-        if (block_buffer.empty())
+        if (result_buffer.empty())
         {
-            return {};
+            return {nullptr, 0, false, "", true};
         }
-        auto block = block_buffer.front();
-        block_buffer.pop();
-        return block;
+        auto result = result_buffer.front();
+        result_buffer.pop();
+        return result;
     }
+
+    size_t getSourceNum() { return source_num; }
 };
 } // namespace DB

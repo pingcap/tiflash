@@ -35,15 +35,16 @@ void ExchangeReceiver::init()
     {
         return;
     }
-    for (auto & meta : pb_exchange_receiver.encoded_task_meta())
+    for (int index = 0; index < pb_exchange_receiver.encoded_task_meta_size(); index++)
     {
-        std::thread t(&ExchangeReceiver::ReadLoop, this, std::ref(meta));
+        auto & meta = pb_exchange_receiver.encoded_task_meta(index);
+        std::thread t(&ExchangeReceiver::ReadLoop, this, std::ref(meta), index);
         workers.push_back(std::move(t));
     }
     inited = true;
 }
 
-void ExchangeReceiver::ReadLoop(const String & meta_raw)
+void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
 {
     live_connections++;
     try
@@ -70,7 +71,7 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw)
             {
                 throw Exception("exchange receiver meet error : " + packet.error().msg());
             }
-            decodePacket(packet);
+            decodePacket(packet, source_index);
         }
     }
     catch (Exception & e)

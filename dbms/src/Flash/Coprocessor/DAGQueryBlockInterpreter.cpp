@@ -286,6 +286,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
             const auto & table_info = storage->getTableInfo();
             tipb::Executor * ts_exec = dag_req.add_executors();
             ts_exec->set_tp(tipb::ExecType::TypeTableScan);
+            ts_exec->set_executor_id(query_block.source->executor_id());
             *(ts_exec->mutable_tbl_scan()) = ts;
 
             for (int i = 0; i < ts.columns().size(); ++i)
@@ -703,8 +704,9 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     const Settings & settings = context.getSettingsRef();
     size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, right_pipeline.streams.size()) : 1;
     JoinPtr joinPtr = std::make_shared<Join>(left_key_names, right_key_names, true,
-        SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode), kind, strictness, join_build_concurrency, collators,
-        left_filter_column_name, right_filter_column_name, other_filter_column_name, other_condition_expr);
+        SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode), kind, strictness,
+        join_build_concurrency, collators, left_filter_column_name, right_filter_column_name, other_filter_column_name,
+        other_condition_expr);
     executeUnion(right_pipeline, max_streams);
     right_query.source = right_pipeline.firstStream();
     right_query.join = joinPtr;
@@ -1077,10 +1079,10 @@ void copyExecutorTreeWithLocalTableScan(
     int exec_id = 0;
     while (current->tp() != tipb::ExecType::TypeTableScan)
     {
+        exec->set_tp(current->tp());
+        exec->set_executor_id(current->executor_id());
         if (current->tp() == tipb::ExecType::TypeSelection)
         {
-            exec->set_tp(tipb::ExecType::TypeSelection);
-            exec->set_executor_id("selection_" + std::to_string(exec_id));
             auto * sel = exec->mutable_selection();
             for (auto const & condition : current->selection().conditions())
             {
@@ -1092,8 +1094,6 @@ void copyExecutorTreeWithLocalTableScan(
         }
         else if (current->tp() == tipb::ExecType::TypeAggregation || current->tp() == tipb::ExecType::TypeStreamAgg)
         {
-            exec->set_tp(current->tp());
-            exec->set_executor_id("aggregation_" + std::to_string(exec_id));
             auto * agg = exec->mutable_aggregation();
             for (auto const & expr : current->aggregation().agg_func())
             {
@@ -1111,8 +1111,6 @@ void copyExecutorTreeWithLocalTableScan(
         }
         else if (current->tp() == tipb::ExecType::TypeLimit)
         {
-            exec->set_tp(current->tp());
-            exec->set_executor_id("limit_" + std::to_string(exec_id));
             auto * limit = exec->mutable_limit();
             limit->set_limit(current->limit().limit());
             exec = limit->mutable_child();
@@ -1120,8 +1118,6 @@ void copyExecutorTreeWithLocalTableScan(
         }
         else if (current->tp() == tipb::ExecType::TypeTopN)
         {
-            exec->set_tp(current->tp());
-            exec->set_executor_id("topN_" + std::to_string(exec_id));
             auto * topn = exec->mutable_topn();
             topn->set_limit(current->topn().limit());
             for (auto const & expr : current->topn().order_by())
@@ -1142,7 +1138,7 @@ void copyExecutorTreeWithLocalTableScan(
     if (current->tp() != tipb::ExecType::TypeTableScan)
         throw TiFlashException("Only support copy from table scan sourced query block", Errors::Coprocessor::Internal);
     exec->set_tp(tipb::ExecType::TypeTableScan);
-    exec->set_executor_id("tablescan_" + std::to_string(exec_id));
+    exec->set_executor_id(current->executor_id());
     auto * new_ts = new tipb::TableScan(current->tbl_scan());
     new_ts->set_next_read_engine(tipb::EngineType::Local);
     exec->set_allocated_tbl_scan(new_ts);
@@ -1261,7 +1257,7 @@ void DAGQueryBlockInterpreter::executeRemoteQueryImpl(Pipeline & pipeline,
             continue;
         std::vector<pingcap::coprocessor::copTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
 
-        BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(cluster, tasks, schema, 1);
+        BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(cluster, tasks, schema, 1, *context.getDAGContext());
         pipeline.streams.push_back(input);
         task_start = task_end;
     }
@@ -1295,7 +1291,7 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
         // todo choose a more reasonable stream number
         for (size_t i = 0; i < max_streams; i++)
         {
-            pipeline.streams.push_back(std::make_shared<ExchangeReceiverInputStream>(exchange_receiver));
+            pipeline.streams.push_back(std::make_shared<ExchangeReceiverInputStream>(dag.getDAGContext(), exchange_receiver));
         }
         std::vector<NameAndTypePair> source_columns;
         Block block = pipeline.firstStream()->getHeader();
@@ -1328,7 +1324,7 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     }
     LOG_INFO(log,
         "execution stream size for query block(before aggregation) " << query_block.qb_column_prefix << " is " << pipeline.streams.size());
-    dag.getDAGContext().final_concurency = pipeline.streams.size();
+    dag.getDAGContext().final_concurrency = pipeline.streams.size();
     if (res.need_aggregate)
     {
         // execute aggregation

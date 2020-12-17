@@ -130,23 +130,36 @@ struct MPPTunnelSet
     std::vector<MPPTunnelPtr> tunnels;
 
     // this is a broadcast writing.
-    void write(const std::string & data)
+    void write(tipb::SelectResponse & response)
     {
+        std::string data;
+        response.SerializeToString(&data);
         mpp::MPPDataPacket packet;
         packet.set_data(data);
-        for (auto tunnel : tunnels)
+        tunnels[0]->write(packet);
+
+        response.clear_execution_summaries();
+        data.clear();
+        response.SerializeToString(&data);
+        packet.set_data(data);
+        for (size_t i = 1; i < tunnels.size(); i++)
         {
-            tunnel->write(packet);
+            tunnels[i]->write(packet);
         }
     }
 
     // this is a partition writing.
-    void write(const std::string & data, int16_t partition_id)
+    void write(tipb::SelectResponse & response, int16_t partition_id)
     {
+        if (partition_id != 0)
+            response.clear_execution_summaries();
+        std::string data;
+        response.SerializeToString(&data);
         mpp::MPPDataPacket packet;
         packet.set_data(data);
         tunnels[partition_id]->write(packet);
     }
+
     void writeError(mpp::Error err)
     {
         mpp::MPPDataPacket packet;
@@ -164,8 +177,12 @@ using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
 
 class MPPTaskManager;
 
-struct MPPTask : private boost::noncopyable
+struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyable
 {
+    Context context;
+
+    std::shared_ptr<DAGContext> dag_context;
+
     MPPTaskId id;
 
     mpp::TaskMeta meta;
@@ -181,7 +198,8 @@ struct MPPTask : private boost::noncopyable
 
     std::condition_variable cv;
 
-    MPPTask(const mpp::TaskMeta & meta_) : meta(meta_), log(&Logger::get("task " + std::to_string(meta_.task_id())))
+    MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
+        : context(context_), meta(meta_), log(&Logger::get("task " + std::to_string(meta_.task_id())))
     {
         id.start_ts = meta.start_ts();
         id.task_id = meta.task_id();
@@ -211,6 +229,8 @@ struct MPPTask : private boost::noncopyable
             it.second->writeDone();
         }
     }
+
+    BlockIO prepare(const mpp::DispatchTaskRequest & task_request);
 
     void run(BlockIO io)
     {
@@ -312,16 +332,13 @@ public:
 
 class MPPHandler
 {
-    Context & context;
     const mpp::DispatchTaskRequest & task_request;
 
     Logger * log;
 
 public:
-    MPPHandler(Context & context_, const mpp::DispatchTaskRequest & task_request_)
-        : context(context_), task_request(task_request_), log(&Logger::get("MPPHandler"))
-    {}
-    grpc::Status execute(mpp::DispatchTaskResponse * response);
+    MPPHandler(const mpp::DispatchTaskRequest & task_request_) : task_request(task_request_), log(&Logger::get("MPPHandler")) {}
+    grpc::Status execute(Context & context, mpp::DispatchTaskResponse * response);
 };
 
 } // namespace DB

@@ -20,13 +20,32 @@ struct ProfileStreamsInfo
     BlockInputStreams input_streams;
 };
 
+struct ThreadSafeExecutionSummary
+{
+    std::atomic<UInt64> time_processed_ns;
+    std::atomic<UInt64> num_produced_rows;
+    std::atomic<UInt64> num_iterations;
+    std::atomic<UInt64> concurrency;
+    ThreadSafeExecutionSummary() : time_processed_ns(0), num_produced_rows(0), num_iterations(0), concurrency(0) {}
+    ThreadSafeExecutionSummary(const ThreadSafeExecutionSummary & other)
+        : time_processed_ns(other.time_processed_ns.load()),
+          num_produced_rows(other.num_produced_rows.load()),
+          num_iterations(other.num_iterations.load()),
+          concurrency(other.concurrency.load())
+    {}
+};
+
 /// A context used to track the information that needs to be passed around during DAG planning.
 class DAGContext
 {
 public:
     explicit DAGContext(const tipb::DAGRequest & dag_request) : flags(dag_request.flags()), sql_mode(dag_request.sql_mode()){};
     explicit DAGContext(const tipb::DAGRequest & dag_request, const mpp::TaskMeta & meta_)
-        : flags(dag_request.flags()), sql_mode(dag_request.sql_mode()), task_meta(meta_){};
+        : flags(dag_request.flags()), sql_mode(dag_request.sql_mode()), mpp_task_meta(meta_)
+    {
+        exchange_sender_executor_id = dag_request.root_executor().executor_id();
+        exchange_sender_execution_summary_key = dag_request.root_executor().exchange_sender().child().executor_id();
+    };
     std::map<String, ProfileStreamsInfo> & getProfileStreamsMap();
     std::unordered_map<String, BlockInputStreams> & getProfileStreamsMapForJoinBuildSide();
     std::unordered_map<UInt32, std::vector<String>> & getQBIdToJoinAliasMap();
@@ -36,19 +55,44 @@ public:
     void handleInvalidTime(const String & msg);
     bool shouldClipToZero();
     const std::vector<std::pair<Int32, String>> & getWarnings() const { return warnings; }
-    const mpp::TaskMeta & getMPPTaskMeta() const { return task_meta; }
+    const mpp::TaskMeta & getMPPTaskMeta() const { return mpp_task_meta; }
+    bool isMPPTask() const { return !exchange_sender_executor_id.empty(); }
+    std::unordered_map<String, std::vector<ThreadSafeExecutionSummary>> & getRemoteExecutionSummaries()
+    {
+        return remote_execution_summaries;
+    }
+    void addRemoteExecutionSummariesImpl(tipb::SelectResponse & resp, size_t index, size_t concurrency, bool is_streaming_call);
 
-    size_t final_concurency;
+    void addRemoteExecutionSummariesForUnaryCall(tipb::SelectResponse & resp) { addRemoteExecutionSummariesImpl(resp, 0, 1, false); }
+
+    void addRemoteExecutionSummariesForStreamingCall(tipb::SelectResponse & resp, size_t index, size_t concurrency)
+    {
+        addRemoteExecutionSummariesImpl(resp, index, concurrency, true);
+    }
+
+    size_t final_concurrency;
     Int64 compile_time_ns;
+    String exchange_sender_executor_id = "";
+    String exchange_sender_execution_summary_key = "";
 
 private:
+    /// profile_streams_map is a map that maps from executor_id to ProfileStreamsInfo
     std::map<String, ProfileStreamsInfo> profile_streams_map;
+    /// profile_streams_map_for_join_build_side is a map that maps from join_build_subquery_name to
+    /// the last BlockInputStreams for join build side. In TiFlash, a hash join's build side is
+    /// finished before probe side starts, so the join probe side's running time does not include
+    /// hash table's build time, when construct ExecSummaries, we need add the build cost to probe executor
     std::unordered_map<String, BlockInputStreams> profile_streams_map_for_join_build_side;
+    /// qb_id_to_join_alias_map is a map that maps query block id to all the join_build_subquery_names
+    /// in this query block and all its children query block
     std::unordered_map<UInt32, std::vector<String>> qb_id_to_join_alias_map;
     std::vector<std::pair<Int32, String>> warnings;
     UInt64 flags;
     UInt64 sql_mode;
-    mpp::TaskMeta task_meta;
+    mpp::TaskMeta mpp_task_meta;
+    /// remote_execution_summaries is used to collect execution summaries from remote execution(coprocessor read/mpp execution)
+    std::mutex remote_execution_summaries_lock;
+    std::unordered_map<String, std::vector<ThreadSafeExecutionSummary>> remote_execution_summaries;
 };
 
 } // namespace DB

@@ -23,7 +23,80 @@ void MPPTask::unregisterTask()
     }
 }
 
-// TODO: More specific resources are needed.
+BlockIO MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
+{
+    auto start_time = Clock::now();
+    tipb::DAGRequest dag_req;
+    dag_req.ParseFromString(task_request.encoded_plan());
+    bool collect_exec_summary = dag_req.has_collect_execution_summaries() && dag_req.collect_execution_summaries();
+    std::unordered_map<RegionID, RegionInfo> regions;
+    for (auto & r : task_request.regions())
+    {
+        auto res = regions.emplace(r.region_id(),
+            RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(),
+                CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
+        if (!res.second)
+            throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": contain duplicate region " + std::to_string(r.region_id()),
+                Errors::Coprocessor::BadRequest);
+    }
+    // set schema ver and start ts.
+    auto schema_ver = task_request.schema_ver();
+    auto start_ts = task_request.meta().start_ts();
+
+    context.setSetting("read_tso", start_ts);
+    context.setSetting("schema_version", schema_ver);
+    context.setSetting("mpp_task_timeout", task_request.timeout());
+    context.getTimezoneInfo().resetByDAGRequest(dag_req);
+
+    // register task.
+    TMTContext & tmt_context = context.getTMTContext();
+    auto task_manager = tmt_context.getMPPTaskManager();
+    LOG_DEBUG(log, "begin to register the task " << id.toString());
+    task_manager->registerTask(shared_from_this());
+
+
+    dag_context = std::make_shared<DAGContext>(dag_req, task_request.meta());
+    context.setDAGContext(dag_context.get());
+
+    DAGQuerySource dag(context, regions, dag_req, true);
+
+    // register tunnels
+    MPPTunnelSetPtr tunnel_set = std::make_shared<MPPTunnelSet>();
+    const auto & exchangeSender = dag_req.root_executor().exchange_sender();
+    std::chrono::seconds timeout(task_request.timeout());
+    for (int i = 0; i < exchangeSender.encoded_task_meta_size(); i++)
+    {
+        // exchange sender will register the tunnels and wait receiver to found a connection.
+        mpp::TaskMeta task_meta;
+        task_meta.ParseFromString(exchangeSender.encoded_task_meta(i));
+        MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout);
+        LOG_DEBUG(log, "begin to register the tunnel " << tunnel->tunnel_id);
+        registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
+        tunnel_set->tunnels.emplace_back(tunnel);
+    }
+    // read index , this may take a long time.
+    BlockIO streams = executeQuery(dag, context, false, QueryProcessingStage::Complete);
+
+    // get partition column ids
+    auto part_keys = exchangeSender.partition_keys();
+    std::vector<Int64> partition_col_id;
+    for (const auto & expr : part_keys)
+    {
+        assert(isColumnExpr(expr));
+        auto column_index = decodeDAGInt64(expr.val());
+        partition_col_id.emplace_back(column_index);
+    }
+    // construct writer
+    std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(tunnel_set,
+        partition_col_id, exchangeSender.tp(), context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(),
+        *dag_context, collect_exec_summary, dag.hasMeaningfulExecutorId());
+    streams.out = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
+    auto end_time = Clock::now();
+    Int64 compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
+    dag_context->compile_time_ns = compile_time_ns;
+    return streams;
+}
+
 void MPPTask::runImpl(BlockIO io)
 {
 
@@ -39,6 +112,7 @@ void MPPTask::runImpl(BlockIO io)
 
         while (Block block = from->read())
         {
+            LOG_DEBUG(log, "write block " + std::to_string(block.rows()));
             to->write(block);
         }
 
@@ -79,78 +153,14 @@ void MPPTask::runImpl(BlockIO io)
 }
 
 // execute is responsible for making plan , register tasks and tunnels and start the running thread.
-grpc::Status MPPHandler::execute(mpp::DispatchTaskResponse * response)
+grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * response)
 {
     Stopwatch stopwatch;
     try
     {
-        tipb::DAGRequest dag_req;
-        dag_req.ParseFromString(task_request.encoded_plan());
-        std::unordered_map<RegionID, RegionInfo> regions;
-        for (auto & r : task_request.regions())
-        {
-            auto res = regions.emplace(r.region_id(),
-                RegionInfo(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(),
-                    CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr));
-            if (!res.second)
-                throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": contain duplicate region " + std::to_string(r.region_id()),
-                    Errors::Coprocessor::BadRequest);
-        }
-        // set schema ver and start ts.
-        auto schema_ver = task_request.schema_ver();
-        auto start_ts = task_request.meta().start_ts();
-
-        context.setSetting("read_tso", start_ts);
-        context.setSetting("schema_version", schema_ver);
-        context.setSetting("mpp_task_timeout", task_request.timeout());
-        context.getTimezoneInfo().resetByDAGRequest(dag_req);
-
-        // register task.
-        TMTContext & tmt_context = context.getTMTContext();
-        auto task_manager = tmt_context.getMPPTaskManager();
-
-        MPPTaskPtr task = std::make_shared<MPPTask>(task_request.meta());
-        LOG_DEBUG(log, "begin to register the task " << task->id.toString());
-        task_manager->registerTask(task);
-
-        DAGContext dag_context(dag_req, task_request.meta());
-        context.setDAGContext(&dag_context);
-
-        DAGQuerySource dag(context, regions, dag_req, true);
-
-        // register tunnels
-        MPPTunnelSetPtr tunnel_set = std::make_shared<MPPTunnelSet>();
-        const auto & exchangeSender = dag_req.root_executor().exchange_sender();
-        std::chrono::seconds timeout(task_request.timeout());
-        for (int i = 0; i < exchangeSender.encoded_task_meta_size(); i++)
-        {
-            // exchange sender will register the tunnels and wait receiver to found a connection.
-            mpp::TaskMeta meta;
-            meta.ParseFromString(exchangeSender.encoded_task_meta(i));
-            MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(meta, task_request.meta(), timeout);
-            LOG_DEBUG(log, "begin to register the tunnel " << tunnel->tunnel_id);
-            task->registerTunnel(MPPTaskId{meta.start_ts(), meta.task_id()}, tunnel);
-            tunnel_set->tunnels.emplace_back(tunnel);
-        }
-        // read index , this may take a long time.
-        BlockIO streams = executeQuery(dag, context, false, QueryProcessingStage::Complete);
-
-        // get partition column ids
-        auto part_keys = exchangeSender.partition_keys();
-        std::vector<Int64> partition_col_id;
-        for (const auto & expr : part_keys)
-        {
-            assert(isColumnExpr(expr));
-            auto column_index = decodeDAGInt64(expr.val());
-            partition_col_id.emplace_back(column_index);
-        }
-        // construct writer
-        std::unique_ptr<DAGResponseWriter> response_writer
-            = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(tunnel_set, partition_col_id, exchangeSender.tp(),
-                context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), dag_context, false, true);
-        streams.out = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
-
-        task->run(streams);
+        MPPTaskPtr task = std::make_shared<MPPTask>(task_request.meta(), context);
+        auto stream = task->prepare(task_request);
+        task->run(stream);
         LOG_INFO(log, "processing dispatch is over; the time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms");
     }
     catch (Exception & e)
