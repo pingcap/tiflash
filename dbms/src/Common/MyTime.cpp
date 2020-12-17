@@ -112,7 +112,7 @@ std::vector<String> parseDateFormat(String format)
 //     second link specified that for string literal, "hour values less than than 10, a leading zero is required.".
 //   ISO-8601: Z|((((?P<tz_sign>[-+])(?P<tz_hour>[0-9]{2})(:(?P<tz_minute>[0-9]{2}){0,1}){0,1})|((?P<tz_minute>[0-9]{2}){0,1}){0,1}))$
 //     see https://www.cl.cam.ac.uk/~mgk25/iso-time.html
-std::tuple<int, String, String, String, String> getTimeZone(String literal)
+std::tuple<int, String, String, String, String> getTimeZone(const String & literal)
 {
     static const std::map<int, std::tuple<int, int>> valid_idx_combinations{
         {100, {0, 0}}, // 23:59:59Z
