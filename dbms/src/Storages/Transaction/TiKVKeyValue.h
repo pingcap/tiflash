@@ -1,25 +1,12 @@
 #pragma once
 
+#include <Common/RedactHelpers.h>
 #include <Storages/Transaction/AtomicDecodedRow.h>
 #include <Storages/Transaction/SerializationHelper.h>
 #include <Storages/Transaction/Types.h>
 
 namespace DB
 {
-
-inline std::string ToHex(const char * data, const size_t size)
-{
-    std::stringstream ss;
-    ss << "[" << std::hex;
-    for (size_t i = 0; i < size; ++i)
-    {
-        ss << Int32(UInt8(data[i]));
-        if (i + 1 != size)
-            ss << ' ';
-    }
-    ss << "]";
-    return ss.str();
-}
 
 template <bool is_key>
 struct StringObject : std::string
@@ -53,8 +40,8 @@ public:
     size_t dataSize() const { return Base::size(); }
     std::string toString() const { return *this; }
 
-    // For debug
-    std::string toHex() const { return ToHex(data(), dataSize()); }
+    // Format as a hex string for debugging. The value will be converted to '?' if redact-log is on
+    std::string toDebugString() const { return Redact::keyToDebugString(data(), dataSize()); }
 
     explicit operator bool() const { return !empty(); }
 
@@ -110,10 +97,11 @@ struct RawTiDBPK : std::shared_ptr<const std::string>
 
     RawTiDBPK(const Base & o) : Base(o), handle(o->size() == 8 ? getHandleID() : 0) {}
 
-    std::string toHex() const
+    // Format as a hex string for debugging. The value will be converted to '?' if redact-log is on
+    std::string toDebugString() const
     {
         auto & p = *this;
-        return ToHex(p->data(), p->size());
+        return Redact::keyToDebugString(p->data(), p->size());
     }
 
     // Make this struct can be casted into HandleID implicitly.

@@ -34,11 +34,10 @@ class ExchangeReceiver
     ::mpp::TaskMeta task_meta;
     std::vector<std::thread> workers;
     // async grpc
-    grpc::CompletionQueue grpc_com_queue;
     DAGSchema schema;
 
     // TODO: should be a concurrency bounded queue.
-    std::mutex rw_mu;
+    std::mutex mu;
     std::condition_variable cv;
     std::queue<Block> block_buffer;
     std::atomic_int live_connections;
@@ -48,20 +47,13 @@ class ExchangeReceiver
     Logger * log;
     class ExchangeCall;
 
-    // All calls should live until the receiver shuts down
-    std::vector<std::shared_ptr<ExchangeCall>> exchangeCalls;
-    void sendAsyncReq();
-
-    void proceedAsyncReq();
+    void ReadLoop(const String & meta_raw);
 
     void decodePacket(const mpp::MPPDataPacket & p)
     {
         tipb::SelectResponse resp;
         resp.ParseFromString(p.data());
         int chunks_size = resp.chunks_size();
-        LOG_DEBUG(log, "get chunk size " + std::to_string(chunks_size));
-        if (chunks_size == 0)
-            return;
         for (int i = 0; i < chunks_size; i++)
         {
             Block block;
@@ -80,9 +72,10 @@ class ExchangeReceiver
                 default:
                     throw Exception("Unsupported encode type", ErrorCodes::LOGICAL_ERROR);
             }
-            std::lock_guard<std::mutex> lk(rw_mu);
+            std::lock_guard<std::mutex> lock(mu);
             block_buffer.push(std::move(block));
-            cv.notify_one();
+            cv.notify_all();
+            LOG_TRACE(log, "decode packet" << std::to_string(block.rows()));
         }
     }
 
@@ -111,28 +104,17 @@ public:
         {
             worker.join();
         }
-        exchangeCalls.clear();
-        grpc_com_queue.Shutdown();
     }
 
     const DAGSchema & getOutputSchema() const { return schema; }
 
-    void init()
-    {
-        std::lock_guard<std::mutex> lk(rw_mu);
-        if (!inited)
-        {
-            sendAsyncReq();
-            workers.emplace_back(std::thread(&ExchangeReceiver::proceedAsyncReq, this));
-            inited = true;
-        }
-    }
+    void init();
 
     Block nextBlock()
     {
         if (!inited)
             init();
-        std::unique_lock<std::mutex> lk(rw_mu);
+        std::unique_lock<std::mutex> lk(mu);
         cv.wait(lk, [&] { return block_buffer.size() > 0 || live_connections == 0 || meet_error; });
         if (meet_error)
         {
@@ -142,9 +124,9 @@ public:
         {
             return {};
         }
-        Block blk = block_buffer.front();
+        auto block = block_buffer.front();
         block_buffer.pop();
-        return blk;
+        return block;
     }
 };
 } // namespace DB

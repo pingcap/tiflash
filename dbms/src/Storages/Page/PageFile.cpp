@@ -114,7 +114,8 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
         switch (write.type)
         {
         case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::UPSERT: {
+        case WriteBatch::WriteType::UPSERT:
+        {
             PageFlags  flags;
             Checksum   page_checksum = 0;
             PageOffset page_offset   = 0;
@@ -322,7 +323,8 @@ void PageFile::MetaMergingReader::moveNext(PageFile::Version * v)
         switch (write_type)
         {
         case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::UPSERT: {
+        case WriteBatch::WriteType::UPSERT:
+        {
             PageMetaFormat::PageFlags flags;
 
             auto      page_id = PageUtil::get<PageId>(pos);
@@ -368,12 +370,14 @@ void PageFile::MetaMergingReader::moveNext(PageFile::Version * v)
             }
             break;
         }
-        case WriteBatch::WriteType::DEL: {
+        case WriteBatch::WriteType::DEL:
+        {
             auto page_id = PageUtil::get<PageId>(pos);
             curr_edit.del(page_id);
             break;
         }
-        case WriteBatch::WriteType::REF: {
+        case WriteBatch::WriteType::REF:
+        {
             const auto ref_id  = PageUtil::get<PageId>(pos);
             const auto page_id = PageUtil::get<PageId>(pos);
             curr_edit.ref(ref_id, page_id);
@@ -421,7 +425,7 @@ const String & PageFile::Writer::parentPath() const
     return page_file.parent_path;
 }
 
-size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
+size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit, const RateLimiterPtr & rate_limiter)
 {
     ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
 
@@ -439,7 +443,7 @@ size_t PageFile::Writer::write(WriteBatch & wb, PageEntriesEdit & edit)
     SCOPE_EXIT({ page_file.free(data_buf.begin(), data_buf.size()); });
 
     auto write_buf = [&](WritableFilePtr & file, UInt64 offset, ByteBuffer buf) {
-        PageUtil::writeFile(file, offset, buf.begin(), buf.size());
+        PageUtil::writeFile(file, offset, buf.begin(), buf.size(), rate_limiter);
         if (sync_on_write)
             PageUtil::syncFile(file);
     };

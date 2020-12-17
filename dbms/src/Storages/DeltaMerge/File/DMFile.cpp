@@ -17,7 +17,7 @@ namespace FailPoints
 {
 extern const char exception_before_dmfile_remove_encryption[];
 extern const char exception_before_dmfile_remove_from_disk[];
-}
+} // namespace FailPoints
 
 namespace DM
 {
@@ -195,13 +195,13 @@ std::tuple<size_t, size_t> DMFile::writePack(WriteBuffer & buffer)
     return std::make_tuple(pack_offset, pack_size);
 }
 
-void DMFile::writeMeta(const FileProviderPtr & file_provider)
+void DMFile::writeMeta(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter)
 {
     String meta_path     = metaPath();
     String tmp_meta_path = meta_path + ".tmp";
 
     {
-        WriteBufferFromFileProvider buf(file_provider, tmp_meta_path, encryptionMetaPath(), false, 4096);
+        WriteBufferFromFileProvider buf(file_provider, tmp_meta_path, encryptionMetaPath(), false, rate_limiter, 4096);
         writeMeta(buf);
         buf.sync();
     }
@@ -237,7 +237,7 @@ void DMFile::upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileVers
                 {});
         }
         // Update ColumnStat in meta.
-        writeMeta(file_provider);
+        writeMeta(file_provider, nullptr);
     }
 }
 
@@ -322,9 +322,9 @@ void DMFile::initializeSubFileStatIfNeeded(const FileProviderPtr & file_provider
     }
 }
 
-void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider)
+void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter)
 {
-    writeMeta(file_provider);
+    writeMeta(file_provider, rate_limiter);
     if (unlikely(status != Status::WRITING))
         throw Exception("Expected WRITING status, now " + statusString(status));
     Poco::File old_file(path());
@@ -392,7 +392,7 @@ std::set<UInt64> DMFile::listAllInPath(const FileProviderPtr & file_provider, co
         if (ss.size() != 2)
             return std::nullopt;
         size_t pos;
-        auto id = std::stoull(ss[1], &pos);
+        auto   id = std::stoull(ss[1], &pos);
         // pos < ss[1].size() means that ss[1] is not an invalid integer
         return pos < ss[1].size() ? std::nullopt : std::make_optional(id);
     };

@@ -4,7 +4,6 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/DeltaValueSpace.h>
-#include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Index/MinMax.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
@@ -25,6 +24,8 @@ class StableValueSpace;
 using StableValueSpacePtr = std::shared_ptr<StableValueSpace>;
 class DeltaValueSpace;
 using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
+class RSOperator;
+using RSOperatorPtr = std::shared_ptr<RSOperator>;
 
 using SegmentPtr  = std::shared_ptr<Segment>;
 using SegmentPair = std::pair<SegmentPtr, SegmentPtr>;
@@ -142,7 +143,7 @@ public:
     /// split(), merge() and mergeDelta() are only used in test cases.
 
     SegmentPair split(DMContext & dm_context) const;
-    SplitInfo   prepareSplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs) const;
+    SplitInfo prepareSplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs, bool need_rate_limit) const;
     SegmentPair
     applySplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs, SplitInfo & split_info) const;
 
@@ -152,7 +153,8 @@ public:
                                             const SegmentSnapshotPtr & left_snap,
                                             const SegmentPtr &         right,
                                             const SegmentSnapshotPtr & right_snap,
-                                            WriteBatches &             wbs);
+                                            WriteBatches &             wbs,
+                                            bool                       need_rate_limit);
     static SegmentPtr          applyMerge(DMContext &                 dm_context, //
                                           const SegmentPtr &          left,
                                           const SegmentSnapshotPtr &  left_snap,
@@ -161,12 +163,13 @@ public:
                                           WriteBatches &              wbs,
                                           const StableValueSpacePtr & merged_stable);
 
-    SegmentPtr          mergeDelta(DMContext & dm_context) const;
-    StableValueSpacePtr prepareMergeDelta(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs) const;
-    SegmentPtr          applyMergeDelta(DMContext &                 dm_context,
-                                        const SegmentSnapshotPtr &  segment_snap,
-                                        WriteBatches &              wbs,
-                                        const StableValueSpacePtr & new_stable) const;
+    SegmentPtr mergeDelta(DMContext & dm_context) const;
+    StableValueSpacePtr
+               prepareMergeDelta(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs, bool need_rate_limit) const;
+    SegmentPtr applyMergeDelta(DMContext &                 dm_context,
+                               const SegmentSnapshotPtr &  segment_snap,
+                               WriteBatches &              wbs,
+                               const StableValueSpacePtr & new_stable) const;
 
     /// Flush delta's cache packs.
     bool flushCache(DMContext & dm_context);
@@ -244,7 +247,8 @@ private:
                                   const SegmentSnapshotPtr & segment_snap,
                                   RowKeyValue &              split_point,
                                   WriteBatches &             wbs) const;
-    SplitInfo prepareSplitPhysical(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs) const;
+    SplitInfo
+    prepareSplitPhysical(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs, bool need_rate_limit) const;
 
 
     /// Make sure that all delta packs have been placed.

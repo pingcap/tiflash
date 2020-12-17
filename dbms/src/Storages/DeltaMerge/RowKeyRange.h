@@ -18,7 +18,6 @@ using RowKeyColumnsPtr = std::shared_ptr<RowKeyColumns>;
 using HandleValuePtr   = std::shared_ptr<String>;
 
 struct RowKeyRange;
-String rangeToString(const RowKeyRange & range);
 
 inline int compare(const char * a, size_t a_size, const char * b, size_t b_size)
 {
@@ -44,12 +43,9 @@ struct RowKeyValueRef
     size_t       size;
     Int64        int_value;
 
-    String toString() const
-    {
-        if (is_common_handle)
-            return ToHex(data, size);
-        return std::to_string(int_value);
-    }
+    // Format as a hex string for debugging. The value will be converted to '?' if redact-log is on
+    String toDebugString() const;
+
     RowKeyValue toRowKeyValue() const;
 };
 
@@ -86,12 +82,11 @@ struct RowKeyValue
         int_value = rowkey_value.int_value;
     }
 
-    String toString() const
-    {
-        if (is_common_handle)
-            return ToHex(value->data(), value->size());
-        return std::to_string(int_value);
-    }
+    // Format as a string
+    String toString() const;
+
+    // Format as a hex string for debugging. The value will be converted to '?' if redact-log is on
+    String toDebugString() const;
 
     RowKeyValueRef    toRowKeyValueRef() const { return RowKeyValueRef{is_common_handle, value->data(), value->size(), int_value}; }
     DecodedTiKVKeyPtr toRegionKey(TableID table_id) const
@@ -107,7 +102,7 @@ struct RowKeyValue
     }
 
     bool is_common_handle;
-    /// In case of non common handle, the value field is redundant in most cases, except taht int_value == Int64::max_value,
+    /// In case of non common handle, the value field is redundant in most cases, except that int_value == Int64::max_value,
     /// because RowKeyValue is an end point of RowKeyRange, assuming that RowKeyRange = [start_value, end_value), since the
     /// end_value of RowKeyRange is always exclusive, if we want to construct a RowKeyRange that include Int64::max_value,
     /// just set end_value.int_value to Int64::max_value is not enough, we still need to set end_value.value a carefully
@@ -575,7 +570,7 @@ struct RowKeyRange
     {
         if (handle_range.all())
         {
-            return RowKeyRange(RowKeyValue::INT_HANDLE_MIN_KEY, RowKeyValue::INT_HANDLE_MAX_KEY, false, 1);
+            return RowKeyRange(RowKeyValue::INT_HANDLE_MIN_KEY, RowKeyValue::INT_HANDLE_MAX_KEY, /*is_common_handle=*/false, 1);
         }
         std::stringstream ss;
         DB::EncodeInt64(handle_range.start, ss);
@@ -587,7 +582,7 @@ struct RowKeyRange
         return RowKeyRange(RowKeyValue(false, std::make_shared<String>(start), handle_range.start),
                            handle_range.end == HandleRange::MAX ? RowKeyValue::INT_HANDLE_MAX_KEY
                                                                 : RowKeyValue(false, std::make_shared<String>(end), handle_range.end),
-                           false,
+                           /*is_common_handle=*/false,
                            1);
     }
 
@@ -645,41 +640,27 @@ struct RowKeyRange
         }
     }
 
+    // Format as a string
+    String toString() const;
 
-    inline String toString() const { return rangeToString(*this); }
+    // Format as a hex string for debugging. The value will be converted to '?' if redact-log is on
+    String toDebugString() const;
 
     bool operator==(const RowKeyRange & rhs) const
     {
         return start.value->compare(*rhs.start.value) == 0 && end.value->compare(*rhs.end.value) == 0;
     }
     bool operator!=(const RowKeyRange & rhs) const { return !(*this == rhs); }
-};
-
-template <bool right_open = true>
-inline String rangeToString(const String & start, const String & end, bool)
-{
-    String s = "[" + ToHex(start.data(), start.size()) + "," + ToHex(end.data(), end.size());
-    if constexpr (right_open)
-        s += ")";
-    else
-        s += "]";
-    return s;
-}
-
-inline String rangeToString(const RowKeyRange & range)
-{
-    return rangeToString<true>(*range.start.value, *range.end.value, range.is_common_handle);
-}
-
-// DB::DM::Handle
+}; // struct RowKeyRange
 using RowKeyRanges = std::vector<RowKeyRange>;
 
-inline String toString(const RowKeyRanges & ranges)
+// Format as a hex string for debugging. The value will be converted to '?' if redact-log is on
+inline String toDebugString(const RowKeyRanges & ranges)
 {
     String s = "{";
     for (auto & r : ranges)
     {
-        s += r.toString() + ",";
+        s += r.toDebugString() + ",";
     }
     if (!ranges.empty())
         s.erase(s.size() - 1);
