@@ -1,19 +1,19 @@
-#include <Common/ProfileEvents.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/ProfileEvents.h>
 
 #include <Encryption/WriteBufferFromFileProvider.h>
 
 
 namespace ProfileEvents
 {
-    extern const Event WriteBufferFromFileDescriptorWrite;
-    extern const Event WriteBufferFromFileDescriptorWriteFailed;
-    extern const Event WriteBufferFromFileDescriptorWriteBytes;
-}
+extern const Event WriteBufferFromFileDescriptorWrite;
+extern const Event WriteBufferFromFileDescriptorWriteFailed;
+extern const Event WriteBufferFromFileDescriptorWriteBytes;
+} // namespace ProfileEvents
 
 namespace CurrentMetrics
 {
-    extern const Metric Write;
+extern const Metric Write;
 }
 
 namespace DB
@@ -32,13 +32,14 @@ WriteBufferFromFileProvider::WriteBufferFromFileProvider(const FileProviderPtr &
     const std::string & file_name_,
     const EncryptionPath & encryption_path_,
     bool create_new_encryption_info_,
+    const RateLimiterPtr & rate_limiter_,
     size_t buf_size,
     int flags,
     mode_t mode,
     char * existing_memory,
     size_t alignment)
     : WriteBufferFromFileDescriptor(-1, buf_size, existing_memory, alignment),
-      file(file_provider_->newWritableFile(file_name_, encryption_path_, true, create_new_encryption_info_, flags, mode))
+      file(file_provider_->newWritableFile(file_name_, encryption_path_, true, create_new_encryption_info_, rate_limiter_, flags, mode))
 {
     fd = file->getFd();
 }

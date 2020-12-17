@@ -112,7 +112,7 @@ public:
             String s = "{rows:" + DB::toString(rows)                       //
                 + ",bytes:" + DB::toString(bytes)                          //
                 + ",has_schema:" + DB::toString((bool)schema)              //
-                + ",delete_range:" + delete_range.toString()               //
+                + ",delete_range:" + delete_range.toDebugString()          //
                 + ",data_page:" + DB::toString(data_page)                  //
                 + ",has_cache:" + DB::toString((bool)cache)                //
                 + ",saved:" + DB::toString(saved)                          //

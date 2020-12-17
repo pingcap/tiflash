@@ -18,7 +18,7 @@ TEST(PageUtils_test, ReadWriteFile)
     WritableFilePtr file = std::make_shared<PosixWritableFile>(FileName, true, -1, 0666);
 
     std::string data_to_write = "123";
-    PageUtil::writeFile(file, 0, data_to_write.data(), 3);
+    PageUtil::writeFile(file, 0, data_to_write.data(), 3, nullptr);
     PageUtil::syncFile(file);
     file->close();
 

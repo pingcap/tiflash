@@ -96,7 +96,7 @@ RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair)
     auto & map = data;
     auto [it, ok] = map.emplace(std::move(kv_pair));
     if (!ok)
-        throw Exception("Found existing key in hex: " + getTiKVKey(it->second).toHex(), ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Found existing key in hex: " + getTiKVKey(it->second).toDebugString(), ErrorCodes::LOGICAL_ERROR);
 
     finishInsert(it);
     return calcTiKVKeyValueSize(it->second);
@@ -386,14 +386,14 @@ inline void decodeLockCfValue(DecodedLockCFValue & res)
                 }
                 default:
                 {
-                    std::string msg = std::string() + "invalid flag " + flag + " in lock value " + value.toHex();
+                    std::string msg = std::string("invalid flag ") + flag + " in lock value " + value.toDebugString();
                     throw Exception(msg, ErrorCodes::LOGICAL_ERROR);
                 }
             }
         }
     }
     if (len != 0)
-        throw Exception("invalid lock value " + value.toHex(), ErrorCodes::LOGICAL_ERROR);
+        throw Exception("invalid lock value " + value.toDebugString(), ErrorCodes::LOGICAL_ERROR);
 }
 
 DecodedLockCFValue::DecodedLockCFValue(std::shared_ptr<const TiKVKey> key_, std::shared_ptr<const TiKVValue> val_)

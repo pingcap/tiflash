@@ -625,7 +625,7 @@ TiFlashApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 in
                 {
                     LOG_ERROR(log,
                         toString() << " catch exception: " << e.message() << ", while applying CmdType::Delete on [term: " << term
-                                   << ", index: " << index << "], key in hex: " << tikv_key.toHex() << ", CF: " << CFToName(cf));
+                                   << ", index: " << index << "], key in hex: " << tikv_key.toDebugString() << ", CF: " << CFToName(cf));
                     e.rethrow();
                 }
                 break;

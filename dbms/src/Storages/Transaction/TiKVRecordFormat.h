@@ -380,7 +380,7 @@ inline TiKVValue encodeWriteCfValue(UInt8 write_type, Timestamp ts, std::string_
 }
 
 template <bool start>
-inline std::string DecodedTiKVKeyToReadableHandleString(const DecodedTiKVKey & decoded_key)
+inline std::string DecodedTiKVKeyToDebugString(const DecodedTiKVKey & decoded_key)
 {
     if (decoded_key.size() <= RAW_KEY_NO_HANDLE_SIZE)
     {
@@ -393,7 +393,19 @@ inline std::string DecodedTiKVKeyToReadableHandleString(const DecodedTiKVKey & d
             return "+INF";
         }
     }
-    return ToHex(decoded_key.data() + RAW_KEY_NO_HANDLE_SIZE, decoded_key.size() - RAW_KEY_NO_HANDLE_SIZE);
+    return Redact::keyToDebugString(decoded_key.data() + RAW_KEY_NO_HANDLE_SIZE, decoded_key.size() - RAW_KEY_NO_HANDLE_SIZE);
+}
+
+using DecodedTiKVKeyPtr = std::shared_ptr<DecodedTiKVKey>;
+inline std::string DecodedTiKVKeyRangeToDebugString(const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & key_range)
+{
+    if (unlikely(*key_range.first >= *key_range.second))
+        return "[none]";
+
+    return std::string("[") //
+        + RecordKVFormat::DecodedTiKVKeyToDebugString<true>(*key_range.first) + ", "
+        + RecordKVFormat::DecodedTiKVKeyToDebugString<false>(*key_range.second) //
+        + ")";
 }
 
 } // namespace RecordKVFormat
