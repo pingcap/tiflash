@@ -77,31 +77,6 @@ class ExchangeReceiver
         else
             result_buffer.emplace(resp_ptr, source_index, true, "Error while decoding MPPDataPacket");
         cv.notify_all();
-        /*
-        //todo should move this to ExchangeReceiverInputStream
-        context.getDAGContext()->addRemoteExecutionSummariesForStreamingCall(resp, source_index, source_num);
-        int chunks_size = resp.chunks_size();
-        for (int i = 0; i < chunks_size; i++)
-        {
-            Block block;
-            const tipb::Chunk & chunk = resp.chunks(i);
-            switch (resp.encode_type())
-            {
-                case tipb::EncodeType::TypeCHBlock:
-                    block = CHBlockChunkCodec().decode(chunk, schema);
-                    break;
-                case tipb::EncodeType::TypeChunk:
-                    block = ArrowChunkCodec().decode(chunk, schema);
-                    break;
-                case tipb::EncodeType::TypeDefault:
-                    block = DefaultChunkCodec().decode(chunk, schema);
-                    break;
-                default:
-                    throw Exception("Unsupported encode type", ErrorCodes::LOGICAL_ERROR);
-            }
-            LOG_TRACE(log, "decode packet" << std::to_string(block.rows()));
-        }
-         */
     }
 
 public:

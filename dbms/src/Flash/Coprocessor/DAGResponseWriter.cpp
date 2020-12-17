@@ -23,8 +23,7 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response)
     if (!collect_execution_summary)
         return;
     auto & remote_execution_summaries = dag_context.getRemoteExecutionSummaries();
-    // add ExecutorExecutionSummary info
-    /// first add execution_summary for local executor
+    /// add execution_summary for local executor
     for (auto & p : dag_context.getProfileStreamsMap())
     {
         ExecutionSummary current;
@@ -54,18 +53,17 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response)
         /// part 3: for join need to add the build time
         for (auto & join_alias : dag_context.getQBIdToJoinAliasMap()[p.second.qb_id])
         {
+            UInt64 process_time_for_build = 0;
             if (dag_context.getProfileStreamsMapForJoinBuildSide().find(join_alias)
                 != dag_context.getProfileStreamsMapForJoinBuildSide().end())
             {
-                UInt64 process_time_for_build = 0;
                 for (auto & join_stream : dag_context.getProfileStreamsMapForJoinBuildSide()[join_alias])
                 {
                     if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(join_stream.get()))
                         process_time_for_build = std::max(process_time_for_build, p_stream->getProfileInfo().execution_time);
                 }
-                /// now hash table is build serially, so add all the time together
-                current.time_processed_ns += process_time_for_build;
             }
+            current.time_processed_ns += process_time_for_build;
         }
 
         current.time_processed_ns += dag_context.compile_time_ns;
@@ -76,7 +74,7 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response)
             fillTiExecutionSummary(response.add_execution_summaries(), current, dag_context.exchange_sender_executor_id);
         }
     }
-    /// second add executionSummary for remote executor
+    /// add executionSummary for remote executor
     for (auto & p : dag_context.getRemoteExecutionSummaries())
     {
         if (local_executors.find(p.first) == local_executors.end())

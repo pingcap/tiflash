@@ -99,8 +99,7 @@ void DAGContext::addRemoteExecutionSummariesImpl(tipb::SelectResponse & resp, si
                 std::lock_guard<std::mutex> lock(remote_execution_summaries_lock);
                 if (remote_execution_summaries.find(executor_id) == remote_execution_summaries.end())
                 {
-                    for (size_t i = 0; i < concurrency; i++)
-                        remote_execution_summaries[executor_id].emplace_back();
+                    remote_execution_summaries[executor_id].resize(concurrency);
                 }
             }
             auto & current_execution_summary = remote_execution_summaries[executor_id][index];
@@ -111,12 +110,12 @@ void DAGContext::addRemoteExecutionSummariesImpl(tipb::SelectResponse & resp, si
             else
             {
                 auto current_time_processed_ns = current_execution_summary.time_processed_ns.load();
-                auto new_comming_time_processed_ns = execution_summary.time_processed_ns();
-                while (current_time_processed_ns < new_comming_time_processed_ns)
+                auto new_coming_time_processed_ns = execution_summary.time_processed_ns();
+                while (current_time_processed_ns < new_coming_time_processed_ns)
                 {
                     /// use cas to update time_processed_ns to the bigger one
                     if (current_execution_summary.time_processed_ns.compare_exchange_weak(
-                            current_time_processed_ns, new_comming_time_processed_ns))
+                            current_time_processed_ns, new_coming_time_processed_ns))
                     {
                         break;
                     }

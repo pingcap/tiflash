@@ -129,6 +129,13 @@ struct MPPTunnelSet
 {
     std::vector<MPPTunnelPtr> tunnels;
 
+    /// for both broadcast writing and partition writing,
+    /// only return execution summary for the first tunnel,
+    /// because in TiDB, it does not known the node concurrency
+    /// when running a mpp query, it just add up all the
+    /// execution summary for the same executor, so if return
+    /// execution summary for all the tunnels, the information
+    /// in TiDB will be amplified, which may make use confused.
     // this is a broadcast writing.
     void write(tipb::SelectResponse & response)
     {
