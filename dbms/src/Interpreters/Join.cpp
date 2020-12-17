@@ -52,6 +52,7 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
     other_filter_column(other_filter_column_),
     other_condition_ptr(other_condition_ptr_),
     original_strictness(strictness),
+    have_finish_build(true),
     log(&Logger::get("Join")),
     limits(limits)
 {
@@ -68,6 +69,13 @@ Join::Join(const Names & key_names_left_, const Names & key_names_right_, bool u
             strictness = ASTTableJoin::Strictness::All;
         }
     }
+}
+
+void Join::setFinishBuildTable(bool finish_)
+{
+    std::lock_guard<std::mutex> lk(build_table_mutex);
+    have_finish_build = finish_;
+    build_table_cv.notify_all();
 }
 
 
@@ -1259,6 +1267,11 @@ void Join::checkTypesOfKeys(const Block & block_left, const Block & block_right)
 void Join::joinBlock(Block & block) const
 {
 //    std::cerr << "joinBlock: " << block.dumpStructure() << "\n";
+
+    // ck will use this function to generate header, that's why here is a check.
+    std::unique_lock lk(build_table_mutex);
+
+    build_table_cv.wait(lk, [&](){ return have_finish_build; });
 
     std::shared_lock lock(rwlock);
 

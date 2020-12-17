@@ -117,13 +117,14 @@ TiFlashApplyRes HandleIngestSST(TiFlashServer * server, SnapshotViewArray snaps,
 
 uint8_t HandleCheckTerminated(TiFlashServer * server) { return server->tmt->getTerminated().load(std::memory_order_relaxed) ? 1 : 0; }
 
-FsStats HandleComputeFsStats(TiFlashServer * server)
+StoreStats HandleComputeStoreStats(TiFlashServer * server)
 {
-    FsStats res; // res.ok = false by default
+    StoreStats res; // res.fs_stats.ok = false by default
     try
     {
         auto global_capacity = server->tmt->getContext().getPathCapacity();
-        res = global_capacity->getFsStats();
+        res.fs_stats = global_capacity->getFsStats();
+        // TODO: set engine read/write stats
     }
     catch (...)
     {

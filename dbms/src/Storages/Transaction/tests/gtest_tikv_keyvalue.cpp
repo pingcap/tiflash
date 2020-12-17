@@ -2,7 +2,7 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TiKVHelper.h>
 #include <Storages/Transaction/TiKVRange.h>
-#include <gtest/gtest.h>
+#include <test_utils/TiflashTestBasic.h>
 
 #include "region_helper.h"
 
@@ -312,7 +312,7 @@ TEST(TiKVKeyValue_test, PortedTests)
         s[0] = char(1);
         s[3] = char(111);
         const auto & key = TiKVKey(s.data(), s.size());
-        ASSERT_TRUE(key.toHex() == "[1 32 33 6f]");
+        ASSERT_EQ(key.toDebugString(), "0132336F");
     }
 
     {
@@ -371,6 +371,43 @@ TEST(TiKVKeyValue_test, PortedTests)
 
     ASSERT_TRUE(res);
 }
+
+TEST(TiKVKeyValue_test, Redact)
+try
+{
+    String table_info_json
+        = R"json({"cols":[{"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"a","O":"a"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":3,"Flen":10,"Tp":15}},{"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"b","O":"b"},"offset":1,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":3,"Flen":20,"Tp":15}},{"comment":"","default":null,"default_bit":null,"id":3,"name":{"L":"c","O":"c"},"offset":2,"origin_default":null,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Elems":null,"Flag":0,"Flen":11,"Tp":3}}],"comment":"","id":49,"index_info":[{"id":1,"idx_cols":[{"length":-1,"name":{"L":"a","O":"a"},"offset":0},{"length":-1,"name":{"L":"b","O":"b"},"offset":1}],"idx_name":{"L":"primary","O":"primary"},"index_type":1,"is_global":false,"is_invisible":false,"is_primary":true,"is_unique":true,"state":5,"tbl_name":{"L":"","O":""}}],"is_common_handle":true,"name":{"L":"pt","O":"pt"},"partition":null,"pk_is_handle":false,"schema_version":25,"state":5,"update_timestamp":421444995366518789})json";
+    TiDB::TableInfo table_info(table_info_json);
+    ASSERT_TRUE(table_info.is_common_handle);
+
+    TiKVKey start, end;
+    {
+        start = RecordKVFormat::genKey(table_info, std::vector{Field{"aaa", strlen("aaa")}, Field{"abc", strlen("abc")}});
+        end = RecordKVFormat::genKey(table_info, std::vector{Field{"bbb", strlen("bbb")}, Field{"abc", strlen("abc")}});
+    }
+    RegionRangeKeys range(std::move(start), std::move(end));
+    auto & raw_keys = range.rawKeys();
+    ASSERT_EQ(RecordKVFormat::getTableId(*raw_keys.first), 49);
+    ASSERT_EQ(RecordKVFormat::getTableId(*raw_keys.second), 49);
+
+    auto raw_pk1 = RecordKVFormat::getRawTiDBPK(*raw_keys.first);
+    auto raw_pk2 = RecordKVFormat::getRawTiDBPK(*raw_keys.second);
+
+    Redact::setRedactLog(false);
+    // These will print the value
+    EXPECT_NE(raw_pk1.toDebugString(), "?");
+    EXPECT_NE(raw_pk2.toDebugString(), "?");
+    EXPECT_NE(RecordKVFormat::DecodedTiKVKeyRangeToDebugString(raw_keys), "[?, ?)");
+
+    Redact::setRedactLog(true);
+    // These will print '?' instead of value
+    EXPECT_EQ(raw_pk1.toDebugString(), "?");
+    EXPECT_EQ(raw_pk2.toDebugString(), "?");
+    EXPECT_EQ(RecordKVFormat::DecodedTiKVKeyRangeToDebugString(raw_keys), "[?, ?)");
+
+    Redact::setRedactLog(false); // restore flags
+}
+CATCH
 
 namespace
 {
@@ -440,14 +477,4 @@ try
 
     // clang-format on
 }
-catch (const Exception & e)
-{
-    std::string text = e.displayText();
-
-    auto embedded_stack_trace_pos = text.find("Stack trace");
-    std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
-    if (std::string::npos == embedded_stack_trace_pos)
-        std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl;
-
-    throw;
-}
+CATCH

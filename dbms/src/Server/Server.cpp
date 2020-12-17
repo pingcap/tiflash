@@ -5,6 +5,7 @@
 #include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Macros.h>
+#include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/TiFlashException.h>
@@ -389,7 +390,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     TiFlashServerHelper helper{
         // a special number, also defined in proxy
         .magic_number = 0x13579BDF,
-        .version = 401002,
+        .version = 401003,
         .inner = &tiflash_instance_wrap,
         .fn_gen_cpp_string = GenCppRawString,
         .fn_handle_write_raft_cmd = HandleWriteRaftCmd,
@@ -398,7 +399,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         .fn_handle_destroy = HandleDestroy,
         .fn_handle_ingest_sst = HandleIngestSST,
         .fn_handle_check_terminated = HandleCheckTerminated,
-        .fn_handle_compute_fs_stats = HandleComputeFsStats,
+        .fn_handle_compute_store_stats = HandleComputeStoreStats,
         .fn_handle_get_tiflash_status = HandleGetTiFlashStatus,
         .fn_pre_handle_snapshot = PreHandleSnapshot,
         .fn_apply_pre_handled_snapshot = ApplyPreHandledSnapshot,
@@ -531,6 +532,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// ===== Paths related configuration initialized end ===== ///
 
     security_config = TiFlashSecurityConfig(config(), log);
+    Redact::setRedactLog(security_config.redact_info_log);
 
     /// Create directories for 'path' and for default database, if not exist.
     for (const String & candidate_path : global_context->getPartPathSelector().getAllPath())
@@ -740,7 +742,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->setMarkCache(mark_cache_size);
 
     /// Size of cache for minmax index, used by DeltaMerge engine.
-    size_t minmax_index_cache_size = config().getUInt64("minmax_index_cache_size", mark_cache_size) ;
+    size_t minmax_index_cache_size = config().getUInt64("minmax_index_cache_size", mark_cache_size);
     if (minmax_index_cache_size)
         global_context->setMinMaxIndexCache(minmax_index_cache_size);
 
@@ -750,6 +752,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();
+
+    /// Init Rate Limiter
+    {
+        global_context->initializeRateLimiter(global_context->getTiFlashMetrics(), storage_config.bg_task_io_rate_limit);
+    }
 
     /// Set path for format schema files
     auto format_schema_path = Poco::File(config().getString("format_schema_path", path + "format_schemas/"));

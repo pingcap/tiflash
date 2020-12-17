@@ -153,9 +153,9 @@ grpc::Status FlashService::Coprocessor(
         MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout);
         if (sender_task == nullptr)
         {
-            auto errMsg = "can't find task [" + toString(request->sender_meta().start_ts()) + ","
-                + toString(request->sender_meta().task_id()) + "] within " + toString(timeout.count()) + " s";
-            LOG_DEBUG(log, errMsg);
+            auto errMsg = "can't find task [" + toString(request->sender_meta().start_ts()) + "," + toString(request->sender_meta().task_id())
+                + "] within " + toString(timeout.count()) + " s";
+            LOG_ERROR(log, errMsg);
             mpp::MPPDataPacket packet;
             auto err = new mpp::Error();
             err->set_msg(errMsg);
@@ -168,7 +168,7 @@ grpc::Status FlashService::Coprocessor(
         {
             auto errMsg = "can't find tunnel ( " + toString(request->receiver_meta().task_id()) + " + "
                 + toString(request->sender_meta().task_id()) + " ) within " + toString(timeout.count()) + " s";
-            LOG_DEBUG(log, errMsg);
+            LOG_ERROR(log, errMsg);
             mpp::MPPDataPacket packet;
             auto err = new mpp::Error();
             err->set_msg(errMsg);

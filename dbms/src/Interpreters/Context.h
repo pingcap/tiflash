@@ -16,7 +16,6 @@
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/TimezoneInfo.h>
 #include <IO/CompressionSettings.h>
-#include <Encryption/FileProvider.h>
 #include <pingcap/Config.h>
 #include <Storages/PartPathSelector.h>
 #include <Storages/Transaction/StorageEngineType.h>
@@ -90,6 +89,12 @@ using SchemaSyncServicePtr = std::shared_ptr<SchemaSyncService>;
 class PathPool;
 class PathCapacityMetrics;
 using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
+class KeyManager;
+using KeyManagerPtr = std::shared_ptr<KeyManager>;
+class FileProvider;
+using FileProviderPtr = std::shared_ptr<FileProvider>;
+class RateLimiter;
+using RateLimiterPtr = std::shared_ptr<RateLimiter>;
 
 namespace DM
 {
@@ -393,6 +398,7 @@ public:
     bool useL0Opt() const;
 
     BackgroundProcessingPool & getBackgroundPool();
+    BackgroundProcessingPool & getBlockableBackgroundPool();
 
     void setDDLWorker(std::shared_ptr<DDLWorker> ddl_worker);
     DDLWorker & getDDLWorker() const;
@@ -420,6 +426,9 @@ public:
 
     void initializeFileProvider(KeyManagerPtr key_manager, bool enable_encryption);
     FileProviderPtr getFileProvider() const;
+
+    void initializeRateLimiter(TiFlashMetricsPtr metrics, UInt64 rate_limit_per_sec);
+    RateLimiterPtr getRateLimiter() const;
 
     Clusters & getClusters() const;
     std::shared_ptr<Cluster> getCluster(const std::string & cluster_name) const;

@@ -1,3 +1,4 @@
+#include <Common/RedactHelpers.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 
 namespace DB::DM
@@ -70,6 +71,59 @@ const RowKeyRange::TableRangeMinMax & RowKeyRange::getTableMinMaxData(TableID ta
         return it->second;
     std::lock_guard<std::mutex> lock(table_mutex);
     return table_min_max_data.try_emplace(table_id, table_id, is_common_handle, rowkey_column_size).first->second;
+}
+
+template <bool enable_redact, bool right_open = true>
+inline String rangeToString(const RowKeyValue & start, const RowKeyValue & end)
+{
+    String s = "[";
+    if constexpr (enable_redact)
+        s += start.toDebugString() + "," + end.toDebugString();
+    else
+        s += start.toString() + "," + end.toString();
+
+    if constexpr (right_open)
+        s += ")";
+    else
+        s += "]";
+    return s;
+}
+
+template <bool enable_redact>
+inline String rangeToString(const RowKeyRange & range)
+{
+    return rangeToString<enable_redact, true>(range.start, range.end);
+}
+
+String RowKeyValueRef::toDebugString() const
+{
+    if (is_common_handle)
+        return Redact::keyToDebugString(data, size);
+    return Redact::handleToDebugString(int_value);
+}
+
+String RowKeyValue::toString() const
+{
+    if (is_common_handle)
+        return Redact::keyToHexString(value->data(), value->size());
+    return DB::toString(int_value);
+}
+
+String RowKeyValue::toDebugString() const
+{
+    if (is_common_handle)
+        return Redact::keyToDebugString(value->data(), value->size());
+    return Redact::handleToDebugString(int_value);
+}
+
+String RowKeyRange::toDebugString() const
+{
+    return rangeToString</*enable_redact*/ true>(*this);
+}
+
+String RowKeyRange::toString() const
+{
+    return rangeToString</*enable_redact*/ false>(*this);
 }
 
 } // namespace DB::DM

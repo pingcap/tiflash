@@ -24,6 +24,8 @@ public:
     std::vector<size_t> latest_capacity_quota;
     Strings kvstore_data_path;
 
+    UInt64 bg_task_io_rate_limit = 0;
+
 public:
     TiFlashStorageConfig() {}
 
