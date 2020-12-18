@@ -136,7 +136,6 @@ struct MPPTunnelSet
         for (int i = 0; i < response.execution_summaries_size(); i++)
         {
             auto * mutable_execution_summary = response.mutable_execution_summaries(i);
-            mutable_execution_summary->set_time_processed_ns(0);
             mutable_execution_summary->set_num_produced_rows(0);
             mutable_execution_summary->set_num_iterations(0);
             mutable_execution_summary->set_concurrency(0);
