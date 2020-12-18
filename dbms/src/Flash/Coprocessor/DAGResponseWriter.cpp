@@ -14,13 +14,13 @@ void DAGResponseWriter::fillTiExecutionSummary(
     execution_summary->set_num_iterations(current.num_iterations - prev_stats.num_iterations);
     execution_summary->set_concurrency(current.concurrency - prev_stats.concurrency);
     prev_stats = current;
-    if (return_executor_id)
+    if (dag_context.return_executor_id)
         execution_summary->set_executor_id(executor_id);
 }
 
 void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response)
 {
-    if (!collect_execution_summary)
+    if (!dag_context.collect_execution_summaries)
         return;
     auto & remote_execution_summaries = dag_context.getRemoteExecutionSummaries();
     /// add execution_summary for local executor
@@ -68,6 +68,8 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response)
 
         current.time_processed_ns += dag_context.compile_time_ns;
         fillTiExecutionSummary(response.add_execution_summaries(), current, p.first);
+        /// do not have an easy and meaninful way to represent the execution summary for exchange sender
+        /// executor, however, TiDB require execution summary for all the executors, so just return its child executor
         if (dag_context.isMPPTask() && p.first == dag_context.exchange_sender_execution_summary_key)
         {
             current.concurrency = dag_context.final_concurrency;
@@ -92,14 +94,12 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response)
     }
 }
 
-DAGResponseWriter::DAGResponseWriter(Int64 records_per_chunk_, tipb::EncodeType encode_type_,
-    std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_, bool collect_execution_summary_, bool return_executor_id_)
+DAGResponseWriter::DAGResponseWriter(
+    Int64 records_per_chunk_, tipb::EncodeType encode_type_, std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_)
     : records_per_chunk(records_per_chunk_),
       encode_type(encode_type_),
       result_field_types(std::move(result_field_types_)),
-      dag_context(dag_context_),
-      collect_execution_summary(collect_execution_summary_),
-      return_executor_id(return_executor_id_)
+      dag_context(dag_context_)
 {
     for (auto & p : dag_context.getProfileStreamsMap())
     {

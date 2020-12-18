@@ -28,7 +28,6 @@ BlockIO MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     auto start_time = Clock::now();
     tipb::DAGRequest dag_req;
     dag_req.ParseFromString(task_request.encoded_plan());
-    bool collect_exec_summary = dag_req.has_collect_execution_summaries() && dag_req.collect_execution_summaries();
     std::unordered_map<RegionID, RegionInfo> regions;
     for (auto & r : task_request.regions())
     {
@@ -87,9 +86,9 @@ BlockIO MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
         partition_col_id.emplace_back(column_index);
     }
     // construct writer
-    std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(tunnel_set,
-        partition_col_id, exchangeSender.tp(), context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(),
-        *dag_context, collect_exec_summary, dag.hasMeaningfulExecutorId());
+    std::unique_ptr<DAGResponseWriter> response_writer
+        = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(tunnel_set, partition_col_id, exchangeSender.tp(),
+            context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), *dag_context);
     streams.out = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
     auto end_time = Clock::now();
     Int64 compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();

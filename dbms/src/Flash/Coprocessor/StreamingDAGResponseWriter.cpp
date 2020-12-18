@@ -17,9 +17,8 @@ extern const int LOGICAL_ERROR;
 template <class StreamWriterPtr>
 StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(StreamWriterPtr writer_, std::vector<Int64> partition_col_ids_,
     tipb::ExchangeType exchange_type_, Int64 records_per_chunk_, tipb::EncodeType encode_type_,
-    std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_, bool collect_execution_summary_, bool return_executor_id_)
-    : DAGResponseWriter(
-        records_per_chunk_, encode_type_, result_field_types_, dag_context_, collect_execution_summary_, return_executor_id_),
+    std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_)
+    : DAGResponseWriter(records_per_chunk_, encode_type_, result_field_types_, dag_context_),
       exchange_type(exchange_type_),
       writer(writer_),
       partition_col_ids(std::move(partition_col_ids_)),

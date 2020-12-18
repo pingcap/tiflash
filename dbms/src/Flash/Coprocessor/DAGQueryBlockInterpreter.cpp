@@ -311,6 +311,9 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
             }
             dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
         }
+        /// do not collect execution summaries because in this case because the execution summaries
+        /// will be collected by CoprocessorBlockInputStream
+        dag_req.set_collect_execution_summaries(false);
 
         std::vector<pingcap::coprocessor::KeyRange> ranges;
         for (auto & info : region_retry)
@@ -1201,6 +1204,7 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
         final_project.emplace_back(col_name, "");
     }
 
+    dag_req.set_collect_execution_summaries(dag.getDAGContext().collect_execution_summaries);
     executeRemoteQueryImpl(pipeline, cop_key_ranges, dag_req, schema);
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
@@ -1219,13 +1223,6 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
             need_append_final_project = true;
         }
     }
-
-    /// For simplicity, remote subquery only record the CopBlockInputStream time, for example,
-    /// if the remote subquery is TS, then it's execute time is the execute time of CopBlockInputStream,
-    /// if the remote subquery is TS SEL, then both TS and SEL's execute time is the same as the CopBlockInputStream
-    recordProfileStreams(pipeline, query_block.source_name);
-    if (query_block.selection)
-        recordProfileStreams(pipeline, query_block.selection_name);
 
     if (need_append_final_project)
         executeFinalProject(pipeline);
@@ -1258,7 +1255,7 @@ void DAGQueryBlockInterpreter::executeRemoteQueryImpl(Pipeline & pipeline,
         std::vector<pingcap::coprocessor::copTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
 
         auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, 1);
-        BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(*context.getDAGContext(), coprocessor_reader);
+        BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(dag.getDAGContext(), coprocessor_reader);
         pipeline.streams.push_back(input);
         task_start = task_end;
     }

@@ -77,13 +77,11 @@ try
     dag_context.compile_time_ns = compile_time_ns;
     LOG_DEBUG(log, "Compile dag request cost " << compile_time_ns / 1000000 << " ms");
 
-    bool collect_exec_summary = dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries();
     BlockOutputStreamPtr dag_output_stream = nullptr;
     if constexpr (!batch)
     {
-        std::unique_ptr<DAGResponseWriter> response_writer
-            = std::make_unique<UnaryDAGResponseWriter>(dag_response, context.getSettings().dag_records_per_chunk, dag.getEncodeType(),
-                dag.getResultFieldTypes(), dag_context, collect_exec_summary, dag.hasMeaningfulExecutorId());
+        std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<UnaryDAGResponseWriter>(
+            dag_response, context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), dag_context);
         dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
         copyData(*streams.in, *dag_output_stream);
     }
@@ -92,7 +90,7 @@ try
         auto streaming_writer = std::make_shared<StreamWriter>(writer);
         std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<StreamWriterPtr>>(streaming_writer,
             std::vector<Int64>(), tipb::ExchangeType::PassThrough, context.getSettings().dag_records_per_chunk, dag.getEncodeType(),
-            dag.getResultFieldTypes(), dag_context, collect_exec_summary, dag.hasMeaningfulExecutorId());
+            dag.getResultFieldTypes(), dag_context);
         dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
         copyData(*streams.in, *dag_output_stream);
     }

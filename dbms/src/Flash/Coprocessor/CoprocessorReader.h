@@ -38,7 +38,7 @@ struct CoprocessorReaderResult
     {}
 };
 
-/// this is a adapter for pingcap::coprocessor::ResponseIter, so it can be used in TiRemoteBlockInputStream
+/// this is an adapter for pingcap::coprocessor::ResponseIter, so it can be used in TiRemoteBlockInputStream
 class CoprocessorReader
 {
     DAGSchema schema;
