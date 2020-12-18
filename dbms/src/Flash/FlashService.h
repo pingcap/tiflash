@@ -41,7 +41,7 @@ private:
     std::tuple<Context, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
 
     // Use execute_in_thread_pool to submit job to thread pool which return grpc::Status.
-    grpc::Status execute_in_thread_pool(std::function<grpc::Status()>);
+    grpc::Status execute_in_thread_pool(const std::unique_ptr<ThreadPool> & pool, std::function<grpc::Status()>);
 
 private:
     IServer & server;
@@ -49,8 +49,8 @@ private:
     const TiFlashSecurityConfig & security_config;
     Logger * log;
 
-    // Put this member at the end so that ensure it will be destroyed firstly.
-    std::unique_ptr<ThreadPool> cop_thread_pool;
+    // Put thread pool member(s) at the end so that ensure it will be destroyed firstly.
+    std::unique_ptr<ThreadPool> cop_pool, batch_pool, mpp_pool;
 };
 
 } // namespace DB

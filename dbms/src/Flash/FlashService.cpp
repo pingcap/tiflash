@@ -31,9 +31,11 @@ FlashService::FlashService(IServer & server_)
       log(&Logger::get("FlashService"))
 {
     size_t threads = static_cast<size_t>(server_.context().getSettingsRef().coprocessor_thread_pool_size);
-    threads = threads ? threads : 4 * getNumberOfPhysicalCPUCores();
+    threads = threads ? threads : getNumberOfPhysicalCPUCores();
     LOG_INFO(log, "Use a thread pool with " << threads << " threads to handling coprocessor requests.");
-    cop_thread_pool = std::make_unique<ThreadPool>(threads, [] { setThreadName("cop-pool-thread"); });
+    cop_pool = std::make_unique<ThreadPool>(threads, [] { setThreadName("cop-pool-cop"); });
+    batch_pool = std::make_unique<ThreadPool>(threads, [] { setThreadName("cop-pool-batch"); });
+    mpp_pool = std::make_unique<ThreadPool>(threads, [] { setThreadName("cop-pool-mpp"); });
 }
 
 grpc::Status FlashService::Coprocessor(
@@ -55,7 +57,7 @@ grpc::Status FlashService::Coprocessor(
         GET_METRIC(metrics, tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
     });
 
-grpc::Status ret = execute_in_thread_pool([&] {
+grpc::Status ret = execute_in_thread_pool(cop_pool, [&] {
     auto [context, status] = createDBContext(grpc_context);
     if (!status.ok())
     {
@@ -89,7 +91,7 @@ grpc::Status ret = execute_in_thread_pool([&] {
         // TODO: update the value of metric tiflash_coprocessor_response_bytes.
     });
 
-grpc::Status ret = execute_in_thread_pool([&] {
+grpc::Status ret = execute_in_thread_pool(batch_pool, [&] {
     auto [context, status] = createDBContext(grpc_context);
     if (!status.ok())
     {
@@ -115,7 +117,7 @@ grpc::Status ret = execute_in_thread_pool([&] {
     }
     // TODO: Add metric.
 
-grpc::Status ret = execute_in_thread_pool([&] {
+grpc::Status ret = execute_in_thread_pool(mpp_pool, [&] {
     auto [context, status] = createDBContext(grpc_context);
     if (!status.ok())
     {
@@ -141,7 +143,7 @@ grpc::Status ret = execute_in_thread_pool([&] {
     }
     // TODO: Add metric.
 
-grpc::Status ret = execute_in_thread_pool([&] {
+grpc::Status ret = execute_in_thread_pool(mpp_pool, [&] {
     auto [context, status] = createDBContext(grpc_context);
     if (!status.ok())
     {
@@ -252,11 +254,11 @@ String getClientMetaVarWithDefault(const grpc::ServerContext * grpc_context, con
     return default_val;
 }
 
-grpc::Status FlashService::execute_in_thread_pool(std::function<grpc::Status()> job)
+grpc::Status FlashService::execute_in_thread_pool(const std::unique_ptr<ThreadPool> & pool, std::function<grpc::Status()> job)
 {
     std::packaged_task<grpc::Status()> task(job);
     std::future<grpc::Status> future = task.get_future();
-    cop_thread_pool->schedule([&task] { task(); });
+    pool->schedule([&task] { task(); });
     return future.get();
 }
 
