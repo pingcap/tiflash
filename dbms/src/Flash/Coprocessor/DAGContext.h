@@ -65,13 +65,6 @@ public:
     const std::vector<std::pair<Int32, String>> & getWarnings() const { return warnings; }
     const mpp::TaskMeta & getMPPTaskMeta() const { return mpp_task_meta; }
     bool isMPPTask() const { return !exchange_sender_executor_id.empty(); }
-    std::unordered_map<String, std::vector<ThreadSafeExecutionSummary>> & getRemoteExecutionSummaries()
-    {
-        return remote_execution_summaries;
-    }
-    void addRemoteExecutionSummariesImpl(tipb::SelectResponse & resp, size_t index, size_t concurrency, bool is_streaming_call);
-
-    void addRemoteExecutionSummariesForUnaryCall(tipb::SelectResponse & resp) { addRemoteExecutionSummariesImpl(resp, 0, 1, false); }
 
     BlockInputStreams & getRemoteInputStreams() { return remote_block_input_streams; }
 
@@ -98,9 +91,6 @@ private:
     UInt64 flags;
     UInt64 sql_mode;
     mpp::TaskMeta mpp_task_meta;
-    /// remote_execution_summaries is used to collect execution summaries from remote execution(coprocessor read/mpp execution)
-    std::mutex remote_execution_summaries_lock;
-    std::unordered_map<String, std::vector<ThreadSafeExecutionSummary>> remote_execution_summaries;
 };
 
 } // namespace DB

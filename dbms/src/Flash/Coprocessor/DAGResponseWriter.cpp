@@ -83,19 +83,25 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response)
         }
     }
     /// add executionSummary for remote executor
-    for (auto & p : dag_context.getRemoteExecutionSummaries())
+    for (auto & streamPtr : dag_context.getRemoteInputStreams())
     {
-        if (local_executors.find(p.first) == local_executors.end())
+        auto & remote_execution_summaries = dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get()) != nullptr
+            ? dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get())->getRemoteExecutionSummaries()
+            : dynamic_cast<ExchangeReceiverInputStream *>(streamPtr.get())->getRemoteExecutionSummaries();
+        for (auto & p : remote_execution_summaries)
         {
-            ExecutionSummary current;
-            for (const auto & remote_execution_summary : p.second)
+            if (local_executors.find(p.first) == local_executors.end())
             {
-                current.time_processed_ns = std::max(current.time_processed_ns, remote_execution_summary.time_processed_ns.load());
-                current.num_produced_rows += remote_execution_summary.num_produced_rows.load();
-                current.num_iterations += remote_execution_summary.num_iterations.load();
-                current.concurrency += remote_execution_summary.concurrency.load();
+                ExecutionSummary current;
+                for (const auto & remote_execution_summary : p.second)
+                {
+                    current.time_processed_ns = std::max(current.time_processed_ns, remote_execution_summary.time_processed_ns);
+                    current.num_produced_rows += remote_execution_summary.num_produced_rows;
+                    current.num_iterations += remote_execution_summary.num_iterations;
+                    current.concurrency += remote_execution_summary.concurrency;
+                }
+                fillTiExecutionSummary(response.add_execution_summaries(), current, p.first);
             }
-            fillTiExecutionSummary(response.add_execution_summaries(), current, p.first);
         }
     }
 }

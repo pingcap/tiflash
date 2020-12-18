@@ -1257,6 +1257,7 @@ void DAGQueryBlockInterpreter::executeRemoteQueryImpl(Pipeline & pipeline,
         auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, 1);
         BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(dag.getDAGContext(), coprocessor_reader);
         pipeline.streams.push_back(input);
+        dag.getDAGContext().getRemoteInputStreams().push_back(input);
         task_start = task_end;
     }
 }
@@ -1289,7 +1290,9 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
         // todo choose a more reasonable stream number
         for (size_t i = 0; i < max_streams; i++)
         {
-            pipeline.streams.push_back(std::make_shared<ExchangeReceiverInputStream>(dag.getDAGContext(), exchange_receiver));
+            auto stream = std::make_shared<ExchangeReceiverInputStream>(dag.getDAGContext(), exchange_receiver);
+            pipeline.streams.push_back(stream);
+            dag.getDAGContext().getRemoteInputStreams().push_back(stream);
         }
         std::vector<NameAndTypePair> source_columns;
         Block block = pipeline.firstStream()->getHeader();
