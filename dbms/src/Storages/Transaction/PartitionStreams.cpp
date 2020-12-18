@@ -1,3 +1,4 @@
+#include <Common/CurrentMetrics.h>
 #include <Common/TiFlashMetrics.h>
 #include <Core/Block.h>
 #include <Interpreters/Context.h>
@@ -14,6 +15,12 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
 #include <common/logger_useful.h>
+
+namespace CurrentMetrics
+{
+extern const Metric EngineTotalKeysWritten;
+extern const Metric EngineTotalBytesWritten;
+} // namespace CurrentMetrics
 
 namespace DB
 {
@@ -34,7 +41,9 @@ std::tuple<Block, bool> readRegionBlock(const ManageableStoragePtr & storage, Re
         nullptr);
 }
 
-static void writeRegionDataToStorage(Context & context, const RegionPtrWrap & region, RegionDataReadInfoList & data_list_read, Logger * log)
+//
+static void writeRegionDataToStorage(
+    Context & context, const RegionPtrWrap & region, RegionDataReadInfoList & data_list_read, Logger * log, bool add_written_metrics)
 {
     constexpr auto FUNCTION_NAME = __FUNCTION__;
     const auto & tmt = context.getTMTContext();
@@ -93,6 +102,9 @@ static void writeRegionDataToStorage(Context & context, const RegionPtrWrap & re
             GET_METRIC(metrics, tiflash_raft_write_data_to_storage_duration_seconds, type_decode).Observe(region_decode_cost / 1000.0);
         }
 
+        const size_t num_rows = block.rows();
+        const size_t num_bytes = block.bytes();
+
         /// Write block into storage.
         watch.restart();
         // Note: do NOT use typeid_cast, since Storage is multi-inherite and typeid_cast will return nullptr
@@ -127,6 +139,13 @@ static void writeRegionDataToStorage(Context & context, const RegionPtrWrap & re
         }
         write_part_cost = watch.elapsedMilliseconds();
         GET_METRIC(metrics, tiflash_raft_write_data_to_storage_duration_seconds, type_write).Observe(write_part_cost / 1000.0);
+
+        if (add_written_metrics)
+        {
+            // Report the rows(keys) and bytes written
+            CurrentMetrics::add(CurrentMetrics::EngineTotalKeysWritten, num_rows);
+            CurrentMetrics::add(CurrentMetrics::EngineTotalBytesWritten, num_bytes);
+        }
 
         LOG_TRACE(log,
             FUNCTION_NAME << ": table " << table_id << ", region " << region->id() << ", cost [region decode " << region_decode_cost
@@ -263,8 +282,8 @@ void RemoveRegionCommitCache(const RegionPtr & region, const RegionDataReadInfoL
     }
 }
 
-void RegionTable::writeBlockByRegion(
-    Context & context, const RegionPtrWrap & region, RegionDataReadInfoList & data_list_to_remove, Logger * log, bool lock_region)
+void RegionTable::writeBlockByRegion(Context & context, const RegionPtrWrap & region, RegionDataReadInfoList & data_list_to_remove,
+    Logger * log, bool add_written_metrics, bool lock_region)
 {
     std::optional<RegionDataReadInfoList> data_list_read = std::nullopt;
     if (region.pre_decode_cache)
@@ -280,7 +299,7 @@ void RegionTable::writeBlockByRegion(
     if (!data_list_read)
         return;
 
-    writeRegionDataToStorage(context, region, *data_list_read, log);
+    writeRegionDataToStorage(context, region, *data_list_read, log, add_written_metrics);
 
     RemoveRegionCommitCache(region, *data_list_read, lock_region);
 
@@ -347,7 +366,8 @@ RegionException::RegionReadStatus RegionTable::resolveLocksAndWriteRegion(TMTCon
         return read_status;
 
     auto & context = tmt.getContext();
-    writeRegionDataToStorage(context, region, data_list_read, log);
+    // Now this function is used to write data when doing learner read, always report written metrics
+    writeRegionDataToStorage(context, region, data_list_read, log, /*add_written_metrics*/ true);
 
     RemoveRegionCommitCache(region, data_list_read);
 

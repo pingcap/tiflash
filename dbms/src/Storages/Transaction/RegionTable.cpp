@@ -100,7 +100,7 @@ bool RegionTable::shouldFlush(const InternalRegion & region) const
     return false;
 }
 
-RegionDataReadInfoList RegionTable::flushRegion(const RegionPtrWrap & region, bool try_persist) const
+RegionDataReadInfoList RegionTable::flushRegion(const RegionPtrWrap & region, bool try_persist, bool add_written_metrics) const
 {
     auto & tmt = context->getTMTContext();
 
@@ -120,7 +120,7 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtrWrap & region, bo
     /// Write region data into corresponding storage.
     RegionDataReadInfoList data_list_to_remove;
     {
-        writeBlockByRegion(*context, region, data_list_to_remove, log);
+        writeBlockByRegion(*context, region, data_list_to_remove, log, add_written_metrics, /*lock_region*/ true);
     }
 
     {
@@ -307,7 +307,7 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
     }
 }
 
-RegionDataReadInfoList RegionTable::tryFlushRegion(RegionID region_id, bool try_persist)
+RegionDataReadInfoList RegionTable::tryFlushRegion(RegionID region_id, bool try_persist, bool add_written_metrics)
 {
     auto region = context->getTMTContext().getKVStore()->getRegion(region_id);
     if (!region)
@@ -316,10 +316,10 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(RegionID region_id, bool try_
         return {};
     }
 
-    return tryFlushRegion(region, try_persist);
+    return tryFlushRegion(region, try_persist, add_written_metrics);
 }
 
-RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtrWrap & region, bool try_persist)
+RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtrWrap & region, bool try_persist, bool add_written_metrics)
 {
     RegionID region_id = region->id();
 
@@ -354,7 +354,7 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtrWrap & region,
     RegionDataReadInfoList data_list_to_remove;
     try
     {
-        data_list_to_remove = flushRegion(region, try_persist);
+        data_list_to_remove = flushRegion(region, try_persist, add_written_metrics);
     }
     catch (...)
     {
@@ -410,7 +410,7 @@ bool RegionTable::tryFlushRegions()
 {
     if (RegionID region_to_flush = pickRegionToFlush(); region_to_flush != InvalidRegionID)
     {
-        tryFlushRegion(region_to_flush, true);
+        tryFlushRegion(region_to_flush, true, true);
         return true;
     }
 

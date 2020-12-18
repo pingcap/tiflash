@@ -117,7 +117,12 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
         // try to flush data into ch first.
         try
         {
-            auto tmp = region_table.tryFlushRegion(new_region_wrap, false);
+            // If PD spot hot TiFlash store, it will move region peer from the busy one to a idle one, which
+            // make the idle TiFlash store accept region data with ApplySnapshot.
+            // If TiFlash report the written metrics of applying snapshots, it will make PD thinks this idle store
+            // get busy and move region out of it, which make PD frequently move region around different TiFlash store.
+            // So we do not add written metrics for applying snapshots.
+            auto tmp = region_table.tryFlushRegion(new_region_wrap, false, /*add_written_metrics*/ false);
             {
                 std::lock_guard<std::mutex> lock(bg_gc_region_data_mutex);
                 bg_gc_region_data.push_back(std::move(tmp));
@@ -398,7 +403,7 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
         const auto try_to_flush_region = [&tmt](const RegionPtr & region) {
             if (tmt.isBgFlushDisabled())
             {
-                tmt.getRegionTable().tryFlushRegion(region, false);
+                tmt.getRegionTable().tryFlushRegion(region, false, true);
             }
             else
             {

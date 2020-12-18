@@ -192,15 +192,14 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
             }
             if (resolve_locks)
             {
-                auto status = RegionException::RegionReadStatus::OK;
-                status = RegionTable::resolveLocksAndWriteRegion( //
-                    tmt,                                          //
-                    table_id,                                     //
-                    region,                                       //
-                    start_ts,                                     //
-                    region_to_query.bypass_lock_ts,               //
-                    region_to_query.version,                      //
-                    region_to_query.conf_version,                 //
+                auto status = RegionTable::resolveLocksAndWriteRegion( //
+                    tmt,                                               //
+                    table_id,                                          //
+                    region,                                            //
+                    start_ts,                                          //
+                    region_to_query.bypass_lock_ts,                    //
+                    region_to_query.version,                           //
+                    region_to_query.conf_version,                      //
                     region_to_query.range_in_table, log);
 
                 if (status != RegionException::RegionReadStatus::OK)

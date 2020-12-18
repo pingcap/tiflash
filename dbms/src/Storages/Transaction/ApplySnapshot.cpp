@@ -56,7 +56,7 @@ void KVStore::tryApplySnapshot(const RegionPtrWrap & new_region, Context & conte
             // engine may delete data unsafely.
             auto region_lock = region_manager.genRegionTaskLock(old_region->id());
             old_region->setStateApplying();
-            tmt.getRegionTable().tryFlushRegion(old_region, false);
+            tmt.getRegionTable().tryFlushRegion(old_region, false, /*add_written_metrics*/ true);
             tryFlushRegionCacheInStorage(tmt, *old_region, log);
             region_persister.persist(*old_region, region_lock);
         }
@@ -259,12 +259,12 @@ TiFlashApplyRes KVStore::handleIngestSST(UInt64 region_id, const SnapshotViewArr
         return TiFlashApplyRes::NotFound;
     }
 
-    const auto func_try_flush = [&]() {
+    const auto func_try_flush = [&](bool add_written_metrics) {
         if (!region->writeCFCount())
             return;
         try
         {
-            tmt.getRegionTable().tryFlushRegion(region, false);
+            tmt.getRegionTable().tryFlushRegion(region, false, add_written_metrics);
             tryFlushRegionCacheInStorage(tmt, *region, log);
         }
         catch (Exception & e)
@@ -276,10 +276,10 @@ TiFlashApplyRes KVStore::handleIngestSST(UInt64 region_id, const SnapshotViewArr
     };
 
     // try to flush remain data in memory.
-    func_try_flush();
+    func_try_flush(true);
     region->handleIngestSST(snaps, index, term, tmt);
     region->tryPreDecodeTiKVValue(tmt);
-    func_try_flush();
+    func_try_flush(false);
 
     if (region->dataSize())
     {

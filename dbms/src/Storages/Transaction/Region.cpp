@@ -681,16 +681,21 @@ TiFlashApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 in
         const auto size_before_written = this->dataSize();
         handle_write_cmd_func();
 
+#if 0
         // Report the rows(keys) and bytes written
         const auto size_after_written = this->dataSize();
         CurrentMetrics::add(CurrentMetrics::EngineTotalKeysWritten, cmds.len);
         CurrentMetrics::add(CurrentMetrics::EngineTotalBytesWritten, size_after_written - size_before_written);
+#else
+        (void)size_before_written;
+#endif
 
         if (tmt.isBgFlushDisabled())
         {
             /// Flush data right after they are committed.
             RegionDataReadInfoList data_list_to_remove;
-            RegionTable::writeBlockByRegion(context, shared_from_this(), data_list_to_remove, log, false);
+            RegionTable::writeBlockByRegion(
+                context, shared_from_this(), data_list_to_remove, log, /*add_written_metrics*/ true, /*lock_region*/ false);
 
             /// Do not need to run predecode.
             data.writeCF().getCFDataPreDecode().popAll();

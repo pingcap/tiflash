@@ -116,8 +116,8 @@ public:
     TableID popOneTableToOptimize();
 
     bool tryFlushRegions();
-    RegionDataReadInfoList tryFlushRegion(RegionID region_id, bool try_persist = false);
-    RegionDataReadInfoList tryFlushRegion(const RegionPtrWrap & region, bool try_persist);
+    RegionDataReadInfoList tryFlushRegion(RegionID region_id, bool try_persist, bool add_written_metrics);
+    RegionDataReadInfoList tryFlushRegion(const RegionPtrWrap & region, bool try_persist, bool add_written_metrics);
 
     void handleInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegions &)> && callback) const;
     std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(const TableID table_id) const;
@@ -130,7 +130,8 @@ public:
         const RegionPtrWrap & region,
         RegionDataReadInfoList & data_list_to_remove,
         Logger * log,
-        bool lock_region = true);
+        bool add_written_metrics,
+        bool lock_region);
 
     /// Read the data of the given region into block, take good care of learner read and locks.
     /// Assuming that the schema has been properly synced by outer, i.e. being new enough to decode data before start_ts,
@@ -179,7 +180,7 @@ private:
     InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, const RegionID region_id);
     InternalRegion & doGetInternalRegion(TableID table_id, RegionID region_id);
 
-    RegionDataReadInfoList flushRegion(const RegionPtrWrap & region, bool try_persist) const;
+    RegionDataReadInfoList flushRegion(const RegionPtrWrap & region, bool try_persist, bool add_written_metrics) const;
     bool shouldFlush(const InternalRegion & region) const;
     RegionID pickRegionToFlush();
 
