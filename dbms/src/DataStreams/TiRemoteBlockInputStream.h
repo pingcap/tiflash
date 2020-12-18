@@ -2,6 +2,7 @@
 
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -15,34 +16,45 @@
 namespace DB
 {
 
-// ExchangeReceiver is in charge of receiving data from exchangeSender located in upstream tasks.
-class ExchangeReceiverInputStream : public IProfilingBlockInputStream
+// TiRemoteBlockInputStream is a block input stream that read/receive data from remote.
+template <typename RemoteReaderPtr, bool is_streaming_reader>
+class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 {
     DAGContext & dag_context;
 
-    std::shared_ptr<ExchangeReceiver> receiver;
+    RemoteReaderPtr remote_reader;
 
     Block sample_block;
 
     std::queue<Block> block_queue;
 
+    String name;
+
     Logger * log;
 
-    bool fetchExchangeRecieverResult()
+    bool fetchRemoteResult()
     {
-        auto result = receiver->nextResult();
+        auto result = remote_reader->nextResult();
         if (result.meet_error)
         {
-            LOG_WARNING(log, "ExchangeReceiver meets error: " << result.error_msg);
+            LOG_WARNING(log, "remote reader meets error: " << result.error_msg);
             throw Exception(result.error_msg);
         }
         if (result.eof)
             return false;
 
-        dag_context.addRemoteExecutionSummariesForStreamingCall(*result.resp, result.call_index, receiver->getSourceNum());
+        if constexpr (is_streaming_reader)
+        {
+            dag_context.addRemoteExecutionSummariesForStreamingCall(*result.resp, result.call_index, remote_reader->getSourceNum());
+        }
+        else
+        {
+            dag_context.addRemoteExecutionSummariesForUnaryCall(*result.resp);
+        }
+
         int chunk_size = result.resp->chunks_size();
         if (chunk_size == 0)
-            return fetchExchangeRecieverResult();
+            return fetchRemoteResult();
 
         for (int i = 0; i < chunk_size; i++)
         {
@@ -51,13 +63,13 @@ class ExchangeReceiverInputStream : public IProfilingBlockInputStream
             switch (result.resp->encode_type())
             {
                 case tipb::EncodeType::TypeCHBlock:
-                    block = CHBlockChunkCodec().decode(chunk, receiver->getOutputSchema());
+                    block = CHBlockChunkCodec().decode(chunk, remote_reader->getOutputSchema());
                     break;
                 case tipb::EncodeType::TypeChunk:
-                    block = ArrowChunkCodec().decode(chunk, receiver->getOutputSchema());
+                    block = ArrowChunkCodec().decode(chunk, remote_reader->getOutputSchema());
                     break;
                 case tipb::EncodeType::TypeDefault:
-                    block = DefaultChunkCodec().decode(chunk, receiver->getOutputSchema());
+                    block = DefaultChunkCodec().decode(chunk, remote_reader->getOutputSchema());
                     break;
                 default:
                     throw Exception("Unsupported encode type", ErrorCodes::LOGICAL_ERROR);
@@ -69,12 +81,15 @@ class ExchangeReceiverInputStream : public IProfilingBlockInputStream
     }
 
 public:
-    ExchangeReceiverInputStream(DAGContext & dag_context_, std::shared_ptr<ExchangeReceiver> receiver_)
-        : dag_context(dag_context_), receiver(std::move(receiver_)), log(&Logger::get("ExchangeReceiverInputStream"))
+    TiRemoteBlockInputStream(DAGContext & dag_context_, RemoteReaderPtr remote_reader_)
+        : dag_context(dag_context_),
+          remote_reader(remote_reader_),
+          name("TiRemoteBlockInputStream(" + remote_reader->getName() + ")"),
+          log(&Logger::get(name))
     {
         // generate sample block
         ColumnsWithTypeAndName columns;
-        for (auto & dag_col : receiver->getOutputSchema())
+        for (auto & dag_col : remote_reader->getOutputSchema())
         {
             auto tp = getDataTypeByColumnInfo(dag_col.second);
             ColumnWithTypeAndName col(tp, dag_col.first);
@@ -85,13 +100,13 @@ public:
 
     Block getHeader() const override { return sample_block; }
 
-    String getName() const override { return "ExchangeReceiver"; }
+    String getName() const override { return name; }
 
     Block readImpl() override
     {
         if (block_queue.empty())
         {
-            if (!fetchExchangeRecieverResult())
+            if (!fetchRemoteResult())
                 return {};
         }
         Block block = block_queue.front();
@@ -99,4 +114,7 @@ public:
         return block;
     }
 };
+
+using ExchangeReceiverInputStream = TiRemoteBlockInputStream<std::shared_ptr<ExchangeReceiver>, true>;
+using CoprocessorBlockInputStream = TiRemoteBlockInputStream<std::shared_ptr<CoprocessorReader>, false>;
 } // namespace DB

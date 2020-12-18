@@ -40,27 +40,24 @@ struct ExchangeReceiverResult
 
 class ExchangeReceiver
 {
-    TMTContext & context;
+    pingcap::kv::Cluster * cluster;
     std::chrono::seconds timeout;
 
     tipb::ExchangeReceiver pb_exchange_receiver;
     size_t source_num;
     ::mpp::TaskMeta task_meta;
     std::vector<std::thread> workers;
-    // async grpc
     DAGSchema schema;
 
     // TODO: should be a concurrency bounded queue.
     std::mutex mu;
     std::condition_variable cv;
-    std::queue<Block> block_buffer;
     std::queue<ExchangeReceiverResult> result_buffer;
     std::atomic_int live_connections;
     bool inited;
     bool meet_error;
     Exception err;
     Logger * log;
-    class ExchangeCall;
 
     void ReadLoop(const String & meta_raw, size_t source_index);
 
@@ -81,7 +78,7 @@ class ExchangeReceiver
 
 public:
     ExchangeReceiver(Context & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta)
-        : context(context_.getTMTContext()),
+        : cluster(context_.getTMTContext().getKVCluster()),
           timeout(context_.getSettings().mpp_task_timeout),
           pb_exchange_receiver(exc),
           source_num(pb_exchange_receiver.encoded_task_meta_size()),
@@ -131,5 +128,6 @@ public:
     }
 
     size_t getSourceNum() { return source_num; }
+    String getName() { return "ExchangeReceiver"; }
 };
 } // namespace DB

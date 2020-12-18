@@ -57,7 +57,7 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
         LOG_DEBUG(log, "begin start and read : " << req->DebugString());
         pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> call(req);
         grpc::ClientContext client_context;
-        auto reader = context.getCluster()->rpc_client->sendStreamRequest(req->sender_meta().address(), &client_context, call);
+        auto reader = cluster->rpc_client->sendStreamRequest(req->sender_meta().address(), &client_context, call);
         reader->WaitForInitialMetadata();
         // Block until the next result is available in the completion queue "cq".
         mpp::MPPDataPacket packet;
