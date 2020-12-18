@@ -129,13 +129,27 @@ struct MPPTunnelSet
 {
     std::vector<MPPTunnelPtr> tunnels;
 
-    /// for both broadcast writing and partition writing,
-    /// only return execution summary for the first tunnel,
-    /// because in TiDB, it does not known the node concurrency
-    /// when running a mpp query, it just add up all the
-    /// execution summary for the same executor, so if return
-    /// execution summary for all the tunnels, the information
-    /// in TiDB will be amplified, which may make use confused.
+    void clearExecutionSummaries(tipb::SelectResponse & response)
+    {
+        /// can not use response.clear_execution_summaries() because
+        /// TiDB assume all the executor should return execution summary
+        for (int i = 0; i < response.execution_summaries_size(); i++)
+        {
+            auto * mutable_execution_summary = response.mutable_execution_summaries(i);
+            mutable_execution_summary->set_time_processed_ns(0);
+            mutable_execution_summary->set_num_produced_rows(0);
+            mutable_execution_summary->set_num_iterations(0);
+            mutable_execution_summary->set_concurrency(0);
+        }
+    }
+    /// for both broadcast writing and partition writing, only
+    /// return meaningful execution summary for the first tunnel,
+    /// because in TiDB, it does not know enough information
+    /// about the execution details for the mpp query, it just
+    /// add up all the execution summaries for the same executor,
+    /// so if return execution summary for all the tunnels, the
+    /// information in TiDB will be amplified, which may make
+    /// user confused.
     // this is a broadcast writing.
     void write(tipb::SelectResponse & response)
     {
@@ -145,13 +159,16 @@ struct MPPTunnelSet
         packet.set_data(data);
         tunnels[0]->write(packet);
 
-        response.clear_execution_summaries();
-        data.clear();
-        response.SerializeToString(&data);
-        packet.set_data(data);
-        for (size_t i = 1; i < tunnels.size(); i++)
+        if (tunnels.size() > 1)
         {
-            tunnels[i]->write(packet);
+            clearExecutionSummaries(response);
+            data.clear();
+            response.SerializeToString(&data);
+            packet.set_data(data);
+            for (size_t i = 1; i < tunnels.size(); i++)
+            {
+                tunnels[i]->write(packet);
+            }
         }
     }
 
@@ -159,7 +176,9 @@ struct MPPTunnelSet
     void write(tipb::SelectResponse & response, int16_t partition_id)
     {
         if (partition_id != 0)
-            response.clear_execution_summaries();
+        {
+            clearExecutionSummaries(response);
+        }
         std::string data;
         response.SerializeToString(&data);
         mpp::MPPDataPacket packet;
