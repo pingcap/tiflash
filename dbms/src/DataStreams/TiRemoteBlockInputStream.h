@@ -3,6 +3,7 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
+#include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -30,7 +31,37 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
     String name;
 
+    std::unordered_map<String, std::vector<ExecutionSummary>> execution_summaries;
+
     Logger * log;
+
+    void addRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t index, size_t concurrency, bool is_streaming_call)
+    {
+        for (auto & execution_summary : resp.execution_summaries())
+        {
+            if (execution_summary.has_executor_id())
+            {
+                auto & executor_id = execution_summary.executor_id();
+                if (execution_summaries.find(executor_id) == execution_summaries.end())
+                {
+                    execution_summaries[executor_id].resize(concurrency);
+                }
+                auto & current_execution_summary = execution_summaries[executor_id][index];
+                if (is_streaming_call)
+                {
+                    current_execution_summary.time_processed_ns += execution_summary.time_processed_ns();
+                }
+                else
+                {
+                    current_execution_summary.time_processed_ns
+                        = std::max(current_execution_summary.time_processed_ns, execution_summary.time_processed_ns());
+                }
+                current_execution_summary.num_produced_rows += execution_summary.num_produced_rows();
+                current_execution_summary.num_iterations += execution_summary.num_iterations();
+                current_execution_summary.concurrency += execution_summary.concurrency();
+            }
+        }
+    }
 
     bool fetchRemoteResult()
     {
@@ -45,11 +76,11 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
         if constexpr (is_streaming_reader)
         {
-            dag_context.addRemoteExecutionSummariesForStreamingCall(*result.resp, result.call_index, remote_reader->getSourceNum());
+            addRemoteExecutionSummaries(*result.resp, result.call_index, remote_reader->getSourceNum(), true);
         }
         else
         {
-            dag_context.addRemoteExecutionSummariesForUnaryCall(*result.resp);
+            addRemoteExecutionSummaries(*result.resp, 0, 1, false);
         }
 
         int chunk_size = result.resp->chunks_size();
@@ -113,6 +144,8 @@ public:
         block_queue.pop();
         return block;
     }
+
+    std::unordered_map<String, std::vector<ExecutionSummary>> & getRemoteExecutionSummaries() { return execution_summaries; }
 };
 
 using ExchangeReceiverInputStream = TiRemoteBlockInputStream<std::shared_ptr<ExchangeReceiver>, true>;

@@ -1,4 +1,5 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 
 namespace DB
@@ -22,7 +23,6 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response)
 {
     if (!dag_context.collect_execution_summaries)
         return;
-    auto & remote_execution_summaries = dag_context.getRemoteExecutionSummaries();
     /// add execution_summary for local executor
     for (auto & p : dag_context.getProfileStreamsMap())
     {
@@ -39,15 +39,21 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response)
             current.concurrency++;
         }
         /// part 2: remote execution info
-        const auto & remote_execution_info = remote_execution_summaries.find(p.first);
-        if (remote_execution_info != remote_execution_summaries.end())
+        for (auto & streamPtr : dag_context.getRemoteInputStreams())
         {
-            for (const auto & remote_execution_summary : remote_execution_info->second)
+            auto & remote_execution_summaries = dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get()) != nullptr
+                ? dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get())->getRemoteExecutionSummaries()
+                : dynamic_cast<ExchangeReceiverInputStream *>(streamPtr.get())->getRemoteExecutionSummaries();
+            const auto & remote_execution_info = remote_execution_summaries.find(p.first);
+            if (remote_execution_info != remote_execution_summaries.end())
             {
-                current.time_processed_ns = std::max(current.time_processed_ns, remote_execution_summary.time_processed_ns.load());
-                current.num_produced_rows += remote_execution_summary.num_produced_rows.load();
-                current.num_iterations += remote_execution_summary.num_iterations.load();
-                current.concurrency += remote_execution_summary.concurrency.load();
+                for (const auto & remote_execution_summary : remote_execution_info->second)
+                {
+                    current.time_processed_ns = std::max(current.time_processed_ns, remote_execution_summary.time_processed_ns);
+                    current.num_produced_rows += remote_execution_summary.num_produced_rows;
+                    current.num_iterations += remote_execution_summary.num_iterations;
+                    current.concurrency += remote_execution_summary.concurrency;
+                }
             }
         }
         /// part 3: for join need to add the build time

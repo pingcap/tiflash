@@ -73,10 +73,7 @@ public:
 
     void addRemoteExecutionSummariesForUnaryCall(tipb::SelectResponse & resp) { addRemoteExecutionSummariesImpl(resp, 0, 1, false); }
 
-    void addRemoteExecutionSummariesForStreamingCall(tipb::SelectResponse & resp, size_t index, size_t concurrency)
-    {
-        addRemoteExecutionSummariesImpl(resp, index, concurrency, true);
-    }
+    BlockInputStreams & getRemoteInputStreams() { return remote_block_input_streams; }
 
     size_t final_concurrency;
     Int64 compile_time_ns;
@@ -96,6 +93,7 @@ private:
     /// qb_id_to_join_alias_map is a map that maps query block id to all the join_build_subquery_names
     /// in this query block and all its children query block
     std::unordered_map<UInt32, std::vector<String>> qb_id_to_join_alias_map;
+    BlockInputStreams remote_block_input_streams;
     std::vector<std::pair<Int32, String>> warnings;
     UInt64 flags;
     UInt64 sql_mode;
