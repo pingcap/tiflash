@@ -29,13 +29,13 @@ struct ExchangeReceiverResult
 {
     std::shared_ptr<tipb::SelectResponse> resp;
     size_t call_index;
+    String req_info;
     bool meet_error;
     String error_msg;
     bool eof;
-    String req_info;
-    ExchangeReceiverResult(std::shared_ptr<tipb::SelectResponse> resp_, size_t call_index_, bool meet_error_ = false,
-        const String & error_msg_ = "", bool eof_ = false, const String & req_info_ = "")
-        : resp(resp_), call_index(call_index_), meet_error(meet_error_), error_msg(error_msg_), eof(eof_), req_info(req_info_)
+    ExchangeReceiverResult(std::shared_ptr<tipb::SelectResponse> resp_, size_t call_index_, const String & req_info_ = "",
+        bool meet_error_ = false, const String & error_msg_ = "", bool eof_ = false)
+        : resp(resp_), call_index(call_index_), req_info(req_info_), meet_error(meet_error_), error_msg(error_msg_), eof(eof_)
     {}
 };
 
@@ -62,7 +62,7 @@ class ExchangeReceiver
 
     void ReadLoop(const String & meta_raw, size_t source_index);
 
-    void decodePacket(const mpp::MPPDataPacket & p, size_t source_index)
+    void decodePacket(const mpp::MPPDataPacket & p, size_t source_index, const String & req_info)
     {
         std::shared_ptr<tipb::SelectResponse> resp_ptr = std::make_shared<tipb::SelectResponse>();
         if (!resp_ptr->ParseFromString(p.data()))
@@ -71,9 +71,9 @@ class ExchangeReceiver
         }
         std::lock_guard<std::mutex> lock(mu);
         if (resp_ptr != nullptr)
-            result_buffer.emplace(resp_ptr, source_index);
+            result_buffer.emplace(resp_ptr, source_index, req_info);
         else
-            result_buffer.emplace(resp_ptr, source_index, true, "Error while decoding MPPDataPacket");
+            result_buffer.emplace(resp_ptr, source_index, req_info, true, "Error while decoding MPPDataPacket");
         cv.notify_all();
     }
 
@@ -117,11 +117,11 @@ public:
         cv.wait(lk, [&] { return result_buffer.size() > 0 || live_connections == 0 || meet_error; });
         if (meet_error)
         {
-            return {nullptr, 0, true, err.message(), false};
+            return {nullptr, 0, "ExchangeReceiver", true, err.message(), false};
         }
         if (result_buffer.empty())
         {
-            return {nullptr, 0, false, "", true};
+            return {nullptr, 0, "ExchangeReceiver", false, "", true};
         }
         auto result = result_buffer.front();
         result_buffer.pop();

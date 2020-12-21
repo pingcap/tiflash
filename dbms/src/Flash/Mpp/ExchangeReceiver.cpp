@@ -54,7 +54,8 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
         auto req = std::make_shared<mpp::EstablishMPPConnectionRequest>();
         req->set_allocated_receiver_meta(new mpp::TaskMeta(task_meta));
         req->set_allocated_sender_meta(sender_task);
-        LOG_DEBUG(log, "begin start and read : " << req->DebugString());
+        String req_info = req->DebugString();
+        LOG_DEBUG(log, "begin start and read : " << req_info);
         pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> call(req);
         grpc::ClientContext client_context;
         auto reader = cluster->rpc_client->sendStreamRequest(req->sender_meta().address(), &client_context, call);
@@ -71,7 +72,7 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
             {
                 throw Exception("exchange receiver meet error : " + packet.error().msg());
             }
-            decodePacket(packet, source_index);
+            decodePacket(packet, source_index, req_info);
         }
     }
     catch (Exception & e)
