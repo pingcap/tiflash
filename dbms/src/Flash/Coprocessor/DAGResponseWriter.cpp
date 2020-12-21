@@ -73,7 +73,7 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response)
         fillTiExecutionSummary(response.add_execution_summaries(), current, p.first);
         /// do not have an easy and meaningful way to get the execution summary for exchange sender
         /// executor, however, TiDB requires execution summary for all the executors, so just return
-        /// is child executor's execution summary
+        /// its child executor's execution summary
         if (dag_context.isMPPTask() && p.first == dag_context.exchange_sender_execution_summary_key)
         {
             current.concurrency = dag_context.final_concurrency;

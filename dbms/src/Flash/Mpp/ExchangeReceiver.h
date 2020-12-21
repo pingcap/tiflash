@@ -32,9 +32,10 @@ struct ExchangeReceiverResult
     bool meet_error;
     String error_msg;
     bool eof;
+    String req_info;
     ExchangeReceiverResult(std::shared_ptr<tipb::SelectResponse> resp_, size_t call_index_, bool meet_error_ = false,
-        const String & error_msg_ = "", bool eof_ = false)
-        : resp(resp_), call_index(call_index_), meet_error(meet_error_), error_msg(error_msg_), eof(eof_)
+        const String & error_msg_ = "", bool eof_ = false, const String & req_info_ = "")
+        : resp(resp_), call_index(call_index_), meet_error(meet_error_), error_msg(error_msg_), eof(eof_), req_info(req_info_)
     {}
 };
 
