@@ -21,8 +21,6 @@ namespace DB
 template <typename RemoteReaderPtr, bool is_streaming_reader>
 class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 {
-    DAGContext & dag_context;
-
     RemoteReaderPtr remote_reader;
 
     Block sample_block;
@@ -112,11 +110,8 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     }
 
 public:
-    TiRemoteBlockInputStream(DAGContext & dag_context_, RemoteReaderPtr remote_reader_)
-        : dag_context(dag_context_),
-          remote_reader(remote_reader_),
-          name("TiRemoteBlockInputStream(" + remote_reader->getName() + ")"),
-          log(&Logger::get(name))
+    explicit TiRemoteBlockInputStream(RemoteReaderPtr remote_reader_)
+        : remote_reader(remote_reader_), name("TiRemoteBlockInputStream(" + remote_reader->getName() + ")"), log(&Logger::get(name))
     {
         // generate sample block
         ColumnsWithTypeAndName columns;

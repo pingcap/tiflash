@@ -49,10 +49,7 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response)
             {
                 for (const auto & remote_execution_summary : remote_execution_info->second)
                 {
-                    current.time_processed_ns = std::max(current.time_processed_ns, remote_execution_summary.time_processed_ns);
-                    current.num_produced_rows += remote_execution_summary.num_produced_rows;
-                    current.num_iterations += remote_execution_summary.num_iterations;
-                    current.concurrency += remote_execution_summary.concurrency;
+                    current.merge(remote_execution_summary);
                 }
             }
         }
@@ -74,8 +71,9 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response)
 
         current.time_processed_ns += dag_context.compile_time_ns;
         fillTiExecutionSummary(response.add_execution_summaries(), current, p.first);
-        /// do not have an easy and meaninful way to represent the execution summary for exchange sender
-        /// executor, however, TiDB require execution summary for all the executors, so just return its child executor
+        /// do not have an easy and meaningful way to get the execution summary for exchange sender
+        /// executor, however, TiDB requires execution summary for all the executors, so just return
+        /// is child executor's execution summary
         if (dag_context.isMPPTask() && p.first == dag_context.exchange_sender_execution_summary_key)
         {
             current.concurrency = dag_context.final_concurrency;
@@ -83,6 +81,7 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response)
         }
     }
     /// add executionSummary for remote executor
+    std::unordered_map<String, ExecutionSummary> merged_remote_execution_summaries;
     for (auto & streamPtr : dag_context.getRemoteInputStreams())
     {
         auto & remote_execution_summaries = dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get()) != nullptr
@@ -92,18 +91,16 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response)
         {
             if (local_executors.find(p.first) == local_executors.end())
             {
-                ExecutionSummary current;
+                auto & current = merged_remote_execution_summaries[p.first];
                 for (const auto & remote_execution_summary : p.second)
                 {
-                    current.time_processed_ns = std::max(current.time_processed_ns, remote_execution_summary.time_processed_ns);
-                    current.num_produced_rows += remote_execution_summary.num_produced_rows;
-                    current.num_iterations += remote_execution_summary.num_iterations;
-                    current.concurrency += remote_execution_summary.concurrency;
+                    current.merge(remote_execution_summary);
                 }
-                fillTiExecutionSummary(response.add_execution_summaries(), current, p.first);
             }
         }
     }
+    for (auto & p : merged_remote_execution_summaries)
+        fillTiExecutionSummary(response.add_execution_summaries(), p.second, p.first);
 }
 
 DAGResponseWriter::DAGResponseWriter(

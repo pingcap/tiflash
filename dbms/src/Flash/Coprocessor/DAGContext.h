@@ -20,21 +20,6 @@ struct ProfileStreamsInfo
     BlockInputStreams input_streams;
 };
 
-struct ThreadSafeExecutionSummary
-{
-    std::atomic<UInt64> time_processed_ns;
-    std::atomic<UInt64> num_produced_rows;
-    std::atomic<UInt64> num_iterations;
-    std::atomic<UInt64> concurrency;
-    ThreadSafeExecutionSummary() : time_processed_ns(0), num_produced_rows(0), num_iterations(0), concurrency(0) {}
-    ThreadSafeExecutionSummary(const ThreadSafeExecutionSummary & other)
-        : time_processed_ns(other.time_processed_ns.load()),
-          num_produced_rows(other.num_produced_rows.load()),
-          num_iterations(other.num_iterations.load()),
-          concurrency(other.concurrency.load())
-    {}
-};
-
 /// A context used to track the information that needs to be passed around during DAG planning.
 class DAGContext
 {

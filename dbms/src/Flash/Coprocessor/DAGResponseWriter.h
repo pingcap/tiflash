@@ -21,6 +21,14 @@ struct ExecutionSummary
     UInt64 num_iterations;
     UInt64 concurrency;
     ExecutionSummary() : time_processed_ns(0), num_produced_rows(0), num_iterations(0), concurrency(0) {}
+
+    void merge(const ExecutionSummary & other)
+    {
+        time_processed_ns = std::max(time_processed_ns, other.time_processed_ns);
+        num_produced_rows += other.num_produced_rows;
+        num_iterations += other.num_iterations;
+        concurrency += other.concurrency;
+    }
 };
 
 class DAGResponseWriter
