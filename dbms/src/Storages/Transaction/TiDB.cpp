@@ -613,7 +613,8 @@ try
     state = static_cast<SchemaState>(obj->getValue<Int32>("state"));
     pk_is_handle = obj->getValue<bool>("pk_is_handle");
     comment = obj->getValue<String>("comment");
-    update_timestamp = obj->getValue<Timestamp>("update_timestamp");
+    if (obj->has("update_timestamp"))
+        update_timestamp = obj->getValue<Timestamp>("update_timestamp");
     auto partition_obj = obj->getObject("partition");
     is_partition_table = obj->has("belonging_table_id") || !partition_obj.isNull();
     if (is_partition_table)
