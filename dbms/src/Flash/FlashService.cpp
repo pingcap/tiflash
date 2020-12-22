@@ -32,8 +32,10 @@ FlashService::FlashService(IServer & server_)
 {
     size_t threads = static_cast<size_t>(server_.context().getSettingsRef().coprocessor_thread_pool_size);
     threads = threads ? threads : getNumberOfPhysicalCPUCores();
-    LOG_INFO(log, "Use a thread pool with " << threads << " threads to handling coprocessor requests.");
-    cop_pool = std::make_unique<ThreadPool>(threads, [] { setThreadName("cop-pool-cop"); });
+    LOG_INFO(log, "Use a thread pool with " << threads << " threads to handling normal coprocessor requests.");
+    LOG_INFO(log, "Use a thread pool with " << threads << " threads to handling batch coprocessor requests.");
+    LOG_INFO(log, "Use a thread pool with " << threads << " threads to handling mpp coprocessor requests.");
+    cop_pool = std::make_unique<ThreadPool>(threads, [] { setThreadName("cop-pool-normal"); });
     batch_pool = std::make_unique<ThreadPool>(threads, [] { setThreadName("cop-pool-batch"); });
     mpp_pool = std::make_unique<ThreadPool>(threads, [] { setThreadName("cop-pool-mpp"); });
 }
