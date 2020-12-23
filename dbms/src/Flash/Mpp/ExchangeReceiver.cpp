@@ -38,6 +38,7 @@ void ExchangeReceiver::init()
     for (auto & meta : pb_exchange_receiver.encoded_task_meta())
     {
         std::thread t(&ExchangeReceiver::ReadLoop, this, std::ref(meta));
+        live_connections++;
         workers.push_back(std::move(t));
     }
     inited = true;
@@ -45,7 +46,6 @@ void ExchangeReceiver::init()
 
 void ExchangeReceiver::ReadLoop(const String & meta_raw)
 {
-    live_connections++;
     try
     {
         auto sender_task = new mpp::TaskMeta();
@@ -62,7 +62,7 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw)
         mpp::MPPDataPacket packet;
         for (;;)
         {
-            LOG_DEBUG(log, "begin next ");
+            LOG_TRACE(log, "begin next ");
             bool success = reader->Read(&packet);
             if (!success)
                 break;
@@ -72,6 +72,7 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw)
             }
             decodePacket(packet);
         }
+        LOG_DEBUG(log, "finish read : " << req->DebugString());
     }
     catch (Exception & e)
     {
