@@ -1100,7 +1100,7 @@ public:
         }
 
 
-        if (start == 0 || length == 0) {
+        if (start == 0 || (!implicit_length && length == 0)) {
             block.getByPosition(result).column = DataTypeString().createColumnConst(column_string->size(), toField(String("")));
             return;
         }
