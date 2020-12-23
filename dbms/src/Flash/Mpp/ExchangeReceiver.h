@@ -72,10 +72,12 @@ class ExchangeReceiver
                 default:
                     throw Exception("Unsupported encode type", ErrorCodes::LOGICAL_ERROR);
             }
+            LOG_DEBUG(log, "decode packet " << std::to_string(block.rows()));
+            if (unlikely(block.rows() == 0))
+                continue;
             std::lock_guard<std::mutex> lock(mu);
             block_buffer.push(std::move(block));
             cv.notify_all();
-            LOG_TRACE(log, "decode packet" << std::to_string(block.rows()));
         }
     }
 
