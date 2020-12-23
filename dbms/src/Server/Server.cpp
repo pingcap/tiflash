@@ -521,7 +521,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         raft_config.enable_compatible_mode, //
         global_context->getPathCapacity(), global_context->getFileProvider());
 
-    // Use pd address to define which default_database we use by defauly.
+    // Use pd address to define which default_database we use by default.
     // For mock test, we use "default". For deployed with pd/tidb/tikv use "system", which is always exist in TiFlash.
     std::string default_database = config().getString("default_database", raft_config.pd_addrs.empty() ? "default" : "system");
     Strings all_normal_path = storage_config.getAllNormalPaths();
