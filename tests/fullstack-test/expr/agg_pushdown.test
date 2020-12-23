@@ -1,0 +1,23 @@
+mysql> drop table if exists test.t
+mysql> create table test.t (c varchar(64))
+mysql> alter table test.t set tiflash replica 1
+
+func> wait_table test t
+
+mysql> insert into test.t values ('ABC'), ('DEF'), ('')
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+mysql> insert into test.t select * from test.t;
+
+mysql> set @@tidb_isolation_read_engines='tiflash'
+mysql> select substr(c, 2), count(1) from test.t group by substr(c, 2) order by substr(c, 2)
++--------------+----------+
+| substr(c, 2) | count(1) |
++--------------+----------+
+|              |       64 |
+| BC           |       64 |
+| EF           |       64 |
++--------------+----------+
