@@ -27,11 +27,13 @@ public:
     explicit DAGContext(const tipb::DAGRequest & dag_request)
         : collect_execution_summaries(dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries()),
           return_executor_id(dag_request.has_root_executor() || dag_request.executors(0).has_executor_id()),
+          is_mpp_task(false),
           flags(dag_request.flags()),
           sql_mode(dag_request.sql_mode()){};
     explicit DAGContext(const tipb::DAGRequest & dag_request, const mpp::TaskMeta & meta_)
         : collect_execution_summaries(dag_request.has_collect_execution_summaries() && dag_request.collect_execution_summaries()),
           return_executor_id(true),
+          is_mpp_task(true),
           flags(dag_request.flags()),
           sql_mode(dag_request.sql_mode()),
           mpp_task_meta(meta_)
@@ -49,7 +51,13 @@ public:
     bool shouldClipToZero();
     const std::vector<std::pair<Int32, String>> & getWarnings() const { return warnings; }
     const mpp::TaskMeta & getMPPTaskMeta() const { return mpp_task_meta; }
-    bool isMPPTask() const { return !exchange_sender_executor_id.empty(); }
+    bool isMPPTask() const { return is_mpp_task; }
+    Int64 getMPPTaskId() const
+    {
+        if (is_mpp_task)
+            return mpp_task_meta.task_id();
+        return 0;
+    }
 
     BlockInputStreams & getRemoteInputStreams() { return remote_block_input_streams; }
 
@@ -59,6 +67,7 @@ public:
     String exchange_sender_execution_summary_key = "";
     bool collect_execution_summaries;
     bool return_executor_id;
+    bool is_mpp_task;
 
 private:
     /// profile_streams_map is a map that maps from executor_id to ProfileStreamsInfo

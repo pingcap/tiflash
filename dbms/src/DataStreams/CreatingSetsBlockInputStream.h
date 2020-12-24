@@ -25,7 +25,7 @@ public:
 
     CreatingSetsBlockInputStream(const BlockInputStreamPtr & input,
         std::vector<SubqueriesForSets> && subqueries_for_sets_list_,
-        const SizeLimits & network_transfer_limits);
+        const SizeLimits & network_transfer_limits, Int64 mpp_task_id_);
 
     String getName() const override { return "CreatingSets"; }
 
@@ -48,6 +48,7 @@ private:
 
     size_t rows_to_transfer = 0;
     size_t bytes_to_transfer = 0;
+    Int64 mpp_task_id = 0;
 
     std::vector<std::thread> workers;
 

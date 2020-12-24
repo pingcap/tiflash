@@ -18,8 +18,8 @@ extern const int SET_SIZE_LIMIT_EXCEEDED;
 
 CreatingSetsBlockInputStream::CreatingSetsBlockInputStream(const BlockInputStreamPtr & input,
     std::vector<SubqueriesForSets> && subqueries_for_sets_list_,
-    const SizeLimits & network_transfer_limits)
-    : subqueries_for_sets_list(std::move(subqueries_for_sets_list_)), network_transfer_limits(network_transfer_limits)
+    const SizeLimits & network_transfer_limits, Int64 mpp_task_id_)
+    : subqueries_for_sets_list(std::move(subqueries_for_sets_list_)), network_transfer_limits(network_transfer_limits), mpp_task_id(mpp_task_id_)
 {
     init(input);
 }
@@ -117,7 +117,8 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
 {
     LOG_TRACE(log,
         (subquery.set ? "Creating set. " : "") << (subquery.join ? "Creating join. " : "")
-                                               << (subquery.table ? "Filling temporary table. " : ""));
+                                               << (subquery.table ? "Filling temporary table. " : "") << " for task "
+                                               << std::to_string(mpp_task_id));
     Stopwatch watch;
 
     BlockOutputStreamPtr table_out;
