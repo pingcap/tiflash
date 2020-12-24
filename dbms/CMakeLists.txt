@@ -167,6 +167,7 @@ target_link_libraries (clickhouse_common_io
     prometheus-cpp::push
     prometheus-cpp::pull
 )
+target_include_directories (clickhouse_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
 
 target_link_libraries (dbms
     clickhouse_parsers
@@ -185,8 +186,6 @@ target_link_libraries (dbms
     ${OPENSSL_CRYPTO_LIBRARY}
     ${BTRIE_LIBRARIES}
 )
-
-target_include_directories (dbms BEFORE PRIVATE ${kvClient_INCLUDE_DIR})
 
 if (NOT USE_INTERNAL_RE2_LIBRARY)
     target_include_directories (dbms BEFORE PRIVATE ${RE2_INCLUDE_DIR})
