@@ -50,7 +50,7 @@ private:
     Logger * log;
 
     // Put thread pool member(s) at the end so that ensure it will be destroyed firstly.
-    std::unique_ptr<ThreadPool> cop_pool, batch_pool, mpp_pool;
+    std::unique_ptr<ThreadPool> cop_pool, batch_cop_pool;
 };
 
 } // namespace DB

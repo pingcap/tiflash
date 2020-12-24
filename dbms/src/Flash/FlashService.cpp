@@ -38,10 +38,10 @@ FlashService::FlashService(IServer & server_)
     LOG_INFO(log, "Use a thread pool with " << cop_pool_size << " threads to handling normal coprocessor requests.");
     cop_pool = std::make_unique<ThreadPool>(cop_pool_size, [] { setThreadName("cop-pool"); });
 
-    size_t batch_pool_size = static_cast<size_t>(settings.batch_pool_size);
-    batch_pool_size = batch_pool_size ? batch_pool_size : default_size;
-    LOG_INFO(log, "Use a thread pool with " << batch_pool_size << " threads to handling batch coprocessor requests.");
-    batch_pool = std::make_unique<ThreadPool>(batch_pool_size, [] { setThreadName("batch-pool"); });
+    size_t batch_cop_pool_size = static_cast<size_t>(settings.batch_cop_pool_size);
+    batch_cop_pool_size = batch_cop_pool_size ? batch_cop_pool_size : default_size;
+    LOG_INFO(log, "Use a thread pool with " << batch_cop_pool_size << " threads to handling batch coprocessor requests.");
+    batch_cop_pool = std::make_unique<ThreadPool>(batch_cop_pool_size, [] { setThreadName("batch-cop-pool"); });
 }
 
 grpc::Status FlashService::Coprocessor(
@@ -97,7 +97,7 @@ grpc::Status ret = executeInThreadPool(cop_pool, [&] {
         // TODO: update the value of metric tiflash_coprocessor_response_bytes.
     });
 
-grpc::Status ret = executeInThreadPool(batch_pool, [&] {
+grpc::Status ret = executeInThreadPool(batch_cop_pool, [&] {
     auto [context, status] = createDBContext(grpc_context);
     if (!status.ok())
     {
