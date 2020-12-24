@@ -35,9 +35,9 @@ FlashService::FlashService(IServer & server_)
     LOG_INFO(log, "Use a thread pool with " << threads << " threads to handling normal coprocessor requests.");
     LOG_INFO(log, "Use a thread pool with " << threads << " threads to handling batch coprocessor requests.");
     LOG_INFO(log, "Use a thread pool with " << threads << " threads to handling mpp coprocessor requests.");
-    cop_pool = std::make_unique<ThreadPool>(threads, [] { setThreadName("cop-pool-normal"); });
-    batch_pool = std::make_unique<ThreadPool>(threads, [] { setThreadName("cop-pool-batch"); });
-    mpp_pool = std::make_unique<ThreadPool>(threads, [] { setThreadName("cop-pool-mpp"); });
+    cop_pool = std::make_unique<ThreadPool>(threads, [] { setThreadName("cop-pool"); });
+    batch_pool = std::make_unique<ThreadPool>(threads, [] { setThreadName("batch-pool"); });
+    mpp_pool = std::make_unique<ThreadPool>(threads, [] { setThreadName("mpp-pool"); });
 }
 
 grpc::Status FlashService::Coprocessor(
