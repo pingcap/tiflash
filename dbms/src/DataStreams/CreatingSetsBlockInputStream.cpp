@@ -225,12 +225,13 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
             msg << "Table with " << head_rows << " rows. ";
 
         msg << "In " << watch.elapsedSeconds() << " sec. ";
-        msg << "using " << std::to_string(subquery.join == nullptr ? 1 : subquery.join->getBuildConcurrency()) << " threads.";
+        msg << "using " << std::to_string(subquery.join == nullptr ? 1 : subquery.join->getBuildConcurrency()) << " threads ";
+        msg << "for task " << std::to_string(mpp_task_id) << ".";
         LOG_DEBUG(log, msg.rdbuf());
     }
     else
     {
-        LOG_DEBUG(log, "Subquery has empty result.");
+        LOG_DEBUG(log, "Subquery has empty result for task " << std::to_string(mpp_task_id) << ".");
     }
 }
 

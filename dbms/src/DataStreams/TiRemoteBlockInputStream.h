@@ -108,6 +108,8 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
                 continue;
             block_queue.push(std::move(block));
         }
+        if (block_queue.empty())
+            return fetchRemoteResult();
         return true;
     }
 
