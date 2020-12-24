@@ -705,8 +705,9 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     const Settings & settings = context.getSettingsRef();
     size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, right_pipeline.streams.size()) : 1;
     JoinPtr joinPtr = std::make_shared<Join>(left_key_names, right_key_names, true,
-        SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode), kind, strictness, join_build_concurrency, collators,
-        left_filter_column_name, right_filter_column_name, other_filter_column_name, other_condition_expr);
+        SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode), kind, strictness,
+        join_build_concurrency, collators, left_filter_column_name, right_filter_column_name, other_filter_column_name,
+        other_condition_expr);
     executeUnion(right_pipeline, max_streams);
     right_query.source = right_pipeline.firstStream();
     right_query.join = joinPtr;
@@ -819,7 +820,7 @@ void DAGQueryBlockInterpreter::executeWhere(Pipeline & pipeline, const Expressio
 }
 
 void DAGQueryBlockInterpreter::executeMergeAggregated(Pipeline & pipeline, bool overflow_row, Names & key_names, bool final,
-                                                      TiDB::TiDBCollators & collators, AggregateDescriptions & aggregates)
+    TiDB::TiDBCollators & collators, AggregateDescriptions & aggregates)
 {
     Block header = pipeline.firstStream()->getHeader();
 
@@ -862,15 +863,15 @@ void DAGQueryBlockInterpreter::executeMergeAggregated(Pipeline & pipeline, bool 
         executeUnion(pipeline, max_streams);
 
         /// Now merge the aggregated blocks
-        pipeline.firstStream() = std::make_shared<MergingAggregatedBlockInputStream>(pipeline.firstStream(), params, final, settings.max_threads);
+        pipeline.firstStream()
+            = std::make_shared<MergingAggregatedBlockInputStream>(pipeline.firstStream(), params, final, settings.max_threads);
     }
     else
     {
         pipeline.firstStream() = std::make_shared<MergingAggregatedMemoryEfficientBlockInputStream>(pipeline.streams, params, final,
-                                                                                                    max_streams,
-                                                                                                    settings.aggregation_memory_efficient_merge_threads
-                                                                                                    ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
-                                                                                                    : static_cast<size_t>(settings.max_threads));
+            max_streams,
+            settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
+                                                                : static_cast<size_t>(settings.max_threads));
 
         pipeline.streams.resize(1);
     }
@@ -1392,14 +1393,31 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     if (res.need_aggregate)
     {
         // execute aggregation
-        if (query_block.aggregation->has_aggregation())
+        switch (query_block.aggregation->aggregation().mode())
         {
-            executeMergeAggregated(pipeline, false, res.aggregation_keys,true,res.aggregation_collators, res.aggregate_descriptions);
+            case ::tipb::AggFunctionMode::CompleteMode:
+            {
+                executeAggregation(
+                    pipeline, res.before_aggregation, res.aggregation_keys, true, res.aggregation_collators, res.aggregate_descriptions);
+            }
+            break;
+            case ::tipb::AggFunctionMode::Partial1Mode:
+            {
+                executeAggregation(
+                    pipeline, res.before_aggregation, res.aggregation_keys, false, res.aggregation_collators, res.aggregate_descriptions);
+            }
+            break;
+            case ::tipb::AggFunctionMode::FinalMode:
+            {
+                executeMergeAggregated(pipeline, false, res.aggregation_keys, true, res.aggregation_collators, res.aggregate_descriptions);
+            }
+            break;
+            default:
+            {
+                throw TiFlashException("Not supported aggregation mode", Errors::Coprocessor::Unimplemented);
+            }
         }
-        else
-        {
-            executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, false, res.aggregation_collators, res.aggregate_descriptions);
-        }
+
         recordProfileStreams(pipeline, query_block.aggregation_name);
     }
     if (res.before_order_and_select)
