@@ -103,8 +103,11 @@ private:
     void executeExpression(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr);
     void executeOrder(Pipeline & pipeline, std::vector<NameAndTypePair> & order_columns);
     void executeLimit(Pipeline & pipeline);
-    void executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, Names & aggregation_keys,
+    void executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, Names & aggregation_keys, bool final,
         TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions);
+    void executeMergeAggregated(Pipeline & pipeline, bool overflow_row, Names & aggregation_keys, bool final,
+                                TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions);
+
     void executeFinalProject(Pipeline & pipeline);
 
     void readFromLocalStorage( //

@@ -9,6 +9,8 @@
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/LimitBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
+#include <DataStreams/MergingAggregatedBlockInputStream.h>
+#include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
@@ -816,7 +818,65 @@ void DAGQueryBlockInterpreter::executeWhere(Pipeline & pipeline, const Expressio
     pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, expr, filter_column); });
 }
 
-void DAGQueryBlockInterpreter::executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expr, Names & key_names,
+void DAGQueryBlockInterpreter::executeMergeAggregated(Pipeline & pipeline, bool overflow_row, Names & key_names, bool final,
+                                                      TiDB::TiDBCollators & collators, AggregateDescriptions & aggregates)
+{
+    Block header = pipeline.firstStream()->getHeader();
+
+    ColumnNumbers keys;
+    for (const auto & name : key_names)
+        keys.push_back(header.getPositionByName(name));
+
+    for (auto & descr : aggregates)
+    {
+        if (descr.arguments.empty())
+        {
+            for (const auto & name : descr.argument_names)
+            {
+                descr.arguments.push_back(header.getPositionByName(name));
+            }
+        }
+    }
+    /** There are two modes of distributed aggregation.
+      *
+      * 1. In different threads read from the remote servers blocks.
+      * Save all the blocks in the RAM. Merge blocks.
+      * If the aggregation is two-level - parallelize to the number of buckets.
+      *
+      * 2. In one thread, read blocks from different servers in order.
+      * RAM stores only one block from each server.
+      * If the aggregation is a two-level aggregation, we consistently merge the blocks of each next level.
+      *
+      * The second option consumes less memory (up to 256 times less)
+      *  in the case of two-level aggregation, which is used for large results after GROUP BY,
+      *  but it can work more slowly.
+      */
+
+    Aggregator::Params params(header, keys, aggregates, overflow_row);
+
+    const Settings & settings = context.getSettingsRef();
+
+    if (!settings.distributed_aggregation_memory_efficient)
+    {
+        /// We union several sources into one, parallelizing the work.
+        executeUnion(pipeline, max_streams);
+
+        /// Now merge the aggregated blocks
+        pipeline.firstStream() = std::make_shared<MergingAggregatedBlockInputStream>(pipeline.firstStream(), params, final, settings.max_threads);
+    }
+    else
+    {
+        pipeline.firstStream() = std::make_shared<MergingAggregatedMemoryEfficientBlockInputStream>(pipeline.streams, params, final,
+                                                                                                    max_streams,
+                                                                                                    settings.aggregation_memory_efficient_merge_threads
+                                                                                                    ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
+                                                                                                    : static_cast<size_t>(settings.max_threads));
+
+        pipeline.streams.resize(1);
+    }
+}
+
+void DAGQueryBlockInterpreter::executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expr, Names & key_names, bool final,
     TiDB::TiDBCollators & collators, AggregateDescriptions & aggregates)
 {
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expr); });
@@ -866,7 +926,7 @@ void DAGQueryBlockInterpreter::executeAggregation(Pipeline & pipeline, const Exp
     if (pipeline.streams.size() > 1)
     {
         pipeline.firstStream() = std::make_shared<ParallelAggregatingBlockInputStream>(pipeline.streams,
-            pipeline.stream_with_non_joined_data, params, context.getFileProvider(), true, max_streams,
+            pipeline.stream_with_non_joined_data, params, context.getFileProvider(), final, max_streams,
             settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
                                                                 : static_cast<size_t>(settings.max_threads));
 
@@ -1332,7 +1392,14 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     if (res.need_aggregate)
     {
         // execute aggregation
-        executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregation_collators, res.aggregate_descriptions);
+        if (query_block.aggregation->has_aggregation())
+        {
+            executeMergeAggregated(pipeline, false, res.aggregation_keys,true,res.aggregation_collators, res.aggregate_descriptions);
+        }
+        else
+        {
+            executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, false, res.aggregation_collators, res.aggregate_descriptions);
+        }
         recordProfileStreams(pipeline, query_block.aggregation_name);
     }
     if (res.before_order_and_select)
