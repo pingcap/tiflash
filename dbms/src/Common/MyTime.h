@@ -126,5 +126,9 @@ size_t maxFormattedDateTimeStringLength(const String & format);
 
 MyDateTime numberToDateTime(Int64 number);
 
+bool isPunctuation(char c);
+
+bool isValidSeperator(char c, int previous_parts);
+
 
 } // namespace DB
