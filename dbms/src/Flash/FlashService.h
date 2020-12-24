@@ -33,9 +33,12 @@ public:
         const ::coprocessor::BatchRequest * request,
         ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer) override;
 
-    ::grpc::Status DispatchMPPTask(::grpc::ServerContext* context, const ::mpp::DispatchTaskRequest* request, ::mpp::DispatchTaskResponse* response) override;
+    ::grpc::Status DispatchMPPTask(
+        ::grpc::ServerContext * context, const ::mpp::DispatchTaskRequest * request, ::mpp::DispatchTaskResponse * response) override;
 
-    ::grpc::Status EstablishMPPConnection(::grpc::ServerContext* context, const ::mpp::EstablishMPPConnectionRequest* request, ::grpc::ServerWriter< ::mpp::MPPDataPacket>* writer) override;
+    ::grpc::Status EstablishMPPConnection(::grpc::ServerContext * context,
+        const ::mpp::EstablishMPPConnectionRequest * request,
+        ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer) override;
 
 private:
     std::tuple<Context, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
