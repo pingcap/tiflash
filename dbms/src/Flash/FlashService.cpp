@@ -34,10 +34,8 @@ FlashService::FlashService(IServer & server_)
     threads = threads ? threads : getNumberOfPhysicalCPUCores();
     LOG_INFO(log, "Use a thread pool with " << threads << " threads to handling normal coprocessor requests.");
     LOG_INFO(log, "Use a thread pool with " << threads << " threads to handling batch coprocessor requests.");
-    LOG_INFO(log, "Use a thread pool with " << threads << " threads to handling mpp coprocessor requests.");
     cop_pool = std::make_unique<ThreadPool>(threads, [] { setThreadName("cop-pool"); });
     batch_pool = std::make_unique<ThreadPool>(threads, [] { setThreadName("batch-pool"); });
-    mpp_pool = std::make_unique<ThreadPool>(threads, [] { setThreadName("mpp-pool"); });
 }
 
 grpc::Status FlashService::Coprocessor(
@@ -119,7 +117,6 @@ grpc::Status ret = executeInThreadPool(batch_pool, [&] {
     }
     // TODO: Add metric.
 
-grpc::Status ret = executeInThreadPool(mpp_pool, [&] {
     auto [context, status] = createDBContext(grpc_context);
     if (!status.ok())
     {
@@ -127,9 +124,6 @@ grpc::Status ret = executeInThreadPool(mpp_pool, [&] {
     }
     MPPHandler mpp_handler(context, *request);
     return mpp_handler.execute(response);
-});
-
-    return ret;
 }
 
 ::grpc::Status FlashService::EstablishMPPConnection(::grpc::ServerContext * grpc_context,
@@ -145,7 +139,6 @@ grpc::Status ret = executeInThreadPool(mpp_pool, [&] {
     }
     // TODO: Add metric.
 
-grpc::Status ret = executeInThreadPool(mpp_pool, [&] {
     auto [context, status] = createDBContext(grpc_context);
     if (!status.ok())
     {
@@ -189,9 +182,6 @@ grpc::Status ret = executeInThreadPool(mpp_pool, [&] {
     // TODO: Check if there are errors in task.
 
     return grpc::Status::OK;
-});
-
-    return ret;
 }
 
 // This function is deprecated.
