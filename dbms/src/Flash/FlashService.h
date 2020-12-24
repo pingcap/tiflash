@@ -40,8 +40,8 @@ public:
 private:
     std::tuple<Context, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
 
-    // Use execute_in_thread_pool to submit job to thread pool which return grpc::Status.
-    grpc::Status execute_in_thread_pool(const std::unique_ptr<ThreadPool> & pool, std::function<grpc::Status()>);
+    // Use executeInThreadPool to submit job to thread pool which return grpc::Status.
+    grpc::Status executeInThreadPool(const std::unique_ptr<ThreadPool> & pool, std::function<grpc::Status()>);
 
 private:
     IServer & server;
