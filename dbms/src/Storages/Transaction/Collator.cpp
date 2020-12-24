@@ -268,7 +268,7 @@ private:
 private:
     static inline CharType decodeChar(const char * s, size_t & offset)
     {
-        return decodeUtf8Char(s, offset)
+        return decodeUtf8Char(s, offset);
     }
 
     using WeightType = GeneralCI::WeightType;
