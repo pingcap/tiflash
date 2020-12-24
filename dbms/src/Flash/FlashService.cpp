@@ -30,12 +30,18 @@ FlashService::FlashService(IServer & server_)
       security_config(server_.securityConfig()),
       log(&Logger::get("FlashService"))
 {
-    size_t threads = static_cast<size_t>(server_.context().getSettingsRef().coprocessor_thread_pool_size);
-    threads = threads ? threads : getNumberOfPhysicalCPUCores();
-    LOG_INFO(log, "Use a thread pool with " << threads << " threads to handling normal coprocessor requests.");
-    LOG_INFO(log, "Use a thread pool with " << threads << " threads to handling batch coprocessor requests.");
-    cop_pool = std::make_unique<ThreadPool>(threads, [] { setThreadName("cop-pool"); });
-    batch_pool = std::make_unique<ThreadPool>(threads, [] { setThreadName("batch-pool"); });
+    auto settings = server_.context().getSettingsRef();
+    const size_t default_size = 2 * getNumberOfPhysicalCPUCores();
+
+    size_t cop_pool_size = static_cast<size_t>(settings.cop_pool_size);
+    cop_pool_size = cop_pool_size ? cop_pool_size : default_size;
+    LOG_INFO(log, "Use a thread pool with " << cop_pool_size << " threads to handling normal coprocessor requests.");
+    cop_pool = std::make_unique<ThreadPool>(cop_pool_size, [] { setThreadName("cop-pool"); });
+
+    size_t batch_pool_size = static_cast<size_t>(settings.batch_pool_size);
+    batch_pool_size = batch_pool_size ? batch_pool_size : default_size;
+    LOG_INFO(log, "Use a thread pool with " << batch_pool_size << " threads to handling batch coprocessor requests.");
+    batch_pool = std::make_unique<ThreadPool>(batch_pool_size, [] { setThreadName("batch-pool"); });
 }
 
 grpc::Status FlashService::Coprocessor(
