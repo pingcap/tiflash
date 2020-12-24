@@ -38,7 +38,7 @@ cmake "$SRCPATH" \
       -DENABLE_MYSQL=OFF \
       -Wno-dev
 
-make -j $NPROC
+make -j $NPROC tiflash
 
 cp -f "$build_dir/dbms/src/Server/tiflash" "$install_dir/tiflash"
 cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.dylib" "$install_dir/libtiflash_proxy.dylib"
