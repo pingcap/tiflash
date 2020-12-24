@@ -109,9 +109,11 @@ void MPPTask::runImpl(BlockIO io)
         to->writePrefix();
         LOG_DEBUG(log, "begin read ");
 
+        size_t count = 0;
+
         while (Block block = from->read())
         {
-            LOG_DEBUG(log, "write block " + std::to_string(block.rows()));
+            count += block.rows();
             to->write(block);
         }
 
@@ -130,7 +132,7 @@ void MPPTask::runImpl(BlockIO io)
 
         finishWrite();
 
-        LOG_DEBUG(log, "finish write ");
+        LOG_DEBUG(log, "finish write with " + std::to_string(count) + " rows");
     }
     catch (Exception & e)
     {

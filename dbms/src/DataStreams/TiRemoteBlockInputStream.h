@@ -104,6 +104,8 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
                     throw Exception("Unsupported encode type", ErrorCodes::LOGICAL_ERROR);
             }
             LOG_DEBUG(log, "decode packet " << std::to_string(block.rows()) + " for " + result.req_info);
+            if (unlikely(block.rows() == 0))
+                continue;
             block_queue.push(std::move(block));
         }
         return true;
