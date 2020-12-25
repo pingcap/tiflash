@@ -73,7 +73,7 @@ public:
             {
                 std::vector<std::string> values;
                 boost::split(values, line, boost::is_any_of(" \t"), boost::token_compress_on);
-                if (values.size() == 0 || values[0] != "cpu")
+                if (values.size() == 0 || values[0] != "cpu" || values.size() < 11)
                 {
                     return {};
                 }
