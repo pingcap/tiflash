@@ -160,9 +160,9 @@ void MPPTask::runImpl(BlockIO io)
 // execute is responsible for making plan , register tasks and tunnels and start the running thread.
 grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * response)
 {
-    Stopwatch stopwatch;
     try
     {
+        Stopwatch stopwatch;
         MPPTaskPtr task = std::make_shared<MPPTask>(task_request.meta(), context);
         auto stream = task->prepare(task_request);
         task->run(stream);
