@@ -54,7 +54,7 @@ class ExchangeReceiver
     std::mutex mu;
     std::condition_variable cv;
     std::queue<ExchangeReceiverResult> result_buffer;
-    std::atomic_int live_connections;
+    Int32 live_connections;
     bool inited;
     bool meet_error;
     Exception err;

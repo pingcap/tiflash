@@ -190,13 +190,14 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
         }
     }
 
+    if (join_build_thread_pool != nullptr)
+        join_build_thread_pool->wait();
+
     if (subquery.join)
         subquery.join->setFinishBuildTable(true);
 
     if (table_out)
         table_out->writeSuffix();
-    if (join_build_thread_pool != nullptr)
-        join_build_thread_pool->wait();
 
     watch.stop();
 
