@@ -823,7 +823,7 @@ void DAGQueryBlockInterpreter::executeMergeAggregated(Pipeline & pipeline, bool 
     TiDB::TiDBCollators & collators, AggregateDescriptions & aggregates)
 {
     Block header = pipeline.firstStream()->getHeader();
-
+    collators = TiDB::dummy_collators;
     ColumnNumbers keys;
     for (const auto & name : key_names)
         keys.push_back(header.getPositionByName(name));
