@@ -206,7 +206,8 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
 {
     Context context;
 
-    std::shared_ptr<DAGContext> dag_context;
+    std::unique_ptr<tipb::DAGRequest> dag_req;
+    std::unique_ptr<DAGContext> dag_context;
 
     MPPTaskId id;
 

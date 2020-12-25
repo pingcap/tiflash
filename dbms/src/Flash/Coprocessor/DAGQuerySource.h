@@ -72,8 +72,6 @@ public:
 
     DAGContext & getDAGContext() const { return *context.getDAGContext(); }
 
-    bool hasMeaningfulExecutorId() { return root_query_block->source->has_executor_id(); }
-
 protected:
     void analyzeDAGEncodeType();
 

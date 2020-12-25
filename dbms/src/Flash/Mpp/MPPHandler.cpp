@@ -26,8 +26,12 @@ void MPPTask::unregisterTask()
 BlockIO MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
     auto start_time = Clock::now();
-    tipb::DAGRequest dag_req;
-    dag_req.ParseFromString(task_request.encoded_plan());
+    dag_req = std::make_unique<tipb::DAGRequest>();
+    if (!dag_req->ParseFromString(task_request.encoded_plan()))
+    {
+        throw TiFlashException(
+            std::string(__PRETTY_FUNCTION__) + ": Invalid encoded plan: " + task_request.encoded_plan(), Errors::Coprocessor::BadRequest);
+    }
     std::unordered_map<RegionID, RegionInfo> regions;
     for (auto & r : task_request.regions())
     {
@@ -45,7 +49,7 @@ BlockIO MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     context.setSetting("read_tso", start_ts);
     context.setSetting("schema_version", schema_ver);
     context.setSetting("mpp_task_timeout", task_request.timeout());
-    context.getTimezoneInfo().resetByDAGRequest(dag_req);
+    context.getTimezoneInfo().resetByDAGRequest(*dag_req);
 
     // register task.
     TMTContext & tmt_context = context.getTMTContext();
@@ -54,14 +58,14 @@ BlockIO MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     task_manager->registerTask(shared_from_this());
 
 
-    dag_context = std::make_shared<DAGContext>(dag_req, task_request.meta());
+    dag_context = std::make_unique<DAGContext>(*dag_req, task_request.meta());
     context.setDAGContext(dag_context.get());
 
-    DAGQuerySource dag(context, regions, dag_req, true);
+    DAGQuerySource dag(context, regions, *dag_req, true);
 
     // register tunnels
     MPPTunnelSetPtr tunnel_set = std::make_shared<MPPTunnelSet>();
-    const auto & exchangeSender = dag_req.root_executor().exchange_sender();
+    const auto & exchangeSender = dag_req->root_executor().exchange_sender();
     std::chrono::seconds timeout(task_request.timeout());
     for (int i = 0; i < exchangeSender.encoded_task_meta_size(); i++)
     {
