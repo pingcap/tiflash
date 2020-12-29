@@ -260,8 +260,8 @@ TiFlashRaftConfig::TiFlashRaftConfig(Poco::Util::LayeredConfiguration & config, 
 pingcap::ClusterConfig getClusterConfig(const TiFlashSecurityConfig & security_config, const TiFlashRaftConfig & raft_config)
 {
     pingcap::ClusterConfig config;
-    config.learner_key = raft_config.engine_key;
-    config.learner_value = raft_config.engine_value;
+    config.tiflash_engine_key = raft_config.engine_key;
+    config.tiflash_engine_value = raft_config.engine_value;
     config.ca_path = security_config.ca_path;
     config.cert_path = security_config.cert_path;
     config.key_path = security_config.key_path;
