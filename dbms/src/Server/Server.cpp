@@ -1024,7 +1024,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 }
 
                 /// TCP
-                if (config().has("tcp_port"))
+                if (config().getBool("enable_tcp", false) && config().has("tcp_port"))
                 {
                     if (security_config.has_tls_config)
                     {
