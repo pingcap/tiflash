@@ -1,9 +1,11 @@
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/CoprocessorHandler.h>
 #include <Flash/Mpp/MPPHandler.h>
+#include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/TMTContext.h>
 
@@ -154,6 +156,9 @@ void MPPTask::runImpl(BlockIO io)
         writeErrToAllTunnel("unrecovered fatal error");
     }
     LOG_INFO(log, "task ends, time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
+    auto process_info = context.getProcessListElement()->getInfo();
+    auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_memory_usage, type_dispatch_mpp_task).Observe(peak_memory);
     unregisterTask();
 }
 
