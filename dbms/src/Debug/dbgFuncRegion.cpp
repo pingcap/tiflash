@@ -273,10 +273,7 @@ void dbgFuncDumpAllRegion(Context & context, TableID table_id, bool ignore_none,
             return;
 
         ss << region->toString(dump_status);
-        if (range.first >= range.second)
-            ss << " [none], ";
-        else
-            ss << " ranges: [" << range.first.toString() << ", " << range.second.toString() << "), ";
+        ss << " ranges: " << DB::TiKVKeyRangeToDebugString(range) << ", ";
         ss << "state: " << raft_serverpb::PeerState_Name(region->peerState());
         if (auto s = region->dataInfo(); s.size() > 2)
             ss << ", " << s;

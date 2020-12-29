@@ -669,8 +669,8 @@ Handle Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_
     stream->readSuffix();
 
     if (!range.check(split_handle))
-        throw Exception("getSplitPointSlow unexpected split_handle: " + DB::Redact::handleToDebugString(split_handle)
-                        + ", should be in range " + range.toDebugString());
+        throw Exception("getSplitPointSlow unexpected split_handle: " + Redact::handleToDebugString(split_handle) + ", should be in range "
+                        + range.toDebugString());
 
     return split_handle;
 }
@@ -687,8 +687,9 @@ Segment::SplitInfo Segment::prepareSplit(DMContext & dm_context, const SegmentSn
         bool   bad_split_point = !range.check(split_point) || split_point == range.start;
         if (bad_split_point)
         {
-            LOG_INFO(log, "Got bad split point [" << DB::Redact::handleToDebugString(split_point)
-                    << "] for segment " << info() << ", fall back to split physical.");
+            LOG_INFO(log,
+                     "Got bad split point [" << Redact::handleToDebugString(split_point) << "] for segment " << info()
+                                             << ", fall back to split physical.");
             return prepareSplitPhysical(dm_context, segment_snap, wbs);
         }
         else
@@ -922,9 +923,8 @@ StableValueSpacePtr Segment::prepareMerge(DMContext &                dm_context,
     LOG_INFO(left->log, "Segment [" << left->segmentId() << "] and [" << right->segmentId() << "] prepare merge start");
 
     if (unlikely(left->range.end != right->range.start || left->next_segment_id != right->segment_id))
-        throw Exception("The ranges of merge segments are not consecutive: first end: "
-                        + DB::Redact::handleToDebugString                      (left->range.end)
-                        + ", second start: " + DB::Redact::handleToDebugString(right->range.start));
+        throw Exception("The ranges of merge segments are not consecutive: first end: " + Redact::handleToDebugString(left->range.end)
+                        + ", second start: " + Redact::handleToDebugString(right->range.start));
 
     auto getStream = [&](const SegmentPtr & segment, const SegmentSnapshotPtr & segment_snap) {
         auto                read_info = segment->getReadInfo(dm_context, *dm_context.store_columns, segment_snap);
@@ -1058,7 +1058,7 @@ String Segment::simpleInfo() const
 String Segment::info() const
 {
     std::stringstream s;
-    s << "{[id:" << segment_id << "], [next:" << next_segment_id << "], [epoch:" << epoch << "], [range:" << range.toDString()
+    s << "{[id:" << segment_id << "], [next:" << next_segment_id << "], [epoch:" << epoch << "], [range:" << range.toDebugString()
       << "], [delta rows:" << delta->getRows() << "], [delete ranges:" << delta->getDeletes() << "], [stable(" << stable->getDMFilesString()
       << "):" << stable->getRows() << "]}";
     return s.str();

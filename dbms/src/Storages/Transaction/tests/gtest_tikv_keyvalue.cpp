@@ -323,13 +323,13 @@ try
     // These will print the value
     EXPECT_NE(raw_pk1.toDebugString(), "?");
     EXPECT_NE(raw_pk2.toDebugString(), "?");
-    EXPECT_NE(RecordKVFormat::DecodedTiKVKeyRangeToDebugString(raw_keys), "[?, ?)");
+    EXPECT_NE(TiKVKeyRangeToDebugString(raw_keys), "[?, ?)");
 
     Redact::setRedactLog(true);
     // These will print '?' instead of value
     EXPECT_EQ(raw_pk1.toDebugString(), "?");
     EXPECT_EQ(raw_pk2.toDebugString(), "?");
-    EXPECT_EQ(RecordKVFormat::DecodedTiKVKeyRangeToDebugString(raw_keys), "[?, ?)");
+    EXPECT_EQ(TiKVKeyRangeToDebugString(raw_keys), "[?, ?)");
 
     Redact::setRedactLog(false); // restore flags
 }

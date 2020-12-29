@@ -408,8 +408,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
                     if (start_handle == P_INF_HANDLE)
                         --segment_it;
                     else
-                        throw Exception("Failed to locate segment begin with start: "
-                                            + DB::Redact::handleToDebugString(start_handle),
+                        throw Exception("Failed to locate segment begin with start: " + Redact::handleToDebugString(start_handle),
                                         ErrorCodes::LOGICAL_ERROR);
                 }
                 segment = segment_it->second;
@@ -501,8 +500,7 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
                     if (start_handle == P_INF_HANDLE)
                         --segment_it;
                     else
-                        throw Exception("Failed to locate segment begin with start: "
-                                            + DB::Redact::handleToDebugString(start_handle),
+                        throw Exception("Failed to locate segment begin with start: " + Redact::handleToDebugString(start_handle),
                                         ErrorCodes::LOGICAL_ERROR);
                 }
                 segment = segment_it->second;
@@ -547,8 +545,7 @@ void DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const HandleRa
                     if (start_handle == P_INF_HANDLE)
                         --segment_it;
                     else
-                        throw Exception("Failed to locate segment begin with start: "
-                                            + DB::Redact::handleToDebugString(start_handle),
+                        throw Exception("Failed to locate segment begin with start: " + Redact::handleToDebugString(start_handle),
                                         ErrorCodes::LOGICAL_ERROR);
                 }
                 segment = segment_it->second;
@@ -608,8 +605,7 @@ void DeltaMergeStore::compact(const Context & db_context, const HandleRange & ra
                     if (start_handle == P_INF_HANDLE)
                         --segment_it;
                     else
-                        throw Exception("Failed to locate segment begin with start: "
-                                            + DB::Redact::handleToDebugString(start_handle),
+                        throw Exception("Failed to locate segment begin with start: " + Redact::handleToDebugString(start_handle),
                                         ErrorCodes::LOGICAL_ERROR);
                 }
                 segment = segment_it->second;
@@ -1399,15 +1395,14 @@ void DeltaMergeStore::check(const Context & /*db_context*/)
             throw Exception("Segment [" + DB::toString(segment_id) + "] is expected to have id [" + DB::toString(next_segment_id) + "]");
         }
         if (last_end != range.start)
-            throw Exception("Segment [" + DB::toString(segment_id) + "] range start[" + DB::Redact::handleToDebugString(range.start)
-                            + "] is not equal to last_end[" + DB::Redact::handleToDebugString(last_end) + "]");
+            throw Exception("Segment [" + DB::toString(segment_id) + "] range start[" + Redact::handleToDebugString(range.start)
+                            + "] is not equal to last_end[" + Redact::handleToDebugString(last_end) + "]");
 
         last_end        = end;
         next_segment_id = segment->nextSegmentId();
     }
     if (last_end != P_INF_HANDLE)
-        throw Exception("Last segment range end[" + DB::Redact::handleToDebugString(last_end)
-                        + "] is not equal to P_INF_HANDLE");
+        throw Exception("Last segment range end[" + Redact::handleToDebugString(last_end) + "] is not equal to P_INF_HANDLE");
 }
 
 BlockPtr DeltaMergeStore::getHeader() const
@@ -1645,7 +1640,7 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(DMContext &          dm_c
         if (range_it->start == P_INF_HANDLE)
             --seg_it;
         else
-            throw Exception("Failed to locate segment begin with start: " + DB::Redact::handleToDebugString(range_it->start),
+            throw Exception("Failed to locate segment begin with start: " + Redact::handleToDebugString(range_it->start),
                             ErrorCodes::LOGICAL_ERROR);
     }
 

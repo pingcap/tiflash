@@ -56,8 +56,7 @@ public:
             }
             else
             {
-                throw TiFlashException("Found overlap ranges: " + DB::Redact::handleToDebugString(prev) + ", "
-                                           + DB::Redact::handleToDebugString(current),
+                throw TiFlashException("Found overlap ranges: " + prev.toDebugString() + ", " + current.toDebugString(),
                                        Errors::Coprocessor::BadRequest);
             }
         }
