@@ -101,6 +101,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_, TiFlashMe
                 current = &current->topn().child();
                 break;
             case tipb::ExecType::TypeExchangeSender:
+                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_exchange_sender).Increment();
                 assignOrThrowException(&exchangeSender, current, EXCHANGE_SENDER_NAME);
                 exchangeServer_name = current->executor_id();
                 current = &current->exchange_sender().child();
@@ -125,7 +126,11 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_, TiFlashMe
         children.push_back(std::make_shared<DAGQueryBlock>(id * 2, source->join().children(0), metrics));
         children.push_back(std::make_shared<DAGQueryBlock>(id * 2 + 1, source->join().children(1), metrics));
     }
-    else
+    else if (current->tp() == tipb::ExecType::TypeExchangeReceiver)
+    {
+        GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_exchange_receiver).Increment();
+    }
+    else if (current->tp() == tipb::ExecType::TypeTableScan)
     {
         GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_ts).Increment();
     }
