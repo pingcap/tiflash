@@ -21,6 +21,9 @@ extern const Metric StoreSizeUsed;
 
 namespace DB
 {
+
+inline size_t safeGetQuota(const std::vector<size_t> & quotas, size_t idx) { return idx < quotas.size() ? quotas[idx] : 0; }
+
 PathCapacityMetrics::PathCapacityMetrics(                                        //
     const size_t capacity_quota_,                                                // will be ignored if `main_capacity_quota` is not empty
     const Strings & main_paths_, const std::vector<size_t> main_capacity_quota_, //
@@ -38,23 +41,21 @@ PathCapacityMetrics::PathCapacityMetrics(                                       
     std::map<String, size_t> all_paths;
     for (size_t i = 0; i < main_paths_.size(); ++i)
     {
-        if (i >= main_capacity_quota_.size())
-            all_paths[main_paths_[i]] = 0;
-        else
-            all_paths[main_paths_[i]] = main_capacity_quota_[i];
+        all_paths[main_paths_[i]] = safeGetQuota(main_capacity_quota_, i);
     }
     for (size_t i = 0; i < latest_paths_.size(); ++i)
     {
         if (auto iter = all_paths.find(latest_paths_[i]); iter != all_paths.end())
         {
-            if (iter->second == 0 || latest_capacity_quota_[i] == 0)
+            // If we have set a unlimited quota for this path, then we keep it limited, else use the bigger quota
+            if (iter->second == 0 || safeGetQuota(latest_capacity_quota_, i) == 0)
                 iter->second = 0;
             else
-                iter->second = std::max(iter->second, latest_capacity_quota_[i]);
+                iter->second = std::max(iter->second, safeGetQuota(latest_capacity_quota_, i));
         }
         else
         {
-            all_paths[latest_paths_[i]] = latest_capacity_quota_[i];
+            all_paths[latest_paths_[i]] = safeGetQuota(latest_capacity_quota_, i);
         }
     }
 
