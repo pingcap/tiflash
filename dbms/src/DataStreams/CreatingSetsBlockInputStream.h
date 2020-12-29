@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/MemoryTracker.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/ExpressionAnalyzer.h> /// SubqueriesForSets
 #include <Poco/Logger.h>
@@ -56,7 +57,7 @@ private:
     Logger * log = &Logger::get("CreatingSetsBlockInputStream");
 
     void createAll();
-    void createOne(SubqueryForSet & subquery);
+    void createOne(SubqueryForSet & subquery, MemoryTracker * memory_tracker);
 };
 
 } // namespace DB

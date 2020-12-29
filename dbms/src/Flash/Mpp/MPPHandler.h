@@ -12,6 +12,7 @@
 #include <thread>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <Common/MemoryTracker.h>
 #include <kvproto/mpp.pb.h>
 #include <kvproto/tikvpb.grpc.pb.h>
 #pragma GCC diagnostic pop
@@ -233,7 +234,7 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
 
     void unregisterTask();
 
-    void runImpl(BlockIO io);
+    void runImpl(BlockIO io, MemoryTracker * memory_tracker);
 
     void writeErrToAllTunnel(const String & e)
     {
@@ -260,7 +261,7 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
 
     void run(BlockIO io)
     {
-        std::thread worker(&MPPTask::runImpl, this, io);
+        std::thread worker(&MPPTask::runImpl, this, io, current_memory_tracker);
         worker.detach();
     }
 

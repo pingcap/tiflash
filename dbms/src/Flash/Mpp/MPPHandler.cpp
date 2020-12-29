@@ -102,9 +102,9 @@ BlockIO MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     return streams;
 }
 
-void MPPTask::runImpl(BlockIO io)
+void MPPTask::runImpl(BlockIO io, MemoryTracker * memory_tracker)
 {
-
+    current_memory_tracker = memory_tracker;
     Stopwatch stopwatch;
     LOG_INFO(log, "task starts running");
     auto from = io.in;

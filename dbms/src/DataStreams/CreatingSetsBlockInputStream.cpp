@@ -100,7 +100,7 @@ void CreatingSetsBlockInputStream::createAll()
                     if (isCancelledOrThrowIfKilled())
                         return;
 
-                    workers.push_back(std::thread(&CreatingSetsBlockInputStream::createOne, this, std::ref(elem.second)));
+                    workers.push_back(std::thread(&CreatingSetsBlockInputStream::createOne, this, std::ref(elem.second), current_memory_tracker));
                 }
             }
         }
@@ -113,8 +113,9 @@ void CreatingSetsBlockInputStream::createAll()
     }
 }
 
-void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
+void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery, MemoryTracker * memory_tracker)
 {
+    current_memory_tracker = memory_tracker;
     LOG_TRACE(log,
         (subquery.set ? "Creating set. " : "") << (subquery.join ? "Creating join. " : "")
                                                << (subquery.table ? "Filling temporary table. " : "") << " for task "
