@@ -109,8 +109,6 @@ bool typeDiffers(const TiDB::ColumnInfo & a, const TiDB::ColumnInfo & b)
             return true;
         for (size_t i = 0; i < a.elems.size(); i++)
         {
-            // todo should use collation info, but seems TiDB does not use collation info, so
-            //  just ignore collation
             if (a.elems[i].first != b.elems[i].first)
                 return true;
         }
