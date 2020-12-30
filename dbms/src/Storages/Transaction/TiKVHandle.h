@@ -161,7 +161,7 @@ inline std::string TiKVKeyRangeToDebugString(const DB::HandleRange<HandleType> &
     std::stringstream ss;
     ss << "[";
     key_range.first.toDebugString(ss);
-    ss << ",";
+    ss << ", ";
     key_range.second.toDebugString(ss);
     ss << ")";
 
