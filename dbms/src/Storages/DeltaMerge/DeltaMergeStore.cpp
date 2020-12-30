@@ -93,14 +93,14 @@ bool DeltaMergeStore::MergeDeltaTaskPool::addTask(const BackgroundTask & task, c
     std::scoped_lock lock(mutex);
     switch (task.type)
     {
-    case Split:
-    case Merge:
-    case MergeDelta:
+    case TaskType::Split:
+    case TaskType::Merge:
+    case TaskType::MergeDelta:
         heavy_tasks.push(task);
         return true;
-    case Compact:
-    case Flush:
-    case PlaceIndex:
+    case TaskType::Compact:
+    case TaskType::Flush:
+    case TaskType::PlaceIndex:
         light_tasks.push(task);
         return false;
     default:
@@ -1111,8 +1111,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
 
     bool should_background_merge_delta = ((delta_check_rows >= delta_limit_rows || delta_check_bytes >= delta_limit_bytes) //
                                           && (delta_rows - delta_last_try_merge_delta_rows >= delta_cache_limit_rows
-                                              || delta_bytes - delta_last_try_merge_delta_bytes >= delta_cache_limit_bytes))
-        || delta_deletes >= 2;
+                                              || delta_bytes - delta_last_try_merge_delta_bytes >= delta_cache_limit_bytes));
     bool should_foreground_merge_delta_by_rows_or_bytes
         = delta_check_rows >= forceMergeDeltaRows(dm_context) || delta_check_bytes >= forceMergeDeltaBytes(dm_context);
     bool should_foreground_merge_delta_by_deletes = delta_deletes >= forceMergeDeltaDeletes(dm_context);
@@ -1169,6 +1168,8 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         }
     }
 
+    // Need to check the latest delta (maybe updated after foreground flush). If it is updating by another thread,
+    // give up adding more tasks on this version of delta.
     if (segment->getDelta()->isUpdating())
         return;
 
@@ -1202,7 +1203,6 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         }
         return next_segment;
     };
-    SegmentPtr merge_sibling;
 
     auto try_fg_merge_delta = [&]() -> SegmentPtr {
         if (should_foreground_merge_delta_by_rows_or_bytes || should_foreground_merge_delta_by_deletes)
@@ -1257,6 +1257,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         return false;
     };
     auto try_bg_merge = [&]() {
+        SegmentPtr merge_sibling;
         if (should_merge && (merge_sibling = getMergeSibling()))
         {
             try_add_background_task(BackgroundTask{TaskType::Merge, dm_context, segment, merge_sibling});
@@ -1292,8 +1293,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         if (try_fg_split(segment))
             return;
 
-        SegmentPtr new_segment;
-        if ((new_segment = try_fg_merge_delta()))
+        if (SegmentPtr new_segment = try_fg_merge_delta(); new_segment)
         {
             // After merge delta, we better check split immediately.
             if (try_bg_split(new_segment))
@@ -1352,15 +1352,15 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
     {
         switch (task.type)
         {
-        case Split:
+        case TaskType::Split:
             std::tie(left, right) = segmentSplit(*task.dm_context, task.segment, false);
             type                  = ThreadType::BG_Split;
             break;
-        case Merge:
+        case TaskType::Merge:
             segmentMerge(*task.dm_context, task.segment, task.next_segment, false);
             type = ThreadType::BG_Merge;
             break;
-        case MergeDelta: {
+        case TaskType::MergeDelta: {
             FAIL_POINT_PAUSE(FailPoints::pause_before_dt_background_delta_merge);
             left = segmentMergeDelta(*task.dm_context, task.segment, TaskRunThread::Thread_BG_Thread_Pool);
             type = ThreadType::BG_MergeDelta;
@@ -1368,19 +1368,19 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
             FailPointHelper::disableFailPoint(FailPoints::pause_until_dt_background_delta_merge);
             break;
         }
-        case Compact:
+        case TaskType::Compact:
             task.segment->compactDelta(*task.dm_context);
             left = task.segment;
             type = ThreadType::BG_Compact;
             break;
-        case Flush:
+        case TaskType::Flush:
             task.segment->flushCache(*task.dm_context);
             // After flush cache, better place delta index.
             task.segment->placeDeltaIndex(*task.dm_context);
             left = task.segment;
             type = ThreadType::BG_Flush;
             break;
-        case PlaceIndex:
+        case TaskType::PlaceIndex:
             task.segment->placeDeltaIndex(*task.dm_context);
             break;
         default:
@@ -1390,7 +1390,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
     catch (const Exception & e)
     {
         LOG_ERROR(log,
-                  "Task " << toString(task.type) << " on Segment [" << task.segment->segmentId()
+                  "Task " << DeltaMergeStore::toString(task.type) << " on Segment [" << task.segment->segmentId()
                           << ((bool)task.next_segment ? ("] and [" + DB::toString(task.next_segment->segmentId())) : "")
                           << "] failed. Error msg: " << e.message());
         e.rethrow();
@@ -1401,6 +1401,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
         throw;
     }
 
+    // continue to check whether we need to apply more tasks after this task is ended.
     if (left)
         checkSegmentUpdate(task.dm_context, left, type);
     if (right)
@@ -1432,6 +1433,16 @@ bool shouldCompact(const SegmentPtr & seg, DB::Timestamp gc_safepoint, double ra
         return true;
     return false;
 }
+
+bool shouldCompactWithStable(const DMContext & context, const SegmentSnapshotPtr & snap)
+{
+    auto delete_range                = snap->delta->getSquashDeleteRange();
+    auto [delete_rows, delete_bytes] = snap->stable->getApproxRowsAndBytes(context, delete_range);
+
+    // TODO: magic number of 0.8
+    bool should_compact = (delete_rows > snap->stable->getRows() * 0.8) || (delete_bytes > snap->stable->getBytes() * 0.8);
+    return should_compact;
+}
 } // namespace GC
 
 UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
@@ -1462,10 +1473,13 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
     Int64  gc_segments_num    = 0;
     while (gc_segments_num < limit)
     {
-        SegmentPtr segment;
         // If the store is shut down, give up running GC on it.
         if (shutdown_called.load(std::memory_order_relaxed))
             break;
+
+        auto               dm_context = newDMContext(global_context, global_context.getSettingsRef());
+        SegmentPtr         segment;
+        SegmentSnapshotPtr segment_snap;
         {
             std::shared_lock lock(read_write_mutex);
 
@@ -1480,12 +1494,11 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
 
             segment           = segment_it->second;
             next_gc_check_key = segment_it->first.toRowKeyValue();
+            segment_snap      = segment->createSnapshot(*dm_context, /* for_update */ true);
         }
 
-        if (segment->hasAbandoned())
-            continue;
-
-        if (segment->getLastCheckGCSafePoint() >= gc_safe_point)
+        assert(segment != nullptr);
+        if (segment->hasAbandoned() || segment->getLastCheckGCSafePoint() >= gc_safe_point || segment_snap == nullptr)
             continue;
 
         const auto  segment_id    = segment->segmentId();
@@ -1504,9 +1517,8 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         // On the other hand, if it should do DeltaMerge using this gc_safe_point, and the DeltaMerge is interruptted by other process,
         // it's still worth to wait another gc_safe_point to check this segment again.
         segment->setLastCheckGCSafePoint(gc_safe_point);
-
-        auto dm_context         = newDMContext(global_context, global_context.getSettingsRef());
         dm_context->min_version = gc_safe_point;
+
         // calculate StableProperty if needed
         if (!segment->getStable()->isStablePropertyCached())
             segment->getStable()->calculateStableProperty(*dm_context, segment_range, isCommonHandle());
@@ -1519,12 +1531,10 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
             bool finish_gc_on_segment = false;
             if (should_compact)
             {
-                ThreadType type = ThreadType::BG_GC;
-                segment         = segmentMergeDelta(*dm_context, segment, TaskRunThread::Thread_BG_GC);
-                if (segment)
+                if (segment = segmentMergeDelta(*dm_context, segment, TaskRunThread::Thread_BG_GC); segment)
                 {
                     // Continue to check whether we need to apply more tasks on this segment
-                    checkSegmentUpdate(dm_context, segment, type);
+                    checkSegmentUpdate(dm_context, segment, ThreadType::BG_GC);
                     gc_segments_num++;
                     finish_gc_on_segment = true;
                     LOG_INFO(log,
@@ -1561,7 +1571,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     {
         std::shared_lock lock(read_write_mutex);
 
-        if (!isSegmentValid(segment))
+        if (!isSegmentValid(lock, segment))
         {
             LOG_DEBUG(log, "Give up segment [" << segment->segmentId() << "] split");
             return {};
@@ -1613,7 +1623,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     {
         std::unique_lock lock(read_write_mutex);
 
-        if (!isSegmentValid(segment))
+        if (!isSegmentValid(lock, segment))
         {
             LOG_DEBUG(log, "Give up segment [" << segment->segmentId() << "] split");
             wbs.setRollback();
@@ -1684,12 +1694,12 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
     {
         std::shared_lock lock(read_write_mutex);
 
-        if (!isSegmentValid(left))
+        if (!isSegmentValid(lock, left))
         {
             LOG_DEBUG(log, "Give up merge segments left [" << left->segmentId() << "], right [" << right->segmentId() << "]");
             return;
         }
-        if (!isSegmentValid(right))
+        if (!isSegmentValid(lock, right))
         {
             LOG_DEBUG(log, "Give up merge segments left [" << left->segmentId() << "], right [" << right->segmentId() << "]");
             return;
@@ -1728,7 +1738,7 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
     {
         std::unique_lock lock(read_write_mutex);
 
-        if (!isSegmentValid(left) || !isSegmentValid(right))
+        if (!isSegmentValid(lock, left) || !isSegmentValid(lock, right))
         {
             LOG_DEBUG(log, "Give up merge segments left [" << left->segmentId() << "], right [" << right->segmentId() << "]");
             wbs.setRollback();
@@ -1771,23 +1781,29 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
         check(dm_context.db_context);
 }
 
-SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const SegmentPtr & segment, const TaskRunThread run_thread)
+SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext &         dm_context,
+                                              const SegmentPtr &  segment,
+                                              const TaskRunThread run_thread,
+                                              SegmentSnapshotPtr  segment_snap)
 {
     LOG_DEBUG(log, toString(run_thread) << " merge delta, segment [" << segment->segmentId() << "], safe point:" << dm_context.min_version);
 
-    SegmentSnapshotPtr segment_snap;
-    ColumnDefinesPtr   schema_snap;
+    ColumnDefinesPtr schema_snap;
+
     {
         std::shared_lock lock(read_write_mutex);
 
-        if (!isSegmentValid(segment))
+        if (!isSegmentValid(lock, segment))
         {
             LOG_DEBUG(log, "Give up merge delta, segment [" << segment->segmentId() << "]");
             return {};
         }
 
-        segment_snap = segment->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
+        // Try to generate a new snapshot if there is no pre-allocated one
         if (!segment_snap)
+            segment_snap = segment->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
+
+        if (unlikely(!segment_snap))
         {
             LOG_DEBUG(log, "Give up merge delta, segment [" << segment->segmentId() << "]");
             return {};
@@ -1849,7 +1865,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
     {
         std::unique_lock read_write_lock(read_write_mutex);
 
-        if (!isSegmentValid(segment))
+        if (!isSegmentValid(read_write_lock, segment))
         {
             LOG_DEBUG(log, "Give up merge delta, segment [" << segment->segmentId() << "]");
             wbs.setRollback();
@@ -1894,7 +1910,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
     return new_segment;
 }
 
-bool DeltaMergeStore::isSegmentValid(const SegmentPtr & segment)
+bool DeltaMergeStore::doIsSegmentValid(const SegmentPtr & segment)
 {
     if (segment->hasAbandoned())
     {

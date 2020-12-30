@@ -153,7 +153,6 @@ try
         {
             // flush segment
             segment = segment->mergeDelta(dmContext(), tableColumns());
-            ;
         }
 
         {
@@ -372,9 +371,9 @@ try
 
     if (merge_delta_after_delete)
     {
-        // flush segment for apply delete range
+        // flush cache before applying merge delete range or the delete range will not be compacted to stable
+        segment->flushCache(dmContext());
         segment = segment->mergeDelta(dmContext(), tableColumns());
-        ;
     }
 
     {
@@ -393,6 +392,25 @@ try
                     EXPECT_EQ(c->getInt(1), 99);
                 }
             }
+        }
+        in->readSuffix();
+    }
+
+    // For the case that apply merge delta after delete range, we ensure that data on disk are compacted
+    if (merge_delta_after_delete)
+    {
+        // read raw after delete range
+        auto in = segment->getInputStreamRaw(dmContext(), *tableColumns());
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            // Only 2 rows are left on disk, others are compacted.
+            ASSERT_EQ(block.rows(), 2UL);
+            // auto pk_col  = block.getByName(DMTestEnv::pk_name);
+            // auto ver_col = block.getByName(VERSION_COLUMN_NAME);
+            // auto tag_col = block.getByName(TAG_COLUMN_NAME);
+            // for (size_t i = 0; i < block.rows(); ++i)
+            //     std::cerr << pk_col.column->getInt(i) << "," << ver_col.column->getInt(i) << "," << tag_col.column->getInt(i) << std::endl;
         }
         in->readSuffix();
     }
@@ -425,9 +443,8 @@ try
     }
 
     {
-        // flush segment
+        // merge delta to create stable
         segment = segment->mergeDelta(dmContext(), tableColumns());
-        ;
     }
 
     {
@@ -439,14 +456,13 @@ try
 
         // flush segment
         segment = segment->mergeDelta(dmContext(), tableColumns());
-        ;
     }
 
     if (merge_delta_after_delete)
     {
-        // flush segment for apply delete range
+        // flush cache before applying merge delete range or the delete range will not be compacted to stable
+        segment->flushCache(dmContext());
         segment = segment->mergeDelta(dmContext(), tableColumns());
-        ;
     }
 
     {
@@ -468,6 +484,25 @@ try
         }
         in->readSuffix();
     }
+
+    // For the case that apply merge delta after delete range, we ensure that data on disk are compacted
+    if (merge_delta_after_delete)
+    {
+        // read raw after delete range
+        auto in = segment->getInputStreamRaw(dmContext(), *tableColumns());
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            // Only 2 rows are left on disk, others are compacted.
+            ASSERT_EQ(block.rows(), 2UL);
+            // auto pk_col  = block.getByName(DMTestEnv::pk_name);
+            // auto ver_col = block.getByName(VERSION_COLUMN_NAME);
+            // auto tag_col = block.getByName(TAG_COLUMN_NAME);
+            // for (size_t i = 0; i < block.rows(); ++i)
+            //     std::cerr << pk_col.column->getInt(i) << "," << ver_col.column->getInt(i) << "," << tag_col.column->getInt(i) << std::endl;
+        }
+        in->readSuffix();
+    }
 }
 CATCH
 
@@ -481,7 +516,6 @@ try
         segment->write(dmContext(), std::move(block));
         // flush [0, 50) to segment's stable
         segment = segment->mergeDelta(dmContext(), tableColumns());
-        ;
     }
 
     auto [read_before_delete, merge_delta_after_delete] = GetParam();
@@ -516,9 +550,9 @@ try
 
     if (merge_delta_after_delete)
     {
-        // flush segment for apply delete range
+        // flush cache before applying merge delete range or the delete range will not be compacted to stable
+        segment->flushCache(dmContext());
         segment = segment->mergeDelta(dmContext(), tableColumns());
-        ;
     }
 
     {
@@ -540,6 +574,25 @@ try
         }
         in->readSuffix();
     }
+
+    // For the case that apply merge delta after delete range, we ensure that data on disk are compacted
+    if (merge_delta_after_delete)
+    {
+        // read raw after delete range
+        auto in = segment->getInputStreamRaw(dmContext(), *tableColumns());
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            // Only 2 rows are left on disk, others are compacted.
+            ASSERT_EQ(block.rows(), 2UL);
+            // auto pk_col  = block.getByName(DMTestEnv::pk_name);
+            // auto ver_col = block.getByName(VERSION_COLUMN_NAME);
+            // auto tag_col = block.getByName(TAG_COLUMN_NAME);
+            // for (size_t i = 0; i < block.rows(); ++i)
+            //     std::cerr << pk_col.column->getInt(i) << "," << ver_col.column->getInt(i) << "," << tag_col.column->getInt(i) << std::endl;
+        }
+        in->readSuffix();
+    }
 }
 CATCH
 
@@ -555,18 +608,25 @@ try
     }
 
     {
-        // flush segment
+        // do delta-merge move data to stable
         segment = segment->mergeDelta(dmContext(), tableColumns());
-        ;
     }
+
+    auto check_segment_squash_delete_range = [this](SegmentPtr & segment, const HandleRange & expect_range) {
+        // set `is_update=false` to get full squash delete range
+        auto snap         = segment->createSnapshot(dmContext(), /*for_update*/ false);
+        auto squash_range = snap->delta->getSquashDeleteRange();
+        ASSERT_ROWKEY_RANGE_EQ(squash_range, RowKeyRange::fromHandleRange(expect_range));
+    };
 
     {
         // Test delete range [70, 100)
         HandleRange del{70, 100};
         segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
-        // flush segment
+        SCOPED_TRACE("check after range: " + del.toDebugString()); // Add trace msg when ASSERT failed
+        check_segment_squash_delete_range(segment, HandleRange{70, 100});
+
         segment = segment->mergeDelta(dmContext(), tableColumns());
-        ;
     }
 
     {
@@ -596,9 +656,10 @@ try
         // Test delete range [63, 70)
         HandleRange del{63, 70};
         segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
-        // flush segment
+        SCOPED_TRACE("check after range: " + del.toDebugString());
+        check_segment_squash_delete_range(segment, HandleRange{63, 100});
+
         segment = segment->mergeDelta(dmContext(), tableColumns());
-        ;
     }
 
     {
@@ -627,9 +688,9 @@ try
         // Test delete range [1, 32)
         HandleRange del{1, 32};
         segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
-        // flush segment
+        SCOPED_TRACE("check after range: " + del.toDebugString());
+        check_segment_squash_delete_range(segment, HandleRange{1, 100});
         segment = segment->mergeDelta(dmContext(), tableColumns());
-        ;
     }
 
     {
@@ -657,9 +718,9 @@ try
         // delete should be idempotent
         HandleRange del{1, 32};
         segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
-        // flush segment
+        SCOPED_TRACE("check after range: " + del.toDebugString());
+        check_segment_squash_delete_range(segment, HandleRange{1, 100});
         segment = segment->mergeDelta(dmContext(), tableColumns());
-        ;
     }
 
     {
@@ -687,9 +748,9 @@ try
         // There is an overlap range [0, 1)
         HandleRange del{0, 2};
         segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
-        // flush segment
+        SCOPED_TRACE("check after range: " + del.toDebugString());
+        check_segment_squash_delete_range(segment, HandleRange{0, 100});
         segment = segment->mergeDelta(dmContext(), tableColumns());
-        ;
     }
 
     {
@@ -705,6 +766,36 @@ try
                 if (iter.name == DMTestEnv::pk_name)
                 {
                     EXPECT_EQ(c->getInt(0), 32);
+                }
+            }
+        }
+        in->readSuffix();
+    }
+
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(9, 16, false);
+        segment->write(dmContext(), std::move(block));
+        SCOPED_TRACE("check after write");
+        // if we write some new data, we can still get the delete range
+        check_segment_squash_delete_range(segment, HandleRange{0, 100});
+    }
+
+    {
+        // Read after new write
+        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            ASSERT_EQ(block.rows(), num_rows_write - 33 + 7);
+            for (auto & iter : block)
+            {
+                auto c = iter.column;
+                if (iter.name == DMTestEnv::pk_name)
+                {
+                    EXPECT_EQ(c->getInt(0), 9);
+                    EXPECT_EQ(c->getInt(6), 15);
+                    EXPECT_EQ(c->getInt(7), 32);
+                    EXPECT_EQ(c->getInt(block.rows() - 1), 62);
                 }
             }
         }
@@ -888,7 +979,6 @@ try
         segment->write(dmContext(), std::move(block));
         // flush segment
         segment = segment->mergeDelta(dmContext(), tableColumns());
-        ;
     }
 
     SegmentPtr new_segment = Segment::restoreSegment(dmContext(), segment->segmentId());
@@ -955,7 +1045,6 @@ try
         {
             // flush segment
             segment = segment->mergeDelta(dmContext(), tableColumns());
-            ;
         }
 
         for (size_t i = (num_batches_written - 1) * num_rows_per_write + 2; i < num_batches_written * num_rows_per_write; i++)

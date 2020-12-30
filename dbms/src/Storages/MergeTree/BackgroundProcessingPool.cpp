@@ -1,11 +1,12 @@
-#include <Common/Exception.h>
-#include <Common/setThreadName.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/Exception.h>
 #include <Common/MemoryTracker.h>
 #include <Common/randomSeed.h>
+#include <Common/setThreadName.h>
 #include <IO/WriteHelpers.h>
-#include <common/logger_useful.h>
+#include <Poco/Timespan.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
+#include <common/logger_useful.h>
 
 #include <pcg_random.hpp>
 #include <random>
@@ -13,9 +14,9 @@
 
 namespace CurrentMetrics
 {
-    extern const Metric BackgroundPoolTask;
-    extern const Metric MemoryTrackingInBackgroundProcessingPool;
-}
+extern const Metric BackgroundPoolTask;
+extern const Metric MemoryTrackingInBackgroundProcessingPool;
+} // namespace CurrentMetrics
 
 namespace DB
 {
@@ -66,9 +67,9 @@ BackgroundProcessingPool::BackgroundProcessingPool(int size_) : size(size_)
 }
 
 
-BackgroundProcessingPool::TaskHandle BackgroundProcessingPool::addTask(const Task & task, const bool multi)
+BackgroundProcessingPool::TaskHandle BackgroundProcessingPool::addTask(const Task & task, const bool multi, const size_t interval_ms)
 {
-    TaskHandle res = std::make_shared<TaskInfo>(*this, task, multi);
+    TaskHandle res = std::make_shared<TaskInfo>(*this, task, multi, interval_ms);
 
     Poco::Timestamp current_time;
 
@@ -132,8 +133,9 @@ void BackgroundProcessingPool::threadFunction()
 
     while (!shutdown)
     {
-        bool done_work = false;
         TaskHandle task;
+        // The time to sleep before running next task, `sleep_seconds` by default.
+        Poco::Timespan next_sleep_time_span(sleep_seconds, 0);
 
         try
         {
@@ -163,8 +165,8 @@ void BackgroundProcessingPool::threadFunction()
             {
                 std::unique_lock<std::mutex> lock(tasks_mutex);
                 wake_event.wait_for(lock,
-                    std::chrono::duration<double>(sleep_seconds
-                        + std::uniform_real_distribution<double>(0, sleep_seconds_random_part)(rng)));
+                    std::chrono::duration<double>(
+                        sleep_seconds + std::uniform_real_distribution<double>(0, sleep_seconds_random_part)(rng)));
                 continue;
             }
 
@@ -173,8 +175,9 @@ void BackgroundProcessingPool::threadFunction()
             if (min_time > current_time)
             {
                 std::unique_lock<std::mutex> lock(tasks_mutex);
-                wake_event.wait_for(lock, std::chrono::microseconds(
-                    min_time - current_time + std::uniform_int_distribution<uint64_t>(0, sleep_seconds_random_part * 1000000)(rng)));
+                wake_event.wait_for(lock,
+                    std::chrono::microseconds(
+                        min_time - current_time + std::uniform_int_distribution<uint64_t>(0, sleep_seconds_random_part * 1000000)(rng)));
             }
 
             std::shared_lock<std::shared_mutex> rlock(task->rwlock);
@@ -185,6 +188,7 @@ void BackgroundProcessingPool::threadFunction()
             {
                 CurrentMetrics::Increment metric_increment{CurrentMetrics::BackgroundPoolTask};
 
+                bool done_work = false;
                 if (!task->multi)
                 {
                     bool expected = false;
@@ -198,6 +202,19 @@ void BackgroundProcessingPool::threadFunction()
                 }
                 else
                     done_work = task->function();
+
+                /// If task has done work, it could be executed again immediately.
+                /// If not, add delay before next run.
+                if (done_work)
+                {
+                    next_sleep_time_span = 0;
+                }
+                else if (task->interval_millisecond != 0)
+                {
+                    // Update `next_sleep_time_span` by user-defined interval if the later one is non-zero
+                    next_sleep_time_span = Poco::Timespan(0, /*microseconds=*/task->interval_millisecond * 1000);
+                }
+                // else `sleep_seconds` by default
             }
         }
         catch (...)
@@ -214,9 +231,7 @@ void BackgroundProcessingPool::threadFunction()
         if (shutdown)
             break;
 
-        /// If task has done work, it could be executed again immediately.
-        /// If not, add delay before next run.
-        Poco::Timestamp next_time_to_execute = Poco::Timestamp() + (done_work ? 0 : sleep_seconds * 1000000);
+        Poco::Timestamp next_time_to_execute = Poco::Timestamp() + next_sleep_time_span;
 
         {
             std::unique_lock<std::mutex> lock(tasks_mutex);
@@ -232,4 +247,4 @@ void BackgroundProcessingPool::threadFunction()
     current_memory_tracker = nullptr;
 }
 
-}
+} // namespace DB

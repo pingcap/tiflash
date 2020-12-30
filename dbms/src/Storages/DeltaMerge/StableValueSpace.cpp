@@ -332,15 +332,22 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(const DM
 
 RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range)
 {
-    if (valid_rows == 0)
+    // Avoid unnessary reading IO
+    if (valid_rows == 0 || range.none())
         return {0, 0};
+
     size_t match_packs       = 0;
     size_t total_match_rows  = 0;
     size_t total_match_bytes = 0;
+    // Usually, this method will be called for some "cold" key ranges. Loading the index
+    // into cache may pollute the cache and make the hot index cache invalid. Set the
+    // index cache to nullptr so that the cache won't be polluted.
+    // TODO: We can use the cache if the index happens to exist in the cache, but
+    // don't refill the cache if the index does not exist.
     for (auto & f : stable->files)
     {
-        auto   filter     = DMFilePackFilter::loadFrom(f,
-                                                 context.db_context.getGlobalContext().getMinMaxIndexCache(),
+        auto   filter     = DMFilePackFilter::loadFrom(f, //
+                                                 nullptr,
                                                  context.hash_salt,
                                                  range,
                                                  RSOperatorPtr{},

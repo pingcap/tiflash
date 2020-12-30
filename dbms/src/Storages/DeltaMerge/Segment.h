@@ -138,13 +138,13 @@ public:
                                        size_t                expected_block_size = DEFAULT_BLOCK_SIZE);
 
     /// Return a stream which is suitable for exporting data.
-    ///  reorgize_block: put those rows with the same pk rows into the same block or not.
+    ///  reorganize_block: put those rows with the same pk rows into the same block or not.
     BlockInputStreamPtr getInputStreamForDataExport(const DMContext &          dm_context,
                                                     const ColumnDefines &      columns_to_read,
                                                     const SegmentSnapshotPtr & segment_snap,
                                                     const RowKeyRange &        data_range,
                                                     size_t                     expected_block_size = DEFAULT_BLOCK_SIZE,
-                                                    bool                       reorgnize_block     = true) const;
+                                                    bool                       reorganize_block    = true) const;
 
     BlockInputStreamPtr getInputStreamRaw(const DMContext &          dm_context,
                                           const ColumnDefines &      columns_to_read,

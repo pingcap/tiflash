@@ -147,98 +147,97 @@ public:
     using SegmentSortedMap = std::map<RowKeyValueRef, SegmentPtr, std::less<>>;
     using SegmentMap       = std::unordered_map<PageId, SegmentPtr>;
 
-    enum ThreadType
-    {
-        Init,
-        Write,
-        Read,
-        BG_Split,
-        BG_Merge,
-        BG_MergeDelta,
-        BG_Compact,
-        BG_Flush,
-        BG_GC,
-    };
+#undef APPLY_FOR_ENUM
+#define APPLY_FOR_ENUM(M) \
+    M(Init)               \
+    M(Write)              \
+    M(Read)               \
+    M(BG_Split)           \
+    M(BG_Merge)           \
+    M(BG_MergeDelta)      \
+    M(BG_Compact)         \
+    M(BG_Flush)           \
+    M(BG_GC)
 
-    enum TaskType
+    enum class ThreadType
     {
-        Split,
-        Merge,
-        MergeDelta,
-        Compact,
-        Flush,
-        PlaceIndex,
-    };
-
-    enum TaskRunThread
-    {
-        Thread_BG_Thread_Pool,
-        Thread_FG,
-        Thread_BG_GC,
+#define M(NAME) NAME,
+        APPLY_FOR_ENUM(M)
+#undef M
     };
 
     static std::string toString(ThreadType type)
     {
         switch (type)
         {
-        case Init:
-            return "Init";
-        case Write:
-            return "Write";
-        case Read:
-            return "Read";
-        case BG_Split:
-            return "BG_Split";
-        case BG_Merge:
-            return "BG_Merge";
-        case BG_MergeDelta:
-            return "BG_MergeDelta";
-        case BG_Compact:
-            return "BG_Compact";
-        case BG_Flush:
-            return "BG_Flush";
-        case BG_GC:
-            return "BG_GC";
+#define M(NAME)            \
+    case ThreadType::NAME: \
+        return #NAME;
+            APPLY_FOR_ENUM(M)
+#undef M
         default:
             return "Unknown";
         }
     }
 
-    static std::string toString(TaskRunThread type)
+#undef APPLY_FOR_ENUM
+#define APPLY_FOR_ENUM(M) \
+    M(Split)              \
+    M(Merge)              \
+    M(MergeDelta)         \
+    M(Compact)            \
+    M(Flush)              \
+    M(PlaceIndex)
+
+    enum class TaskType
     {
-        switch (type)
-        {
-        case Thread_BG_Thread_Pool:
-            return "BackgroundThreadPool";
-        case Thread_FG:
-            return "Foreground";
-        case Thread_BG_GC:
-            return "BackgroundGCThread";
-        default:
-            return "Unknown";
-        }
-    }
+#define M(NAME) NAME,
+        APPLY_FOR_ENUM(M)
+#undef M
+    };
 
     static std::string toString(TaskType type)
     {
         switch (type)
         {
-        case Split:
-            return "Split";
-        case Merge:
-            return "Merge";
-        case MergeDelta:
-            return "MergeDelta";
-        case Compact:
-            return "Compact";
-        case Flush:
-            return "Flush";
-        case PlaceIndex:
-            return "PlaceIndex";
+#define M(NAME)          \
+    case TaskType::NAME: \
+        return #NAME;
+            APPLY_FOR_ENUM(M)
+#undef M
         default:
             return "Unknown";
         }
     }
+
+#undef APPLY_FOR_ENUM
+#define APPLY_FOR_ENUM(M)    \
+    M(Thread_BG_Thread_Pool) \
+    M(Thread_FG)             \
+    M(Thread_BG_GC)
+
+    enum class TaskRunThread
+    {
+#define M(NAME) NAME,
+        APPLY_FOR_ENUM(M)
+#undef M
+    };
+
+    static std::string toString(TaskRunThread type)
+    {
+        switch (type)
+        {
+#define M(NAME)               \
+    case TaskRunThread::NAME: \
+        return #NAME;
+            APPLY_FOR_ENUM(M)
+#undef M
+        default:
+            return "Unknown";
+        }
+    }
+
+#undef APPLY_FOR_ENUM
 
     struct BackgroundTask
     {
@@ -360,7 +359,10 @@ public:
     /// Compact fregment packs into bigger one.
     void compact(const Context & context, const RowKeyRange & range);
 
-    /// Apply `commands` on `table_columns`
+    /// Iterator over all segments and apply gc jobs.
+    UInt64 onSyncGc(Int64 limit);
+
+    /// Apply DDL `commands` on `table_columns`
     void applyAlters(const AlterCommands &         commands, //
                      const OptionTableInfoConstRef table_info,
                      ColumnID &                    max_column_id_used,
@@ -383,8 +385,6 @@ public:
     SegmentStats        getSegmentStats();
     bool                isCommonHandle() const { return is_common_handle; }
     size_t              getRowKeyColumnSize() const { return rowkey_column_size; }
-
-    UInt64 onSyncGc(Int64 limit);
 
 public:
     /// Methods mainly used by region split.
@@ -413,13 +413,19 @@ private:
 
     SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
     void        segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right, bool is_foreground);
-    SegmentPtr  segmentMergeDelta(DMContext & dm_context, const SegmentPtr & segment, const TaskRunThread thread);
+    SegmentPtr  segmentMergeDelta(DMContext &         dm_context,
+                                  const SegmentPtr &  segment,
+                                  const TaskRunThread thread,
+                                  SegmentSnapshotPtr  segment_snap = nullptr);
 
     bool updateGCSafePoint();
 
     bool handleBackgroundTask(bool heavy);
 
-    bool isSegmentValid(const SegmentPtr & segment);
+    // isSegmentValid should be protected by lock on `read_write_mutex`
+    inline bool isSegmentValid(std::shared_lock<std::shared_mutex> &, const SegmentPtr & segment) { return doIsSegmentValid(segment); }
+    inline bool isSegmentValid(std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment) { return doIsSegmentValid(segment); }
+    bool        doIsSegmentValid(const SegmentPtr & segment);
 
     void restoreStableFiles();
 
