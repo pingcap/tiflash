@@ -253,7 +253,7 @@ option (ENABLE_MONGODB "Enable MongoDB" OFF)
 option (ENABLE_CPPUNIT "Enable CppUnit" OFF)
 option (POCO_ENABLE_MONGODB "Enable MongoDB in Poco" OFF)
 option (ENABLE_MYSQL_STORAGE "Set to ON to enable mysql storage" OFF)
-message(STATUS "feature odbc: ${ENABLE_ODBC} capnp: ${ENABLE_CAPNP} mysql-storage: ${ENABLE_MYSQL_STOAGE} ")
+message(STATUS "feature odbc: ${ENABLE_ODBC} capnp: ${ENABLE_CAPNP} mysql-storage: ${ENABLE_MYSQL_STORAGE} ")
 
 include (cmake/find_zlib.cmake)
 include (cmake/find_zstd.cmake)
