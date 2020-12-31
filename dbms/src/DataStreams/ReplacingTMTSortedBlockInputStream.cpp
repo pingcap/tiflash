@@ -35,9 +35,9 @@ Block ReplacingTMTSortedBlockInputStream<HandleType>::readImpl()
                 for (size_t i = 0; i < begin_handle_ranges.size(); ++i)
                 {
                     ss << "[";
-                    begin_handle_ranges[i].toString(ss);
+                    begin_handle_ranges[i].toDebugString(ss);
                     ss << ",";
-                    end_handle_ranges[i].toString(ss);
+                    end_handle_ranges[i].toDebugString(ss);
                     ss << ") ";
                 }
             }

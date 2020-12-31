@@ -2,7 +2,7 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TiKVHelper.h>
 #include <Storages/Transaction/TiKVRange.h>
-#include <gtest/gtest.h>
+#include <test_utils/TiflashTestBasic.h>
 
 #include "region_helper.h"
 
@@ -258,7 +258,7 @@ TEST(TiKVKeyValue_test, DISABLED_PortedTests)
         s[0] = char(1);
         s[3] = char(111);
         const auto & key = TiKVKey(s.data(), s.size());
-        ASSERT_TRUE(key.toHex() == "[1 32 33 6f]");
+        ASSERT_EQ(key.toDebugString(), "0132336F");
     }
 
     {
@@ -329,7 +329,7 @@ HandleRange<HandleID> parseTestCase2(std::vector<std::vector<u_char>> && seq)
 std::string rangeToString(const HandleRange<HandleID> & r)
 {
     std::stringstream ss;
-    ss << "[" << r.first.toString() << "," << r.second.toString() << ")";
+    ss << "[" << r.first.toDebugString() << "," << r.second.toDebugString() << ")";
     return ss.str();
 }
 
@@ -366,14 +366,4 @@ try
 
     // clang-format on
 }
-catch (const Exception & e)
-{
-    std::string text = e.displayText();
-
-    auto embedded_stack_trace_pos = text.find("Stack trace");
-    std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
-    if (std::string::npos == embedded_stack_trace_pos)
-        std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl;
-
-    throw;
-}
+CATCH

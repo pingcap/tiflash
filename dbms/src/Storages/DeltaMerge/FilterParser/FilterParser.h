@@ -2,8 +2,6 @@
 
 #include <cassert>
 #include <sstream>
-
-#include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <tipb/expression.pb.h>
 
 namespace DB
@@ -15,6 +13,8 @@ struct DAGQueryInfo;
 
 namespace DM
 {
+class RSOperator;
+using RSOperatorPtr = std::shared_ptr<RSOperator>;
 
 class FilterParser
 {
@@ -31,7 +31,7 @@ public:
                                        AttrCreatorByColumnID && creator,
                                        Poco::Logger *           log);
 
-    /// Some helper structur
+    /// Some helper structure
 
     enum RSFilterType
     {
