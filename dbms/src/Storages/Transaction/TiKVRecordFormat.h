@@ -238,14 +238,14 @@ inline DecodedLockCFValue decodeLockCfValue(const TiKVValue & value)
                 }
                 default:
                 {
-                    std::string msg = std::string() + "invalid flag " + flag + " in lock value " + value.toHex();
+                    std::string msg = std::string() + "invalid flag " + flag + " in lock value " + value.toDebugString();
                     throw Exception(msg, ErrorCodes::LOGICAL_ERROR);
                 }
             }
         }
     }
     if (len != 0)
-        throw Exception("invalid lock value " + value.toHex(), ErrorCodes::LOGICAL_ERROR);
+        throw Exception("invalid lock value " + value.toDebugString(), ErrorCodes::LOGICAL_ERROR);
 
     return std::make_tuple(lock_type, primary, ts, ttl, min_commit_ts);
 }
@@ -290,12 +290,10 @@ inline TiKVValue internalEncodeWriteCfValue(UInt8 write_type, Timestamp ts, cons
     return TiKVValue(res.str());
 }
 
-
 inline TiKVValue encodeWriteCfValue(UInt8 write_type, Timestamp ts, const String & short_value)
 {
     return internalEncodeWriteCfValue(write_type, ts, &short_value);
 }
-
 
 inline TiKVValue encodeWriteCfValue(UInt8 write_type, Timestamp ts) { return internalEncodeWriteCfValue(write_type, ts, nullptr); }
 

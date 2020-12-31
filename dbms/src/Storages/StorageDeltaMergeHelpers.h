@@ -28,7 +28,7 @@ inline DB::HandleID getRangeEndID(const DB::TiKVHandle::Handle<HandleID> & end)
         case DB::TiKVHandle::HandleIDType::MAX:
             return DB::DM::HandleRange::MAX;
         default:
-            throw Exception("Unknown TiKVHandle type: " + end.toString(), ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Unknown TiKVHandle type: " + end.toDebugString(), ErrorCodes::LOGICAL_ERROR);
     }
 }
 } // namespace

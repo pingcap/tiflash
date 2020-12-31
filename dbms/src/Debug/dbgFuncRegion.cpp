@@ -230,7 +230,7 @@ std::string getRegionKeyString(const TiKVRange::Handle s, const TiKVKey & k)
     }
     catch (...)
     {
-        return "e:" + k.toHex();
+        return "e:" + k.toDebugString();
     }
 }
 
@@ -243,7 +243,7 @@ std::string getStartKeyString(TableID table_id, const TiKVKey & start_key)
     }
     catch (...)
     {
-        return "e: " + start_key.toHex();
+        return "e: " + start_key.toDebugString();
     }
 }
 
@@ -256,7 +256,7 @@ std::string getEndKeyString(TableID table_id, const TiKVKey & end_key)
     }
     catch (...)
     {
-        return "e: " + end_key.toHex();
+        return "e: " + end_key.toDebugString();
     }
 }
 
@@ -273,10 +273,7 @@ void dbgFuncDumpAllRegion(Context & context, TableID table_id, bool ignore_none,
             return;
 
         ss << region->toString(dump_status);
-        if (range.first >= range.second)
-            ss << " [none], ";
-        else
-            ss << " ranges: [" << range.first.toString() << ", " << range.second.toString() << "), ";
+        ss << " ranges: " << DB::TiKVKeyRangeToDebugString(range) << ", ";
         ss << "state: " << raft_serverpb::PeerState_Name(region->peerState());
         if (auto s = region->dataInfo(); s.size() > 2)
             ss << ", " << s;

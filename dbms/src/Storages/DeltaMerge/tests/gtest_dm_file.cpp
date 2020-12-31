@@ -359,7 +359,7 @@ try
                     for (size_t i = 0; i < c->size(); i++)
                     {
                         EXPECT_EQ(c->getInt(i), expect_first_pk + Int64(i))
-                            << "range: " << range.toString() << ", i: " << i << ", first pk: " << expect_first_pk;
+                            << "range: " << range.toDebugString() << ", i: " << i << ", first pk: " << expect_first_pk;
                         // std::cerr << c->getInt(i) << std::endl;
                         num_rows_read++;
                     }
@@ -368,7 +368,7 @@ try
         }
         stream->readSuffix();
         ASSERT_EQ(num_rows_read, expect_last_pk - expect_first_pk) //
-            << "range: " << range.toString()                       //
+            << "range: " << range.toDebugString()                       //
             << ", first: " << expect_first_pk << ", last: " << expect_last_pk;
     }
 }
@@ -461,7 +461,7 @@ try
                     for (size_t i = 0; i < c->size(); i++)
                     {
                         EXPECT_EQ(c->getInt(i), expect_first_pk + Int64(i))
-                            << "range: " << range.toString() << ", i: " << i << ", first pk: " << expect_first_pk;
+                            << "range: " << range.toDebugString() << ", i: " << i << ", first pk: " << expect_first_pk;
                         // std::cerr << c->getInt(i) << std::endl;
                         num_rows_read++;
                     }
@@ -470,7 +470,7 @@ try
         }
         stream->readSuffix();
         ASSERT_EQ(num_rows_read, expect_last_pk - expect_first_pk) //
-            << "range: " << range.toString()                       //
+            << "range: " << range.toDebugString()                  //
             << ", first: " << expect_first_pk << ", last: " << expect_last_pk;
     }
 }

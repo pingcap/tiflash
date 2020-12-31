@@ -24,11 +24,11 @@ public:
 
     Attrs getAttrs() override { return {attr}; }
 
-    String toString() override
+    String toDebugString() override
     {
         String s = R"({"op":")" + name() + R"(","col":")" + attr.col_name + R"(","value":"[)";
         for (auto & v : values)
-            s += "\"" + applyVisitor(FieldVisitorToString(), v) + "\",";
+            s += "\"" + applyVisitor(FieldVisitorToDebugString(), v) + "\",";
         s.pop_back();
         return s + "]}";
     };
