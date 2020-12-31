@@ -90,6 +90,28 @@ using ColumnInfosModifier = std::function<void(ColumnInfos & column_infos)>;
 using SchemaChange = std::pair<AlterCommands, ColumnInfosModifier>;
 using SchemaChanges = std::vector<SchemaChange>;
 
+bool typeDiffers(const TiDB::ColumnInfo & a, const TiDB::ColumnInfo & b)
+{
+    if (a.tp != b.tp || a.hasNotNullFlag() != b.hasNotNullFlag() || a.hasUnsignedFlag() != b.hasUnsignedFlag())
+        return true;
+    if (a.tp == TypeEnum || a.tp == TypeSet)
+    {
+        if (a.elems.size() != b.elems.size())
+            return true;
+        for (size_t i = 0; i < a.elems.size(); i++)
+        {
+            if (a.elems[i].first != b.elems[i].first)
+                return true;
+        }
+        return false;
+    }
+    else if (a.tp == TypeNewDecimal)
+    {
+        return a.flen != b.flen || a.decimal != b.decimal;
+    }
+    return false;
+}
+
 /// When schema change detected, the modification to original table info must be preserved as well.
 /// With the preserved table info modifications, table info changes along with applying alter commands.
 /// In other words, table info and storage structure (altered by applied alter commands) are always identical,
@@ -186,8 +208,7 @@ inline SchemaChanges detectSchemaChanges(Logger * log, Context & context, const 
                       if (column_info_.id == orig_column_info.id && column_info_.name != orig_column_info.name)
                           LOG_INFO(log, "detect column " << orig_column_info.name << " rename to " << column_info_.name);
 
-                      return column_info_.id == orig_column_info.id
-                          && (column_info_.tp != orig_column_info.tp || column_info_.hasNotNullFlag() != orig_column_info.hasNotNullFlag());
+                      return column_info_.id == orig_column_info.id && typeDiffers(column_info_, orig_column_info);
                   });
 
             if (column_info != table_info.columns.end())
