@@ -370,6 +370,7 @@ String DAGExpressionAnalyzer::applyFunction(
     actions->add(apply_function);
     return result_name;
 }
+
 void DAGExpressionAnalyzer::appendWhere(
     ExpressionActionsChain & chain, const std::vector<const tipb::Expr *> & conditions, String & filter_column_name)
 {
