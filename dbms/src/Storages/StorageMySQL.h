@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Common/config.h>
 #if USE_MYSQL
+#include <Common/config.h>
 
 #include <ext/shared_ptr_helper.h>
 

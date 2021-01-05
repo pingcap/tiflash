@@ -1,6 +1,6 @@
-#include <Storages/StorageMySQL.h>
 
 #if USE_MYSQL
+#include <Storages/StorageMySQL.h>
 #include <Storages/StorageFactory.h>
 #include <Storages/transformQueryForExternalDatabase.h>
 #include <Dictionaries/MySQLBlockInputStream.h>
