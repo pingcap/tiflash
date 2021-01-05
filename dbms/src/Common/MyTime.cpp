@@ -1302,14 +1302,14 @@ void MyDateTimeFormatter::init()
                                 .append(int_to_2_width_string[datetime.second])
                                 .append(" PM");
                         else if (h < 12)
-                            result.append(int_to_2_width_string[datetime.hour % 24])
+                            result.append(int_to_2_width_string[h])
                                 .append(":")
                                 .append(int_to_2_width_string[datetime.minute])
                                 .append(":")
                                 .append(int_to_2_width_string[datetime.second])
                                 .append(" AM");
                         else
-                            result.append(int_to_2_width_string[datetime.hour % 24])
+                            result.append(int_to_2_width_string[h - 12])
                                 .append(":")
                                 .append(int_to_2_width_string[datetime.minute])
                                 .append(":")
