@@ -1,21 +1,9 @@
-mysql> use test;
-mysql> drop table if exists t;
-mysql> create table t (id int, value decimal(6,3));
-mysql> alter table t set tiflash replica 1;
-mysql> insert into t values(1,2.3),(3,4.5),(5,6.7);
-
-func> wait_table test t
-
-mysql> use test;  set @@tidb_opt_broadcast_join=1; select id+1, value+1 from t order by id;
-+------+---------+
-| id+1 | value+1 |
-+------+---------+
-|    2 |   3.300 |
-|    4 |   5.500 |
-|    6 |   7.700 |
-+------+---------+
-
-mysql> insert into t values(null,null),(1,null),(null,3.3);
+mysql> drop table if exists test.t;
+mysql> create table test.t (id int, value decimal(6,3));
+mysql> alter table test.t set tiflash replica 1;
+mysql> insert into test.t values(1,2.3),(3,4.5),(5,6.7);
+mysql> insert into test.t values(null,null),(1,null),(null,3.3);
+mysql> analyze table test.t;
 
 func> wait_table test t
 
@@ -31,16 +19,12 @@ mysql> use test;  set @@tidb_opt_broadcast_join=1; select id+1, value+1 from t o
 |    6 |   7.700 |
 +------+---------+
 
-func> wait_table test t
-
 mysql> use test;  set @@tidb_opt_broadcast_join=1; select /*+ hash_agg()*/count(a) from  (select id +1 as a from t)A;
 +----------+
 | count(a) |
 +----------+
 |        4 |
 +----------+
-
-func> wait_table test t
 
 mysql> use test;  set @@tidb_opt_broadcast_join=1; select A.b from t join (select id-2 as b from t) A on A.b=t.id;
 +---+
@@ -51,16 +35,12 @@ mysql> use test;  set @@tidb_opt_broadcast_join=1; select A.b from t join (selec
 | 1 |
 +---+
 
-func> wait_table test t
-
 mysql> use test;  set @@tidb_opt_broadcast_join=1; select /*+ hash_agg()*/ sum(b) from  (select id + 1 as b from t)A;
 +--------+
 | sum(b) |
 +--------+
 |     14 |
 +--------+
-
-func> wait_table test t
 
 mysql> use test;  set @@tidb_opt_broadcast_join=1; select * from (select id-2 as b from t) B join (select id-2 as b from t) A on A.b=B.b;
 +----+----+
@@ -86,16 +66,12 @@ mysql> use test;  set @@tidb_allow_mpp=1; set @@tidb_opt_broadcast_join=0; selec
 |    6 |   7.700 |
 +------+---------+
 
-func> wait_table test t
-
 mysql> use test;  set @@tidb_allow_mpp=1; set @@tidb_opt_broadcast_join=0; select /*+ hash_agg()*/count(a) from  (select id +1 as a from t)A;
 +----------+
 | count(a) |
 +----------+
 |        4 |
 +----------+
-
-func> wait_table test t
 
 mysql> use test; set @@tidb_allow_mpp=1; set @@tidb_opt_broadcast_join=0; select A.b from t join (select id-2 as b from t) A on A.b=t.id;
 +---+
@@ -106,16 +82,12 @@ mysql> use test; set @@tidb_allow_mpp=1; set @@tidb_opt_broadcast_join=0; select
 | 1 |
 +---+
 
-func> wait_table test t
-
 mysql> use test; set @@tidb_allow_mpp=1; set @@tidb_opt_broadcast_join=0; select /*+ hash_agg()*/ sum(b) from  (select id + 1 as b from t)A;
 +--------+
 | sum(b) |
 +--------+
 |     14 |
 +--------+
-
-func> wait_table test t
 
 mysql> use test; set @@tidb_allow_mpp=1; set @@tidb_opt_broadcast_join=0; select * from (select id-2 as b from t) B join (select id-2 as b from t) A on A.b=B.b;
 +----+----+
