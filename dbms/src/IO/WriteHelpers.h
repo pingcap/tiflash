@@ -624,12 +624,11 @@ inline void writeDateTimeText(const LocalDateTime & datetime, WriteBuffer & buf)
     }
 }
 
-inline void writeMyDateTimeTextWithFormat(UInt64 packed, WriteBuffer & buf, MyDateTimeFormatter & formatter, String & result_container)
+inline void writeMyDateTimeTextWithFormat(UInt64 packed, WriteBuffer & buf, MyDateTimeFormatter & formatter, String & result)
 {
-    result_container.clear();
-    formatter.format(MyDateTime(packed), result_container);
-    //MyDateTime(packed).dateFormat(format, result_container);
-    buf.write(result_container.c_str(), result_container.size());
+    result.clear();
+    formatter.format(MyDateTime(packed), result);
+    buf.write(result.c_str(), result.size());
 }
 
 inline void writeMyDateTimeText(UInt64 packed, int fsp, WriteBuffer & buf)
