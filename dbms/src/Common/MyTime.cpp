@@ -291,26 +291,10 @@ UInt64 MyTimeBase::toCoreTime() const
 }
 
 // the implementation is the same as TiDB
-String MyTimeBase::dateFormat(const String & layout) const
+void MyTimeBase::dateFormat(const String & layout, String & result) const
 {
-    String result;
-    bool in_pattern_match = false;
-    for (size_t i = 0; i < layout.size(); i++)
-    {
-        char x = layout[i];
-        if (in_pattern_match)
-        {
-            convertDateFormat(x, result);
-            in_pattern_match = false;
-            continue;
-        }
-
-        if (x == '%')
-            in_pattern_match = true;
-        else
-            result.push_back(x);
-    }
-    return result;
+    auto formatter = MyDateTimeFormatter(layout);
+    formatter.format(*this, result);
 }
 
 // the implementation is the same as TiDB
@@ -463,24 +447,224 @@ static const String weekday_names[] = {
     "Saturday",
 };
 
-String abbrDayOfMonth(int day)
-{
-    switch (day)
-    {
-        case 1:
-        case 21:
-        case 31:
-            return "st";
-        case 2:
-        case 22:
-            return "nd";
-        case 3:
-        case 23:
-            return "rd";
-        default:
-            return "th";
-    }
-}
+static const String abbr_day_of_month[] = {
+    "th",
+    "st",
+    "nd",
+    "rd",
+    "th",
+    "th",
+    "th",
+    "th",
+    "th",
+    "th",
+};
+
+static const String int_to_2_width_string[] = {
+    "00",
+    "01",
+    "02",
+    "03",
+    "04",
+    "05",
+    "06",
+    "07",
+    "08",
+    "09",
+    "10",
+    "11",
+    "12",
+    "13",
+    "14",
+    "15",
+    "16",
+    "17",
+    "18",
+    "19",
+    "20",
+    "21",
+    "22",
+    "23",
+    "24",
+    "25",
+    "26",
+    "27",
+    "28",
+    "29",
+    "30",
+    "31",
+    "32",
+    "33",
+    "34",
+    "35",
+    "36",
+    "37",
+    "38",
+    "39",
+    "40",
+    "41",
+    "42",
+    "43",
+    "44",
+    "45",
+    "46",
+    "47",
+    "48",
+    "49",
+    "50",
+    "51",
+    "52",
+    "53",
+    "54",
+    "55",
+    "56",
+    "57",
+    "58",
+    "59",
+    "60",
+    "61",
+    "62",
+    "63",
+    "64",
+    "65",
+    "66",
+    "67",
+    "68",
+    "69",
+    "70",
+    "71",
+    "72",
+    "73",
+    "74",
+    "75",
+    "76",
+    "77",
+    "78",
+    "79",
+    "80",
+    "81",
+    "82",
+    "83",
+    "84",
+    "85",
+    "86",
+    "87",
+    "88",
+    "89",
+    "90",
+    "91",
+    "92",
+    "93",
+    "94",
+    "95",
+    "96",
+    "97",
+    "98",
+    "99",
+};
+
+static const String int_to_string[] = {
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "10",
+    "11",
+    "12",
+    "13",
+    "14",
+    "15",
+    "16",
+    "17",
+    "18",
+    "19",
+    "20",
+    "21",
+    "22",
+    "23",
+    "24",
+    "25",
+    "26",
+    "27",
+    "28",
+    "29",
+    "30",
+    "31",
+    "32",
+    "33",
+    "34",
+    "35",
+    "36",
+    "37",
+    "38",
+    "39",
+    "40",
+    "41",
+    "42",
+    "43",
+    "44",
+    "45",
+    "46",
+    "47",
+    "48",
+    "49",
+    "50",
+    "51",
+    "52",
+    "53",
+    "54",
+    "55",
+    "56",
+    "57",
+    "58",
+    "59",
+    "60",
+    "61",
+    "62",
+    "63",
+    "64",
+    "65",
+    "66",
+    "67",
+    "68",
+    "69",
+    "70",
+    "71",
+    "72",
+    "73",
+    "74",
+    "75",
+    "76",
+    "77",
+    "78",
+    "79",
+    "80",
+    "81",
+    "82",
+    "83",
+    "84",
+    "85",
+    "86",
+    "87",
+    "88",
+    "89",
+    "90",
+    "91",
+    "92",
+    "93",
+    "94",
+    "95",
+    "96",
+    "97",
+    "98",
+    "99",
+};
 
 int MyTimeBase::weekDay() const
 {
@@ -492,249 +676,6 @@ int MyTimeBase::weekDay() const
         diff += (-diff / 7 + 1) * 7;
     diff = diff % 7;
     return diff;
-}
-
-// the implementation is the same as TiDB
-void MyTimeBase::convertDateFormat(char c, String & result) const
-{
-    switch (c)
-    {
-        case 'b':
-        {
-            if (month == 0 || month > 12)
-            {
-                throw Exception("invalid time format");
-            }
-            result.append(abbrev_month_names[month - 1]);
-            break;
-        }
-        case 'M':
-        {
-            if (month == 0 || month > 12)
-            {
-                throw Exception("invalid time format");
-            }
-            result.append(month_names[month - 1]);
-            break;
-        }
-        case 'm':
-        {
-            char buf[16];
-            sprintf(buf, "%02d", month);
-            result.append(String(buf));
-            break;
-        }
-        case 'c':
-        {
-            char buf[16];
-            sprintf(buf, "%d", month);
-            result.append(String(buf));
-            break;
-        }
-        case 'D':
-        {
-            char buf[16];
-            sprintf(buf, "%d", day);
-            result.append(String(buf));
-            result.append(abbrDayOfMonth(day));
-            break;
-        }
-        case 'd':
-        {
-            char buf[16];
-            sprintf(buf, "%02d", day);
-            result.append(String(buf));
-            break;
-        }
-        case 'e':
-        {
-            char buf[16];
-            sprintf(buf, "%d", day);
-            result.append(String(buf));
-            break;
-        }
-        case 'j':
-        {
-            char buf[16];
-            sprintf(buf, "%03d", yearDay());
-            result.append(String(buf));
-            break;
-        }
-        case 'H':
-        {
-            char buf[16];
-            sprintf(buf, "%02d", hour);
-            result.append(String(buf));
-            break;
-        }
-        case 'k':
-        {
-            char buf[16];
-            sprintf(buf, "%d", hour);
-            result.append(String(buf));
-            break;
-        }
-        case 'h':
-        case 'I':
-        {
-            char buf[16];
-            if (hour % 12 == 0)
-                sprintf(buf, "%d", 12);
-            else
-                sprintf(buf, "%02d", hour);
-            result.append(String(buf));
-            break;
-        }
-        case 'l':
-        {
-            char buf[16];
-            if (hour % 12 == 0)
-                sprintf(buf, "%d", 12);
-            else
-                sprintf(buf, "%d", hour);
-            result.append(String(buf));
-            break;
-        }
-        case 'i':
-        {
-            char buf[16];
-            sprintf(buf, "%02d", minute);
-            result.append(String(buf));
-            break;
-        }
-        case 'p':
-        {
-            if ((hour / 12) % 2)
-                result.append(String("PM"));
-            else
-                result.append(String("AM"));
-            break;
-        }
-        case 'r':
-        {
-            char buf[24];
-            auto h = hour % 24;
-            if (h == 0)
-                sprintf(buf, "%02d:%02d:%02d AM", 12, minute, second);
-            else if (h == 12)
-                sprintf(buf, "%02d:%02d:%02d PM", 12, minute, second);
-            else if (h < 12)
-                sprintf(buf, "%02d:%02d:%02d AM", h, minute, second);
-            else
-                sprintf(buf, "%02d:%02d:%02d PM", h - 12, minute, second);
-            result.append(String(buf));
-            break;
-        }
-        case 'T':
-        {
-            char buf[24];
-            sprintf(buf, "%02d:%02d:%02d", hour, minute, second);
-            result.append(String(buf));
-            break;
-        }
-        case 'S':
-        case 's':
-        {
-            char buf[16];
-            sprintf(buf, "%02d", second);
-            result.append(String(buf));
-            break;
-        }
-        case 'f':
-        {
-            char buf[16];
-            sprintf(buf, "%06d", micro_second);
-            result.append(String(buf));
-            break;
-        }
-        case 'U':
-        {
-            char buf[16];
-            auto w = week(0);
-            sprintf(buf, "%02d", w);
-            result.append(String(buf));
-            break;
-        }
-        case 'u':
-        {
-            char buf[16];
-            auto w = week(1);
-            sprintf(buf, "%02d", w);
-            result.append(String(buf));
-            break;
-        }
-        case 'V':
-        {
-            char buf[16];
-            auto w = week(2);
-            sprintf(buf, "%02d", w);
-            result.append(String(buf));
-            break;
-        }
-        case 'v':
-        {
-            char buf[16];
-            auto [year, week] = calcWeek(3);
-            std::ignore = year;
-            sprintf(buf, "%02d", week);
-            result.append(String(buf));
-            break;
-        }
-        case 'a':
-        {
-            auto week_day = weekDay();
-            result.append(abbrev_weekday_names[week_day]);
-            break;
-        }
-        case 'W':
-        {
-            auto week_day = weekDay();
-            result.append(weekday_names[week_day]);
-            break;
-        }
-        case 'w':
-        {
-            auto week_day = weekDay();
-            result.append(std::to_string(week_day));
-            break;
-        }
-        case 'X':
-        {
-            char buf[16];
-            auto [year, week] = calcWeek(6);
-            std::ignore = week;
-            sprintf(buf, "%04d", year);
-            result.append(String(buf));
-            break;
-        }
-        case 'x':
-        {
-            char buf[16];
-            auto [year, week] = calcWeek(3);
-            std::ignore = week;
-            sprintf(buf, "%04d", year);
-            result.append(String(buf));
-            break;
-        }
-        case 'Y':
-        {
-            char buf[16];
-            sprintf(buf, "%04d", year);
-            result.append(String(buf));
-            break;
-        }
-        case 'y':
-        {
-            char buf[16];
-            sprintf(buf, "%02d", year % 100);
-            result.append(String(buf));
-            break;
-        }
-        default:
-        {
-            result.push_back(c);
-        }
-    }
 }
 
 // TODO: support parse time from float string
@@ -1023,12 +964,16 @@ Field parseMyDateTime(const String & str, int8_t fsp)
 
 String MyDateTime::toString(int fsp) const
 {
-    String result = dateFormat("%Y-%m-%d %H:%i:%s");
+    const static String format = "%Y-%m-%d %H:%i:%s";
+    String result;
+    result.reserve(maxFormattedDateTimeStringLength(format));
+    dateFormat(format, result);
     if (fsp > 0)
     {
-        char buf[16];
-        sprintf(buf, ".%06d", micro_second);
-        result.append(String(buf, fsp + 1));
+        result.append(".")
+            .append(int_to_2_width_string[micro_second / 10000])
+            .append(int_to_2_width_string[micro_second % 10000 / 100])
+            .append(int_to_2_width_string[micro_second % 100]);
     }
     return result;
 }
@@ -1251,6 +1196,225 @@ MyDateTime numberToDateTime(Int64 number)
     }
 
     return get_datetime(number);
+}
+
+void MyDateTimeFormatter::init()
+{
+    bool in_pattern_match = false;
+    for (size_t i = 0; i < layout.size(); i++)
+    {
+        char x = layout[i];
+        if (in_pattern_match)
+        {
+            switch (x)
+            {
+                case 'b':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        if (unlikely(datetime.month == 0 || datetime.month > 12))
+                            throw Exception("invalid time format");
+                        result.append(abbrev_month_names[datetime.month - 1]);
+                    });
+                    break;
+                case 'M':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        if (unlikely(datetime.month == 0 || datetime.month > 12))
+                            throw Exception("invalid time format");
+                        result.append(month_names[datetime.month - 1]);
+                    });
+                    break;
+                case 'm':
+                    formatters.emplace_back(
+                        [](const MyTimeBase & datetime, String & result) { result.append(int_to_2_width_string[datetime.month]); });
+                    break;
+                case 'c':
+                    formatters.emplace_back(
+                        [](const MyTimeBase & datetime, String & result) { result.append(int_to_string[datetime.month]); });
+                    break;
+                case 'D':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        result.append(int_to_string[datetime.day]).append(abbr_day_of_month[datetime.day % 10]);
+                    });
+                    break;
+                case 'd':
+                    formatters.emplace_back(
+                        [](const MyTimeBase & datetime, String & result) { result.append(int_to_2_width_string[datetime.day]); });
+                    break;
+                case 'e':
+                    formatters.emplace_back(
+                        [](const MyTimeBase & datetime, String & result) { result.append(int_to_string[datetime.day]); });
+                    break;
+                case 'j':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        auto year_day = datetime.yearDay();
+                        result.append(int_to_string[year_day / 100]).append(int_to_2_width_string[year_day % 100]);
+                    });
+                    break;
+                case 'H':
+                    formatters.emplace_back(
+                        [](const MyTimeBase & datetime, String & result) { result.append(int_to_2_width_string[datetime.hour]); });
+                    break;
+                case 'k':
+                    formatters.emplace_back(
+                        [](const MyTimeBase & datetime, String & result) { result.append(int_to_string[datetime.hour]); });
+                    break;
+                case 'h':
+                case 'I':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        if (datetime.hour % 12 == 0)
+                            result.append("12");
+                        else
+                            result.append(int_to_2_width_string[datetime.hour]);
+                    });
+                    break;
+                case 'l':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        if (datetime.hour % 12 == 0)
+                            result.append("12");
+                        else
+                            result.append(int_to_string[datetime.hour]);
+                    });
+                    break;
+                case 'i':
+                    formatters.emplace_back(
+                        [](const MyTimeBase & datetime, String & result) { result.append(int_to_2_width_string[datetime.minute]); });
+                    break;
+                case 'p':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        if ((datetime.hour / 12) % 2)
+                            result.append("PM");
+                        else
+                            result.append("AM");
+                    });
+                    break;
+                case 'r':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        auto h = datetime.hour % 24;
+                        if (h == 0)
+                            result.append("12:")
+                                .append(int_to_2_width_string[datetime.minute])
+                                .append(":")
+                                .append(int_to_2_width_string[datetime.second])
+                                .append(" AM");
+                        else if (h == 12)
+                            result.append("12:")
+                                .append(int_to_2_width_string[datetime.minute])
+                                .append(":")
+                                .append(int_to_2_width_string[datetime.second])
+                                .append(" PM");
+                        else if (h < 12)
+                            result.append(int_to_2_width_string[datetime.hour % 24])
+                                .append(":")
+                                .append(int_to_2_width_string[datetime.minute])
+                                .append(":")
+                                .append(int_to_2_width_string[datetime.second])
+                                .append(" AM");
+                        else
+                            result.append(int_to_2_width_string[datetime.hour % 24])
+                                .append(":")
+                                .append(int_to_2_width_string[datetime.minute])
+                                .append(":")
+                                .append(int_to_2_width_string[datetime.second])
+                                .append(" PM");
+                    });
+                    break;
+                case 'T':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        result.append(int_to_2_width_string[datetime.hour])
+                            .append(":")
+                            .append(int_to_2_width_string[datetime.minute])
+                            .append(":")
+                            .append(int_to_2_width_string[datetime.second]);
+                    });
+                    break;
+                case 'S':
+                case 's':
+                    formatters.emplace_back(
+                        [](const MyTimeBase & datetime, String & result) { result.append(int_to_2_width_string[datetime.second]); });
+                    break;
+                case 'f':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        result.append(int_to_2_width_string[datetime.micro_second / 10000])
+                            .append(int_to_2_width_string[datetime.micro_second % 10000 / 100])
+                            .append(int_to_2_width_string[datetime.micro_second % 100]);
+                    });
+                    break;
+                case 'U':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        auto w = datetime.week(0);
+                        result.append(int_to_2_width_string[w]);
+                    });
+                    break;
+                case 'u':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        auto w = datetime.week(1);
+                        result.append(int_to_2_width_string[w]);
+                    });
+                    break;
+                case 'V':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        auto w = datetime.week(2);
+                        result.append(int_to_2_width_string[w]);
+                    });
+                    break;
+                case 'v':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        auto [year, week] = datetime.calcWeek(3);
+                        std::ignore = year;
+                        result.append(int_to_2_width_string[week]);
+                    });
+                    break;
+                case 'a':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        auto week_day = datetime.weekDay();
+                        result.append(abbrev_weekday_names[week_day]);
+                    });
+                    break;
+                case 'W':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        auto week_day = datetime.weekDay();
+                        result.append(weekday_names[week_day]);
+                    });
+                    break;
+                case 'w':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        auto week_day = datetime.weekDay();
+                        result.append(std::to_string(week_day));
+                    });
+                    break;
+                case 'X':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        auto [year, week] = datetime.calcWeek(6);
+                        std::ignore = week;
+                        result.append(int_to_2_width_string[year / 100]).append(int_to_2_width_string[year % 100]);
+                    });
+                    break;
+                case 'x':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        auto [year, week] = datetime.calcWeek(3);
+                        std::ignore = week;
+                        result.append(int_to_2_width_string[year / 100]).append(int_to_2_width_string[year % 100]);
+                    });
+                    break;
+                case 'Y':
+                    formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
+                        result.append(int_to_2_width_string[datetime.year / 100]).append(int_to_2_width_string[datetime.year % 100]);
+                    });
+                    break;
+                case 'y':
+                    formatters.emplace_back(
+                        [](const MyTimeBase & datetime, String & result) { result.append(int_to_2_width_string[datetime.year % 100]); });
+                    break;
+                default:
+                    formatters.emplace_back([x](const MyTimeBase &, String & result) { result.push_back(x); });
+            }
+            in_pattern_match = false;
+            continue;
+        }
+        if (x == '%')
+            in_pattern_match = true;
+        else
+            formatters.emplace_back([x](const MyTimeBase &, String & result) { result.push_back(x); });
+    }
 }
 
 } // namespace DB
