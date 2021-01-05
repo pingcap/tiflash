@@ -119,9 +119,7 @@ struct MyDate : public MyTimeBase
 struct MyDateTimeFormatter
 {
     std::vector<std::function<void(const MyTimeBase & datetime, String & result)>> formatters;
-    const String & layout;
-    explicit MyDateTimeFormatter(const String & layout_) : layout(layout_) { init(); }
-    void init();
+    explicit MyDateTimeFormatter(const String & layout_);
     void format(const MyTimeBase & datetime, String & result)
     {
         for (auto & f : formatters)
