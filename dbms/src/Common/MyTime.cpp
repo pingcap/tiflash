@@ -1378,7 +1378,7 @@ void MyDateTimeFormatter::init()
                 case 'w':
                     formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
                         auto week_day = datetime.weekDay();
-                        result.append(std::to_string(week_day));
+                        result.append(int_to_string[week_day]);
                     });
                     break;
                 case 'X':
