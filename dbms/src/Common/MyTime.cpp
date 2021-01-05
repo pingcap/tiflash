@@ -1003,7 +1003,7 @@ MyDateTime numberToDateTime(Int64 number)
     return get_datetime(number);
 }
 
-void MyDateTimeFormatter::init()
+MyDateTimeFormatter::MyDateTimeFormatter(const String & layout)
 {
     bool in_pattern_match = false;
     for (size_t i = 0; i < layout.size(); i++)
