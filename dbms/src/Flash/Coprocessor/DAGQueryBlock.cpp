@@ -34,7 +34,6 @@ const static String AGG_NAME("aggregation");
 const static String TOPN_NAME("topN");
 const static String LIMIT_NAME("limit");
 const static String EXCHANGE_SENDER_NAME("exchange_sender");
-const static String PROJ_NAME("projection");
 
 static void assignOrThrowException(const tipb::Executor ** to, const tipb::Executor * from, const String & name)
 {
