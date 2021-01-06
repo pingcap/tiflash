@@ -78,7 +78,8 @@ BlockIO InterpreterDAG::execute()
     {
         const Settings & settings = context.getSettingsRef();
         pipeline.firstStream() = std::make_shared<CreatingSetsBlockInputStream>(pipeline.firstStream(), std::move(subqueriesForSets),
-            SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode));
+            SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode),
+            dag.getDAGContext().getMPPTaskId());
     }
 
     BlockIO res;

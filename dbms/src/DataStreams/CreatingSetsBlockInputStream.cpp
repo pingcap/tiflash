@@ -18,8 +18,8 @@ extern const int SET_SIZE_LIMIT_EXCEEDED;
 
 CreatingSetsBlockInputStream::CreatingSetsBlockInputStream(const BlockInputStreamPtr & input,
     std::vector<SubqueriesForSets> && subqueries_for_sets_list_,
-    const SizeLimits & network_transfer_limits)
-    : subqueries_for_sets_list(std::move(subqueries_for_sets_list_)), network_transfer_limits(network_transfer_limits)
+    const SizeLimits & network_transfer_limits, Int64 mpp_task_id_)
+    : subqueries_for_sets_list(std::move(subqueries_for_sets_list_)), network_transfer_limits(network_transfer_limits), mpp_task_id(mpp_task_id_)
 {
     init(input);
 }
@@ -100,7 +100,7 @@ void CreatingSetsBlockInputStream::createAll()
                     if (isCancelledOrThrowIfKilled())
                         return;
 
-                    workers.push_back(std::thread(&CreatingSetsBlockInputStream::createOne, this, std::ref(elem.second)));
+                    workers.push_back(std::thread(&CreatingSetsBlockInputStream::createOne, this, std::ref(elem.second), current_memory_tracker));
                 }
             }
         }
@@ -113,11 +113,13 @@ void CreatingSetsBlockInputStream::createAll()
     }
 }
 
-void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
+void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery, MemoryTracker * memory_tracker)
 {
+    current_memory_tracker = memory_tracker;
     LOG_TRACE(log,
         (subquery.set ? "Creating set. " : "") << (subquery.join ? "Creating join. " : "")
-                                               << (subquery.table ? "Filling temporary table. " : ""));
+                                               << (subquery.table ? "Filling temporary table. " : "") << " for task "
+                                               << std::to_string(mpp_task_id));
     Stopwatch watch;
 
     BlockOutputStreamPtr table_out;
@@ -225,12 +227,13 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
             msg << "Table with " << head_rows << " rows. ";
 
         msg << "In " << watch.elapsedSeconds() << " sec. ";
-        msg << "using " << std::to_string(subquery.join == nullptr ? 1 : subquery.join->getBuildConcurrency()) << " threads.";
+        msg << "using " << std::to_string(subquery.join == nullptr ? 1 : subquery.join->getBuildConcurrency()) << " threads ";
+        msg << "for task " << std::to_string(mpp_task_id) << ".";
         LOG_DEBUG(log, msg.rdbuf());
     }
     else
     {
-        LOG_DEBUG(log, "Subquery has empty result.");
+        LOG_DEBUG(log, "Subquery has empty result for task " << std::to_string(mpp_task_id) << ".");
     }
 }
 
