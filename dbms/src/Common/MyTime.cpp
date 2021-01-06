@@ -9,8 +9,6 @@
 namespace DB
 {
 
-using std::sprintf;
-
 int adjustYear(int year)
 {
     if (year >= 0 && year <= 69)
