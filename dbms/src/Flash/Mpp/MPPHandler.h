@@ -12,6 +12,7 @@
 #include <thread>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <Common/MemoryTracker.h>
 #include <kvproto/mpp.pb.h>
 #include <kvproto/tikvpb.grpc.pb.h>
 #pragma GCC diagnostic pop
@@ -129,24 +130,62 @@ struct MPPTunnelSet
 {
     std::vector<MPPTunnelPtr> tunnels;
 
-    // this is a broadcast writing.
-    void write(const std::string & data)
+    void clearExecutionSummaries(tipb::SelectResponse & response)
     {
+        /// can not use response.clear_execution_summaries() because
+        /// TiDB assume all the executor should return execution summary
+        for (int i = 0; i < response.execution_summaries_size(); i++)
+        {
+            auto * mutable_execution_summary = response.mutable_execution_summaries(i);
+            mutable_execution_summary->set_num_produced_rows(0);
+            mutable_execution_summary->set_num_iterations(0);
+            mutable_execution_summary->set_concurrency(0);
+        }
+    }
+    /// for both broadcast writing and partition writing, only
+    /// return meaningful execution summary for the first tunnel,
+    /// because in TiDB, it does not know enough information
+    /// about the execution details for the mpp query, it just
+    /// add up all the execution summaries for the same executor,
+    /// so if return execution summary for all the tunnels, the
+    /// information in TiDB will be amplified, which may make
+    /// user confused.
+    // this is a broadcast writing.
+    void write(tipb::SelectResponse & response)
+    {
+        std::string data;
+        response.SerializeToString(&data);
         mpp::MPPDataPacket packet;
         packet.set_data(data);
-        for (auto tunnel : tunnels)
+        tunnels[0]->write(packet);
+
+        if (tunnels.size() > 1)
         {
-            tunnel->write(packet);
+            clearExecutionSummaries(response);
+            data.clear();
+            response.SerializeToString(&data);
+            packet.set_data(data);
+            for (size_t i = 1; i < tunnels.size(); i++)
+            {
+                tunnels[i]->write(packet);
+            }
         }
     }
 
     // this is a partition writing.
-    void write(const std::string & data, int16_t partition_id)
+    void write(tipb::SelectResponse & response, int16_t partition_id)
     {
+        if (partition_id != 0)
+        {
+            clearExecutionSummaries(response);
+        }
+        std::string data;
+        response.SerializeToString(&data);
         mpp::MPPDataPacket packet;
         packet.set_data(data);
         tunnels[partition_id]->write(packet);
     }
+
     void writeError(mpp::Error err)
     {
         mpp::MPPDataPacket packet;
@@ -164,8 +203,13 @@ using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
 
 class MPPTaskManager;
 
-struct MPPTask : private boost::noncopyable
+struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyable
 {
+    Context context;
+
+    std::unique_ptr<tipb::DAGRequest> dag_req;
+    std::unique_ptr<DAGContext> dag_context;
+
     MPPTaskId id;
 
     mpp::TaskMeta meta;
@@ -181,7 +225,8 @@ struct MPPTask : private boost::noncopyable
 
     std::condition_variable cv;
 
-    MPPTask(const mpp::TaskMeta & meta_) : meta(meta_), log(&Logger::get("task " + std::to_string(meta_.task_id())))
+    MPPTask(const mpp::TaskMeta & meta_, const Context & context_)
+        : context(context_), meta(meta_), log(&Logger::get("task " + std::to_string(meta_.task_id())))
     {
         id.start_ts = meta.start_ts();
         id.task_id = meta.task_id();
@@ -189,7 +234,7 @@ struct MPPTask : private boost::noncopyable
 
     void unregisterTask();
 
-    void runImpl(BlockIO io);
+    void runImpl(BlockIO io, MemoryTracker * memory_tracker);
 
     void writeErrToAllTunnel(const String & e)
     {
@@ -212,9 +257,11 @@ struct MPPTask : private boost::noncopyable
         }
     }
 
+    BlockIO prepare(const mpp::DispatchTaskRequest & task_request);
+
     void run(BlockIO io)
     {
-        std::thread worker(&MPPTask::runImpl, this, io);
+        std::thread worker(&MPPTask::runImpl, this, io, current_memory_tracker);
         worker.detach();
     }
 
@@ -312,16 +359,13 @@ public:
 
 class MPPHandler
 {
-    Context & context;
     const mpp::DispatchTaskRequest & task_request;
 
     Logger * log;
 
 public:
-    MPPHandler(Context & context_, const mpp::DispatchTaskRequest & task_request_)
-        : context(context_), task_request(task_request_), log(&Logger::get("MPPHandler"))
-    {}
-    grpc::Status execute(mpp::DispatchTaskResponse * response);
+    MPPHandler(const mpp::DispatchTaskRequest & task_request_) : task_request(task_request_), log(&Logger::get("MPPHandler")) {}
+    grpc::Status execute(Context & context, mpp::DispatchTaskResponse * response);
 };
 
 } // namespace DB
