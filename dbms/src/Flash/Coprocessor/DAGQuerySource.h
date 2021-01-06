@@ -30,8 +30,10 @@ struct StreamWriter
 
     StreamWriter(::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_) : writer(writer_) {}
 
-    void write(const String & dag_data, [[maybe_unused]] uint16_t id = 0)
+    void write(tipb::SelectResponse & response, [[maybe_unused]] uint16_t id = 0)
     {
+        std::string dag_data;
+        response.SerializeToString(&dag_data);
         ::coprocessor::BatchResponse resp;
         resp.set_data(dag_data);
         std::lock_guard<std::mutex> lk(write_mutex);

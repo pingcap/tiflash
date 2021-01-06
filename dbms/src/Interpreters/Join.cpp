@@ -1,22 +1,19 @@
-#include <common/logger_useful.h>
-
 #include <Columns/ColumnConst.h>
-#include <Columns/ColumnString.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnNullable.h>
-
-#include <DataTypes/DataTypeNullable.h>
-
-#include <Interpreters/Join.h>
-#include <Interpreters/NullableUtils.h>
-
+#include <Columns/ColumnString.h>
+#include <Common/typeid_cast.h>
+#include <Core/ColumnNumbers.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
-
-#include <Core/ColumnNumbers.h>
-#include <Common/typeid_cast.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
+#include <Interpreters/Join.h>
+#include <Interpreters/NullableUtils.h>
+#include <common/logger_useful.h>
+
+#include "executeQuery.h"
 
 
 namespace DB
@@ -638,8 +635,10 @@ void Join::insertFromBlockASync(const Block & block, ThreadPool & thread_pool)
         stored_block = &blocks.back();
         block_index = blocks.size();
     }
-    thread_pool.schedule([&, stored_block, block_index]
+    auto memory_tracker = current_memory_tracker;
+    thread_pool.schedule([&, stored_block, block_index, memory_tracker]
     {
+        current_memory_tracker = memory_tracker;
         if (build_set_exceeded.load())
             return;
         if (!insertFromBlockInternal(stored_block, block_index))
