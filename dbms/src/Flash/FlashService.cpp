@@ -121,15 +121,23 @@ grpc::Status FlashService::Coprocessor(
     {
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
     }
-    // TODO: Add metric.
+    GET_METRIC(metrics, tiflash_coprocessor_request_count, type_dispatch_mpp_task).Increment();
+    GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_dispatch_mpp_task).Increment();
+    Stopwatch watch;
+    SCOPE_EXIT({
+        GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_dispatch_mpp_task).Decrement();
+        GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_dispatch_mpp_task).Observe(watch.elapsedSeconds());
+        GET_METRIC(metrics, tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
+    });
 
     auto [context, status] = createDBContext(grpc_context);
     if (!status.ok())
     {
         return status;
     }
-    MPPHandler mpp_handler(context, *request);
-    return mpp_handler.execute(response);
+
+    MPPHandler mpp_handler(*request);
+    return mpp_handler.execute(context, response);
 }
 
 ::grpc::Status FlashService::EstablishMPPConnection(::grpc::ServerContext * grpc_context,
@@ -143,7 +151,14 @@ grpc::Status FlashService::Coprocessor(
     {
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
     }
-    // TODO: Add metric.
+    GET_METRIC(metrics, tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
+    GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
+    Stopwatch watch;
+    SCOPE_EXIT({
+        GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
+        GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_mpp_establish_conn).Observe(watch.elapsedSeconds());
+        // TODO: update the value of metric tiflash_coprocessor_response_bytes.
+    });
 
     auto [context, status] = createDBContext(grpc_context);
     if (!status.ok())

@@ -24,7 +24,8 @@ using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 
 bool isSourceNode(const tipb::Executor * root)
 {
-    return root->tp() == tipb::ExecType::TypeJoin || root->tp() == tipb::ExecType::TypeTableScan || root->tp() == tipb::ExecType::TypeExchangeReceiver;
+    return root->tp() == tipb::ExecType::TypeJoin || root->tp() == tipb::ExecType::TypeTableScan
+        || root->tp() == tipb::ExecType::TypeExchangeReceiver;
 }
 
 const static String SOURCE_NAME("source");
@@ -100,6 +101,7 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_, TiFlashMe
                 current = &current->topn().child();
                 break;
             case tipb::ExecType::TypeExchangeSender:
+                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_exchange_sender).Increment();
                 assignOrThrowException(&exchangeSender, current, EXCHANGE_SENDER_NAME);
                 exchangeServer_name = current->executor_id();
                 current = &current->exchange_sender().child();
@@ -124,7 +126,11 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_, TiFlashMe
         children.push_back(std::make_shared<DAGQueryBlock>(id * 2, source->join().children(0), metrics));
         children.push_back(std::make_shared<DAGQueryBlock>(id * 2 + 1, source->join().children(1), metrics));
     }
-    else
+    else if (current->tp() == tipb::ExecType::TypeExchangeReceiver)
+    {
+        GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_exchange_receiver).Increment();
+    }
+    else if (current->tp() == tipb::ExecType::TypeTableScan)
     {
         GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_ts).Increment();
     }
@@ -145,31 +151,46 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
                 assignOrThrowException(&source, &executors[i], SOURCE_NAME);
                 /// use index as the prefix for executor name so when we sort by
                 /// the executor name, it will result in the same order as it is
-                /// in the dag_request, this is needed when filling executeSummary
+                /// in the dag_request, this is needed when filling execution_summary
                 /// in DAGDriver
-                source_name = std::to_string(i) + "_tablescan";
+                if (executors[i].has_executor_id())
+                    source_name = executors[i].executor_id();
+                else
+                    source_name = std::to_string(i) + "_tablescan";
                 break;
             case tipb::ExecType::TypeSelection:
                 GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_sel).Increment();
                 assignOrThrowException(&selection, &executors[i], SEL_NAME);
-                selection_name = std::to_string(i) + "_selection";
+                if (executors[i].has_executor_id())
+                    selection_name = executors[i].executor_id();
+                else
+                    selection_name = std::to_string(i) + "_selection";
                 break;
             case tipb::ExecType::TypeStreamAgg:
             case tipb::ExecType::TypeAggregation:
                 GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_agg).Increment();
                 assignOrThrowException(&aggregation, &executors[i], AGG_NAME);
-                aggregation_name = std::to_string(i) + "_aggregation";
+                if (executors[i].has_executor_id())
+                    aggregation_name = executors[i].executor_id();
+                else
+                    aggregation_name = std::to_string(i) + "_aggregation";
                 collectOutPutFieldTypesFromAgg(output_field_types, executors[i].aggregation());
                 break;
             case tipb::ExecType::TypeTopN:
                 GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_topn).Increment();
                 assignOrThrowException(&limitOrTopN, &executors[i], TOPN_NAME);
-                limitOrTopN_name = std::to_string(i) + "_limitOrTopN";
+                if (executors[i].has_executor_id())
+                    limitOrTopN_name = executors[i].executor_id();
+                else
+                    limitOrTopN_name = std::to_string(i) + "_limitOrTopN";
                 break;
             case tipb::ExecType::TypeLimit:
                 GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_limit).Increment();
                 assignOrThrowException(&limitOrTopN, &executors[i], LIMIT_NAME);
-                limitOrTopN_name = std::to_string(i) + "_limitOrTopN";
+                if (executors[i].has_executor_id())
+                    limitOrTopN_name = executors[i].executor_id();
+                else
+                    limitOrTopN_name = std::to_string(i) + "_limitOrTopN";
                 break;
             default:
                 throw TiFlashException(
