@@ -41,6 +41,10 @@ struct ExchangeReceiverResult
 
 class ExchangeReceiver
 {
+public:
+    static constexpr bool is_streaming_reader = true;
+
+private:
     pingcap::kv::Cluster * cluster;
     std::chrono::seconds timeout;
 

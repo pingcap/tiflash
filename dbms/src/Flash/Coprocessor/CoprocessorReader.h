@@ -42,6 +42,10 @@ struct CoprocessorReaderResult
 /// this is an adapter for pingcap::coprocessor::ResponseIter, so it can be used in TiRemoteBlockInputStream
 class CoprocessorReader
 {
+public:
+    static constexpr bool is_streaming_reader = false;
+
+private:
     DAGSchema schema;
     pingcap::coprocessor::ResponseIter resp_iter;
 

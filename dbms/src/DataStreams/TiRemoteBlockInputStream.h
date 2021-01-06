@@ -18,10 +18,12 @@ namespace DB
 {
 
 // TiRemoteBlockInputStream is a block input stream that read/receive data from remote.
-template <typename RemoteReaderPtr, bool is_streaming_reader>
+template <typename RemoteReader>
 class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 {
-    RemoteReaderPtr remote_reader;
+    static constexpr bool is_streaming_reader = RemoteReader::is_streaming_reader;
+
+    std::shared_ptr<RemoteReader> remote_reader;
 
     Block sample_block;
 
@@ -114,7 +116,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     }
 
 public:
-    explicit TiRemoteBlockInputStream(RemoteReaderPtr remote_reader_)
+    explicit TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_)
         : remote_reader(remote_reader_), name("TiRemoteBlockInputStream(" + remote_reader->getName() + ")"), log(&Logger::get(name))
     {
         // generate sample block
@@ -148,6 +150,6 @@ public:
     std::unordered_map<String, std::vector<ExecutionSummary>> & getRemoteExecutionSummaries() { return execution_summaries; }
 };
 
-using ExchangeReceiverInputStream = TiRemoteBlockInputStream<std::shared_ptr<ExchangeReceiver>, true>;
-using CoprocessorBlockInputStream = TiRemoteBlockInputStream<std::shared_ptr<CoprocessorReader>, false>;
+using ExchangeReceiverInputStream = TiRemoteBlockInputStream<ExchangeReceiver>;
+using CoprocessorBlockInputStream = TiRemoteBlockInputStream<CoprocessorReader>;
 } // namespace DB
