@@ -1,3 +1,5 @@
+#if Poco_SQLODBC_FOUND || Poco_DataODBC_FOUND
+
 #include <Poco/Ext/SessionPoolHelpers.h>
 #include <Storages/transformQueryForExternalDatabase.h>
 #include <Storages/StorageODBC.h>
@@ -80,3 +82,5 @@ void registerStorageODBC(StorageFactory & factory)
 }
 
 }
+
+#endif

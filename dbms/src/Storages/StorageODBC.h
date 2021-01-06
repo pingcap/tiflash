@@ -1,4 +1,5 @@
 #pragma once
+#if Poco_SQLODBC_FOUND || Poco_DataODBC_FOUND
 
 #include <ext/shared_ptr_helper.h>
 #include <Storages/IStorage.h>
@@ -47,3 +48,5 @@ private:
     std::shared_ptr<Poco::Data::SessionPool> pool;
 };
 }
+
+#endif
