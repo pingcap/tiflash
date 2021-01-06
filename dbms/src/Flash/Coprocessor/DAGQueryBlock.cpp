@@ -25,7 +25,7 @@ using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 bool isSourceNode(const tipb::Executor * root)
 {
     return root->tp() == tipb::ExecType::TypeJoin || root->tp() == tipb::ExecType::TypeTableScan
-        || root->tp() == tipb::ExecType::TypeExchangeReceiver;
+        || root->tp() == tipb::ExecType::TypeExchangeReceiver || root->tp() == tipb::ExecType::TypeProjection;
 }
 
 const static String SOURCE_NAME("source");
@@ -130,6 +130,11 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const tipb::Executor & root_, TiFlashMe
     {
         GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_exchange_receiver).Increment();
     }
+    else if (current->tp() == tipb::ExecType::TypeProjection)
+    {
+        GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_projection).Increment();
+        children.push_back(std::make_shared<DAGQueryBlock>(id + 1, source->projection().child(), metrics));
+    }
     else if (current->tp() == tipb::ExecType::TypeTableScan)
     {
         GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_ts).Increment();
@@ -200,6 +205,16 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
     fillOutputFieldTypes();
 }
 
+void DAGQueryBlock::insertOutputFiledType(int32_t tp, int32_t flag, int32_t flen, int32_t dec)
+{
+    tipb::FieldType field_type;
+    field_type.set_tp(tp);
+    field_type.set_flag(flag);
+    field_type.set_flen(flen);
+    field_type.set_decimal(dec);
+    output_field_types.push_back(field_type);
+}
+
 void DAGQueryBlock::fillOutputFieldTypes()
 {
     if (source->tp() == tipb::ExecType::TypeJoin)
@@ -247,12 +262,18 @@ void DAGQueryBlock::fillOutputFieldTypes()
         {
             for (auto & ci : source->exchange_receiver().field_types())
             {
-                tipb::FieldType field_type;
-                field_type.set_tp(ci.tp());
-                field_type.set_flag(ci.flag());
-                field_type.set_flen(ci.flen());
-                field_type.set_decimal(ci.decimal());
-                output_field_types.push_back(field_type);
+                insertOutputFiledType(ci.tp(), ci.flag(), ci.flen(), ci.decimal());
+            }
+        }
+    }
+    else if (source->tp() == tipb::ExecType::TypeProjection)
+    {
+        if (output_field_types.empty())
+        {
+            for (auto & expr : source->projection().exprs())
+            {
+                auto & ci = expr.field_type();
+                insertOutputFiledType(ci.tp(), ci.flag(), ci.flen(), ci.decimal());
             }
         }
     }
@@ -262,12 +283,7 @@ void DAGQueryBlock::fillOutputFieldTypes()
         {
             for (auto & ci : source->tbl_scan().columns())
             {
-                tipb::FieldType field_type;
-                field_type.set_tp(ci.tp());
-                field_type.set_flag(ci.flag());
-                field_type.set_flen(ci.columnlen());
-                field_type.set_decimal(ci.decimal());
-                output_field_types.push_back(field_type);
+                insertOutputFiledType(ci.tp(), ci.flag(), ci.columnlen(), ci.decimal());
             }
         }
     }

@@ -807,8 +807,10 @@ AnalysisResult DAGQueryBlockInterpreter::analyzeExpressions()
         res.has_order_by = true;
         analyzer->appendOrderBy(chain, query_block.limitOrTopN->topn(), res.order_columns);
     }
+
     // Append final project results if needed.
     analyzer->appendFinalProject(chain, final_project);
+
     res.before_order_and_select = chain.getLastActions();
     chain.finalize();
     chain.clear();
@@ -1225,7 +1227,7 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
     }
 
     if (need_append_final_project)
-        executeFinalProject(pipeline);
+        executeProject(pipeline, final_project);
 }
 
 void DAGQueryBlockInterpreter::executeRemoteQueryImpl(Pipeline & pipeline,
@@ -1310,6 +1312,38 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
         analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
         recordProfileStreams(pipeline, query_block.source_name);
     }
+    else if (query_block.source->tp() == tipb::ExecType::TypeProjection)
+    {
+        std::vector<NameAndTypePair> input_columns;
+        pipeline.streams = input_streams_vec[0];
+        for (auto const & p : pipeline.firstStream()->getHeader().getNamesAndTypesList())
+            input_columns.emplace_back(p.name, p.type);
+        DAGExpressionAnalyzer dag_analyzer(std::move(input_columns), context);
+        ExpressionActionsChain chain;
+        dag_analyzer.initChain(chain, dag_analyzer.getCurrentInputColumns());
+        ExpressionActionsChain::Step & last_step = chain.steps.back();
+        std::vector<NameAndTypePair> output_columns;
+        NamesWithAliases project_cols;
+        for (auto & expr : query_block.source->projection().exprs())
+        {
+            auto expr_name = dag_analyzer.getActions(expr, last_step.actions);
+            last_step.required_output.emplace_back(expr_name);
+            auto & col = last_step.actions->getSampleBlock().getByName(expr_name);
+            output_columns.emplace_back(col.name, col.type);
+            project_cols.emplace_back(col.name, col.name);
+            if (query_block.aggregation == nullptr)
+            {
+                if (query_block.isRootQueryBlock())
+                    final_project.emplace_back(col.name, "");
+                else
+                    final_project.emplace_back(col.name, query_block.qb_column_prefix + col.name);
+            }
+        }
+        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions()); });
+        executeProject(pipeline, project_cols);
+        analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(output_columns), context);
+        recordProfileStreams(pipeline, query_block.source_name);
+    }
     else
     {
         executeTS(query_block.source->tbl_scan(), pipeline);
@@ -1345,7 +1379,7 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     }
 
     // execute projection
-    executeFinalProject(pipeline);
+    executeProject(pipeline, final_project);
 
     // execute limit
     if (query_block.limitOrTopN != nullptr && query_block.limitOrTopN->tp() == tipb::TypeLimit)
@@ -1362,8 +1396,10 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     }
 }
 
-void DAGQueryBlockInterpreter::executeFinalProject(Pipeline & pipeline)
+void DAGQueryBlockInterpreter::executeProject(Pipeline & pipeline, NamesWithAliases & project_cols)
 {
+    if (final_project.empty())
+        return;
     auto columns = pipeline.firstStream()->getHeader();
     NamesAndTypesList input_column;
     for (auto & column : columns.getColumnsWithTypeAndName())
@@ -1371,7 +1407,7 @@ void DAGQueryBlockInterpreter::executeFinalProject(Pipeline & pipeline)
         input_column.emplace_back(column.name, column.type);
     }
     ExpressionActionsPtr project = std::make_shared<ExpressionActions>(input_column, context.getSettingsRef());
-    project->add(ExpressionAction::project(final_project));
+    project->add(ExpressionAction::project(project_cols));
     // add final project
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, project); });
 }
