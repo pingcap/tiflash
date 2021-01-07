@@ -1037,7 +1037,10 @@ MyDateTimeFormatter::MyDateTimeFormatter(const String & layout)
                     break;
                 case 'D':
                     formatters.emplace_back([](const MyTimeBase & datetime, String & result) {
-                        result.append(int_to_string[datetime.day]).append(abbr_day_of_month[datetime.day % 10]);
+                        if (datetime.day >= 11 && datetime.day <= 13)
+                            result.append(int_to_string[datetime.day]).append("th");
+                        else
+                            result.append(int_to_string[datetime.day]).append(abbr_day_of_month[datetime.day % 10]);
                     });
                     break;
                 case 'd':
