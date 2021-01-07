@@ -79,7 +79,7 @@ struct MyTimeBase
     // DateFormat returns a textual representation of the time value formatted
     // according to layout
     // See http://dev.mysql.com/doc/refman/5.7/en/date-and-time-functions.html#function_date-format
-    String dateFormat(const String & layout) const;
+    void dateFormat(const String & layout, String & result) const;
 
     // returns the week day of current date(0 as sunday)
     int weekDay() const;
@@ -89,9 +89,6 @@ struct MyTimeBase
     int week(UInt32 mode) const;
 
     std::tuple<int, int> calcWeek(UInt32 mode) const;
-
-protected:
-    void convertDateFormat(char c, String & result) const;
 };
 
 struct MyDateTime : public MyTimeBase
@@ -111,7 +108,25 @@ struct MyDate : public MyTimeBase
 
     MyDate(UInt16 year_, UInt8 month_, UInt8 day_) : MyTimeBase(year_, month_, day_, 0, 0, 0, 0) {}
 
-    String toString() const { return dateFormat("%Y-%m-%d"); }
+    String toString() const
+    {
+        String result;
+        dateFormat("%Y-%m-%d", result);
+        return result;
+    }
+};
+
+struct MyDateTimeFormatter
+{
+    std::vector<std::function<void(const MyTimeBase & datetime, String & result)>> formatters;
+    explicit MyDateTimeFormatter(const String & layout_);
+    void format(const MyTimeBase & datetime, String & result)
+    {
+        for (auto & f : formatters)
+        {
+            f(datetime, result);
+        }
+    }
 };
 
 Field parseMyDateTime(const String & str, int8_t fsp = 6);
