@@ -30,29 +30,25 @@ void DAGStringConverter::buildTSString(const tipb::TableScan & ts, std::stringst
     else
     {
         // do not have table id
-        throw TiFlashException(
-            "Table id not specified in table scan executor", Errors::Coprocessor::BadRequest);
+        throw TiFlashException("Table id not specified in table scan executor", Errors::Coprocessor::BadRequest);
     }
     auto & tmt_ctx = context.getTMTContext();
     auto storage = tmt_ctx.getStorages().get(table_id);
     if (storage == nullptr)
     {
-        throw TiFlashException(
-            "Table " + std::to_string(table_id) + " doesn't exist.", Errors::Coprocessor::BadRequest);
+        throw TiFlashException("Table " + std::to_string(table_id) + " doesn't exist.", Errors::Coprocessor::BadRequest);
     }
 
     const auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
     if (!managed_storage)
     {
-        throw TiFlashException(
-            "Only Manageable table is supported in DAG request", Errors::Coprocessor::BadRequest);
+        throw TiFlashException("Only Manageable table is supported in DAG request", Errors::Coprocessor::BadRequest);
     }
 
     if (ts.columns_size() == 0)
     {
         // no column selected, must be something wrong
-        throw TiFlashException(
-            "No column is selected in table scan executor", Errors::Coprocessor::BadRequest);
+        throw TiFlashException("No column is selected in table scan executor", Errors::Coprocessor::BadRequest);
     }
     for (const tipb::ColumnInfo & ci : ts.columns())
     {
@@ -93,6 +89,21 @@ void DAGStringConverter::buildSelString(const tipb::Selection & sel, std::string
 }
 
 void DAGStringConverter::buildLimitString(const tipb::Limit & limit, std::stringstream & ss) { ss << "LIMIT " << limit.limit() << " "; }
+
+void DAGStringConverter::buildProjString(const tipb::Projection & proj, std::stringstream & ss)
+{
+    ss << "PROJECTION ";
+    bool first = true;
+    for (auto & expr : proj.exprs())
+    {
+        if (first)
+            first = false;
+        else
+            ss << ", ";
+        auto name = exprToString(expr, getCurrentColumns());
+        ss << name;
+    }
+}
 
 void DAGStringConverter::buildAggString(const tipb::Aggregation & agg, std::stringstream & ss)
 {
@@ -158,6 +169,8 @@ void DAGStringConverter::buildString(const tipb::Executor & executor, std::strin
             return buildTopNString(executor.topn(), ss);
         case tipb::ExecType::TypeLimit:
             return buildLimitString(executor.limit(), ss);
+        case tipb::ExecType::TypeProjection:
+            return buildProjString(executor.projection(), ss);
         case tipb::ExecType::TypeExchangeSender:
         case tipb::ExecType::TypeExchangeReceiver:
             throw TiFlashException("Mpp executor is not supported", Errors::Coprocessor::Unimplemented);
