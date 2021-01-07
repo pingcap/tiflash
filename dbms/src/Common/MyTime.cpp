@@ -771,12 +771,14 @@ String MyDateTime::toString(int fsp) const
     String result;
     result.reserve(maxFormattedDateTimeStringLength(format));
     dateFormat(format, result);
+    auto length = result.length();
     if (fsp > 0)
     {
         result.append(".")
             .append(int_to_2_width_string[micro_second / 10000])
             .append(int_to_2_width_string[micro_second % 10000 / 100])
             .append(int_to_2_width_string[micro_second % 100]);
+        result.resize(length + fsp + 1);
     }
     return result;
 }
