@@ -347,6 +347,7 @@ class MPPTaskManager : private boost::noncopyable
 
 public:
     explicit MPPTaskManager(BackgroundProcessingPool & background_pool_);
+    ~MPPTaskManager();
 
     std::vector<UInt64> getCurrentQueries()
     {

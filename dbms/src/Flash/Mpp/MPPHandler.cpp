@@ -337,4 +337,6 @@ MPPTaskManager::MPPTaskManager(BackgroundProcessingPool & background_pool_)
         false);
 }
 
+MPPTaskManager::~MPPTaskManager() { background_pool.removeTask(handle); }
+
 } // namespace DB
