@@ -66,7 +66,7 @@ struct MPPTunnel
 
     // write a single packet to the tunnel, it will block if tunnel is not ready.
     // TODO: consider to hold a buffer
-    void write(const mpp::MPPDataPacket & data)
+    void write(const mpp::MPPDataPacket & data, bool close_after_write = false)
     {
 
         LOG_TRACE(log, "ready to write");
@@ -74,13 +74,7 @@ struct MPPTunnel
 
         if (timeout.count() > 0)
         {
-            if (cv_for_connected.wait_for(lk, timeout, [&]() { return connected; }))
-            {
-                writer->Write(data);
-
-                LOG_TRACE(log, "finish write");
-            }
-            else
+            if (!cv_for_connected.wait_for(lk, timeout, [&]() { return connected; }))
             {
                 throw Exception(tunnel_id + " is timeout");
             }
@@ -88,9 +82,17 @@ struct MPPTunnel
         else
         {
             cv_for_connected.wait(lk, [&]() { return connected; });
-            writer->Write(data);
-            LOG_TRACE(log, "finish write");
         }
+        writer->Write(data);
+        if (close_after_write)
+        {
+            finished = true;
+            cv_for_finished.notify_all();
+        }
+        if (close_after_write)
+            LOG_TRACE(log, "finish write and close the tunnel");
+        else
+            LOG_TRACE(log, "finish write");
     }
 
     // finish the writing.
@@ -101,6 +103,12 @@ struct MPPTunnel
             throw Exception("has finished");
         finished = true;
         cv_for_finished.notify_all();
+    }
+
+    bool isFinished()
+    {
+        std::lock_guard<std::mutex> lk(mu);
+        return finished;
     }
 
     // a MPPConn request has arrived. it will build connection by this tunnel;
@@ -262,8 +270,10 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
                 auto err = new mpp::Error();
                 err->set_msg(e);
                 data.set_allocated_error(err);
-                it.second->write(data);
-                it.second->writeDone();
+                if (!it.second->isFinished())
+                {
+                    it.second->write(data, true);
+                }
             }
         }
         catch (...)
