@@ -84,6 +84,12 @@ BlockIO MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     context.setSetting("read_tso", start_ts);
     context.setSetting("schema_version", schema_ver);
     context.setSetting("mpp_task_timeout", task_request.timeout());
+    if (task_request.timeout() > 0)
+    {
+        /// in the implementation, mpp_task_timeout is actually the task writing tunnel timeout
+        /// so make the mpp_task_running_timeout a little bigger than mpp_task_timeout
+        context.setSetting("mpp_task_running_timeout", task_request.timeout() + 30);
+    }
     context.getTimezoneInfo().resetByDAGRequest(*dag_req);
     context.setProgressCallback([this](const Progress & progress) { this->updateProgress(progress); });
 

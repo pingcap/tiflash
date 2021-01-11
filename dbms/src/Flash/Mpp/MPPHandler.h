@@ -88,6 +88,8 @@ struct MPPTunnel
         else
         {
             cv_for_connected.wait(lk, [&]() { return connected; });
+            writer->Write(data);
+            LOG_TRACE(log, "finish write");
         }
     }
 
