@@ -1,4 +1,5 @@
 #include <Columns/ColumnVector.h>
+#include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/typeid_cast.h>
 #include <Core/SortDescription.h>
@@ -52,6 +53,14 @@ namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
+
+namespace FailPoints
+{
+extern const char pause_before_dt_background_delta_merge[];
+extern const char pause_until_dt_background_delta_merge[];
+extern const char force_triggle_background_merge_delta[];
+extern const char force_triggle_foreground_flush[];
+} // namespace FailPoints
 
 namespace DM
 {
@@ -810,6 +819,9 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     bool should_place_delta_index = delta_rows - placed_delta_rows >= delta_cache_limit_rows * 3
         && delta_rows - delta_last_try_place_delta_index_rows >= delta_cache_limit_rows;
 
+    fiu_do_on(FailPoints::force_triggle_background_merge_delta, { should_background_merge_delta = true; });
+    fiu_do_on(FailPoints::force_triggle_foreground_flush, { should_foreground_flush = true; });
+
     auto try_add_background_task = [&](const BackgroundTask & task) {
         // Prevent too many tasks.
         if (background_tasks.length() <= std::max(id_to_segment.size() * 2, background_pool.getNumberOfThreads() * 3))
@@ -994,8 +1006,7 @@ bool DeltaMergeStore::handleBackgroundTask()
 
     // Update GC safe point before background task
     /// Note that `task.dm_context->db_context` will be free after query is finish. We should not use that in background task.
-    auto pd_client = global_context.getTMTContext().getPDClient();
-    if (!pd_client->isMock())
+    if (auto pd_client = global_context.getTMTContext().getPDClient(); !pd_client->isMock())
     {
         auto safe_point = PDClientHelper::getGCSafePointWithRetry(pd_client,
                                                                   /* ignore_cache= */ false,
@@ -1022,10 +1033,14 @@ bool DeltaMergeStore::handleBackgroundTask()
             segmentMerge(*task.dm_context, task.segment, task.next_segment);
             type = ThreadType::BG_Merge;
             break;
-        case MergeDelta:
+        case MergeDelta: {
+            FAIL_POINT_PAUSE(FailPoints::pause_before_dt_background_delta_merge);
             left = segmentMergeDelta(*task.dm_context, task.segment, false);
             type = ThreadType::BG_MergeDelta;
+            // Wake up all waiting threads if failpoint is enabled
+            FailPointHelper::disableFailPoint(FailPoints::pause_until_dt_background_delta_merge);
             break;
+        }
         case Compact: {
             task.segment->compactDelta(*task.dm_context);
             left = task.segment;

@@ -8,21 +8,31 @@ namespace DB
 {
 std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::fail_point_wait_channels;
 
-#define APPLY_FOR_FAILPOINTS(M)                              \
-    M(exception_between_drop_meta_and_data)                  \
-    M(exception_between_alter_data_and_meta)                 \
-    M(exception_drop_table_during_remove_meta)               \
-    M(exception_between_rename_table_data_and_metadata);     \
-    M(exception_between_create_database_meta_and_directory); \
-    M(exception_before_rename_table_old_meta_removed);       \
-    M(region_exception_after_read_from_storage_some_error)   \
-    M(region_exception_after_read_from_storage_all_error)    \
-    M(exception_before_dmfile_remove_encryption)             \
-    M(exception_before_dmfile_remove_from_disk)              \
-    M(force_enable_region_persister_compatible_mode)         \
-    M(force_disable_region_persister_compatible_mode)
+#define APPLY_FOR_FAILPOINTS(M)                             \
+    M(exception_between_drop_meta_and_data)                 \
+    M(exception_between_alter_data_and_meta)                \
+    M(exception_drop_table_during_remove_meta)              \
+    M(exception_between_rename_table_data_and_metadata)     \
+    M(exception_between_create_database_meta_and_directory) \
+    M(exception_before_rename_table_old_meta_removed)       \
+    M(exception_after_step_1_in_exchange_partition)         \
+    M(exception_before_step_2_rename_in_exchange_partition) \
+    M(exception_after_step_2_in_exchange_partition)         \
+    M(exception_before_step_3_rename_in_exchange_partition) \
+    M(exception_after_step_3_in_exchange_partition)         \
+    M(region_exception_after_read_from_storage_some_error)  \
+    M(region_exception_after_read_from_storage_all_error)   \
+    M(exception_before_dmfile_remove_encryption)            \
+    M(exception_before_dmfile_remove_from_disk)             \
+    M(force_enable_region_persister_compatible_mode)        \
+    M(force_disable_region_persister_compatible_mode)       \
+    M(force_triggle_background_merge_delta)                 \
+    M(force_triggle_foreground_flush)
 
-#define APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M) M(pause_after_learner_read)
+#define APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M)  \
+    M(pause_after_learner_read)               \
+    M(pause_before_dt_background_delta_merge) \
+    M(pause_until_dt_background_delta_merge)
 
 namespace FailPoints
 {
@@ -37,13 +47,15 @@ class FailPointChannel : private boost::noncopyable
 {
 public:
     // wake up all waiting threads when destroy
-    ~FailPointChannel() { cv.notify_all(); }
+    ~FailPointChannel() { wake(); }
 
     void wait()
     {
         std::unique_lock lock(m);
         cv.wait(lock);
     }
+
+    void wake() { cv.notify_all(); }
 
 private:
     std::mutex m;
@@ -80,7 +92,10 @@ void FailPointHelper::enableFailPoint(const String & fail_point_name)
 void FailPointHelper::disableFailPoint(const String & fail_point_name)
 {
     if (auto iter = fail_point_wait_channels.find(fail_point_name); iter != fail_point_wait_channels.end())
+    {
+        iter->second->wake();
         fail_point_wait_channels.erase(iter);
+    }
     fiu_disable(fail_point_name.c_str());
 }
 
