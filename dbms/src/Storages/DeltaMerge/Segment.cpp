@@ -727,7 +727,6 @@ Segment::prepareSplit(DMContext & dm_context, const SegmentSnapshotPtr & segment
                      "Got bad split point [" << split_value.toDebugString() << "] for segment " << info()
                                              << ", fall back to split physical.");
             return prepareSplitPhysical(dm_context, segment_snap, wbs, need_rate_limit);
-
         }
         else
             return prepareSplitLogical(dm_context, segment_snap, split_point, wbs);

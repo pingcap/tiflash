@@ -995,6 +995,47 @@ try
         in->readSuffix();
         ASSERT_EQ(num_rows_read, (size_t)(num_rows_write * 2));
     }
+
+    // Flush cache and apply delta-merge, then read again
+    // This will create a new stable with new schema, check the data.
+    {
+        segment->flushCache(dmContext());
+        segment = segment->mergeDelta(dmContext());
+    }
+
+    {
+        // check the stable data with new schema
+        auto in = segment->getInputStream(dmContext(), *columns_to_read, {RowKeyRange::newAll(false, 1)});
+
+        // check that we can read correct values
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            ASSERT_TRUE(block.has(column_name_i8_to_i32));
+            const ColumnWithTypeAndName & col = block.getByName(column_name_i8_to_i32);
+            ASSERT_DATATYPE_EQ(col.type, column_i32_after_ddl.type);
+            ASSERT_EQ(col.name, column_i32_after_ddl.name);
+            ASSERT_EQ(col.column_id, column_i32_after_ddl.id);
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                auto value    = col.column->getInt(i);
+                auto expected = 0;
+                if (i < num_rows_write / 2)
+                    expected = static_cast<int64_t>(-1 * (i % 2 ? 1 : -1) * i);
+                else
+                {
+                    auto r   = i - num_rows_write / 2;
+                    expected = static_cast<int64_t>(-1 * (r % 2 ? 1 : -1) * r);
+                }
+                // std::cerr << " row: " << i << "  "<< value << std::endl;
+                ASSERT_EQ(value, expected) << "at row: " << i;
+            }
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, (size_t)(num_rows_write * 2));
+    }
 }
 CATCH
 
@@ -1074,7 +1115,8 @@ try
         Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write * 2, false, /* tso= */ 3);
 
         const size_t          num_rows = block.rows();
-        ColumnWithTypeAndName int8_col(nullptr, new_column_define.type, new_column_define.name, new_column_id);
+        ColumnWithTypeAndName int8_col(
+            nullptr, new_column_define.type, new_column_define.name, new_column_id, new_column_define.default_value);
         {
             IColumn::MutablePtr m_col       = int8_col.type->createColumn();
             auto &              column_data = typeid_cast<ColumnVector<Int8> &>(*m_col).getData();
@@ -1099,6 +1141,47 @@ try
 
     {
         // read written data
+        auto in = segment->getInputStream(dmContext(), *columns_after_ddl, {RowKeyRange::newAll(false, 1)});
+
+        // check that we can read correct values
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            ASSERT_TRUE(block.has(new_column_name));
+            const ColumnWithTypeAndName & col = block.getByName(new_column_name);
+            ASSERT_DATATYPE_EQ(col.type, new_column_define.type);
+            ASSERT_EQ(col.name, new_column_define.name);
+            ASSERT_EQ(col.column_id, new_column_define.id);
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                int8_t value    = col.column->getInt(i);
+                int8_t expected = 0;
+                if (i < num_rows_write / 2)
+                    expected = new_column_default_value_int;
+                else
+                {
+                    auto r   = i - num_rows_write / 2;
+                    expected = static_cast<int8_t>(-1 * (r % 2 ? 1 : -1) * r);
+                }
+                // std::cerr << " row: " << i << "  "<< value << std::endl;
+                ASSERT_EQ(value, expected) << "at row: " << i;
+            }
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, (size_t)(num_rows_write * 2));
+    }
+
+    // Flush cache and apply delta-merge, then read again
+    // This will create a new stable with new schema, check the data.
+    {
+        segment->flushCache(dmContext());
+        segment = segment->mergeDelta(dmContext());
+    }
+
+    {
+        // read written data after delta-merge
         auto in = segment->getInputStream(dmContext(), *columns_after_ddl, {RowKeyRange::newAll(false, 1)});
 
         // check that we can read correct values
