@@ -163,9 +163,10 @@ String taskStatusToString(TaskStatus ts)
 }
 void MPPTask::runImpl(BlockIO io, MemoryTracker * memory_tracker)
 {
-    if (status.load() != INITIALIZING)
+    auto current_status = static_cast<TaskStatus>(status.load());
+    if (current_status != INITIALIZING)
     {
-        LOG_WARNING(log, "task in " + taskStatusToString(static_cast<TaskStatus>(status.load())) + " state, skip running");
+        LOG_WARNING(log, "task in " + taskStatusToString(current_status) + " state, skip running");
         return;
     }
     current_memory_tracker = memory_tracker;
