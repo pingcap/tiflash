@@ -83,6 +83,8 @@ struct MPPTunnel
         {
             cv_for_connected.wait(lk, [&]() { return connected; });
         }
+        if (finished)
+            throw Exception("write to tunnel which is already closed.");
         writer->Write(data);
         if (close_after_write)
         {
@@ -103,12 +105,6 @@ struct MPPTunnel
             throw Exception("has finished");
         finished = true;
         cv_for_finished.notify_all();
-    }
-
-    bool isFinished()
-    {
-        std::lock_guard<std::mutex> lk(mu);
-        return finished;
     }
 
     // a MPPConn request has arrived. it will build connection by this tunnel;
@@ -207,7 +203,7 @@ class MPPTaskManager;
 struct MPPTaskProgress
 {
     std::atomic<UInt64> current_progress{0};
-    UInt64 last_progress_on_check = 0;
+    UInt64 progress_on_last_check = 0;
     UInt64 epoch_when_found_no_progress = 0;
     bool found_no_progress = false;
     bool isTaskHanging(const Context & context);
@@ -220,6 +216,7 @@ enum TaskStatus
     FINISHED,
     CANCELLED,
 };
+
 struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyable
 {
     Context context;
@@ -230,7 +227,7 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
     MPPTaskId id;
 
     MPPTaskProgress task_progress;
-    TaskStatus status = INITIALIZING;
+    std::atomic<Int32> status{INITIALIZING};
 
     mpp::TaskMeta meta;
 
@@ -270,10 +267,7 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
                 auto err = new mpp::Error();
                 err->set_msg(e);
                 data.set_allocated_error(err);
-                if (!it.second->isFinished())
-                {
-                    it.second->write(data, true);
-                }
+                it.second->write(data, true);
             }
         }
         catch (...)
@@ -334,9 +328,9 @@ struct MPPQueryTaskSet
 {
     /// to_be_cancelled is kind of lock, if to_be_cancelled is set
     /// to true, then task_map can only be modified by query cancel
-    /// thread, however we do not need any mutex because all the
-    /// write/read to MPPQueryTaskSet is protected by the mutex in
-    /// MPPTaskManager
+    /// thread, which means no task can register/un-register for the
+    /// query, here we do not need mutex because all the write/read
+    /// to MPPQueryTaskSet is protected by the mutex in MPPTaskManager
     bool to_be_cancelled = false;
     MPPTaskPtrs task_map;
 };

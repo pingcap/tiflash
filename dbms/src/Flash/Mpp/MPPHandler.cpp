@@ -16,7 +16,7 @@ bool MPPTaskProgress::isTaskHanging(const Context & context)
 {
     bool ret = false;
     auto current_progress_value = current_progress.load();
-    if (current_progress_value != last_progress_on_check)
+    if (current_progress_value != progress_on_last_check)
     {
         /// make some progress
         found_no_progress = false;
@@ -41,7 +41,7 @@ bool MPPTaskProgress::isTaskHanging(const Context & context)
                 ret = true;
         }
     }
-    last_progress_on_check = current_progress_value;
+    progress_on_last_check = current_progress_value;
     return ret;
 }
 
@@ -163,9 +163,9 @@ String taskStatusToString(TaskStatus ts)
 }
 void MPPTask::runImpl(BlockIO io, MemoryTracker * memory_tracker)
 {
-    if (status != INITIALIZING)
+    if (status.load() != INITIALIZING)
     {
-        LOG_WARNING(log, "task in " + taskStatusToString(status) + " state, skip running");
+        LOG_WARNING(log, "task in " + taskStatusToString(static_cast<TaskStatus>(status.load())) + " state, skip running");
         return;
     }
     current_memory_tracker = memory_tracker;
@@ -230,14 +230,15 @@ void MPPTask::runImpl(BlockIO io, MemoryTracker * memory_tracker)
 
 bool MPPTask::isTaskHanging()
 {
-    if (status == RUNNING)
+    if (status.load() == RUNNING)
         return task_progress.isTaskHanging(context);
     return false;
 }
 
 void MPPTask::cancel()
 {
-    if (status == FINISHED || status == CANCELLED)
+    auto current_status = status.load();
+    if (current_status == FINISHED || current_status == CANCELLED)
         return;
     LOG_WARNING(log, "Begin cancel task: " + id.toString());
     /// step 1. cancel query streams
