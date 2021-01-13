@@ -74,12 +74,13 @@ const Segment::Version Segment::CURRENT_VERSION = 1;
 const static size_t    SEGMENT_BUFFER_SIZE      = 128; // More than enough.
 
 DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
+                             const ColumnDefinesPtr &    schema_snap,
                              const BlockInputStreamPtr & input_stream,
                              UInt64                      file_id,
                              const String &              parent_path)
 {
     auto   dmfile        = DMFile::create(file_id, parent_path);
-    auto   output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.db_context, dmfile, *dm_context.store_columns);
+    auto   output_stream = std::make_shared<DMFileBlockOutputStream>(dm_context.db_context, dmfile, *schema_snap);
     auto * mvcc_stream   = typeid_cast<const DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT> *>(input_stream.get());
 
     input_stream->readPrefix();
@@ -109,13 +110,17 @@ DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
     return dmfile;
 }
 
-StableValueSpacePtr createNewStable(DMContext & context, const BlockInputStreamPtr & input_stream, PageId stable_id, WriteBatches & wbs)
+StableValueSpacePtr createNewStable(DMContext & context, 
+                                    const ColumnDefinesPtr &    schema_snap,
+                                    const BlockInputStreamPtr & input_stream,
+                                    PageId stable_id,
+                                    WriteBatches & wbs)
 {
     auto delegate   = context.path_pool.getStableDiskDelegator();
     auto store_path = delegate.choosePath();
 
     PageId dmfile_id = context.storage_pool.newDataPageId();
-    auto   dmfile    = writeIntoNewDMFile(context, input_stream, dmfile_id, store_path);
+    auto   dmfile    = writeIntoNewDMFile(context, schema_snap, input_stream, dmfile_id, store_path);
     auto   stable    = std::make_shared<StableValueSpace>(stable_id);
     stable->setFiles({dmfile});
     stable->saveMeta(wbs.meta);
@@ -151,7 +156,7 @@ SegmentPtr Segment::newSegment(
     WriteBatches wbs(context.storage_pool);
 
     auto delta  = std::make_shared<DeltaValueSpace>(delta_id);
-    auto stable = createNewStable(context, std::make_shared<EmptySkippableBlockInputStream>(*context.store_columns), stable_id, wbs);
+    auto stable = createNewStable(context, context.store_columns, std::make_shared<EmptySkippableBlockInputStream>(*context.store_columns), stable_id, wbs);
 
     auto segment = std::make_shared<Segment>(INITIAL_EPOCH, range, segment_id, next_segment_id, delta, stable);
 
@@ -260,13 +265,16 @@ bool Segment::write(DMContext & dm_context, const HandleRange & delete_range)
     return delta->appendDeleteRange(dm_context, delete_range);
 }
 
-SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool is_update) const
+SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update) const
 {
-    auto delta_snap  = delta->createSnapshot(dm_context, is_update);
-    auto stable_snap = stable->createSnapshot();
+    // If the snapshot is created for read, then the snapshot will contains all packs (cached and persisted) for read.
+    // To ensure the schema consistency, if the snapshot is created for update, and there is persisted pack in delta,
+    // then `schema_snap` will be the latest persisted pack's schema. Otherwise it is the `dm_context.store_columns`.
+    auto [delta_snap, schema_snap] = delta->createSnapshot(dm_context, for_update, dm_context.store_columns);
+    auto stable_snap               = stable->createSnapshot();
     if (!delta_snap || !stable_snap)
         return {};
-    return std::make_shared<SegmentSnapshot>(delta_snap, stable_snap);
+    return std::make_shared<SegmentSnapshot>(delta_snap, stable_snap, schema_snap);
 }
 
 BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_context,
@@ -461,7 +469,7 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext & dm_context, const Seg
 
     EventRecorder recorder(ProfileEvents::DMDeltaMerge, ProfileEvents::DMDeltaMergeNS);
 
-    auto read_info = getReadInfo(dm_context, *dm_context.store_columns, segment_snap);
+    auto read_info = getReadInfo(dm_context, *segment_snap->schema, segment_snap);
 
     BlockInputStreamPtr data_stream = getPlacedStream(dm_context,
                                                       read_info.read_columns,
@@ -759,7 +767,7 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, const S
 
     EventRecorder recorder(ProfileEvents::DMSegmentSplit, ProfileEvents::DMSegmentSplitNS);
 
-    auto read_info   = getReadInfo(dm_context, *dm_context.store_columns, segment_snap);
+    auto read_info   = getReadInfo(dm_context, segment_snap);
     auto split_point = getSplitPointSlow(dm_context, read_info, segment_snap);
 
     HandleRange my_range    = {range.start, split_point};
@@ -791,7 +799,7 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, const S
         my_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
             my_data, read_info.read_columns, dm_context.min_version);
         auto my_stable_id = segment_snap->stable->getId();
-        my_new_stable     = createNewStable(dm_context, my_data, my_stable_id, wbs);
+        my_new_stable     = createNewStable(dm_context, segment_snap->schema, my_data, my_stable_id, wbs);
     }
 
     LOG_INFO(log, "prepare my_new_stable done");
@@ -815,7 +823,7 @@ Segment::SplitInfo Segment::prepareSplitPhysical(DMContext & dm_context, const S
         other_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
             other_data, read_info.read_columns, dm_context.min_version);
         auto other_stable_id = dm_context.storage_pool.newMetaPageId();
-        other_stable         = createNewStable(dm_context, other_data, other_stable_id, wbs);
+        other_stable         = createNewStable(dm_context, segment_snap->schema, other_data, other_stable_id, wbs);
     }
 
     LOG_INFO(log, "prepare other_stable done");
@@ -927,7 +935,7 @@ StableValueSpacePtr Segment::prepareMerge(DMContext &                dm_context,
                         + ", second start: " + Redact::handleToDebugString(right->range.start));
 
     auto getStream = [&](const SegmentPtr & segment, const SegmentSnapshotPtr & segment_snap) {
-        auto                read_info = segment->getReadInfo(dm_context, *dm_context.store_columns, segment_snap);
+        auto                read_info = segment->getReadInfo(dm_context, segment_snap);
         BlockInputStreamPtr stream    = getPlacedStream(dm_context,
                                                      read_info.read_columns,
                                                      segment->range,
@@ -951,8 +959,9 @@ StableValueSpacePtr Segment::prepareMerge(DMContext &                dm_context,
 
     auto merged_stream = std::make_shared<ConcatBlockInputStream>(BlockInputStreams{left_stream, right_stream});
 
+    // FIXME: which snap should we use?
     auto merged_stable_id = left->stable->getId();
-    auto merged_stable    = createNewStable(dm_context, merged_stream, merged_stable_id, wbs);
+    auto merged_stable    = createNewStable(dm_context, left_snap->schema, merged_stream, merged_stable_id, wbs);
 
     LOG_INFO(left->log, "Segment [" << left->segmentId() << "] and [" << right->segmentId() << "] prepare merge done");
 

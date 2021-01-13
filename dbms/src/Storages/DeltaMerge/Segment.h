@@ -35,10 +35,14 @@ struct SegmentSnapshot : private boost::noncopyable
 {
     DeltaSnapshotPtr  delta;
     StableSnapshotPtr stable;
+    ColumnDefinesPtr  schema;
 
-    SegmentSnapshot(const DeltaSnapshotPtr & delta_, const StableSnapshotPtr & stable_) : delta(delta_), stable(stable_) {}
+    SegmentSnapshot(DeltaSnapshotPtr delta_, StableSnapshotPtr stable_, ColumnDefinesPtr schema_)
+        : delta(std::move(delta_)), stable(std::move(stable_)), schema(std::move(schema_))
+    {
+    }
 
-    SegmentSnapshotPtr clone() { return std::make_shared<SegmentSnapshot>(delta->clone(), stable->clone()); }
+    SegmentSnapshotPtr clone() { return std::make_shared<SegmentSnapshot>(delta->clone(), stable->clone(), schema); }
 
     UInt64 getBytes() { return delta->getBytes() + stable->getBytes(); }
     UInt64 getRows() { return delta->getRows() + stable->getRows(); }
@@ -201,6 +205,13 @@ public:
     void drop(const FileProviderPtr & file_provider) { stable->drop(file_provider); }
 
 private:
+    inline ReadInfo getReadInfo(const DMContext &          dm_context,
+                                const SegmentSnapshotPtr & segment_snap,
+                                const HandleRanges &       read_ranges = {HandleRange::newAll()},
+                                UInt64                     max_version = MAX_UINT64) const
+    {
+        return getReadInfo(dm_context, *segment_snap->schema, segment_snap, read_ranges, max_version);
+    }
     ReadInfo getReadInfo(const DMContext &          dm_context,
                          const ColumnDefines &      read_columns,
                          const SegmentSnapshotPtr & segment_snap,

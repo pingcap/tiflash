@@ -30,9 +30,10 @@ DeltaValueSpace::Snapshot::~Snapshot()
     }
 }
 
-SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool is_update)
+std::pair<SnapshotPtr, ColumnDefinesPtr>
+DeltaValueSpace::createSnapshot(const DMContext & context, bool for_update, ColumnDefinesPtr schema)
 {
-    if (is_update)
+    if (for_update)
     {
         bool v = false;
         // Other thread is doing structure update, just return.
@@ -47,7 +48,7 @@ SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool is_u
         return {};
 
     auto snap          = std::make_shared<Snapshot>();
-    snap->is_update    = is_update;
+    snap->is_update    = for_update;
     snap->delta        = this->shared_from_this();
     snap->storage_snap = std::make_shared<StorageSnapshot>(context.storage_pool, true);
     snap->rows         = rows;
@@ -57,24 +58,31 @@ SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool is_u
 
     snap->shared_delta_index = delta_index;
 
-    if (is_update)
+    /// If `for_update` is false, it will create a snapshot with all packs in DeltaValueSpace.
+    /// If `for_update` is true, it will create a snapshot with persisted packs, and update `schema` to the latest persisted pack's schema to ensure schema consistency for updating tasks.
+
+    if (for_update)
     {
         snap->rows -= unsaved_rows;
         snap->deletes -= unsaved_deletes;
     }
 
-    size_t check_rows    = 0;
-    size_t check_deletes = 0;
-    size_t total_rows    = 0;
-    size_t total_deletes = 0;
-    for (auto & pack : packs)
+    size_t   check_rows    = 0;
+    size_t   check_deletes = 0;
+    size_t   total_rows    = 0;
+    size_t   total_deletes = 0;
+    BlockPtr latest_persisted_schema{nullptr};
+    for (const auto & pack : packs)
     {
-        if (!is_update || pack->isSaved())
+        if (!for_update || pack->isSaved())
         {
             // Because flush/compact threads could update the Pack::cache instance during read operation.
             // We better make a copy if cache exists.
             auto pack_copy = pack->isCached() ? std::make_shared<Pack>(*pack) : pack;
             snap->packs.push_back(std::move(pack_copy));
+
+            if (for_update && pack->isSaved() && !pack->isDeleteRange())
+                latest_persisted_schema = pack->schema;
 
             check_rows += pack->rows;
             check_deletes += pack->isDeleteRange();
@@ -83,10 +91,13 @@ SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool is_u
         total_deletes += pack->isDeleteRange();
     }
 
+    if (for_update && latest_persisted_schema)
+        schema = std::make_shared<ColumnDefines>(getColumnDefinesFromBlock(*latest_persisted_schema));
+
     if (unlikely(check_rows != snap->rows || check_deletes != snap->deletes || total_rows != rows || total_deletes != deletes))
         throw Exception("Rows and deletes check failed!", ErrorCodes::LOGICAL_ERROR);
 
-    return snap;
+    return std::make_pair(snap, schema);
 }
 
 class DeltaSnapshotInputStream : public IBlockInputStream
@@ -282,7 +293,7 @@ Block DeltaValueSpace::Snapshot::read(size_t pack_index)
     auto & pack_columns = getColumnsOfPack(pack_index, column_defines.size());
     for (size_t i = 0; i < column_defines.size(); ++i)
     {
-        auto cd = column_defines[i];
+        auto & cd = column_defines[i];
         block.insert(ColumnWithTypeAndName(pack_columns[i], cd.type, cd.name, cd.id));
     }
     return block;
