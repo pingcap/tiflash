@@ -156,14 +156,18 @@ Segment::Segment(UInt64                      epoch_, //
 {
 }
 
-SegmentPtr Segment::newSegment(
-    DMContext & context, const RowKeyRange & range, PageId segment_id, PageId next_segment_id, PageId delta_id, PageId stable_id)
+SegmentPtr Segment::newSegment(DMContext &              context,
+                               const ColumnDefinesPtr & schema,
+                               const RowKeyRange &      range,
+                               PageId                   segment_id,
+                               PageId                   next_segment_id,
+                               PageId                   delta_id,
+                               PageId                   stable_id)
 {
     WriteBatches wbs(context.storage_pool);
 
     auto delta  = std::make_shared<DeltaValueSpace>(delta_id, range.is_common_handle, range.rowkey_column_size);
-    auto stable = createNewStable(
-        context, context.store_columns, std::make_shared<EmptySkippableBlockInputStream>(*context.store_columns), stable_id, wbs, false);
+    auto stable = createNewStable(context, schema, std::make_shared<EmptySkippableBlockInputStream>(*schema), stable_id, wbs, false);
 
     auto segment = std::make_shared<Segment>(INITIAL_EPOCH, range, segment_id, next_segment_id, delta, stable);
 
@@ -178,10 +182,16 @@ SegmentPtr Segment::newSegment(
     return segment;
 }
 
-SegmentPtr Segment::newSegment(DMContext & context, const RowKeyRange & rowkey_range, PageId segment_id, PageId next_segment_id)
+SegmentPtr Segment::newSegment(
+    DMContext & context, const ColumnDefinesPtr & schema, const RowKeyRange & rowkey_range, PageId segment_id, PageId next_segment_id)
 {
-    return newSegment(
-        context, rowkey_range, segment_id, next_segment_id, context.storage_pool.newMetaPageId(), context.storage_pool.newMetaPageId());
+    return newSegment(context,
+                      schema,
+                      rowkey_range,
+                      segment_id,
+                      next_segment_id,
+                      context.storage_pool.newMetaPageId(),
+                      context.storage_pool.newMetaPageId());
 }
 
 SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
@@ -278,13 +288,17 @@ bool Segment::write(DMContext & dm_context, const RowKeyRange & delete_range)
     return delta->appendDeleteRange(dm_context, delete_range);
 }
 
-SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update) const
+SegmentSnapshotPtr Segment::createSnapshot(
+    std::shared_lock<std::shared_mutex> *, // A pointer to a lock, caller should ensure schema_snap is not changed under this lock
+    const DMContext &        dm_context,
+    bool                     for_update,
+    const ColumnDefinesPtr & schema_snap) const
 {
     // If the snapshot is created for read, then the snapshot will contains all packs (cached and persisted) for read.
     // To ensure the schema consistency, if the snapshot is created for update, and there is persisted pack in delta,
     // then `schema_snap` will be the latest persisted pack's schema. Otherwise it is the `dm_context.store_columns`.
-    auto [delta_snap, schema_snap] = delta->createSnapshot(dm_context, for_update, dm_context.store_columns);
-    auto stable_snap               = stable->createSnapshot();
+    auto delta_snap  = delta->createSnapshot(dm_context, for_update);
+    auto stable_snap = stable->createSnapshot();
     if (!delta_snap || !stable_snap)
         return {};
     return std::make_shared<SegmentSnapshot>(delta_snap, stable_snap, schema_snap);
@@ -385,7 +399,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &     dm_context,
                                             size_t                expected_block_size)
 {
 
-    auto segment_snap = createSnapshot(dm_context);
+    auto segment_snap = createSnapshot(nullptr, dm_context);
     if (!segment_snap)
         return {};
     return getInputStream(dm_context, columns_to_read, segment_snap, read_ranges, filter, max_version, expected_block_size);
@@ -480,16 +494,16 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &          dm_con
 
 BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context, const ColumnDefines & columns_to_read)
 {
-    auto segment_snap = createSnapshot(dm_context);
+    auto segment_snap = createSnapshot(nullptr, dm_context);
     if (!segment_snap)
         return {};
     return getInputStreamRaw(dm_context, columns_to_read, segment_snap, true);
 }
 
-SegmentPtr Segment::mergeDelta(DMContext & dm_context) const
+SegmentPtr Segment::mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const
 {
     WriteBatches wbs(dm_context.storage_pool);
-    auto         segment_snap = createSnapshot(dm_context, true);
+    auto         segment_snap = createSnapshot(nullptr, dm_context, true, schema_snap);
     if (!segment_snap)
         return {};
 
@@ -559,10 +573,10 @@ SegmentPtr Segment::applyMergeDelta(DMContext &                 context,
     return new_me;
 }
 
-SegmentPair Segment::split(DMContext & dm_context) const
+SegmentPair Segment::split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const
 {
     WriteBatches wbs(dm_context.storage_pool);
-    auto         segment_snap = createSnapshot(dm_context, true);
+    auto         segment_snap = createSnapshot(nullptr, dm_context, true, schema_snap);
     if (!segment_snap)
         return {};
 
@@ -940,12 +954,12 @@ SegmentPair Segment::applySplit(DMContext &                dm_context, //
     return {new_me, other};
 }
 
-SegmentPtr Segment::merge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right)
+SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schema_snap, const SegmentPtr & left, const SegmentPtr & right)
 {
     WriteBatches wbs(dm_context.storage_pool);
 
-    auto left_snap  = left->createSnapshot(dm_context, true);
-    auto right_snap = right->createSnapshot(dm_context, true);
+    auto left_snap  = left->createSnapshot(nullptr, dm_context, true, schema_snap);
+    auto right_snap = right->createSnapshot(nullptr, dm_context, true, schema_snap);
     if (!left_snap || !right_snap)
         return {};
 
@@ -1098,7 +1112,7 @@ bool Segment::compactDelta(DMContext & dm_context)
 
 void Segment::placeDeltaIndex(DMContext & dm_context)
 {
-    auto segment_snap = createSnapshot(dm_context, true);
+    auto segment_snap = createSnapshot(nullptr, dm_context, true);
     if (!segment_snap)
         return;
     getReadInfo(dm_context,

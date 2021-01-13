@@ -186,7 +186,7 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
             auto segment_id = storage_pool.newMetaPageId();
             if (segment_id != DELTA_MERGE_FIRST_SEGMENT_ID)
                 throw Exception("The first segment id should be " + DB::toString(DELTA_MERGE_FIRST_SEGMENT_ID), ErrorCodes::LOGICAL_ERROR);
-            auto first_segment = Segment::newSegment(*dm_context, RowKeyRange::newAll(is_common_handle, rowkey_column_size), segment_id, 0);
+            auto first_segment = Segment::newSegment(*dm_context, store_columns, RowKeyRange::newAll(is_common_handle, rowkey_column_size), segment_id, 0);
             segments.emplace(first_segment->getRowKeyRange().getEnd(), first_segment);
             id_to_segment.emplace(segment_id, first_segment);
         }
@@ -350,7 +350,6 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
                                path_pool,
                                storage_pool,
                                hash_salt,
-                               store_columns,
                                latest_gc_safe_point,
                                settings.not_compress_columns,
                                is_common_handle,
@@ -671,7 +670,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
             (void)handle;
             if (read_segments.empty() || read_segments.count(segment->segmentId()))
             {
-                auto segment_snap = segment->createSnapshot(*dm_context);
+                auto segment_snap = segment->createSnapshot(&lock, *dm_context);
                 if (unlikely(!segment_snap))
                     throw Exception("Failed to get segment snap", ErrorCodes::LOGICAL_ERROR);
                 tasks.push_back(std::make_shared<SegmentReadTask>(segment, segment_snap, RowKeyRanges{segment->getRowKeyRange()}));
@@ -1122,7 +1121,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
             return {};
         }
 
-        segment_snap = segment->createSnapshot(dm_context, /* is_update */ true);
+        segment_snap = segment->createSnapshot(&lock, dm_context, /* is_update */ true, store_columns);
         if (!segment_snap)
         {
             LOG_DEBUG(log, "Give up segment [" << segment->segmentId() << "] split");
@@ -1237,8 +1236,8 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
             return;
         }
 
-        left_snap  = left->createSnapshot(dm_context, /* is_update */ true);
-        right_snap = right->createSnapshot(dm_context, /* is_update */ true);
+        left_snap  = left->createSnapshot(&lock, dm_context, /* is_update */ true, store_columns);
+        right_snap = right->createSnapshot(&lock, dm_context, /* is_update */ true, store_columns);
 
         if (!left_snap || !right_snap)
         {
@@ -1329,7 +1328,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
             return {};
         }
 
-        segment_snap = segment->createSnapshot(dm_context, /* is_update */ true);
+        segment_snap = segment->createSnapshot(&lock, dm_context, /* is_update */ true, store_columns);
         if (!segment_snap)
         {
             LOG_DEBUG(log, "Give up merge delta, segment [" << segment->segmentId() << "]");
@@ -1719,7 +1718,7 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(DMContext &          dm_c
             if (tasks.empty() || tasks.back()->segment != seg_it->second)
             {
                 auto segment      = seg_it->second;
-                auto segment_snap = segment->createSnapshot(dm_context);
+                auto segment_snap = segment->createSnapshot(&lock, dm_context);
                 if (unlikely(!segment_snap))
                     throw Exception("Failed to get segment snap", ErrorCodes::LOGICAL_ERROR);
                 tasks.push_back(std::make_shared<SegmentReadTask>(segment, segment_snap));
