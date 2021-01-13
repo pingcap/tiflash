@@ -4,7 +4,6 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/DeltaMerge/Segment.h>
 
 namespace DB
 {
