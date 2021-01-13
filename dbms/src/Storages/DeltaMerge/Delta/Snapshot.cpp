@@ -58,7 +58,7 @@ SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool for_
     snap->shared_delta_index = delta_index;
 
     /// If `for_update` is false, it will create a snapshot with all packs in DeltaValueSpace.
-    /// If `for_update` is true, it will create a snapshot with persisted packs, and update `schema` to the latest persisted pack's schema to ensure schema consistency for updating tasks.
+    /// If `for_update` is true, it will create a snapshot with persisted packs.
 
     if (for_update)
     {
@@ -66,10 +66,10 @@ SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool for_
         snap->deletes -= unsaved_deletes;
     }
 
-    size_t   check_rows    = 0;
-    size_t   check_deletes = 0;
-    size_t   total_rows    = 0;
-    size_t   total_deletes = 0;
+    size_t check_rows    = 0;
+    size_t check_deletes = 0;
+    size_t total_rows    = 0;
+    size_t total_deletes = 0;
     for (const auto & pack : packs)
     {
         if (!for_update || pack->isSaved())

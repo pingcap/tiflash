@@ -112,8 +112,8 @@ public:
 
     SegmentSnapshotPtr createSnapshot(std::shared_lock<std::shared_mutex> *,
                                       const DMContext &        dm_context,
-                                      bool                     for_update  = false,
-                                      const ColumnDefinesPtr & schema_snap = nullptr) const;
+                                      const ColumnDefinesPtr & schema_snap,
+                                      bool                     for_update = false) const;
 
     BlockInputStreamPtr getInputStream(const DMContext &          dm_context,
                                        const ColumnDefines &      columns_to_read,
@@ -218,7 +218,8 @@ private:
                                 const HandleRanges &       read_ranges = {HandleRange::newAll()},
                                 UInt64                     max_version = MAX_UINT64) const
     {
-        return getReadInfo(dm_context, *segment_snap->schema, segment_snap, read_ranges, max_version);
+        // Read all columns using the schema in `segment_snap`
+        return getReadInfo(dm_context, /*read_columns=*/*segment_snap->schema, segment_snap, read_ranges, max_version);
     }
     ReadInfo getReadInfo(const DMContext &          dm_context,
                          const ColumnDefines &      read_columns,
