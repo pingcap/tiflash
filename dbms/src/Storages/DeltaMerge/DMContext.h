@@ -55,20 +55,11 @@ struct DMContext : private boost::noncopyable
     const bool read_stable_only;
     const bool enable_skippable_place;
 
-private:
-    // The schema snapshot at the time we create this Context
-    const ColumnDefinesPtr store_columns;
-
-    friend SegmentSnapshotPtr Segment::createSnapshot(const DMContext &, bool) const;
-    friend SegmentPtr         Segment::newSegment(
-        DMContext & context, const RowKeyRange & range, PageId segment_id, PageId next_segment_id, PageId delta_id, PageId stable_id);
-
 public:
     DMContext(const Context &          db_context_,
               StoragePathPool &        path_pool_,
               StoragePool &            storage_pool_,
               const UInt64             hash_salt_,
-              const ColumnDefinesPtr & store_columns_,
               const DB::Timestamp      min_version_,
               const NotCompress &      not_compress_,
               const DB::Settings &     settings)
@@ -87,8 +78,7 @@ public:
           enable_logical_split(settings.dt_enable_logical_split),
           read_delta_only(settings.dt_read_delta_only),
           read_stable_only(settings.dt_read_stable_only),
-          enable_skippable_place(settings.dt_enable_skippable_place),
-          store_columns(store_columns_)
+          enable_skippable_place(settings.dt_enable_skippable_place)
     {
     }
 };

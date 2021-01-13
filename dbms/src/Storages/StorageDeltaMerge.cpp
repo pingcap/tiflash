@@ -338,7 +338,7 @@ BlockOutputStreamPtr StorageDeltaMerge::write(const ASTPtr & query, const Settin
 void StorageDeltaMerge::write(Block && block, const Settings & settings)
 {
     {
-        // TODO: remove this code if the column ids and default value in the block are already settled.
+        // TODO: remove this code if the column ids in the block are already settled.
         auto header = store->getHeader();
         for (auto & col : block)
         {
@@ -350,9 +350,10 @@ void StorageDeltaMerge::write(Block && block, const Settings & settings)
                 col.column_id = TAG_COLUMN_ID;
             else
             {
-                auto header_col = header->getByName(col.name);
+                auto & header_col = header->getByName(col.name);
                 col.column_id = header_col.column_id;
-                col.default_value = header_col.default_value;
+                // We don't need to set default_value by now
+                // col.default_value = header_col.default_value;
             }
         }
     }

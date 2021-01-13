@@ -30,8 +30,7 @@ DeltaValueSpace::Snapshot::~Snapshot()
     }
 }
 
-std::pair<SnapshotPtr, ColumnDefinesPtr>
-DeltaValueSpace::createSnapshot(const DMContext & context, bool for_update, ColumnDefinesPtr schema)
+SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool for_update)
 {
     if (for_update)
     {
@@ -71,7 +70,6 @@ DeltaValueSpace::createSnapshot(const DMContext & context, bool for_update, Colu
     size_t   check_deletes = 0;
     size_t   total_rows    = 0;
     size_t   total_deletes = 0;
-    BlockPtr latest_persisted_schema{nullptr};
     for (const auto & pack : packs)
     {
         if (!for_update || pack->isSaved())
@@ -81,9 +79,6 @@ DeltaValueSpace::createSnapshot(const DMContext & context, bool for_update, Colu
             auto pack_copy = pack->isCached() ? std::make_shared<Pack>(*pack) : pack;
             snap->packs.push_back(std::move(pack_copy));
 
-            if (for_update && pack->isSaved() && !pack->isDeleteRange())
-                latest_persisted_schema = pack->schema;
-
             check_rows += pack->rows;
             check_deletes += pack->isDeleteRange();
         }
@@ -91,13 +86,10 @@ DeltaValueSpace::createSnapshot(const DMContext & context, bool for_update, Colu
         total_deletes += pack->isDeleteRange();
     }
 
-    if (for_update && latest_persisted_schema)
-        schema = std::make_shared<ColumnDefines>(getColumnDefinesFromBlock(*latest_persisted_schema));
-
     if (unlikely(check_rows != snap->rows || check_deletes != snap->deletes || total_rows != rows || total_deletes != deletes))
         throw Exception("Rows and deletes check failed!", ErrorCodes::LOGICAL_ERROR);
 
-    return std::make_pair(snap, schema);
+    return snap;
 }
 
 class DeltaSnapshotInputStream : public IBlockInputStream

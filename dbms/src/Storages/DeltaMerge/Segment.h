@@ -88,16 +88,18 @@ public:
             const DeltaValueSpacePtr &  delta_,
             const StableValueSpacePtr & stable_);
 
-    static SegmentPtr newSegment(DMContext &         context, //
-                                 const HandleRange & range_,
-                                 PageId              segment_id,
-                                 PageId              next_segment_id,
-                                 PageId              delta_id,
-                                 PageId              stable_id);
-    static SegmentPtr newSegment(DMContext &         context, //
-                                 const HandleRange & range,
-                                 PageId              segment_id,
-                                 PageId              next_segment_id);
+    static SegmentPtr newSegment(DMContext &              context, //
+                                 const ColumnDefinesPtr & schema,
+                                 const HandleRange &      range_,
+                                 PageId                   segment_id,
+                                 PageId                   next_segment_id,
+                                 PageId                   delta_id,
+                                 PageId                   stable_id);
+    static SegmentPtr newSegment(DMContext &              context, //
+                                 const ColumnDefinesPtr & schema,
+                                 const HandleRange &      range,
+                                 PageId                   segment_id,
+                                 PageId                   next_segment_id);
 
     static SegmentPtr restoreSegment(DMContext & context, PageId segment_id);
 
@@ -108,7 +110,10 @@ public:
     bool write(DMContext & dm_context, const Block & block); // For test only
     bool write(DMContext & dm_context, const HandleRange & delete_range);
 
-    SegmentSnapshotPtr createSnapshot(const DMContext & dm_context, bool is_update = false) const;
+    SegmentSnapshotPtr createSnapshot(std::shared_lock<std::shared_mutex> *,
+                                      const DMContext &        dm_context,
+                                      bool                     for_update  = false,
+                                      const ColumnDefinesPtr & schema_snap = nullptr) const;
 
     BlockInputStreamPtr getInputStream(const DMContext &          dm_context,
                                        const ColumnDefines &      columns_to_read,
@@ -136,12 +141,15 @@ public:
     /// For those split, merge and mergeDelta methods, we should use prepareXXX/applyXXX combo in real production.
     /// split(), merge() and mergeDelta() are only used in test cases.
 
-    SegmentPair split(DMContext & dm_context) const;
+    SegmentPair split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
     SplitInfo   prepareSplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs) const;
     SegmentPair
     applySplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs, SplitInfo & split_info) const;
 
-    static SegmentPtr          merge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right);
+    static SegmentPtr          merge(DMContext &              dm_context, //
+                                     const ColumnDefinesPtr & schema_snap,
+                                     const SegmentPtr &       left,
+                                     const SegmentPtr &       right);
     static StableValueSpacePtr prepareMerge(DMContext &                dm_context, //
                                             const SegmentPtr &         left,
                                             const SegmentSnapshotPtr & left_snap,
@@ -156,7 +164,7 @@ public:
                                           WriteBatches &              wbs,
                                           const StableValueSpacePtr & merged_stable);
 
-    SegmentPtr          mergeDelta(DMContext & dm_context) const;
+    SegmentPtr          mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
     StableValueSpacePtr prepareMergeDelta(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs) const;
     SegmentPtr          applyMergeDelta(DMContext &                 dm_context,
                                         const SegmentSnapshotPtr &  segment_snap,

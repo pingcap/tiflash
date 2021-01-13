@@ -353,8 +353,7 @@ public:
 
     /// Create a constant snapshot for read.
     /// Returns empty if this instance is abandoned, you should try again.
-    std::pair<SnapshotPtr, ColumnDefinesPtr>
-    createSnapshot(const DMContext & context, bool for_update = false, ColumnDefinesPtr schema = nullptr);
+    SnapshotPtr createSnapshot(const DMContext & context, bool for_update = false);
 };
 
 using Pack             = DeltaValueSpace::Pack;
