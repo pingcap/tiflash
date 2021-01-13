@@ -717,13 +717,20 @@ void DAGExpressionAnalyzer::generateFinalProject(ExpressionActionsChain & chain,
 
         for (UInt32 i : output_offsets)
         {
-            if (schema[i].tp() == TiDB::TypeTimestamp && !casted[i])
+            if (schema[i].tp() == TiDB::TypeTimestamp)
             {
-                if (tz_col.length() == 0)
-                    tz_col = getActions(tz_expr, step.actions);
-                auto updated_name = appendTimeZoneCast(tz_col, current_columns[i].name, tz_cast_func_name, step.actions);
-                final_project.emplace_back(updated_name, column_prefix + updated_name);
-                casted[i] = 1;
+                if (casted[i] == 1)
+                {
+                    // todo find right column
+                }
+                else
+                {
+                    if (tz_col.length() == 0)
+                        tz_col = getActions(tz_expr, step.actions);
+                    auto updated_name = appendTimeZoneCast(tz_col, current_columns[i].name, tz_cast_func_name, step.actions);
+                    final_project.emplace_back(updated_name, column_prefix + updated_name);
+                    casted[i] = 1;
+                }
             }
             else
             {
