@@ -32,17 +32,10 @@ DAGQuerySource::DAGQuerySource(Context & context_, const std::unordered_map<Regi
     root_query_block->collectAllPossibleChildrenJoinSubqueryAlias(context.getDAGContext()->getQBIdToJoinAliasMap());
     for (Int32 i : dag_request.output_offsets())
         root_query_block->output_offsets.push_back(i);
-    if (root_query_block->aggregation != nullptr)
+
+    for (UInt32 i : dag_request.output_offsets())
     {
-        for (auto & field_type : root_query_block->output_field_types)
-            result_field_types.push_back(field_type);
-    }
-    else
-    {
-        for (UInt32 i : dag_request.output_offsets())
-        {
-            result_field_types.push_back(root_query_block->output_field_types[i]);
-        }
+        result_field_types.push_back(root_query_block->output_field_types[i]);
     }
     analyzeDAGEncodeType();
 }
