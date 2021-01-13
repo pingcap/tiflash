@@ -1611,8 +1611,6 @@ try
                               EMPTY_FILTER,
                               /* expected_block_size= */ 1024)[0];
 
-        constexpr Float64 epsilon = 0.00001;
-
         in->readPrefix();
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -1627,8 +1625,7 @@ try
                 Field tmp;
                 col.column->get(i, tmp);
                 // There is some loss of precision during the convertion, so we just do a rough comparison
-                Float64 v = std::abs(tmp.get<Float64>());
-                EXPECT_TRUE(v - 1.125 < epsilon);
+                EXPECT_FLOAT_EQ(std::abs(tmp.get<Float64>()), 1.125);
             }
         }
         in->readSuffix();
@@ -1678,9 +1675,9 @@ try
             ASSERT_DATATYPE_EQ(col.type, col_type_to_add);
             ASSERT_EQ(col.name, col_name_to_add);
             Field tmp;
-            col.column->get(0, tmp);
+            tmp = (*col.column)[0];
             EXPECT_FLOAT_EQ(tmp.get<Float64>(), 1.125); // fill with default value
-            col.column->get(1, tmp);
+            tmp = (*col.column)[1];
             EXPECT_FLOAT_EQ(tmp.get<Float64>(), 3.1415); // keep the value we inserted
         }
         in->readSuffix();
