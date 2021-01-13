@@ -507,11 +507,10 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
 // 2. based on the dag encode type, the return column will be with session level timezone(Arrow encode)
 //    or UTC timezone(Default encode), if UTC timezone is needed, another cast function is used to
 //    convert the session level timezone to UTC timezone.
-// In the worst case(e.g select ts_col from table with Default encode), this will introduce two
-// useless casts to all the timestamp columns, in order to avoid redundant cast, when cast the ts
-// column to the columns with session-level timezone info, the original ts columns with UTC timezone
-// are still kept, and the InterpreterDAG will choose the correct column based on encode type
-bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(ExpressionActionsChain & chain, std::vector<bool> is_ts_column, bool keep_UTC_column)
+// Note in the worst case(e.g select ts_col from table with Default encode), this will introduce two
+// useless casts to all the timestamp columns, however, since TiDB now use chunk encode as the default
+// encoding scheme, the worst case should happen rarely
+bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(ExpressionActionsChain & chain, std::vector<bool> is_ts_column)
 {
     if (context.getTimezoneInfo().is_utc_timezone)
         return false;
@@ -530,8 +529,6 @@ bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(ExpressionActionsChain & 
             if (tz_col.length() == 0)
                 tz_col = getActions(tz_expr, actions);
             String casted_name = appendTimeZoneCast(tz_col, source_columns[i].name, func_name, actions);
-            if (keep_UTC_column)
-                source_columns.emplace_back(source_columns[i].name, source_columns[i].type);
             source_columns[i].name = casted_name;
             ret = true;
         }
@@ -634,29 +631,16 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(ExpressionActionsChain &
     return ret;
 }
 
-void DAGExpressionAnalyzer::appendAggSelect(
-    ExpressionActionsChain & chain, const tipb::Aggregation & aggregation, bool keep_session_timezone_info)
+void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, const tipb::Aggregation & aggregation)
 {
     initChain(chain, getCurrentInputColumns());
     bool need_update_aggregated_columns = false;
     std::vector<NameAndTypePair> updated_aggregated_columns;
     ExpressionActionsChain::Step step = chain.steps.back();
-    bool need_append_timezone_cast = !keep_session_timezone_info && !context.getTimezoneInfo().is_utc_timezone;
-    tipb::Expr tz_expr;
-    if (need_append_timezone_cast)
-        constructTZExpr(tz_expr, context.getTimezoneInfo(), false);
-    String tz_col;
-    String tz_cast_func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneToUTC" : "ConvertTimeZoneByOffset";
     for (Int32 i = 0; i < aggregation.agg_func_size(); i++)
     {
         String & name = aggregated_columns[i].name;
         String updated_name = appendCastIfNeeded(aggregation.agg_func(i), step.actions, name, false);
-        if (need_append_timezone_cast && aggregation.agg_func(i).field_type().tp() == TiDB::TypeTimestamp)
-        {
-            if (tz_col.length() == 0)
-                tz_col = getActions(tz_expr, step.actions);
-            updated_name = appendTimeZoneCast(tz_col, updated_name, tz_cast_func_name, step.actions);
-        }
         if (name != updated_name)
         {
             need_update_aggregated_columns = true;
@@ -674,12 +658,6 @@ void DAGExpressionAnalyzer::appendAggSelect(
     {
         String & name = aggregated_columns[i + aggregation.agg_func_size()].name;
         String updated_name = appendCastIfNeeded(aggregation.group_by(i), step.actions, name, false);
-        if (need_append_timezone_cast && aggregation.group_by(i).field_type().tp() == TiDB::TypeTimestamp)
-        {
-            if (tz_col.length() == 0)
-                tz_col = getActions(tz_expr, step.actions);
-            updated_name = appendTimeZoneCast(tz_col, updated_name, tz_cast_func_name, step.actions);
-        }
         if (name != updated_name)
         {
             need_update_aggregated_columns = true;
@@ -700,6 +678,57 @@ void DAGExpressionAnalyzer::appendAggSelect(
         for (size_t i = 0; i < updated_aggregated_columns.size(); i++)
         {
             aggregated_columns.emplace_back(updated_aggregated_columns[i].name, updated_aggregated_columns[i].type);
+        }
+    }
+}
+
+void DAGExpressionAnalyzer::generateFinalProject(ExpressionActionsChain & chain, const std::vector<tipb::FieldType> & schema,
+    const std::vector<Int32> & output_offsets, const String & column_prefix, bool keep_session_timezone_info,
+    NamesWithAliases & final_project)
+{
+    if (unlikely(!keep_session_timezone_info && output_offsets.empty()))
+        throw Exception("Root Query block without output_offsets", ErrorCodes::LOGICAL_ERROR);
+
+    auto & current_columns = getCurrentInputColumns();
+    bool need_append_timezone_cast = !keep_session_timezone_info && !context.getTimezoneInfo().is_utc_timezone;
+    if (!need_append_timezone_cast)
+    {
+        if (!output_offsets.empty())
+        {
+            for (auto i : output_offsets)
+                final_project.emplace_back(current_columns[i].name, column_prefix + current_columns[i].name);
+        }
+        else
+        {
+            for (const auto & element : current_columns)
+                final_project.emplace_back(element.name, column_prefix + element.name);
+        }
+    }
+    else
+    {
+        initChain(chain, getCurrentInputColumns());
+        ExpressionActionsChain::Step step = chain.steps.back();
+
+        tipb::Expr tz_expr;
+        constructTZExpr(tz_expr, context.getTimezoneInfo(), false);
+        String tz_col;
+        String tz_cast_func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneToUTC" : "ConvertTimeZoneByOffset";
+        std::vector<Int32> casted(schema.size(), 0);
+
+        for (UInt32 i : output_offsets)
+        {
+            if (schema[i].tp() == TiDB::TypeTimestamp && !casted[i])
+            {
+                if (tz_col.length() == 0)
+                    tz_col = getActions(tz_expr, step.actions);
+                auto updated_name = appendTimeZoneCast(tz_col, current_columns[i].name, tz_cast_func_name, step.actions);
+                final_project.emplace_back(updated_name, column_prefix + updated_name);
+                casted[i] = 1;
+            }
+            else
+            {
+                final_project.emplace_back(current_columns[i].name, column_prefix + current_columns[i].name);
+            }
         }
     }
 }
