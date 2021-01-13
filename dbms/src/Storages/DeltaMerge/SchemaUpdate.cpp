@@ -184,8 +184,9 @@ inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefi
 
 inline void setColumnDefineDefaultValue(const OptionTableInfoConstRef table_info, ColumnDefine & define)
 {
-    const auto col_info  = table_info->get().getColumnInfo(define.id);
-    define.default_value = col_info.defaultValueToField();
+    // check ConvertColumnType_test.GetDefaultValue for unittest
+    const auto & col_info = table_info->get().getColumnInfo(define.id);
+    define.default_value  = col_info.defaultValueToField();
 }
 
 void applyAlter(ColumnDefines &               table_columns,
