@@ -277,7 +277,7 @@ TiFlashApplyRes KVStore::handleIngestSST(UInt64 region_id, const SnapshotViewArr
     // try to flush remain data in memory.
     func_try_flush();
     region->handleIngestSST(snaps, index, term, tmt);
-    region->tryPreDecodeTiKVValue(tmt);
+    region->tryPreDecodeTiKVValue<true>(tmt);
     func_try_flush();
 
     if (region->dataSize())
