@@ -706,6 +706,8 @@ void DAGExpressionAnalyzer::generateFinalProject(ExpressionActionsChain & chain,
     }
     else
     {
+        /// for all the columns that need to be returned, if the type is timestamp, then convert
+        /// the timestamp column to UTC based, refer to appendTimeZoneCastsAfterTS for more details
         initChain(chain, getCurrentInputColumns());
         ExpressionActionsChain::Step step = chain.steps.back();
 
@@ -714,7 +716,7 @@ void DAGExpressionAnalyzer::generateFinalProject(ExpressionActionsChain & chain,
         String tz_col;
         String tz_cast_func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneToUTC" : "ConvertTimeZoneByOffset";
         std::vector<Int32> casted(schema.size(), 0);
-        std::unordered_map<String,String> casted_name_map;
+        std::unordered_map<String, String> casted_name_map;
 
         for (UInt32 i : output_offsets)
         {
