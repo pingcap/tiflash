@@ -258,16 +258,28 @@ try
 
     DM::ColumnDefine cd;
 
+    size_t num_rows = 100;
     {
         cd.id   = 2;
         cd.type = typeFromString("Nullable(Float32)");
         DM::setColumnDefineDefaultValue(table_info, cd);
         EXPECT_EQ(cd.default_value.getType(), Field::Types::Float64);
         EXPECT_FLOAT_EQ(cd.default_value.safeGet<Float64>(), 3.14);
-        auto col = createColumnWithDefaultValue(cd, 1);
-        ASSERT_EQ(col->size(), 1UL);
-        Field f = (*col)[0];
-        EXPECT_FLOAT_EQ(f.get<Float64>(), 3.14);
+        auto col = createColumnWithDefaultValue(cd, num_rows);
+        ASSERT_EQ(col->size(), num_rows);
+        for (size_t i = 0; i < num_rows; ++i)
+        {
+            Field f = (*col)[i];
+            EXPECT_FLOAT_EQ(f.get<Float64>(), 3.14);
+        }
+        // Try to copy using inserRangeFrom
+        auto col2 = cd.type->createColumn();
+        col2->insertRangeFrom(*col, 0, num_rows);
+        for (size_t i = 0; i < num_rows; ++i)
+        {
+            Field f = (*col2)[i];
+            EXPECT_FLOAT_EQ(f.get<Float64>(), 3.14);
+        }
     }
 
     {
@@ -276,10 +288,21 @@ try
         DM::setColumnDefineDefaultValue(table_info, cd);
         EXPECT_EQ(cd.default_value.getType(), Field::Types::Float64);
         EXPECT_FLOAT_EQ(cd.default_value.safeGet<double>(), 3.14);
-        auto col = createColumnWithDefaultValue(cd, 1);
-        ASSERT_EQ(col->size(), 1UL);
-        Field f = (*col)[0];
-        EXPECT_FLOAT_EQ(f.get<Float64>(), 3.14);
+        auto col = createColumnWithDefaultValue(cd, num_rows);
+        ASSERT_EQ(col->size(), num_rows);
+        for (size_t i = 0; i < num_rows; ++i)
+        {
+            Field f = (*col)[i];
+            EXPECT_FLOAT_EQ(f.get<Float64>(), 3.14);
+        }
+        // Try to copy using inserRangeFrom
+        auto col2 = cd.type->createColumn();
+        col2->insertRangeFrom(*col, 0, num_rows);
+        for (size_t i = 0; i < num_rows; ++i)
+        {
+            Field f = (*col2)[i];
+            EXPECT_FLOAT_EQ(f.get<Float64>(), 3.14);
+        }
     }
 }
 CATCH
