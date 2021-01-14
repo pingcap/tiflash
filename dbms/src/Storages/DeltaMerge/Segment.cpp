@@ -283,7 +283,7 @@ SegmentSnapshotPtr Segment::createSnapshot(
     auto stable_snap = stable->createSnapshot();
     if (!delta_snap || !stable_snap)
         return {};
-    return std::make_shared<SegmentSnapshot>(delta_snap, stable_snap, schema_snap);
+    return std::make_shared<SegmentSnapshot>(std::move(delta_snap), std::move(stable_snap), schema_snap);
 }
 
 BlockInputStreamPtr Segment::getInputStream(const DMContext &          dm_context,
