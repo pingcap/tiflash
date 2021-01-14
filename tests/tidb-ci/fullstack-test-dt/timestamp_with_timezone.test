@@ -6,7 +6,7 @@ mysql> create table test.t1 (id int, value timestamp);
 mysql> create table test.t2 (id int, value timestamp);
 
 mysql> set time_zone='America/New_York'; insert into test.t1 values(1,'2020-01-01 11:11:11'),(2,'2020-01-02 16:11:11');
-mysql> set time_zone='Asia/Shanghai'; insert into test.t2 values(1,'2020-01-02 00:11:11'),(2,'2020-01-02 05:11:11');
+mysql> set time_zone='Asia/Shanghai'; insert into test.t2 values(1,'2020-01-02 00:11:11'),(2,'2020-01-03 05:11:11');
 
 mysql> alter table test.t1 set tiflash replica 1;
 mysql> alter table test.t2 set tiflash replica 1;
@@ -18,114 +18,119 @@ mysql> analyze table test.t1;
 mysql> analyze table test.t2;
 
 # default encode with non-utc timezone
-mysql> set time_zone='Asia/Shanghai'; set tidb_enable_chunk_rpc=0; set session tidb_isolation_read_engines='tiflash'; select * from t1 where value = '2020-01-02 05:11:11';
-+------+-------+------+-------+
-| id   | value | id   | value |
-+------+-------+------+-------+
-|    5 |     6 |    5 |     6 |
-+------+-------+------+-------+
-mysql> set time_zone='Asia/Shanghai'; set tidb_enable_chunk_rpc=0; set session tidb_isolation_read_engines='tiflash'; select count(*), value from t1 where value = '2020-01-02 05:11:11' group by value;
-+------+-------+------+-------+
-| id   | value | id   | value |
-+------+-------+------+-------+
-|    5 |     6 |    5 |     6 |
-+------+-------+------+-------+
+mysql> use test; set time_zone='Asia/Shanghai'; set tidb_enable_chunk_rpc=0; set session tidb_isolation_read_engines='tiflash'; select * from t1 where value = '2020-01-03 05:11:11';
++------+---------------------+
+| id   | value               |
++------+---------------------+
+|    2 | 2020-01-03 05:11:11 |
++------+---------------------+
+mysql> use test; set time_zone='Asia/Shanghai'; set tidb_enable_chunk_rpc=0; set session tidb_isolation_read_engines='tiflash'; select count(*), value from t1 where value = '2020-01-03 05:11:11' group by value;
++----------+---------------------+
+| count(*) | value               |
++----------+---------------------+
+|        1 | 2020-01-03 05:11:11 |
++----------+---------------------+
 # default encode with utc timezone
-mysql> set time_zone='UTC'; set tidb_enable_chunk_rpc=0; set session tidb_isolation_read_engines='tiflash'; select * from where value = '2020-01-02 16:11:11';
-+------+-------+------+-------+
-| id   | value | id   | value |
-+------+-------+------+-------+
-|    5 |     6 |    5 |     6 |
-+------+-------+------+-------+
-mysql> set time_zone='UTC'; set tidb_enable_chunk_rpc=0; set session tidb_isolation_read_engines='tiflash'; select * from where value = '2020-01-02 16:11:11' group by value;
-+------+-------+------+-------+
-| id   | value | id   | value |
-+------+-------+------+-------+
-|    5 |     6 |    5 |     6 |
-+------+-------+------+-------+
+mysql> use test; set time_zone='UTC'; set tidb_enable_chunk_rpc=0; set session tidb_isolation_read_engines='tiflash'; select * from t1 where value = '2020-01-01 16:11:11';
++------+---------------------+
+| id   | value               |
++------+---------------------+
+|    1 | 2020-01-01 16:11:11 |
++------+---------------------+
+mysql> use test; set time_zone='UTC'; set tidb_enable_chunk_rpc=0; set session tidb_isolation_read_engines='tiflash'; select count(*), value from t1 where value = '2020-01-01 16:11:11' group by value;
++----------+---------------------+
+| count(*) | value               |
++----------+---------------------+
+|        1 | 2020-01-01 16:11:11 |
++----------+---------------------+
 # chunk encode with non-utc timezone
-mysql> set time_zone='Asia/Shanghai'; set tidb_enable_chunk_rpc=1; set session tidb_isolation_read_engines='tiflash'; select * from t1 where value = '2020-01-02 05:11:11';
-+------+-------+------+-------+
-| id   | value | id   | value |
-+------+-------+------+-------+
-|    5 |     6 |    5 |     6 |
-+------+-------+------+-------+
-mysql> set time_zone='Asia/Shanghai'; set tidb_enable_chunk_rpc=1; set session tidb_isolation_read_engines='tiflash'; select * from t1 where value = '2020-01-02 05:11:11' group by value;
-+------+-------+------+-------+
-| id   | value | id   | value |
-+------+-------+------+-------+
-|    5 |     6 |    5 |     6 |
-+------+-------+------+-------+
+mysql> use test; set time_zone='Asia/Shanghai'; set tidb_enable_chunk_rpc=1; set session tidb_isolation_read_engines='tiflash'; select * from t1 where value = '2020-01-03 05:11:11';
++------+---------------------+
+| id   | value               |
++------+---------------------+
+|    2 | 2020-01-03 05:11:11 |
++------+---------------------+
+mysql> use test; set time_zone='Asia/Shanghai'; set tidb_enable_chunk_rpc=1; set session tidb_isolation_read_engines='tiflash'; select count(*), value from t1 where value = '2020-01-03 05:11:11' group by value;
++----------+---------------------+
+| count(*) | value               |
++----------+---------------------+
+|        1 | 2020-01-03 05:11:11 |
++----------+---------------------+
 # chunk encode with utc timezone
-mysql> set time_zone='UTC'; set tidb_enable_chunk_rpc=1; set session tidb_isolation_read_engines='tiflash'; select * from t1 where value = '2020-01-02 16:11:11';
-+------+-------+------+-------+
-| id   | value | id   | value |
-+------+-------+------+-------+
-|    5 |     6 |    5 |     6 |
-+------+-------+------+-------+
-mysql> set time_zone='UTC'; set tidb_enable_chunk_rpc=1; set session tidb_isolation_read_engines='tiflash'; select * from t1 where value = '2020-01-02 16:11:11' group by value;
-+------+-------+------+-------+
-| id   | value | id   | value |
-+------+-------+------+-------+
-|    5 |     6 |    5 |     6 |
-+------+-------+------+-------+
+mysql> use test; set time_zone='UTC'; set tidb_enable_chunk_rpc=1; set session tidb_isolation_read_engines='tiflash'; select * from t1 where value = '2020-01-01 16:11:11';
++------+---------------------+
+| id   | value               |
++------+---------------------+
+|    1 | 2020-01-01 16:11:11 |
++------+---------------------+
+mysql> use test; set time_zone='UTC'; set tidb_enable_chunk_rpc=1; set session tidb_isolation_read_engines='tiflash'; select count(*), value from t1 where value = '2020-01-01 16:11:11' group by value;
++----------+---------------------+
+| count(*) | value               |
++----------+---------------------+
+|        1 | 2020-01-01 16:11:11 |
++----------+---------------------+
 
 # default encode in tidb, chunk encode in tiflash, non-utc timezone
-mysql> set time_zone='Asia/Shanghai'; set tidb_enable_chunk_rpc=0; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ * from t1 join t2 on t1.value = t2.value;
-+------+-------+------+-------+
-| id   | value | id   | value |
-+------+-------+------+-------+
-|    5 |     6 |    5 |     6 |
-+------+-------+------+-------+
-
-mysql> set time_zone='Asia/Shanghai'; set tidb_enable_chunk_rpc=0; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ count(*), t1.value from t1 join t2 on t1.value = t2.value group by t1.value;
-+------+-------+------+-------+
-| id   | value | id   | value |
-+------+-------+------+-------+
-|    5 |     6 |    5 |     6 |
-+------+-------+------+-------+
-
+mysql> use test; set time_zone='Asia/Shanghai'; set tidb_enable_chunk_rpc=0; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ * from t1 join t2 on t1.value = t2.value order by t1.id;
++------+---------------------+------+---------------------+
+| id   | value               | id   | value               |
++------+---------------------+------+---------------------+
+|    1 | 2020-01-02 00:11:11 |    1 | 2020-01-02 00:11:11 |
+|    2 | 2020-01-03 05:11:11 |    2 | 2020-01-03 05:11:11 |
++------+---------------------+------+---------------------+
+mysql> use test; set time_zone='Asia/Shanghai'; set tidb_enable_chunk_rpc=0; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ count(*), t1.value from t1 join t2 on t1.value = t2.value group by t1.value order by value;
++----------+---------------------+
+| count(*) | value               |
++----------+---------------------+
+|        1 | 2020-01-02 00:11:11 |
+|        1 | 2020-01-03 05:11:11 |
++----------+---------------------+
 # default encode in tidb, chunk encode in tiflash, utc timezone
-mysql> set time_zone='UTC'; set tidb_enable_chunk_rpc=0; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ * from t1 join t2 on t1.value = t2.value;
-+------+-------+------+-------+
-| id   | value | id   | value |
-+------+-------+------+-------+
-|    5 |     6 |    5 |     6 |
-+------+-------+------+-------+
-mysql> set time_zone='UTC'; set tidb_enable_chunk_rpc=0; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ count(*), t1.value from t1 join t2 on t1.value = t2.value group by t1.value;
-+------+-------+------+-------+
-| id   | value | id   | value |
-+------+-------+------+-------+
-|    5 |     6 |    5 |     6 |
-+------+-------+------+-------+
-
+mysql> use test; set time_zone='UTC'; set tidb_enable_chunk_rpc=0; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ * from t1 join t2 on t1.value = t2.value order by t1.id;
++------+---------------------+------+---------------------+
+| id   | value               | id   | value               |
++------+---------------------+------+---------------------+
+|    1 | 2020-01-01 16:11:11 |    1 | 2020-01-01 16:11:11 |
+|    2 | 2020-01-02 21:11:11 |    2 | 2020-01-02 21:11:11 |
++------+---------------------+------+---------------------+
+mysql> use test; set time_zone='UTC'; set tidb_enable_chunk_rpc=0; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ count(*), t1.value from t1 join t2 on t1.value = t2.value group by t1.value order by value;
++----------+---------------------+
+| count(*) | value               |
++----------+---------------------+
+|        1 | 2020-01-01 16:11:11 |
+|        1 | 2020-01-02 21:11:11 |
++----------+---------------------+
 # chunk encode in tidb, chunk encode in tiflash, non-utc timezone
-mysql> set time_zone='Asia/Shanghai'; set tidb_enable_chunk_rpc=1; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ * from t1 join t2 on t1.value = t2.value;
-+------+-------+------+-------+
-| id   | value | id   | value |
-+------+-------+------+-------+
-|    5 |     6 |    5 |     6 |
-+------+-------+------+-------+
-mysql> set time_zone='Asia/Shanghai'; set tidb_enable_chunk_rpc=1; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ count(*), t1.value from t1 join t2 on t1.value = t2.value group by t1.value;
-+------+-------+------+-------+
-| id   | value | id   | value |
-+------+-------+------+-------+
-|    5 |     6 |    5 |     6 |
-+------+-------+------+-------+
+mysql> use test; set time_zone='Asia/Shanghai'; set tidb_enable_chunk_rpc=1; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ * from t1 join t2 on t1.value = t2.value order by t1.id;
++------+---------------------+------+---------------------+
+| id   | value               | id   | value               |
++------+---------------------+------+---------------------+
+|    1 | 2020-01-02 00:11:11 |    1 | 2020-01-02 00:11:11 |
+|    2 | 2020-01-03 05:11:11 |    2 | 2020-01-03 05:11:11 |
++------+---------------------+------+---------------------+
+mysql> use test; set time_zone='Asia/Shanghai'; set tidb_enable_chunk_rpc=1; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ count(*), t1.value from t1 join t2 on t1.value = t2.value group by t1.value order by value;
++----------+---------------------+
+| count(*) | value               |
++----------+---------------------+
+|        1 | 2020-01-02 00:11:11 |
+|        1 | 2020-01-03 05:11:11 |
++----------+---------------------+
 
 # chunk encode in tidb, chunk encode in tiflash, utc timezone
-mysql> set time_zone='UTC'; set tidb_enable_chunk_rpc=1; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ * from t1 join t2 on t1.value = t2.value;
-+------+-------+------+-------+
-| id   | value | id   | value |
-+------+-------+------+-------+
-|    5 |     6 |    5 |     6 |
-+------+-------+------+-------+
-mysql> set time_zone='UTC'; set tidb_enable_chunk_rpc=1; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ count(*), t1.value from t1 join t2 on t1.value = t2.value group by t1.value;
-+------+-------+------+-------+
-| id   | value | id   | value |
-+------+-------+------+-------+
-|    5 |     6 |    5 |     6 |
-+------+-------+------+-------+
+mysql> use test; set time_zone='UTC'; set tidb_enable_chunk_rpc=1; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ * from t1 join t2 on t1.value = t2.value order by t1.id;
++------+---------------------+------+---------------------+
+| id   | value               | id   | value               |
++------+---------------------+------+---------------------+
+|    1 | 2020-01-01 16:11:11 |    1 | 2020-01-01 16:11:11 |
+|    2 | 2020-01-02 21:11:11 |    2 | 2020-01-02 21:11:11 |
++------+---------------------+------+---------------------+
+mysql> use test; set time_zone='UTC'; set tidb_enable_chunk_rpc=1; set session tidb_isolation_read_engines='tiflash'; set session tidb_opt_broadcast_join=1; select /*+ broadcast_join(t1,t2) */ count(*), t1.value from t1 join t2 on t1.value = t2.value group by t1.value order by value;
++----------+---------------------+
+| count(*) | value               |
++----------+---------------------+
+|        1 | 2020-01-01 16:11:11 |
+|        1 | 2020-01-02 21:11:11 |
++----------+---------------------+
 
 mysql> drop table if exists test.t1;
 mysql> drop table if exists test.t2;

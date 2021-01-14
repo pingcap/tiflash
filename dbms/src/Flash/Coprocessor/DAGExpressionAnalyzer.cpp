@@ -714,22 +714,24 @@ void DAGExpressionAnalyzer::generateFinalProject(ExpressionActionsChain & chain,
         String tz_col;
         String tz_cast_func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneToUTC" : "ConvertTimeZoneByOffset";
         std::vector<Int32> casted(schema.size(), 0);
+        std::unordered_map<String,String> casted_name_map;
 
         for (UInt32 i : output_offsets)
         {
             if (schema[i].tp() == TiDB::TypeTimestamp)
             {
-                if (casted[i] == 1)
-                {
-                    // todo find right column
-                }
-                else
+                const auto & it = casted_name_map.find(current_columns[i].name);
+                if (it == casted_name_map.end())
                 {
                     if (tz_col.length() == 0)
                         tz_col = getActions(tz_expr, step.actions);
                     auto updated_name = appendTimeZoneCast(tz_col, current_columns[i].name, tz_cast_func_name, step.actions);
                     final_project.emplace_back(updated_name, column_prefix + updated_name);
-                    casted[i] = 1;
+                    casted_name_map[current_columns[i].name] = updated_name;
+                }
+                else
+                {
+                    final_project.emplace_back(it->second, column_prefix + it->second);
                 }
             }
             else
