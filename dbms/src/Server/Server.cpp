@@ -73,6 +73,12 @@
 #include <jemalloc/jemalloc.h>
 #endif
 
+#ifndef NDEBUG
+#ifdef FIU_ENABLE
+#include <fiu.h>
+#endif
+#endif
+
 namespace CurrentMetrics
 {
 extern const Metric Revision;
