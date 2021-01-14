@@ -1002,7 +1002,7 @@ try
 
     {
         // check the stable data with new schema
-        auto in = segment->getInputStream(dmContext(), *columns_to_read, {RowKeyRange::newAll(false, 1)});
+        auto in = segment->getInputStream(dmContext(), *columns_to_read);
 
         // check that we can read correct values
         size_t num_rows_read = 0;
@@ -1179,7 +1179,7 @@ try
 
     {
         // read written data after delta-merge
-        auto in = segment->getInputStream(dmContext(), *columns_after_ddl, {RowKeyRange::newAll(false, 1)});
+        auto in = segment->getInputStream(dmContext(), *columns_after_ddl);
 
         // check that we can read correct values
         size_t num_rows_read = 0;

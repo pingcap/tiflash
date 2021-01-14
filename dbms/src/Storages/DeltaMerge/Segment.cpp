@@ -496,7 +496,7 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext & dm_context, const Seg
     data_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
         data_stream, read_info.read_columns, dm_context.min_version);
 
-    auto new_stable = createNewStable(dm_context, data_stream, segment_snap->stable->getId(), wbs);
+    auto new_stable = createNewStable(dm_context, segment_snap->schema, data_stream, segment_snap->stable->getId(), wbs);
 
     LOG_INFO(log, "Segment [" << DB::toString(segment_id) << "] prepare merge delta done.");
 
