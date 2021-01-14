@@ -1,3 +1,4 @@
+#include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
@@ -11,6 +12,11 @@
 
 namespace DB
 {
+
+namespace FailPoints
+{
+extern const char hang_in_execution[];
+} // namespace FailPoints
 
 bool MPPTaskProgress::isTaskHanging(const Context & context)
 {
@@ -187,6 +193,7 @@ void MPPTask::runImpl(BlockIO io, MemoryTracker * memory_tracker)
         {
             count += block.rows();
             to->write(block);
+            FAIL_POINT_PAUSE(FailPoints::hang_in_execution);
         }
 
         /// For outputting additional information in some formats.

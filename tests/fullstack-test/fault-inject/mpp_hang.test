@@ -1,0 +1,27 @@
+mysql> drop table if exists test.t;
+mysql> create table test.t(id int, value int);
+mysql> alter table test.t set tiflash replica 1;
+
+func> wait_table test t
+
+
+mysql> insert into test.t values (1, 1),(1,2)
+
+# ensure table is sync to tiflash
+mysql> select table_schema,table_name,replica_count,location_labels,available from information_schema.tiflash_replica where table_schema='test' and table_name='t';
++--------------+------------+---------------+-----------------+-----------+
+| table_schema | table_name | replica_count | location_labels | available |
++--------------+------------+---------------+-----------------+-----------+
+| test         | t          |             1 |                 |         1 |
++--------------+------------+---------------+-----------------+-----------+
+>> DBGInvoke __try_flush()
+>> DBGInvoke __init_fail_point()
+
+>> DBGInvoke __enable_fail_point(hang_in_execution)
+
+mysql> set session tidb_isolation_read_engines='tiflash'; set session tidb_allow_mpp = 1; set session tidb_opt_cpu_factor=10000000; select count(*) from test.t;
+ERROR 1105 (HY000) at line 1: other error for mpp stream: MPP Task canceled because it seems hangs
+
+>> DBGInvoke __disable_fail_point(hang_in_execution)
+
+mysql> drop table if exists test.t
