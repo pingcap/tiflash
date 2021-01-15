@@ -185,7 +185,7 @@ void DatabaseTiFlash::createTable(const Context & context, const String & table_
         /// If it was ATTACH query and file with table metadata already exist
         /// (so, ATTACH is done after DETACH), then rename atomically replaces old file with new one.
         context.getFileProvider()->renameFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""), table_metadata_path,
-            EncryptionPath(table_metadata_path, ""));
+            EncryptionPath(table_metadata_path, ""), true);
     }
     catch (...)
     {
@@ -283,7 +283,7 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
                 = use_target_encrypt_info ? EncryptionPath(new_tbl_meta_file, "") : EncryptionPath(new_tbl_meta_file_tmp, "");
             bool create_new_encryption_info = !use_target_encrypt_info && statement.size();
             WriteBufferFromFileProvider out(context.getFileProvider(), new_tbl_meta_file_tmp, encryption_path, create_new_encryption_info,
-                nullptr, O_WRONLY | O_CREAT | O_EXCL);
+                nullptr, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
             writeString(statement, out);
             out.next();
             if (context.getSettingsRef().fsync_metadata)
@@ -294,15 +294,8 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
         try
         {
             /// rename atomically replaces the old file with the new one.
-            if (use_target_encrypt_info)
-            {
-                Poco::File(new_tbl_meta_file_tmp).renameTo(new_tbl_meta_file);
-            }
-            else
-            {
-                context.getFileProvider()->renameFile(new_tbl_meta_file_tmp, EncryptionPath(new_tbl_meta_file_tmp, ""), new_tbl_meta_file,
-                    EncryptionPath(new_tbl_meta_file, ""));
-            }
+            context.getFileProvider()->renameFile(new_tbl_meta_file_tmp, EncryptionPath(new_tbl_meta_file_tmp, ""), new_tbl_meta_file,
+                EncryptionPath(new_tbl_meta_file, ""), !use_target_encrypt_info);
         }
         catch (...)
         {
@@ -372,12 +365,12 @@ void DatabaseTiFlash::alterTable(
 
     // refer to the comment in `renameTable`
     bool use_target_encrypt_info = context.getFileProvider()->isFileEncrypted(EncryptionPath(table_metadata_path, ""));
+    EncryptionPath encryption_path
+        = use_target_encrypt_info ? EncryptionPath(table_metadata_path, "") : EncryptionPath(table_metadata_tmp_path, "");
     {
-        EncryptionPath encryption_path
-            = use_target_encrypt_info ? EncryptionPath(table_metadata_path, "") : EncryptionPath(table_metadata_tmp_path, "");
         bool create_new_encryption_info = !use_target_encrypt_info && statement.size();
         WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, encryption_path, create_new_encryption_info,
-            nullptr, O_WRONLY | O_CREAT | O_EXCL);
+            nullptr, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
         out.next();
         if (context.getSettingsRef().fsync_metadata)
@@ -388,15 +381,8 @@ void DatabaseTiFlash::alterTable(
     try
     {
         /// rename atomically replaces the old file with the new one.
-        if (use_target_encrypt_info)
-        {
-            Poco::File(table_metadata_tmp_path).renameTo(table_metadata_path);
-        }
-        else
-        {
-            context.getFileProvider()->renameFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""), table_metadata_path,
-                EncryptionPath(table_metadata_path, ""));
-        }
+        context.getFileProvider()->renameFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""), table_metadata_path,
+            EncryptionPath(table_metadata_path, ""), !use_target_encrypt_info);
     }
     catch (...)
     {

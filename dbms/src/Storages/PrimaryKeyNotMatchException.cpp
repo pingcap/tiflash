@@ -44,9 +44,9 @@ String fixCreateStatementWithPriKeyNotMatchException( //
         // 3. If we create new encryption info for `t_31.sql.tmp`,
         // then we cannot rename the encryption info and the file in an atomic operation.
         bool use_target_encrypt_info = context.getFileProvider()->isFileEncrypted(EncryptionPath(table_metadata_path, ""));
+        EncryptionPath encryption_path
+            = use_target_encrypt_info ? EncryptionPath(table_metadata_path, "") : EncryptionPath(table_metadata_tmp_path, "");
         {
-            EncryptionPath encryption_path
-                = use_target_encrypt_info ? EncryptionPath(table_metadata_path, "") : EncryptionPath(table_metadata_tmp_path, "");
             bool create_new_encryption_info = !use_target_encrypt_info && statement.size();
             WriteBufferFromFileProvider out(context.getFileProvider(), table_metadata_tmp_path, encryption_path, create_new_encryption_info,
                 nullptr, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
@@ -60,15 +60,8 @@ String fixCreateStatementWithPriKeyNotMatchException( //
         try
         {
             /// rename atomically replaces the old file with the new one.
-            if (use_target_encrypt_info)
-            {
-                Poco::File(table_metadata_tmp_path).renameTo(table_metadata_path);
-            }
-            else
-            {
-                context.getFileProvider()->renameFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""),
-                    table_metadata_path, EncryptionPath(table_metadata_path, ""));
-            }
+            context.getFileProvider()->renameFile(table_metadata_tmp_path, encryption_path, table_metadata_path,
+                EncryptionPath(table_metadata_path, ""), !use_target_encrypt_info);
         }
         catch (...)
         {
