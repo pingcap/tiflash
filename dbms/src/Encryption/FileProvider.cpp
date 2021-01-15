@@ -109,6 +109,9 @@ void FileProvider::deleteEncryptionInfo(const EncryptionPath & encryption_path_,
 
 void FileProvider::linkEncryptionInfo(const EncryptionPath & src_encryption_path_, const EncryptionPath & dst_encryption_path_) const
 {
+    // delete the encryption info for dst_path if any
+    if (isFileEncrypted(dst_encryption_path_))
+        key_manager->deleteFile(dst_encryption_path_.full_path, true);
     key_manager->linkFile(src_encryption_path_.full_path, dst_encryption_path_.full_path);
 }
 
