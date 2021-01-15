@@ -290,7 +290,7 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
 
     void run(BlockIO io)
     {
-        std::thread worker(&MPPTask::runImpl, this, io, current_memory_tracker);
+        std::thread worker(&MPPTask::runImpl, this->shared_from_this(), io, current_memory_tracker);
         worker.detach();
     }
 
