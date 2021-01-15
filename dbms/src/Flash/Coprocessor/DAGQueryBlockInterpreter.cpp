@@ -791,20 +791,35 @@ AnalysisResult DAGQueryBlockInterpreter::analyzeExpressions()
         // TiDB: agg functions + firstRow(needed group-by items)
         // TiFlash: all aggs from TiDB, (i.e., agg functions + firstRow(needed group-by items)) + group-by items
         // so using "output_offsets" to truncate the frefix TiDB n columns from TiFlash schema.
+        // when output_offsets if empty, output the aggregated_columns.
         std::string name = "";
-        for(auto offset : query_block.output_offsets)
+        if (query_block.output_offsets.size() > 0)
         {
-            if ((size_t)offset >= analyzer->getCurrentInputColumns().size())
+            for (auto offset : query_block.output_offsets)
             {
-                // array index out of bound
-                throw TiFlashException("Output offset index is out of bound", Errors::Coprocessor::BadRequest);
+                if ((size_t)offset >= analyzer->getCurrentInputColumns().size())
+                {
+                    // array index out of bound
+                    throw TiFlashException("Output offset index is out of bound", Errors::Coprocessor::BadRequest);
+                }
+                auto & element = analyzer->getCurrentInputColumns()[offset];
+                if (!query_block.isRootQueryBlock())
+                {
+                    name = query_block.qb_column_prefix + element.name;
+                }
+                final_project.emplace_back(element.name, name);
             }
-            auto & element = analyzer->getCurrentInputColumns()[offset];
-            if (!query_block.isRootQueryBlock())
+        }
+        else
+        {
+            for (auto & element : analyzer->getCurrentInputColumns())
             {
-                name = query_block.qb_column_prefix + element.name;
+                if (!query_block.isRootQueryBlock())
+                {
+                    name = query_block.qb_column_prefix + element.name;
+                }
+                final_project.emplace_back(element.name, name);
             }
-            final_project.emplace_back(element.name, name);
         }
     }
     // Or TopN, not both.

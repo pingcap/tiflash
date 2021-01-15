@@ -16,10 +16,7 @@ extern const int COP_BAD_DAG_REQUEST;
 
 DAGQuerySource::DAGQuerySource(Context & context_, const std::unordered_map<RegionID, RegionInfo> & regions_,
     const tipb::DAGRequest & dag_request_, const bool is_batch_cop_)
-    : context(context_),
-      regions(regions_),
-      dag_request(dag_request_),
-      is_batch_cop(is_batch_cop_)
+    : context(context_), regions(regions_), dag_request(dag_request_), is_batch_cop(is_batch_cop_)
 {
     if (dag_request.has_root_executor())
     {
@@ -33,8 +30,18 @@ DAGQuerySource::DAGQuerySource(Context & context_, const std::unordered_map<Regi
     for (Int32 i : dag_request.output_offsets())
         root_query_block->output_offsets.push_back(i);
 
+    if (dag_request.output_offsets().size() == 0)
+    {
+        throw Exception("output offset is empty");
+    }
+
     for (UInt32 i : dag_request.output_offsets())
     {
+        if ((size_t)i >= root_query_block->output_field_types.size())
+        {
+            // array index out of bound
+            throw TiFlashException("Output offset index is out of bound", Errors::Coprocessor::BadRequest);
+        }
         result_field_types.push_back(root_query_block->output_field_types[i]);
     }
     analyzeDAGEncodeType();
