@@ -122,7 +122,7 @@ bool FileProvider::isFileEncrypted(const EncryptionPath & encryption_path_) cons
 bool FileProvider::isEncryptionEnabled() const { return encryption_enabled; }
 
 void FileProvider::renameFile(const String & src_file_path_, const EncryptionPath & src_encryption_path_, const String & dst_file_path_,
-    const EncryptionPath & dst_encryption_path_) const
+    const EncryptionPath & dst_encryption_path_, bool rename_encryption_info_) const
 {
     Poco::File data_file(src_file_path_);
     if (unlikely(!data_file.exists()))
@@ -135,6 +135,23 @@ void FileProvider::renameFile(const String & src_file_path_, const EncryptionPat
                 + " should be identical to dst file name: " + dst_encryption_path_.file_name,
             Errors::Encryption::Internal);
     }
+
+    if (!rename_encryption_info_)
+    {
+        if (unlikely(src_encryption_path_.full_path != dst_encryption_path_.full_path))
+        {
+            throw DB::TiFlashException("Src file encryption full path: " + src_encryption_path_.full_path
+                    + " must be same with dst file encryption full path" + dst_encryption_path_.full_path,
+                Errors::Encryption::Internal);
+        }
+        data_file.renameTo(dst_file_path_);
+        return;
+    }
+
+    // delete the encryption info for dst_path if any
+    if (isFileEncrypted(dst_encryption_path_))
+        key_manager->deleteFile(dst_encryption_path_.full_path, true);
+
     // rename encryption info(if any) before rename the underlying file
     bool is_file_encrypted = isFileEncrypted(src_encryption_path_);
     if (is_file_encrypted)
