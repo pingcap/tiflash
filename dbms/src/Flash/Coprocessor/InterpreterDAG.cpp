@@ -79,6 +79,8 @@ void InterpreterDAG::initMPPExchangeReceiver(const DAGQueryBlock & dag_query_blo
 BlockIO InterpreterDAG::execute()
 {
     if (dag.getDAGContext().isMPPTask())
+        /// Due to leaner read, DAGQueryBlockInterpreter may take a long time to build
+        /// the query plan, so we init mpp exchange receiver before executeQueryBlock
         initMPPExchangeReceiver(*dag.getQueryBlock());
     /// region_info should based on the source executor, however
     /// tidb does not support multi-table dag request yet, so
