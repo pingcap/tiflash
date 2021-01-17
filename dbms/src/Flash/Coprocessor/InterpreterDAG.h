@@ -39,6 +39,7 @@ public:
 
 private:
     BlockInputStreams executeQueryBlock(DAGQueryBlock & query_block, std::vector<SubqueriesForSets> & subqueriesForSets);
+    void initMPPExchangeReceiver(const DAGQueryBlock & dag_query_block);
     RegionException::RegionReadStatus getRegionReadStatus(const RegionPtr & current_region);
 
 private:
@@ -48,6 +49,8 @@ private:
 
     /// How many streams we ask for storage to produce, and in how many threads we will do further processing.
     size_t max_streams = 1;
+
+    std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> mpp_exchange_receiver_maps;
 
     const bool keep_session_timezone_info;
 

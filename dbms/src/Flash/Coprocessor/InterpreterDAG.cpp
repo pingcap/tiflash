@@ -50,20 +50,36 @@ BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block,
             BlockInputStreams child_streams = executeQueryBlock(*child, subqueriesForSets);
             input_streams_vec.push_back(child_streams);
         }
-        DAGQueryBlockInterpreter query_block_interpreter(
-            context, input_streams_vec, query_block, keep_session_timezone_info, dag.getDAGRequest(), dag.getAST(), dag, subqueriesForSets);
+        DAGQueryBlockInterpreter query_block_interpreter(context, input_streams_vec, query_block, keep_session_timezone_info,
+            dag.getDAGRequest(), dag.getAST(), dag, subqueriesForSets, mpp_exchange_receiver_maps);
         return query_block_interpreter.execute();
     }
     else
     {
-        DAGQueryBlockInterpreter query_block_interpreter(
-            context, {}, query_block, keep_session_timezone_info, dag.getDAGRequest(), dag.getAST(), dag, subqueriesForSets);
+        DAGQueryBlockInterpreter query_block_interpreter(context, {}, query_block, keep_session_timezone_info, dag.getDAGRequest(),
+            dag.getAST(), dag, subqueriesForSets, mpp_exchange_receiver_maps);
         return query_block_interpreter.execute();
+    }
+}
+
+void InterpreterDAG::initMPPExchangeReceiver(const DAGQueryBlock & dag_query_block)
+{
+    for (const auto & child_qb : dag_query_block.children)
+    {
+        initMPPExchangeReceiver(*child_qb);
+    }
+    if (dag_query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
+    {
+        /// use max_streams * 2 as the default receiver buffer size, maybe make it more configurable
+        mpp_exchange_receiver_maps[dag_query_block.source_name] = std::make_shared<ExchangeReceiver>(
+            context, dag_query_block.source->exchange_receiver(), dag.getDAGContext().getMPPTaskMeta(), max_streams * 2);
     }
 }
 
 BlockIO InterpreterDAG::execute()
 {
+    if (dag.getDAGContext().isMPPTask())
+        initMPPExchangeReceiver(*dag.getQueryBlock());
     /// region_info should based on the source executor, however
     /// tidb does not support multi-table dag request yet, so
     /// it is ok to use the same region_info for the whole dag request
