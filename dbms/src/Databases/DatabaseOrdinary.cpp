@@ -411,15 +411,7 @@ void DatabaseOrdinary::alterTable(
     }
     catch (...)
     {
-        if (use_target_encrypt_info)
-        {
-            Poco::File data_file(table_metadata_tmp_path);
-            data_file.remove();
-        }
-        else
-        {
-            context.getFileProvider()->deleteRegularFile(table_metadata_tmp_path, encryption_path);
-        }
+        context.getFileProvider()->deleteRegularFile(table_metadata_tmp_path, encryption_path);
         throw;
     }
 }
