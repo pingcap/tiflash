@@ -278,9 +278,9 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
         // 3. If we create new encryption info for `t_31.sql.tmp`,
         // then we cannot rename the encryption info and the file in an atomic operation.
         bool use_target_encrypt_info = context.getFileProvider()->isFileEncrypted(EncryptionPath(new_tbl_meta_file, ""));
+        EncryptionPath encryption_path
+            = use_target_encrypt_info ? EncryptionPath(new_tbl_meta_file, "") : EncryptionPath(new_tbl_meta_file_tmp, "");
         {
-            EncryptionPath encryption_path
-                = use_target_encrypt_info ? EncryptionPath(new_tbl_meta_file, "") : EncryptionPath(new_tbl_meta_file_tmp, "");
             bool create_new_encryption_info = !use_target_encrypt_info && statement.size();
             WriteBufferFromFileProvider out(context.getFileProvider(), new_tbl_meta_file_tmp, encryption_path, create_new_encryption_info,
                 nullptr, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
@@ -294,15 +294,12 @@ void DatabaseTiFlash::renameTable(const Context & context, const String & table_
         try
         {
             /// rename atomically replaces the old file with the new one.
-            context.getFileProvider()->renameFile(new_tbl_meta_file_tmp, EncryptionPath(new_tbl_meta_file_tmp, ""), new_tbl_meta_file,
-                EncryptionPath(new_tbl_meta_file, ""), !use_target_encrypt_info);
+            context.getFileProvider()->renameFile(
+                new_tbl_meta_file_tmp, encryption_path, new_tbl_meta_file, EncryptionPath(new_tbl_meta_file, ""), !use_target_encrypt_info);
         }
         catch (...)
         {
-            if (!use_target_encrypt_info)
-            {
-                context.getFileProvider()->deleteRegularFile(new_tbl_meta_file_tmp, EncryptionPath(new_tbl_meta_file_tmp, ""));
-            }
+            context.getFileProvider()->deleteRegularFile(new_tbl_meta_file_tmp, EncryptionPath(new_tbl_meta_file_tmp, ""));
             throw;
         }
 
@@ -381,15 +378,12 @@ void DatabaseTiFlash::alterTable(
     try
     {
         /// rename atomically replaces the old file with the new one.
-        context.getFileProvider()->renameFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""), table_metadata_path,
+        context.getFileProvider()->renameFile(table_metadata_tmp_path, encryption_path, table_metadata_path,
             EncryptionPath(table_metadata_path, ""), !use_target_encrypt_info);
     }
     catch (...)
     {
-        if (!use_target_encrypt_info)
-        {
-            context.getFileProvider()->deleteRegularFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""));
-        }
+        context.getFileProvider()->deleteRegularFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""));
         throw;
     }
 }

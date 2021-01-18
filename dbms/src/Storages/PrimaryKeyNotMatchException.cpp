@@ -65,10 +65,7 @@ String fixCreateStatementWithPriKeyNotMatchException( //
         }
         catch (...)
         {
-            if (!use_target_encrypt_info)
-            {
-                context.getFileProvider()->deleteRegularFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""));
-            }
+            context.getFileProvider()->deleteRegularFile(table_metadata_tmp_path, EncryptionPath(table_metadata_tmp_path, ""));
             throw;
         }
     }
