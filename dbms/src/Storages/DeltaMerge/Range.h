@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/RedactHelpers.h>
 #include <Core/Types.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Transaction/Types.h>
@@ -10,6 +11,8 @@ namespace DM
 
 template <typename T>
 struct Range;
+template <typename T>
+String rangeToDebugString(const Range<T> & range);
 template <typename T>
 String rangeToString(const Range<T> & range);
 
@@ -62,11 +65,30 @@ struct Range
 
     inline bool check(T value) const { return checkStart(value) && checkEnd(value); }
 
+    inline String toDebugString() const { return rangeToDebugString(*this); }
+
     inline String toString() const { return rangeToString(*this); }
 
     bool operator==(const Range & rhs) const { return start == rhs.start && end == rhs.end; }
     bool operator!=(const Range & rhs) const { return !(*this == rhs); }
 };
+
+template <class T, bool right_open = true>
+inline String rangeToDebugString(T start, T end)
+{
+    String s = "[" + Redact::handleToDebugString(start) + "," + Redact::handleToDebugString(end);
+    if constexpr (right_open)
+        s += ")";
+    else
+        s += "]";
+    return s;
+}
+
+template <typename T>
+inline String rangeToDebugString(const Range<T> & range)
+{
+    return rangeToDebugString<T, true>(range.start, range.end);
+}
 
 template <class T, bool right_open = true>
 inline String rangeToString(T start, T end)
@@ -90,12 +112,12 @@ using Handle       = DB::HandleID;
 using HandleRange  = Range<Handle>;
 using HandleRanges = std::vector<HandleRange>;
 
-inline String toString(const HandleRanges & ranges)
+inline String toDebugString(const HandleRanges & ranges)
 {
     String s = "{";
     for (auto & r : ranges)
     {
-        s += r.toString() + ",";
+        s += r.toDebugString() + ",";
     }
     if (!ranges.empty())
         s.erase(s.size() - 1);

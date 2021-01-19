@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/RedactHelpers.h>
 #include <Storages/Transaction/AtomicDecodedRow.h>
 #include <Storages/Transaction/SerializationHelper.h>
 #include <Storages/Transaction/Types.h>
@@ -39,20 +40,8 @@ public:
     size_t dataSize() const { return Base::size(); }
     std::string toString() const { return *this; }
 
-    // For debug
-    std::string toHex() const
-    {
-        std::stringstream ss;
-        ss << "[" << std::hex;
-        for (size_t i = 0; i < dataSize(); ++i)
-        {
-            ss << Int32(UInt8(at(i)));
-            if (i + 1 != dataSize())
-                ss << ' ';
-        }
-        ss << "]";
-        return ss.str();
-    }
+    // Format as a hex string for debugging. The value will be converted to '?' if redact-log is on
+    std::string toDebugString() const { return Redact::keyToDebugString(data(), dataSize()); }
 
     explicit operator bool() const { return !empty(); }
 

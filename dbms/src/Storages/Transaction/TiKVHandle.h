@@ -1,9 +1,10 @@
 #pragma once
 
+#include <Common/Exception.h>
+#include <Common/RedactHelpers.h>
 #include <Core/Types.h>
 #include <Storages/Transaction/Types.h>
 #include <common/likely.h>
-#include <Common/Exception.h>
 
 namespace DB
 {
@@ -75,18 +76,18 @@ struct Handle
 
     bool operator>=(const Handle & handle) const { return !(*this < handle); }
 
-    void toString(std::stringstream & ss) const
+    void toDebugString(std::stringstream & ss) const
     {
         if (type == HandleIDType::NORMAL)
-            ss << handle_id;
+            ss << Redact::handleToDebugString(handle_id);
         else
             ss << "<" << handleIDTypeToString(type) << ">";
     }
 
-    String toString() const
+    String toDebugString() const
     {
         std::stringstream ss;
-        toString(ss);
+        toDebugString(ss);
         return ss.str();
     }
 
@@ -150,5 +151,21 @@ inline bool operator<=(const HandleType & handle_id, const Handle<HandleType> & 
 
 template <typename HandleType>
 using HandleRange = std::pair<TiKVHandle::Handle<HandleType>, TiKVHandle::Handle<HandleType>>;
+
+template <typename HandleType>
+inline std::string TiKVKeyRangeToDebugString(const DB::HandleRange<HandleType> & key_range)
+{
+    if (unlikely(key_range.first >= key_range.second))
+        return "[none]";
+
+    std::stringstream ss;
+    ss << "[";
+    key_range.first.toDebugString(ss);
+    ss << ", ";
+    key_range.second.toDebugString(ss);
+    ss << ")";
+
+    return ss.str();
+}
 
 } // namespace DB

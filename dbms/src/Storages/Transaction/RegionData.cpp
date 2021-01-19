@@ -1,3 +1,4 @@
+#include <Common/RedactHelpers.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Transaction/ColumnFamily.h>
@@ -102,8 +103,8 @@ RegionDataReadInfo RegionData::readDataByWriteIt(const ConstWriteCFIter & write_
         if (auto data_it = map.find({handle, prewrite_ts}); data_it != map.end())
             return std::make_tuple(handle, write_type, ts, RegionDefaultCFDataTrait::getTiKVValue(data_it));
         else
-            throw Exception("Handle: " + std::to_string(handle) + ", Prewrite ts: " + std::to_string(prewrite_ts)
-                    + " can not found in default cf for key: " + key->toHex(),
+            throw Exception("Handle: " + Redact::handleToDebugString(handle) + ", Prewrite ts: " + std::to_string(prewrite_ts)
+                    + " can not found in default cf for key: " + key->toDebugString(),
                 ErrorCodes::LOGICAL_ERROR);
     }
 

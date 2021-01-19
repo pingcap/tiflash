@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Common/RedactHelpers.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/ReadHelpers.h>
@@ -175,9 +176,9 @@ private:
                 auto version = version_column[i];
                 if (handle < last_handle || (handle == last_handle && version < last_version))
                 {
-                    throw Exception("DeltaMerge return wrong result, current handle[" + DB::toString(handle) + "]version["
+                    throw Exception("DeltaMerge return wrong result, current handle[" + Redact::handleToDebugString(handle) + "]version["
                                     + DB::toString(version) + "]@read[" + DB::toString(num_read) + "]@pos[" + DB::toString(i)
-                                    + "] is expected >= last_handle[" + DB::toString(last_handle) + "]last_version["
+                                    + "] is expected >= last_handle[" + Redact::handleToDebugString(last_handle) + "]last_version["
                                     + DB::toString(last_version) + "]@read[" + DB::toString(last_handle_read_num) + "]@pos["
                                     + DB::toString(last_handle_pos) + "]");
                 }

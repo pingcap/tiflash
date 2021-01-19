@@ -138,6 +138,23 @@ public:
     String operator() (const DecimalField<Decimal256> & x) const;
 };
 
+/** Prints Field as literal in debug logging. The value will be converted to '?' if redact-log is on */
+class FieldVisitorToDebugString : public StaticVisitor<String>
+{
+public:
+    String operator() (const Null & x) const;
+    String operator() (const UInt64 & x) const;
+    String operator() (const Int64 & x) const;
+    String operator() (const Float64 & x) const;
+    String operator() (const String & x) const;
+    String operator() (const Array & x) const;
+    String operator() (const Tuple & x) const;
+    String operator() (const DecimalField<Decimal32> & x) const;
+    String operator() (const DecimalField<Decimal64> & x) const;
+    String operator() (const DecimalField<Decimal128> & x) const;
+    String operator() (const DecimalField<Decimal256> & x) const;
+};
+
 
 /** Print readable and unique text dump of field type and value. */
 class FieldVisitorDump : public StaticVisitor<String>
