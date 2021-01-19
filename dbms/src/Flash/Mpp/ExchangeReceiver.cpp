@@ -28,7 +28,7 @@ struct RpcTypeTraits<::mpp::EstablishMPPConnectionRequest>
 namespace DB
 {
 
-void ExchangeReceiver::init()
+void ExchangeReceiver::setUpConnection()
 {
     for (int index = 0; index < pb_exchange_receiver.encoded_task_meta_size(); index++)
     {
