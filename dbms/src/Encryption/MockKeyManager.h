@@ -25,12 +25,6 @@ public:
         std::ignore = dst_fname;
     }
 
-    void renameFile(const String & src_fname, const String & dst_fname) override
-    {
-        std::ignore = src_fname;
-        std::ignore = dst_fname;
-    }
-
 private:
     const static EncryptionMethod default_method;
     const static unsigned char default_key[33];
