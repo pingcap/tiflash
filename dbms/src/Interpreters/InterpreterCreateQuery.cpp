@@ -127,7 +127,8 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
         String statement = statement_stream.str();
 
         /// Exclusive flag guarantees, that database is not created right now in another thread.
-        WriteBufferFromFileProvider out(context.getFileProvider(), metadata_file_tmp_path, EncryptionPath(metadata_file_tmp_path, ""), true, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
+        WriteBufferFromFileProvider out(context.getFileProvider(), metadata_file_tmp_path, EncryptionPath(metadata_file_tmp_path, ""), true,
+            statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
 
         out.next();
