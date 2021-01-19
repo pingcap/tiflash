@@ -228,14 +228,20 @@ public:
         return c_start;
     }
 
-    template <typename ... TAllocatorParams>
+    template <typename... TAllocatorParams>
     void push_back_raw(const char * ptr, TAllocatorParams &&... allocator_params)
     {
-        if (unlikely(c_end >= c_end_of_storage))
-            reserveForNextSize(std::forward<TAllocatorParams>(allocator_params)...);
+        push_back_raw_many(1, ptr, std::forward<TAllocatorParams>(allocator_params)...);
+    }
 
-        memcpy(c_end, ptr, ELEMENT_SIZE);
-        c_end += byte_size(1);
+    template <typename... TAllocatorParams>
+    void push_back_raw_many(size_t number_of_items, const void * ptr, TAllocatorParams &&... allocator_params)
+    {
+        size_t items_byte_size = byte_size(number_of_items);
+        if (unlikely(c_end + items_byte_size > c_end_of_storage))
+            reserve(size() + number_of_items, std::forward<TAllocatorParams>(allocator_params)...);
+        memcpy(c_end, ptr, items_byte_size);
+        c_end += items_byte_size;
     }
 
     void protect()
@@ -434,10 +440,11 @@ public:
     template <typename It1, typename It2>
     void insert(iterator it, It1 from_begin, It2 from_end)
     {
-        insertPrepare(from_begin, from_end);
-
         size_t bytes_to_copy = this->byte_size(from_end - from_begin);
         size_t bytes_to_move = (end() - it) * sizeof(T);
+
+        // This may make `it` invalid, do it after calculating `bytes_to_move`
+        insertPrepare(from_begin, from_end);
 
         if (unlikely(bytes_to_move))
             memcpy(this->c_end + bytes_to_copy - bytes_to_move, this->c_end - bytes_to_move, bytes_to_move);
