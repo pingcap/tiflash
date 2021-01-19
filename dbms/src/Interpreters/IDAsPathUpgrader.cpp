@@ -157,8 +157,8 @@ void writeTableDefinitionToFile(const FileProviderPtr & file_provider, const Str
             out.sync();
         out.close();
     }
-    file_provider->renameFile(table_meta_tmp_path, EncryptionPath(table_meta_tmp_path, ""),
-        table_meta_path, EncryptionPath(table_meta_path, ""));
+    file_provider->renameFile(
+        table_meta_tmp_path, EncryptionPath(table_meta_tmp_path, ""), table_meta_path, EncryptionPath(table_meta_path, ""), true);
 }
 
 void writeDatabaseDefinitionToFile(const FileProviderPtr & file_provider, const String & database_meta_path, const ASTPtr & query, bool fsync_metadata)
@@ -175,8 +175,8 @@ void writeDatabaseDefinitionToFile(const FileProviderPtr & file_provider, const 
             out.sync();
         out.close();
     }
-    file_provider->renameFile(db_meta_tmp_path, EncryptionPath(db_meta_tmp_path, ""),
-        database_meta_path, EncryptionPath(database_meta_path, ""));
+    file_provider->renameFile(
+        db_meta_tmp_path, EncryptionPath(db_meta_tmp_path, ""), database_meta_path, EncryptionPath(database_meta_path, ""), true);
 }
 
 ASTPtr parseCreateDatabaseAST(const String & statement)
