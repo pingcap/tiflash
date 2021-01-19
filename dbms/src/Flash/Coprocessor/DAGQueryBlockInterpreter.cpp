@@ -1305,7 +1305,7 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
 
 void DAGQueryBlockInterpreter::executeProject(Pipeline & pipeline, NamesWithAliases & project_cols)
 {
-    if (final_project.empty())
+    if (project_cols.empty())
         return;
     auto columns = pipeline.firstStream()->getHeader();
     NamesAndTypesList input_column;
