@@ -160,7 +160,7 @@ void writeTableDefinitionToFile(
         out.close();
     }
     file_provider->renameFile(
-        table_meta_tmp_path, EncryptionPath(table_meta_tmp_path, ""), table_meta_path, EncryptionPath(table_meta_path, ""));
+        table_meta_tmp_path, EncryptionPath(table_meta_tmp_path, ""), table_meta_path, EncryptionPath(table_meta_path, ""), true);
 }
 
 void writeDatabaseDefinitionToFile(
@@ -180,7 +180,7 @@ void writeDatabaseDefinitionToFile(
         out.close();
     }
     file_provider->renameFile(
-        db_meta_tmp_path, EncryptionPath(db_meta_tmp_path, ""), database_meta_path, EncryptionPath(database_meta_path, ""));
+        db_meta_tmp_path, EncryptionPath(db_meta_tmp_path, ""), database_meta_path, EncryptionPath(database_meta_path, ""), true);
 }
 
 ASTPtr parseCreateDatabaseAST(const String & statement)
