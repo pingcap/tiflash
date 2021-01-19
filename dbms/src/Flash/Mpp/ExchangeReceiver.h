@@ -37,6 +37,7 @@ struct ExchangeReceiverResult
         bool meet_error_ = false, const String & error_msg_ = "", bool eof_ = false)
         : resp(resp_), call_index(call_index_), req_info(req_info_), meet_error(meet_error_), error_msg(error_msg_), eof(eof_)
     {}
+    ExchangeReceiverResult() : ExchangeReceiverResult(nullptr, 0) {}
 };
 
 class ExchangeReceiver
@@ -60,10 +61,11 @@ private:
     std::condition_variable cv;
     std::queue<ExchangeReceiverResult> result_buffer;
     Int32 live_connections;
-    bool inited;
     bool meet_error;
     Exception err;
     Logger * log;
+
+    void setUpConnection();
 
     void ReadLoop(const String & meta_raw, size_t source_index);
 
@@ -92,7 +94,6 @@ public:
           task_meta(meta),
           max_buffer_size(max_buffer_size_),
           live_connections(0),
-          inited(false),
           meet_error(false),
           log(&Logger::get("exchange_receiver"))
     {
@@ -102,7 +103,7 @@ public:
             ColumnInfo info = fieldTypeToColumnInfo(exc.field_types(i));
             schema.push_back(std::make_pair(name, info));
         }
-        init();
+        setUpConnection();
     }
 
     ~ExchangeReceiver()
@@ -115,26 +116,24 @@ public:
 
     const DAGSchema & getOutputSchema() const { return schema; }
 
-    void init();
-
     ExchangeReceiverResult nextResult()
     {
-        if (!inited)
-            init();
         std::unique_lock<std::mutex> lk(mu);
         cv.wait(lk, [&] { return !result_buffer.empty() || live_connections == 0 || meet_error; });
+        ExchangeReceiverResult result;
         if (meet_error)
         {
-            cv.notify_all();
-            return {nullptr, 0, "ExchangeReceiver", true, err.message(), false};
+            result = {nullptr, 0, "ExchangeReceiver", true, err.message(), false};
         }
-        if (result_buffer.empty())
+        else if (result_buffer.empty())
         {
-            cv.notify_all();
-            return {nullptr, 0, "ExchangeReceiver", false, "", true};
+            result = {nullptr, 0, "ExchangeReceiver", false, "", true};
         }
-        auto result = result_buffer.front();
-        result_buffer.pop();
+        else
+        {
+            result = result_buffer.front();
+            result_buffer.pop();
+        }
         cv.notify_all();
         return result;
     }
