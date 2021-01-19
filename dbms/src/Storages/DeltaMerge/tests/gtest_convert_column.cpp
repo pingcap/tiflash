@@ -10,8 +10,7 @@ namespace DB
 {
 namespace DM
 {
-using OptionTableInfoConstRef = std::optional<std::reference_wrapper<const TiDB::TableInfo>>;
-extern void setColumnDefineDefaultValue(const OptionTableInfoConstRef table_info, ColumnDefine & define);
+extern void setColumnDefineDefaultValue(const TiDB::TableInfo & table_info, ColumnDefine & define);
 
 namespace tests
 {

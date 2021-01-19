@@ -182,10 +182,10 @@ inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefi
 }
 
 
-inline void setColumnDefineDefaultValue(const OptionTableInfoConstRef table_info, ColumnDefine & define)
+inline void setColumnDefineDefaultValue(const TiDB::TableInfo & table_info, ColumnDefine & define)
 {
-    // check ConvertColumnType_test.GetDefaultValue for unittest
-    const auto & col_info = table_info->get().getColumnInfo(define.id);
+    // Check ConvertColumnType_test.GetDefaultValue for unit test.
+    const auto & col_info = table_info.getColumnInfo(define.id);
     define.default_value  = col_info.defaultValueToField();
 }
 
@@ -211,7 +211,7 @@ void applyAlter(ColumnDefines &               table_columns,
                 column_define.type = command.data_type;
                 if (table_info)
                 {
-                    setColumnDefineDefaultValue(table_info, column_define);
+                    setColumnDefineDefaultValue(*table_info, column_define);
                 }
                 else
                 {
@@ -252,7 +252,7 @@ void applyAlter(ColumnDefines &               table_columns,
         if (table_info)
         {
             define.id = table_info->get().getColumnID(command.column_name);
-            setColumnDefineDefaultValue(table_info, define);
+            setColumnDefineDefaultValue(*table_info, define);
         }
         else
         {
