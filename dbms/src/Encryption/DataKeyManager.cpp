@@ -46,14 +46,4 @@ void DataKeyManager::linkFile(const String & src_fname, const String & dst_fname
     }
 }
 
-void DataKeyManager::renameFile(const String & src_fname, const String & dst_fname)
-{
-    auto r = tiflash_instance_wrap->proxy_helper->renameFile(Poco::Path(src_fname).toString(), Poco::Path(dst_fname).toString());
-    if (unlikely(r.res != FileEncryptionRes::Ok && r.res != FileEncryptionRes::Disabled))
-    {
-        throw DB::TiFlashException("Link encryption info from file: " + src_fname + " to " + dst_fname + " meet error: " + *r.erro_msg,
-            Errors::Encryption::Internal);
-    }
-}
-
 } // namespace DB
