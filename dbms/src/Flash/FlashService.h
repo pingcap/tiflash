@@ -2,6 +2,7 @@
 
 #include <Common/TiFlashSecurity.h>
 #include <Interpreters/Context.h>
+#include <common/ThreadPool.h>
 #include <common/logger_useful.h>
 
 #include <boost/noncopyable.hpp>
@@ -33,15 +34,19 @@ public:
         ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer) override;
 
 private:
-    std::tuple<Context, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_contex) const;
+    std::tuple<Context, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
+
+    // Use executeInThreadPool to submit job to thread pool which return grpc::Status.
+    grpc::Status executeInThreadPool(const std::unique_ptr<ThreadPool> & pool, std::function<grpc::Status()>);
 
 private:
     IServer & server;
     TiFlashMetricsPtr metrics;
-
     const TiFlashSecurityConfig & security_config;
-
     Logger * log;
+
+    // Put thread pool member(s) at the end so that ensure it will be destroyed firstly.
+    std::unique_ptr<ThreadPool> cop_pool, batch_cop_pool;
 };
 
 } // namespace DB
