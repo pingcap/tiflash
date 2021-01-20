@@ -1,5 +1,6 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/setThreadName.h>
 #include <Core/Types.h>
 #include <Flash/BatchCommandsHandler.h>
 #include <Flash/BatchCoprocessorHandler.h>
@@ -26,37 +27,50 @@ FlashService::FlashService(IServer & server_)
       metrics(server.context().getTiFlashMetrics()),
       security_config(server_.securityConfig()),
       log(&Logger::get("FlashService"))
-{}
+{
+    auto settings = server_.context().getSettingsRef();
+    const size_t default_size = 2 * getNumberOfPhysicalCPUCores();
+
+    size_t cop_pool_size = static_cast<size_t>(settings.cop_pool_size);
+    cop_pool_size = cop_pool_size ? cop_pool_size : default_size;
+    LOG_INFO(log, "Use a thread pool with " << cop_pool_size << " threads to handle cop requests.");
+    cop_pool = std::make_unique<ThreadPool>(cop_pool_size, [] { setThreadName("cop-pool"); });
+
+    size_t batch_cop_pool_size = static_cast<size_t>(settings.batch_cop_pool_size);
+    batch_cop_pool_size = batch_cop_pool_size ? batch_cop_pool_size : default_size;
+    LOG_INFO(log, "Use a thread pool with " << batch_cop_pool_size << " threads to handle batch cop requests.");
+    batch_cop_pool = std::make_unique<ThreadPool>(batch_cop_pool_size, [] { setThreadName("batch-cop-pool"); });
+}
 
 grpc::Status FlashService::Coprocessor(
     grpc::ServerContext * grpc_context, const coprocessor::Request * request, coprocessor::Response * response)
 {
-    GET_METRIC(metrics, tiflash_coprocessor_request_count, type_cop).Increment();
-    GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_cop).Increment();
-    SCOPE_EXIT({ GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_cop).Decrement(); });
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling coprocessor request: " << request->DebugString());
+
     if (!security_config.checkGrpcContext(grpc_context))
     {
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
     }
-    auto start_time = std::chrono::system_clock::now();
+
+    GET_METRIC(metrics, tiflash_coprocessor_request_count, type_cop).Increment();
+    GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_cop).Increment();
+    Stopwatch watch;
     SCOPE_EXIT({
-        std::chrono::duration<double> duration_sec = std::chrono::system_clock::now() - start_time;
-        GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_cop).Observe(duration_sec.count());
+        GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_cop).Decrement();
+        GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_cop).Observe(watch.elapsedSeconds());
         GET_METRIC(metrics, tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
     });
 
-    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling coprocessor request: " << request->DebugString());
-
-    auto [context, status] = createDBContext(grpc_context);
-    if (!status.ok())
-    {
-        return status;
-    }
-
-    CoprocessorContext cop_context(context, request->context(), *grpc_context);
-    CoprocessorHandler cop_handler(cop_context, request, response);
-
-    auto ret = cop_handler.execute();
+    grpc::Status ret = executeInThreadPool(cop_pool, [&] {
+        auto [context, status] = createDBContext(grpc_context);
+        if (!status.ok())
+        {
+            return status;
+        }
+        CoprocessorContext cop_context(context, request->context(), *grpc_context);
+        CoprocessorHandler cop_handler(cop_context, request, response);
+        return cop_handler.execute();
+    });
 
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle coprocessor request done: " << ret.error_code() << ", " << ret.error_message());
     return ret;
@@ -74,20 +88,23 @@ grpc::Status FlashService::Coprocessor(
 
     GET_METRIC(metrics, tiflash_coprocessor_request_count, type_super_batch).Increment();
     GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_super_batch).Increment();
-    SCOPE_EXIT({ GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_super_batch).Decrement(); });
     Stopwatch watch;
-    SCOPE_EXIT({ GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_super_batch).Observe(watch.elapsedSeconds()); });
+    SCOPE_EXIT({
+        GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_super_batch).Decrement();
+        GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_super_batch).Observe(watch.elapsedSeconds());
+        // TODO: update the value of metric tiflash_coprocessor_response_bytes.
+    });
 
-    auto [context, status] = createDBContext(grpc_context);
-    if (!status.ok())
-    {
-        return status;
-    }
-
-    CoprocessorContext cop_context(context, request->context(), *grpc_context);
-    BatchCoprocessorHandler cop_handler(cop_context, request, writer);
-
-    auto ret = cop_handler.execute();
+    grpc::Status ret = executeInThreadPool(batch_cop_pool, [&] {
+        auto [context, status] = createDBContext(grpc_context);
+        if (!status.ok())
+        {
+            return status;
+        }
+        CoprocessorContext cop_context(context, request->context(), *grpc_context);
+        BatchCoprocessorHandler cop_handler(cop_context, request, writer);
+        return cop_handler.execute();
+    });
 
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle coprocessor request done: " << ret.error_code() << ", " << ret.error_message());
     return ret;
@@ -152,6 +169,14 @@ String getClientMetaVarWithDefault(const grpc::ServerContext * grpc_context, con
     if (auto it = grpc_context->client_metadata().find(name); it != grpc_context->client_metadata().end())
         return it->second.data();
     return default_val;
+}
+
+grpc::Status FlashService::executeInThreadPool(const std::unique_ptr<ThreadPool> & pool, std::function<grpc::Status()> job)
+{
+    std::packaged_task<grpc::Status()> task(job);
+    std::future<grpc::Status> future = task.get_future();
+    pool->schedule([&task] { task(); });
+    return future.get();
 }
 
 std::tuple<Context, grpc::Status> FlashService::createDBContext(const grpc::ServerContext * grpc_context) const
