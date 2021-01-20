@@ -28,6 +28,8 @@
 #include <Storages/Transaction/TypeMapping.h>
 #include <tipb/select.pb.h>
 
+#include <utility>
+
 namespace DB
 {
 
@@ -47,6 +49,9 @@ static const String ENCODE_TYPE_NAME = "encode_type";
 static const String TZ_OFFSET_NAME = "tz_offset";
 static const String TZ_NAME_NAME = "tz_name";
 static const String COLLATOR_NAME = "collator";
+static const String MPP_QUERY = "mpp_query";
+static const String USE_BROADCAST_JOIN = "use_broadcast_join";
+static const String MPP_PARTITION_NUM = "mpp_partition_num";
 
 struct DAGProperties
 {
@@ -54,11 +59,34 @@ struct DAGProperties
     Int64 tz_offset = 0;
     String tz_name = "";
     Int32 collator = 0;
+    bool is_mpp_query = false;
+    bool use_broadcast_join = false;
+    Int32 mpp_partition_num = 1;
 };
+
+enum QueryFragmentType
+{
+    DAG,
+    MPP_ESTABLISH_CONNECTION,
+    MPP_DISPATCH
+};
+
+struct QueryFragment
+{
+    std::shared_ptr<tipb::DAGRequest> dag_request;
+    TableID table_id;
+    DAGSchema result_schema;
+    QueryFragmentType type;
+    QueryFragment(std::shared_ptr<tipb::DAGRequest> request, TableID table_id_, DAGSchema && result_schema_, QueryFragmentType type_)
+        : dag_request(std::move(request)), table_id(table_id_), result_schema(std::move(result_schema_)), type(type_)
+    {}
+};
+
+using QueryFragments = std::vector<QueryFragment>;
 
 using MakeResOutputStream = std::function<BlockInputStreamPtr(BlockInputStreamPtr)>;
 
-std::tuple<TableID, DAGSchema, tipb::DAGRequest, MakeResOutputStream> compileQuery(
+std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
     Context & context, const String & query, SchemaFetcher schema_fetcher, const DAGProperties & properties);
 
 class UniqRawResReformatBlockOutputStream : public IProfilingBlockInputStream
@@ -141,11 +169,55 @@ DAGProperties getDAGProperties(String prop_string)
         ret.tz_name = properties[TZ_NAME_NAME];
     if (properties.find(COLLATOR_NAME) != properties.end())
         ret.collator = std::stoi(properties[COLLATOR_NAME]);
+    if (properties.find(MPP_QUERY) != properties.end())
+        ret.is_mpp_query = properties[MPP_QUERY] == "true";
+    if (properties.find(USE_BROADCAST_JOIN) != properties.end())
+        ret.use_broadcast_join = properties[USE_BROADCAST_JOIN] == "true";
+    if (properties.find(MPP_PARTITION_NUM) != properties.end())
+        ret.mpp_partition_num = std::stoi(properties[USE_BROADCAST_JOIN]);
 
     return ret;
 }
 
-BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
+BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, Timestamp start_ts, const DAGProperties & properties,
+    QueryFragments & query_fragments, MakeResOutputStream & func_wrap_output_stream)
+{
+    if (properties.is_mpp_query)
+    {
+        throw Exception("mpp query not support yet");
+    }
+    else
+    {
+        auto & query_fragment = query_fragments[0];
+        auto table_id = query_fragment.table_id;
+        RegionPtr region;
+        if (region_id == InvalidRegionID)
+        {
+            auto regions = context.getTMTContext().getRegionTable().getRegionsByTable(table_id);
+            if (regions.empty())
+                throw Exception("No region for table", ErrorCodes::BAD_ARGUMENTS);
+            region = regions[0].second;
+            region_id = regions[0].first;
+        }
+        else
+        {
+            region = context.getTMTContext().getKVStore()->getRegion(region_id);
+            if (!region)
+                throw Exception("No such region", ErrorCodes::BAD_ARGUMENTS);
+        }
+        auto handle_range = getHandleRangeByTable(region->getRange()->rawKeys(), table_id);
+        std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges;
+        DecodedTiKVKeyPtr start_key = std::make_shared<DecodedTiKVKey>(RecordKVFormat::genRawKey(table_id, handle_range.first.handle_id));
+        DecodedTiKVKeyPtr end_key = std::make_shared<DecodedTiKVKey>(RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id));
+        key_ranges.emplace_back(std::make_pair(std::move(start_key), std::move(end_key)));
+        tipb::SelectResponse dag_response = executeDAGRequest(
+            context, *query_fragment.dag_request, region_id, region->version(), region->confVer(), start_ts, key_ranges);
+
+        return func_wrap_output_stream(outputDAGResponse(context, query_fragment.result_schema, dag_response));
+    }
+}
+
+BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args)
 {
     if (args.size() < 1 || args.size() > 3)
         throw Exception("Args not matched, should be: query[, region-id, dag_prop_string]", ErrorCodes::BAD_ARGUMENTS);
@@ -161,7 +233,7 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
     DAGProperties properties = getDAGProperties(prop_string);
     Timestamp start_ts = context.getTMTContext().getPDClient()->getTS();
 
-    auto [table_id, schema, dag_request, func_wrap_output_stream] = compileQuery(
+    auto [query_fragments, func_wrap_output_stream] = compileQuery(
         context, query,
         [&](const String & database_name, const String & table_name) {
             auto storage = context.getTable(database_name, table_name);
@@ -174,33 +246,10 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
         },
         properties);
 
-    RegionPtr region;
-    if (region_id == InvalidRegionID)
-    {
-        auto regions = context.getTMTContext().getRegionTable().getRegionsByTable(table_id);
-        if (regions.empty())
-            throw Exception("No region for table", ErrorCodes::BAD_ARGUMENTS);
-        region = context.getTMTContext().getRegionTable().getRegionsByTable(table_id).front().second;
-    }
-    else
-    {
-        region = context.getTMTContext().getKVStore()->getRegion(region_id);
-        if (!region)
-            throw Exception("No such region", ErrorCodes::BAD_ARGUMENTS);
-    }
-
-    auto handle_range = getHandleRangeByTable(region->getRange()->rawKeys(), table_id);
-    std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges;
-    DecodedTiKVKeyPtr start_key = std::make_shared<DecodedTiKVKey>(RecordKVFormat::genRawKey(table_id, handle_range.first.handle_id));
-    DecodedTiKVKeyPtr end_key = std::make_shared<DecodedTiKVKey>(RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id));
-    key_ranges.emplace_back(std::make_pair(std::move(start_key), std::move(end_key)));
-    tipb::SelectResponse dag_response
-        = executeDAGRequest(context, dag_request, region->id(), region->version(), region->confVer(), start_ts, key_ranges);
-
-    return func_wrap_output_stream(outputDAGResponse(context, schema, dag_response));
+    return executeQuery(context, region_id, start_ts, properties, query_fragments, func_wrap_output_stream);
 }
 
-BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
+BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args)
 {
     if (args.size() < 2 || args.size() > 4)
         throw Exception("Args not matched, should be: query, region-id[, start-ts, dag_prop_string]", ErrorCodes::BAD_ARGUMENTS);
@@ -218,24 +267,14 @@ BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
         prop_string = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
     DAGProperties properties = getDAGProperties(prop_string);
 
-    auto [table_id, schema, dag_request, func_wrap_output_stream] = compileQuery(
+    auto [query_fragments, func_wrap_output_stream] = compileQuery(
         context, query,
         [&](const String & database_name, const String & table_name) {
             return MockTiDB::instance().getTableByName(database_name, table_name)->table_info;
         },
         properties);
-    std::ignore = table_id;
 
-    RegionPtr region = context.getTMTContext().getKVStore()->getRegion(region_id);
-    auto handle_range = getHandleRangeByTable(region->getRange()->rawKeys(), table_id);
-    std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges;
-    DecodedTiKVKeyPtr start_key = std::make_shared<DecodedTiKVKey>(RecordKVFormat::genRawKey(table_id, handle_range.first.handle_id));
-    DecodedTiKVKeyPtr end_key = std::make_shared<DecodedTiKVKey>(RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id));
-    key_ranges.emplace_back(std::make_pair(std::move(start_key), std::move(end_key)));
-    tipb::SelectResponse dag_response
-        = executeDAGRequest(context, dag_request, region_id, region->version(), region->confVer(), start_ts, key_ranges);
-
-    return func_wrap_output_stream(outputDAGResponse(context, schema, dag_response));
+    return executeQuery(context, region_id, start_ts, properties, query_fragments, func_wrap_output_stream);
 }
 
 struct ExecutorCtx
@@ -512,12 +551,15 @@ void compileFilter(const DAGSchema & input, ASTPtr ast, tipb::Selection * filter
     compileExpr(input, ast, cond, referred_columns, col_ref_map, collator_id);
 }
 
-std::tuple<TableID, DAGSchema, tipb::DAGRequest, MakeResOutputStream> compileQuery(
+std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
     Context & context, const String & query, SchemaFetcher schema_fetcher, const DAGProperties & properties)
 {
+    if (properties.is_mpp_query)
+        throw Exception("mpp query is not supported yet");
     MakeResOutputStream func_wrap_output_stream = [](BlockInputStreamPtr in) { return in; };
     DAGSchema schema;
-    tipb::DAGRequest dag_request;
+    std::shared_ptr<tipb::DAGRequest> dag_request_ptr = std::make_shared<tipb::DAGRequest>();
+    tipb::DAGRequest & dag_request = *dag_request_ptr;
     dag_request.set_time_zone_name(properties.tz_name);
     dag_request.set_time_zone_offset(properties.tz_offset);
     dag_request.set_flags(dag_request.flags() | (1u << 1u /* TRUNCATE_AS_WARNING */) | (1u << 6u /* OVERFLOW_AS_WARNING */));
@@ -831,7 +873,9 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest, MakeResOutputStream> compileQue
         }
     }
 
-    return std::make_tuple(table_info.id, std::move(schema), std::move(dag_request), func_wrap_output_stream);
+    QueryFragments tasks;
+    tasks.emplace_back(dag_request_ptr, table_info.id, std::move(schema), DAG);
+    return std::make_tuple(std::move(tasks), func_wrap_output_stream);
 }
 
 tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version,

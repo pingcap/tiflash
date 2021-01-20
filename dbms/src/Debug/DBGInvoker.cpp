@@ -90,8 +90,10 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("enable_fail_point", DbgFailPointFunc::dbgEnableFailPoint);
     regSchemalessFunc("disable_fail_point", DbgFailPointFunc::dbgDisableFailPoint);
 
-    regSchemafulFunc("dag", dbgFuncDAG);
-    regSchemafulFunc("mock_dag", dbgFuncMockDAG);
+    regSchemafulFunc("dag", dbgFuncTiDBQuery);
+    regSchemafulFunc("mock_dag", dbgFuncMockTiDBQuery);
+    regSchemafulFunc("tidb_query", dbgFuncTiDBQuery);
+    regSchemafulFunc("tidb_mock_query", dbgFuncMockTiDBQuery);
 
     regSchemalessFunc("region_mock_ingest_sst", dbgFuncIngestSST);
 
