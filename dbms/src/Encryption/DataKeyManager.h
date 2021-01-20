@@ -23,8 +23,6 @@ public:
 
     void linkFile(const String & src_fname, const String & dst_fname) override;
 
-    void renameFile(const String & src_fname, const String & dst_fname) override;
-
 private:
     TiFlashServer * tiflash_instance_wrap;
 };
