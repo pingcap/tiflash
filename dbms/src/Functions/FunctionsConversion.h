@@ -1568,12 +1568,16 @@ public:
             auto format = col_const->getValue<String>();
             ColumnString::Chars_t & data_to = col_to->getChars();
             ColumnString::Offsets & offsets_to = col_to->getOffsets();
-            data_to.resize(size * maxFormattedDateTimeStringLength(format));
+            auto max_length = maxFormattedDateTimeStringLength(format);
+            data_to.resize(size * max_length);
             offsets_to.resize(size);
             WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
+            String result_container;
+            result_container.reserve(max_length);
+            auto formatter = MyDateTimeFormatter(format);
             for (size_t i = 0; i < size; i++)
             {
-                writeMyDateTimeTextWithFormat(vec_from[i], write_buffer, format);
+                writeMyDateTimeTextWithFormat(vec_from[i], write_buffer, formatter, result_container);
                 writeChar(0, write_buffer);
                 offsets_to[i] = write_buffer.count();
             }
