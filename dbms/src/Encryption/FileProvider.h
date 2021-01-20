@@ -40,8 +40,16 @@ public:
 
     bool isEncryptionEnabled() const;
 
+    // `renameFile` includes two steps,
+    // 1. rename encryption info
+    // 2. rename file
+    // so it's not an atomic operation
+    //
+    // for the case that you want the atomicity, and the dst file already exist and is encrypted,
+    // you can reuse the encryption info of dst_file for src_file,
+    // and call `renameFile` with `rename_encryption_info_` set to false
     void renameFile(const String & src_file_path_, const EncryptionPath & src_encryption_path_, const String & dst_file_path_,
-        const EncryptionPath & dst_encryption_path_) const;
+        const EncryptionPath & dst_encryption_path_, bool rename_encryption_info_) const;
 
     ~FileProvider() = default;
 
