@@ -70,9 +70,9 @@ void InterpreterDAG::initMPPExchangeReceiver(const DAGQueryBlock & dag_query_blo
     }
     if (dag_query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
-        /// use max_streams * 2 as the default receiver buffer size, maybe make it more configurable
+        /// use max_streams * 5 as the default receiver buffer size, maybe make it more configurable
         mpp_exchange_receiver_maps[dag_query_block.source_name] = std::make_shared<ExchangeReceiver>(
-            context, dag_query_block.source->exchange_receiver(), dag.getDAGContext().getMPPTaskMeta(), max_streams * 2);
+            context, dag_query_block.source->exchange_receiver(), dag.getDAGContext().getMPPTaskMeta(), max_streams * 5);
     }
 }
 
