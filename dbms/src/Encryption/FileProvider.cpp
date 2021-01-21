@@ -67,8 +67,7 @@ void FileProvider::deleteDirectory(const String & dir_path_, bool dir_path_as_en
                 }
                 else
                 {
-                    throw DB::TiFlashException(
-                            "Unknown file type: " + file.path(), Errors::Encryption::Internal);
+                    throw DB::TiFlashException("Unknown file type: " + file.path(), Errors::Encryption::Internal);
                 }
             }
             dir_file.remove(recursive);
@@ -88,8 +87,7 @@ void FileProvider::deleteRegularFile(const String & file_path_, const Encryption
     {
         if (unlikely(!data_file.isFile()))
         {
-            throw DB::TiFlashException(
-                    "File: " + data_file.path() + " is not a regular file", Errors::Encryption::Internal);
+            throw DB::TiFlashException("File: " + data_file.path() + " is not a regular file", Errors::Encryption::Internal);
         }
         key_manager->deleteFile(encryption_path_.full_path, true);
         data_file.remove(false);
@@ -111,6 +109,9 @@ void FileProvider::deleteEncryptionInfo(const EncryptionPath & encryption_path_,
 
 void FileProvider::linkEncryptionInfo(const EncryptionPath & src_encryption_path_, const EncryptionPath & dst_encryption_path_) const
 {
+    // delete the encryption info for dst_path if any
+    if (isFileEncrypted(dst_encryption_path_))
+        key_manager->deleteFile(dst_encryption_path_.full_path, true);
     key_manager->linkFile(src_encryption_path_.full_path, dst_encryption_path_.full_path);
 }
 
@@ -123,27 +124,46 @@ bool FileProvider::isFileEncrypted(const EncryptionPath & encryption_path_) cons
 
 bool FileProvider::isEncryptionEnabled() const { return encryption_enabled; }
 
-void FileProvider::renameFile(const String &src_file_path_, const EncryptionPath &src_encryption_path_,
-                              const String &dst_file_path_, const EncryptionPath &dst_encryption_path_) const
+void FileProvider::renameFile(const String & src_file_path_, const EncryptionPath & src_encryption_path_, const String & dst_file_path_,
+    const EncryptionPath & dst_encryption_path_, bool rename_encryption_info_) const
 {
     Poco::File data_file(src_file_path_);
     if (unlikely(!data_file.exists()))
     {
-        throw DB::TiFlashException(
-                "Src file: " + src_file_path_ + " doesn't exist", Errors::Encryption::Internal);
+        throw DB::TiFlashException("Src file: " + src_file_path_ + " doesn't exist", Errors::Encryption::Internal);
     }
     if (unlikely(src_encryption_path_.file_name != dst_encryption_path_.file_name))
     {
-        throw DB::TiFlashException(
-                "The src file name: " + src_encryption_path_.file_name + " should be identical to dst file name: "
-                + dst_encryption_path_.file_name, Errors::Encryption::Internal);
+        throw DB::TiFlashException("The src file name: " + src_encryption_path_.file_name
+                + " should be identical to dst file name: " + dst_encryption_path_.file_name,
+            Errors::Encryption::Internal);
     }
-    // rename encryption info(if any) before rename the underlying file
-    if (isFileEncrypted(src_encryption_path_))
+
+    if (!rename_encryption_info_)
     {
-        key_manager->renameFile(src_encryption_path_.full_path, dst_encryption_path_.full_path);
+        if (unlikely(src_encryption_path_.full_path != dst_encryption_path_.full_path))
+        {
+            throw DB::TiFlashException("Src file encryption full path: " + src_encryption_path_.full_path
+                    + " must be same with dst file encryption full path" + dst_encryption_path_.full_path,
+                Errors::Encryption::Internal);
+        }
+        data_file.renameTo(dst_file_path_);
+        return;
     }
+
+    // delete the encryption info for dst_path if any
+    if (isFileEncrypted(dst_encryption_path_))
+        key_manager->deleteFile(dst_encryption_path_.full_path, true);
+
+    // rename encryption info(if any) before rename the underlying file
+    bool is_file_encrypted = isFileEncrypted(src_encryption_path_);
+    if (is_file_encrypted)
+        key_manager->linkFile(src_encryption_path_.full_path, dst_encryption_path_.full_path);
+
     data_file.renameTo(dst_file_path_);
+
+    if (is_file_encrypted)
+        key_manager->deleteFile(src_encryption_path_.full_path, false);
 }
 
 } // namespace DB
