@@ -26,6 +26,8 @@ class DeltaValueSpace;
 using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
 class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
+struct DMContext;
+using DMContextPtr = std::shared_ptr<DMContext>;
 
 using SegmentPtr  = std::shared_ptr<Segment>;
 using SegmentPair = std::pair<SegmentPtr, SegmentPtr>;
@@ -36,14 +38,10 @@ struct SegmentSnapshot : private boost::noncopyable
 {
     DeltaSnapshotPtr  delta;
     StableSnapshotPtr stable;
-    ColumnDefinesPtr  schema;
 
-    SegmentSnapshot(DeltaSnapshotPtr delta_, StableSnapshotPtr stable_, ColumnDefinesPtr schema_)
-        : delta(std::move(delta_)), stable(std::move(stable_)), schema(std::move(schema_))
-    {
-    }
+    SegmentSnapshot(DeltaSnapshotPtr delta_, StableSnapshotPtr stable_) : delta(std::move(delta_)), stable(std::move(stable_)) {}
 
-    SegmentSnapshotPtr clone() { return std::make_shared<SegmentSnapshot>(delta->clone(), stable->clone(), schema); }
+    SegmentSnapshotPtr clone() { return std::make_shared<SegmentSnapshot>(delta->clone(), stable->clone()); }
 
     UInt64 getBytes() { return delta->getBytes() + stable->getBytes(); }
     UInt64 getRows() { return delta->getRows() + stable->getRows(); }
@@ -89,18 +87,16 @@ public:
             const DeltaValueSpacePtr &  delta_,
             const StableValueSpacePtr & stable_);
 
-    static SegmentPtr newSegment(DMContext &              context, //
-                                 const ColumnDefinesPtr & schema,
-                                 const RowKeyRange &      rowkey_range,
-                                 PageId                   segment_id,
-                                 PageId                   next_segment_id,
-                                 PageId                   delta_id,
-                                 PageId                   stable_id);
-    static SegmentPtr newSegment(DMContext &              context, //
-                                 const ColumnDefinesPtr & schema,
-                                 const RowKeyRange &      rowkey_range,
-                                 PageId                   segment_id,
-                                 PageId                   next_segment_id);
+    static SegmentPtr newSegment(DMContext &         context, //
+                                 const RowKeyRange & rowkey_range,
+                                 PageId              segment_id,
+                                 PageId              next_segment_id,
+                                 PageId              delta_id,
+                                 PageId              stable_id);
+    static SegmentPtr newSegment(DMContext &         context, //
+                                 const RowKeyRange & rowkey_range,
+                                 PageId              segment_id,
+                                 PageId              next_segment_id);
 
     static SegmentPtr restoreSegment(DMContext & context, PageId segment_id);
 
@@ -111,10 +107,10 @@ public:
     bool write(DMContext & dm_context, const Block & block); // For test only
     bool write(DMContext & dm_context, const RowKeyRange & delete_range);
 
-    SegmentSnapshotPtr createSnapshot(std::shared_lock<std::shared_mutex> *,
-                                      const DMContext &        dm_context,
-                                      const ColumnDefinesPtr & schema_snap,
-                                      bool                     for_update = false) const;
+    // Create a snapshot for updating this Segment. The caller should pass the latest schema while creating this snapshot.
+    SegmentSnapshotPtr
+                       createUpdateSnapshot(std::shared_lock<std::shared_mutex> *, DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
+    SegmentSnapshotPtr createReadSnapshot(const DMContext & dm_context) const;
 
     BlockInputStreamPtr getInputStream(const DMContext &          dm_context,
                                        const ColumnDefines &      columns_to_read,
@@ -229,14 +225,6 @@ public:
     getRowsAndBytesInRange(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, const RowKeyRange & check_range, bool is_exact);
 
 private:
-    inline ReadInfo getReadInfo(const DMContext &          dm_context,
-                                const SegmentSnapshotPtr & segment_snap,
-                                const RowKeyRanges &       read_ranges,
-                                UInt64                     max_version = MAX_UINT64) const
-    {
-        // Read all columns using the schema in `segment_snap`
-        return getReadInfo(dm_context, /*read_columns=*/*segment_snap->schema, segment_snap, read_ranges, max_version);
-    }
     ReadInfo getReadInfo(const DMContext &          dm_context,
                          const ColumnDefines &      read_columns,
                          const SegmentSnapshotPtr & segment_snap,

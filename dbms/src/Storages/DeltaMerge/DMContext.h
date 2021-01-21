@@ -62,11 +62,16 @@ struct DMContext : private boost::noncopyable
     const bool read_stable_only;
     const bool enable_skippable_place;
 
+private:
+    // The schema snapshot, maybe update.
+    ColumnDefinesPtr schema_snap;
+
 public:
     DMContext(const Context &          db_context_,
               StoragePathPool &        path_pool_,
               StoragePool &            storage_pool_,
               const UInt64             hash_salt_,
+              const ColumnDefinesPtr & store_columns_,
               const DB::Timestamp      min_version_,
               const NotCompress &      not_compress_,
               bool                     is_common_handle_,
@@ -89,9 +94,14 @@ public:
           enable_logical_split(settings.dt_enable_logical_split),
           read_delta_only(settings.dt_read_delta_only),
           read_stable_only(settings.dt_read_stable_only),
-          enable_skippable_place(settings.dt_enable_skippable_place)
+          enable_skippable_place(settings.dt_enable_skippable_place),
+          schema_snap(store_columns_)
     {
     }
+
+    // Make setting/getting schema_snap thread safe
+    inline void             updateSchemaSnap(const ColumnDefinesPtr & latest) { std::atomic_store<ColumnDefines>(&schema_snap, latest); }
+    inline ColumnDefinesPtr getSchemaSnap() const { return std::atomic_load<ColumnDefines>(&schema_snap); }
 };
 
 } // namespace DM
