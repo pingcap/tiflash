@@ -551,6 +551,13 @@ void compileFilter(const DAGSchema & input, ASTPtr ast, tipb::Selection * filter
     compileExpr(input, ast, cond, referred_columns, col_ref_map, collator_id);
 }
 
+/*
+std::tuple<QueryFragments, MakeResOutputStream> compileMPPQuery(
+    Context & context, const String & query, SchemaFetcher schema_fetcher, const DAGProperties & properties)
+{
+}
+ */
+
 std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
     Context & context, const String & query, SchemaFetcher schema_fetcher, const DAGProperties & properties)
 {
