@@ -36,14 +36,10 @@ struct SegmentSnapshot : private boost::noncopyable
 {
     DeltaSnapshotPtr  delta;
     StableSnapshotPtr stable;
-    ColumnDefinesPtr  schema;
 
-    SegmentSnapshot(DeltaSnapshotPtr delta_, StableSnapshotPtr stable_, ColumnDefinesPtr schema_)
-        : delta(std::move(delta_)), stable(std::move(stable_)), schema(std::move(schema_))
-    {
-    }
+    SegmentSnapshot(DeltaSnapshotPtr && delta_, StableSnapshotPtr && stable_) : delta(std::move(delta_)), stable(std::move(stable_)) {}
 
-    SegmentSnapshotPtr clone() { return std::make_shared<SegmentSnapshot>(delta->clone(), stable->clone(), schema); }
+    SegmentSnapshotPtr clone() { return std::make_shared<SegmentSnapshot>(delta->clone(), stable->clone()); }
 
     UInt64 getBytes() { return delta->getBytes() + stable->getBytes(); }
     UInt64 getRows() { return delta->getRows() + stable->getRows(); }
@@ -111,10 +107,7 @@ public:
     bool write(DMContext & dm_context, const Block & block); // For test only
     bool write(DMContext & dm_context, const RowKeyRange & delete_range);
 
-    SegmentSnapshotPtr createSnapshot(std::shared_lock<std::shared_mutex> *,
-                                      const DMContext &        dm_context,
-                                      const ColumnDefinesPtr & schema_snap,
-                                      bool                     for_update = false) const;
+    SegmentSnapshotPtr createSnapshot(const DMContext & dm_context, bool for_update = false) const;
 
     BlockInputStreamPtr getInputStream(const DMContext &          dm_context,
                                        const ColumnDefines &      columns_to_read,
@@ -152,7 +145,11 @@ public:
     /// split(), merge() and mergeDelta() are only used in test cases.
 
     SegmentPair split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
-    SplitInfo prepareSplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs, bool need_rate_limit) const;
+    SplitInfo   prepareSplit(DMContext &                dm_context,
+                             const ColumnDefinesPtr &   schema_snap,
+                             const SegmentSnapshotPtr & segment_snap,
+                             WriteBatches &             wbs,
+                             bool                       need_rate_limit) const;
     SegmentPair
     applySplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs, SplitInfo & split_info) const;
 
@@ -161,6 +158,7 @@ public:
                                      const SegmentPtr &       left,
                                      const SegmentPtr &       right);
     static StableValueSpacePtr prepareMerge(DMContext &                dm_context, //
+                                            const ColumnDefinesPtr &   schema_snap,
                                             const SegmentPtr &         left,
                                             const SegmentSnapshotPtr & left_snap,
                                             const SegmentPtr &         right,
@@ -175,13 +173,16 @@ public:
                                           WriteBatches &              wbs,
                                           const StableValueSpacePtr & merged_stable);
 
-    SegmentPtr mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
-    StableValueSpacePtr
-               prepareMergeDelta(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs, bool need_rate_limit) const;
-    SegmentPtr applyMergeDelta(DMContext &                 dm_context,
-                               const SegmentSnapshotPtr &  segment_snap,
-                               WriteBatches &              wbs,
-                               const StableValueSpacePtr & new_stable) const;
+    SegmentPtr          mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
+    StableValueSpacePtr prepareMergeDelta(DMContext &                dm_context,
+                                          const ColumnDefinesPtr &   schema_snap,
+                                          const SegmentSnapshotPtr & segment_snap,
+                                          WriteBatches &             wbs,
+                                          bool                       need_rate_limit) const;
+    SegmentPtr          applyMergeDelta(DMContext &                 dm_context,
+                                        const SegmentSnapshotPtr &  segment_snap,
+                                        WriteBatches &              wbs,
+                                        const StableValueSpacePtr & new_stable) const;
 
     /// Flush delta's cache packs.
     bool flushCache(DMContext & dm_context);
@@ -229,14 +230,6 @@ public:
     getRowsAndBytesInRange(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, const RowKeyRange & check_range, bool is_exact);
 
 private:
-    inline ReadInfo getReadInfo(const DMContext &          dm_context,
-                                const SegmentSnapshotPtr & segment_snap,
-                                const RowKeyRanges &       read_ranges,
-                                UInt64                     max_version = MAX_UINT64) const
-    {
-        // Read all columns using the schema in `segment_snap`
-        return getReadInfo(dm_context, /*read_columns=*/*segment_snap->schema, segment_snap, read_ranges, max_version);
-    }
     ReadInfo getReadInfo(const DMContext &          dm_context,
                          const ColumnDefines &      read_columns,
                          const SegmentSnapshotPtr & segment_snap,
@@ -264,11 +257,15 @@ private:
     RowKeyValue getSplitPointFast(DMContext & dm_context, const StableSnapshotPtr & stable_snap) const;
 
     SplitInfo prepareSplitLogical(DMContext &                dm_context, //
+                                  const ColumnDefinesPtr &   schema_snap,
                                   const SegmentSnapshotPtr & segment_snap,
                                   RowKeyValue &              split_point,
                                   WriteBatches &             wbs) const;
-    SplitInfo
-    prepareSplitPhysical(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs, bool need_rate_limit) const;
+    SplitInfo prepareSplitPhysical(DMContext &                dm_context,
+                                   const ColumnDefinesPtr &   schema_snap,
+                                   const SegmentSnapshotPtr & segment_snap,
+                                   WriteBatches &             wbs,
+                                   bool                       need_rate_limit) const;
 
 
     /// Make sure that all delta packs have been placed.
