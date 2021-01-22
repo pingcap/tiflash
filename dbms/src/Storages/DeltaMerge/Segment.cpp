@@ -273,8 +273,8 @@ bool Segment::write(DMContext & dm_context, const HandleRange & delete_range)
 
 SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update) const
 {
-    // If the snapshot is created for read, then the snapshot will contains all packs (cached and persisted) for read.
-    // If the snapshot is created for update, then we will only read the persisted packs for this snapshot.
+    // If the snapshot is created for read, then the snapshot will contain all packs (cached and persisted) for read.
+    // If the snapshot is created for update, then the snapshot will only contain the persisted packs.
     auto delta_snap  = delta->createSnapshot(dm_context, for_update);
     auto stable_snap = stable->createSnapshot();
     if (!delta_snap || !stable_snap)
