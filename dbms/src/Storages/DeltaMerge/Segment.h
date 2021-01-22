@@ -35,14 +35,10 @@ struct SegmentSnapshot : private boost::noncopyable
 {
     DeltaSnapshotPtr  delta;
     StableSnapshotPtr stable;
-    ColumnDefinesPtr  schema;
 
-    SegmentSnapshot(DeltaSnapshotPtr delta_, StableSnapshotPtr stable_, ColumnDefinesPtr schema_)
-        : delta(std::move(delta_)), stable(std::move(stable_)), schema(std::move(schema_))
-    {
-    }
+    SegmentSnapshot(DeltaSnapshotPtr && delta_, StableSnapshotPtr && stable_) : delta(std::move(delta_)), stable(std::move(stable_)) {}
 
-    SegmentSnapshotPtr clone() { return std::make_shared<SegmentSnapshot>(delta->clone(), stable->clone(), schema); }
+    SegmentSnapshotPtr clone() { return std::make_shared<SegmentSnapshot>(delta->clone(), stable->clone()); }
 
     UInt64 getBytes() { return delta->getBytes() + stable->getBytes(); }
     UInt64 getRows() { return delta->getRows() + stable->getRows(); }
@@ -110,10 +106,7 @@ public:
     bool write(DMContext & dm_context, const Block & block); // For test only
     bool write(DMContext & dm_context, const HandleRange & delete_range);
 
-    SegmentSnapshotPtr createSnapshot(std::shared_lock<std::shared_mutex> *,
-                                      const DMContext &        dm_context,
-                                      const ColumnDefinesPtr & schema_snap,
-                                      bool                     for_update = false) const;
+    SegmentSnapshotPtr createSnapshot(const DMContext & dm_context, bool for_update = false) const;
 
     BlockInputStreamPtr getInputStream(const DMContext &          dm_context,
                                        const ColumnDefines &      columns_to_read,
@@ -142,7 +135,10 @@ public:
     /// split(), merge() and mergeDelta() are only used in test cases.
 
     SegmentPair split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
-    SplitInfo   prepareSplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs) const;
+    SplitInfo   prepareSplit(DMContext &                dm_context,
+                             const ColumnDefinesPtr &   schema_snap,
+                             const SegmentSnapshotPtr & segment_snap,
+                             WriteBatches &             wbs) const;
     SegmentPair
     applySplit(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs, SplitInfo & split_info) const;
 
@@ -151,6 +147,7 @@ public:
                                      const SegmentPtr &       left,
                                      const SegmentPtr &       right);
     static StableValueSpacePtr prepareMerge(DMContext &                dm_context, //
+                                            const ColumnDefinesPtr &   schema_snap,
                                             const SegmentPtr &         left,
                                             const SegmentSnapshotPtr & left_snap,
                                             const SegmentPtr &         right,
@@ -165,7 +162,10 @@ public:
                                           const StableValueSpacePtr & merged_stable);
 
     SegmentPtr          mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
-    StableValueSpacePtr prepareMergeDelta(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs) const;
+    StableValueSpacePtr prepareMergeDelta(DMContext &                dm_context,
+                                          const ColumnDefinesPtr &   schema_snap,
+                                          const SegmentSnapshotPtr & segment_snap,
+                                          WriteBatches &             wbs) const;
     SegmentPtr          applyMergeDelta(DMContext &                 dm_context,
                                         const SegmentSnapshotPtr &  segment_snap,
                                         WriteBatches &              wbs,
@@ -213,14 +213,6 @@ public:
     void drop(const FileProviderPtr & file_provider) { stable->drop(file_provider); }
 
 private:
-    inline ReadInfo getReadInfo(const DMContext &          dm_context,
-                                const SegmentSnapshotPtr & segment_snap,
-                                const HandleRanges &       read_ranges = {HandleRange::newAll()},
-                                UInt64                     max_version = MAX_UINT64) const
-    {
-        // Read all columns using the schema in `segment_snap`
-        return getReadInfo(dm_context, /*read_columns=*/*segment_snap->schema, segment_snap, read_ranges, max_version);
-    }
     ReadInfo getReadInfo(const DMContext &          dm_context,
                          const ColumnDefines &      read_columns,
                          const SegmentSnapshotPtr & segment_snap,
@@ -248,10 +240,14 @@ private:
     Handle getSplitPointFast(DMContext & dm_context, const StableSnapshotPtr & stable_snap) const;
 
     SplitInfo prepareSplitLogical(DMContext &                dm_context, //
+                                  const ColumnDefinesPtr &   schema_snap,
                                   const SegmentSnapshotPtr & segment_snap,
                                   Handle                     split_point,
                                   WriteBatches &             wbs) const;
-    SplitInfo prepareSplitPhysical(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap, WriteBatches & wbs) const;
+    SplitInfo prepareSplitPhysical(DMContext &                dm_context,
+                                   const ColumnDefinesPtr &   schema_snap,
+                                   const SegmentSnapshotPtr & segment_snap,
+                                   WriteBatches &             wbs) const;
 
 
     /// Make sure that all delta packs have been placed.

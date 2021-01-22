@@ -650,7 +650,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
             (void)handle;
             if (read_segments.empty() || read_segments.count(segment->segmentId()))
             {
-                auto segment_snap = segment->createSnapshot(&lock, *dm_context, store_columns);
+                auto segment_snap = segment->createSnapshot(*dm_context);
                 if (unlikely(!segment_snap))
                     throw Exception("Failed to get segment snap", ErrorCodes::LOGICAL_ERROR);
                 tasks.push_back(std::make_shared<SegmentReadTask>(segment, segment_snap, HandleRanges{segment->getRange()}));
@@ -1084,6 +1084,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     LOG_DEBUG(log, "Split segment " << segment->info() << ", safe point:" << dm_context.min_version);
 
     SegmentSnapshotPtr segment_snap;
+    ColumnDefinesPtr   schema_snap;
 
     {
         std::shared_lock lock(read_write_mutex);
@@ -1094,12 +1095,13 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
             return {};
         }
 
-        segment_snap = segment->createSnapshot(&lock, dm_context, store_columns, /* for_update */ true);
+        segment_snap = segment->createSnapshot(dm_context, /* for_update */ true);
         if (!segment_snap)
         {
             LOG_DEBUG(log, "Give up segment [" << segment->segmentId() << "] split");
             return {};
         }
+        schema_snap = store_columns;
     }
 
     // Not counting the early give up action.
@@ -1118,7 +1120,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 
     WriteBatches wbs(storage_pool);
     auto         range      = segment->getRange();
-    auto         split_info = segment->prepareSplit(dm_context, segment_snap, wbs);
+    auto         split_info = segment->prepareSplit(dm_context, schema_snap, segment_snap, wbs);
 
     wbs.writeLogAndData();
     split_info.my_stable->enableDMFilesGC();
@@ -1192,6 +1194,7 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
 
     SegmentSnapshotPtr left_snap;
     SegmentSnapshotPtr right_snap;
+    ColumnDefinesPtr   schema_snap;
 
     {
         std::shared_lock lock(read_write_mutex);
@@ -1207,14 +1210,15 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
             return;
         }
 
-        left_snap  = left->createSnapshot(&lock, dm_context, store_columns, /* for_update */ true);
-        right_snap = right->createSnapshot(&lock, dm_context, store_columns, /* for_update */ true);
+        left_snap  = left->createSnapshot(dm_context, /* for_update */ true);
+        right_snap = right->createSnapshot(dm_context, /* for_update */ true);
 
         if (!left_snap || !right_snap)
         {
             LOG_DEBUG(log, "Give up merge segments left [" << left->segmentId() << "], right [" << right->segmentId() << "]");
             return;
         }
+        schema_snap = store_columns;
     }
 
     // Not counting the early give up action.
@@ -1232,7 +1236,7 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
     auto right_range = right->getRange();
 
     WriteBatches wbs(storage_pool);
-    auto         merged_stable = Segment::prepareMerge(dm_context, left, left_snap, right, right_snap, wbs);
+    auto         merged_stable = Segment::prepareMerge(dm_context, schema_snap, left, left_snap, right, right_snap, wbs);
     wbs.writeLogAndData();
     merged_stable->enableDMFilesGC();
 
@@ -1289,7 +1293,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
                   << " merge delta, segment [" << segment->segmentId() << "], safe point:" << dm_context.min_version);
 
     SegmentSnapshotPtr segment_snap;
-
+    ColumnDefinesPtr   schema_snap;
     {
         std::shared_lock lock(read_write_mutex);
 
@@ -1299,12 +1303,13 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
             return {};
         }
 
-        segment_snap = segment->createSnapshot(&lock, dm_context, store_columns, /* for_update */ true);
+        segment_snap = segment->createSnapshot(dm_context, /* for_update */ true);
         if (!segment_snap)
         {
             LOG_DEBUG(log, "Give up merge delta, segment [" << segment->segmentId() << "]");
             return {};
         }
+        schema_snap = store_columns;
     }
 
     // Not counting the early give up action.
@@ -1324,7 +1329,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
 
     WriteBatches wbs(storage_pool);
 
-    auto new_stable = segment->prepareMergeDelta(dm_context, segment_snap, wbs);
+    auto new_stable = segment->prepareMergeDelta(dm_context, schema_snap, segment_snap, wbs);
     wbs.writeLogAndData();
     new_stable->enableDMFilesGC();
 
@@ -1668,7 +1673,7 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(DMContext &          dm_c
         {
             if (tasks.empty() || tasks.back()->segment != seg_it->second)
             {
-                auto segment_snap = segment->createSnapshot(&lock, dm_context, store_columns);
+                auto segment_snap = segment->createSnapshot(dm_context);
                 if (unlikely(!segment_snap))
                     throw Exception("Failed to get segment snap", ErrorCodes::LOGICAL_ERROR);
                 tasks.push_back(std::make_shared<SegmentReadTask>(segment, segment_snap));
