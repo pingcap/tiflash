@@ -1,0 +1,20 @@
+mysql> drop table if exists test.t;
+mysql> create table test.t (id int, value decimal(6,3),name char(20));
+mysql> alter table test.t set tiflash replica 1;
+mysql> insert into test.t values(1,2.3,"fzh"),(2,4.5,"pingcap"),(3,6.7,"tidb"),(1,null,"abc"),(NULL,NULL,NULL);
+
+mysql> analyze table test.t;
+
+func> wait_table test t
+
+mysql>use test; set @@tidb_allow_mpp=1;  select B.id from (select 1+id-1 as id from t)B join (select id,value+1 from t)A on B.id=A.id order by 1;
++----+
+| id |
++----+
+|  1 |
+|  1 |
+|  1 |
+|  1 |
+|  2 |
+|  3 |
++----+
