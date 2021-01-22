@@ -53,7 +53,7 @@ protected:
         setColumns(cols);
 
         auto segment_id = storage_pool->newMetaPageId();
-        return Segment::newSegment(*dm_context_, RowKeyRange::newAll(is_common_handle, rowkey_column_size), segment_id, 0);
+        return Segment::newSegment(*dm_context_, table_columns_, RowKeyRange::newAll(is_common_handle, rowkey_column_size), segment_id, 0);
     }
 
     // setColumns should update dm_context at the same time
@@ -65,7 +65,6 @@ protected:
                                                   *path_pool,
                                                   *storage_pool,
                                                   0,
-                                                  table_columns_,
                                                   /*min_version_*/ 0,
                                                   settings.not_compress_columns,
                                                   is_common_handle,
