@@ -19,10 +19,8 @@ RUN yum makecache \
          debhelper \
          libtool \
          ncurses-static \
-         openssl-devel \
          libtool-ltdl-devel \
          python3-devel \
-         libcurl-devel \
          bzip2 \
          chrpath \
   && curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain nightly  \
@@ -38,6 +36,8 @@ RUN yum makecache \
           etcd3 \
   && cd /prepare-environments \
   && ./install-gcc.sh \
-  && ./install-llvm.sh \
+  && ./install-openssl.sh \
+  && yum remove openssl-devel \
+  && ./install-libcurl.sh \
   && ./install-grpc.sh \
   && yum clean all
