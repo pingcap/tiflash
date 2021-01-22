@@ -277,12 +277,31 @@ BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args)
     return executeQuery(context, region_id, start_ts, properties, query_fragments, func_wrap_output_stream);
 }
 
-struct ExecutorCtx
+enum ExecutorType
 {
-    tipb::Executor * input;
+    TABLE_SCAN,
+    SELECTION,
+    PROJECTION,
+    AGGREGATION,
+    TOPN,
+    EXCHANGE_RECEIVER,
+    EXCHANGE_SENDER,
+};
+
+struct Executor
+{
+    ExecutorType type;
+    size_t index;
     DAGSchema output;
     std::unordered_map<String, std::vector<tipb::Expr *>> col_ref_map;
+    std::vector<std::shared_ptr<Executor>> children;
+    Executor(ExecutorType type_, size_t index_, DAGSchema && output_, std::unordered_map<String, std::vector<tipb::Expr *>> && col_ref_map_)
+        : type(type_), index(index_), output(std::move(output_)), col_ref_map(std::move(col_ref_map_)) {}
+    Executor(ExecutorType type_, size_t index_, DAGSchema && output_)
+        : type(type_), index(index_), output(std::move(output_)) {}
 };
+
+using ExecutorPtr = std::shared_ptr<Executor>;
 
 std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
     {"equals", tipb::ScalarFuncSig::EQInt},
@@ -581,6 +600,7 @@ std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
     ParserSelectQuery parser;
     ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "from DAG compiler", 0);
     ASTSelectQuery & ast_query = typeid_cast<ASTSelectQuery &>(*ast);
+    size_t executor_index = 0;
 
     /// Get table metadata.
     TableInfo table_info;
@@ -605,17 +625,11 @@ std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
         table_info = schema_fetcher(database_name, table_name);
     }
 
-    std::unordered_map<tipb::Executor *, ExecutorCtx> executor_ctx_map;
+    ExecutorPtr root_executor = nullptr;
     std::unordered_set<String> referred_columns;
-    tipb::TableScan * ts = nullptr;
-    tipb::Executor * last_executor = nullptr;
 
     /// Table scan.
     {
-        tipb::Executor * ts_exec = dag_request.add_executors();
-        ts_exec->set_tp(tipb::ExecType::TypeTableScan);
-        ts = ts_exec->mutable_tbl_scan();
-        ts->set_table_id(table_info.id);
         DAGSchema ts_output;
         for (const auto & column_info : table_info.columns)
         {
@@ -643,9 +657,7 @@ std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
                 }
             }
         }
-        executor_ctx_map.emplace(
-            ts_exec, ExecutorCtx{nullptr, std::move(ts_output), std::unordered_map<String, std::vector<tipb::Expr *>>{}});
-        last_executor = ts_exec;
+        root_executor = std::make_shared<Executor>(TABLE_SCAN, executor_index, std::move(ts_output));
     }
 
     /// Filter.
