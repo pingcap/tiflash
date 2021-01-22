@@ -4,6 +4,8 @@ USER root
 WORKDIR /root/
 
 ENV HOME /root/
+ENV LIBRARY_PATH ""
+ENV LD_LIBRARY_PATH ""
 
 COPY prepare-environments /prepare-environments
 
@@ -17,10 +19,8 @@ RUN yum makecache \
          debhelper \
          libtool \
          ncurses-static \
-         openssl-devel \
          libtool-ltdl-devel \
          python3-devel \
-         libcurl-devel \
          bzip2 \
          chrpath \
   && curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain nightly  \
@@ -35,9 +35,10 @@ RUN yum makecache \
           setuptools \
           etcd3 \
   && cd /prepare-environments \
-  && ./install-openssl.sh \
   && ./install-cmake.sh \
   && ./install-gcc.sh \
-  && ./install-llvm.sh \
+  && ./install-openssl.sh \
+  && ./install-libcurl.sh \
   && ./install-grpc.sh \
+  && yum remove openssl-devel \
   && yum clean all

@@ -4,5 +4,3 @@ USER root
 WORKDIR /root/
 
 ENV HOME /root/
-
-COPY tiflash/flash_cluster_manager /flash_cluster_manager
