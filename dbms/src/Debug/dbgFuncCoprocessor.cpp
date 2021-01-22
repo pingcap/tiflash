@@ -77,8 +77,8 @@ struct QueryFragment
     TableID table_id;
     DAGSchema result_schema;
     QueryFragmentType type;
-    QueryFragment(std::shared_ptr<tipb::DAGRequest> request, TableID table_id_, DAGSchema && result_schema_, QueryFragmentType type_)
-        : dag_request(std::move(request)), table_id(table_id_), result_schema(std::move(result_schema_)), type(type_)
+    QueryFragment(std::shared_ptr<tipb::DAGRequest> request, TableID table_id_, const DAGSchema & result_schema_, QueryFragmentType type_)
+        : dag_request(std::move(request)), table_id(table_id_), result_schema(result_schema_), type(type_)
     {}
 };
 
@@ -284,21 +284,67 @@ enum ExecutorType
     PROJECTION,
     AGGREGATION,
     TOPN,
+    LIMIT,
     EXCHANGE_RECEIVER,
     EXCHANGE_SENDER,
 };
+
+using TipbExprs = std::vector<tipb::Expr *>;
 
 struct Executor
 {
     ExecutorType type;
     size_t index;
     DAGSchema output;
-    std::unordered_map<String, std::vector<tipb::Expr *>> col_ref_map;
+    std::unordered_map<String, TipbExprs> col_ref_map;
     std::vector<std::shared_ptr<Executor>> children;
-    Executor(ExecutorType type_, size_t index_, DAGSchema && output_, std::unordered_map<String, std::vector<tipb::Expr *>> && col_ref_map_)
-        : type(type_), index(index_), output(std::move(output_)), col_ref_map(std::move(col_ref_map_)) {}
-    Executor(ExecutorType type_, size_t index_, DAGSchema && output_)
-        : type(type_), index(index_), output(std::move(output_)) {}
+    Executor(ExecutorType type_, size_t index_, const DAGSchema & output_, std::unordered_map<String, TipbExprs> && col_ref_map_)
+        : type(type_), index(index_), output(output_), col_ref_map(std::move(col_ref_map_))
+    {}
+};
+
+struct TableScan : public Executor
+{
+    TableScan(size_t index_, const DAGSchema & output_, std::unordered_map<String, TipbExprs> && col_ref_map_)
+        : Executor(TABLE_SCAN, index_, output_, std::move(col_ref_map_))
+    {}
+};
+
+struct Selection : public Executor
+{
+    std::vector<std::shared_ptr<tipb::Expr>> conditions;
+    Selection(size_t index_, const DAGSchema & output_, std::unordered_map<String, TipbExprs> && col_ref_map_,
+        std::vector<std::shared_ptr<tipb::Expr>> && conditions_)
+        : Executor(SELECTION, index_, output_, std::move(col_ref_map_)), conditions(std::move(conditions_))
+    {}
+};
+
+struct TopN : public Executor
+{
+    std::vector<std::shared_ptr<tipb::ByItem>> order_columns;
+    size_t limit;
+    TopN(size_t index_, const DAGSchema & output_, std::unordered_map<String, TipbExprs> && col_ref_map_,
+        std::vector<std::shared_ptr<tipb::ByItem>> && order_columns_, size_t limit_)
+        : Executor(TOPN, index_, output_, std::move(col_ref_map_)), order_columns(std::move(order_columns_)), limit(limit_)
+    {}
+};
+
+struct Limit : public Executor
+{
+    size_t limit;
+    Limit(size_t index_, const DAGSchema & output_, std::unordered_map<String, TipbExprs> && col_ref_map_, size_t limit_)
+        : Executor(TOPN, index_, output_, std::move(col_ref_map_)), limit(limit_)
+    {}
+};
+
+struct Aggregation : public Executor
+{
+    std::vector<std::shared_ptr<tipb::Expr>> agg_exprs;
+    std::vector<std::shared_ptr<tipb::Expr>> gby_exprs;
+    Aggregation(size_t index_, const DAGSchema & output_, std::unordered_map<String, TipbExprs> && col_ref_map_,
+        std::vector<std::shared_ptr<tipb::Expr>> && agg_exprs_, std::vector<std::shared_ptr<tipb::Expr>> && gby_exprs_)
+        : Executor(TOPN, index_, output_, std::move(col_ref_map_)), agg_exprs(std::move(agg_exprs_)), gby_exprs(std::move(gby_exprs_))
+    {}
 };
 
 using ExecutorPtr = std::shared_ptr<Executor>;
@@ -552,8 +598,8 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
     }
 }
 
-void compileFilter(const DAGSchema & input, ASTPtr ast, tipb::Selection * filter, std::unordered_set<String> & referred_columns,
-    std::unordered_map<String, std::vector<tipb::Expr *>> & col_ref_map, Int32 collator_id)
+void compileFilter(const DAGSchema & input, ASTPtr ast, std::vector<std::shared_ptr<tipb::Expr>> & conditions,
+    std::unordered_set<String> & referred_columns, std::unordered_map<String, TipbExprs> & col_ref_map, Int32 collator_id)
 {
     if (auto * func = typeid_cast<ASTFunction *>(ast.get()))
     {
@@ -561,13 +607,14 @@ void compileFilter(const DAGSchema & input, ASTPtr ast, tipb::Selection * filter
         {
             for (auto & child : func->arguments->children)
             {
-                compileFilter(input, child, filter, referred_columns, col_ref_map, collator_id);
+                compileFilter(input, child, conditions, referred_columns, col_ref_map, collator_id);
             }
             return;
         }
     }
-    tipb::Expr * cond = filter->add_conditions();
-    compileExpr(input, ast, cond, referred_columns, col_ref_map, collator_id);
+    std::shared_ptr<tipb::Expr> cond = std::make_shared<tipb::Expr>();
+    conditions.push_back(cond);
+    compileExpr(input, ast, cond.get(), referred_columns, col_ref_map, collator_id);
 }
 
 /*
@@ -583,7 +630,6 @@ std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
     if (properties.is_mpp_query)
         throw Exception("mpp query is not supported yet");
     MakeResOutputStream func_wrap_output_stream = [](BlockInputStreamPtr in) { return in; };
-    DAGSchema schema;
     std::shared_ptr<tipb::DAGRequest> dag_request_ptr = std::make_shared<tipb::DAGRequest>();
     tipb::DAGRequest & dag_request = *dag_request_ptr;
     dag_request.set_time_zone_name(properties.tz_name);
@@ -657,66 +703,65 @@ std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
                 }
             }
         }
-        root_executor = std::make_shared<Executor>(TABLE_SCAN, executor_index, std::move(ts_output));
+        std::unordered_map<String, TipbExprs> col_ref_map;
+        root_executor = std::make_shared<TableScan>(executor_index, ts_output, std::move(col_ref_map));
+        executor_index++;
     }
 
     /// Filter.
     if (ast_query.where_expression)
     {
-        tipb::Executor * filter_exec = dag_request.add_executors();
-        filter_exec->set_tp(tipb::ExecType::TypeSelection);
-        tipb::Selection * filter = filter_exec->mutable_selection();
-        std::unordered_map<String, std::vector<tipb::Expr *>> col_ref_map;
-        compileFilter(
-            executor_ctx_map[last_executor].output, ast_query.where_expression, filter, referred_columns, col_ref_map, properties.collator);
-        executor_ctx_map.emplace(filter_exec, ExecutorCtx{last_executor, executor_ctx_map[last_executor].output, std::move(col_ref_map)});
-        last_executor = filter_exec;
+        std::unordered_map<String, TipbExprs> col_ref_map;
+        std::vector<std::shared_ptr<tipb::Expr>> conditions;
+        compileFilter(root_executor->output, ast_query.where_expression, conditions, referred_columns, col_ref_map, properties.collator);
+        auto selection = std::make_shared<Selection>(executor_index, root_executor->output, std::move(col_ref_map), std::move(conditions));
+        selection->children.push_back(root_executor);
+        root_executor = selection;
+        executor_index++;
     }
 
     /// TopN.
     if (ast_query.order_expression_list && ast_query.limit_length)
     {
-        tipb::Executor * topn_exec = dag_request.add_executors();
-        topn_exec->set_tp(tipb::ExecType::TypeTopN);
-        tipb::TopN * topn = topn_exec->mutable_topn();
         std::unordered_map<String, std::vector<tipb::Expr *>> col_ref_map;
+        std::vector<std::shared_ptr<tipb::ByItem>> order_columns;
         for (const auto & child : ast_query.order_expression_list->children)
         {
             ASTOrderByElement * elem = typeid_cast<ASTOrderByElement *>(child.get());
             if (!elem)
                 throw Exception("Invalid order by element", ErrorCodes::LOGICAL_ERROR);
-            tipb::ByItem * by = topn->add_order_by();
-            by->set_desc(elem->direction < 0);
-            tipb::Expr * expr = by->mutable_expr();
-            compileExpr(
-                executor_ctx_map[last_executor].output, elem->children[0], expr, referred_columns, col_ref_map, properties.collator);
+            auto order_expr = std::make_shared<tipb::ByItem>();
+            order_columns.push_back(order_expr);
+            order_expr->set_desc(elem->direction < 0);
+            tipb::Expr * expr = order_expr->mutable_expr();
+            compileExpr(root_executor->output, elem->children[0], expr, referred_columns, col_ref_map, properties.collator);
         }
         auto limit = safeGet<UInt64>(typeid_cast<ASTLiteral &>(*ast_query.limit_length).value);
-        topn->set_limit(limit);
-        executor_ctx_map.emplace(topn_exec, ExecutorCtx{last_executor, executor_ctx_map[last_executor].output, std::move(col_ref_map)});
-        last_executor = topn_exec;
+        auto topN = std::make_shared<TopN>(executor_index, root_executor->output, std::move(col_ref_map), std::move(order_columns), limit);
+        topN->children.push_back(root_executor);
+        root_executor = topN;
+        executor_index++;
     }
     else if (ast_query.limit_length)
     {
-        tipb::Executor * limit_exec = dag_request.add_executors();
-        limit_exec->set_tp(tipb::ExecType::TypeLimit);
-        tipb::Limit * limit = limit_exec->mutable_limit();
+        std::unordered_map<String, std::vector<tipb::Expr *>> col_ref_map;
         auto limit_length = safeGet<UInt64>(typeid_cast<ASTLiteral &>(*ast_query.limit_length).value);
-        limit->set_limit(limit_length);
-        executor_ctx_map.emplace(limit_exec,
-            ExecutorCtx{last_executor, executor_ctx_map[last_executor].output, std::unordered_map<String, std::vector<tipb::Expr *>>{}});
-        last_executor = limit_exec;
+        auto limit = std::make_shared<Limit>(executor_index, root_executor->output, std::move(col_ref_map), limit_length);
+        limit->children.push_back(root_executor);
+        root_executor = limit;
+        executor_index++;
     }
 
     /// Column pruner.
-    std::function<void(ExecutorCtx &)> column_pruner = [&](ExecutorCtx & executor_ctx) {
-        if (!executor_ctx.input)
+    std::function<void(std::shared_ptr<Executor>)> column_pruner = [&](std::shared_ptr<Executor> executor) {
+        if (executor->children.empty())
         {
-            executor_ctx.output.erase(std::remove_if(executor_ctx.output.begin(), executor_ctx.output.end(),
-                                          [&](const auto & field) { return referred_columns.count(field.first) == 0; }),
-                executor_ctx.output.end());
+            executor->output.erase(std::remove_if(executor->output.begin(), executor->output.end(),
+                                       [&](const auto & field) { return referred_columns.count(field.first) == 0; }),
+                executor->output.end());
 
-            for (const auto & info : executor_ctx.output)
+            /*
+            for (const auto & info : executor->output)
             {
                 tipb::ColumnInfo * ci = ts->add_columns();
                 if (info.first == MutableSupport::tidb_pk_column_name)
@@ -735,12 +780,14 @@ std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
                     }
                 }
             }
+             */
 
             return;
         }
-        column_pruner(executor_ctx_map[executor_ctx.input]);
-        const auto & last_output = executor_ctx_map[executor_ctx.input].output;
-        for (const auto & pair : executor_ctx.col_ref_map)
+        // support more than 1 child
+        column_pruner(executor->children[0]);
+        const auto & last_output = executor->children[0]->output;
+        for (const auto & pair : root_executor->col_ref_map)
         {
             auto iter = std::find_if(last_output.begin(), last_output.end(), [&](const auto & field) { return field.first == pair.first; });
             if (iter == last_output.end())
@@ -751,109 +798,109 @@ std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
             for (auto * expr : pair.second)
                 expr->set_val(s_val);
         }
-        executor_ctx.output = last_output;
+        root_executor->output = last_output;
     };
 
-    /// Aggregation finalize.
+    bool has_gby = ast_query.group_expression_list != nullptr;
+    bool has_agg_func = false;
+    for (const auto & child : ast_query.select_expression_list->children)
     {
-        bool has_gby = ast_query.group_expression_list != nullptr;
-        bool has_agg_func = false;
-        for (const auto & child : ast_query.select_expression_list->children)
+        const ASTFunction * func = typeid_cast<const ASTFunction *>(child.get());
+        if (func && AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
         {
-            const ASTFunction * func = typeid_cast<const ASTFunction *>(child.get());
-            if (func && AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
-            {
-                has_agg_func = true;
-                break;
-            }
-        }
-
-        if (has_gby || has_agg_func)
-        {
-            if (last_executor->has_limit() || last_executor->has_topn())
-                throw Exception("Limit/TopN and Agg cannot co-exist.", ErrorCodes::LOGICAL_ERROR);
-
-            tipb::Executor * agg_exec = dag_request.add_executors();
-            agg_exec->set_tp(tipb::ExecType::TypeAggregation);
-            tipb::Aggregation * agg = agg_exec->mutable_aggregation();
-            std::unordered_map<String, std::vector<tipb::Expr *>> col_ref_map;
-            for (const auto & expr : ast_query.select_expression_list->children)
-            {
-                const ASTFunction * func = typeid_cast<const ASTFunction *>(expr.get());
-                if (!func || !AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
-                    throw Exception("Only agg function is allowed in select for a query with aggregation", ErrorCodes::LOGICAL_ERROR);
-
-                tipb::Expr * agg_func = agg->add_agg_func();
-
-                for (const auto & arg : func->arguments->children)
-                {
-                    tipb::Expr * arg_expr = agg_func->add_children();
-                    compileExpr(executor_ctx_map[last_executor].output, arg, arg_expr, referred_columns, col_ref_map, properties.collator);
-                }
-
-                if (func->name == "count")
-                {
-                    agg_func->set_tp(tipb::Count);
-                    auto ft = agg_func->mutable_field_type();
-                    ft->set_tp(TiDB::TypeLongLong);
-                    ft->set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);
-                }
-                else if (func->name == "max")
-                {
-                    agg_func->set_tp(tipb::Max);
-                    if (agg_func->children_size() != 1)
-                        throw Exception("udaf max only accept 1 argument");
-                    auto ft = agg_func->mutable_field_type();
-                    ft->set_tp(agg_func->children(0).field_type().tp());
-                    ft->set_collate(properties.collator);
-                }
-                else if (func->name == "min")
-                {
-                    agg_func->set_tp(tipb::Min);
-                    if (agg_func->children_size() != 1)
-                        throw Exception("udaf min only accept 1 argument");
-                    auto ft = agg_func->mutable_field_type();
-                    ft->set_tp(agg_func->children(0).field_type().tp());
-                    ft->set_collate(properties.collator);
-                }
-                else if (func->name == UniqRawResName)
-                {
-                    agg_func->set_tp(tipb::ApproxCountDistinct);
-                    auto ft = agg_func->mutable_field_type();
-                    ft->set_tp(TiDB::TypeString);
-                    ft->set_flag(1);
-                    func_wrap_output_stream
-                        = [](BlockInputStreamPtr in) { return std::make_shared<UniqRawResReformatBlockOutputStream>(in); };
-                }
-                // TODO: Other agg func.
-                else
-                {
-                    throw Exception("Unsupported agg function " + func->name, ErrorCodes::LOGICAL_ERROR);
-                }
-
-                schema.emplace_back(std::make_pair(func->getColumnName(), fieldTypeToColumnInfo(agg_func->field_type())));
-            }
-
-            if (has_gby)
-            {
-                for (const auto & child : ast_query.group_expression_list->children)
-                {
-                    tipb::Expr * gby = agg->add_group_by();
-                    compileExpr(executor_ctx_map[last_executor].output, child, gby, referred_columns, col_ref_map, properties.collator);
-                    schema.emplace_back(std::make_pair(child->getColumnName(), fieldTypeToColumnInfo(gby->field_type())));
-                }
-            }
-
-            executor_ctx_map.emplace(agg_exec, ExecutorCtx{last_executor, DAGSchema{}, std::move(col_ref_map)});
-            last_executor = agg_exec;
-
-            column_pruner(executor_ctx_map[last_executor]);
+            has_agg_func = true;
+            break;
         }
     }
-
-    /// Non-aggregation finalize.
-    if (!last_executor->has_aggregation())
+    DAGSchema final_schema;
+    /// Aggregation finalize.
+    if (has_gby || has_agg_func)
     {
+        if (!properties.is_mpp_query && (root_executor->type == LIMIT || root_executor->type == TOPN))
+            throw Exception("Limit/TopN and Agg cannot co-exist in non-mpp mode.", ErrorCodes::LOGICAL_ERROR);
+
+        std::unordered_map<String, std::vector<tipb::Expr *>> col_ref_map;
+        std::vector<std::shared_ptr<tipb::Expr>> agg_exprs;
+        std::vector<std::shared_ptr<tipb::Expr>> gby_exprs;
+        for (const auto & expr : ast_query.select_expression_list->children)
+        {
+            const ASTFunction * func = typeid_cast<const ASTFunction *>(expr.get());
+            if (!func || !AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
+                throw Exception("Only agg function is allowed in select for a query with aggregation", ErrorCodes::LOGICAL_ERROR);
+
+            auto agg_func = std::make_shared<tipb::Expr>();
+            agg_exprs.push_back(agg_func);
+
+            for (const auto & arg : func->arguments->children)
+            {
+                tipb::Expr * arg_expr = agg_func->add_children();
+                compileExpr(root_executor->output, arg, arg_expr, referred_columns, col_ref_map, properties.collator);
+            }
+
+            if (func->name == "count")
+            {
+                agg_func->set_tp(tipb::Count);
+                auto ft = agg_func->mutable_field_type();
+                ft->set_tp(TiDB::TypeLongLong);
+                ft->set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);
+            }
+            else if (func->name == "max")
+            {
+                agg_func->set_tp(tipb::Max);
+                if (agg_func->children_size() != 1)
+                    throw Exception("udaf max only accept 1 argument");
+                auto ft = agg_func->mutable_field_type();
+                ft->set_tp(agg_func->children(0).field_type().tp());
+                ft->set_collate(properties.collator);
+            }
+            else if (func->name == "min")
+            {
+                agg_func->set_tp(tipb::Min);
+                if (agg_func->children_size() != 1)
+                    throw Exception("udaf min only accept 1 argument");
+                auto ft = agg_func->mutable_field_type();
+                ft->set_tp(agg_func->children(0).field_type().tp());
+                ft->set_collate(properties.collator);
+            }
+            else if (func->name == UniqRawResName)
+            {
+                agg_func->set_tp(tipb::ApproxCountDistinct);
+                auto ft = agg_func->mutable_field_type();
+                ft->set_tp(TiDB::TypeString);
+                ft->set_flag(1);
+                func_wrap_output_stream = [](BlockInputStreamPtr in) { return std::make_shared<UniqRawResReformatBlockOutputStream>(in); };
+            }
+            // TODO: Other agg func.
+            else
+            {
+                throw Exception("Unsupported agg function " + func->name, ErrorCodes::LOGICAL_ERROR);
+            }
+
+            final_schema.emplace_back(std::make_pair(func->getColumnName(), fieldTypeToColumnInfo(agg_func->field_type())));
+        }
+
+        if (has_gby)
+        {
+            for (const auto & child : ast_query.group_expression_list->children)
+            {
+                auto gby = std::make_shared<tipb::Expr>();
+                gby_exprs.push_back(gby);
+                compileExpr(root_executor->output, child, gby.get(), referred_columns, col_ref_map, properties.collator);
+                final_schema.emplace_back(std::make_pair(child->getColumnName(), fieldTypeToColumnInfo(gby->field_type())));
+            }
+        }
+
+        auto aggregation = std::make_shared<Aggregation>(
+            executor_index, final_schema, std::move(col_ref_map), std::move(agg_exprs), std::move(gby_exprs));
+        aggregation->children.push_back(root_executor);
+        root_executor = aggregation;
+        executor_index++;
+
+        column_pruner(root_executor);
+    }
+    else
+    {
+        /// Non-aggregation finalize.
         std::vector<String> final_output;
         for (const auto & expr : ast_query.select_expression_list->children)
         {
@@ -864,7 +911,7 @@ std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
             }
             else if (typeid_cast<ASTAsterisk *>(expr.get()))
             {
-                const auto & last_output = executor_ctx_map[last_executor].output;
+                const auto & last_output = root_executor->output;
                 for (const auto & field : last_output)
                 {
                     referred_columns.emplace(field.first);
@@ -877,9 +924,9 @@ std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
             }
         }
 
-        column_pruner(executor_ctx_map[last_executor]);
+        column_pruner(root_executor);
 
-        const auto & last_output = executor_ctx_map[last_executor].output;
+        const auto & last_output = root_executor->output;
 
         for (const auto & field : final_output)
         {
@@ -888,12 +935,13 @@ std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
             if (iter == last_output.end())
                 throw Exception("Column not found after pruning: " + field, ErrorCodes::LOGICAL_ERROR);
             dag_request.add_output_offsets(iter - last_output.begin());
-            schema.push_back(*iter);
+            final_schema.push_back(*iter);
         }
     }
 
+
     QueryFragments tasks;
-    tasks.emplace_back(dag_request_ptr, table_info.id, std::move(schema), DAG);
+    tasks.emplace_back(dag_request_ptr, table_info.id, final_schema, DAG);
     return std::make_tuple(std::move(tasks), func_wrap_output_stream);
 }
 
