@@ -543,6 +543,7 @@ struct TableScan : public Executor
     bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t) override
     {
         tipb_executor->set_tp(tipb::ExecType::TypeTableScan);
+        tipb_executor->set_executor_id("table_scan_" + std::to_string(index));
         auto * ts = tipb_executor->mutable_tbl_scan();
         ts->set_table_id(table_info.id);
         for (const auto & info : output)
@@ -577,6 +578,7 @@ struct Selection : public Executor
     bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id) override
     {
         tipb_executor->set_tp(tipb::ExecType::TypeSelection);
+        tipb_executor->set_executor_id("selection_" + std::to_string(index));
         auto * sel = tipb_executor->mutable_selection();
         for (auto & expr : conditions)
         {
@@ -598,6 +600,7 @@ struct TopN : public Executor
     bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id) override
     {
         tipb_executor->set_tp(tipb::ExecType::TypeTopN);
+        tipb_executor->set_executor_id("topn_" + std::to_string(index));
         tipb::TopN * topn = tipb_executor->mutable_topn();
         for (const auto & child : order_columns)
         {
@@ -622,6 +625,7 @@ struct Limit : public Executor
     bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id) override
     {
         tipb_executor->set_tp(tipb::ExecType::TypeLimit);
+        tipb_executor->set_executor_id("limit_" + std::to_string(index));
         tipb::Limit * lt = tipb_executor->mutable_limit();
         lt->set_limit(limit);
         auto * child_executor = lt->mutable_child();
@@ -639,6 +643,7 @@ struct Aggregation : public Executor
     bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id) override
     {
         tipb_executor->set_tp(tipb::ExecType::TypeAggregation);
+        tipb_executor->set_executor_id("aggregation_" + std::to_string(index));
         auto * agg = tipb_executor->mutable_aggregation();
         auto & input_schema = children[0]->output;
         std::unordered_map<String, std::vector<tipb::Expr *>> col_ref_map;
@@ -1040,7 +1045,7 @@ std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
             {
                 ci = children_ci[0];
             }
-            if (func->name == UniqRawResName)
+            else if (func->name == UniqRawResName)
             {
                 func_wrap_output_stream = [](BlockInputStreamPtr in) { return std::make_shared<UniqRawResReformatBlockOutputStream>(in); };
                 ci.tp = TiDB::TypeString;
@@ -1059,6 +1064,7 @@ std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
         {
             for (const auto & child : ast_query.group_expression_list->children)
             {
+                gby_exprs.push_back(child);
                 auto ci = compileExpr(root_executor->output, child, referred_columns);
                 final_schema.emplace_back(std::make_pair(child->getColumnName(), ci));
             }
@@ -1135,11 +1141,8 @@ std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
         for (size_t i = 0; i < root_executor->output.size(); i++)
             dag_request.add_output_offsets(i);
     }
-    auto * current_tipb_executor = dag_request.mutable_root_executor();
-    while (root_executor != nullptr)
-    {
-        root_executor->toTiPBExecutor(current_tipb_executor, properties.collator);
-    }
+    auto * root_tipb_executor = dag_request.mutable_root_executor();
+    root_executor->toTiPBExecutor(root_tipb_executor, properties.collator);
 
     QueryFragments tasks;
     tasks.emplace_back(dag_request_ptr, table_info.id, final_schema, DAG);
