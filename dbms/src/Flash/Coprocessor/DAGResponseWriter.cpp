@@ -90,14 +90,17 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response)
         auto remote_execution_summaries = dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get()) != nullptr
             ? dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get())->getRemoteExecutionSummaries()
             : dynamic_cast<ExchangeReceiverInputStream *>(streamPtr.get())->getRemoteExecutionSummaries();
-        for (auto & p : *remote_execution_summaries)
+        if (remote_execution_summaries != nullptr)
         {
-            if (local_executors.find(p.first) == local_executors.end())
+            for (auto & p : *remote_execution_summaries)
             {
-                auto & current = merged_remote_execution_summaries[p.first];
-                for (const auto & remote_execution_summary : p.second)
+                if (local_executors.find(p.first) == local_executors.end())
                 {
-                    current.merge(remote_execution_summary);
+                    auto & current = merged_remote_execution_summaries[p.first];
+                    for (const auto & remote_execution_summary : p.second)
+                    {
+                        current.merge(remote_execution_summary);
+                    }
                 }
             }
         }
