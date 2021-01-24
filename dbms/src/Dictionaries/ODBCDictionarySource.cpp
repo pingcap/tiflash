@@ -1,3 +1,5 @@
+#if Poco_SQLODBC_FOUND || Poco_DataODBC_FOUND
+
 #include <DataTypes/DataTypeString.h>
 #include <Columns/ColumnString.h>
 #include <Poco/Ext/SessionPoolHelpers.h>
@@ -150,3 +152,5 @@ std::string ODBCDictionarySource::doInvalidateQuery(const std::string & request)
 }
 
 }
+
+#endif

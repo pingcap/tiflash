@@ -1,4 +1,5 @@
 #pragma once
+#if Poco_SQLODBC_FOUND || Poco_DataODBC_FOUND
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -77,3 +78,4 @@ private:
 
 
 }
+#endif
