@@ -1,6 +1,6 @@
-#include <TableFunctions/TableFunctionODBC.h>
 
 #if Poco_SQLODBC_FOUND || Poco_DataODBC_FOUND
+#include <TableFunctions/TableFunctionODBC.h>
 #include <type_traits>
 #include <ext/scope_guard.h>
 

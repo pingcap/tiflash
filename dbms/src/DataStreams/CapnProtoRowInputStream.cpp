@@ -1,5 +1,5 @@
-#include <Common/config.h>
 #if USE_CAPNP
+#include <Common/config.h>
 
 #include <Common/escapeForFileName.h>
 #include <IO/ReadBuffer.h>
