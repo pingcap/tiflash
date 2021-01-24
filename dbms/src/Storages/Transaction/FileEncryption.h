@@ -1,43 +1,24 @@
 #pragma once
 
+#include <Storages/Transaction/RaftStoreProxyFFI/EncryptionFFI.h>
+
 #include <cstring>
 
 namespace DB
 {
-
-using TiFlashRawString = std::string *;
-
+using RawCppStringPtr = std::string *;
+const char * IntoEncryptionMethodName(EncryptionMethod);
 struct TiFlashServer;
 
-enum class FileEncryptionRes : uint8_t
-{
-    Disabled = 0,
-    Ok,
-    Error,
-};
-
-enum class EncryptionMethod : uint8_t
-{
-    Unknown = 0,
-    Plaintext = 1,
-    Aes128Ctr = 2,
-    Aes192Ctr = 3,
-    Aes256Ctr = 4,
-};
-
-const char * IntoEncryptionMethodName(EncryptionMethod);
-
-struct FileEncryptionInfoRaw
+struct FileEncryptionInfo
 {
     FileEncryptionRes res;
     EncryptionMethod method;
-    TiFlashRawString key;
-    TiFlashRawString iv;
-    TiFlashRawString erro_msg;
-};
+    RawCppStringPtr key;
+    RawCppStringPtr iv;
+    RawCppStringPtr erro_msg;
 
-struct FileEncryptionInfo : FileEncryptionInfoRaw
-{
+public:
     ~FileEncryptionInfo()
     {
         if (key)
@@ -57,13 +38,16 @@ struct FileEncryptionInfo : FileEncryptionInfoRaw
         }
     }
 
-    FileEncryptionInfo(const FileEncryptionInfoRaw & src) : FileEncryptionInfoRaw{src} {}
+    FileEncryptionInfo(const FileEncryptionInfoRaw & src)
+        : FileEncryptionInfo(src.res, src.method, static_cast<RawCppStringPtr>(src.key), static_cast<RawCppStringPtr>(src.iv),
+            static_cast<RawCppStringPtr>(src.erro_msg))
+    {}
     FileEncryptionInfo(const FileEncryptionRes & res_,
         const EncryptionMethod & method_,
-        TiFlashRawString key_,
-        TiFlashRawString iv_,
-        TiFlashRawString erro_msg_)
-        : FileEncryptionInfoRaw{res_, method_, key_, iv_, erro_msg_}
+        RawCppStringPtr key_,
+        RawCppStringPtr iv_,
+        RawCppStringPtr erro_msg_)
+        : res(res_), method(method_), key(key_), iv(iv_), erro_msg(erro_msg_)
     {}
     FileEncryptionInfo(const FileEncryptionInfo &) = delete;
     FileEncryptionInfo(FileEncryptionInfo && src)
