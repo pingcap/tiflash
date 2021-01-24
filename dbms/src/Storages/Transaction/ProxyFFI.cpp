@@ -47,7 +47,7 @@ const std::string & CFToName(const ColumnFamilyType type)
 
 RawCppPtr GenCppRawString(BaseBuffView view)
 {
-    return RawCppPtr(view.len ? new std::string(view.data, view.len) : nullptr, RawCppPtrType::String);
+    return RawCppPtr{view.len ? new std::string(view.data, view.len) : nullptr, RawCppPtrType::String};
 }
 
 static_assert(alignof(TiFlashServerHelper) == alignof(void *));
@@ -85,7 +85,13 @@ TiFlashApplyRes HandleAdminRaftCmd(const TiFlashServer * server, BaseBuffView re
     }
 }
 
-void AtomicUpdateProxy(DB::TiFlashServer * server, DB::TiFlashRaftProxyHelper * proxy) { server->proxy_helper = proxy; }
+static_assert(sizeof(TiFlashRaftProxyHelperFFI) == sizeof(TiFlashRaftProxyHelper));
+static_assert(alignof(TiFlashRaftProxyHelperFFI) == alignof(TiFlashRaftProxyHelper));
+
+void AtomicUpdateProxy(DB::TiFlashServer * server, TiFlashRaftProxyHelperFFI * proxy)
+{
+    server->proxy_helper = static_cast<TiFlashRaftProxyHelper *>(proxy);
+}
 
 void HandleDestroy(TiFlashServer * server, RegionId region_id)
 {
@@ -135,22 +141,37 @@ StoreStats HandleComputeStoreStats(TiFlashServer * server)
 
 TiFlashStatus HandleGetTiFlashStatus(TiFlashServer * server) { return server->status.load(); }
 
-RaftProxyStatus TiFlashRaftProxyHelper::getProxyStatus() const
-{
-    return static_cast<RaftProxyStatus>(fn_handle_get_proxy_status(proxy_ptr));
-}
+RaftProxyStatus TiFlashRaftProxyHelper::getProxyStatus() const { return fn_handle_get_proxy_status(proxy_ptr); }
+
+BaseBuffView strIntoView(const std::string & view) { return BaseBuffView(view.data(), view.size()); }
+
 bool TiFlashRaftProxyHelper::checkEncryptionEnabled() const { return fn_is_encryption_enabled(proxy_ptr); }
 EncryptionMethod TiFlashRaftProxyHelper::getEncryptionMethod() const { return fn_encryption_method(proxy_ptr); }
-FileEncryptionInfo TiFlashRaftProxyHelper::getFile(std::string_view view) const { return fn_handle_get_file(proxy_ptr, view); }
-FileEncryptionInfo TiFlashRaftProxyHelper::newFile(std::string_view view) const { return fn_handle_new_file(proxy_ptr, view); }
-FileEncryptionInfo TiFlashRaftProxyHelper::deleteFile(std::string_view view) const { return fn_handle_delete_file(proxy_ptr, view); }
-FileEncryptionInfo TiFlashRaftProxyHelper::linkFile(std::string_view src, std::string_view dst) const
+FileEncryptionInfo TiFlashRaftProxyHelper::getFile(const std::string & view) const
 {
-    return fn_handle_link_file(proxy_ptr, src, dst);
+    return fn_handle_get_file(proxy_ptr, strIntoView(view));
 }
-FileEncryptionInfo TiFlashRaftProxyHelper::renameFile(std::string_view src, std::string_view dst) const
+FileEncryptionInfo TiFlashRaftProxyHelper::newFile(const std::string & view) const
 {
-    return fn_handle_rename_file(proxy_ptr, src, dst);
+    return fn_handle_new_file(proxy_ptr, strIntoView(view));
+}
+FileEncryptionInfo TiFlashRaftProxyHelper::deleteFile(const std::string & view) const
+{
+    return fn_handle_delete_file(proxy_ptr, strIntoView(view));
+}
+FileEncryptionInfo TiFlashRaftProxyHelper::linkFile(const std::string & src, const std::string & dst) const
+{
+    return fn_handle_link_file(proxy_ptr, strIntoView(src), strIntoView(dst));
+}
+
+void CppStrVec::updateView()
+{
+    view.clear();
+    view.reserve(data.size());
+    for (const auto & e : data)
+    {
+        view.emplace_back(strIntoView(e));
+    }
 }
 
 kvrpcpb::ReadIndexResponse TiFlashRaftProxyHelper::readIndex(const kvrpcpb::ReadIndexRequest & req) const
@@ -170,7 +191,7 @@ BatchReadIndexRes TiFlashRaftProxyHelper::batchReadIndex(const std::vector<kvrpc
     CppStrVec data(std::move(req_strs));
     assert(req_strs.empty());
     auto outer_view = data.intoOuterView();
-    BatchReadIndexRes res(fn_handle_batch_read_index(proxy_ptr, outer_view));
+    BatchReadIndexRes res(reinterpret_cast<BatchReadIndexRes::pointer>(fn_handle_batch_read_index(proxy_ptr, outer_view)));
     return res;
 }
 
@@ -243,7 +264,7 @@ void GcRawCppPtr(TiFlashServer *, void * ptr, RawCppPtrType type)
         switch (type)
         {
             case RawCppPtrType::String:
-                delete reinterpret_cast<TiFlashRawString>(ptr);
+                delete reinterpret_cast<RawCppStringPtr>(ptr);
                 break;
             case RawCppPtrType::PreHandledSnapshot:
                 delete reinterpret_cast<PreHandledSnapshot *>(ptr);
@@ -267,17 +288,17 @@ const char * IntoEncryptionMethodName(EncryptionMethod method)
     return EncryptionMethodName[static_cast<uint8_t>(method)];
 }
 
-BatchReadIndexRes::pointer GenBatchReadIndexRes(uint64_t cap)
+RawVoidPtr GenBatchReadIndexRes(uint64_t cap)
 {
     auto res = new BatchReadIndexRes::element_type();
     res->reserve(cap);
     return res;
 }
 
-void InsertBatchReadIndexResp(BatchReadIndexRes::pointer resp, BaseBuffView view, uint64_t region_id)
+void InsertBatchReadIndexResp(RawVoidPtr resp, BaseBuffView view, uint64_t region_id)
 {
     kvrpcpb::ReadIndexResponse res;
     res.ParseFromArray(view.data, view.len);
-    resp->emplace_back(std::move(res), region_id);
+    reinterpret_cast<BatchReadIndexRes::pointer>(resp)->emplace_back(std::move(res), region_id);
 }
 } // namespace DB
