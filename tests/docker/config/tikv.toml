@@ -25,10 +25,6 @@ labels = {  }
 
 [raftstore]
 raftdb-path = ""
-sync-log = true
-capacity = 107374182400
-consistency-check-interval = "10s"
-raft-log-gc-count-limit = 256
 
 [coprocessor]
 region-max-keys = 144000
