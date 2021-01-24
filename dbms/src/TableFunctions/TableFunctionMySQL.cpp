@@ -1,5 +1,5 @@
-#include <Common/config.h>
 #if USE_MYSQL
+#include <Common/config.h>
 
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeDate.h>
