@@ -31,20 +31,43 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
     String name;
 
+    /// this atomic var is kind of a lock for the struct of execution_summaries:
+    /// if execution_summaries_inited = true, the map itself will not be modified,
+    /// so DAGResponseWriter can read it safely, otherwise, DAGResponseWriter
+    /// will just skip this InputStream
+    std::atomic<bool> execution_summaries_inited;
     std::unordered_map<String, std::vector<ExecutionSummary>> execution_summaries;
 
     Logger * log;
 
-    void addRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t index, size_t concurrency, bool is_streaming_call)
+    void initRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t concurrency)
     {
         for (auto & execution_summary : resp.execution_summaries())
         {
             if (execution_summary.has_executor_id())
             {
                 auto & executor_id = execution_summary.executor_id();
-                if (execution_summaries.find(executor_id) == execution_summaries.end())
+                execution_summaries[executor_id].resize(concurrency);
+            }
+        }
+        execution_summaries_inited.store(true);
+    }
+
+    void addRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t index, size_t concurrency, bool is_streaming_call)
+    {
+        if (!execution_summaries_inited.load())
+        {
+            initRemoteExecutionSummaries(resp, concurrency);
+        }
+        for (auto & execution_summary : resp.execution_summaries())
+        {
+            if (execution_summary.has_executor_id())
+            {
+                auto & executor_id = execution_summary.executor_id();
+                if (unlikely(execution_summaries.find(executor_id) == execution_summaries.end()))
                 {
-                    execution_summaries[executor_id].resize(concurrency);
+                    LOG_WARNING(log, "execution " + executor_id + " not found in execution_summaries, this should not happen");
+                    continue;
                 }
                 auto & current_execution_summary = execution_summaries[executor_id][index];
                 if (is_streaming_call)
@@ -117,7 +140,10 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
 public:
     explicit TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_)
-        : remote_reader(remote_reader_), name("TiRemoteBlockInputStream(" + remote_reader->getName() + ")"), log(&Logger::get(name))
+        : remote_reader(remote_reader_),
+          name("TiRemoteBlockInputStream(" + remote_reader->getName() + ")"),
+          execution_summaries_inited(false),
+          log(&Logger::get(name))
     {
         // generate sample block
         ColumnsWithTypeAndName columns;
@@ -147,7 +173,10 @@ public:
         return block;
     }
 
-    std::unordered_map<String, std::vector<ExecutionSummary>> & getRemoteExecutionSummaries() { return execution_summaries; }
+    const std::unordered_map<String, std::vector<ExecutionSummary>> * getRemoteExecutionSummaries()
+    {
+        return execution_summaries_inited.load() ? &execution_summaries : nullptr;
+    }
 };
 
 using ExchangeReceiverInputStream = TiRemoteBlockInputStream<ExchangeReceiver>;

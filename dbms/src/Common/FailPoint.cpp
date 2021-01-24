@@ -27,7 +27,9 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(force_enable_region_persister_compatible_mode)         \
     M(force_disable_region_persister_compatible_mode)
 
-#define APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M) M(pause_after_learner_read)
+#define APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M) \
+    M(pause_after_learner_read)              \
+    M(hang_in_execution)
 
 namespace FailPoints
 {
@@ -41,13 +43,16 @@ APPLY_FOR_FAILPOINTS_WITH_CHANNEL(M)
 class FailPointChannel : private boost::noncopyable
 {
 public:
-    // wake up all waiting threads when destroy
-    ~FailPointChannel() { cv.notify_all(); }
-
+    ~FailPointChannel() { notify_all(); }
     void wait()
     {
         std::unique_lock lock(m);
         cv.wait(lock);
+    }
+    void notify_all()
+    {
+        std::unique_lock lock(m);
+        cv.notify_all();
     }
 
 private:
@@ -85,14 +90,19 @@ void FailPointHelper::enableFailPoint(const String & fail_point_name)
 void FailPointHelper::disableFailPoint(const String & fail_point_name)
 {
     if (auto iter = fail_point_wait_channels.find(fail_point_name); iter != fail_point_wait_channels.end())
+    {
+        /// can not rely on deconstruction to do the notify_all things, because
+        /// if someone wait on this, the deconstruct will never be called.
+        iter->second->notify_all();
         fail_point_wait_channels.erase(iter);
+    }
     fiu_disable(fail_point_name.c_str());
 }
 
 void FailPointHelper::wait(const String & fail_point_name)
 {
     if (auto iter = fail_point_wait_channels.find(fail_point_name); iter == fail_point_wait_channels.end())
-        throw Exception("Can not find channel for fail point" + fail_point_name);
+        throw Exception("Can not find channel for fail point " + fail_point_name);
     else
     {
         auto ptr = iter->second;
