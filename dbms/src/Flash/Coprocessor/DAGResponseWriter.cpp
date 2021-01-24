@@ -41,15 +41,18 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response)
         /// part 2: remote execution info
         for (auto & streamPtr : dag_context.getRemoteInputStreams())
         {
-            auto & remote_execution_summaries = dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get()) != nullptr
+            auto remote_execution_summaries = dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get()) != nullptr
                 ? dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get())->getRemoteExecutionSummaries()
                 : dynamic_cast<ExchangeReceiverInputStream *>(streamPtr.get())->getRemoteExecutionSummaries();
-            const auto & remote_execution_info = remote_execution_summaries.find(p.first);
-            if (remote_execution_info != remote_execution_summaries.end())
+            if (remote_execution_summaries != nullptr)
             {
-                for (const auto & remote_execution_summary : remote_execution_info->second)
+                const auto & remote_execution_info = remote_execution_summaries->find(p.first);
+                if (remote_execution_info != remote_execution_summaries->end())
                 {
-                    current.merge(remote_execution_summary);
+                    for (const auto & remote_execution_summary : remote_execution_info->second)
+                    {
+                        current.merge(remote_execution_summary);
+                    }
                 }
             }
         }
@@ -84,17 +87,20 @@ void DAGResponseWriter::addExecuteSummaries(tipb::SelectResponse & response)
     std::unordered_map<String, ExecutionSummary> merged_remote_execution_summaries;
     for (auto & streamPtr : dag_context.getRemoteInputStreams())
     {
-        auto & remote_execution_summaries = dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get()) != nullptr
+        auto remote_execution_summaries = dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get()) != nullptr
             ? dynamic_cast<CoprocessorBlockInputStream *>(streamPtr.get())->getRemoteExecutionSummaries()
             : dynamic_cast<ExchangeReceiverInputStream *>(streamPtr.get())->getRemoteExecutionSummaries();
-        for (auto & p : remote_execution_summaries)
+        if (remote_execution_summaries != nullptr)
         {
-            if (local_executors.find(p.first) == local_executors.end())
+            for (auto & p : *remote_execution_summaries)
             {
-                auto & current = merged_remote_execution_summaries[p.first];
-                for (const auto & remote_execution_summary : p.second)
+                if (local_executors.find(p.first) == local_executors.end())
                 {
-                    current.merge(remote_execution_summary);
+                    auto & current = merged_remote_execution_summaries[p.first];
+                    for (const auto & remote_execution_summary : p.second)
+                    {
+                        current.merge(remote_execution_summary);
+                    }
                 }
             }
         }
