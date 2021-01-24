@@ -4,6 +4,7 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/copyData.h>
 #include <Interpreters/Context.h>
+#include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <common/logger_useful.h>
 
 #include <boost/noncopyable.hpp>
@@ -65,7 +66,7 @@ struct MPPTunnel
 
     // write a single packet to the tunnel, it will block if tunnel is not ready.
     // TODO: consider to hold a buffer
-    void write(const mpp::MPPDataPacket & data)
+    void write(const mpp::MPPDataPacket & data, bool close_after_write = false)
     {
 
         LOG_TRACE(log, "ready to write");
@@ -73,13 +74,7 @@ struct MPPTunnel
 
         if (timeout.count() > 0)
         {
-            if (cv_for_connected.wait_for(lk, timeout, [&]() { return connected; }))
-            {
-                writer->Write(data);
-
-                LOG_TRACE(log, "finish write");
-            }
-            else
+            if (!cv_for_connected.wait_for(lk, timeout, [&]() { return connected; }))
             {
                 throw Exception(tunnel_id + " is timeout");
             }
@@ -88,6 +83,18 @@ struct MPPTunnel
         {
             cv_for_connected.wait(lk, [&]() { return connected; });
         }
+        if (finished)
+            throw Exception("write to tunnel which is already closed.");
+        writer->Write(data);
+        if (close_after_write)
+        {
+            finished = true;
+            cv_for_finished.notify_all();
+        }
+        if (close_after_write)
+            LOG_TRACE(log, "finish write and close the tunnel");
+        else
+            LOG_TRACE(log, "finish write");
     }
 
     // finish the writing.
@@ -186,22 +193,29 @@ struct MPPTunnelSet
         tunnels[partition_id]->write(packet);
     }
 
-    void writeError(mpp::Error err)
-    {
-        mpp::MPPDataPacket packet;
-        packet.set_allocated_error(&err);
-        for (auto tunnel : tunnels)
-        {
-            tunnel->write(packet);
-        }
-    }
-
     uint16_t getPartitionNum() { return tunnels.size(); }
 };
 
 using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
 
 class MPPTaskManager;
+
+struct MPPTaskProgress
+{
+    std::atomic<UInt64> current_progress{0};
+    UInt64 progress_on_last_check = 0;
+    UInt64 epoch_when_found_no_progress = 0;
+    bool found_no_progress = false;
+    bool isTaskHanging(const Context & context);
+};
+
+enum TaskStatus
+{
+    INITIALIZING,
+    RUNNING,
+    FINISHED,
+    CANCELLED,
+};
 
 struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyable
 {
@@ -211,6 +225,9 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
     std::unique_ptr<DAGContext> dag_context;
 
     MPPTaskId id;
+
+    MPPTaskProgress task_progress;
+    std::atomic<Int32> status{INITIALIZING};
 
     mpp::TaskMeta meta;
 
@@ -236,16 +253,26 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
 
     void runImpl(BlockIO io, MemoryTracker * memory_tracker);
 
+    bool isTaskHanging();
+
+    void cancel();
+
     void writeErrToAllTunnel(const String & e)
     {
-        for (auto it : tunnel_map)
+        try
         {
-            mpp::MPPDataPacket data;
-            auto err = new mpp::Error();
-            err->set_msg(e);
-            data.set_allocated_error(err);
-            it.second->write(data);
-            it.second->writeDone();
+            for (auto & it : tunnel_map)
+            {
+                mpp::MPPDataPacket data;
+                auto err = new mpp::Error();
+                err->set_msg(e);
+                data.set_allocated_error(err);
+                it.second->write(data, true);
+            }
+        }
+        catch (...)
+        {
+            LOG_WARNING(log, "Failed to write error " + e + " to all tunnel");
         }
     }
 
@@ -259,9 +286,11 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
 
     BlockIO prepare(const mpp::DispatchTaskRequest & task_request);
 
+    void updateProgress(const Progress &) { task_progress.current_progress++; }
+
     void run(BlockIO io)
     {
-        std::thread worker(&MPPTask::runImpl, this, io, current_memory_tracker);
+        std::thread worker(&MPPTask::runImpl, this->shared_from_this(), io, current_memory_tracker);
         worker.detach();
     }
 
@@ -293,44 +322,103 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
 
 using MPPTaskPtr = std::shared_ptr<MPPTask>;
 
+using MPPTaskMap = std::map<MPPTaskId, MPPTaskPtr>;
+
+struct MPPQueryTaskSet
+{
+    /// to_be_cancelled is kind of lock, if to_be_cancelled is set
+    /// to true, then task_map can only be modified by query cancel
+    /// thread, which means no task can register/un-register for the
+    /// query, here we do not need mutex because all the write/read
+    /// to MPPQueryTaskSet is protected by the mutex in MPPTaskManager
+    bool to_be_cancelled = false;
+    MPPTaskMap task_map;
+};
+
+/// a map from the mpp query id to mpp query task set, we use
+/// the start ts of a query as the query id as TiDB will guarantee
+/// the uniqueness of the start ts
+using MPPQueryMap = std::unordered_map<UInt64, MPPQueryTaskSet>;
+
 // MPPTaskManger holds all running mpp tasks. It's a single instance holden in Context.
 class MPPTaskManager : private boost::noncopyable
 {
     std::mutex mu;
 
-    std::map<MPPTaskId, MPPTaskPtr> task_map;
+    MPPQueryMap mpp_query_map;
 
     Logger * log;
 
     std::condition_variable cv;
 
-public:
-    MPPTaskManager() : log(&Logger::get("TaskManager")) {}
+    BackgroundProcessingPool & background_pool;
+    BackgroundProcessingPool::TaskHandle handle;
 
-    void registerTask(MPPTaskPtr task)
+public:
+    explicit MPPTaskManager(BackgroundProcessingPool & background_pool_);
+    ~MPPTaskManager();
+
+    std::vector<UInt64> getCurrentQueries()
+    {
+        std::vector<UInt64> ret;
+        std::lock_guard<std::mutex> lock(mu);
+        for (auto & it : mpp_query_map)
+        {
+            ret.push_back(it.first);
+        }
+        return ret;
+    }
+    std::vector<MPPTaskPtr> getCurrentTasksForQuery(UInt64 query_id)
+    {
+        std::vector<MPPTaskPtr> ret;
+        std::lock_guard<std::mutex> lock(mu);
+        const auto & it = mpp_query_map.find(query_id);
+        if (it == mpp_query_map.end() || it->second.to_be_cancelled)
+            return ret;
+        for (const auto & task_it : it->second.task_map)
+            ret.push_back(task_it.second);
+        return ret;
+    }
+
+    bool registerTask(MPPTaskPtr task)
     {
         std::unique_lock<std::mutex> lock(mu);
-        if (task_map.find(task->id) != task_map.end())
+        const auto & it = mpp_query_map.find(task->id.start_ts);
+        if (it != mpp_query_map.end() && it->second.to_be_cancelled)
+        {
+            LOG_WARNING(log, "Do not register task: " + task->id.toString() + " because the query is to be cancelled.");
+            cv.notify_all();
+            return false;
+        }
+        if (it != mpp_query_map.end() && it->second.task_map.find(task->id) != it->second.task_map.end())
         {
             throw Exception("The task " + task->id.toString() + " has been registered");
         }
-        task_map.emplace(task->id, task);
+        mpp_query_map[task->id.start_ts].task_map.emplace(task->id, task);
         task->manager = this;
         cv.notify_all();
+        return true;
     }
 
     void unregisterTask(MPPTask * task)
     {
         std::unique_lock<std::mutex> lock(mu);
-        auto it = task_map.find(task->id);
-        if (it != task_map.end())
+        auto it = mpp_query_map.find(task->id.start_ts);
+        if (it != mpp_query_map.end())
         {
-            task_map.erase(it);
+            if (it->second.to_be_cancelled)
+                return;
+            auto task_it = it->second.task_map.find(task->id);
+            if (task_it != it->second.task_map.end())
+            {
+                it->second.task_map.erase(task_it);
+                if (it->second.task_map.empty())
+                    /// remove query task map if the task is the last one
+                    mpp_query_map.erase(it);
+                return;
+            }
         }
-        else
-        {
-            LOG_ERROR(log, "The task " + task->id.toString() + " cannot be found and fail to unregister");
-        }
+        LOG_ERROR(log, "The task " + task->id.toString() + " cannot be found and fail to unregister");
     }
 
     MPPTaskPtr findTaskWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout)
@@ -339,19 +427,53 @@ public:
         std::map<MPPTaskId, MPPTaskPtr>::iterator it;
         std::unique_lock<std::mutex> lock(mu);
         auto ret = cv.wait_for(lock, timeout, [&] {
-            it = task_map.find(id);
-            return it != task_map.end();
+            auto query_it = mpp_query_map.find(id.start_ts);
+            if (query_it == mpp_query_map.end() || query_it->second.to_be_cancelled)
+            {
+                /// if the query is cancelled, return false to make the finder fail quickly
+                LOG_WARNING(log, "Query " + std::to_string(id.start_ts) + " is cancelled, all its tasks are invalid.");
+                return false;
+            }
+            it = query_it->second.task_map.find(id);
+            return it != query_it->second.task_map.end();
         });
         return ret ? it->second : nullptr;
+    }
+
+    void cancelMPPQuery(UInt64 query_id)
+    {
+        MPPQueryMap::iterator it;
+        {
+            /// cancel task may take a long time, so first
+            /// set a flag, so we can cancel task one by
+            /// one without holding the lock
+            std::lock_guard<std::mutex> lock(mu);
+            it = mpp_query_map.find(query_id);
+            if (it == mpp_query_map.end())
+                return;
+            it->second.to_be_cancelled = true;
+            LOG_WARNING(log, "Begin cancel query: " + std::to_string(query_id));
+        }
+        for (auto & task_id : it->second.task_map)
+            task_id.second->cancel();
+        {
+            std::lock_guard<std::mutex> lock(mu);
+            /// just to double check the query still exists
+            it = mpp_query_map.find(query_id);
+            if (it != mpp_query_map.end())
+                mpp_query_map.erase(it);
+        }
+        LOG_WARNING(log, "Finish cancel query: " + std::to_string(query_id));
     }
 
     String toString()
     {
         std::lock_guard<std::mutex> lock(mu);
-        String res;
-        for (auto it : task_map)
+        String res("(");
+        for (auto & query_it : mpp_query_map)
         {
-            res += "(" + it.first.toString() + ", ";
+            for (auto & it : query_it.second.task_map)
+                res += it.first.toString() + ", ";
         }
         return res + ")";
     }

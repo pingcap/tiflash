@@ -47,7 +47,6 @@ public:
 
 private:
     pingcap::kv::Cluster * cluster;
-    std::chrono::seconds timeout;
 
     tipb::ExchangeReceiver pb_exchange_receiver;
     size_t source_num;
@@ -88,7 +87,6 @@ private:
 public:
     ExchangeReceiver(Context & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta, size_t max_buffer_size_)
         : cluster(context_.getTMTContext().getKVCluster()),
-          timeout(context_.getSettings().mpp_task_timeout),
           pb_exchange_receiver(exc),
           source_num(pb_exchange_receiver.encoded_task_meta_size()),
           task_meta(meta),
