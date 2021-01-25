@@ -42,7 +42,8 @@ CppStrWithView HandleGetTableSyncStatus(TiFlashServer * server, uint64_t table_i
         ss << region_id << ' ';
     ss << std::endl;
 
-    return CppStrWithView(ss.str());
+    auto s = new std::string(ss.str());
+    return CppStrWithView{.inner = RawCppPtr{.ptr = s, .type = RawCppPtrType::String}, .view = BaseBuffView(s->data(), s->size())};
 }
 
 inline std::string ToPdKey(const char * key, const size_t len)

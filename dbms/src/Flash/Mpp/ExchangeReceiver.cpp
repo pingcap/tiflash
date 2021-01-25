@@ -28,13 +28,8 @@ struct RpcTypeTraits<::mpp::EstablishMPPConnectionRequest>
 namespace DB
 {
 
-void ExchangeReceiver::init()
+void ExchangeReceiver::setUpConnection()
 {
-    std::lock_guard<std::mutex> lk(mu);
-    if (inited)
-    {
-        return;
-    }
     for (int index = 0; index < pb_exchange_receiver.encoded_task_meta_size(); index++)
     {
         auto & meta = pb_exchange_receiver.encoded_task_meta(index);
@@ -42,7 +37,6 @@ void ExchangeReceiver::init()
         live_connections++;
         workers.push_back(std::move(t));
     }
-    inited = true;
 }
 
 void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
