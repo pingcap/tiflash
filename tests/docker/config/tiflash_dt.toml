@@ -61,7 +61,7 @@ http_port = 8123
 	tidb_status_addr = "tidb0:10080"
 	service_addr = "0.0.0.0:3930"
 	[flash.flash_cluster]
-		update_rule_interval = 1
+		update_rule_interval = 5
 	[flash.proxy]
         addr = "0.0.0.0:20170"
         advertise-addr = "tiflash0:20170"
