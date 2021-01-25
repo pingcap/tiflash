@@ -28,7 +28,7 @@ struct ColumnWithTypeAndName
     Field default_value;
 
     ColumnWithTypeAndName() : ColumnWithTypeAndName(nullptr, nullptr, "") {}
-    ColumnWithTypeAndName(ColumnPtr column_, DataTypePtr type_, const String & name_, Int64 column_id_ = 0, Field default_value_ = Field())
+    ColumnWithTypeAndName(ColumnPtr column_, DataTypePtr type_, String name_, Int64 column_id_ = 0, Field default_value_ = Field())
         : column(std::move(column_)),
           type(std::move(type_)),
           name(std::move(name_)),
