@@ -398,7 +398,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         .fn_handle_destroy = HandleDestroy,
         .fn_handle_ingest_sst = HandleIngestSST,
         .fn_handle_check_terminated = HandleCheckTerminated,
-        .fn_handle_compute_fs_stats = HandleComputeFsStats,
+        .fn_handle_compute_store_stats = HandleComputeStoreStats,
         .fn_handle_get_tiflash_status = HandleGetTiFlashStatus,
         .fn_pre_handle_snapshot = PreHandleSnapshot,
         .fn_apply_pre_handled_snapshot = ApplyPreHandledSnapshot,
