@@ -1,4 +1,5 @@
 #include <Columns/ColumnVector.h>
+#include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/typeid_cast.h>
 #include <Core/SortDescription.h>
@@ -52,6 +53,14 @@ namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
+
+namespace FailPoints
+{
+extern const char pause_before_dt_background_delta_merge[];
+extern const char pause_until_dt_background_delta_merge[];
+extern const char force_triggle_background_merge_delta[];
+extern const char force_triggle_foreground_flush[];
+} // namespace FailPoints
 
 namespace DM
 {
@@ -177,7 +186,8 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
             auto segment_id = storage_pool.newMetaPageId();
             if (segment_id != DELTA_MERGE_FIRST_SEGMENT_ID)
                 throw Exception("The first segment id should be " + DB::toString(DELTA_MERGE_FIRST_SEGMENT_ID), ErrorCodes::LOGICAL_ERROR);
-            auto first_segment = Segment::newSegment(*dm_context, RowKeyRange::newAll(is_common_handle, rowkey_column_size), segment_id, 0);
+            auto first_segment
+                = Segment::newSegment(*dm_context, store_columns, RowKeyRange::newAll(is_common_handle, rowkey_column_size), segment_id, 0);
             segments.emplace(first_segment->getRowKeyRange().getEnd(), first_segment);
             id_to_segment.emplace(segment_id, first_segment);
         }
@@ -341,7 +351,6 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
                                path_pool,
                                storage_pool,
                                hash_salt,
-                               store_columns,
                                latest_gc_safe_point,
                                settings.not_compress_columns,
                                is_common_handle,
@@ -835,6 +844,9 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         && (delta_rows - placed_delta_rows >= delta_cache_limit_rows * 3
             && delta_rows - delta_last_try_place_delta_index_rows >= delta_cache_limit_rows);
 
+    fiu_do_on(FailPoints::force_triggle_background_merge_delta, { should_background_merge_delta = true; });
+    fiu_do_on(FailPoints::force_triggle_foreground_flush, { should_foreground_flush = true; });
+
     auto try_add_background_task = [&](const BackgroundTask & task) {
         // Prevent too many tasks.
         if (background_tasks.length() <= std::max(id_to_segment.size() * 2, background_pool.getNumberOfThreads() * 3))
@@ -1022,8 +1034,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
 
     // Update GC safe point before background task
     /// Note that `task.dm_context->db_context` will be free after query is finish. We should not use that in background task.
-    auto pd_client = global_context.getTMTContext().getPDClient();
-    if (!pd_client->isMock())
+    if (auto pd_client = global_context.getTMTContext().getPDClient(); !pd_client->isMock())
     {
         auto safe_point = PDClientHelper::getGCSafePointWithRetry(pd_client,
                                                                   /* ignore_cache= */ false,
@@ -1050,10 +1061,14 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
             segmentMerge(*task.dm_context, task.segment, task.next_segment, false);
             type = ThreadType::BG_Merge;
             break;
-        case MergeDelta:
+        case MergeDelta: {
+            FAIL_POINT_PAUSE(FailPoints::pause_before_dt_background_delta_merge);
             left = segmentMergeDelta(*task.dm_context, task.segment, false);
             type = ThreadType::BG_MergeDelta;
+            // Wake up all waiting threads if failpoint is enabled
+            FailPointHelper::disableFailPoint(FailPoints::pause_until_dt_background_delta_merge);
             break;
+        }
         case Compact:
             task.segment->compactDelta(*task.dm_context);
             left = task.segment;
@@ -1097,6 +1112,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
                   << " split segment " << segment->info() << ", safe point:" << dm_context.min_version);
 
     SegmentSnapshotPtr segment_snap;
+    ColumnDefinesPtr   schema_snap;
 
     {
         std::shared_lock lock(read_write_mutex);
@@ -1107,12 +1123,13 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
             return {};
         }
 
-        segment_snap = segment->createSnapshot(dm_context, /* is_update */ true);
+        segment_snap = segment->createSnapshot(dm_context, /* for_update */ true);
         if (!segment_snap)
         {
             LOG_DEBUG(log, "Give up segment [" << segment->segmentId() << "] split");
             return {};
         }
+        schema_snap = store_columns;
     }
 
     // Not counting the early give up action.
@@ -1131,7 +1148,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 
     WriteBatches wbs(storage_pool, is_foreground ? nullptr : dm_context.db_context.getRateLimiter());
     auto         range      = segment->getRowKeyRange();
-    auto         split_info = segment->prepareSplit(dm_context, segment_snap, wbs, !is_foreground);
+    auto         split_info = segment->prepareSplit(dm_context, schema_snap, segment_snap, wbs, !is_foreground);
 
     wbs.writeLogAndData();
     split_info.my_stable->enableDMFilesGC();
@@ -1207,6 +1224,7 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
 
     SegmentSnapshotPtr left_snap;
     SegmentSnapshotPtr right_snap;
+    ColumnDefinesPtr   schema_snap;
 
     {
         std::shared_lock lock(read_write_mutex);
@@ -1222,14 +1240,15 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
             return;
         }
 
-        left_snap  = left->createSnapshot(dm_context, /* is_update */ true);
-        right_snap = right->createSnapshot(dm_context, /* is_update */ true);
+        left_snap  = left->createSnapshot(dm_context, /* for_update */ true);
+        right_snap = right->createSnapshot(dm_context, /* for_update */ true);
 
         if (!left_snap || !right_snap)
         {
             LOG_DEBUG(log, "Give up merge segments left [" << left->segmentId() << "], right [" << right->segmentId() << "]");
             return;
         }
+        schema_snap = store_columns;
     }
 
     // Not counting the early give up action.
@@ -1247,7 +1266,7 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
     auto right_range = right->getRowKeyRange();
 
     WriteBatches wbs(storage_pool, is_foreground ? nullptr : dm_context.db_context.getRateLimiter());
-    auto         merged_stable = Segment::prepareMerge(dm_context, left, left_snap, right, right_snap, wbs, !is_foreground);
+    auto         merged_stable = Segment::prepareMerge(dm_context, schema_snap, left, left_snap, right, right_snap, wbs, !is_foreground);
     wbs.writeLogAndData();
     merged_stable->enableDMFilesGC();
 
@@ -1304,7 +1323,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
                   << " merge delta, segment [" << segment->segmentId() << "], safe point:" << dm_context.min_version);
 
     SegmentSnapshotPtr segment_snap;
-
+    ColumnDefinesPtr   schema_snap;
     {
         std::shared_lock lock(read_write_mutex);
 
@@ -1314,12 +1333,13 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
             return {};
         }
 
-        segment_snap = segment->createSnapshot(dm_context, /* is_update */ true);
+        segment_snap = segment->createSnapshot(dm_context, /* for_update */ true);
         if (!segment_snap)
         {
             LOG_DEBUG(log, "Give up merge delta, segment [" << segment->segmentId() << "]");
             return {};
         }
+        schema_snap = store_columns;
     }
 
     // Not counting the early give up action.
@@ -1339,7 +1359,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(DMContext & dm_context, const Segm
 
     WriteBatches wbs(storage_pool, is_foreground ? nullptr : dm_context.db_context.getRateLimiter());
 
-    auto new_stable = segment->prepareMergeDelta(dm_context, segment_snap, wbs, !is_foreground);
+    auto new_stable = segment->prepareMergeDelta(dm_context, schema_snap, segment_snap, wbs, !is_foreground);
     wbs.writeLogAndData();
     new_stable->enableDMFilesGC();
 
