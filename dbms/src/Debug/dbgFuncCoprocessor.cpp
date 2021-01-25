@@ -530,6 +530,7 @@ struct Executor
     DAGSchema output_schema;
     std::vector<std::shared_ptr<Executor>> children;
     virtual bool generateNewSchema() { return false; }
+    virtual std::unordered_set<String> * getReferredColumns() { throw Exception("Should not reach here"); }
     Executor(size_t & index_, const DAGSchema & output_schema_) : index(index_), output_schema(output_schema_) { index_++; }
     virtual bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id) = 0;
     virtual ~Executor() {}
@@ -538,10 +539,13 @@ struct Executor
 struct TableScan : public Executor
 {
     TableInfo table_info;
+    /// used by column pruner
+    std::unordered_set<String> referred_columns;
     TableScan(size_t & index_, const DAGSchema & output_schema_, TableInfo & table_info_)
         : Executor(index_, output_schema_), table_info(table_info_)
     {}
     bool generateNewSchema() override { return true; }
+    std::unordered_set<String> * getReferredColumns() override { return &referred_columns; }
     bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t) override
     {
         tipb_executor->set_tp(tipb::ExecType::TypeTableScan);
@@ -641,6 +645,7 @@ struct Aggregation : public Executor
     bool need_append_project;
     std::vector<ASTPtr> agg_exprs;
     std::vector<ASTPtr> gby_exprs;
+    std::unordered_set<String> referred_columns;
     Aggregation(size_t & index_, const DAGSchema & output_schema_, bool has_uniq_raw_res_, bool need_append_project_,
         std::vector<ASTPtr> && agg_exprs_, std::vector<ASTPtr> && gby_exprs_)
         : Executor(index_, output_schema_),
@@ -719,6 +724,15 @@ struct Aggregation : public Executor
         return children[0]->toTiPBExecutor(child_executor, collator_id);
     }
     bool generateNewSchema() override { return true; }
+    std::unordered_set<String> * getReferredColumns() override { return &referred_columns; }
+};
+
+struct Project : public Executor
+{
+    std::vector<ASTPtr> exprs;
+    Project(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> exprs_)
+        : Executor(index_, output_schema_), exprs(std::move(exprs_))
+    {}
 };
 
 using ExecutorPtr = std::shared_ptr<Executor>;
@@ -1010,6 +1024,12 @@ ExecutorPtr compileAggregation(ExecutorPtr input, size_t & executor_index, std::
     return aggregation;
 }
 
+//ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, std::unordered_set<String> & referred_columns,
+//                               DAGSchema & final_schema, ASTPtr select_list, ASTPtr group_by_exprs)
+//{
+//    return nullptr;
+//}
+
 std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
     Context & context, const String & query, SchemaFetcher schema_fetcher, const DAGProperties & properties)
 {
@@ -1046,7 +1066,7 @@ std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
     }
 
     ExecutorPtr root_executor = nullptr;
-    std::unordered_set<String> referred_columns;
+    std::unordered_set<String> * referred_columns = nullptr;
 
     /// Table scan.
     {
@@ -1062,19 +1082,20 @@ std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
             }
         }
         root_executor = compileTableScan(executor_index, table_info, append_pk_column);
+        referred_columns = root_executor->getReferredColumns();
     }
 
     /// Filter.
     if (ast_query.where_expression)
     {
-        root_executor = compileSelection(root_executor, executor_index, referred_columns, ast_query.where_expression);
+        root_executor = compileSelection(root_executor, executor_index, *referred_columns, ast_query.where_expression);
     }
 
     /// TopN.
     if (ast_query.order_expression_list && ast_query.limit_length)
     {
         root_executor
-            = compileTopN(root_executor, executor_index, referred_columns, ast_query.order_expression_list, ast_query.limit_length);
+            = compileTopN(root_executor, executor_index, *referred_columns, ast_query.order_expression_list, ast_query.limit_length);
     }
     else if (ast_query.limit_length)
     {
@@ -1083,17 +1104,30 @@ std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
 
     /// Column pruner.
     std::function<void(std::shared_ptr<Executor>)> column_pruner = [&](std::shared_ptr<Executor> executor) {
-        if (executor->children.empty())
+        if (executor->generateNewSchema())
         {
-            executor->output_schema.erase(std::remove_if(executor->output_schema.begin(), executor->output_schema.end(),
-                                              [&](const auto & field) { return referred_columns.count(field.first) == 0; }),
-                executor->output_schema.end());
-            return;
+            /// if the executor is a schema generator, then prune the useless columns
+            /// Note, column prune cross schema generator is not handled, for example:
+            /// select id from (select id, value from t) a, value will not be pruned
+            /// since this is only for mock test, I think it is acceptable
+            auto used_columns = *executor->getReferredColumns();
+            /// if used_columns is empty, it means all column should be not pruned.
+            if (!used_columns.empty())
+            {
+                executor->output_schema.erase(std::remove_if(executor->output_schema.begin(), executor->output_schema.end(),
+                                                  [&](const auto & field) { return used_columns.count(field.first) == 0; }),
+                    executor->output_schema.end());
+            }
         }
-        // todo support more than 1 child
-        column_pruner(executor->children[0]);
+        if (!executor->children.empty())
+            // todo support more than 1 child
+            column_pruner(executor->children[0]);
         if (!executor->generateNewSchema())
+        {
+            /// fon non-schema generator, update its output schema because after its children
+            /// finish column prune, the output of the current executor is changed too.
             executor->output_schema = executor->children[0]->output_schema;
+        }
     };
 
     bool has_gby = ast_query.group_expression_list != nullptr;
@@ -1116,7 +1150,7 @@ std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
             && (dynamic_cast<Limit *>(root_executor.get()) != nullptr || dynamic_cast<TopN *>(root_executor.get()) != nullptr))
             throw Exception("Limit/TopN and Agg cannot co-exist in non-mpp mode.", ErrorCodes::LOGICAL_ERROR);
 
-        root_executor = compileAggregation(root_executor, executor_index, referred_columns, final_schema, ast_query.select_expression_list,
+        root_executor = compileAggregation(root_executor, executor_index, *referred_columns, final_schema, ast_query.select_expression_list,
             has_gby ? ast_query.group_expression_list : nullptr);
 
         if (dynamic_cast<Aggregation *>(root_executor.get())->need_append_project)
@@ -1124,6 +1158,7 @@ std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
         if (dynamic_cast<Aggregation *>(root_executor.get())->has_uniq_raw_res)
             func_wrap_output_stream = [](BlockInputStreamPtr in) { return std::make_shared<UniqRawResReformatBlockOutputStream>(in); };
 
+        referred_columns = root_executor->getReferredColumns();
         column_pruner(root_executor);
     }
     else
@@ -1134,7 +1169,7 @@ std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
         {
             if (ASTIdentifier * id = typeid_cast<ASTIdentifier *>(expr.get()))
             {
-                referred_columns.emplace(id->getColumnName());
+                referred_columns->emplace(id->getColumnName());
                 final_output.emplace_back(id->getColumnName());
             }
             else if (typeid_cast<ASTAsterisk *>(expr.get()))
@@ -1142,7 +1177,7 @@ std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
                 const auto & last_output = root_executor->output_schema;
                 for (const auto & field : last_output)
                 {
-                    referred_columns.emplace(field.first);
+                    referred_columns->emplace(field.first);
                     final_output.push_back(field.first);
                 }
             }
