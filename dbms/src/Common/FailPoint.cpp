@@ -62,8 +62,6 @@ public:
         cv.notify_all();
     }
 
-    void wake() { cv.notify_all(); }
-
 private:
     std::mutex m;
     std::condition_variable cv;
