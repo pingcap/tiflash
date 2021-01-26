@@ -111,29 +111,29 @@ std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
 
 });
 
-enum QueryFragmentType
+enum QueryTaskType
 {
     DAG,
     MPP_ESTABLISH_CONNECTION,
     MPP_DISPATCH
 };
 
-struct QueryFragment
+struct QueryTask
 {
     std::shared_ptr<tipb::DAGRequest> dag_request;
     TableID table_id;
     DAGSchema result_schema;
-    QueryFragmentType type;
-    QueryFragment(std::shared_ptr<tipb::DAGRequest> request, TableID table_id_, const DAGSchema & result_schema_, QueryFragmentType type_)
+    QueryTaskType type;
+    QueryTask(std::shared_ptr<tipb::DAGRequest> request, TableID table_id_, const DAGSchema & result_schema_, QueryTaskType type_)
         : dag_request(std::move(request)), table_id(table_id_), result_schema(result_schema_), type(type_)
     {}
 };
 
-using QueryFragments = std::vector<QueryFragment>;
+using QueryTasks = std::vector<QueryTask>;
 
 using MakeResOutputStream = std::function<BlockInputStreamPtr(BlockInputStreamPtr)>;
 
-std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
+std::tuple<QueryTasks, MakeResOutputStream> compileQuery(
     Context & context, const String & query, SchemaFetcher schema_fetcher, const DAGProperties & properties);
 
 class UniqRawResReformatBlockOutputStream : public IProfilingBlockInputStream
@@ -227,7 +227,7 @@ DAGProperties getDAGProperties(String prop_string)
 }
 
 BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, Timestamp start_ts, const DAGProperties & properties,
-    QueryFragments & query_fragments, MakeResOutputStream & func_wrap_output_stream)
+    QueryTasks & query_fragments, MakeResOutputStream & func_wrap_output_stream)
 {
     if (properties.is_mpp_query)
     {
@@ -1203,7 +1203,84 @@ ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr se
     return project;
 }
 
-std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
+struct QueryFragment
+{
+    ExecutorPtr root_executor;
+    TableID table_id;
+    bool is_top_fragment;
+    QueryFragment(ExecutorPtr root_executor_, TableID table_id_, bool is_top_fragment_)
+        : root_executor(std::move(root_executor_)), table_id(table_id_), is_top_fragment(is_top_fragment_)
+    {}
+    QueryTask toQueryTask(const DAGProperties & properties)
+    {
+        std::shared_ptr<tipb::DAGRequest> dag_request_ptr = std::make_shared<tipb::DAGRequest>();
+        tipb::DAGRequest & dag_request = *dag_request_ptr;
+        dag_request.set_time_zone_name(properties.tz_name);
+        dag_request.set_time_zone_offset(properties.tz_offset);
+        dag_request.set_flags(dag_request.flags() | (1u << 1u /* TRUNCATE_AS_WARNING */) | (1u << 6u /* OVERFLOW_AS_WARNING */));
+
+        if (is_top_fragment)
+        {
+            if (properties.encode_type == "chunk")
+                dag_request.set_encode_type(tipb::EncodeType::TypeChunk);
+            else if (properties.encode_type == "chblock")
+                dag_request.set_encode_type(tipb::EncodeType::TypeCHBlock);
+            else
+                dag_request.set_encode_type(tipb::EncodeType::TypeDefault);
+        }
+        else
+        {
+            dag_request.set_encode_type(tipb::EncodeType::TypeCHBlock);
+        }
+
+        for (size_t i = 0; i < root_executor->output_schema.size(); i++)
+            dag_request.add_output_offsets(i);
+        auto * root_tipb_executor = dag_request.mutable_root_executor();
+        root_executor->toTiPBExecutor(root_tipb_executor, properties.collator);
+
+        return QueryTask(dag_request_ptr, table_id, root_executor->output_schema, properties.is_mpp_query ? MPP_DISPATCH : DAG);
+        //QueryTask ret(dag_request_ptr, table_id, root_executor->output_schema, properties.is_mpp_query ? MPP_DISPATCH : DAG);
+        //return ret;
+    }
+};
+
+using QueryFragments = std::vector<QueryFragment>;
+
+QueryFragments queryPlanToQueryFragments(const DAGProperties & properties, ExecutorPtr root_executor)
+{
+    QueryFragments fragments;
+    if (properties.is_mpp_query)
+    {
+        throw Exception("MPP not supported yet");
+    }
+    else
+    {
+        ExecutorPtr current_executor = root_executor;
+        while (!current_executor->children.empty())
+        {
+            if (current_executor->children.size() > 1)
+                throw Exception("Join is not supported in non mpp mode");
+            current_executor = current_executor->children[0];
+        }
+        auto * ts = dynamic_cast<TableScan *>(current_executor.get());
+        if (ts == nullptr)
+            throw Exception("Only table scan is supported as the source executor in non mpp mode");
+        fragments.emplace_back(root_executor, ts->table_info.id, true);
+    }
+    return fragments;
+}
+
+
+QueryTasks queryPlanToQueryTasks(const DAGProperties & properties, ExecutorPtr root_executor)
+{
+    QueryFragments fragments = queryPlanToQueryFragments(properties, root_executor);
+    QueryTasks tasks;
+    for (auto & fragment : fragments)
+        tasks.emplace_back(fragment.toQueryTask(properties));
+    return tasks;
+}
+
+std::tuple<QueryTasks, MakeResOutputStream> compileQuery(
     Context & context, const String & query, SchemaFetcher schema_fetcher, const DAGProperties & properties)
 {
     if (properties.is_mpp_query)
@@ -1316,36 +1393,9 @@ std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
     for (auto & schema : root_executor->output_schema)
         used_columns.emplace(schema.first);
     root_executor->columnPrune(used_columns);
-    final_schema = root_executor->output_schema;
+    /// todo for mpp, add top level exchange sender
 
-    std::shared_ptr<tipb::DAGRequest> dag_request_ptr = std::make_shared<tipb::DAGRequest>();
-    tipb::DAGRequest & dag_request = *dag_request_ptr;
-    dag_request.set_time_zone_name(properties.tz_name);
-    dag_request.set_time_zone_offset(properties.tz_offset);
-    dag_request.set_flags(dag_request.flags() | (1u << 1u /* TRUNCATE_AS_WARNING */) | (1u << 6u /* OVERFLOW_AS_WARNING */));
-
-    if (properties.encode_type == "chunk")
-        dag_request.set_encode_type(tipb::EncodeType::TypeChunk);
-    else if (properties.encode_type == "chblock")
-        dag_request.set_encode_type(tipb::EncodeType::TypeCHBlock);
-    else
-        dag_request.set_encode_type(tipb::EncodeType::TypeDefault);
-    if (!output_offsets.empty())
-    {
-        for (auto i : output_offsets)
-            dag_request.add_output_offsets(i);
-    }
-    else
-    {
-        for (size_t i = 0; i < root_executor->output_schema.size(); i++)
-            dag_request.add_output_offsets(i);
-    }
-    auto * root_tipb_executor = dag_request.mutable_root_executor();
-    root_executor->toTiPBExecutor(root_tipb_executor, properties.collator);
-
-    QueryFragments tasks;
-    tasks.emplace_back(dag_request_ptr, table_info.id, final_schema, DAG);
-    return std::make_tuple(std::move(tasks), func_wrap_output_stream);
+    return std::make_tuple(queryPlanToQueryTasks(properties, root_executor), func_wrap_output_stream);
 }
 
 tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version,
