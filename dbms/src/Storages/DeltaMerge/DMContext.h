@@ -18,6 +18,8 @@ namespace DM
 
 class StoragePool;
 using NotCompress = std::unordered_set<ColId>;
+struct DMContext;
+using DMContextPtr = std::shared_ptr<DMContext>;
 
 /**
  * This context object carries table infos. And those infos are only meaningful to current context.
@@ -30,10 +32,6 @@ struct DMContext : private boost::noncopyable
     StoragePathPool & path_pool;
     StoragePool &     storage_pool;
     const UInt64      hash_salt;
-
-    // The schema snapshot
-    // We need a consistent snapshot of columns, copy ColumnsDefines
-    const ColumnDefinesPtr store_columns;
 
     // gc safe-point, maybe update.
     DB::Timestamp min_version;
@@ -64,11 +62,11 @@ struct DMContext : private boost::noncopyable
     const bool read_stable_only;
     const bool enable_skippable_place;
 
+public:
     DMContext(const Context &          db_context_,
               StoragePathPool &        path_pool_,
               StoragePool &            storage_pool_,
               const UInt64             hash_salt_,
-              const ColumnDefinesPtr & store_columns_,
               const DB::Timestamp      min_version_,
               const NotCompress &      not_compress_,
               bool                     is_common_handle_,
@@ -79,7 +77,6 @@ struct DMContext : private boost::noncopyable
           path_pool(path_pool_),
           storage_pool(storage_pool_),
           hash_salt(hash_salt_),
-          store_columns(store_columns_),
           min_version(min_version_),
           not_compress(not_compress_),
           is_common_handle(is_common_handle_),
@@ -96,8 +93,6 @@ struct DMContext : private boost::noncopyable
     {
     }
 };
-
-using DMContextPtr = std::shared_ptr<DMContext>;
 
 } // namespace DM
 } // namespace DB
