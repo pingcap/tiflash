@@ -1270,7 +1270,12 @@ std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
 
         if (need_append_project)
         {
-            throw Exception("Not supported yet");
+            root_executor = compileProject(root_executor, executor_index, ast_query.select_expression_list);
+            std::unordered_set<String> used_columns;
+            for (auto & schema : root_executor->output_schema)
+                used_columns.emplace(schema.first);
+            root_executor->columnPrune(used_columns);
+            final_schema = root_executor->output_schema;
         }
         else
         {
