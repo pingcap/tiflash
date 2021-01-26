@@ -64,7 +64,8 @@ extern const char pause_after_learner_read[];
 
 DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std::vector<BlockInputStreams> & input_streams_vec_,
     const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const tipb::DAGRequest & rqst_, ASTPtr dummy_query_,
-    const DAGQuerySource & dag_, std::vector<SubqueriesForSets> & subqueriesForSets_)
+    const DAGQuerySource & dag_, std::vector<SubqueriesForSets> & subqueriesForSets_,
+    const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map_)
     : context(context_),
       input_streams_vec(input_streams_vec_),
       query_block(query_block_),
@@ -73,6 +74,7 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(Context & context_, const std
       dummy_query(std::move(dummy_query_)),
       dag(dag_),
       subqueriesForSets(subqueriesForSets_),
+      exchange_receiver_map(exchange_receiver_map_),
       log(&Logger::get("DAGQueryBlockInterpreter"))
 {
     if (query_block.selection != nullptr)
@@ -1287,12 +1289,13 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
-        auto exchange_receiver
-            = std::make_shared<ExchangeReceiver>(context, query_block.source->exchange_receiver(), dag.getDAGContext().getMPPTaskMeta());
+        auto it = exchange_receiver_map.find(query_block.source_name);
+        if (unlikely(it == exchange_receiver_map.end()))
+            throw Exception("Can not find exchange receiver for " + query_block.source_name, ErrorCodes::LOGICAL_ERROR);
         // todo choose a more reasonable stream number
         for (size_t i = 0; i < max_streams; i++)
         {
-            auto stream = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver);
+            auto stream = std::make_shared<ExchangeReceiverInputStream>(it->second);
             pipeline.streams.push_back(stream);
             dag.getDAGContext().getRemoteInputStreams().push_back(stream);
         }

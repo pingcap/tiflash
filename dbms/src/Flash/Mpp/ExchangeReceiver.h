@@ -37,6 +37,7 @@ struct ExchangeReceiverResult
         bool meet_error_ = false, const String & error_msg_ = "", bool eof_ = false)
         : resp(resp_), call_index(call_index_), req_info(req_info_), meet_error(meet_error_), error_msg(error_msg_), eof(eof_)
     {}
+    ExchangeReceiverResult() : ExchangeReceiverResult(nullptr, 0) {}
 };
 
 class ExchangeReceiver
@@ -46,11 +47,11 @@ public:
 
 private:
     pingcap::kv::Cluster * cluster;
-    std::chrono::seconds timeout;
 
     tipb::ExchangeReceiver pb_exchange_receiver;
     size_t source_num;
     ::mpp::TaskMeta task_meta;
+    size_t max_buffer_size;
     std::vector<std::thread> workers;
     DAGSchema schema;
 
@@ -59,10 +60,11 @@ private:
     std::condition_variable cv;
     std::queue<ExchangeReceiverResult> result_buffer;
     Int32 live_connections;
-    bool inited;
     bool meet_error;
     Exception err;
     Logger * log;
+
+    void setUpConnection();
 
     void ReadLoop(const String & meta_raw, size_t source_index);
 
@@ -73,7 +75,8 @@ private:
         {
             resp_ptr = nullptr;
         }
-        std::lock_guard<std::mutex> lock(mu);
+        std::unique_lock<std::mutex> lock(mu);
+        cv.wait(lock, [&] { return result_buffer.size() < max_buffer_size || meet_error; });
         if (resp_ptr != nullptr)
             result_buffer.emplace(resp_ptr, source_index, req_info);
         else
@@ -82,14 +85,13 @@ private:
     }
 
 public:
-    ExchangeReceiver(Context & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta)
+    ExchangeReceiver(Context & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta, size_t max_buffer_size_)
         : cluster(context_.getTMTContext().getKVCluster()),
-          timeout(context_.getSettings().mpp_task_timeout),
           pb_exchange_receiver(exc),
           source_num(pb_exchange_receiver.encoded_task_meta_size()),
           task_meta(meta),
+          max_buffer_size(max_buffer_size_),
           live_connections(0),
-          inited(false),
           meet_error(false),
           log(&Logger::get("exchange_receiver"))
     {
@@ -99,6 +101,7 @@ public:
             ColumnInfo info = fieldTypeToColumnInfo(exc.field_types(i));
             schema.push_back(std::make_pair(name, info));
         }
+        setUpConnection();
     }
 
     ~ExchangeReceiver()
@@ -111,24 +114,25 @@ public:
 
     const DAGSchema & getOutputSchema() const { return schema; }
 
-    void init();
-
     ExchangeReceiverResult nextResult()
     {
-        if (!inited)
-            init();
         std::unique_lock<std::mutex> lk(mu);
-        cv.wait(lk, [&] { return result_buffer.size() > 0 || live_connections == 0 || meet_error; });
+        cv.wait(lk, [&] { return !result_buffer.empty() || live_connections == 0 || meet_error; });
+        ExchangeReceiverResult result;
         if (meet_error)
         {
-            return {nullptr, 0, "ExchangeReceiver", true, err.message(), false};
+            result = {nullptr, 0, "ExchangeReceiver", true, err.message(), false};
         }
-        if (result_buffer.empty())
+        else if (result_buffer.empty())
         {
-            return {nullptr, 0, "ExchangeReceiver", false, "", true};
+            result = {nullptr, 0, "ExchangeReceiver", false, "", true};
         }
-        auto result = result_buffer.front();
-        result_buffer.pop();
+        else
+        {
+            result = result_buffer.front();
+            result_buffer.pop();
+        }
+        cv.notify_all();
         return result;
     }
 
