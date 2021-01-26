@@ -524,12 +524,29 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t co
     }
 }
 
+void collectUsedColumnsFromExpr(const DAGSchema & input, ASTPtr ast, std::unordered_set<String> & used_columns)
+{
+    if (ASTIdentifier * id = typeid_cast<ASTIdentifier *>(ast.get()))
+    {
+        used_columns.emplace(id->getColumnName());
+    }
+    else if (ASTFunction * func = typeid_cast<ASTFunction *>(ast.get()))
+    {
+        /// check function
+        for (const auto & child_ast : func->arguments->children)
+        {
+            collectUsedColumnsFromExpr(input, child_ast, used_columns);
+        }
+    }
+}
+
 struct Executor
 {
     size_t index;
     DAGSchema output_schema;
     std::vector<std::shared_ptr<Executor>> children;
     virtual bool generateNewSchema() { return false; }
+    virtual void columnPrune(std::unordered_set<String> & used_columns) = 0;
     virtual std::unordered_set<String> * getReferredColumns() { throw Exception("Should not reach here"); }
     Executor(size_t & index_, const DAGSchema & output_schema_) : index(index_), output_schema(output_schema_) { index_++; }
     virtual bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id) = 0;
@@ -540,12 +557,16 @@ struct TableScan : public Executor
 {
     TableInfo table_info;
     /// used by column pruner
-    std::unordered_set<String> referred_columns;
     TableScan(size_t & index_, const DAGSchema & output_schema_, TableInfo & table_info_)
         : Executor(index_, output_schema_), table_info(table_info_)
     {}
     bool generateNewSchema() override { return true; }
-    std::unordered_set<String> * getReferredColumns() override { return &referred_columns; }
+    void columnPrune(std::unordered_set<String> & used_columns) override
+    {
+        output_schema.erase(std::remove_if(output_schema.begin(), output_schema.end(),
+                                [&](const auto & field) { return used_columns.count(field.first) == 0; }),
+            output_schema.end());
+    }
     bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t) override
     {
         tipb_executor->set_tp(tipb::ExecType::TypeTableScan);
@@ -594,6 +615,14 @@ struct Selection : public Executor
         auto * child_executor = sel->mutable_child();
         return children[0]->toTiPBExecutor(child_executor, collator_id);
     }
+    void columnPrune(std::unordered_set<String> & used_columns) override
+    {
+        for (auto & expr : conditions)
+            collectUsedColumnsFromExpr(children[0]->output_schema, expr, used_columns);
+        children[0]->columnPrune(used_columns);
+        /// update output schema after column prune
+        output_schema = children[0]->output_schema;
+    }
 };
 
 struct TopN : public Executor
@@ -622,6 +651,14 @@ struct TopN : public Executor
         auto * child_executor = topn->mutable_child();
         return children[0]->toTiPBExecutor(child_executor, collator_id);
     }
+    void columnPrune(std::unordered_set<String> & used_columns) override
+    {
+        for (auto & expr : order_columns)
+            collectUsedColumnsFromExpr(children[0]->output_schema, expr, used_columns);
+        children[0]->columnPrune(used_columns);
+        /// update output schema after column prune
+        output_schema = children[0]->output_schema;
+    }
 };
 
 struct Limit : public Executor
@@ -637,6 +674,12 @@ struct Limit : public Executor
         auto * child_executor = lt->mutable_child();
         return children[0]->toTiPBExecutor(child_executor, collator_id);
     }
+    void columnPrune(std::unordered_set<String> & used_columns) override
+    {
+        children[0]->columnPrune(used_columns);
+        /// update output schema after column prune
+        output_schema = children[0]->output_schema;
+    }
 };
 
 struct Aggregation : public Executor
@@ -645,7 +688,6 @@ struct Aggregation : public Executor
     bool need_append_project;
     std::vector<ASTPtr> agg_exprs;
     std::vector<ASTPtr> gby_exprs;
-    std::unordered_set<String> referred_columns;
     Aggregation(size_t & index_, const DAGSchema & output_schema_, bool has_uniq_raw_res_, bool need_append_project_,
         std::vector<ASTPtr> && agg_exprs_, std::vector<ASTPtr> && gby_exprs_)
         : Executor(index_, output_schema_),
@@ -724,20 +766,68 @@ struct Aggregation : public Executor
         return children[0]->toTiPBExecutor(child_executor, collator_id);
     }
     bool generateNewSchema() override { return true; }
-    std::unordered_set<String> * getReferredColumns() override { return &referred_columns; }
+    void columnPrune(std::unordered_set<String> & used_columns) override
+    {
+        output_schema.erase(std::remove_if(output_schema.begin(), output_schema.end(),
+                                [&](const auto & field) { return used_columns.count(field.first) == 0; }),
+            output_schema.end());
+        std::unordered_set<String> used_input_columns;
+        for (auto & agg_func : agg_exprs)
+        {
+            if (used_columns.find(agg_func->getColumnName()) != used_columns.end())
+            {
+                collectUsedColumnsFromExpr(children[0]->output_schema, agg_func, used_input_columns);
+            }
+        }
+        for (auto & gby_expr : gby_exprs)
+        {
+            collectUsedColumnsFromExpr(children[0]->output_schema, gby_expr, used_input_columns);
+        }
+        children[0]->columnPrune(used_input_columns);
+    }
 };
 
 struct Project : public Executor
 {
     std::vector<ASTPtr> exprs;
-    Project(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> exprs_)
+    bool generateNewSchema() override { return true; }
+    Project(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> && exprs_)
         : Executor(index_, output_schema_), exprs(std::move(exprs_))
     {}
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id) override
+    {
+        tipb_executor->set_tp(tipb::ExecType::TypeProjection);
+        tipb_executor->set_executor_id("project_" + std::to_string(index));
+        auto * proj = tipb_executor->mutable_projection();
+        auto & input_schema = children[0]->output_schema;
+        for (const auto & child : exprs)
+        {
+            tipb::Expr * expr = proj->add_exprs();
+            astToPB(input_schema, child, expr, collator_id);
+        }
+        auto * children_executor = proj->mutable_child();
+        return children[0]->toTiPBExecutor(children_executor, collator_id);
+    }
+    void columnPrune(std::unordered_set<String> & used_columns) override
+    {
+        output_schema.erase(std::remove_if(output_schema.begin(), output_schema.end(),
+                                [&](const auto & field) { return used_columns.count(field.first) == 0; }),
+            output_schema.end());
+        std::unordered_set<String> used_input_columns;
+        for (auto & expr : exprs)
+        {
+            if (used_columns.find(expr->getColumnName()) != used_columns.end())
+            {
+                collectUsedColumnsFromExpr(children[0]->output_schema, expr, used_input_columns);
+            }
+        }
+        children[0]->columnPrune(used_input_columns);
+    }
 };
 
 using ExecutorPtr = std::shared_ptr<Executor>;
 
-TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast, std::unordered_set<String> & referred_columns)
+TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast)
 {
     TiDB::ColumnInfo ci;
     if (ASTIdentifier * id = typeid_cast<ASTIdentifier *>(ast.get()))
@@ -747,8 +837,6 @@ TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast, std::unordered
         if (ft == input.end())
             throw Exception("No such column " + id->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
         ci = ft->second;
-
-        referred_columns.emplace((*ft).first);
     }
     else if (ASTFunction * func = typeid_cast<ASTFunction *>(ast.get()))
     {
@@ -772,12 +860,12 @@ TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast, std::unordered
                         // flatten tuple elements
                         for (const auto & c : tuple_func->arguments->children)
                         {
-                            compileExpr(input, c, referred_columns);
+                            compileExpr(input, c);
                         }
                     }
                     else
                     {
-                        compileExpr(input, child_ast, referred_columns);
+                        compileExpr(input, child_ast);
                     }
                 }
                 return ci;
@@ -789,7 +877,7 @@ TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast, std::unordered
                 for (size_t i = 0; i < func->arguments->children.size(); i++)
                 {
                     const auto & child_ast = func->arguments->children[i];
-                    auto child_ci = compileExpr(input, child_ast, referred_columns);
+                    auto child_ci = compileExpr(input, child_ast);
                     // todo should infer the return type based on all input types
                     if ((it_sig->second == tipb::ScalarFuncSig::IfInt && i == 1)
                         || (it_sig->second != tipb::ScalarFuncSig::IfInt && i == 0))
@@ -801,7 +889,7 @@ TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast, std::unordered
                 ci.flag = TiDB::ColumnFlagUnsigned;
                 for (const auto & child_ast : func->arguments->children)
                 {
-                    compileExpr(input, child_ast, referred_columns);
+                    compileExpr(input, child_ast);
                 }
                 return ci;
             case tipb::ScalarFuncSig::FromUnixTime2Arg:
@@ -839,7 +927,7 @@ TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast, std::unordered
         }
         for (const auto & child_ast : func->arguments->children)
         {
-            compileExpr(input, child_ast, referred_columns);
+            compileExpr(input, child_ast);
         }
     }
     else if (ASTLiteral * lit = typeid_cast<ASTLiteral *>(ast.get()))
@@ -881,7 +969,7 @@ TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast, std::unordered
     return ci;
 }
 
-void compileFilter(const DAGSchema & input, ASTPtr ast, std::vector<ASTPtr> & conditions, std::unordered_set<String> & referred_columns)
+void compileFilter(const DAGSchema & input, ASTPtr ast, std::vector<ASTPtr> & conditions)
 {
     if (auto * func = typeid_cast<ASTFunction *>(ast.get()))
     {
@@ -889,13 +977,13 @@ void compileFilter(const DAGSchema & input, ASTPtr ast, std::vector<ASTPtr> & co
         {
             for (auto & child : func->arguments->children)
             {
-                compileFilter(input, child, conditions, referred_columns);
+                compileFilter(input, child, conditions);
             }
             return;
         }
     }
     conditions.push_back(ast);
-    compileExpr(input, ast, referred_columns);
+    compileExpr(input, ast);
 }
 
 ExecutorPtr compileTableScan(size_t & executor_index, TableInfo & table_info, bool append_pk_column)
@@ -924,17 +1012,16 @@ ExecutorPtr compileTableScan(size_t & executor_index, TableInfo & table_info, bo
     return std::make_shared<TableScan>(executor_index, ts_output, table_info);
 }
 
-ExecutorPtr compileSelection(ExecutorPtr input, size_t & executor_index, std::unordered_set<String> & referred_columns, ASTPtr filter)
+ExecutorPtr compileSelection(ExecutorPtr input, size_t & executor_index, ASTPtr filter)
 {
     std::vector<ASTPtr> conditions;
-    compileFilter(input->output_schema, filter, conditions, referred_columns);
+    compileFilter(input->output_schema, filter, conditions);
     auto selection = std::make_shared<Selection>(executor_index, input->output_schema, std::move(conditions));
     selection->children.push_back(input);
     return selection;
 }
 
-ExecutorPtr compileTopN(
-    ExecutorPtr input, size_t & executor_index, std::unordered_set<String> & referred_columns, ASTPtr order_exprs, ASTPtr limit_expr)
+ExecutorPtr compileTopN(ExecutorPtr input, size_t & executor_index, ASTPtr order_exprs, ASTPtr limit_expr)
 {
     std::vector<ASTPtr> order_columns;
     for (const auto & child : order_exprs->children)
@@ -943,7 +1030,7 @@ ExecutorPtr compileTopN(
         if (!elem)
             throw Exception("Invalid order by element", ErrorCodes::LOGICAL_ERROR);
         order_columns.push_back(child);
-        compileExpr(input->output_schema, elem->children[0], referred_columns);
+        compileExpr(input->output_schema, elem->children[0]);
     }
     auto limit = safeGet<UInt64>(typeid_cast<ASTLiteral &>(*limit_expr).value);
     auto topN = std::make_shared<TopN>(executor_index, input->output_schema, std::move(order_columns), limit);
@@ -959,8 +1046,8 @@ ExecutorPtr compileLimit(ExecutorPtr input, size_t & executor_index, ASTPtr limi
     return limit;
 }
 
-ExecutorPtr compileAggregation(ExecutorPtr input, size_t & executor_index, std::unordered_set<String> & referred_columns,
-    DAGSchema & final_schema, ASTPtr agg_funcs, ASTPtr group_by_exprs)
+ExecutorPtr compileAggregation(
+    ExecutorPtr input, size_t & executor_index, DAGSchema & final_schema, ASTPtr agg_funcs, ASTPtr group_by_exprs)
 {
     std::vector<ASTPtr> agg_exprs;
     std::vector<ASTPtr> gby_exprs;
@@ -979,7 +1066,7 @@ ExecutorPtr compileAggregation(ExecutorPtr input, size_t & executor_index, std::
 
             for (const auto & arg : func->arguments->children)
             {
-                children_ci.push_back(compileExpr(input->output_schema, arg, referred_columns));
+                children_ci.push_back(compileExpr(input->output_schema, arg));
             }
 
             TiDB::ColumnInfo ci;
@@ -1013,7 +1100,7 @@ ExecutorPtr compileAggregation(ExecutorPtr input, size_t & executor_index, std::
         for (const auto & child : group_by_exprs->children)
         {
             gby_exprs.push_back(child);
-            auto ci = compileExpr(input->output_schema, child, referred_columns);
+            auto ci = compileExpr(input->output_schema, child);
             final_schema.emplace_back(std::make_pair(child->getColumnName(), ci));
         }
     }
@@ -1024,11 +1111,34 @@ ExecutorPtr compileAggregation(ExecutorPtr input, size_t & executor_index, std::
     return aggregation;
 }
 
-//ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, std::unordered_set<String> & referred_columns,
-//                               DAGSchema & final_schema, ASTPtr select_list, ASTPtr group_by_exprs)
-//{
-//    return nullptr;
-//}
+ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr select_list)
+{
+    std::vector<ASTPtr> exprs;
+    DAGSchema output_schema;
+    for (const auto & expr : select_list->children)
+    {
+        exprs.push_back(expr);
+        const ASTFunction * func = typeid_cast<const ASTFunction *>(expr.get());
+        if (!func || AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
+        {
+            /// aggregate function is handled in compileAggregation
+            auto ft = std::find_if(input->output_schema.begin(), input->output_schema.end(),
+                [&](const auto & field) { return field.first == func->getColumnName(); });
+            if (ft == input->output_schema.end())
+                throw Exception("No such agg " + func->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
+            output_schema.emplace_back(ft->first, ft->second);
+        }
+        else
+        {
+            auto ci = compileExpr(input->output_schema, expr);
+            output_schema.emplace_back(expr->getColumnName(), ci);
+        }
+    }
+
+    auto project = std::make_shared<Project>(executor_index, output_schema, std::move(exprs));
+    project->children.push_back(input);
+    return project;
+}
 
 std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
     Context & context, const String & query, SchemaFetcher schema_fetcher, const DAGProperties & properties)
@@ -1066,7 +1176,6 @@ std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
     }
 
     ExecutorPtr root_executor = nullptr;
-    std::unordered_set<String> * referred_columns = nullptr;
 
     /// Table scan.
     {
@@ -1082,53 +1191,23 @@ std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
             }
         }
         root_executor = compileTableScan(executor_index, table_info, append_pk_column);
-        referred_columns = root_executor->getReferredColumns();
     }
 
     /// Filter.
     if (ast_query.where_expression)
     {
-        root_executor = compileSelection(root_executor, executor_index, *referred_columns, ast_query.where_expression);
+        root_executor = compileSelection(root_executor, executor_index, ast_query.where_expression);
     }
 
     /// TopN.
     if (ast_query.order_expression_list && ast_query.limit_length)
     {
-        root_executor
-            = compileTopN(root_executor, executor_index, *referred_columns, ast_query.order_expression_list, ast_query.limit_length);
+        root_executor = compileTopN(root_executor, executor_index, ast_query.order_expression_list, ast_query.limit_length);
     }
     else if (ast_query.limit_length)
     {
         root_executor = compileLimit(root_executor, executor_index, ast_query.limit_length);
     }
-
-    /// Column pruner.
-    std::function<void(std::shared_ptr<Executor>)> column_pruner = [&](std::shared_ptr<Executor> executor) {
-        if (executor->generateNewSchema())
-        {
-            /// if the executor is a schema generator, then prune the useless columns
-            /// Note, column prune cross schema generator is not handled, for example:
-            /// select id from (select id, value from t) a, value will not be pruned
-            /// since this is only for mock test, I think it is acceptable
-            auto used_columns = *executor->getReferredColumns();
-            /// if used_columns is empty, it means all column should be not pruned.
-            if (!used_columns.empty())
-            {
-                executor->output_schema.erase(std::remove_if(executor->output_schema.begin(), executor->output_schema.end(),
-                                                  [&](const auto & field) { return used_columns.count(field.first) == 0; }),
-                    executor->output_schema.end());
-            }
-        }
-        if (!executor->children.empty())
-            // todo support more than 1 child
-            column_pruner(executor->children[0]);
-        if (!executor->generateNewSchema())
-        {
-            /// fon non-schema generator, update its output schema because after its children
-            /// finish column prune, the output of the current executor is changed too.
-            executor->output_schema = executor->children[0]->output_schema;
-        }
-    };
 
     bool has_gby = ast_query.group_expression_list != nullptr;
     bool has_agg_func = false;
@@ -1150,26 +1229,35 @@ std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
             && (dynamic_cast<Limit *>(root_executor.get()) != nullptr || dynamic_cast<TopN *>(root_executor.get()) != nullptr))
             throw Exception("Limit/TopN and Agg cannot co-exist in non-mpp mode.", ErrorCodes::LOGICAL_ERROR);
 
-        root_executor = compileAggregation(root_executor, executor_index, *referred_columns, final_schema, ast_query.select_expression_list,
+        root_executor = compileAggregation(root_executor, executor_index, final_schema, ast_query.select_expression_list,
             has_gby ? ast_query.group_expression_list : nullptr);
 
-        if (dynamic_cast<Aggregation *>(root_executor.get())->need_append_project)
-            throw Exception("Only agg function is allowed in select for a query with aggregation", ErrorCodes::LOGICAL_ERROR);
         if (dynamic_cast<Aggregation *>(root_executor.get())->has_uniq_raw_res)
             func_wrap_output_stream = [](BlockInputStreamPtr in) { return std::make_shared<UniqRawResReformatBlockOutputStream>(in); };
 
-        referred_columns = root_executor->getReferredColumns();
-        column_pruner(root_executor);
+
+        if (dynamic_cast<Aggregation *>(root_executor.get())->need_append_project)
+        {
+            throw Exception("Not supported yet");
+            //root_executor = compileProject(root_executor, executor_index, *referred_columns, ast_query.select_expression_list);
+        }
+        else
+        {
+            std::unordered_set<String> used_columns;
+            for (auto & schema : final_schema)
+                used_columns.emplace(schema.first);
+            root_executor->columnPrune(used_columns);
+        }
     }
     else
     {
         /// Non-aggregation finalize.
         std::vector<String> final_output;
+        bool need_append_project = false;
         for (const auto & expr : ast_query.select_expression_list->children)
         {
             if (ASTIdentifier * id = typeid_cast<ASTIdentifier *>(expr.get()))
             {
-                referred_columns->emplace(id->getColumnName());
                 final_output.emplace_back(id->getColumnName());
             }
             else if (typeid_cast<ASTAsterisk *>(expr.get()))
@@ -1177,29 +1265,37 @@ std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
                 const auto & last_output = root_executor->output_schema;
                 for (const auto & field : last_output)
                 {
-                    referred_columns->emplace(field.first);
                     final_output.push_back(field.first);
                 }
             }
             else
             {
-                // todo support project
-                throw Exception("Unsupported expression type in select", ErrorCodes::LOGICAL_ERROR);
+                need_append_project = true;
+                break;
             }
         }
 
-        column_pruner(root_executor);
-
-        const auto & last_output = root_executor->output_schema;
-
-        for (const auto & field : final_output)
+        if (need_append_project)
         {
-            auto iter
-                = std::find_if(last_output.begin(), last_output.end(), [&](const auto & last_field) { return last_field.first == field; });
-            if (iter == last_output.end())
-                throw Exception("Column not found after pruning: " + field, ErrorCodes::LOGICAL_ERROR);
-            output_offsets.push_back(iter - last_output.begin());
-            final_schema.push_back(*iter);
+            throw Exception("Not supported yet");
+        }
+        else
+        {
+            std::unordered_set<String> used_columns;
+            used_columns.insert(final_output.begin(), final_output.end());
+            root_executor->columnPrune(used_columns);
+
+            const auto & last_output = root_executor->output_schema;
+
+            for (const auto & field : final_output)
+            {
+                auto iter = std::find_if(
+                    last_output.begin(), last_output.end(), [&](const auto & last_field) { return last_field.first == field; });
+                if (iter == last_output.end())
+                    throw Exception("Column not found after pruning: " + field, ErrorCodes::LOGICAL_ERROR);
+                output_offsets.push_back(iter - last_output.begin());
+                final_schema.push_back(*iter);
+            }
         }
     }
 
