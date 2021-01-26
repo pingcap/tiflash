@@ -545,7 +545,6 @@ struct Executor
     size_t index;
     DAGSchema output_schema;
     std::vector<std::shared_ptr<Executor>> children;
-    virtual bool generateNewSchema() { return false; }
     virtual void columnPrune(std::unordered_set<String> & used_columns) = 0;
     virtual std::unordered_set<String> * getReferredColumns() { throw Exception("Should not reach here"); }
     Executor(size_t & index_, const DAGSchema & output_schema_) : index(index_), output_schema(output_schema_) { index_++; }
@@ -560,7 +559,6 @@ struct TableScan : public Executor
     TableScan(size_t & index_, const DAGSchema & output_schema_, TableInfo & table_info_)
         : Executor(index_, output_schema_), table_info(table_info_)
     {}
-    bool generateNewSchema() override { return true; }
     void columnPrune(std::unordered_set<String> & used_columns) override
     {
         output_schema.erase(std::remove_if(output_schema.begin(), output_schema.end(),
@@ -765,7 +763,6 @@ struct Aggregation : public Executor
         auto * child_executor = agg->mutable_child();
         return children[0]->toTiPBExecutor(child_executor, collator_id);
     }
-    bool generateNewSchema() override { return true; }
     void columnPrune(std::unordered_set<String> & used_columns) override
     {
         output_schema.erase(std::remove_if(output_schema.begin(), output_schema.end(),
@@ -790,7 +787,6 @@ struct Aggregation : public Executor
 struct Project : public Executor
 {
     std::vector<ASTPtr> exprs;
-    bool generateNewSchema() override { return true; }
     Project(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> && exprs_)
         : Executor(index_, output_schema_), exprs(std::move(exprs_))
     {}
@@ -1046,11 +1042,11 @@ ExecutorPtr compileLimit(ExecutorPtr input, size_t & executor_index, ASTPtr limi
     return limit;
 }
 
-ExecutorPtr compileAggregation(
-    ExecutorPtr input, size_t & executor_index, DAGSchema & final_schema, ASTPtr agg_funcs, ASTPtr group_by_exprs)
+ExecutorPtr compileAggregation(ExecutorPtr input, size_t & executor_index, ASTPtr agg_funcs, ASTPtr group_by_exprs)
 {
     std::vector<ASTPtr> agg_exprs;
     std::vector<ASTPtr> gby_exprs;
+    DAGSchema output_schema;
     bool has_uniq_raw_res = false;
     bool need_append_project = false;
     if (agg_funcs != nullptr)
@@ -1091,7 +1087,7 @@ ExecutorPtr compileAggregation(
                 throw Exception("Unsupported agg function " + func->name, ErrorCodes::LOGICAL_ERROR);
             }
 
-            final_schema.emplace_back(std::make_pair(func->getColumnName(), ci));
+            output_schema.emplace_back(std::make_pair(func->getColumnName(), ci));
         }
     }
 
@@ -1101,12 +1097,12 @@ ExecutorPtr compileAggregation(
         {
             gby_exprs.push_back(child);
             auto ci = compileExpr(input->output_schema, child);
-            final_schema.emplace_back(std::make_pair(child->getColumnName(), ci));
+            output_schema.emplace_back(std::make_pair(child->getColumnName(), ci));
         }
     }
 
     auto aggregation = std::make_shared<Aggregation>(
-        executor_index, final_schema, has_uniq_raw_res, need_append_project, std::move(agg_exprs), std::move(gby_exprs));
+        executor_index, output_schema, has_uniq_raw_res, need_append_project, std::move(agg_exprs), std::move(gby_exprs));
     aggregation->children.push_back(input);
     return aggregation;
 }
@@ -1229,8 +1225,8 @@ std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
             && (dynamic_cast<Limit *>(root_executor.get()) != nullptr || dynamic_cast<TopN *>(root_executor.get()) != nullptr))
             throw Exception("Limit/TopN and Agg cannot co-exist in non-mpp mode.", ErrorCodes::LOGICAL_ERROR);
 
-        root_executor = compileAggregation(root_executor, executor_index, final_schema, ast_query.select_expression_list,
-            has_gby ? ast_query.group_expression_list : nullptr);
+        root_executor = compileAggregation(
+            root_executor, executor_index, ast_query.select_expression_list, has_gby ? ast_query.group_expression_list : nullptr);
 
         if (dynamic_cast<Aggregation *>(root_executor.get())->has_uniq_raw_res)
             func_wrap_output_stream = [](BlockInputStreamPtr in) { return std::make_shared<UniqRawResReformatBlockOutputStream>(in); };
@@ -1238,16 +1234,13 @@ std::tuple<QueryFragments, MakeResOutputStream> compileQuery(
 
         if (dynamic_cast<Aggregation *>(root_executor.get())->need_append_project)
         {
-            throw Exception("Not supported yet");
-            //root_executor = compileProject(root_executor, executor_index, *referred_columns, ast_query.select_expression_list);
+            root_executor = compileProject(root_executor, executor_index, ast_query.select_expression_list);
         }
-        else
-        {
-            std::unordered_set<String> used_columns;
-            for (auto & schema : final_schema)
-                used_columns.emplace(schema.first);
-            root_executor->columnPrune(used_columns);
-        }
+        std::unordered_set<String> used_columns;
+        for (auto & schema : root_executor->output_schema)
+            used_columns.emplace(schema.first);
+        root_executor->columnPrune(used_columns);
+        final_schema = root_executor->output_schema;
     }
     else
     {
