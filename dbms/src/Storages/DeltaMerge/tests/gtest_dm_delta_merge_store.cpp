@@ -1,3 +1,4 @@
+#include <Common/FailPoint.h>
 #include <DataTypes/DataTypeString.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
@@ -13,6 +14,15 @@
 
 namespace DB
 {
+
+namespace FailPoints
+{
+extern const char pause_before_dt_background_delta_merge[];
+extern const char pause_until_dt_background_delta_merge[];
+extern const char force_triggle_background_merge_delta[];
+extern const char force_triggle_foreground_flush[];
+} // namespace FailPoints
+
 namespace DM
 {
 namespace tests
@@ -24,7 +34,11 @@ public:
     DeltaMergeStore_test() : name("DeltaMergeStore_test") {}
 
 protected:
-    static void SetUpTestCase() { DB::tests::TiFlashTestEnv::setupLogger(); }
+    static void SetUpTestCase()
+    {
+        DB::tests::TiFlashTestEnv::setupLogger();
+        fiu_init(0); // init failpoint
+    }
 
     void cleanUp()
     {
@@ -1002,11 +1016,11 @@ try
 
     const size_t num_rows_write = 128;
     {
-        // write to store
+        // write to store with column c1
         Block block;
         {
             block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-            // Add a column of col1:String for test
+            // Add a column of i8:Int8 for test
             ColumnWithTypeAndName col1({}, std::make_shared<DataTypeInt8>(), col_name_c1, col_id_c1);
             {
                 IColumn::MutablePtr m_col1 = col1.type->createColumn();
@@ -1106,8 +1120,9 @@ try
     const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("Float32");
 
     // write some rows before DDL
+    size_t num_rows_write = 1;
     {
-        Block block = DMTestEnv::prepareSimpleWriteBlock(0, 1, false);
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
         store->write(*context, context->getSettingsRef(), block);
     }
 
@@ -1150,26 +1165,24 @@ try
                               /* expected_block_size= */ 1024)[0];
 
         in->readPrefix();
+        size_t num_rows_read = 0;
         while (Block block = in->read())
         {
-            for (auto & itr : block)
+            num_rows_read += block.rows();
+            ASSERT_TRUE(block.has(col_name_to_add));
+            const auto & col = block.getByName(col_name_to_add);
+            ASSERT_DATATYPE_EQ(col.type, col_type_to_add);
+            ASSERT_EQ(col.name, col_name_to_add);
+            for (size_t i = 0; i < block.rows(); ++i)
             {
-                auto c = itr.column;
-                for (size_t i = 0; i < c->size(); i++)
-                {
-                    if (itr.name == "f32")
-                    {
-                        Field tmp;
-                        c->get(i, tmp);
-                        // There is some loss of precision during the convertion, so we just do a rough comparison
-                        Float64 epsilon = 0.00001;
-                        Float64 v       = std::abs(tmp.get<Float64>());
-                        EXPECT_TRUE(v - 1.125 < epsilon);
-                    }
-                }
+                Field tmp;
+                col.column->get(i, tmp);
+                // There is some loss of precision during the convertion, so we just do a rough comparison
+                EXPECT_FLOAT_EQ(tmp.get<Float64>(), 1.125);
             }
         }
         in->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
     }
 }
 CATCH
@@ -1533,6 +1546,141 @@ try
             in->readSuffix();
             ASSERT_EQ(num_rows_read, num_rows_write * 2);
         }
+    }
+}
+CATCH
+
+TEST_F(DeltaMergeStore_test, DDL_issue1341)
+try
+{
+    // issue 1341: Background task may use a wrong schema to compact data
+
+    const String      col_name_to_add   = "f32";
+    const ColId       col_id_to_add     = 2;
+    const DataTypePtr col_type_to_add   = DataTypeFactory::instance().get("Float32");
+    const auto        col_default_value = toField(DecimalField(Decimal32(1125), 3)); // 1.125
+
+    // write some rows before DDL
+    size_t num_rows_write = 1;
+    {
+        // Enable pause before delta-merge
+        FailPointHelper::enableFailPoint(FailPoints::pause_before_dt_background_delta_merge);
+        // Enable pause until delta-merge is done
+        FailPointHelper::enableFailPoint(FailPoints::pause_until_dt_background_delta_merge);
+        FailPointHelper::enableFailPoint(FailPoints::force_triggle_background_merge_delta);
+
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+        store->write(*context, context->getSettingsRef(), block);
+    }
+
+    // DDL add column f32 with default value
+    {
+        AlterCommands commands;
+        {
+            AlterCommand com;
+            com.type        = AlterCommand::ADD_COLUMN;
+            com.data_type   = col_type_to_add;
+            com.column_name = col_name_to_add;
+
+            // mock default value
+            // actual ddl is like: ADD COLUMN `f32` Float32 DEFAULT 1.125
+            auto cast = std::make_shared<ASTFunction>();
+            {
+                cast->name      = "CAST";
+                ASTPtr arg      = std::make_shared<ASTLiteral>(toField(DecimalField(Decimal32(1125), 3)));
+                cast->arguments = std::make_shared<ASTExpressionList>();
+                cast->children.push_back(cast->arguments);
+                cast->arguments->children.push_back(arg);
+                cast->arguments->children.push_back(ASTPtr()); // dummy alias
+            }
+            com.default_expression = cast;
+            commands.emplace_back(std::move(com));
+        }
+        ColumnID _col_to_add = col_id_to_add;
+        store->applyAlters(commands, std::nullopt, _col_to_add, *context);
+    }
+
+    // try read
+    {
+        auto in = store->read(*context,
+                              context->getSettingsRef(),
+                              store->getTableColumns(),
+                              {HandleRange::newAll()},
+                              /* num_streams= */ 1,
+                              /* max_version= */ std::numeric_limits<UInt64>::max(),
+                              EMPTY_FILTER,
+                              /* expected_block_size= */ 1024)[0];
+
+        in->readPrefix();
+        size_t num_rows_read = 0;
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            ASSERT_TRUE(block.has(col_name_to_add));
+            const auto & col = block.getByName(col_name_to_add);
+            ASSERT_DATATYPE_EQ(col.type, col_type_to_add);
+            ASSERT_EQ(col.name, col_name_to_add);
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                Field tmp;
+                col.column->get(i, tmp);
+                // There is some loss of precision during the convertion, so we just do a rough comparison
+                EXPECT_FLOAT_EQ(std::abs(tmp.get<Float64>()), 1.125);
+            }
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+
+    {
+        // write and triggle flush
+        FailPointHelper::enableFailPoint(FailPoints::force_triggle_foreground_flush);
+
+        Block                 block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write, num_rows_write * 2, false);
+        ColumnWithTypeAndName f_col(nullptr, col_type_to_add, col_name_to_add, col_id_to_add, col_default_value);
+        {
+            IColumn::MutablePtr m_col       = f_col.type->createColumn();
+            auto &              column_data = typeid_cast<ColumnVector<Float32> &>(*m_col).getData();
+            column_data.resize(num_rows_write);
+            for (size_t i = 0; i < num_rows_write; ++i)
+            {
+                column_data[i] = static_cast<Float32>(3.1415);
+            }
+            f_col.column = std::move(m_col);
+        }
+        block.insert(f_col);
+        store->write(*context, context->getSettingsRef(), block);
+    }
+
+    // disable pause so that delta-merge can continue
+    FailPointHelper::disableFailPoint(FailPoints::pause_before_dt_background_delta_merge);
+    // wait till delta-merge is done
+    FAIL_POINT_PAUSE(FailPoints::pause_until_dt_background_delta_merge);
+    {
+        auto in = store->read(*context,
+                              context->getSettingsRef(),
+                              store->getTableColumns(),
+                              {HandleRange::newAll()},
+                              /* num_streams= */ 1,
+                              /* max_version= */ std::numeric_limits<UInt64>::max(),
+                              EMPTY_FILTER,
+                              /* expected_block_size= */ 1024)[0];
+
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            ASSERT_EQ(block.rows(), num_rows_write * 2);
+            ASSERT_TRUE(block.has(col_name_to_add));
+            const auto & col = block.getByName(col_name_to_add);
+            ASSERT_DATATYPE_EQ(col.type, col_type_to_add);
+            ASSERT_EQ(col.name, col_name_to_add);
+            Field tmp;
+            tmp = (*col.column)[0];
+            EXPECT_FLOAT_EQ(tmp.get<Float64>(), 1.125); // fill with default value
+            tmp = (*col.column)[1];
+            EXPECT_FLOAT_EQ(tmp.get<Float64>(), 3.1415); // keep the value we inserted
+        }
+        in->readSuffix();
     }
 }
 CATCH

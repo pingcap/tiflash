@@ -54,7 +54,7 @@ protected:
         setColumns(cols);
 
         auto segment_id = storage_pool->newMetaPageId();
-        return Segment::newSegment(*dm_context_, HandleRange::newAll(), segment_id, 0);
+        return Segment::newSegment(*dm_context_, table_columns_, HandleRange::newAll(), segment_id, 0);
     }
 
     // setColumns should update dm_context at the same time
@@ -66,7 +66,6 @@ protected:
                                                   *storage_path_pool,
                                                   *storage_pool,
                                                   0,
-                                                  table_columns_,
                                                   /*min_version_*/ 0,
                                                   settings.not_compress_columns,
                                                   db_context->getSettingsRef());
@@ -131,7 +130,7 @@ try
 
         {
             // flush segment
-            segment = segment->mergeDelta(dmContext());
+            segment = segment->mergeDelta(dmContext(), tableColumns());;
         }
 
         {
@@ -172,7 +171,7 @@ try
 
         {
             // flush segment
-            segment = segment->mergeDelta(dmContext());
+            segment = segment->mergeDelta(dmContext(), tableColumns());;
         }
 
         {
@@ -232,7 +231,7 @@ try
     if (merge_delta_after_delete)
     {
         // flush segment for apply delete range
-        segment = segment->mergeDelta(dmContext());
+        segment = segment->mergeDelta(dmContext(), tableColumns());;
     }
 
     {
@@ -284,7 +283,7 @@ try
 
     {
         // flush segment
-        segment = segment->mergeDelta(dmContext());
+        segment = segment->mergeDelta(dmContext(), tableColumns());;
     }
 
     {
@@ -295,13 +294,13 @@ try
         // TODO test delete range not included by segment
 
         // flush segment
-        segment = segment->mergeDelta(dmContext());
+        segment = segment->mergeDelta(dmContext(), tableColumns());;
     }
 
     if (merge_delta_after_delete)
     {
         // flush segment for apply delete range
-        segment = segment->mergeDelta(dmContext());
+        segment = segment->mergeDelta(dmContext(), tableColumns());;
     }
 
     {
@@ -335,7 +334,7 @@ try
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write / 2, false);
         segment->write(dmContext(), std::move(block));
         // flush [0, 50) to segment's stable
-        segment = segment->mergeDelta(dmContext());
+        segment = segment->mergeDelta(dmContext(), tableColumns());;
     }
 
     auto [read_before_delete, merge_delta_after_delete] = GetParam();
@@ -371,7 +370,7 @@ try
     if (merge_delta_after_delete)
     {
         // flush segment for apply delete range
-        segment = segment->mergeDelta(dmContext());
+        segment = segment->mergeDelta(dmContext(), tableColumns());;
     }
 
     {
@@ -409,7 +408,7 @@ try
 
     {
         // flush segment
-        segment = segment->mergeDelta(dmContext());
+        segment = segment->mergeDelta(dmContext(), tableColumns());;
     }
 
     {
@@ -417,7 +416,7 @@ try
         HandleRange del{70, 100};
         segment->write(dmContext(), {del});
         // flush segment
-        segment = segment->mergeDelta(dmContext());
+        segment = segment->mergeDelta(dmContext(), tableColumns());;
     }
 
     {
@@ -448,7 +447,7 @@ try
         HandleRange del{63, 70};
         segment->write(dmContext(), {del});
         // flush segment
-        segment = segment->mergeDelta(dmContext());
+        segment = segment->mergeDelta(dmContext(), tableColumns());;
     }
 
     {
@@ -478,7 +477,7 @@ try
         HandleRange del{1, 32};
         segment->write(dmContext(), {del});
         // flush segment
-        segment = segment->mergeDelta(dmContext());
+        segment = segment->mergeDelta(dmContext(), tableColumns());;
     }
 
     {
@@ -507,7 +506,7 @@ try
         HandleRange del{1, 32};
         segment->write(dmContext(), {del});
         // flush segment
-        segment = segment->mergeDelta(dmContext());
+        segment = segment->mergeDelta(dmContext(), tableColumns());;
     }
 
     {
@@ -536,7 +535,7 @@ try
         HandleRange del{0, 2};
         segment->write(dmContext(), {del});
         // flush segment
-        segment = segment->mergeDelta(dmContext());
+        segment = segment->mergeDelta(dmContext(), tableColumns());;
     }
 
     {
@@ -589,7 +588,7 @@ try
     SegmentPtr new_segment;
     // test split segment
     {
-        std::tie(segment, new_segment) = segment->split(dmContext());
+        std::tie(segment, new_segment) = segment->split(dmContext(), tableColumns());
     }
     // check segment range
     const auto s1_range = segment->getRange();
@@ -627,7 +626,7 @@ try
     // TODO: enable merge test!
     if (false)
     {
-        segment = Segment::merge(dmContext(), segment, new_segment);
+        segment = Segment::merge(dmContext(), tableColumns(), segment, new_segment);
         {
             // check merged segment range
             const auto & merged_range = segment->getRange();
@@ -714,7 +713,7 @@ try
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
         segment->write(dmContext(), std::move(block));
         // flush segment
-        segment = segment->mergeDelta(dmContext());
+        segment = segment->mergeDelta(dmContext(), tableColumns());;
     }
 
     SegmentPtr new_segment = Segment::restoreSegment(dmContext(), segment->segmentId());
@@ -780,7 +779,7 @@ try
 
         {
             // flush segment
-            segment = segment->mergeDelta(dmContext());
+            segment = segment->mergeDelta(dmContext(), tableColumns());;
         }
 
         for (size_t i = (num_batches_written - 1) * num_rows_per_write + 2; i < num_batches_written * num_rows_per_write; i++)
@@ -993,6 +992,47 @@ try
         in->readSuffix();
         ASSERT_EQ(num_rows_read, (size_t)(num_rows_write * 2));
     }
+
+    // Flush cache and apply delta-merge, then read again
+    // This will create a new stable with new schema, check the data.
+    {
+        segment->flushCache(dmContext());
+        segment = segment->mergeDelta(dmContext(), tableColumns());;
+    }
+
+    {
+        // check the stable data with new schema
+        auto in = segment->getInputStream(dmContext(), *columns_to_read);
+
+        // check that we can read correct values
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            ASSERT_TRUE(block.has(column_name_i8_to_i32));
+            const ColumnWithTypeAndName & col = block.getByName(column_name_i8_to_i32);
+            ASSERT_DATATYPE_EQ(col.type, column_i32_after_ddl.type);
+            ASSERT_EQ(col.name, column_i32_after_ddl.name);
+            ASSERT_EQ(col.column_id, column_i32_after_ddl.id);
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                auto value    = col.column->getInt(i);
+                auto expected = 0;
+                if (i < num_rows_write / 2)
+                    expected = static_cast<int64_t>(-1 * (i % 2 ? 1 : -1) * i);
+                else
+                {
+                    auto r   = i - num_rows_write / 2;
+                    expected = static_cast<int64_t>(-1 * (r % 2 ? 1 : -1) * r);
+                }
+                // std::cerr << " row: " << i << "  "<< value << std::endl;
+                ASSERT_EQ(value, expected) << "at row: " << i;
+            }
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, (size_t)(num_rows_write * 2));
+    }
 }
 CATCH
 
@@ -1072,7 +1112,8 @@ try
         Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write * 2, false, /* tso= */ 3);
 
         const size_t          num_rows = block.rows();
-        ColumnWithTypeAndName int8_col(nullptr, new_column_define.type, new_column_define.name, new_column_id);
+        ColumnWithTypeAndName int8_col(
+            nullptr, new_column_define.type, new_column_define.name, new_column_id, new_column_define.default_value);
         {
             IColumn::MutablePtr m_col       = int8_col.type->createColumn();
             auto &              column_data = typeid_cast<ColumnVector<Int8> &>(*m_col).getData();
@@ -1098,6 +1139,47 @@ try
     {
         // read written data
         BlockInputStreamPtr in = segment->getInputStream(dmContext(), *columns_after_ddl);
+
+        // check that we can read correct values
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            ASSERT_TRUE(block.has(new_column_name));
+            const ColumnWithTypeAndName & col = block.getByName(new_column_name);
+            ASSERT_DATATYPE_EQ(col.type, new_column_define.type);
+            ASSERT_EQ(col.name, new_column_define.name);
+            ASSERT_EQ(col.column_id, new_column_define.id);
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                int8_t value    = col.column->getInt(i);
+                int8_t expected = 0;
+                if (i < num_rows_write / 2)
+                    expected = new_column_default_value_int;
+                else
+                {
+                    auto r   = i - num_rows_write / 2;
+                    expected = static_cast<int8_t>(-1 * (r % 2 ? 1 : -1) * r);
+                }
+                // std::cerr << " row: " << i << "  "<< value << std::endl;
+                ASSERT_EQ(value, expected) << "at row: " << i;
+            }
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, (size_t)(num_rows_write * 2));
+    }
+
+    // Flush cache and apply delta-merge, then read again
+    // This will create a new stable with new schema, check the data.
+    {
+        segment->flushCache(dmContext());
+        segment = segment->mergeDelta(dmContext(), tableColumns());;
+    }
+
+    {
+        // read written data after delta-merge
+        auto in = segment->getInputStream(dmContext(), *columns_after_ddl);
 
         // check that we can read correct values
         size_t num_rows_read = 0;
