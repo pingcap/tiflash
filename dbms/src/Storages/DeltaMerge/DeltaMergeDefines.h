@@ -71,8 +71,8 @@ struct ColumnDefine
     DataTypePtr type;
     Field       default_value;
 
-    explicit ColumnDefine(ColId id_ = 0, String name_ = "", DataTypePtr type_ = nullptr)
-        : id(id_), name(std::move(name_)), type(std::move(type_))
+    explicit ColumnDefine(ColId id_ = 0, String name_ = "", DataTypePtr type_ = nullptr, Field default_value_ = Field{})
+        : id(id_), name(std::move(name_)), type(std::move(type_)), default_value(std::move(default_value_))
     {
     }
 };

@@ -353,7 +353,7 @@ public:
 
     /// Create a constant snapshot for read.
     /// Returns empty if this instance is abandoned, you should try again.
-    SnapshotPtr createSnapshot(const DMContext & context, bool is_update = false);
+    SnapshotPtr createSnapshot(const DMContext & context, bool for_update = false);
 };
 
 using Pack             = DeltaValueSpace::Pack;
