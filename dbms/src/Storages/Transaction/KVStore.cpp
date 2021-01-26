@@ -127,6 +127,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
         }
         catch (...)
         {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
         }
     }
 
@@ -155,7 +156,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
             regionsMut().emplace(region_id, new_region);
         }
 
-        region_persister.persist(*new_region, region_lock);
+        persistRegion(*new_region, region_lock, "save current region after apply");
         region_range_index.add(new_region);
 
         tmt.getRegionTable().shrinkRegionRange(*new_region);
@@ -305,9 +306,9 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt)
 
 void KVStore::setRegionCompactLogPeriod(Seconds period) { REGION_COMPACT_LOG_PERIOD = period; }
 
-void KVStore::persistRegion(const Region & region, const RegionTaskLock & region_task_lock)
+void KVStore::persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller)
 {
-    LOG_INFO(log, "Start to persist " << region.toString(true) << ", cache size: " << region.dataSize() << " bytes");
+    LOG_INFO(log, "Start to persist " << region.toString(true) << ", cache size: " << region.dataSize() << " bytes for `" << caller << '`');
     region_persister.persist(region, region_task_lock);
     LOG_DEBUG(log, "Persist " << region.toString(false) << " done");
 }
@@ -352,7 +353,7 @@ TiFlashApplyRes KVStore::handleUselessAdminRaftCmd(
     if (sync_log)
     {
         tryFlushRegionCacheInStorage(tmt, curr_region, log);
-        persistRegion(curr_region, region_task_lock);
+        persistRegion(curr_region, region_task_lock, __FUNCTION__);
         return TiFlashApplyRes::Persist;
     }
     return TiFlashApplyRes::None;
@@ -399,7 +400,14 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
         const auto try_to_flush_region = [&tmt](const RegionPtr & region) {
             if (tmt.isBgFlushDisabled())
             {
-                tmt.getRegionTable().tryFlushRegion(region, false);
+                try
+                {
+                    tmt.getRegionTable().tryFlushRegion(region, false);
+                }
+                catch (const Exception & e)
+                {
+                    tryLogCurrentException(__PRETTY_FUNCTION__);
+                }
             }
             else
             {
@@ -410,7 +418,7 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
 
         const auto persist_and_sync = [&](const Region & region) {
             tryFlushRegionCacheInStorage(tmt, region, log);
-            persistRegion(region, region_task_lock);
+            persistRegion(region, region_task_lock, __FUNCTION__);
         };
 
         const auto handle_batch_split = [&](Regions & split_regions) {
