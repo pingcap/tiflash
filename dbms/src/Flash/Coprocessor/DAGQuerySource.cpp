@@ -16,10 +16,7 @@ extern const int COP_BAD_DAG_REQUEST;
 
 DAGQuerySource::DAGQuerySource(Context & context_, const std::unordered_map<RegionID, RegionInfo> & regions_,
     const tipb::DAGRequest & dag_request_, const bool is_batch_cop_)
-    : context(context_),
-      regions(regions_),
-      dag_request(dag_request_),
-      is_batch_cop(is_batch_cop_)
+    : context(context_), regions(regions_), dag_request(dag_request_), is_batch_cop(is_batch_cop_)
 {
     if (dag_request.has_root_executor())
     {
@@ -32,17 +29,13 @@ DAGQuerySource::DAGQuerySource(Context & context_, const std::unordered_map<Regi
     root_query_block->collectAllPossibleChildrenJoinSubqueryAlias(context.getDAGContext()->getQBIdToJoinAliasMap());
     for (Int32 i : dag_request.output_offsets())
         root_query_block->output_offsets.push_back(i);
-    if (root_query_block->aggregation != nullptr)
+    for (UInt32 i : dag_request.output_offsets())
     {
-        for (auto & field_type : root_query_block->output_field_types)
-            result_field_types.push_back(field_type);
-    }
-    else
-    {
-        for (UInt32 i : dag_request.output_offsets())
-        {
-            result_field_types.push_back(root_query_block->output_field_types[i]);
-        }
+        if (unlikely(i >= root_query_block->output_field_types.size()))
+            throw TiFlashException(std::string(__PRETTY_FUNCTION__) + ": Invalid output offset(schema has "
+                    + std::to_string(root_query_block->output_field_types.size()) + " columns, access index " + std::to_string(i),
+                Errors::Coprocessor::BadRequest);
+        result_field_types.push_back(root_query_block->output_field_types[i]);
     }
     analyzeDAGEncodeType();
 }
