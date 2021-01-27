@@ -64,7 +64,7 @@ void MPPTask::unregisterTask()
     }
 }
 
-BlockIO MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
+void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 {
     auto start_time = Clock::now();
     dag_req = std::make_unique<tipb::DAGRequest>();
@@ -129,7 +129,7 @@ BlockIO MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
         tunnel_set->tunnels.emplace_back(tunnel);
     }
     // read index , this may take a long time.
-    BlockIO streams = executeQuery(dag, context, false, QueryProcessingStage::Complete);
+    io = executeQuery(dag, context, false, QueryProcessingStage::Complete);
 
     // get partition column ids
     auto part_keys = exchangeSender.partition_keys();
@@ -144,11 +144,10 @@ BlockIO MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     std::unique_ptr<DAGResponseWriter> response_writer
         = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr>>(tunnel_set, partition_col_id, exchangeSender.tp(),
             context.getSettings().dag_records_per_chunk, dag.getEncodeType(), dag.getResultFieldTypes(), *dag_context);
-    streams.out = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
+    io.out = std::make_shared<DAGBlockOutputStream>(io.in->getHeader(), std::move(response_writer));
     auto end_time = Clock::now();
     Int64 compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     dag_context->compile_time_ns = compile_time_ns;
-    return streams;
 }
 
 String taskStatusToString(TaskStatus ts)
@@ -167,7 +166,7 @@ String taskStatusToString(TaskStatus ts)
             return "unknown";
     }
 }
-void MPPTask::runImpl(BlockIO io, MemoryTracker * memory_tracker)
+void MPPTask::runImpl()
 {
     auto current_status = static_cast<TaskStatus>(status.load());
     if (current_status != INITIALIZING)
@@ -277,8 +276,9 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
     {
         Stopwatch stopwatch;
         MPPTaskPtr task = std::make_shared<MPPTask>(task_request.meta(), context);
-        auto stream = task->prepare(task_request);
-        task->run(stream);
+        task->prepare(task_request);
+        task->memory_tracker = current_memory_tracker;
+        task->run();
         LOG_INFO(log, "processing dispatch is over; the time cost is " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms");
     }
     catch (Exception & e)

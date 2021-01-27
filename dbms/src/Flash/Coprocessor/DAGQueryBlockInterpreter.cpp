@@ -214,29 +214,6 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
-    if (query_block.aggregation == nullptr)
-    {
-        if (query_block.isRootQueryBlock())
-        {
-            for (auto i : query_block.output_offsets)
-            {
-                if ((size_t)i >= required_columns.size())
-                {
-                    // array index out of bound
-                    throw TiFlashException("Output offset index is out of bound", Errors::Coprocessor::BadRequest);
-                }
-                // do not have alias
-                final_project.emplace_back(required_columns[i], "");
-            }
-        }
-        else
-        {
-            for (size_t i = 0; i < required_columns.size(); i++)
-                /// for child query block, the final project is all the columns read from
-                /// the table and add alias start with qb_column_prefix to avoid column name conflict
-                final_project.emplace_back(required_columns[i], query_block.qb_column_prefix + required_columns[i]);
-        }
-    }
     // todo handle alias column
     if (settings.max_columns_to_read && required_columns.size() > settings.max_columns_to_read)
     {
@@ -363,27 +340,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         });
     }
 
-    if (addTimeZoneCastAfterTS(is_ts_column, pipeline) && !query_block.aggregation
-        && (keep_session_timezone_info || !query_block.isRootQueryBlock()))
-    {
-        if (query_block.isRootQueryBlock())
-        {
-            for (size_t i = 0; i < query_block.output_offsets.size(); i++)
-            {
-                int column_index = query_block.output_offsets[i];
-                if (is_ts_column[column_index])
-                    final_project[i].first = analyzer->getCurrentInputColumns()[column_index].name;
-            }
-        }
-        else
-        {
-            for (size_t i = 0; i < final_project.size(); i++)
-            {
-                if (is_ts_column[i])
-                    final_project[i].first = analyzer->getCurrentInputColumns()[i].name;
-            }
-        }
-    }
+    addTimeZoneCastAfterTS(is_ts_column, pipeline);
 }
 
 void DAGQueryBlockInterpreter::readFromLocalStorage( //
@@ -651,24 +608,6 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
         columns_added_by_join.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
     }
 
-    if (!query_block.aggregation)
-    {
-        if (query_block.isRootQueryBlock())
-        {
-            for (auto i : query_block.output_offsets)
-            {
-                if ((size_t)i >= join_output_columns.size())
-                    throw TiFlashException("Output offset index is out of bound", Errors::Coprocessor::BadRequest);
-                final_project.emplace_back(join_output_columns[i].name, "");
-            }
-        }
-        else
-        {
-            for (auto const & p : join_output_columns)
-                final_project.emplace_back(p.name, query_block.qb_column_prefix + p.name);
-        }
-    }
-
     DataTypes join_key_types;
     getJoinKeyTypes(join, join_key_types);
     TiDB::TiDBCollators collators;
@@ -746,12 +685,7 @@ bool DAGQueryBlockInterpreter::addTimeZoneCastAfterTS(std::vector<bool> & is_ts_
         return false;
 
     ExpressionActionsChain chain;
-    /// only keep UTC column if
-    /// 1. the query block is the root query block
-    /// 2. keep_session_timezone_info is false
-    /// 3. current query block does not have aggregation
-    if (analyzer->appendTimeZoneCastsAfterTS(
-            chain, is_ts_column, query_block.isRootQueryBlock() && !keep_session_timezone_info && query_block.aggregation == nullptr))
+    if (analyzer->appendTimeZoneCastsAfterTS(chain, is_ts_column))
     {
         pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions()); });
         return true;
@@ -785,23 +719,7 @@ AnalysisResult DAGQueryBlockInterpreter::analyzeExpressions()
         chain.clear();
 
         // add cast if type is not match
-        analyzer->appendAggSelect(
-            chain, query_block.aggregation->aggregation(), keep_session_timezone_info || !query_block.isRootQueryBlock());
-        if (query_block.isRootQueryBlock())
-        {
-            // todo for root query block, use output offsets to reconstruct the final project
-            for (auto & element : analyzer->getCurrentInputColumns())
-            {
-                final_project.emplace_back(element.name, "");
-            }
-        }
-        else
-        {
-            for (auto & element : analyzer->getCurrentInputColumns())
-            {
-                final_project.emplace_back(element.name, query_block.qb_column_prefix + element.name);
-            }
-        }
+        analyzer->appendAggSelect(chain, query_block.aggregation->aggregation());
     }
     // Or TopN, not both.
     if (query_block.limitOrTopN && query_block.limitOrTopN->tp() == tipb::ExecType::TypeTopN)
@@ -809,6 +727,9 @@ AnalysisResult DAGQueryBlockInterpreter::analyzeExpressions()
         res.has_order_by = true;
         analyzer->appendOrderBy(chain, query_block.limitOrTopN->topn(), res.order_columns);
     }
+
+    analyzer->generateFinalProject(chain, query_block.output_field_types, query_block.output_offsets, query_block.qb_column_prefix,
+        keep_session_timezone_info || !query_block.isRootQueryBlock(), final_project);
 
     // Append final project results if needed.
     analyzer->appendFinalProject(chain, final_project);
@@ -1304,13 +1225,6 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
         for (const auto & col : block.getColumnsWithTypeAndName())
         {
             source_columns.emplace_back(NameAndTypePair(col.name, col.type));
-            if (query_block.aggregation == nullptr)
-            {
-                if (query_block.isRootQueryBlock())
-                    final_project.emplace_back(col.name, "");
-                else
-                    final_project.emplace_back(col.name, query_block.qb_column_prefix + col.name);
-            }
         }
         analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
         recordProfileStreams(pipeline, query_block.source_name);
@@ -1334,13 +1248,6 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
             auto & col = last_step.actions->getSampleBlock().getByName(expr_name);
             output_columns.emplace_back(col.name, col.type);
             project_cols.emplace_back(col.name, col.name);
-            if (query_block.aggregation == nullptr)
-            {
-                if (query_block.isRootQueryBlock())
-                    final_project.emplace_back(col.name, "");
-                else
-                    final_project.emplace_back(col.name, query_block.qb_column_prefix + col.name);
-            }
         }
         pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions()); });
         executeProject(pipeline, project_cols);
@@ -1401,7 +1308,7 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
 
 void DAGQueryBlockInterpreter::executeProject(Pipeline & pipeline, NamesWithAliases & project_cols)
 {
-    if (final_project.empty())
+    if (project_cols.empty())
         return;
     auto columns = pipeline.firstStream()->getHeader();
     NamesAndTypesList input_column;
