@@ -219,10 +219,13 @@ enum TaskStatus
 
 struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyable
 {
+    /// store io in MPPTask to keep the life cycle of memory_tracker for the current query
+    BlockIO io;
     Context context;
 
     std::unique_ptr<tipb::DAGRequest> dag_req;
     std::unique_ptr<DAGContext> dag_context;
+    MemoryTracker * memory_tracker = nullptr;
 
     MPPTaskId id;
 
@@ -251,7 +254,7 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
 
     void unregisterTask();
 
-    void runImpl(BlockIO io, MemoryTracker * memory_tracker);
+    void runImpl();
 
     bool isTaskHanging();
 
@@ -284,13 +287,13 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
         }
     }
 
-    BlockIO prepare(const mpp::DispatchTaskRequest & task_request);
+    void prepare(const mpp::DispatchTaskRequest & task_request);
 
     void updateProgress(const Progress &) { task_progress.current_progress++; }
 
-    void run(BlockIO io)
+    void run()
     {
-        std::thread worker(&MPPTask::runImpl, this->shared_from_this(), io, current_memory_tracker);
+        std::thread worker(&MPPTask::runImpl, this->shared_from_this());
         worker.detach();
     }
 
@@ -317,6 +320,12 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
             return it != tunnel_map.end();
         });
         return ret ? it->second : nullptr;
+    }
+    ~MPPTask()
+    {
+        /// MPPTask maybe destructed by different thread, set the query memory_tracker
+        /// to current_memory_tracker in the destructor
+        current_memory_tracker = memory_tracker;
     }
 };
 
