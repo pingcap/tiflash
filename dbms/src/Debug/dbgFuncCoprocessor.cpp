@@ -873,6 +873,55 @@ struct Project : public Executor
     }
 };
 
+struct ExchangeSender : Executor
+{
+    tipb::ExchangeType type;
+    std::vector<size_t> partition_keys;
+    ExchangeSender(size_t & index, const DAGSchema & output, tipb::ExchangeType type_, std::vector<size_t> && partition_keys_)
+        : Executor(index, output), type(type_), partition_keys(std::move(partition_keys_))
+    {}
+    void columnPrune(std::unordered_set<String> & used_columns) override { throw Exception("Should not reach here"); }
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id) override
+    {
+        tipb_executor->set_tp(tipb::ExecType::TypeExchangeSender);
+        tipb_executor->set_executor_id("exchange_sender_" + std::to_string(index));
+        tipb::ExchangeSender * exchange_sender = tipb_executor->mutable_exchange_sender();
+        exchange_sender->set_tp(type);
+        for (auto i : partition_keys)
+        {
+            auto * expr = exchange_sender->add_partition_keys();
+            expr->set_tp(tipb::Int64);
+            std::stringstream ss;
+            encodeDAGInt64(i, ss);
+            expr->set_val(ss.str());
+        }
+        // todo add task_meta
+        auto * child_executor = exchange_sender->mutable_child();
+        return children[0]->toTiPBExecutor(child_executor, collator_id);
+    }
+};
+
+struct ExchangeReceiver : Executor
+{
+    void columnPrune(std::unordered_set<String> & used_columns) override { throw Exception("Should not reach here"); }
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t) override
+    {
+        tipb_executor->set_tp(tipb::ExecType::TypeExchangeReceiver);
+        tipb_executor->set_executor_id("exchange_receiver_" + std::to_string(index));
+        tipb::ExchangeReceiver * exchange_receiver = tipb_executor->mutable_exchange_receiver();
+        for (auto & field : output_schema)
+        {
+            auto * field_type = exchange_receiver->add_field_types();
+            field_type->set_tp(field.second.tp);
+            field_type->set_flag(field.second.flag);
+            field_type->set_flen(field.second.flen);
+            field_type->set_decimal(field.second.decimal);
+        }
+        // todo add task_meta
+        return true;
+    }
+};
+
 using ExecutorPtr = std::shared_ptr<Executor>;
 
 TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast)
