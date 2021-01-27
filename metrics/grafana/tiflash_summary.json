@@ -5034,7 +5034,7 @@
         "options": [
 
         ],
-        "query": "label_values(tiflash_system_profile_event_Query, cluster)",
+        "query": "label_values(tiflash_system_profile_event_Query, tidb_cluster)",
         "refresh": 2,
         "regex": "",
         "sort": 1,
