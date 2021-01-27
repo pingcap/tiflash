@@ -880,7 +880,7 @@ struct ExchangeSender : Executor
     ExchangeSender(size_t & index, const DAGSchema & output, tipb::ExchangeType type_, std::vector<size_t> && partition_keys_)
         : Executor(index, output), type(type_), partition_keys(std::move(partition_keys_))
     {}
-    void columnPrune(std::unordered_set<String> & used_columns) override { throw Exception("Should not reach here"); }
+    void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
     bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id) override
     {
         tipb_executor->set_tp(tipb::ExecType::TypeExchangeSender);
@@ -903,7 +903,7 @@ struct ExchangeSender : Executor
 
 struct ExchangeReceiver : Executor
 {
-    void columnPrune(std::unordered_set<String> & used_columns) override { throw Exception("Should not reach here"); }
+    void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
     bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t) override
     {
         tipb_executor->set_tp(tipb::ExecType::TypeExchangeReceiver);
