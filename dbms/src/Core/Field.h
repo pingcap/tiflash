@@ -533,8 +533,6 @@ private:
     }
 
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
     template <typename F, typename Field> /// Field template parameter may be const or non-const Field.
     static void dispatch(F && f, Field & field)
     {
@@ -581,7 +579,6 @@ private:
                 throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
         }
     }
-#pragma GCC diagnostic pop
 
 
     void create(const Field & x)
