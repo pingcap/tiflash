@@ -112,7 +112,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(tiflash_system_current_metric_StoreSizeUsed{instance=~\"$instance\"}) by (instance)",
+              "expr": "sum(tiflash_system_current_metric_StoreSizeUsed{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{instance}}",
@@ -209,7 +209,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(tiflash_system_current_metric_StoreSizeAvailable{instance=~\"$instance\"}) by (instance)",
+              "expr": "sum(tiflash_system_current_metric_StoreSizeAvailable{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{instance}}",
@@ -306,7 +306,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(tiflash_system_current_metric_StoreSizeCapacity{instance=~\"$instance\"}) by (instance)",
+              "expr": "sum(tiflash_system_current_metric_StoreSizeCapacity{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{instance}}",
@@ -407,7 +407,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "tiflash_system_asynchronous_metric_Uptime{instance=~\"$instance\"}",
+              "expr": "tiflash_system_asynchronous_metric_Uptime{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 2,
@@ -498,7 +498,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_retained{instance=~\"$instance\"})",
+              "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_retained{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"})",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
@@ -506,7 +506,7 @@
               "refId": "A"
             },
             {
-              "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_mapped{instance=~\"$instance\"})",
+              "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_mapped{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"})",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
@@ -514,7 +514,7 @@
               "refId": "B"
             },
             {
-              "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_resident{instance=~\"$instance\"})",
+              "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_resident{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"})",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
@@ -522,7 +522,7 @@
               "refId": "C"
             },
             {
-              "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_allocated{instance=~\"$instance\"})",
+              "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_allocated{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"})",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
@@ -530,7 +530,7 @@
               "refId": "D"
             },
             {
-              "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_active{instance=~\"$instance\"})",
+              "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_active{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"})",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
@@ -538,7 +538,7 @@
               "refId": "E"
             },
             {
-              "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_metadata_thp{instance=~\"$instance\"})",
+              "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_metadata_thp{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"})",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
@@ -546,7 +546,7 @@
               "refId": "F"
             },
             {
-              "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_metadata{instance=~\"$instance\"})",
+              "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_metadata{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"})",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
@@ -554,7 +554,7 @@
               "refId": "G"
             },
             {
-              "expr": "tiflash_proxy_process_resident_memory_bytes{job=\"tiflash\"}",
+              "expr": "tiflash_proxy_process_resident_memory_bytes{tidb_cluster=\"$tidb_cluster\", job=\"tiflash\"}",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{instance}}",
@@ -651,7 +651,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(tiflash_proxy_process_cpu_seconds_total{job=\"tiflash\"}[1m])",
+              "expr": "rate(tiflash_proxy_process_cpu_seconds_total{tidb_cluster=\"$tidb_cluster\", job=\"tiflash\"}[1m])",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 2,
@@ -743,7 +743,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_system_profile_event_FileFSync{instance=~\"$instance\"}[1m])) by (instance)",
+              "expr": "sum(rate(tiflash_system_profile_event_FileFSync{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{instance}}",
@@ -834,14 +834,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_system_profile_event_FileOpen{instance=~\"$instance\"}[1m])) by (instance)",
+              "expr": "sum(rate(tiflash_system_profile_event_FileOpen{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "Newly Open-{{instance}}",
               "refId": "A"
             },
             {
-              "expr": "sum(rate(tiflash_system_profile_event_FileOpenFailed{instance=~\"$instance\"}[1m])) by (instance)",
+              "expr": "sum(rate(tiflash_system_profile_event_FileOpenFailed{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "Newly Open Failed-{{instance}}",
@@ -931,7 +931,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "tiflash_proxy_process_open_fds{job=\"tiflash\"}",
+              "expr": "tiflash_proxy_process_open_fds{tidb_cluster=\"$tidb_cluster\", job=\"tiflash\"}",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
@@ -939,7 +939,7 @@
               "refId": "A"
             },
             {
-              "expr": "sum(tiflash_system_current_metric_OpenFileForWrite{instance=~\"$instance\"}) by (instance)",
+              "expr": "sum(tiflash_system_current_metric_OpenFileForWrite{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 1,
@@ -947,7 +947,7 @@
               "refId": "B"
             },
             {
-              "expr": "sum(tiflash_system_current_metric_OpenFileForRead{instance=~\"$instance\"}) by (instance)",
+              "expr": "sum(tiflash_system_current_metric_OpenFileForRead{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 1,
@@ -1050,7 +1050,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_coprocessor_request_count{instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_coprocessor_request_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{type}}",
@@ -1138,7 +1138,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_coprocessor_executor_count{instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_coprocessor_executor_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{type}}",
@@ -1225,28 +1225,28 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.999, sum(rate(tiflash_coprocessor_request_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.999, sum(rate(tiflash_coprocessor_request_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "999",
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(tiflash_coprocessor_request_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(tiflash_coprocessor_request_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "99",
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(tiflash_coprocessor_request_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(tiflash_coprocessor_request_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "95",
               "refId": "C"
             },
             {
-              "expr": "histogram_quantile(0.80, sum(rate(tiflash_coprocessor_request_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.80, sum(rate(tiflash_coprocessor_request_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "80",
@@ -1333,7 +1333,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_coprocessor_request_error{instance=~\"$instance\"}[1m])) by (reason)",
+              "expr": "sum(rate(tiflash_coprocessor_request_error{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (reason)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{reason}}",
@@ -1420,28 +1420,28 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.999, sum(rate(tiflash_coprocessor_request_handle_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.999, sum(rate(tiflash_coprocessor_request_handle_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "999",
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(tiflash_coprocessor_request_handle_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(tiflash_coprocessor_request_handle_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "99",
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(tiflash_coprocessor_request_handle_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(tiflash_coprocessor_request_handle_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "95",
               "refId": "C"
             },
             {
-              "expr": "histogram_quantile(0.80, sum(rate(tiflash_coprocessor_request_handle_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.80, sum(rate(tiflash_coprocessor_request_handle_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "80",
@@ -1528,7 +1528,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_coprocessor_response_bytes{instance=~\"$instance\"}[1m])) by (instance)",
+              "expr": "sum(rate(tiflash_coprocessor_response_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{instance}}",
@@ -1613,28 +1613,28 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.999, sum(rate(tiflash_coprocessor_request_memory_usage_bucket{instance=~\"$instance\"}[1m])) by (le, type))",
+              "expr": "histogram_quantile(0.999, sum(rate(tiflash_coprocessor_request_memory_usage_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "999-{{type}}",
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(tiflash_coprocessor_request_memory_usage_bucket{instance=~\"$instance\"}[1m])) by (le, type))",
+              "expr": "histogram_quantile(0.99, sum(rate(tiflash_coprocessor_request_memory_usage_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "99-{{type}}",
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(tiflash_coprocessor_request_memory_usage_bucket{instance=~\"$instance\"}[1m])) by (le, type))",
+              "expr": "histogram_quantile(0.95, sum(rate(tiflash_coprocessor_request_memory_usage_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "95-{{type}}",
               "refId": "C"
             },
             {
-              "expr": "histogram_quantile(0.80, sum(rate(tiflash_coprocessor_request_memory_usage_bucket{instance=~\"$instance\"}[1m])) by (le, type))",
+              "expr": "histogram_quantile(0.80, sum(rate(tiflash_coprocessor_request_memory_usage_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "80-{{type}}",
@@ -1721,7 +1721,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(tiflash_coprocessor_handling_request_count{instance=~\"$instance\"}) by (type)",
+              "expr": "sum(tiflash_coprocessor_handling_request_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (type)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{type}}",
@@ -1824,7 +1824,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "avg(tiflash_schema_version{instance=~\"$instance\"}) by (instance)",
+              "expr": "avg(tiflash_schema_version{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{instance}}",
@@ -1913,14 +1913,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "avg(increase(tiflash_schema_apply_count{instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "avg(increase(tiflash_schema_apply_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{type}}",
               "refId": "A"
             },
             {
-              "expr": "avg(increase(tiflash_schema_trigger_count{instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "avg(increase(tiflash_schema_trigger_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "triggle-by-{{type}}",
@@ -2009,21 +2009,21 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "avg(increase(tiflash_schema_internal_ddl_count{instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "avg(increase(tiflash_schema_internal_ddl_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{type}}",
               "refId": "A"
             },
             {
-              "expr": "sum(increase(tiflash_schema_internal_ddl_count{instance=~\"$instance\"}[1m]))",
+              "expr": "sum(increase(tiflash_schema_internal_ddl_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "total",
               "refId": "B"
             },
             {
-              "expr": "sum(increase(tiflash_schema_internal_ddl_count{instance=~\"$instance\"}[1m])) by (type,instance)",
+              "expr": "sum(increase(tiflash_schema_internal_ddl_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type,instance)",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
@@ -2031,7 +2031,7 @@
               "refId": "C"
             },
             {
-              "expr": "sum(increase(tiflash_schema_internal_ddl_count{instance=~\"$instance\"}[1m])) by (instance)",
+              "expr": "sum(increase(tiflash_schema_internal_ddl_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance)",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
@@ -2120,28 +2120,28 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.999, sum(rate(tiflash_schema_apply_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.999, sum(rate(tiflash_schema_apply_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "999",
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(tiflash_schema_apply_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(tiflash_schema_apply_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "99",
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(tiflash_schema_apply_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(tiflash_schema_apply_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "95",
               "refId": "C"
             },
             {
-              "expr": "histogram_quantile(0.80, sum(rate(tiflash_schema_apply_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.80, sum(rate(tiflash_schema_apply_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "80",
@@ -2244,14 +2244,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_storage_command_count{instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_storage_command_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{type}}",
               "refId": "A"
             },
             {
-              "expr": "sum(rate(tiflash_system_profile_event_DMWriteBlock{instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_system_profile_event_DMWriteBlock{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "write block",
@@ -2341,7 +2341,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "max(tiflash_storage_write_amplification{instance=~\"$instance\"}) by (instance)",
+              "expr": "max(tiflash_storage_write_amplification{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 1,
@@ -2349,7 +2349,7 @@
               "refId": "A"
             },
             {
-              "expr": "sum((rate(tiflash_system_profile_event_PSMWriteBytes{instance=~\"$instance\"}[5m]) + rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes{instance=~\"$instance\"}[5m]) + rate(tiflash_system_profile_event_WriteBufferAIOWriteBytes{instance=~\"$instance\"}[5m])) / (rate(tiflash_system_profile_event_DMWriteBytes{instance=~\"$instance\"}[5m]))) by (instance)",
+              "expr": "sum((rate(tiflash_system_profile_event_PSMWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m]) + rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m]) + rate(tiflash_system_profile_event_WriteBufferAIOWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m])) / (rate(tiflash_system_profile_event_DMWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m]))) by (instance)",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 1,
@@ -2357,7 +2357,7 @@
               "refId": "B"
             },
             {
-              "expr": "sum((rate(tiflash_system_profile_event_PSMWriteBytes{instance=~\"$instance\"}[10m]) + rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes{instance=~\"$instance\"}[10m]) + rate(tiflash_system_profile_event_WriteBufferAIOWriteBytes{instance=~\"$instance\"}[10m])) / (rate(tiflash_system_profile_event_DMWriteBytes{instance=~\"$instance\"}[10m]))) by (instance)",
+              "expr": "sum((rate(tiflash_system_profile_event_PSMWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[10m]) + rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[10m]) + rate(tiflash_system_profile_event_WriteBufferAIOWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[10m])) / (rate(tiflash_system_profile_event_DMWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[10m]))) by (instance)",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
@@ -2365,7 +2365,7 @@
               "refId": "C"
             },
             {
-              "expr": "sum((rate(tiflash_system_profile_event_PSMWriteBytes{instance=~\"$instance\"}[30m]) + rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes{instance=~\"$instance\"}[30m]) + rate(tiflash_system_profile_event_WriteBufferAIOWriteBytes{instance=~\"$instance\"}[30m])) / (rate(tiflash_system_profile_event_DMWriteBytes{instance=~\"$instance\"}[30m]))) by (instance)",
+              "expr": "sum((rate(tiflash_system_profile_event_PSMWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[30m]) + rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[30m]) + rate(tiflash_system_profile_event_WriteBufferAIOWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[30m])) / (rate(tiflash_system_profile_event_DMWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[30m]))) by (instance)",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
@@ -2455,7 +2455,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_storage_read_tasks_count{instance=~\"$instance\"}[1m])) by (instance)",
+              "expr": "sum(rate(tiflash_storage_read_tasks_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance)",
               "format": "time_series",
               "instant": false,
               "intervalFactor": 2,
@@ -2557,7 +2557,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "avg((rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{instance=~\"$instance\"}[1m]) - rate(tiflash_system_profile_event_DMFileFilterAftRoughSet{instance=~\"$instance\"}[1m])) / (rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{instance=~\"$instance\"}[1m]))) by (instance)",
+              "expr": "avg((rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]) - rate(tiflash_system_profile_event_DMFileFilterAftRoughSet{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) / (rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (instance)",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 1,
@@ -2565,7 +2565,7 @@
               "refId": "B"
             },
             {
-              "expr": "avg((rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{instance=~\"$instance\"}[5m]) - rate(tiflash_system_profile_event_DMFileFilterAftRoughSet{instance=~\"$instance\"}[5m])) / (rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{instance=~\"$instance\"}[5m]))) by (instance)",
+              "expr": "avg((rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m]) - rate(tiflash_system_profile_event_DMFileFilterAftRoughSet{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m])) / (rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[5m]))) by (instance)",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
@@ -2573,7 +2573,7 @@
               "refId": "C"
             },
             {
-              "expr": "sum(rate(tiflash_system_profile_event_DMFileFilterNoFilter{instance=~\"$instance\"}[1m])) by (instance)",
+              "expr": "sum(rate(tiflash_system_profile_event_DMFileFilterNoFilter{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance)",
               "format": "time_series",
               "hide": true,
               "instant": false,
@@ -2582,7 +2582,7 @@
               "refId": "A"
             },
             {
-              "expr": "sum(rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{instance=~\"$instance\"}[1m])) by (instance)",
+              "expr": "sum(rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance)",
               "format": "time_series",
               "hide": true,
               "instant": false,
@@ -2591,7 +2591,7 @@
               "refId": "D"
             },
             {
-              "expr": "sum(rate(tiflash_system_profile_event_DMFileFilterAftRoughSet{instance=~\"$instance\"}[1m])) by (instance)",
+              "expr": "sum(rate(tiflash_system_profile_event_DMFileFilterAftRoughSet{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance)",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
@@ -2682,7 +2682,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_storage_subtask_count{instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_storage_subtask_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{type}}",
@@ -2776,7 +2776,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.999, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le,type))",
+              "expr": "histogram_quantile(0.999, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le,type))",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
@@ -2784,7 +2784,7 @@
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le,type))",
+              "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le,type))",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 1,
@@ -2792,7 +2792,7 @@
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le,type))",
+              "expr": "histogram_quantile(0.95, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le,type))",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
@@ -2800,7 +2800,7 @@
               "refId": "C"
             },
             {
-              "expr": "histogram_quantile(0.80, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le,type))",
+              "expr": "histogram_quantile(0.80, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le,type))",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
@@ -2889,7 +2889,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(increase(tiflash_storage_page_gc_count{instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(increase(tiflash_storage_page_gc_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{type}}",
@@ -2970,7 +2970,7 @@
           "reverseYBuckets": false,
           "targets": [
             {
-              "expr": "sum(delta(tiflash_storage_page_gc_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le)",
+              "expr": "sum(delta(tiflash_storage_page_gc_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le)",
               "format": "heatmap",
               "intervalFactor": 2,
               "legendFormat": "{{le}}",
@@ -3045,14 +3045,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_system_profile_event_PSMWriteIOCalls{instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_system_profile_event_PSMWriteIOCalls{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "Page",
               "refId": "A"
             },
             {
-              "expr": "sum(rate(tiflash_system_profile_event_PSMWriteCalls{instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_system_profile_event_PSMWriteCalls{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 2,
@@ -3060,7 +3060,7 @@
               "refId": "B"
             },
             {
-              "expr": "sum(rate(tiflash_system_profile_event_PSMWritePages{instance=~\"$instance\"}[1m]))",
+              "expr": "sum(rate(tiflash_system_profile_event_PSMWritePages{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 2,
@@ -3068,14 +3068,14 @@
               "refId": "C"
             },
             {
-              "expr": "sum(rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWrite{instance=~\"$instance\"}[1m]))",
+              "expr": "sum(rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWrite{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "File Descriptor",
               "refId": "D"
             },
             {
-              "expr": "sum(rate(tiflash_system_profile_event_WriteBufferAIOWrite{instance=~\"$instance\"}[1m]))",
+              "expr": "sum(rate(tiflash_system_profile_event_WriteBufferAIOWrite{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "AIO",
@@ -3166,14 +3166,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_system_profile_event_PSMReadIOCalls{instance=~\"$instance\"}[1m]))",
+              "expr": "sum(rate(tiflash_system_profile_event_PSMReadIOCalls{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "Page",
               "refId": "A"
             },
             {
-              "expr": "sum(rate(tiflash_system_profile_event_PSMReadCalls{instance=~\"$instance\"}[1m]))",
+              "expr": "sum(rate(tiflash_system_profile_event_PSMReadCalls{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 2,
@@ -3181,7 +3181,7 @@
               "refId": "B"
             },
             {
-              "expr": "sum(rate(tiflash_system_profile_event_PSMReadPages{instance=~\"$instance\"}[1m]))",
+              "expr": "sum(rate(tiflash_system_profile_event_PSMReadPages{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 2,
@@ -3189,14 +3189,14 @@
               "refId": "C"
             },
             {
-              "expr": "sum(rate(tiflash_system_profile_event_ReadBufferFromFileDescriptorRead{instance=~\"$instance\"}[1m]))",
+              "expr": "sum(rate(tiflash_system_profile_event_ReadBufferFromFileDescriptorRead{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "File Descriptor",
               "refId": "D"
             },
             {
-              "expr": "sum(rate(tiflash_system_profile_event_ReadBufferAIORead{instance=~\"$instance\"}[1m]))",
+              "expr": "sum(rate(tiflash_system_profile_event_ReadBufferAIORead{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "AIO",
@@ -3293,7 +3293,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes{instance=~\"$instance\"}[1m]))",
+              "expr": "sum(rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 2,
@@ -3302,14 +3302,14 @@
               "step": 10
             },
             {
-              "expr": "sum(rate(tiflash_system_profile_event_PSMWriteBytes{instance=~\"$instance\"}[1m]))",
+              "expr": "sum(rate(tiflash_system_profile_event_PSMWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "Page",
               "refId": "B"
             },
             {
-              "expr": "sum(rate(tiflash_system_profile_event_WriteBufferAIOWriteBytes{instance=~\"$instance\"}[1m]))",
+              "expr": "sum(rate(tiflash_system_profile_event_WriteBufferAIOWriteBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 1,
@@ -3406,7 +3406,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_system_profile_event_ReadBufferFromFileDescriptorReadBytes{instance=~\"$instance\"}[1m]))",
+              "expr": "sum(rate(tiflash_system_profile_event_ReadBufferFromFileDescriptorReadBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 2,
@@ -3415,14 +3415,14 @@
               "step": 10
             },
             {
-              "expr": "sum(rate(tiflash_system_profile_event_PSMReadBytes{instance=~\"$instance\"}[1m]))",
+              "expr": "sum(rate(tiflash_system_profile_event_PSMReadBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "Page",
               "refId": "B"
             },
             {
-              "expr": "sum(rate(tiflash_system_profile_event_ReadBufferAIOReadBytes{instance=~\"$instance\"}[1m]))",
+              "expr": "sum(rate(tiflash_system_profile_event_ReadBufferAIOReadBytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "AIO",
@@ -3510,21 +3510,21 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(tiflash_storage_rate_limiter_total_request_bytes{instance=~\"$instance\"}[30s])",
+              "expr": "rate(tiflash_storage_rate_limiter_total_request_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[30s])",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "request_bytes-{{instance}}",
               "refId": "A"
             },
             {
-              "expr": "rate(tiflash_storage_rate_limiter_total_alloc_bytes{instance=~\"$instance\"}[30s])",
+              "expr": "rate(tiflash_storage_rate_limiter_total_alloc_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[30s])",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "alloc_bytes-{{instance}}",
               "refId": "B"
             },
             {
-              "expr": "tiflash_storage_rate_limiter_total_request_bytes{instance=~\"$instance\"} - tiflash_storage_rate_limiter_total_alloc_bytes{instance=~\"$instance\"}",
+              "expr": "tiflash_storage_rate_limiter_total_request_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"} - tiflash_storage_rate_limiter_total_alloc_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "pending_bytes-{{instance}}",
@@ -3615,7 +3615,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "avg(tiflash_system_current_metric_DT_DeltaMerge{instance=~\"$instance\"}) by (instance)",
+              "expr": "avg(tiflash_system_current_metric_DT_DeltaMerge{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 1,
@@ -3623,14 +3623,14 @@
               "refId": "A"
             },
             {
-              "expr": "avg(tiflash_system_current_metric_DT_SegmentSplit{instance=~\"$instance\"}) by (instance)",
+              "expr": "avg(tiflash_system_current_metric_DT_SegmentSplit{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "seg_split-{{instance}}",
               "refId": "B"
             },
             {
-              "expr": "avg(tiflash_system_current_metric_DT_SegmentMerge{instance=~\"$instance\"}) by (instance)",
+              "expr": "avg(tiflash_system_current_metric_DT_SegmentMerge{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "seg_merge-{{instance}}",
@@ -3747,7 +3747,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_storage_throughput_bytes{instance=~\"$instance\", type=\"write\"}[1m]))",
+              "expr": "sum(rate(tiflash_storage_throughput_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"write\"}[1m]))",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 1,
@@ -3756,21 +3756,21 @@
               "step": 10
             },
             {
-              "expr": "sum(rate(tiflash_storage_throughput_bytes{instance=~\"$instance\", type!=\"write\"}[1m]))",
+              "expr": "sum(rate(tiflash_storage_throughput_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type!=\"write\"}[1m]))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "throughput_delta-management",
               "refId": "B"
             },
             {
-              "expr": "sum(tiflash_storage_throughput_bytes{instance=~\"$instance\", type=\"write\"})",
+              "expr": "sum(tiflash_storage_throughput_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"write\"})",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "total_write",
               "refId": "C"
             },
             {
-              "expr": "sum(tiflash_storage_throughput_bytes{instance=~\"$instance\", type!=\"write\"})",
+              "expr": "sum(tiflash_storage_throughput_bytes{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type!=\"write\"})",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "total_delta-management",
@@ -3863,7 +3863,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_write_stall_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le, type, instance))",
+              "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_write_stall_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type, instance))",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 1,
@@ -3951,7 +3951,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "avg(tiflash_system_current_metric_RateLimiterPendingWriteRequest{instance=~\"$instance\"}) by (instance)",
+              "expr": "avg(tiflash_system_current_metric_RateLimiterPendingWriteRequest{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "num-{{instance}}",
@@ -4053,7 +4053,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_raft_read_index_count{instance=~\"$instance\"}[1m])) by (instance)",
+              "expr": "sum(rate(tiflash_raft_read_index_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{instance}}",
@@ -4141,28 +4141,28 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.999, sum(rate(tiflash_raft_read_index_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.999, sum(rate(tiflash_raft_read_index_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "999",
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(tiflash_raft_read_index_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(tiflash_raft_read_index_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "99",
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(tiflash_raft_read_index_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(tiflash_raft_read_index_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "95",
               "refId": "C"
             },
             {
-              "expr": "histogram_quantile(0.80, sum(rate(tiflash_raft_read_index_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.80, sum(rate(tiflash_raft_read_index_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "80",
@@ -4249,28 +4249,28 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.999, sum(rate(tiflash_raft_wait_index_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.999, sum(rate(tiflash_raft_wait_index_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "999",
               "refId": "A"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(tiflash_raft_wait_index_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(tiflash_raft_wait_index_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "99",
               "refId": "B"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(tiflash_raft_wait_index_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(tiflash_raft_wait_index_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "95",
               "refId": "C"
             },
             {
-              "expr": "histogram_quantile(0.80, sum(rate(tiflash_raft_wait_index_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.80, sum(rate(tiflash_raft_wait_index_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "80",
@@ -4360,7 +4360,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(tiflash_system_current_metric_RaftNumSnapshotsPendingApply{instance=~\"$instance\"}) by (instance)",
+              "expr": "sum(tiflash_system_current_metric_RaftNumSnapshotsPendingApply{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 1,
@@ -4454,7 +4454,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.99, sum(rate(tiflash_raft_apply_write_command_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(tiflash_raft_apply_write_command_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": " 99%",
@@ -4463,7 +4463,7 @@
               "step": 4
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(tiflash_raft_apply_write_command_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(tiflash_raft_apply_write_command_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "95%",
@@ -4471,7 +4471,7 @@
               "step": 4
             },
             {
-              "expr": "sum(rate(tiflash_raft_apply_write_command_duration_seconds_sum{instance=~\"$instance\"}[1m])) / sum(rate(tiflash_raft_apply_write_command_duration_seconds_count{instance=~\"$instance\"}[1m])) ",
+              "expr": "sum(rate(tiflash_raft_apply_write_command_duration_seconds_sum{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) / sum(rate(tiflash_raft_apply_write_command_duration_seconds_count{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) ",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "avg",
@@ -4553,7 +4553,7 @@
           "reverseYBuckets": false,
           "targets": [
             {
-              "expr": "sum(delta(tiflash_raft_apply_write_command_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le)",
+              "expr": "sum(delta(tiflash_raft_apply_write_command_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le)",
               "format": "heatmap",
               "intervalFactor": 2,
               "legendFormat": "{{le}}",
@@ -4618,7 +4618,7 @@
           "reverseYBuckets": false,
           "targets": [
             {
-              "expr": "sum(delta(tiflash_raft_command_duration_seconds_bucket{instance=~\"$instance\", type=\"snapshot_predecode\"}[1m])) by (le)",
+              "expr": "sum(delta(tiflash_raft_command_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"snapshot_predecode\"}[1m])) by (le)",
               "format": "heatmap",
               "intervalFactor": 2,
               "legendFormat": "{{le}}",
@@ -4683,7 +4683,7 @@
           "reverseYBuckets": false,
           "targets": [
             {
-              "expr": "sum(delta(tiflash_raft_command_duration_seconds_bucket{instance=~\"$instance\", type=\"snapshot_flush\"}[1m])) by (le)",
+              "expr": "sum(delta(tiflash_raft_command_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"snapshot_flush\"}[1m])) by (le)",
               "format": "heatmap",
               "intervalFactor": 2,
               "legendFormat": "{{le}}",
@@ -4764,7 +4764,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(rate(tiflash_raft_process_keys{instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_raft_process_keys{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 2,
@@ -4846,7 +4846,7 @@
           "reverseYBuckets": false,
           "targets": [
             {
-              "expr": "sum(delta(tiflash_raft_command_duration_seconds_bucket{instance=~\"$instance\", type=\"ingest_sst\"}[1m])) by (le)",
+              "expr": "sum(delta(tiflash_raft_command_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"ingest_sst\"}[1m])) by (le)",
               "format": "heatmap",
               "intervalFactor": 2,
               "legendFormat": "{{le}}",
@@ -4911,7 +4911,7 @@
           "reverseYBuckets": false,
           "targets": [
             {
-              "expr": "sum(delta(tiflash_raft_write_data_to_storage_duration_seconds_bucket{instance=~\"$instance\", type=\"decode\"}[1m])) by (le)",
+              "expr": "sum(delta(tiflash_raft_write_data_to_storage_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"decode\"}[1m])) by (le)",
               "format": "heatmap",
               "intervalFactor": 2,
               "legendFormat": "{{le}}",
@@ -4976,7 +4976,7 @@
           "reverseYBuckets": false,
           "targets": [
             {
-              "expr": "sum(delta(tiflash_raft_write_data_to_storage_duration_seconds_bucket{instance=~\"$instance\", type=\"write\"}[1m])) by (le)",
+              "expr": "sum(delta(tiflash_raft_write_data_to_storage_duration_seconds_bucket{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"write\"}[1m])) by (le)",
               "format": "heatmap",
               "intervalFactor": 2,
               "legendFormat": "{{le}}",
@@ -5023,16 +5023,41 @@
     "list": [
       {
         "allValue": null,
+        "current": {
+        },
+        "datasource": "${DS_TEST-CLUSTER}",
+        "hide": 2,
+        "includeAll": false,
+        "label": "tidb_cluster",
+        "multi": false,
+        "name": "tidb_cluster",
+        "options": [
+
+        ],
+        "query": "label_values(tiflash_system_profile_event_Query, cluster)",
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "tagValuesQuery": "",
+        "tags": [
+
+        ],
+        "tagsQuery": "",
+        "type": "query",
+        "useTags": false
+      },
+      {
+        "allValue": null,
         "current": {},
         "datasource": "${DS_TEST-CLUSTER}",
-        "definition": "label_values(tiflash_system_profile_event_Query, instance)",
+        "definition": "label_values(tiflash_system_profile_event_Query{tidb_cluster=\"$tidb_cluster\"}, instance)",
         "hide": 0,
         "includeAll": true,
         "label": "Instance",
         "multi": true,
         "name": "instance",
         "options": [],
-        "query": "label_values(tiflash_system_profile_event_Query, instance)",
+        "query": "label_values(tiflash_system_profile_event_Query{tidb_cluster=\"$tidb_cluster\"}, instance)",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
