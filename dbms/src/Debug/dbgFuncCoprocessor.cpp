@@ -62,6 +62,7 @@ struct DAGProperties
     bool is_mpp_query = false;
     bool use_broadcast_join = false;
     Int32 mpp_partition_num = 1;
+    Timestamp start_ts = DEFAULT_MAX_READ_TSO;
 };
 
 std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
@@ -124,8 +125,10 @@ struct QueryTask
     TableID table_id;
     DAGSchema result_schema;
     QueryTaskType type;
-    QueryTask(std::shared_ptr<tipb::DAGRequest> request, TableID table_id_, const DAGSchema & result_schema_, QueryTaskType type_)
-        : dag_request(std::move(request)), table_id(table_id_), result_schema(result_schema_), type(type_)
+    Int32 partition_id;
+    QueryTask(std::shared_ptr<tipb::DAGRequest> request, TableID table_id_, const DAGSchema & result_schema_, QueryTaskType type_,
+        Int32 partition_id_ = -1)
+        : dag_request(std::move(request)), table_id(table_id_), result_schema(result_schema_), type(type_), partition_id(partition_id_)
     {}
 };
 
@@ -226,8 +229,8 @@ DAGProperties getDAGProperties(String prop_string)
     return ret;
 }
 
-BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, Timestamp start_ts, const DAGProperties & properties,
-    QueryTasks & query_fragments, MakeResOutputStream & func_wrap_output_stream)
+BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_fragments,
+    MakeResOutputStream & func_wrap_output_stream)
 {
     if (properties.is_mpp_query)
     {
@@ -258,7 +261,7 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, Timestam
         DecodedTiKVKeyPtr end_key = std::make_shared<DecodedTiKVKey>(RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id));
         key_ranges.emplace_back(std::make_pair(std::move(start_key), std::move(end_key)));
         tipb::SelectResponse dag_response = executeDAGRequest(
-            context, *query_fragment.dag_request, region_id, region->version(), region->confVer(), start_ts, key_ranges);
+            context, *query_fragment.dag_request, region_id, region->version(), region->confVer(), properties.start_ts, key_ranges);
 
         return func_wrap_output_stream(outputDAGResponse(context, query_fragment.result_schema, dag_response));
     }
@@ -278,7 +281,7 @@ BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args)
     if (args.size() == 3)
         prop_string = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     DAGProperties properties = getDAGProperties(prop_string);
-    Timestamp start_ts = context.getTMTContext().getPDClient()->getTS();
+    properties.start_ts = context.getTMTContext().getPDClient()->getTS();
 
     auto [query_fragments, func_wrap_output_stream] = compileQuery(
         context, query,
@@ -293,7 +296,7 @@ BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args)
         },
         properties);
 
-    return executeQuery(context, region_id, start_ts, properties, query_fragments, func_wrap_output_stream);
+    return executeQuery(context, region_id, properties, query_fragments, func_wrap_output_stream);
 }
 
 BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args)
@@ -313,6 +316,7 @@ BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args)
     if (args.size() == 4)
         prop_string = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
     DAGProperties properties = getDAGProperties(prop_string);
+    properties.start_ts = start_ts;
 
     auto [query_fragments, func_wrap_output_stream] = compileQuery(
         context, query,
@@ -321,7 +325,7 @@ BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args)
         },
         properties);
 
-    return executeQuery(context, region_id, start_ts, properties, query_fragments, func_wrap_output_stream);
+    return executeQuery(context, region_id, properties, query_fragments, func_wrap_output_stream);
 }
 
 void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t collator_id)
@@ -560,6 +564,22 @@ void collectUsedColumnsFromExpr(const DAGSchema & input, ASTPtr ast, std::unorde
         }
     }
 }
+
+struct MPPCtx
+{
+    Timestamp start_ts;
+    size_t partition_num;
+    size_t & task_id;
+    size_t next_executor_id;
+    std::vector<size_t> sender_target_task_ids;
+    std::vector<size_t> partition_keys;
+    tipb::ExchangeType type;
+    MPPCtx(Timestamp start_ts_, size_t partition_num_, size_t & task_id_)
+        : start_ts(start_ts_), partition_num(partition_num_), task_id(task_id_)
+    {}
+};
+
+using MPPCtxPtr = std::shared_ptr<MPPCtx>;
 
 struct Executor
 {
@@ -873,12 +893,22 @@ struct Project : public Executor
     }
 };
 
+struct TaskMeta
+{
+    UInt64 start_ts = 0;
+    Int64 task_id = 0;
+    Int64 partition_id = 0;
+};
+
+using TaskMetas = std::vector<TaskMeta>;
+
 struct ExchangeSender : Executor
 {
     tipb::ExchangeType type;
+    TaskMetas task_metas;
     std::vector<size_t> partition_keys;
-    ExchangeSender(size_t & index, const DAGSchema & output, tipb::ExchangeType type_, std::vector<size_t> && partition_keys_)
-        : Executor(index, output), type(type_), partition_keys(std::move(partition_keys_))
+    ExchangeSender(size_t & index, const DAGSchema & output, tipb::ExchangeType type_, std::vector<size_t> & partition_keys_)
+        : Executor(index, output), type(type_), partition_keys(partition_keys_)
     {}
     void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
     bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id) override
@@ -895,6 +925,18 @@ struct ExchangeSender : Executor
             encodeDAGInt64(i, ss);
             expr->set_val(ss.str());
         }
+        if (task_metas.empty())
+            throw Exception("Empty task metas in Exchange Sender");
+        for (auto & task_meta : task_metas)
+        {
+            mpp::TaskMeta meta;
+            meta.set_start_ts(task_meta.start_ts);
+            meta.set_task_id(task_meta.task_id);
+            meta.set_partition_id(task_meta.partition_id);
+            meta.set_address("127.0.0.1");
+            auto * meta_string = exchange_sender->add_encoded_task_meta();
+            meta.AppendToString(meta_string);
+        }
         // todo add task_meta
         auto * child_executor = exchange_sender->mutable_child();
         return children[0]->toTiPBExecutor(child_executor, collator_id);
@@ -903,6 +945,7 @@ struct ExchangeSender : Executor
 
 struct ExchangeReceiver : Executor
 {
+    TaskMetas task_metas;
     void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
     bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t) override
     {
@@ -917,7 +960,18 @@ struct ExchangeReceiver : Executor
             field_type->set_flen(field.second.flen);
             field_type->set_decimal(field.second.decimal);
         }
-        // todo add task_meta
+        if (task_metas.empty())
+            throw Exception("Empty task metas in Exchange receiver");
+        for (auto & task_meta : task_metas)
+        {
+            mpp::TaskMeta meta;
+            meta.set_start_ts(task_meta.start_ts);
+            meta.set_task_id(task_meta.task_id);
+            meta.set_partition_id(task_meta.partition_id);
+            meta.set_address("127.0.0.1");
+            auto * meta_string = exchange_receiver->add_encoded_task_meta();
+            meta.AppendToString(meta_string);
+        }
         return true;
     }
 };
@@ -1257,50 +1311,100 @@ struct QueryFragment
     ExecutorPtr root_executor;
     TableID table_id;
     bool is_top_fragment;
-    QueryFragment(ExecutorPtr root_executor_, TableID table_id_, bool is_top_fragment_)
-        : root_executor(std::move(root_executor_)), table_id(table_id_), is_top_fragment(is_top_fragment_)
+    std::vector<TaskMeta> sender_task_metas;
+    std::unordered_map<String, std::vector<TaskMeta>> receiver_task_metas_map;
+    std::vector<size_t> task_ids;
+    QueryFragment(ExecutorPtr root_executor_, TableID table_id_, bool is_top_fragment_, std::vector<TaskMeta> && sender_task_metas_,
+        std::unordered_map<String, std::vector<TaskMeta>> && receiver_task_metas_map_, std::vector<size_t> && task_ids_)
+        : root_executor(std::move(root_executor_)),
+          table_id(table_id_),
+          is_top_fragment(is_top_fragment_),
+          sender_task_metas(std::move(sender_task_metas_)),
+          receiver_task_metas_map(std::move(receiver_task_metas_map_)),
+          task_ids(std::move(task_ids_))
     {}
-    QueryTask toQueryTask(const DAGProperties & properties)
+    QueryTasks toQueryTask(const DAGProperties & properties)
     {
-        std::shared_ptr<tipb::DAGRequest> dag_request_ptr = std::make_shared<tipb::DAGRequest>();
-        tipb::DAGRequest & dag_request = *dag_request_ptr;
-        dag_request.set_time_zone_name(properties.tz_name);
-        dag_request.set_time_zone_offset(properties.tz_offset);
-        dag_request.set_flags(dag_request.flags() | (1u << 1u /* TRUNCATE_AS_WARNING */) | (1u << 6u /* OVERFLOW_AS_WARNING */));
-
-        if (is_top_fragment)
-        {
-            if (properties.encode_type == "chunk")
-                dag_request.set_encode_type(tipb::EncodeType::TypeChunk);
-            else if (properties.encode_type == "chblock")
-                dag_request.set_encode_type(tipb::EncodeType::TypeCHBlock);
-            else
-                dag_request.set_encode_type(tipb::EncodeType::TypeDefault);
-        }
+        QueryTasks ret;
+        if (properties.is_mpp_query) {}
         else
         {
-            dag_request.set_encode_type(tipb::EncodeType::TypeCHBlock);
+            std::shared_ptr<tipb::DAGRequest> dag_request_ptr = std::make_shared<tipb::DAGRequest>();
+            tipb::DAGRequest & dag_request = *dag_request_ptr;
+            dag_request.set_time_zone_name(properties.tz_name);
+            dag_request.set_time_zone_offset(properties.tz_offset);
+            dag_request.set_flags(dag_request.flags() | (1u << 1u /* TRUNCATE_AS_WARNING */) | (1u << 6u /* OVERFLOW_AS_WARNING */));
+
+            if (is_top_fragment)
+            {
+                if (properties.encode_type == "chunk")
+                    dag_request.set_encode_type(tipb::EncodeType::TypeChunk);
+                else if (properties.encode_type == "chblock")
+                    dag_request.set_encode_type(tipb::EncodeType::TypeCHBlock);
+                else
+                    dag_request.set_encode_type(tipb::EncodeType::TypeDefault);
+            }
+            else
+            {
+                dag_request.set_encode_type(tipb::EncodeType::TypeCHBlock);
+            }
+
+            for (size_t i = 0; i < root_executor->output_schema.size(); i++)
+                dag_request.add_output_offsets(i);
+            auto * root_tipb_executor = dag_request.mutable_root_executor();
+            root_executor->toTiPBExecutor(root_tipb_executor, properties.collator);
+
+            ret.emplace_back(dag_request_ptr, table_id, root_executor->output_schema, DAG);
         }
-
-        for (size_t i = 0; i < root_executor->output_schema.size(); i++)
-            dag_request.add_output_offsets(i);
-        auto * root_tipb_executor = dag_request.mutable_root_executor();
-        root_executor->toTiPBExecutor(root_tipb_executor, properties.collator);
-
-        return QueryTask(dag_request_ptr, table_id, root_executor->output_schema, properties.is_mpp_query ? MPP_DISPATCH : DAG);
-        //QueryTask ret(dag_request_ptr, table_id, root_executor->output_schema, properties.is_mpp_query ? MPP_DISPATCH : DAG);
-        //return ret;
+        return ret;
     }
 };
 
 using QueryFragments = std::vector<QueryFragment>;
 
-QueryFragments queryPlanToQueryFragments(const DAGProperties & properties, ExecutorPtr root_executor)
+void generateMPPQueryFragments(ExecutorPtr root_executor, MPPCtxPtr mpp_ctx, QueryFragments & query_fragments)
+{
+    bool is_root_fragment = mpp_ctx->sender_target_task_ids.size() == 1 && mpp_ctx->sender_target_task_ids[0] == -1;
+    std::unordered_map<String, TaskMetas> receiver_to_task_metas_map;
+    std::unordered_map<String, ExecutorPtr> receiver_to_sender_executor_map;
+    TaskMetas sender_task_metas;
+    size_t receiver_index = 0;
+    if (mpp_ctx->type == tipb::PassThrough) {}
+    else if (mpp_ctx->type == tipb::Hash)
+    {
+        size_t start_task_id = mpp_ctx->task_id;
+        mpp_ctx->task_id += mpp_ctx->partition_num;
+        for (size_t i = 0; i < mpp_ctx->partition_num; i++)
+        {
+            std::shared_ptr<ExchangeSender> exchange_sender = std::make_shared<ExchangeSender>(
+                mpp_ctx->next_executor_id, root_executor->output_schema, mpp_ctx->type, mpp_ctx->partition_keys);
+            for (size_t t = 0; t < mpp_ctx->sender_target_task_ids.size(); t++)
+            {
+                TaskMeta tm;
+                tm.task_id = mpp_ctx->sender_target_task_ids[t];
+                tm.start_ts = mpp_ctx->start_ts;
+                tm.partition_id = t;
+                exchange_sender->task_metas.push_back(tm);
+            }
+            exchange_sender->children[0] = root_executor;
+        }
+    }
+    else
+    {
+        throw Exception("Broadcast partition is not supported yet");
+    }
+}
+
+QueryFragments queryPlanToQueryFragments(const DAGProperties & properties, ExecutorPtr root_executor, size_t next_executor_id)
 {
     QueryFragments fragments;
     if (properties.is_mpp_query)
     {
-        throw Exception("MPP not supported yet");
+        size_t task_id = 1;
+        MPPCtxPtr mpp_ctx = std::make_shared<MPPCtx>(properties.start_ts, properties.mpp_partition_num, task_id);
+        mpp_ctx->sender_target_task_ids.emplace_back(-1);
+        mpp_ctx->type = tipb::ExchangeType::PassThrough;
+        mpp_ctx->next_executor_id = next_executor_id;
     }
     else
     {
@@ -1322,7 +1426,7 @@ QueryFragments queryPlanToQueryFragments(const DAGProperties & properties, Execu
 
 QueryTasks queryPlanToQueryTasks(const DAGProperties & properties, ExecutorPtr root_executor)
 {
-    QueryFragments fragments = queryPlanToQueryFragments(properties, root_executor);
+    QueryFragments fragments = queryPlanToQueryFragments(properties, root_executor, root_executor->index);
     QueryTasks tasks;
     for (auto & fragment : fragments)
         tasks.emplace_back(fragment.toQueryTask(properties));
