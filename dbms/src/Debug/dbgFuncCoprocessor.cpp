@@ -787,6 +787,11 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest, MakeResOutputStream> compileQue
             last_executor = agg_exec;
 
             column_pruner(executor_ctx_map[last_executor]);
+
+            for (size_t i = 0; i < schema.size(); i++)
+            {
+                dag_request.add_output_offsets(i);
+            }
         }
     }
 

@@ -217,17 +217,36 @@ void DAGQueryBlock::insertOutputFiledType(int32_t tp, int32_t flag, int32_t flen
 
 void DAGQueryBlock::fillOutputFieldTypes()
 {
+    if (!output_field_types.empty())
+    {
+        return;
+    }
     if (source->tp() == tipb::ExecType::TypeJoin)
     {
-        if (output_field_types.empty())
+        for (auto & field_type : children[0]->output_field_types)
         {
-            for (auto & field_type : children[0]->output_field_types)
+            if (source->join().join_type() == tipb::JoinType::TypeRightOuterJoin)
             {
-                if (source->join().join_type() == tipb::JoinType::TypeRightOuterJoin)
+                /// the type of left column for right join is always nullable
+                auto updated_field_type = field_type;
+                updated_field_type.set_flag((UInt32)updated_field_type.flag() & (~(UInt32)TiDB::ColumnFlagNotNull));
+                output_field_types.push_back(updated_field_type);
+            }
+            else
+            {
+                output_field_types.push_back(field_type);
+            }
+        }
+        if (source->join().join_type() != tipb::JoinType::TypeSemiJoin && source->join().join_type() != tipb::JoinType::TypeAntiSemiJoin)
+        {
+            /// for semi/anti semi join, the right table column is ignored
+            for (auto & field_type : children[1]->output_field_types)
+            {
+                if (source->join().join_type() == tipb::JoinType::TypeLeftOuterJoin)
                 {
-                    /// the type of left column for right join is always nullable
+                    /// the type of right column for left join is always nullable
                     auto updated_field_type = field_type;
-                    updated_field_type.set_flag((UInt32)updated_field_type.flag() & (~(UInt32)TiDB::ColumnFlagNotNull));
+                    updated_field_type.set_flag(updated_field_type.flag() & (~(UInt32)TiDB::ColumnFlagNotNull));
                     output_field_types.push_back(updated_field_type);
                 }
                 else
@@ -235,56 +254,28 @@ void DAGQueryBlock::fillOutputFieldTypes()
                     output_field_types.push_back(field_type);
                 }
             }
-            if (source->join().join_type() != tipb::JoinType::TypeSemiJoin
-                && source->join().join_type() != tipb::JoinType::TypeAntiSemiJoin)
-            {
-                /// for semi/anti semi join, the right table column is ignored
-                for (auto & field_type : children[1]->output_field_types)
-                {
-                    if (source->join().join_type() == tipb::JoinType::TypeLeftOuterJoin)
-                    {
-                        /// the type of right column for left join is always nullable
-                        auto updated_field_type = field_type;
-                        updated_field_type.set_flag(updated_field_type.flag() & (~(UInt32)TiDB::ColumnFlagNotNull));
-                        output_field_types.push_back(updated_field_type);
-                    }
-                    else
-                    {
-                        output_field_types.push_back(field_type);
-                    }
-                }
-            }
         }
     }
     else if (source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
-        if (output_field_types.empty())
+        for (auto & ci : source->exchange_receiver().field_types())
         {
-            for (auto & ci : source->exchange_receiver().field_types())
-            {
-                insertOutputFiledType(ci.tp(), ci.flag(), ci.flen(), ci.decimal());
-            }
+            insertOutputFiledType(ci.tp(), ci.flag(), ci.flen(), ci.decimal());
         }
     }
     else if (source->tp() == tipb::ExecType::TypeProjection)
     {
-        if (output_field_types.empty())
+        for (auto & expr : source->projection().exprs())
         {
-            for (auto & expr : source->projection().exprs())
-            {
-                auto & ci = expr.field_type();
-                insertOutputFiledType(ci.tp(), ci.flag(), ci.flen(), ci.decimal());
-            }
+            auto & ci = expr.field_type();
+            insertOutputFiledType(ci.tp(), ci.flag(), ci.flen(), ci.decimal());
         }
     }
     else
     {
-        if (output_field_types.empty())
+        for (auto & ci : source->tbl_scan().columns())
         {
-            for (auto & ci : source->tbl_scan().columns())
-            {
-                insertOutputFiledType(ci.tp(), ci.flag(), ci.columnlen(), ci.decimal());
-            }
+            insertOutputFiledType(ci.tp(), ci.flag(), ci.columnlen(), ci.decimal());
         }
     }
 }
