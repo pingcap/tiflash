@@ -1037,7 +1037,7 @@ private:
 
     void runQueries(const QueriesWithIndexes & queries_with_indexes)
     {
-        for (const std::pair<Query, const size_t> & query_and_index : queries_with_indexes)
+        for (const std::pair<Query, size_t> & query_and_index : queries_with_indexes)
         {
             Query query = query_and_index.first;
             const size_t run_index = query_and_index.second;
@@ -1451,7 +1451,7 @@ try
         input_files = options["input-files"].as<Strings>();
         Strings collected_files;
 
-        for (const String filename : input_files)
+        for (const String & filename : input_files)
         {
             fs::path file(filename);
 
