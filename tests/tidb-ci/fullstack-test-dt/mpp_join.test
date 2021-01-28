@@ -7,7 +7,7 @@ mysql> analyze table test.t;
 
 func> wait_table test t
 
-mysql>use test; set @@tidb_allow_mpp=1;  select B.id from (select 1+id-1 as id from t)B join (select id,value+1 from t)A on B.id=A.id order by 1;
+mysql> use test; set @@tidb_allow_mpp=1; select B.id from (select 1+id-1 as id from t)B join (select id,value+1 from t)A on B.id=A.id order by 1;
 +----+
 | id |
 +----+
