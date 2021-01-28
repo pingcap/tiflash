@@ -2289,6 +2289,213 @@ public:
     }
 };
 
+class FunctionExtractMyDateTime : public IFunction
+{
+public:
+    static constexpr auto name = "extractMyDateTime";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionExtractMyDateTime>(); };
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 2; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!arguments[0]->isString())
+            throw TiFlashException("First argument for function " + getName() + " (unit) must be String", Errors::Coprocessor::BadRequest);
+
+        if (!arguments[1]->isString())
+            throw TiFlashException(
+                "Illegal type " + arguments[1]->getName() + " of second argument of function " + getName() + ". Must be UInt32.",
+                Errors::Coprocessor::BadRequest);
+
+        return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeInt64>());
+    }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {}; }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    {
+        auto * unit_column = checkAndGetColumnConst<ColumnString>(block.getByPosition(arguments[0]).column.get());
+        if (!unit_column)
+            throw TiFlashException(
+                "First argument for function " + getName() + " must be constant String", Errors::Coprocessor::BadRequest);
+
+        String unit = Poco::toLower(unit_column->getValue<String>());
+
+        auto * datetime_column = checkAndGetColumn<ColumnString>(block.getByPosition(arguments[1]).column.get());
+
+
+        if (datetime_column->onlyNull())
+        {
+            block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
+            return;
+        }
+
+        size_t rows = block.rows();
+        auto col_to = ColumnInt64::create(rows);
+        auto & vec_to = col_to->getData();
+
+        if (unit == "year")
+            dispatch<extract_year>(datetime_column, vec_to);
+        else if (unit == "quarter")
+            dispatch<extract_quater>(datetime_column, vec_to);
+        else if (unit == "month")
+            dispatch<extract_month>(datetime_column, vec_to);
+        else if (unit == "week")
+            dispatch<extract_week>(datetime_column, vec_to);
+        else if (unit == "day")
+            dispatch<extract_day>(datetime_column, vec_to);
+        else if (unit == "day_microsecond")
+            dispatch<extract_day_microsecond>(datetime_column, vec_to);
+        else if (unit == "day_second")
+            dispatch<extract_day_second>(datetime_column, vec_to);
+        else if (unit == "day_minute")
+            dispatch<extract_day_minute>(datetime_column, vec_to);
+        else if (unit == "day_hour")
+            dispatch<extract_day_hour>(datetime_column, vec_to);
+        else if (unit == "year_month")
+            dispatch<extract_year_month>(datetime_column, vec_to);
+        /// TODO: support ExtractDuration
+        // else if (unit == "hour");
+        // else if (unit == "minute");
+        // else if (unit == "second");
+        // else if (unit == "microsecond");
+        // else if (unit == "second_microsecond");
+        // else if (unit == "minute_microsecond");
+        // else if (unit == "minute_second");
+        // else if (unit == "hour_microsecond");
+        // else if (unit == "hour_second");
+        // else if (unit == "hour_minute");
+        else
+            throw TiFlashException("Function " + getName() + " does not support '" + unit + "' unit", Errors::Coprocessor::BadRequest);
+
+        block.getByPosition(result).column = std::move(col_to);
+    }
+
+private:
+    using Func = Int64 (*)(UInt64);
+
+    template <Func F>
+    static void dispatch(const ColumnString * from, PaddedPODArray<Int64> & vec_to)
+    {
+        const auto & data = from->getChars();
+        const auto & offsets = from->getOffsets();
+        if (checkColumnConst<ColumnString>(from))
+        {
+            StringRef string_ref(data.data(), offsets[0] - 1);
+            constant<F>(string_ref, from->size(), vec_to);
+        }
+        else
+        {
+            vector<F>(data, offsets, vec_to);
+        }
+    }
+
+    template <Func F>
+    static void constant(const StringRef & from, size_t size, PaddedPODArray<Int64> & vec_to)
+    {
+        vec_to.resize(size);
+        auto from_value = get<UInt64>(parseMyDateTime(from.toString()));
+        for (size_t i = 0; i < size; ++i)
+        {
+            vec_to[i] = F(from_value);
+        }
+    }
+
+    template <Func F>
+    static void vector(const ColumnString::Chars_t & from, const ColumnString::Offsets & from_offsets, PaddedPODArray<Int64> & vec_to)
+    {
+        vec_to.resize(from_offsets.size() + 1);
+        size_t current_offset = 0;
+        for (size_t i = 0; i < from_offsets.size(); i++)
+        {
+            size_t next_offset = from_offsets[i];
+            size_t string_size = next_offset - current_offset - 1;
+            StringRef string_value(&from[current_offset], string_size);
+            auto packed_value = get<UInt64>(parseMyDateTime(string_value.toString()));
+            vec_to[i] = F(packed_value);
+            current_offset = next_offset;
+        }
+    }
+
+    static Int64 extract_year(UInt64 packed)
+    {
+        MyDateTime datetime(packed);
+        return datetime.year;
+    }
+
+    static Int64 extract_quater(UInt64 packed)
+    {
+        MyDateTime datetime(packed);
+        return (datetime.month + 2) / 3;
+    }
+
+    static Int64 extract_month(UInt64 packed)
+    {
+        MyDateTime datetime(packed);
+        return datetime.month;
+    }
+
+    static Int64 extract_week(UInt64 packed)
+    {
+        MyDateTime datetime(packed);
+        return datetime.week(0);
+    }
+
+    static Int64 extract_day(UInt64 packed)
+    {
+        MyDateTime datetime(packed);
+        return datetime.day;
+    }
+
+    static Int64 extract_day_microsecond(UInt64 packed)
+    {
+        MyDateTime datetime(packed);
+        Int64 day = datetime.day;
+        Int64 h = datetime.hour;
+        Int64 m = datetime.minute;
+        Int64 s = datetime.second;
+        return (day * 1000000 + h * 10000 + m * 100 + s) * 1000000 + datetime.micro_second;
+    }
+
+    static Int64 extract_day_second(UInt64 packed)
+    {
+        MyDateTime datetime(packed);
+        Int64 day = datetime.day;
+        Int64 h = datetime.hour;
+        Int64 m = datetime.minute;
+        Int64 s = datetime.second;
+        return day * 1000000 + h * 10000 + m * 100 + s;
+    }
+
+    static Int64 extract_day_minute(UInt64 packed)
+    {
+        MyDateTime datetime(packed);
+        Int64 day = datetime.day;
+        Int64 h = datetime.hour;
+        Int64 m = datetime.minute;
+        return day * 10000 + h * 100 + m;
+    }
+
+    static Int64 extract_day_hour(UInt64 packed)
+    {
+        MyDateTime datetime(packed);
+        Int64 day = datetime.day;
+        Int64 h = datetime.hour;
+        return day * 100 + h;
+    }
+
+    static Int64 extract_year_month(UInt64 packed)
+    {
+        MyDateTime datetime(packed);
+        Int64 y = datetime.year;
+        Int64 m = datetime.month;
+        return y * 100 + m;
+    }
+};
+
 
 using FunctionToYear = FunctionDateOrDateTimeToSomething<DataTypeUInt16, ToYearImpl>;
 using FunctionToQuarter = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToQuarterImpl>;
