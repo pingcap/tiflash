@@ -41,6 +41,7 @@
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFIType.h>
+#include <Storages/Transaction/RaftStoreProxyFFI/VersionCheck.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -399,10 +400,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     TiFlashProxyConfig proxy_conf(config());
     TiFlashServer tiflash_instance_wrap{};
-    TiFlashServerHelper helper{
+    EngineStoreServerHelper helper{
         // a special number, also defined in proxy
-        .magic_number = 0x13579BDF,
-        .version = 400002,
+        .magic_number = RAFT_STORE_PROXY_MAGIC_NUMBER,
+        .version = RAFT_STORE_PROXY_VERSION,
         .inner = &tiflash_instance_wrap,
         .fn_gen_cpp_string = GenCppRawString,
         .fn_handle_write_raft_cmd = HandleWriteRaftCmd,

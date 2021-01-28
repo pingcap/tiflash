@@ -2,6 +2,8 @@
 
 #include <Storages/Transaction/RaftStoreProxyFFI/ColumnFamily.h>
 
+#include <string>
+
 namespace DB
 {
 

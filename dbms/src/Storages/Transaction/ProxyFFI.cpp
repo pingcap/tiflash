@@ -50,7 +50,10 @@ RawCppPtr GenCppRawString(BaseBuffView view)
     return RawCppPtr{view.len ? new std::string(view.data, view.len) : nullptr, RawCppPtrType::String};
 }
 
-static_assert(alignof(TiFlashServerHelper) == alignof(void *));
+static_assert(alignof(EngineStoreServerHelper) == alignof(RawVoidPtr));
+
+static_assert(sizeof(RaftStoreProxyPtr) == sizeof(ConstRawVoidPtr));
+static_assert(alignof(RaftStoreProxyPtr) == alignof(ConstRawVoidPtr));
 
 TiFlashApplyRes HandleWriteRaftCmd(const TiFlashServer * server, WriteCmdsView cmds, RaftCmdHeader header)
 {
@@ -93,7 +96,7 @@ void AtomicUpdateProxy(DB::TiFlashServer * server, TiFlashRaftProxyHelperFFI * p
     server->proxy_helper = static_cast<TiFlashRaftProxyHelper *>(proxy);
 }
 
-void HandleDestroy(TiFlashServer * server, RegionId region_id)
+void HandleDestroy(TiFlashServer * server, uint64_t region_id)
 {
     try
     {
@@ -107,7 +110,7 @@ void HandleDestroy(TiFlashServer * server, RegionId region_id)
     }
 }
 
-TiFlashApplyRes HandleIngestSST(TiFlashServer * server, SnapshotViewArray snaps, RaftCmdHeader header)
+TiFlashApplyRes HandleIngestSST(TiFlashServer * server, SSTViewVec snaps, RaftCmdHeader header)
 {
     try
     {
@@ -207,7 +210,7 @@ struct PreHandledSnapshot
 };
 
 RawCppPtr PreHandleSnapshot(
-    TiFlashServer * server, BaseBuffView region_buff, uint64_t peer_id, SnapshotViewArray snaps, uint64_t index, uint64_t term)
+    TiFlashServer * server, BaseBuffView region_buff, uint64_t peer_id, SSTViewVec snaps, uint64_t index, uint64_t term)
 {
     try
     {
@@ -241,7 +244,7 @@ void ApplyPreHandledSnapshot(TiFlashServer * server, PreHandledSnapshot * snap)
     }
 }
 
-void ApplyPreHandledSnapshot(TiFlashServer * server, void * res, RawCppPtrType type)
+void ApplyPreHandledSnapshot(TiFlashServer * server, RawVoidPtr res, RawCppPtrType type)
 {
     switch (type)
     {
@@ -257,7 +260,7 @@ void ApplyPreHandledSnapshot(TiFlashServer * server, void * res, RawCppPtrType t
     }
 }
 
-void GcRawCppPtr(TiFlashServer *, void * ptr, RawCppPtrType type)
+void GcRawCppPtr(TiFlashServer *, RawVoidPtr ptr, RawCppPtrType type)
 {
     if (ptr)
     {
