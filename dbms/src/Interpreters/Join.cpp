@@ -634,6 +634,7 @@ void Join::insertFromBlockASync(const Block & block, ThreadPool & thread_pool)
         blocks.push_back(block);
         stored_block = &blocks.back();
         block_index = blocks.size();
+        original_blocks.push_back(block);
     }
     auto memory_tracker = current_memory_tracker;
     thread_pool.schedule([&, stored_block, block_index, memory_tracker]
