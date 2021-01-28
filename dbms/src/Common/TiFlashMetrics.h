@@ -1,3 +1,4 @@
+#include <Common/TiFlashBuildInfo.h>
 #include <prometheus/counter.h>
 #include <prometheus/exposer.h>
 #include <prometheus/gateway.h>
@@ -30,7 +31,7 @@ namespace DB
     M(tiflash_coprocessor_executor_count, "Total number of each executor", Counter, F(type_ts, {"type", "table_scan"}),                   \
         F(type_sel, {"type", "selection"}), F(type_agg, {"type", "aggregation"}), F(type_topn, {"type", "top_n"}),                        \
         F(type_limit, {"type", "limit"}), F(type_join, {"type", "join"}), F(type_exchange_sender, {"type", "exchange_sender"}),           \
-        F(type_exchange_receiver, {"type", "exchange_receiver"}), F(type_projection, {"type", "projection"}))                                                                         \
+        F(type_exchange_receiver, {"type", "exchange_receiver"}), F(type_projection, {"type", "projection"}))                             \
     M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of request duration", Histogram,                                  \
         F(type_batch, {{"type", "batch"}}, ExpBuckets{0.0005, 2, 20}), F(type_cop, {{"type", "cop"}}, ExpBuckets{0.0005, 2, 20}),         \
         F(type_super_batch, {{"type", "super_batch"}}, ExpBuckets{0.0005, 2, 20}),                                                        \
@@ -119,7 +120,9 @@ namespace DB
     M(tiflash_raft_apply_write_command_duration_seconds, "Bucketed histogram of applying write command Raft logs", Histogram,             \
         F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))                                                                    \
     M(tiflash_raft_write_data_to_storage_duration_seconds, "Bucketed histogram of writting region into storage layer", Histogram,         \
-        F(type_decode, {{"type", "decode"}}, ExpBuckets{0.0005, 2, 20}), F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))
+        F(type_decode, {{"type", "decode"}}, ExpBuckets{0.0005, 2, 20}), F(type_write, {{"type", "write"}}, ExpBuckets{0.0005, 2, 20}))   \
+    M(tiflash_server_info, "Indicate the tiflash server info, and the value is the start timestamp (s).", Gauge,                          \
+        F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))
 
 
 struct ExpBuckets
