@@ -404,12 +404,13 @@ private:
     String other_filter_column;
     ExpressionActionsPtr other_condition_ptr;
     ASTTableJoin::Strictness original_strictness;
-
     /** Blocks of "right" table.
       */
     BlocksList blocks;
     /// mutex to protect concurrent insert to blocks
     std::mutex blocks_lock;
+    /// keep original block for concurrent build
+    Blocks original_blocks;
 
     MapsAny maps_any;            /// For ANY LEFT|INNER JOIN
     MapsAll maps_all;            /// For ALL LEFT|INNER JOIN
