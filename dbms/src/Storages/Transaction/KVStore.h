@@ -30,7 +30,7 @@ struct TiKVRangeKey;
 
 class TMTContext;
 
-struct SnapshotViewArray;
+struct SSTViewVec;
 struct WriteCmdsView;
 
 enum class TiFlashApplyRes : uint32_t;
@@ -73,14 +73,13 @@ public:
     TiFlashApplyRes handleWriteRaftCmd(
         raft_cmdpb::RaftCmdRequest && request, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
     TiFlashApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
-    void handleApplySnapshot(
-        metapb::Region && region, uint64_t peer_id, const SnapshotViewArray snaps, uint64_t index, uint64_t term, TMTContext & tmt);
+    void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, const SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
     void handleApplySnapshot(const RegionPtrWrap &, TMTContext & tmt);
     void tryApplySnapshot(const RegionPtrWrap &, Context & context);
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
     void setRegionCompactLogPeriod(Seconds period);
-    TiFlashApplyRes handleIngestSST(UInt64 region_id, const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt);
-    RegionPreDecodeBlockDataPtr preHandleSnapshot(RegionPtr new_region, const SnapshotViewArray snaps, TMTContext & tmt);
+    TiFlashApplyRes handleIngestSST(UInt64 region_id, const SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
+    RegionPreDecodeBlockDataPtr preHandleSnapshot(RegionPtr new_region, const SSTViewVec, TMTContext & tmt);
     RegionPtr genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
     const TiFlashRaftProxyHelper * getProxyHelper() const { return proxy_helper; }
 
@@ -108,7 +107,7 @@ private:
     TiFlashApplyRes handleUselessAdminRaftCmd(
         raft_cmdpb::AdminCmdType cmd_type, UInt64 curr_region_id, UInt64 index, UInt64 term, TMTContext & tmt);
 
-    void persistRegion(const Region & region, const RegionTaskLock & region_task_lock);
+    void persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller);
 
 private:
     RegionManager region_manager;
