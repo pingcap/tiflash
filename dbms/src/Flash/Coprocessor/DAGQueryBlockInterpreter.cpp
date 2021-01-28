@@ -785,40 +785,19 @@ AnalysisResult DAGQueryBlockInterpreter::analyzeExpressions()
         // add cast if type is not match
         analyzer->appendAggSelect(
             chain, query_block.aggregation->aggregation(), keep_session_timezone_info || !query_block.isRootQueryBlock());
-
-        // Agg schema is generated differently between TiDB and TiFlash, but this difference can be eliminated by "query_block.output_offsets"
-        // for partial agg, TiFlash works the same with TiFlash, however, for complete and final agg,
-        // TiDB: agg functions + firstRow(needed group-by items)
-        // TiFlash: all aggs from TiDB, (i.e., agg functions + firstRow(needed group-by items)) + group-by items
-        // so using "output_offsets" to truncate the frefix TiDB n columns from TiFlash schema.
-        // when output_offsets if empty, output the aggregated_columns.
-        std::string name = "";
-        if (query_block.output_offsets.size() > 0)
+        if (query_block.isRootQueryBlock())
         {
-            for (auto offset : query_block.output_offsets)
+            // todo for root query block, use output offsets to reconstruct the final project
+            for (auto & element : analyzer->getCurrentInputColumns())
             {
-                if ((size_t)offset >= analyzer->getCurrentInputColumns().size())
-                {
-                    // array index out of bound
-                    throw TiFlashException("Output offset index is out of bound", Errors::Coprocessor::BadRequest);
-                }
-                auto & element = analyzer->getCurrentInputColumns()[offset];
-                if (!query_block.isRootQueryBlock())
-                {
-                    name = query_block.qb_column_prefix + element.name;
-                }
-                final_project.emplace_back(element.name, name);
+                final_project.emplace_back(element.name, "");
             }
         }
         else
         {
             for (auto & element : analyzer->getCurrentInputColumns())
             {
-                if (!query_block.isRootQueryBlock())
-                {
-                    name = query_block.qb_column_prefix + element.name;
-                }
-                final_project.emplace_back(element.name, name);
+                final_project.emplace_back(element.name, query_block.qb_column_prefix + element.name);
             }
         }
     }
@@ -1419,7 +1398,7 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
 
 void DAGQueryBlockInterpreter::executeProject(Pipeline & pipeline, NamesWithAliases & project_cols)
 {
-    if (project_cols.empty())
+    if (final_project.empty())
         return;
     auto columns = pipeline.firstStream()->getHeader();
     NamesAndTypesList input_column;
