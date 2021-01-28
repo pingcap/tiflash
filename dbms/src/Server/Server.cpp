@@ -8,6 +8,7 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/TiFlashException.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/config.h>
 #include <Common/escapeForFileName.h>
 #include <Common/formatReadable.h>
@@ -33,6 +34,7 @@
 #include <Poco/Net/HTTPServer.h>
 #include <Poco/Net/NetException.h>
 #include <Poco/StringTokenizer.h>
+#include <Poco/Timestamp.h>
 #include <Server/StorageConfigParser.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/PathCapacityMetrics.h>
@@ -1218,6 +1220,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 tiflash_instance_wrap.proxy_helper->batchReadIndex(batch_read_index_req);
             }
             LOG_INFO(log, "start to wait for terminal signal");
+        }
+
+        {
+            // Report the unix timestamp, git hash, release version
+            auto metrics = global_context->getTiFlashMetrics();
+            Poco::Timestamp ts;
+            GET_METRIC(metrics, tiflash_server_info, start_time).Set(ts.epochTime());
         }
 
         waitForTerminationRequest();
