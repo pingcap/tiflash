@@ -30,20 +30,6 @@ struct BaseBuffView
     BaseBuffView(const char * data_, const uint64_t len_) : data(data_), len(len_) {}
 };
 
-struct SnapshotView
-{
-    const BaseBuffView * keys;
-    const BaseBuffView * vals;
-    const ColumnFamilyType cf;
-    const uint64_t len = 0;
-};
-
-struct SnapshotViewArray
-{
-    const SnapshotView * views;
-    const uint64_t len = 0;
-};
-
 struct RaftCmdHeader
 {
     uint64_t region_id;
@@ -130,6 +116,38 @@ struct CppStrVecView
 struct FileEncryptionInfoRaw;
 enum class EncryptionMethod : uint8_t;
 
+struct SSTView
+{
+    ColumnFamilyType type;
+    BaseBuffView path;
+};
+
+struct SSTViewVec
+{
+    const SSTView * views;
+    const uint64_t len;
+};
+
+struct RaftStoreProxyPtr
+{
+    ConstRawVoidPtr _inner;
+};
+
+struct SSTReaderPtr
+{
+    RawVoidPtr _inner;
+};
+
+struct SSTReaderInterfaces
+{
+    SSTReaderPtr (*fn_get_sst_reader)(SSTView, RaftStoreProxyPtr);
+    uint8_t (*fn_remained)(SSTReaderPtr, ColumnFamilyType);
+    BaseBuffView (*fn_key)(SSTReaderPtr, ColumnFamilyType);
+    BaseBuffView (*fn_value)(SSTReaderPtr, ColumnFamilyType);
+    void (*fn_next)(SSTReaderPtr, ColumnFamilyType);
+    void (*fn_gc)(SSTReaderPtr, ColumnFamilyType);
+};
+
 struct TiFlashRaftProxyHelperFFI
 {
     RaftStoreProxyPtr proxy_ptr;
@@ -141,9 +159,10 @@ struct TiFlashRaftProxyHelperFFI
     FileEncryptionInfoRaw (*fn_handle_delete_file)(RaftStoreProxyPtr, BaseBuffView);
     FileEncryptionInfoRaw (*fn_handle_link_file)(RaftStoreProxyPtr, BaseBuffView, BaseBuffView);
     RawVoidPtr (*fn_handle_batch_read_index)(RaftStoreProxyPtr, CppStrVecView);
+    SSTReaderInterfaces sst_reader_interfaces;
 };
 
-struct TiFlashServerHelper
+struct EngineStoreServerHelper
 {
     uint32_t magic_number; // use a very special number to check whether this struct is legal
     uint32_t version;      // version of function interface
@@ -154,12 +173,12 @@ struct TiFlashServerHelper
     TiFlashApplyRes (*fn_handle_write_raft_cmd)(const TiFlashServer *, WriteCmdsView, RaftCmdHeader);
     TiFlashApplyRes (*fn_handle_admin_raft_cmd)(const TiFlashServer *, BaseBuffView, BaseBuffView, RaftCmdHeader);
     void (*fn_atomic_update_proxy)(TiFlashServer *, TiFlashRaftProxyHelperFFI *);
-    void (*fn_handle_destroy)(TiFlashServer *, RegionId);
-    TiFlashApplyRes (*fn_handle_ingest_sst)(TiFlashServer *, SnapshotViewArray, RaftCmdHeader);
+    void (*fn_handle_destroy)(TiFlashServer *, uint64_t);
+    TiFlashApplyRes (*fn_handle_ingest_sst)(TiFlashServer *, SSTViewVec, RaftCmdHeader);
     uint8_t (*fn_handle_check_terminated)(TiFlashServer *);
     StoreStats (*fn_handle_compute_store_stats)(TiFlashServer *);
     TiFlashStatus (*fn_handle_get_tiflash_status)(TiFlashServer *);
-    RawCppPtr (*fn_pre_handle_snapshot)(TiFlashServer *, BaseBuffView, uint64_t, SnapshotViewArray, uint64_t, uint64_t);
+    RawCppPtr (*fn_pre_handle_snapshot)(TiFlashServer *, BaseBuffView, uint64_t, SSTViewVec, uint64_t, uint64_t);
     void (*fn_apply_pre_handled_snapshot)(TiFlashServer *, RawVoidPtr, RawCppPtrType);
     CppStrWithView (*fn_handle_get_table_sync_status)(TiFlashServer *, uint64_t);
     void (*fn_gc_raw_cpp_ptr)(TiFlashServer *, RawVoidPtr, RawCppPtrType);

@@ -378,7 +378,12 @@ void StorageDeltaMerge::write(Block && block, const Settings & settings)
             else if (col.name == TAG_COLUMN_NAME)
                 col.column_id = TAG_COLUMN_ID;
             else
-                col.column_id = header->getByName(col.name).column_id;
+            {
+                auto & header_col = header->getByName(col.name);
+                col.column_id = header_col.column_id;
+                // We don't need to set default_value by now
+                // col.default_value = header_col.default_value;
+            }
         }
     }
     store->write(global_context, settings, block);
