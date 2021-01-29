@@ -52,6 +52,7 @@ static const String COLLATOR_NAME = "collator";
 static const String MPP_QUERY = "mpp_query";
 static const String USE_BROADCAST_JOIN = "use_broadcast_join";
 static const String MPP_PARTITION_NUM = "mpp_partition_num";
+static const String LOCAL_HOST = "127.0.0.1:3930";
 
 struct DAGProperties
 {
@@ -115,7 +116,6 @@ std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
 enum QueryTaskType
 {
     DAG,
-    MPP_ESTABLISH_CONNECTION,
     MPP_DISPATCH
 };
 
@@ -125,10 +125,16 @@ struct QueryTask
     TableID table_id;
     DAGSchema result_schema;
     QueryTaskType type;
-    Int32 partition_id;
+    Int64 task_id;
+    Int64 partition_id;
     QueryTask(std::shared_ptr<tipb::DAGRequest> request, TableID table_id_, const DAGSchema & result_schema_, QueryTaskType type_,
-        Int32 partition_id_ = -1)
-        : dag_request(std::move(request)), table_id(table_id_), result_schema(result_schema_), type(type_), partition_id(partition_id_)
+        Int64 task_id_, Int64 partition_id_)
+        : dag_request(std::move(request)),
+          table_id(table_id_),
+          result_schema(result_schema_),
+          type(type_),
+          task_id(task_id_),
+          partition_id(partition_id_)
     {}
 };
 
@@ -224,22 +230,61 @@ DAGProperties getDAGProperties(String prop_string)
     if (properties.find(USE_BROADCAST_JOIN) != properties.end())
         ret.use_broadcast_join = properties[USE_BROADCAST_JOIN] == "true";
     if (properties.find(MPP_PARTITION_NUM) != properties.end())
-        ret.mpp_partition_num = std::stoi(properties[USE_BROADCAST_JOIN]);
+        ret.mpp_partition_num = std::stoi(properties[MPP_PARTITION_NUM]);
 
     return ret;
 }
 
-BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_fragments,
+BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks,
     MakeResOutputStream & func_wrap_output_stream)
 {
     if (properties.is_mpp_query)
     {
-        throw Exception("mpp query not support yet");
+        for (auto & task : query_tasks)
+        {
+            auto req = std::make_shared<mpp::DispatchTaskRequest>();
+            auto * tm = req->mutable_meta();
+            tm->set_start_ts(properties.start_ts);
+            tm->set_partition_id(task.partition_id);
+            tm->set_address(LOCAL_HOST);
+            tm->set_task_id(task.task_id);
+            auto * encoded_plan = req->mutable_encoded_plan();
+            task.dag_request->AppendToString(encoded_plan);
+            req->set_timeout(10);
+            req->set_schema_ver(DEFAULT_UNSPECIFIED_SCHEMA_VERSION);
+            auto table_id = task.table_id;
+            if (table_id != -1)
+            {
+                /// contains a table scan
+                auto regions = context.getTMTContext().getRegionTable().getRegionsByTable(table_id);
+                if (regions.size() < properties.mpp_partition_num)
+                    throw Exception("Not supported: table region num less than mpp partition num");
+                for (size_t i = 0; i < regions.size(); i++)
+                {
+                    if (i % properties.mpp_partition_num != task.partition_id)
+                        continue;
+                    auto * region = req->add_regions();
+                    region->set_region_id(regions[i].first);
+                    auto * meta = region->mutable_region_epoch();
+                    meta->set_conf_ver(regions[i].second->confVer());
+                    meta->set_version(regions[i].second->version());
+                    auto * range = region->add_ranges();
+                    auto handle_range = getHandleRangeByTable(regions[i].second->getRange()->rawKeys(), table_id);
+                    range->set_start(RecordKVFormat::genRawKey(table_id, handle_range.first.handle_id));
+                    range->set_end(RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id));
+                }
+            }
+            pingcap::kv::RpcCall<mpp::DispatchTaskRequest> call(req);
+            context.getTMTContext().getCluster()->rpc_client->sendRequest(LOCAL_HOST, call, 1000);
+            if (call.getResp()->has_error())
+                throw Exception("Meet error while dispatch mpp task: " + call.getResp()->error().msg());
+        }
+        throw Exception("MPP execution not supported yet");
     }
     else
     {
-        auto & query_fragment = query_fragments[0];
-        auto table_id = query_fragment.table_id;
+        auto & task = query_tasks[0];
+        auto table_id = task.table_id;
         RegionPtr region;
         if (region_id == InvalidRegionID)
         {
@@ -261,9 +306,9 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
         DecodedTiKVKeyPtr end_key = std::make_shared<DecodedTiKVKey>(RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id));
         key_ranges.emplace_back(std::make_pair(std::move(start_key), std::move(end_key)));
         tipb::SelectResponse dag_response = executeDAGRequest(
-            context, *query_fragment.dag_request, region_id, region->version(), region->confVer(), properties.start_ts, key_ranges);
+            context, *task.dag_request, region_id, region->version(), region->confVer(), properties.start_ts, key_ranges);
 
-        return func_wrap_output_stream(outputDAGResponse(context, query_fragment.result_schema, dag_response));
+        return func_wrap_output_stream(outputDAGResponse(context, task.result_schema, dag_response));
     }
 }
 
@@ -283,7 +328,7 @@ BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args)
     DAGProperties properties = getDAGProperties(prop_string);
     properties.start_ts = context.getTMTContext().getPDClient()->getTS();
 
-    auto [query_fragments, func_wrap_output_stream] = compileQuery(
+    auto [query_tasks, func_wrap_output_stream] = compileQuery(
         context, query,
         [&](const String & database_name, const String & table_name) {
             auto storage = context.getTable(database_name, table_name);
@@ -296,7 +341,7 @@ BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args)
         },
         properties);
 
-    return executeQuery(context, region_id, properties, query_fragments, func_wrap_output_stream);
+    return executeQuery(context, region_id, properties, query_tasks, func_wrap_output_stream);
 }
 
 BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args)
@@ -318,14 +363,14 @@ BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args)
     DAGProperties properties = getDAGProperties(prop_string);
     properties.start_ts = start_ts;
 
-    auto [query_fragments, func_wrap_output_stream] = compileQuery(
+    auto [query_tasks, func_wrap_output_stream] = compileQuery(
         context, query,
         [&](const String & database_name, const String & table_name) {
             return MockTiDB::instance().getTableByName(database_name, table_name)->table_info;
         },
         properties);
 
-    return executeQuery(context, region_id, properties, query_fragments, func_wrap_output_stream);
+    return executeQuery(context, region_id, properties, query_tasks, func_wrap_output_stream);
 }
 
 void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t collator_id)
@@ -568,29 +613,137 @@ void collectUsedColumnsFromExpr(const DAGSchema & input, ASTPtr ast, std::unorde
 struct MPPCtx
 {
     Timestamp start_ts;
-    size_t partition_num;
-    size_t & task_id;
-    size_t next_executor_id;
-    std::vector<size_t> sender_target_task_ids;
-    std::vector<size_t> partition_keys;
+    Int64 partition_num;
+    Int64 next_task_id;
+    std::vector<Int64> sender_target_task_ids;
+    std::vector<Int64> current_task_ids;
+    std::vector<Int64> partition_keys;
     tipb::ExchangeType type;
-    MPPCtx(Timestamp start_ts_, size_t partition_num_, size_t & task_id_)
-        : start_ts(start_ts_), partition_num(partition_num_), task_id(task_id_)
-    {}
+    MPPCtx(Timestamp start_ts_, size_t partition_num_) : start_ts(start_ts_), partition_num(partition_num_), next_task_id(1) {}
 };
 
 using MPPCtxPtr = std::shared_ptr<MPPCtx>;
+struct ExchangeSender;
+struct ExchangeReceiver;
+
+struct MPPInfo
+{
+    Timestamp start_ts;
+    Int64 partition_id;
+    Int64 task_id;
+    const std::vector<Int64> & sender_target_task_ids;
+    const std::unordered_map<String, std::vector<Int64>> & receiver_source_task_ids_map;
+    MPPInfo(Timestamp start_ts_, Int64 partition_id_, Int64 task_id_, const std::vector<Int64> & sender_target_task_ids_,
+        const std::unordered_map<String, std::vector<Int64>> & receiver_source_task_ids_map_)
+        : start_ts(start_ts_),
+          partition_id(partition_id_),
+          task_id(task_id_),
+          sender_target_task_ids(sender_target_task_ids_),
+          receiver_source_task_ids_map(receiver_source_task_ids_map_)
+    {}
+};
 
 struct Executor
 {
     size_t index;
+    String name;
     DAGSchema output_schema;
     std::vector<std::shared_ptr<Executor>> children;
     virtual void columnPrune(std::unordered_set<String> & used_columns) = 0;
-    virtual std::unordered_set<String> * getReferredColumns() { throw Exception("Should not reach here"); }
-    Executor(size_t & index_, const DAGSchema & output_schema_) : index(index_), output_schema(output_schema_) { index_++; }
-    virtual bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id) = 0;
+    Executor(size_t & index_, String && name_, const DAGSchema & output_schema_)
+        : index(index_), name(std::move(name_)), output_schema(output_schema_)
+    {
+        index_++;
+    }
+    virtual bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info) = 0;
+    virtual void toMPPSubPlan(size_t & executor_index, const DAGProperties & properties,
+        std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiver>, std::shared_ptr<ExchangeSender>>> & exchange_map)
+    {
+        children[0]->toMPPSubPlan(executor_index, properties, exchange_map);
+    }
     virtual ~Executor() {}
+};
+
+struct TaskMeta
+{
+    UInt64 start_ts = 0;
+    Int64 task_id = 0;
+    Int64 partition_id = 0;
+};
+
+using TaskMetas = std::vector<TaskMeta>;
+
+struct ExchangeSender : Executor
+{
+    tipb::ExchangeType type;
+    TaskMetas task_metas;
+    std::vector<size_t> partition_keys;
+    ExchangeSender(size_t & index, const DAGSchema & output, tipb::ExchangeType type_, const std::vector<size_t> & partition_keys_ = {})
+        : Executor(index, "exchange_sender_" + std::to_string(index), output), type(type_), partition_keys(partition_keys_)
+    {}
+    void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info) override
+    {
+        tipb_executor->set_tp(tipb::ExecType::TypeExchangeSender);
+        tipb_executor->set_executor_id(name);
+        tipb::ExchangeSender * exchange_sender = tipb_executor->mutable_exchange_sender();
+        exchange_sender->set_tp(type);
+        for (auto i : partition_keys)
+        {
+            auto * expr = exchange_sender->add_partition_keys();
+            expr->set_tp(tipb::ColumnRef);
+            std::stringstream ss;
+            encodeDAGInt64(i, ss);
+            expr->set_val(ss.str());
+        }
+        for (auto task_id : mpp_info.sender_target_task_ids)
+        {
+            mpp::TaskMeta meta;
+            meta.set_start_ts(mpp_info.start_ts);
+            meta.set_task_id(task_id);
+            meta.set_partition_id(mpp_info.partition_id);
+            meta.set_address(LOCAL_HOST);
+            auto * meta_string = exchange_sender->add_encoded_task_meta();
+            meta.AppendToString(meta_string);
+        }
+        auto * child_executor = exchange_sender->mutable_child();
+        return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info);
+    }
+};
+
+struct ExchangeReceiver : Executor
+{
+    TaskMetas task_metas;
+    ExchangeReceiver(size_t & index, const DAGSchema & output) : Executor(index, "exchange_receiver_" + std::to_string(index), output) {}
+    void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t, const MPPInfo & mpp_info) override
+    {
+        tipb_executor->set_tp(tipb::ExecType::TypeExchangeReceiver);
+        tipb_executor->set_executor_id(name);
+        tipb::ExchangeReceiver * exchange_receiver = tipb_executor->mutable_exchange_receiver();
+        for (auto & field : output_schema)
+        {
+            auto * field_type = exchange_receiver->add_field_types();
+            field_type->set_tp(field.second.tp);
+            field_type->set_flag(field.second.flag);
+            field_type->set_flen(field.second.flen);
+            field_type->set_decimal(field.second.decimal);
+        }
+        auto it = mpp_info.receiver_source_task_ids_map.find(name);
+        if (it == mpp_info.receiver_source_task_ids_map.end())
+            throw Exception("Can not found mpp receiver info");
+        for (size_t i = 0; i < it->second.size(); i++)
+        {
+            mpp::TaskMeta meta;
+            meta.set_start_ts(mpp_info.start_ts);
+            meta.set_task_id(it->second[i]);
+            meta.set_partition_id(i);
+            meta.set_address(LOCAL_HOST);
+            auto * meta_string = exchange_receiver->add_encoded_task_meta();
+            meta.AppendToString(meta_string);
+        }
+        return true;
+    }
 };
 
 struct TableScan : public Executor
@@ -598,7 +751,7 @@ struct TableScan : public Executor
     TableInfo table_info;
     /// used by column pruner
     TableScan(size_t & index_, const DAGSchema & output_schema_, TableInfo & table_info_)
-        : Executor(index_, output_schema_), table_info(table_info_)
+        : Executor(index_, "table_scan_" + std::to_string(index_), output_schema_), table_info(table_info_)
     {}
     void columnPrune(std::unordered_set<String> & used_columns) override
     {
@@ -606,10 +759,10 @@ struct TableScan : public Executor
                                 [&](const auto & field) { return used_columns.count(field.first) == 0; }),
             output_schema.end());
     }
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t) override
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t, const MPPInfo &) override
     {
         tipb_executor->set_tp(tipb::ExecType::TypeTableScan);
-        tipb_executor->set_executor_id("table_scan_" + std::to_string(index));
+        tipb_executor->set_executor_id(name);
         auto * ts = tipb_executor->mutable_tbl_scan();
         ts->set_table_id(table_info.id);
         for (const auto & info : output_schema)
@@ -633,18 +786,21 @@ struct TableScan : public Executor
         }
         return true;
     }
+    void toMPPSubPlan(size_t &, const DAGProperties &,
+        std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiver>, std::shared_ptr<ExchangeSender>>> &) override
+    {}
 };
 
 struct Selection : public Executor
 {
     std::vector<ASTPtr> conditions;
     Selection(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> && conditions_)
-        : Executor(index_, output_schema_), conditions(std::move(conditions_))
+        : Executor(index_, "selection_" + std::to_string(index_), output_schema_), conditions(std::move(conditions_))
     {}
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id) override
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info) override
     {
         tipb_executor->set_tp(tipb::ExecType::TypeSelection);
-        tipb_executor->set_executor_id("selection_" + std::to_string(index));
+        tipb_executor->set_executor_id(name);
         auto * sel = tipb_executor->mutable_selection();
         for (auto & expr : conditions)
         {
@@ -652,7 +808,7 @@ struct Selection : public Executor
             astToPB(children[0]->output_schema, expr, cond, collator_id);
         }
         auto * child_executor = sel->mutable_child();
-        return children[0]->toTiPBExecutor(child_executor, collator_id);
+        return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info);
     }
     void columnPrune(std::unordered_set<String> & used_columns) override
     {
@@ -669,12 +825,12 @@ struct TopN : public Executor
     std::vector<ASTPtr> order_columns;
     size_t limit;
     TopN(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> && order_columns_, size_t limit_)
-        : Executor(index_, output_schema_), order_columns(std::move(order_columns_)), limit(limit_)
+        : Executor(index_, "topn_" + std::to_string(index_), output_schema_), order_columns(std::move(order_columns_)), limit(limit_)
     {}
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id) override
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info) override
     {
         tipb_executor->set_tp(tipb::ExecType::TypeTopN);
-        tipb_executor->set_executor_id("topn_" + std::to_string(index));
+        tipb_executor->set_executor_id(name);
         tipb::TopN * topn = tipb_executor->mutable_topn();
         for (const auto & child : order_columns)
         {
@@ -688,7 +844,7 @@ struct TopN : public Executor
         }
         topn->set_limit(limit);
         auto * child_executor = topn->mutable_child();
-        return children[0]->toTiPBExecutor(child_executor, collator_id);
+        return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info);
     }
     void columnPrune(std::unordered_set<String> & used_columns) override
     {
@@ -703,15 +859,17 @@ struct TopN : public Executor
 struct Limit : public Executor
 {
     size_t limit;
-    Limit(size_t & index_, const DAGSchema & output_schema_, size_t limit_) : Executor(index_, output_schema_), limit(limit_) {}
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id) override
+    Limit(size_t & index_, const DAGSchema & output_schema_, size_t limit_)
+        : Executor(index_, "limit_" + std::to_string(index_), output_schema_), limit(limit_)
+    {}
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info) override
     {
         tipb_executor->set_tp(tipb::ExecType::TypeLimit);
-        tipb_executor->set_executor_id("limit_" + std::to_string(index));
+        tipb_executor->set_executor_id(name);
         tipb::Limit * lt = tipb_executor->mutable_limit();
         lt->set_limit(limit);
         auto * child_executor = lt->mutable_child();
-        return children[0]->toTiPBExecutor(child_executor, collator_id);
+        return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info);
     }
     void columnPrune(std::unordered_set<String> & used_columns) override
     {
@@ -727,18 +885,20 @@ struct Aggregation : public Executor
     bool need_append_project;
     std::vector<ASTPtr> agg_exprs;
     std::vector<ASTPtr> gby_exprs;
+    bool is_final_mode;
     Aggregation(size_t & index_, const DAGSchema & output_schema_, bool has_uniq_raw_res_, bool need_append_project_,
-        std::vector<ASTPtr> && agg_exprs_, std::vector<ASTPtr> && gby_exprs_)
-        : Executor(index_, output_schema_),
+        std::vector<ASTPtr> && agg_exprs_, std::vector<ASTPtr> && gby_exprs_, bool is_final_mode_)
+        : Executor(index_, "aggregation_" + std::to_string(index_), output_schema_),
           has_uniq_raw_res(has_uniq_raw_res_),
           need_append_project(need_append_project_),
           agg_exprs(std::move(agg_exprs_)),
-          gby_exprs(std::move(gby_exprs_))
+          gby_exprs(std::move(gby_exprs_)),
+          is_final_mode(is_final_mode_)
     {}
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id) override
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info) override
     {
         tipb_executor->set_tp(tipb::ExecType::TypeAggregation);
-        tipb_executor->set_executor_id("aggregation_" + std::to_string(index));
+        tipb_executor->set_executor_id(name);
         auto * agg = tipb_executor->mutable_aggregation();
         auto & input_schema = children[0]->output_schema;
         for (const auto & expr : agg_exprs)
@@ -758,6 +918,13 @@ struct Aggregation : public Executor
             if (func->name == "count")
             {
                 agg_func->set_tp(tipb::Count);
+                auto ft = agg_func->mutable_field_type();
+                ft->set_tp(TiDB::TypeLongLong);
+                ft->set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);
+            }
+            else if (func->name == "sum")
+            {
+                agg_func->set_tp(tipb::Sum);
                 auto ft = agg_func->mutable_field_type();
                 ft->set_tp(TiDB::TypeLongLong);
                 ft->set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);
@@ -801,7 +968,7 @@ struct Aggregation : public Executor
         }
 
         auto * child_executor = agg->mutable_child();
-        return children[0]->toTiPBExecutor(child_executor, collator_id);
+        return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info);
     }
     void columnPrune(std::unordered_set<String> & used_columns) override
     {
@@ -828,18 +995,65 @@ struct Aggregation : public Executor
         }
         children[0]->columnPrune(used_input_columns);
     }
+    void toMPPSubPlan(size_t & executor_index, const DAGProperties & properties,
+        std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiver>, std::shared_ptr<ExchangeSender>>> & exchange_map) override
+    {
+        if (!is_final_mode)
+        {
+            children[0]->toMPPSubPlan(executor_index, properties, exchange_map);
+            return;
+        }
+        /// for aggregation, change aggregation to partial_aggregation => exchange_sender => exchange_receiver => final_aggregation
+        // todo support avg
+        if (has_uniq_raw_res)
+            throw Exception("uniq raw res not supported in mpp query");
+        if (gby_exprs.size() == 0)
+            throw Exception("agg without group by columns not supported in mpp query");
+        std::shared_ptr<Aggregation> partial_agg = std::make_shared<Aggregation>(
+            executor_index, output_schema, has_uniq_raw_res, false, std::move(agg_exprs), std::move(gby_exprs), false);
+        partial_agg->children.push_back(children[0]);
+        std::vector<size_t> partition_keys;
+        size_t agg_func_num = partial_agg->agg_exprs.size();
+        for (size_t i = 0; i < partial_agg->gby_exprs.size(); i++)
+        {
+            partition_keys.push_back(i + agg_func_num);
+        }
+        std::shared_ptr<ExchangeSender> exchange_sender
+            = std::make_shared<ExchangeSender>(executor_index, output_schema, tipb::Hash, partition_keys);
+        exchange_sender->children.push_back(partial_agg);
+
+        std::shared_ptr<ExchangeReceiver> exchange_receiver = std::make_shared<ExchangeReceiver>(executor_index, output_schema);
+        exchange_map[exchange_receiver->name] = std::make_pair(exchange_receiver, exchange_sender);
+        /// re-construct agg_exprs and gby_exprs in final_agg
+        for (size_t i = 0; i < partial_agg->agg_exprs.size(); i++)
+        {
+            const ASTFunction * agg_func = typeid_cast<const ASTFunction *>(partial_agg->agg_exprs[i].get());
+            ASTPtr update_agg_expr = agg_func->clone();
+            auto * update_agg_func = typeid_cast<ASTFunction *>(update_agg_expr.get());
+            if (agg_func->name == "count")
+                update_agg_func->name = "sum";
+            update_agg_func->arguments->children.clear();
+            update_agg_func->arguments->children.push_back(std::make_shared<ASTIdentifier>(output_schema[i].first));
+            agg_exprs.push_back(update_agg_expr);
+        }
+        for (size_t i = 0; i < partial_agg->gby_exprs.size(); i++)
+        {
+            gby_exprs.push_back(std::make_shared<ASTIdentifier>(output_schema[agg_func_num + i].first));
+        }
+        children[0] = exchange_receiver;
+    }
 };
 
 struct Project : public Executor
 {
     std::vector<ASTPtr> exprs;
     Project(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> && exprs_)
-        : Executor(index_, output_schema_), exprs(std::move(exprs_))
+        : Executor(index_, "project_" + std::to_string(index_), output_schema_), exprs(std::move(exprs_))
     {}
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id) override
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info) override
     {
         tipb_executor->set_tp(tipb::ExecType::TypeProjection);
-        tipb_executor->set_executor_id("project_" + std::to_string(index));
+        tipb_executor->set_executor_id(name);
         auto * proj = tipb_executor->mutable_projection();
         auto & input_schema = children[0]->output_schema;
         for (const auto & child : exprs)
@@ -863,7 +1077,7 @@ struct Project : public Executor
             astToPB(input_schema, child, expr, collator_id);
         }
         auto * children_executor = proj->mutable_child();
-        return children[0]->toTiPBExecutor(children_executor, collator_id);
+        return children[0]->toTiPBExecutor(children_executor, collator_id, mpp_info);
     }
     void columnPrune(std::unordered_set<String> & used_columns) override
     {
@@ -890,89 +1104,6 @@ struct Project : public Executor
             }
         }
         children[0]->columnPrune(used_input_columns);
-    }
-};
-
-struct TaskMeta
-{
-    UInt64 start_ts = 0;
-    Int64 task_id = 0;
-    Int64 partition_id = 0;
-};
-
-using TaskMetas = std::vector<TaskMeta>;
-
-struct ExchangeSender : Executor
-{
-    tipb::ExchangeType type;
-    TaskMetas task_metas;
-    std::vector<size_t> partition_keys;
-    ExchangeSender(size_t & index, const DAGSchema & output, tipb::ExchangeType type_, std::vector<size_t> & partition_keys_)
-        : Executor(index, output), type(type_), partition_keys(partition_keys_)
-    {}
-    void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id) override
-    {
-        tipb_executor->set_tp(tipb::ExecType::TypeExchangeSender);
-        tipb_executor->set_executor_id("exchange_sender_" + std::to_string(index));
-        tipb::ExchangeSender * exchange_sender = tipb_executor->mutable_exchange_sender();
-        exchange_sender->set_tp(type);
-        for (auto i : partition_keys)
-        {
-            auto * expr = exchange_sender->add_partition_keys();
-            expr->set_tp(tipb::Int64);
-            std::stringstream ss;
-            encodeDAGInt64(i, ss);
-            expr->set_val(ss.str());
-        }
-        if (task_metas.empty())
-            throw Exception("Empty task metas in Exchange Sender");
-        for (auto & task_meta : task_metas)
-        {
-            mpp::TaskMeta meta;
-            meta.set_start_ts(task_meta.start_ts);
-            meta.set_task_id(task_meta.task_id);
-            meta.set_partition_id(task_meta.partition_id);
-            meta.set_address("127.0.0.1");
-            auto * meta_string = exchange_sender->add_encoded_task_meta();
-            meta.AppendToString(meta_string);
-        }
-        // todo add task_meta
-        auto * child_executor = exchange_sender->mutable_child();
-        return children[0]->toTiPBExecutor(child_executor, collator_id);
-    }
-};
-
-struct ExchangeReceiver : Executor
-{
-    TaskMetas task_metas;
-    void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t) override
-    {
-        tipb_executor->set_tp(tipb::ExecType::TypeExchangeReceiver);
-        tipb_executor->set_executor_id("exchange_receiver_" + std::to_string(index));
-        tipb::ExchangeReceiver * exchange_receiver = tipb_executor->mutable_exchange_receiver();
-        for (auto & field : output_schema)
-        {
-            auto * field_type = exchange_receiver->add_field_types();
-            field_type->set_tp(field.second.tp);
-            field_type->set_flag(field.second.flag);
-            field_type->set_flen(field.second.flen);
-            field_type->set_decimal(field.second.decimal);
-        }
-        if (task_metas.empty())
-            throw Exception("Empty task metas in Exchange receiver");
-        for (auto & task_meta : task_metas)
-        {
-            mpp::TaskMeta meta;
-            meta.set_start_ts(task_meta.start_ts);
-            meta.set_task_id(task_meta.task_id);
-            meta.set_partition_id(task_meta.partition_id);
-            meta.set_address("127.0.0.1");
-            auto * meta_string = exchange_receiver->add_encoded_task_meta();
-            meta.AppendToString(meta_string);
-        }
-        return true;
     }
 };
 
@@ -1260,7 +1391,7 @@ ExecutorPtr compileAggregation(ExecutorPtr input, size_t & executor_index, ASTPt
     }
 
     auto aggregation = std::make_shared<Aggregation>(
-        executor_index, output_schema, has_uniq_raw_res, need_append_project, std::move(agg_exprs), std::move(gby_exprs));
+        executor_index, output_schema, has_uniq_raw_res, need_append_project, std::move(agg_exprs), std::move(gby_exprs), true);
     aggregation->children.push_back(input);
     return aggregation;
 }
@@ -1311,50 +1442,65 @@ struct QueryFragment
     ExecutorPtr root_executor;
     TableID table_id;
     bool is_top_fragment;
-    std::vector<TaskMeta> sender_task_metas;
-    std::unordered_map<String, std::vector<TaskMeta>> receiver_task_metas_map;
-    std::vector<size_t> task_ids;
-    QueryFragment(ExecutorPtr root_executor_, TableID table_id_, bool is_top_fragment_, std::vector<TaskMeta> && sender_task_metas_,
-        std::unordered_map<String, std::vector<TaskMeta>> && receiver_task_metas_map_, std::vector<size_t> && task_ids_)
+    std::vector<Int64> sender_target_task_ids;
+    std::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
+    std::vector<Int64> task_ids;
+    QueryFragment(ExecutorPtr root_executor_, TableID table_id_, bool is_top_fragment_, std::vector<Int64> && sender_target_task_ids_ = {},
+        std::unordered_map<String, std::vector<Int64>> && receiver_source_task_ids_map_ = {}, std::vector<Int64> && task_ids_ = {})
         : root_executor(std::move(root_executor_)),
           table_id(table_id_),
           is_top_fragment(is_top_fragment_),
-          sender_task_metas(std::move(sender_task_metas_)),
-          receiver_task_metas_map(std::move(receiver_task_metas_map_)),
+          sender_target_task_ids(std::move(sender_target_task_ids_)),
+          receiver_source_task_ids_map(std::move(receiver_source_task_ids_map_)),
           task_ids(std::move(task_ids_))
     {}
-    QueryTasks toQueryTask(const DAGProperties & properties)
+
+    QueryTask toQueryTask(const DAGProperties & properties, MPPInfo & mpp_info)
     {
-        QueryTasks ret;
-        if (properties.is_mpp_query) {}
+        std::shared_ptr<tipb::DAGRequest> dag_request_ptr = std::make_shared<tipb::DAGRequest>();
+        tipb::DAGRequest & dag_request = *dag_request_ptr;
+        dag_request.set_time_zone_name(properties.tz_name);
+        dag_request.set_time_zone_offset(properties.tz_offset);
+        dag_request.set_flags(dag_request.flags() | (1u << 1u /* TRUNCATE_AS_WARNING */) | (1u << 6u /* OVERFLOW_AS_WARNING */));
+
+        if (is_top_fragment)
+        {
+            if (properties.encode_type == "chunk")
+                dag_request.set_encode_type(tipb::EncodeType::TypeChunk);
+            else if (properties.encode_type == "chblock")
+                dag_request.set_encode_type(tipb::EncodeType::TypeCHBlock);
+            else
+                dag_request.set_encode_type(tipb::EncodeType::TypeDefault);
+        }
         else
         {
-            std::shared_ptr<tipb::DAGRequest> dag_request_ptr = std::make_shared<tipb::DAGRequest>();
-            tipb::DAGRequest & dag_request = *dag_request_ptr;
-            dag_request.set_time_zone_name(properties.tz_name);
-            dag_request.set_time_zone_offset(properties.tz_offset);
-            dag_request.set_flags(dag_request.flags() | (1u << 1u /* TRUNCATE_AS_WARNING */) | (1u << 6u /* OVERFLOW_AS_WARNING */));
+            dag_request.set_encode_type(tipb::EncodeType::TypeCHBlock);
+        }
 
-            if (is_top_fragment)
+        for (size_t i = 0; i < root_executor->output_schema.size(); i++)
+            dag_request.add_output_offsets(i);
+        auto * root_tipb_executor = dag_request.mutable_root_executor();
+        root_executor->toTiPBExecutor(root_tipb_executor, properties.collator, mpp_info);
+        return QueryTask(dag_request_ptr, table_id, root_executor->output_schema,
+            mpp_info.sender_target_task_ids.size() == 0 ? DAG : MPP_DISPATCH, mpp_info.task_id, mpp_info.partition_id);
+    }
+
+    QueryTasks toQueryTasks(const DAGProperties & properties)
+    {
+        QueryTasks ret;
+        if (properties.is_mpp_query)
+        {
+            for (size_t partition_id = 0; partition_id < task_ids.size(); partition_id++)
             {
-                if (properties.encode_type == "chunk")
-                    dag_request.set_encode_type(tipb::EncodeType::TypeChunk);
-                else if (properties.encode_type == "chblock")
-                    dag_request.set_encode_type(tipb::EncodeType::TypeCHBlock);
-                else
-                    dag_request.set_encode_type(tipb::EncodeType::TypeDefault);
+                MPPInfo mpp_info(
+                    properties.start_ts, partition_id, task_ids[partition_id], sender_target_task_ids, receiver_source_task_ids_map);
+                ret.push_back(toQueryTask(properties, mpp_info));
             }
-            else
-            {
-                dag_request.set_encode_type(tipb::EncodeType::TypeCHBlock);
-            }
-
-            for (size_t i = 0; i < root_executor->output_schema.size(); i++)
-                dag_request.add_output_offsets(i);
-            auto * root_tipb_executor = dag_request.mutable_root_executor();
-            root_executor->toTiPBExecutor(root_tipb_executor, properties.collator);
-
-            ret.emplace_back(dag_request_ptr, table_id, root_executor->output_schema, DAG);
+        }
+        else
+        {
+            MPPInfo mpp_info(properties.start_ts, -1, -1, {}, {});
+            ret.push_back(toQueryTask(properties, mpp_info));
         }
         return ret;
     }
@@ -1362,82 +1508,104 @@ struct QueryFragment
 
 using QueryFragments = std::vector<QueryFragment>;
 
-void generateMPPQueryFragments(ExecutorPtr root_executor, MPPCtxPtr mpp_ctx, QueryFragments & query_fragments)
+TableID findTableIdForQueryFragment(ExecutorPtr root_executor, bool must_have_table_id)
 {
-    bool is_root_fragment = mpp_ctx->sender_target_task_ids.size() == 1 && mpp_ctx->sender_target_task_ids[0] == -1;
-    std::unordered_map<String, TaskMetas> receiver_to_task_metas_map;
-    std::unordered_map<String, ExecutorPtr> receiver_to_sender_executor_map;
-    TaskMetas sender_task_metas;
-    size_t receiver_index = 0;
-    if (mpp_ctx->type == tipb::PassThrough) {}
-    else if (mpp_ctx->type == tipb::Hash)
+    ExecutorPtr current_executor = root_executor;
+    while (!current_executor->children.empty())
     {
-        size_t start_task_id = mpp_ctx->task_id;
-        mpp_ctx->task_id += mpp_ctx->partition_num;
-        for (size_t i = 0; i < mpp_ctx->partition_num; i++)
+        ExecutorPtr non_exchange_child;
+        for (auto c : current_executor->children)
         {
-            std::shared_ptr<ExchangeSender> exchange_sender = std::make_shared<ExchangeSender>(
-                mpp_ctx->next_executor_id, root_executor->output_schema, mpp_ctx->type, mpp_ctx->partition_keys);
-            for (size_t t = 0; t < mpp_ctx->sender_target_task_ids.size(); t++)
-            {
-                TaskMeta tm;
-                tm.task_id = mpp_ctx->sender_target_task_ids[t];
-                tm.start_ts = mpp_ctx->start_ts;
-                tm.partition_id = t;
-                exchange_sender->task_metas.push_back(tm);
-            }
-            exchange_sender->children[0] = root_executor;
+            if (dynamic_cast<ExchangeReceiver *>(c.get()))
+                continue;
+            if (non_exchange_child != nullptr)
+                throw Exception("More than one non-exchange child, should not happen");
+            non_exchange_child = c;
         }
+        if (non_exchange_child == nullptr)
+        {
+            if (must_have_table_id)
+                throw Exception("Table scan not found");
+            return -1;
+        }
+        current_executor = non_exchange_child;
     }
-    else
+    auto * ts = dynamic_cast<TableScan *>(current_executor.get());
+    if (ts == nullptr)
     {
-        throw Exception("Broadcast partition is not supported yet");
+        if (must_have_table_id)
+            throw Exception("Table scan not found");
+        return -1;
     }
+    return ts->table_info.id;
 }
 
-QueryFragments queryPlanToQueryFragments(const DAGProperties & properties, ExecutorPtr root_executor, size_t next_executor_id)
+QueryFragments mppQueryToQueryFragments(
+    ExecutorPtr root_executor, size_t & executor_index, const DAGProperties & properties, bool for_root_fragment, MPPCtxPtr mpp_ctx)
 {
     QueryFragments fragments;
-    if (properties.is_mpp_query)
+    std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiver>, std::shared_ptr<ExchangeSender>>> exchange_map;
+    root_executor->toMPPSubPlan(executor_index, properties, exchange_map);
+    TableID table_id = findTableIdForQueryFragment(root_executor, exchange_map.empty());
+    std::vector<Int64> sender_target_task_ids = mpp_ctx->sender_target_task_ids;
+    std::vector<Int64> current_task_ids = mpp_ctx->current_task_ids;
+    std::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
+    for (auto & exchange : exchange_map)
     {
-        size_t task_id = 1;
-        MPPCtxPtr mpp_ctx = std::make_shared<MPPCtx>(properties.start_ts, properties.mpp_partition_num, task_id);
-        mpp_ctx->sender_target_task_ids.emplace_back(-1);
-        mpp_ctx->type = tipb::ExchangeType::PassThrough;
-        mpp_ctx->next_executor_id = next_executor_id;
+        std::vector<Int64> task_ids;
+        for (size_t i = 0; i < mpp_ctx->partition_num; i++)
+            task_ids.push_back(mpp_ctx->next_task_id++);
+        mpp_ctx->sender_target_task_ids = current_task_ids;
+        mpp_ctx->current_task_ids = task_ids;
+        receiver_source_task_ids_map[exchange.first] = task_ids;
+        mpp_ctx->type = tipb::Hash;
+        auto sub_fragments = mppQueryToQueryFragments(exchange.second.second, executor_index, properties, false, mpp_ctx);
+        fragments.insert(fragments.end(), sub_fragments.begin(), sub_fragments.end());
     }
-    else
-    {
-        ExecutorPtr current_executor = root_executor;
-        while (!current_executor->children.empty())
-        {
-            if (current_executor->children.size() > 1)
-                throw Exception("Join is not supported in non mpp mode");
-            current_executor = current_executor->children[0];
-        }
-        auto * ts = dynamic_cast<TableScan *>(current_executor.get());
-        if (ts == nullptr)
-            throw Exception("Only table scan is supported as the source executor in non mpp mode");
-        fragments.emplace_back(root_executor, ts->table_info.id, true);
-    }
+    fragments.emplace_back(root_executor, table_id, for_root_fragment, std::move(sender_target_task_ids),
+        std::move(receiver_source_task_ids_map), std::move(current_task_ids));
     return fragments;
 }
 
-
-QueryTasks queryPlanToQueryTasks(const DAGProperties & properties, ExecutorPtr root_executor)
+QueryFragments queryPlanToQueryFragments(const DAGProperties & properties, ExecutorPtr root_executor, size_t & executor_index)
 {
-    QueryFragments fragments = queryPlanToQueryFragments(properties, root_executor, root_executor->index);
+    if (properties.is_mpp_query)
+    {
+        ExecutorPtr root_exchange_sender
+            = std::make_shared<ExchangeSender>(executor_index, root_executor->output_schema, tipb::PassThrough);
+        root_exchange_sender->children.push_back(root_executor);
+        root_executor = root_exchange_sender;
+        MPPCtxPtr mpp_ctx = std::make_shared<MPPCtx>(properties.start_ts, properties.mpp_partition_num);
+        mpp_ctx->sender_target_task_ids.emplace_back(-1);
+        for (size_t i = 0; i < properties.mpp_partition_num; i++)
+            mpp_ctx->current_task_ids.push_back(mpp_ctx->next_task_id++);
+        mpp_ctx->type = tipb::ExchangeType::PassThrough;
+        return mppQueryToQueryFragments(root_executor, executor_index, properties, true, mpp_ctx);
+    }
+    else
+    {
+        QueryFragments fragments;
+        fragments.emplace_back(root_executor, findTableIdForQueryFragment(root_executor, true), true);
+        return fragments;
+    }
+}
+
+QueryTasks queryPlanToQueryTasks(const DAGProperties & properties, ExecutorPtr root_executor, size_t & executor_index)
+{
+    QueryFragments fragments = queryPlanToQueryFragments(properties, root_executor, executor_index);
     QueryTasks tasks;
     for (auto & fragment : fragments)
-        tasks.emplace_back(fragment.toQueryTask(properties));
+    {
+        auto t = fragment.toQueryTasks(properties);
+        tasks.insert(tasks.end(), t.begin(), t.end());
+    }
     return tasks;
 }
+
 
 std::tuple<QueryTasks, MakeResOutputStream> compileQuery(
     Context & context, const String & query, SchemaFetcher schema_fetcher, const DAGProperties & properties)
 {
-    if (properties.is_mpp_query)
-        throw Exception("mpp query is not supported yet");
     MakeResOutputStream func_wrap_output_stream = [](BlockInputStreamPtr in) { return in; };
 
     ParserSelectQuery parser;
@@ -1546,9 +1714,8 @@ std::tuple<QueryTasks, MakeResOutputStream> compileQuery(
     for (auto & schema : root_executor->output_schema)
         used_columns.emplace(schema.first);
     root_executor->columnPrune(used_columns);
-    /// todo for mpp, add top level exchange sender
 
-    return std::make_tuple(queryPlanToQueryTasks(properties, root_executor), func_wrap_output_stream);
+    return std::make_tuple(queryPlanToQueryTasks(properties, root_executor, executor_index), func_wrap_output_stream);
 }
 
 tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version,
@@ -1586,6 +1753,15 @@ void chunksToBlocks(const DAGSchema & schema, const tipb::SelectResponse & dag_r
     for (const auto & chunk : dag_response.chunks())
         blocks.emplace_back(codec->decode(chunk, schema));
 }
+
+//BlockInputStreamPtr ExchangeReceiverResponse(Context &, const DAGSchema & schema, DB::ExchangeReceiver & exchange_receiver)
+//{
+//    BlocksList blocks;
+//    while (true)
+//    {
+//        exchange_receiver.
+//    }
+//}
 
 BlockInputStreamPtr outputDAGResponse(Context &, const DAGSchema & schema, const tipb::SelectResponse & dag_response)
 {
