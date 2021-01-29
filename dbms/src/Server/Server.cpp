@@ -9,6 +9,7 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/TiFlashException.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/config.h>
 #include <Common/escapeForFileName.h>
 #include <Common/formatReadable.h>
@@ -34,12 +35,14 @@
 #include <Poco/Net/HTTPServer.h>
 #include <Poco/Net/NetException.h>
 #include <Poco/StringTokenizer.h>
+#include <Poco/Timestamp.h>
 #include <Server/StorageConfigParser.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFIType.h>
+#include <Storages/Transaction/RaftStoreProxyFFI/VersionCheck.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -398,10 +401,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     TiFlashProxyConfig proxy_conf(config());
     TiFlashServer tiflash_instance_wrap{};
-    TiFlashServerHelper helper{
+    EngineStoreServerHelper helper{
         // a special number, also defined in proxy
-        .magic_number = 0x13579BDF,
-        .version = 401004,
+        .magic_number = RAFT_STORE_PROXY_MAGIC_NUMBER,
+        .version = RAFT_STORE_PROXY_VERSION,
         .inner = &tiflash_instance_wrap,
         .fn_gen_cpp_string = GenCppRawString,
         .fn_handle_write_raft_cmd = HandleWriteRaftCmd,
@@ -1227,6 +1230,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 tiflash_instance_wrap.proxy_helper->batchReadIndex(batch_read_index_req);
             }
             LOG_INFO(log, "start to wait for terminal signal");
+        }
+
+        {
+            // Report the unix timestamp, git hash, release version
+            auto metrics = global_context->getTiFlashMetrics();
+            Poco::Timestamp ts;
+            GET_METRIC(metrics, tiflash_server_info, start_time).Set(ts.epochTime());
         }
 
         waitForTerminationRequest();
