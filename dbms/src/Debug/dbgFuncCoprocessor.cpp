@@ -2,6 +2,7 @@
 #include <AggregateFunctions/AggregateFunctionUniq.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/BlocksListBlockInputStream.h>
+#include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
@@ -10,6 +11,7 @@
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
+#include <Flash/Mpp/ExchangeReceiver.h>
 #include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
@@ -127,14 +129,16 @@ struct QueryTask
     QueryTaskType type;
     Int64 task_id;
     Int64 partition_id;
+    bool is_root_task;
     QueryTask(std::shared_ptr<tipb::DAGRequest> request, TableID table_id_, const DAGSchema & result_schema_, QueryTaskType type_,
-        Int64 task_id_, Int64 partition_id_)
+        Int64 task_id_, Int64 partition_id_, bool is_root_task_)
         : dag_request(std::move(request)),
           table_id(table_id_),
           result_schema(result_schema_),
           type(type_),
           task_id(task_id_),
-          partition_id(partition_id_)
+          partition_id(partition_id_),
+          is_root_task(is_root_task_)
     {}
 };
 
@@ -240,8 +244,15 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
 {
     if (properties.is_mpp_query)
     {
+        DAGSchema root_task_schema;
+        std::vector<Int64> root_task_ids;
         for (auto & task : query_tasks)
         {
+            if (task.is_root_task)
+            {
+                root_task_ids.push_back(task.task_id);
+                root_task_schema = task.result_schema;
+            }
             auto req = std::make_shared<mpp::DispatchTaskRequest>();
             auto * tm = req->mutable_meta();
             tm->set_start_ts(properties.start_ts);
@@ -279,7 +290,34 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
             if (call.getResp()->has_error())
                 throw Exception("Meet error while dispatch mpp task: " + call.getResp()->error().msg());
         }
-        throw Exception("MPP execution not supported yet");
+        tipb::ExchangeReceiver tipb_exchange_receiver;
+        for (size_t i = 0; i < root_task_ids.size(); i++)
+        {
+            mpp::TaskMeta tm;
+            tm.set_start_ts(properties.start_ts);
+            tm.set_address(LOCAL_HOST);
+            tm.set_task_id(root_task_ids[i]);
+            tm.set_partition_id(-1);
+            auto * tm_string = tipb_exchange_receiver.add_encoded_task_meta();
+            tm.AppendToString(tm_string);
+        }
+        for (auto & field : root_task_schema)
+        {
+            auto * field_type = tipb_exchange_receiver.add_field_types();
+            field_type->set_tp(field.second.tp);
+            field_type->set_flag(field.second.flag);
+            field_type->set_flen(field.second.flen);
+            field_type->set_decimal(field.second.decimal);
+        }
+        mpp::TaskMeta root_tm;
+        root_tm.set_start_ts(properties.start_ts);
+        root_tm.set_address(LOCAL_HOST);
+        root_tm.set_task_id(-1);
+        root_tm.set_partition_id(-1);
+        std::shared_ptr<ExchangeReceiver> exchange_receiver
+            = std::make_shared<ExchangeReceiver>(context, tipb_exchange_receiver, root_tm, 10);
+        BlockInputStreamPtr ret = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver);
+        return ret;
     }
     else
     {
@@ -623,8 +661,6 @@ struct MPPCtx
 };
 
 using MPPCtxPtr = std::shared_ptr<MPPCtx>;
-struct ExchangeSender;
-struct ExchangeReceiver;
 
 struct MPPInfo
 {
@@ -643,6 +679,19 @@ struct MPPInfo
     {}
 };
 
+struct TaskMeta
+{
+    UInt64 start_ts = 0;
+    Int64 task_id = 0;
+    Int64 partition_id = 0;
+};
+
+using TaskMetas = std::vector<TaskMeta>;
+
+namespace mock
+{
+struct ExchangeSender;
+struct ExchangeReceiver;
 struct Executor
 {
     size_t index;
@@ -663,15 +712,6 @@ struct Executor
     }
     virtual ~Executor() {}
 };
-
-struct TaskMeta
-{
-    UInt64 start_ts = 0;
-    Int64 task_id = 0;
-    Int64 partition_id = 0;
-};
-
-using TaskMetas = std::vector<TaskMeta>;
 
 struct ExchangeSender : Executor
 {
@@ -1106,8 +1146,9 @@ struct Project : public Executor
         children[0]->columnPrune(used_input_columns);
     }
 };
+} // namespace mock
 
-using ExecutorPtr = std::shared_ptr<Executor>;
+using ExecutorPtr = std::shared_ptr<mock::Executor>;
 
 TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast)
 {
@@ -1291,14 +1332,14 @@ ExecutorPtr compileTableScan(size_t & executor_index, TableInfo & table_info, bo
         ci.setNotNullFlag();
         ts_output.emplace_back(std::make_pair(MutableSupport::tidb_pk_column_name, std::move(ci)));
     }
-    return std::make_shared<TableScan>(executor_index, ts_output, table_info);
+    return std::make_shared<mock::TableScan>(executor_index, ts_output, table_info);
 }
 
 ExecutorPtr compileSelection(ExecutorPtr input, size_t & executor_index, ASTPtr filter)
 {
     std::vector<ASTPtr> conditions;
     compileFilter(input->output_schema, filter, conditions);
-    auto selection = std::make_shared<Selection>(executor_index, input->output_schema, std::move(conditions));
+    auto selection = std::make_shared<mock::Selection>(executor_index, input->output_schema, std::move(conditions));
     selection->children.push_back(input);
     return selection;
 }
@@ -1315,7 +1356,7 @@ ExecutorPtr compileTopN(ExecutorPtr input, size_t & executor_index, ASTPtr order
         compileExpr(input->output_schema, elem->children[0]);
     }
     auto limit = safeGet<UInt64>(typeid_cast<ASTLiteral &>(*limit_expr).value);
-    auto topN = std::make_shared<TopN>(executor_index, input->output_schema, std::move(order_columns), limit);
+    auto topN = std::make_shared<mock::TopN>(executor_index, input->output_schema, std::move(order_columns), limit);
     topN->children.push_back(input);
     return topN;
 }
@@ -1323,7 +1364,7 @@ ExecutorPtr compileTopN(ExecutorPtr input, size_t & executor_index, ASTPtr order
 ExecutorPtr compileLimit(ExecutorPtr input, size_t & executor_index, ASTPtr limit_expr)
 {
     auto limit_length = safeGet<UInt64>(typeid_cast<ASTLiteral &>(*limit_expr).value);
-    auto limit = std::make_shared<Limit>(executor_index, input->output_schema, limit_length);
+    auto limit = std::make_shared<mock::Limit>(executor_index, input->output_schema, limit_length);
     limit->children.push_back(input);
     return limit;
 }
@@ -1390,7 +1431,7 @@ ExecutorPtr compileAggregation(ExecutorPtr input, size_t & executor_index, ASTPt
         }
     }
 
-    auto aggregation = std::make_shared<Aggregation>(
+    auto aggregation = std::make_shared<mock::Aggregation>(
         executor_index, output_schema, has_uniq_raw_res, need_append_project, std::move(agg_exprs), std::move(gby_exprs), true);
     aggregation->children.push_back(input);
     return aggregation;
@@ -1432,7 +1473,7 @@ ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr se
         }
     }
 
-    auto project = std::make_shared<Project>(executor_index, output_schema, std::move(exprs));
+    auto project = std::make_shared<mock::Project>(executor_index, output_schema, std::move(exprs));
     project->children.push_back(input);
     return project;
 }
@@ -1482,7 +1523,7 @@ struct QueryFragment
         auto * root_tipb_executor = dag_request.mutable_root_executor();
         root_executor->toTiPBExecutor(root_tipb_executor, properties.collator, mpp_info);
         return QueryTask(dag_request_ptr, table_id, root_executor->output_schema,
-            mpp_info.sender_target_task_ids.size() == 0 ? DAG : MPP_DISPATCH, mpp_info.task_id, mpp_info.partition_id);
+            mpp_info.sender_target_task_ids.size() == 0 ? DAG : MPP_DISPATCH, mpp_info.task_id, mpp_info.partition_id, is_top_fragment);
     }
 
     QueryTasks toQueryTasks(const DAGProperties & properties)
@@ -1516,7 +1557,7 @@ TableID findTableIdForQueryFragment(ExecutorPtr root_executor, bool must_have_ta
         ExecutorPtr non_exchange_child;
         for (auto c : current_executor->children)
         {
-            if (dynamic_cast<ExchangeReceiver *>(c.get()))
+            if (dynamic_cast<mock::ExchangeReceiver *>(c.get()))
                 continue;
             if (non_exchange_child != nullptr)
                 throw Exception("More than one non-exchange child, should not happen");
@@ -1530,7 +1571,7 @@ TableID findTableIdForQueryFragment(ExecutorPtr root_executor, bool must_have_ta
         }
         current_executor = non_exchange_child;
     }
-    auto * ts = dynamic_cast<TableScan *>(current_executor.get());
+    auto * ts = dynamic_cast<mock::TableScan *>(current_executor.get());
     if (ts == nullptr)
     {
         if (must_have_table_id)
@@ -1544,7 +1585,7 @@ QueryFragments mppQueryToQueryFragments(
     ExecutorPtr root_executor, size_t & executor_index, const DAGProperties & properties, bool for_root_fragment, MPPCtxPtr mpp_ctx)
 {
     QueryFragments fragments;
-    std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiver>, std::shared_ptr<ExchangeSender>>> exchange_map;
+    std::unordered_map<String, std::pair<std::shared_ptr<mock::ExchangeReceiver>, std::shared_ptr<mock::ExchangeSender>>> exchange_map;
     root_executor->toMPPSubPlan(executor_index, properties, exchange_map);
     TableID table_id = findTableIdForQueryFragment(root_executor, exchange_map.empty());
     std::vector<Int64> sender_target_task_ids = mpp_ctx->sender_target_task_ids;
@@ -1572,7 +1613,7 @@ QueryFragments queryPlanToQueryFragments(const DAGProperties & properties, Execu
     if (properties.is_mpp_query)
     {
         ExecutorPtr root_exchange_sender
-            = std::make_shared<ExchangeSender>(executor_index, root_executor->output_schema, tipb::PassThrough);
+            = std::make_shared<mock::ExchangeSender>(executor_index, root_executor->output_schema, tipb::PassThrough);
         root_exchange_sender->children.push_back(root_executor);
         root_executor = root_exchange_sender;
         MPPCtxPtr mpp_ctx = std::make_shared<MPPCtx>(properties.start_ts, properties.mpp_partition_num);
@@ -1687,17 +1728,17 @@ std::tuple<QueryTasks, MakeResOutputStream> compileQuery(
     if (has_gby || has_agg_func)
     {
         if (!properties.is_mpp_query
-            && (dynamic_cast<Limit *>(root_executor.get()) != nullptr || dynamic_cast<TopN *>(root_executor.get()) != nullptr))
+            && (dynamic_cast<mock::Limit *>(root_executor.get()) != nullptr || dynamic_cast<mock::TopN *>(root_executor.get()) != nullptr))
             throw Exception("Limit/TopN and Agg cannot co-exist in non-mpp mode.", ErrorCodes::LOGICAL_ERROR);
 
         root_executor = compileAggregation(
             root_executor, executor_index, ast_query.select_expression_list, has_gby ? ast_query.group_expression_list : nullptr);
 
-        if (dynamic_cast<Aggregation *>(root_executor.get())->has_uniq_raw_res)
+        if (dynamic_cast<mock::Aggregation *>(root_executor.get())->has_uniq_raw_res)
             func_wrap_output_stream = [](BlockInputStreamPtr in) { return std::make_shared<UniqRawResReformatBlockOutputStream>(in); };
 
 
-        if (dynamic_cast<Aggregation *>(root_executor.get())->need_append_project)
+        if (dynamic_cast<mock::Aggregation *>(root_executor.get())->need_append_project)
         {
             /// Project if needed
             root_executor = compileProject(root_executor, executor_index, ast_query.select_expression_list);
