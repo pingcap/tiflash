@@ -40,6 +40,7 @@
 #include <Server/StorageConfigParser.h>
 #include <Server/UserConfigParser.h>
 #include <Storages/MutableSupport.h>
+#include <Storages/FormatVersion.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/Transaction/FileEncryption.h>
@@ -540,6 +541,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     size_t global_capacity_quota = 0;
     TiFlashStorageConfig storage_config;
     std::tie(global_capacity_quota, storage_config) = TiFlashStorageConfig::parseSettings(config(), log);
+
+    if(storage_config.format_version)
+        setStorageFormat(storage_config.format_version);
 
     global_context->initializePathCapacityMetric(                           //
         global_capacity_quota,                                              //
