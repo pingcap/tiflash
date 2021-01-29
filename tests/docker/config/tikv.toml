@@ -14,6 +14,8 @@
 labels = {  }
 
 [storage]
+# No space is reserved at all
+reserve-space = "0"
 
 [pd]
 # This section will be overwritten by command line parameters
@@ -25,10 +27,7 @@ labels = {  }
 
 [raftstore]
 raftdb-path = ""
-sync-log = true
-capacity = 107374182400
-consistency-check-interval = "10s"
-raft-log-gc-count-limit = 256
+capacity = "100GB"
 
 [coprocessor]
 region-max-keys = 144000
