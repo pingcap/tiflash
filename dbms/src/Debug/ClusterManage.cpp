@@ -19,8 +19,40 @@ extern const int BAD_ARGUMENTS;
 extern const int UNKNOWN_TABLE;
 } // namespace ErrorCodes
 
-CppStrWithView HandleGetTableSyncStatus(TiFlashServer * server, uint64_t table_id)
+static const std::string TABLE_SYNC_STATUS_PREFIX = "/tiflash/sync-status/";
+
+uint8_t CheckHttpUriAvailable(BaseBuffView path_)
 {
+    std::string_view path(path_.data, path_.len);
+    return path.size() > TABLE_SYNC_STATUS_PREFIX.size() && path.substr(0, TABLE_SYNC_STATUS_PREFIX.size()) == TABLE_SYNC_STATUS_PREFIX;
+}
+
+HttpRequestRes HandleHttpRequest(EngineStoreServerWrap * server, BaseBuffView path_)
+{
+    HttpRequestStatus status = HttpRequestStatus::Ok;
+    TableID table_id = 0;
+    std::string_view path(path_.data, path_.len);
+    {
+        if (CheckHttpUriAvailable(path_))
+        {
+            std::string table_id_str(path.substr(TABLE_SYNC_STATUS_PREFIX.size()));
+            try
+            {
+                table_id = std::stoll(table_id_str);
+            }
+            catch (...)
+            {
+                status = HttpRequestStatus::ErrorParam;
+            }
+        }
+        else
+        {
+            status = HttpRequestStatus::ErrorParam;
+        }
+        if (status != HttpRequestStatus::Ok)
+            return HttpRequestRes{.status = status, .res = CppStrWithView{.inner = RawCppPtr{}, .view = BaseBuffView{}}};
+    }
+
     std::stringstream ss;
     auto & tmt = *server->tmt;
 
@@ -43,7 +75,8 @@ CppStrWithView HandleGetTableSyncStatus(TiFlashServer * server, uint64_t table_i
     ss << std::endl;
 
     auto s = new std::string(ss.str());
-    return CppStrWithView{.inner = RawCppPtr{.ptr = s, .type = RawCppPtrType::String}, .view = BaseBuffView(s->data(), s->size())};
+    return HttpRequestRes{
+        .status = status, .res = CppStrWithView{.inner = RawCppPtr{s, RawCppPtrType::String}, .view = BaseBuffView(s->data(), s->size())}};
 }
 
 inline std::string ToPdKey(const char * key, const size_t len)
