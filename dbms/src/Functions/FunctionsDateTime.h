@@ -382,9 +382,7 @@ struct ToYearImpl
     {
         return time_zone.toYear(DayNum_t(d));
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
-        throw Exception("Illegal type MyTime of argument for function toYear", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-    }
+    static inline UInt16 execute(UInt64 packed, const DateLUTImpl &) { return UInt16((packed >> 46) / 13); }
 
     using FactorTransform = ZeroTransform;
 };
@@ -401,9 +399,7 @@ struct ToQuarterImpl
     {
         return time_zone.toQuarter(DayNum_t(d));
     }
-    static inline UInt8 execute(UInt64 , const DateLUTImpl & ) {
-        throw Exception("Illegal type MyTime of argument for function toQuarter", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-    }
+    static inline UInt8 execute(UInt64 packed, const DateLUTImpl &) { return ((/* Month */ (packed >> 46) % 13) + 2) / 3; }
 
     using FactorTransform = ToStartOfYearImpl;
 };
@@ -421,9 +417,7 @@ struct ToMonthImpl
         return time_zone.toMonth(DayNum_t(d));
     }
     // tidb date related type, ignore time_zone info
-    static inline UInt8 execute(UInt64 t, const DateLUTImpl & ) {
-        return (UInt8)((t >> 46u)%13);
-    }
+    static inline UInt8 execute(UInt64 t, const DateLUTImpl &) { return (UInt8)((t >> 46u) % 13); }
 
     using FactorTransform = ToStartOfYearImpl;
 };
@@ -2289,6 +2283,79 @@ public:
     }
 };
 
+struct ExtractMyDateTimeImpl
+{
+    static Int64 extract_year(UInt64 packed)
+    {
+        static const auto & lut = DateLUT::instance();
+        return ToYearImpl::execute(packed, lut);
+    }
+
+    static Int64 extract_quater(UInt64 packed)
+    {
+        static const auto & lut = DateLUT::instance();
+        return ToQuarterImpl::execute(packed, lut);
+    }
+
+    static Int64 extract_month(UInt64 packed)
+    {
+        static const auto & lut = DateLUT::instance();
+        return ToMonthImpl::execute(packed, lut);
+    }
+
+    static Int64 extract_week(UInt64 packed)
+    {
+        MyDateTime datetime(packed);
+        return datetime.week(0);
+    }
+
+    static Int64 extract_day(UInt64 packed) { return (packed >> 41) & ((1 << 5) - 1); }
+
+    static Int64 extract_day_microsecond(UInt64 packed)
+    {
+        MyDateTime datetime(packed);
+        Int64 day = datetime.day;
+        Int64 h = datetime.hour;
+        Int64 m = datetime.minute;
+        Int64 s = datetime.second;
+        return (day * 1000000 + h * 10000 + m * 100 + s) * 1000000 + datetime.micro_second;
+    }
+
+    static Int64 extract_day_second(UInt64 packed)
+    {
+        MyDateTime datetime(packed);
+        Int64 day = datetime.day;
+        Int64 h = datetime.hour;
+        Int64 m = datetime.minute;
+        Int64 s = datetime.second;
+        return day * 1000000 + h * 10000 + m * 100 + s;
+    }
+
+    static Int64 extract_day_minute(UInt64 packed)
+    {
+        MyDateTime datetime(packed);
+        Int64 day = datetime.day;
+        Int64 h = datetime.hour;
+        Int64 m = datetime.minute;
+        return day * 10000 + h * 100 + m;
+    }
+
+    static Int64 extract_day_hour(UInt64 packed)
+    {
+        MyDateTime datetime(packed);
+        Int64 day = datetime.day;
+        Int64 h = datetime.hour;
+        return day * 100 + h;
+    }
+
+    static Int64 extract_year_month(UInt64 packed)
+    {
+        Int64 y = extract_year(packed);
+        Int64 m = extract_month(packed);
+        return y * 100 + m;
+    }
+};
+
 class FunctionExtractMyDateTime : public IFunction
 {
 public:
@@ -2313,7 +2380,7 @@ public:
     }
 
     bool useDefaultImplementationForConstants() const override { return true; }
-    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {}; }
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {0}; }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
     {
@@ -2338,25 +2405,25 @@ public:
         auto & vec_to = col_to->getData();
 
         if (unit == "year")
-            dispatch<extract_year>(datetime_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_year>(datetime_column, vec_to);
         else if (unit == "quarter")
-            dispatch<extract_quater>(datetime_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_quater>(datetime_column, vec_to);
         else if (unit == "month")
-            dispatch<extract_month>(datetime_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_month>(datetime_column, vec_to);
         else if (unit == "week")
-            dispatch<extract_week>(datetime_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_week>(datetime_column, vec_to);
         else if (unit == "day")
-            dispatch<extract_day>(datetime_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_day>(datetime_column, vec_to);
         else if (unit == "day_microsecond")
-            dispatch<extract_day_microsecond>(datetime_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_day_microsecond>(datetime_column, vec_to);
         else if (unit == "day_second")
-            dispatch<extract_day_second>(datetime_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_day_second>(datetime_column, vec_to);
         else if (unit == "day_minute")
-            dispatch<extract_day_minute>(datetime_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_day_minute>(datetime_column, vec_to);
         else if (unit == "day_hour")
-            dispatch<extract_day_hour>(datetime_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_day_hour>(datetime_column, vec_to);
         else if (unit == "year_month")
-            dispatch<extract_year_month>(datetime_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_year_month>(datetime_column, vec_to);
         /// TODO: support ExtractDuration
         // else if (unit == "hour");
         // else if (unit == "minute");
@@ -2418,81 +2485,6 @@ private:
             vec_to[i] = F(packed_value);
             current_offset = next_offset;
         }
-    }
-
-    static Int64 extract_year(UInt64 packed)
-    {
-        MyDateTime datetime(packed);
-        return datetime.year;
-    }
-
-    static Int64 extract_quater(UInt64 packed)
-    {
-        MyDateTime datetime(packed);
-        return (datetime.month + 2) / 3;
-    }
-
-    static Int64 extract_month(UInt64 packed)
-    {
-        MyDateTime datetime(packed);
-        return datetime.month;
-    }
-
-    static Int64 extract_week(UInt64 packed)
-    {
-        MyDateTime datetime(packed);
-        return datetime.week(0);
-    }
-
-    static Int64 extract_day(UInt64 packed)
-    {
-        MyDateTime datetime(packed);
-        return datetime.day;
-    }
-
-    static Int64 extract_day_microsecond(UInt64 packed)
-    {
-        MyDateTime datetime(packed);
-        Int64 day = datetime.day;
-        Int64 h = datetime.hour;
-        Int64 m = datetime.minute;
-        Int64 s = datetime.second;
-        return (day * 1000000 + h * 10000 + m * 100 + s) * 1000000 + datetime.micro_second;
-    }
-
-    static Int64 extract_day_second(UInt64 packed)
-    {
-        MyDateTime datetime(packed);
-        Int64 day = datetime.day;
-        Int64 h = datetime.hour;
-        Int64 m = datetime.minute;
-        Int64 s = datetime.second;
-        return day * 1000000 + h * 10000 + m * 100 + s;
-    }
-
-    static Int64 extract_day_minute(UInt64 packed)
-    {
-        MyDateTime datetime(packed);
-        Int64 day = datetime.day;
-        Int64 h = datetime.hour;
-        Int64 m = datetime.minute;
-        return day * 10000 + h * 100 + m;
-    }
-
-    static Int64 extract_day_hour(UInt64 packed)
-    {
-        MyDateTime datetime(packed);
-        Int64 day = datetime.day;
-        Int64 h = datetime.hour;
-        return day * 100 + h;
-    }
-
-    static Int64 extract_year_month(UInt64 packed)
-    {
-        MyDateTime datetime(packed);
-        Int64 y = datetime.year;
-        Int64 m = datetime.month;
-        return y * 100 + m;
     }
 };
 
