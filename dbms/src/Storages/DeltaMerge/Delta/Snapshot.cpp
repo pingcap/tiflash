@@ -30,9 +30,9 @@ DeltaValueSpace::Snapshot::~Snapshot()
     }
 }
 
-SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool is_update)
+SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool for_update)
 {
-    if (is_update)
+    if (for_update)
     {
         bool v = false;
         // Other thread is doing structure update, just return.
@@ -47,7 +47,7 @@ SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool is_u
         return {};
 
     auto snap                = std::make_shared<Snapshot>();
-    snap->is_update          = is_update;
+    snap->is_update          = for_update;
     snap->delta              = this->shared_from_this();
     snap->is_common_handle   = is_common_handle;
     snap->rowkey_column_size = rowkey_column_size;
@@ -59,7 +59,10 @@ SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool is_u
 
     snap->shared_delta_index = delta_index;
 
-    if (is_update)
+    /// If `for_update` is false, it will create a snapshot with all packs in DeltaValueSpace.
+    /// If `for_update` is true, it will create a snapshot with persisted packs.
+
+    if (for_update)
     {
         snap->rows -= unsaved_rows;
         snap->deletes -= unsaved_deletes;
@@ -69,9 +72,9 @@ SnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool is_u
     size_t check_deletes = 0;
     size_t total_rows    = 0;
     size_t total_deletes = 0;
-    for (auto & pack : packs)
+    for (const auto & pack : packs)
     {
-        if (!is_update || pack->isSaved())
+        if (!for_update || pack->isSaved())
         {
             // Because flush/compact threads could update the Pack::cache instance during read operation.
             // We better make a copy if cache exists.
@@ -284,7 +287,7 @@ Block DeltaValueSpace::Snapshot::read(size_t pack_index)
     auto & pack_columns = getColumnsOfPack(pack_index, column_defines.size());
     for (size_t i = 0; i < column_defines.size(); ++i)
     {
-        auto cd = column_defines[i];
+        auto & cd = column_defines[i];
         block.insert(ColumnWithTypeAndName(pack_columns[i], cd.type, cd.name, cd.id));
     }
     return block;

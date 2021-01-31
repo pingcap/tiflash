@@ -14,6 +14,8 @@
 labels = {  }
 
 [storage]
+# No space is reserved at all
+reserve-space = "0"
 
 [pd]
 # This section will be overwritten by command line parameters
@@ -25,6 +27,7 @@ labels = {  }
 
 [raftstore]
 raftdb-path = ""
+capacity = "100GB"
 
 [coprocessor]
 region-max-keys = 144000
