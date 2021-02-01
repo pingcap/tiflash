@@ -2371,9 +2371,9 @@ public:
         if (!arguments[0]->isString())
             throw TiFlashException("First argument for function " + getName() + " (unit) must be String", Errors::Coprocessor::BadRequest);
 
-        if (!arguments[1]->isString())
+        if (!(arguments[1]->isString() || arguments[1]->isDateOrDateTime()))
             throw TiFlashException(
-                "Illegal type " + arguments[1]->getName() + " of second argument of function " + getName() + ". Must be UInt32.",
+                "Illegal type " + arguments[1]->getName() + " of second argument of function " + getName() + ". Must be DateOrDateTime or String.",
                 Errors::Coprocessor::BadRequest);
 
         return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeInt64>());
@@ -2391,10 +2391,10 @@ public:
 
         String unit = Poco::toLower(unit_column->getValue<String>());
 
-        auto * datetime_column = checkAndGetColumn<ColumnString>(block.getByPosition(arguments[1]).column.get());
+        auto from_column = block.getByPosition(arguments[1]).column;
 
 
-        if (datetime_column->onlyNull())
+        if (from_column->onlyNull())
         {
             block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
             return;
@@ -2405,25 +2405,25 @@ public:
         auto & vec_to = col_to->getData();
 
         if (unit == "year")
-            dispatch<ExtractMyDateTimeImpl::extract_year>(datetime_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_year>(from_column, vec_to);
         else if (unit == "quarter")
-            dispatch<ExtractMyDateTimeImpl::extract_quater>(datetime_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_quater>(from_column, vec_to);
         else if (unit == "month")
-            dispatch<ExtractMyDateTimeImpl::extract_month>(datetime_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_month>(from_column, vec_to);
         else if (unit == "week")
-            dispatch<ExtractMyDateTimeImpl::extract_week>(datetime_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_week>(from_column, vec_to);
         else if (unit == "day")
-            dispatch<ExtractMyDateTimeImpl::extract_day>(datetime_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_day>(from_column, vec_to);
         else if (unit == "day_microsecond")
-            dispatch<ExtractMyDateTimeImpl::extract_day_microsecond>(datetime_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_day_microsecond>(from_column, vec_to);
         else if (unit == "day_second")
-            dispatch<ExtractMyDateTimeImpl::extract_day_second>(datetime_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_day_second>(from_column, vec_to);
         else if (unit == "day_minute")
-            dispatch<ExtractMyDateTimeImpl::extract_day_minute>(datetime_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_day_minute>(from_column, vec_to);
         else if (unit == "day_hour")
-            dispatch<ExtractMyDateTimeImpl::extract_day_hour>(datetime_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_day_hour>(from_column, vec_to);
         else if (unit == "year_month")
-            dispatch<ExtractMyDateTimeImpl::extract_year_month>(datetime_column, vec_to);
+            dispatch<ExtractMyDateTimeImpl::extract_year_month>(from_column, vec_to);
         /// TODO: support ExtractDuration
         // else if (unit == "hour");
         // else if (unit == "minute");
@@ -2445,23 +2445,38 @@ private:
     using Func = Int64 (*)(UInt64);
 
     template <Func F>
-    static void dispatch(const ColumnString * from, PaddedPODArray<Int64> & vec_to)
+    static void dispatch(const ColumnPtr col_from, PaddedPODArray<Int64> & vec_to)
     {
-        const auto & data = from->getChars();
-        const auto & offsets = from->getOffsets();
-        if (checkColumnConst<ColumnString>(from))
+        if (const auto * from = checkAndGetColumn<ColumnString>(col_from.get()); from)
         {
-            StringRef string_ref(data.data(), offsets[0] - 1);
-            constant<F>(string_ref, from->size(), vec_to);
+            const auto & data = from->getChars();
+            const auto & offsets = from->getOffsets();
+            if (checkColumnConst<ColumnString>(from))
+            {
+                StringRef string_ref(data.data(), offsets[0] - 1);
+                constant_string<F>(string_ref, from->size(), vec_to);
+            }
+            else
+            {
+                vector_string<F>(data, offsets, vec_to);
+            }
         }
-        else
+        else if (const auto * from = checkAndGetColumn<ColumnUInt64>(col_from.get()); from)
         {
-            vector<F>(data, offsets, vec_to);
+            const auto & data = from->getData();
+            if (checkColumnConst<ColumnUInt64>(from))
+            {
+                constant_datetime<F>(from->getUInt(0), from->size(), vec_to);
+            }
+            else
+            {
+                vector_datetime<F>(data, vec_to);
+            }
         }
     }
 
     template <Func F>
-    static void constant(const StringRef & from, size_t size, PaddedPODArray<Int64> & vec_to)
+    static void constant_string(const StringRef & from, size_t size, PaddedPODArray<Int64> & vec_to)
     {
         vec_to.resize(size);
         auto from_value = get<UInt64>(parseMyDateTime(from.toString()));
@@ -2472,18 +2487,39 @@ private:
     }
 
     template <Func F>
-    static void vector(const ColumnString::Chars_t & from, const ColumnString::Offsets & from_offsets, PaddedPODArray<Int64> & vec_to)
+    static void vector_string(
+        const ColumnString::Chars_t & vec_from, const ColumnString::Offsets & offsets_from, PaddedPODArray<Int64> & vec_to)
     {
-        vec_to.resize(from_offsets.size() + 1);
+        vec_to.resize(offsets_from.size() + 1);
         size_t current_offset = 0;
-        for (size_t i = 0; i < from_offsets.size(); i++)
+        for (size_t i = 0; i < offsets_from.size(); i++)
         {
-            size_t next_offset = from_offsets[i];
+            size_t next_offset = offsets_from[i];
             size_t string_size = next_offset - current_offset - 1;
-            StringRef string_value(&from[current_offset], string_size);
+            StringRef string_value(&vec_from[current_offset], string_size);
             auto packed_value = get<UInt64>(parseMyDateTime(string_value.toString()));
             vec_to[i] = F(packed_value);
             current_offset = next_offset;
+        }
+    }
+
+    template <Func F>
+    static void constant_datetime(const UInt64 & from, size_t size, PaddedPODArray<Int64> & vec_to)
+    {
+        vec_to.resize(size);
+        for (size_t i = 0; i < size; ++i)
+        {
+            vec_to[i] = F(from);
+        }
+    }
+
+    template <Func F>
+    static void vector_datetime(const ColumnUInt64::Container & vec_from, PaddedPODArray<Int64> & vec_to)
+    {
+        vec_to.resize(vec_from.size());
+        for (size_t i = 0; i < vec_from.size(); i++)
+        {
+            vec_to[i] = F(vec_from[i]);
         }
     }
 };
