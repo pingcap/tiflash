@@ -8,7 +8,7 @@ namespace DB
 {
 using RawCppStringPtr = std::string *;
 const char * IntoEncryptionMethodName(EncryptionMethod);
-struct TiFlashServer;
+struct EngineStoreServerWrap;
 
 struct FileEncryptionInfo
 {

@@ -2,8 +2,6 @@
 
 #include "Common.h"
 
-extern "C" {
-
 namespace DB
 {
 
@@ -31,4 +29,3 @@ struct FileEncryptionInfoRaw
     RawVoidPtr erro_msg;
 };
 } // namespace DB
-}

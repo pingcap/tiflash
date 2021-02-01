@@ -3,7 +3,7 @@
 
 namespace DB
 {
-DataKeyManager::DataKeyManager(TiFlashServer * tiflash_instance_wrap_) : tiflash_instance_wrap{tiflash_instance_wrap_} {}
+DataKeyManager::DataKeyManager(EngineStoreServerWrap * tiflash_instance_wrap_) : tiflash_instance_wrap{tiflash_instance_wrap_} {}
 
 FileEncryptionInfo DataKeyManager::getFile(const String & fname)
 {
