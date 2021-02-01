@@ -31,8 +31,8 @@ HttpRequestRes HandleHttpRequest(EngineStoreServerWrap * server, BaseBuffView pa
 {
     HttpRequestStatus status = HttpRequestStatus::Ok;
     TableID table_id = 0;
-    std::string_view path(path_.data, path_.len);
     {
+        std::string_view path(path_.data, path_.len);
         if (CheckHttpUriAvailable(path_))
         {
             std::string table_id_str(path.substr(TABLE_SYNC_STATUS_PREFIX.size()));
