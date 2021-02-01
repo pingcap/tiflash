@@ -72,7 +72,6 @@ RawCppPtr PreHandleSnapshot(
     EngineStoreServerWrap * server, BaseBuffView region_buff, uint64_t peer_id, SSTViewVec, uint64_t index, uint64_t term);
 void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, void * res, RawCppPtrType type);
 HttpRequestRes HandleHttpRequest(EngineStoreServerWrap *, BaseBuffView);
-HttpRequestRes HandleHttpRequest(EngineStoreServerWrap *, BaseBuffView);
 uint8_t CheckHttpUriAvailable(BaseBuffView);
 void GcRawCppPtr(EngineStoreServerWrap *, void * ptr, RawCppPtrType type);
 RawVoidPtr GenBatchReadIndexRes(uint64_t cap);
