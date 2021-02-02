@@ -1,6 +1,20 @@
 #!/bin/bash
 
-set -xe
+set -x
+set +e
+
+pwd
+cat /proc/cpuinfo | grep name | cut -f2 -d: | uniq -c
+cat /proc/meminfo
+uname -a
+hostname
+lsmod
+dmidecode | grep 'Product Name'
+free -mh
+df -h
+cat /proc/loadavg
+
+set -e
 
 function wait_env() {
   local engine="$1"
