@@ -54,6 +54,9 @@ cmake "$SRCPATH" ${DEFINE_CMAKE_PREFIX_PATH} \
 
 make -j $NPROC tiflash
 
+# Reduce binary size by compressing.
+objcopy --compress-debug-sections=zlib-gnu "$build_dir/dbms/src/Server/tiflash"
+
 cp -f "$build_dir/dbms/src/Server/tiflash" "$install_dir/tiflash"
 cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "$install_dir/libtiflash_proxy.so"
 
