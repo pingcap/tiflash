@@ -283,24 +283,21 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
     }
     catch (Exception & e)
     {
-        mpp::Error error;
         LOG_ERROR(log, "dispatch task meet error : " << e.displayText());
-        error.set_msg(e.displayText());
-        response->set_allocated_error(&error);
+        auto * err = response->mutable_error();
+        err->set_msg(e.displayText());
     }
     catch (std::exception & e)
     {
-        mpp::Error error;
         LOG_ERROR(log, "dispatch task meet error : " << e.what());
-        error.set_msg(e.what());
-        response->set_allocated_error(&error);
+        auto * err = response->mutable_error();
+        err->set_msg(e.what());
     }
     catch (...)
     {
-        mpp::Error error;
         LOG_ERROR(log, "dispatch task meet fatal error");
-        error.set_msg("fatal error");
-        response->set_allocated_error(&error);
+        auto * err = response->mutable_error();
+        err->set_msg("fatal error");
     }
     return grpc::Status::OK;
 }
