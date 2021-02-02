@@ -55,7 +55,7 @@ static_assert(alignof(EngineStoreServerHelper) == alignof(RawVoidPtr));
 static_assert(sizeof(RaftStoreProxyPtr) == sizeof(ConstRawVoidPtr));
 static_assert(alignof(RaftStoreProxyPtr) == alignof(ConstRawVoidPtr));
 
-TiFlashApplyRes HandleWriteRaftCmd(const TiFlashServer * server, WriteCmdsView cmds, RaftCmdHeader header)
+EngineStoreApplyRes HandleWriteRaftCmd(const EngineStoreServerWrap * server, WriteCmdsView cmds, RaftCmdHeader header)
 {
     try
     {
@@ -68,7 +68,8 @@ TiFlashApplyRes HandleWriteRaftCmd(const TiFlashServer * server, WriteCmdsView c
     }
 }
 
-TiFlashApplyRes HandleAdminRaftCmd(const TiFlashServer * server, BaseBuffView req_buff, BaseBuffView resp_buff, RaftCmdHeader header)
+EngineStoreApplyRes HandleAdminRaftCmd(
+    const EngineStoreServerWrap * server, BaseBuffView req_buff, BaseBuffView resp_buff, RaftCmdHeader header)
 {
     try
     {
@@ -88,15 +89,15 @@ TiFlashApplyRes HandleAdminRaftCmd(const TiFlashServer * server, BaseBuffView re
     }
 }
 
-static_assert(sizeof(TiFlashRaftProxyHelperFFI) == sizeof(TiFlashRaftProxyHelper));
-static_assert(alignof(TiFlashRaftProxyHelperFFI) == alignof(TiFlashRaftProxyHelper));
+static_assert(sizeof(RaftStoreProxyFFIHelper) == sizeof(TiFlashRaftProxyHelper));
+static_assert(alignof(RaftStoreProxyFFIHelper) == alignof(TiFlashRaftProxyHelper));
 
-void AtomicUpdateProxy(DB::TiFlashServer * server, TiFlashRaftProxyHelperFFI * proxy)
+void AtomicUpdateProxy(DB::EngineStoreServerWrap * server, RaftStoreProxyFFIHelper * proxy)
 {
     server->proxy_helper = static_cast<TiFlashRaftProxyHelper *>(proxy);
 }
 
-void HandleDestroy(TiFlashServer * server, uint64_t region_id)
+void HandleDestroy(EngineStoreServerWrap * server, uint64_t region_id)
 {
     try
     {
@@ -110,7 +111,7 @@ void HandleDestroy(TiFlashServer * server, uint64_t region_id)
     }
 }
 
-TiFlashApplyRes HandleIngestSST(TiFlashServer * server, SSTViewVec snaps, RaftCmdHeader header)
+EngineStoreApplyRes HandleIngestSST(EngineStoreServerWrap * server, SSTViewVec snaps, RaftCmdHeader header)
 {
     try
     {
@@ -124,9 +125,12 @@ TiFlashApplyRes HandleIngestSST(TiFlashServer * server, SSTViewVec snaps, RaftCm
     }
 }
 
-uint8_t HandleCheckTerminated(TiFlashServer * server) { return server->tmt->getTerminated().load(std::memory_order_relaxed) ? 1 : 0; }
+uint8_t HandleCheckTerminated(EngineStoreServerWrap * server)
+{
+    return server->tmt->getTerminated().load(std::memory_order_relaxed) ? 1 : 0;
+}
 
-StoreStats HandleComputeStoreStats(TiFlashServer * server)
+StoreStats HandleComputeStoreStats(EngineStoreServerWrap * server)
 {
     StoreStats res; // res.fs_stats.ok = false by default
     try
@@ -142,7 +146,7 @@ StoreStats HandleComputeStoreStats(TiFlashServer * server)
     return res;
 }
 
-TiFlashStatus HandleGetTiFlashStatus(TiFlashServer * server) { return server->status.load(); }
+EngineStoreServerStatus HandleGetTiFlashStatus(EngineStoreServerWrap * server) { return server->status.load(); }
 
 RaftProxyStatus TiFlashRaftProxyHelper::getProxyStatus() const { return fn_handle_get_proxy_status(proxy_ptr); }
 
@@ -210,7 +214,7 @@ struct PreHandledSnapshot
 };
 
 RawCppPtr PreHandleSnapshot(
-    TiFlashServer * server, BaseBuffView region_buff, uint64_t peer_id, SSTViewVec snaps, uint64_t index, uint64_t term)
+    EngineStoreServerWrap * server, BaseBuffView region_buff, uint64_t peer_id, SSTViewVec snaps, uint64_t index, uint64_t term)
 {
     try
     {
@@ -230,7 +234,7 @@ RawCppPtr PreHandleSnapshot(
     }
 }
 
-void ApplyPreHandledSnapshot(TiFlashServer * server, PreHandledSnapshot * snap)
+void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, PreHandledSnapshot * snap)
 {
     try
     {
@@ -244,7 +248,7 @@ void ApplyPreHandledSnapshot(TiFlashServer * server, PreHandledSnapshot * snap)
     }
 }
 
-void ApplyPreHandledSnapshot(TiFlashServer * server, RawVoidPtr res, RawCppPtrType type)
+void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, RawCppPtrType type)
 {
     switch (type)
     {
@@ -260,7 +264,7 @@ void ApplyPreHandledSnapshot(TiFlashServer * server, RawVoidPtr res, RawCppPtrTy
     }
 }
 
-void GcRawCppPtr(TiFlashServer *, RawVoidPtr ptr, RawCppPtrType type)
+void GcRawCppPtr(EngineStoreServerWrap *, RawVoidPtr ptr, RawCppPtrType type)
 {
     if (ptr)
     {

@@ -2,14 +2,12 @@
 
 #include "Common.h"
 
-extern "C" {
-
 namespace DB
 {
 
-struct TiFlashServer;
+struct EngineStoreServerWrap;
 
-enum class TiFlashApplyRes : uint32_t
+enum class EngineStoreApplyRes : uint32_t
 {
     None = 0,
     Persist,
@@ -27,7 +25,7 @@ struct BaseBuffView
     const char * data;
     const uint64_t len;
 
-    BaseBuffView(const char * data_, const uint64_t len_) : data(data_), len(len_) {}
+    BaseBuffView(const char * data_ = nullptr, const uint64_t len_ = 0) : data(data_), len(len_) {}
 };
 
 struct RaftCmdHeader
@@ -76,7 +74,7 @@ enum class RaftProxyStatus : uint8_t
     Stopped,
 };
 
-enum class TiFlashStatus : uint8_t
+enum class EngineStoreServerStatus : uint8_t
 {
     Idle = 0,
     Running,
@@ -95,6 +93,7 @@ struct RawCppPtr
     RawVoidPtr ptr;
     RawCppPtrType type;
 
+    RawCppPtr(RawVoidPtr ptr_ = nullptr, RawCppPtrType type_ = RawCppPtrType::None) : ptr(ptr_), type(type_) {}
     RawCppPtr(const RawCppPtr &) = delete;
     RawCppPtr(RawCppPtr &&) = delete;
 };
@@ -105,6 +104,21 @@ struct CppStrWithView
     BaseBuffView view;
 
     CppStrWithView(const CppStrWithView &) = delete;
+};
+
+enum class HttpRequestStatus : uint8_t
+{
+    Ok = 0,
+    ErrorParam,
+};
+
+
+struct HttpRequestRes
+{
+    HttpRequestStatus status;
+    CppStrWithView res;
+
+    HttpRequestRes(const HttpRequestRes &) = delete;
 };
 
 struct CppStrVecView
@@ -148,7 +162,7 @@ struct SSTReaderInterfaces
     void (*fn_gc)(SSTReaderPtr, ColumnFamilyType);
 };
 
-struct TiFlashRaftProxyHelperFFI
+struct RaftStoreProxyFFIHelper
 {
     RaftStoreProxyPtr proxy_ptr;
     RaftProxyStatus (*fn_handle_get_proxy_status)(RaftStoreProxyPtr);
@@ -168,22 +182,22 @@ struct EngineStoreServerHelper
     uint32_t version;      // version of function interface
     //
 
-    TiFlashServer * inner;
+    EngineStoreServerWrap * inner;
     RawCppPtr (*fn_gen_cpp_string)(BaseBuffView);
-    TiFlashApplyRes (*fn_handle_write_raft_cmd)(const TiFlashServer *, WriteCmdsView, RaftCmdHeader);
-    TiFlashApplyRes (*fn_handle_admin_raft_cmd)(const TiFlashServer *, BaseBuffView, BaseBuffView, RaftCmdHeader);
-    void (*fn_atomic_update_proxy)(TiFlashServer *, TiFlashRaftProxyHelperFFI *);
-    void (*fn_handle_destroy)(TiFlashServer *, uint64_t);
-    TiFlashApplyRes (*fn_handle_ingest_sst)(TiFlashServer *, SSTViewVec, RaftCmdHeader);
-    uint8_t (*fn_handle_check_terminated)(TiFlashServer *);
-    StoreStats (*fn_handle_compute_store_stats)(TiFlashServer *);
-    TiFlashStatus (*fn_handle_get_tiflash_status)(TiFlashServer *);
-    RawCppPtr (*fn_pre_handle_snapshot)(TiFlashServer *, BaseBuffView, uint64_t, SSTViewVec, uint64_t, uint64_t);
-    void (*fn_apply_pre_handled_snapshot)(TiFlashServer *, RawVoidPtr, RawCppPtrType);
-    CppStrWithView (*fn_handle_get_table_sync_status)(TiFlashServer *, uint64_t);
-    void (*fn_gc_raw_cpp_ptr)(TiFlashServer *, RawVoidPtr, RawCppPtrType);
+    EngineStoreApplyRes (*fn_handle_write_raft_cmd)(const EngineStoreServerWrap *, WriteCmdsView, RaftCmdHeader);
+    EngineStoreApplyRes (*fn_handle_admin_raft_cmd)(const EngineStoreServerWrap *, BaseBuffView, BaseBuffView, RaftCmdHeader);
+    void (*fn_atomic_update_proxy)(EngineStoreServerWrap *, RaftStoreProxyFFIHelper *);
+    void (*fn_handle_destroy)(EngineStoreServerWrap *, uint64_t);
+    EngineStoreApplyRes (*fn_handle_ingest_sst)(EngineStoreServerWrap *, SSTViewVec, RaftCmdHeader);
+    uint8_t (*fn_handle_check_terminated)(EngineStoreServerWrap *);
+    StoreStats (*fn_handle_compute_store_stats)(EngineStoreServerWrap *);
+    EngineStoreServerStatus (*fn_handle_get_engine_store_server_status)(EngineStoreServerWrap *);
+    RawCppPtr (*fn_pre_handle_snapshot)(EngineStoreServerWrap *, BaseBuffView, uint64_t, SSTViewVec, uint64_t, uint64_t);
+    void (*fn_apply_pre_handled_snapshot)(EngineStoreServerWrap *, RawVoidPtr, RawCppPtrType);
+    HttpRequestRes (*fn_handle_http_request)(EngineStoreServerWrap *, BaseBuffView);
+    uint8_t (*fn_check_http_uri_available)(BaseBuffView);
+    void (*fn_gc_raw_cpp_ptr)(EngineStoreServerWrap *, RawVoidPtr, RawCppPtrType);
     RawVoidPtr (*fn_gen_batch_read_index_res)(uint64_t);
     void (*fn_insert_batch_read_index_resp)(RawVoidPtr, BaseBuffView, uint64_t);
 };
 } // namespace DB
-}

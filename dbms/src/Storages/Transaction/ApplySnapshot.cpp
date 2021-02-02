@@ -247,7 +247,7 @@ void KVStore::handleApplySnapshot(
     handleApplySnapshot(RegionPtrWrap{new_region, preHandleSnapshot(new_region, snaps, tmt)}, tmt);
 }
 
-TiFlashApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)
+EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)
 {
     auto region_task_lock = region_manager.genRegionTaskLock(region_id);
 
@@ -260,7 +260,7 @@ TiFlashApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec snap
     if (region == nullptr)
     {
         LOG_WARNING(log, __PRETTY_FUNCTION__ << ": [region " << region_id << "] is not found, might be removed already");
-        return TiFlashApplyRes::NotFound;
+        return EngineStoreApplyRes::NotFound;
     }
 
     const auto func_try_flush = [&]() {
@@ -288,12 +288,12 @@ TiFlashApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec snap
     if (region->dataSize())
     {
         LOG_INFO(log, __FUNCTION__ << ": " << region->toString(true) << " with data " << region->dataInfo() << " skip persist");
-        return TiFlashApplyRes::None;
+        return EngineStoreApplyRes::None;
     }
     else
     {
         persistRegion(*region, region_task_lock, __FUNCTION__);
-        return TiFlashApplyRes::Persist;
+        return EngineStoreApplyRes::Persist;
     }
 }
 
