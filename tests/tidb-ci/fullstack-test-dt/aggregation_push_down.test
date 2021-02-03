@@ -93,20 +93,26 @@ mysql> use test;  set @@tidb_allow_mpp=1; set @@tidb_broadcast_join_threshold_co
 |    5 |      5 |    5 |
 +------+--------+------+
 
-mysql> use test;  set @@tidb_allow_mpp=1; select avg(value) from t group by id;
-+------------+
-| avg(value) |
-+------------+
-|  4.5000000 |
-|  3.3000000 |
-|  6.7000000 |
-|  2.3000000 |
-+------------+
+mysql> insert into test.t values(4,null);
 
-mysql> use test;  set @@tidb_allow_mpp=1;  select avg(value) as av from t group by id having av>4;
-+-----------+
-| av        |
-+-----------+
-| 6.7000000 |
-| 4.5000000 |
-+-----------+
+func> wait_table test t
+
+mysql> use test;  set @@tidb_allow_mpp=1; select id, avg(value) from t group by id order by 1,2;
++------+------------+
+| id   | avg(value) |
++------+------------+
+| NULL |  3.3000000 |
+|    1 |  2.3000000 |
+|    3 |  4.5000000 |
+|    4 |       NULL |
+|    5 |  6.7000000 |
++------+------------+
+
+mysql> use test;  set @@tidb_allow_mpp=1; select id,avg(value) as av from t group by id having av>4 or id is null order by 1,2;
++------+-----------+
+| id   | av        |
++------+-----------+
+| NULL | 3.3000000 |
+|    3 | 4.5000000 |
+|    5 | 6.7000000 |
++------+-----------+
