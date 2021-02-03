@@ -2371,9 +2371,11 @@ public:
         if (!arguments[0]->isString())
             throw TiFlashException("First argument for function " + getName() + " (unit) must be String", Errors::Coprocessor::BadRequest);
 
-        if (!(arguments[1]->isString() || arguments[1]->isDateOrDateTime()))
+        // TODO: Support Extract from string, see https://github.com/pingcap/tidb/issues/22700
+        // if (!(arguments[1]->isString() || arguments[1]->isDateOrDateTime()))
+        if (!arguments[1]->isDateOrDateTime())
             throw TiFlashException(
-                "Illegal type " + arguments[1]->getName() + " of second argument of function " + getName() + ". Must be DateOrDateTime or String.",
+                "Illegal type " + arguments[1]->getName() + " of second argument of function " + getName() + ". Must be DateOrDateTime.",
                 Errors::Coprocessor::BadRequest);
 
         return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeInt64>());
