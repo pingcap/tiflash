@@ -4,6 +4,9 @@ set -x
 set +e
 
 pwd
+df -h
+grep ^ /sys/block/*/queue/rotational
+
 cat /proc/cpuinfo | grep name | cut -f2 -d: | uniq -c
 cat /proc/meminfo
 uname -a
@@ -11,7 +14,6 @@ hostname
 lsmod
 dmidecode | grep 'Product Name'
 free -mh
-df -h
 cat /proc/loadavg
 
 set -e
