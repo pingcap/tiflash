@@ -55,6 +55,7 @@ static const String COLLATOR_NAME = "collator";
 static const String MPP_QUERY = "mpp_query";
 static const String USE_BROADCAST_JOIN = "use_broadcast_join";
 static const String MPP_PARTITION_NUM = "mpp_partition_num";
+static const String MPP_TIMEOUT = "mpp_timeout";
 static const String LOCAL_HOST = "127.0.0.1:3930";
 
 struct DAGProperties
@@ -67,6 +68,7 @@ struct DAGProperties
     bool use_broadcast_join = false;
     Int32 mpp_partition_num = 1;
     Timestamp start_ts = DEFAULT_MAX_READ_TSO;
+    Int32 mpp_timeout = 10;
 };
 
 std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
@@ -256,6 +258,8 @@ DAGProperties getDAGProperties(String prop_string)
         ret.use_broadcast_join = properties[USE_BROADCAST_JOIN] == "true";
     if (properties.find(MPP_PARTITION_NUM) != properties.end())
         ret.mpp_partition_num = std::stoi(properties[MPP_PARTITION_NUM]);
+    if (properties.find(MPP_TIMEOUT) != properties.end())
+        ret.mpp_timeout = std::stoi(properties[MPP_TIMEOUT]);
 
     return ret;
 }
@@ -282,7 +286,7 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
             tm->set_task_id(task.task_id);
             auto * encoded_plan = req->mutable_encoded_plan();
             task.dag_request->AppendToString(encoded_plan);
-            req->set_timeout(10);
+            req->set_timeout(properties.mpp_timeout);
             req->set_schema_ver(DEFAULT_UNSPECIFIED_SCHEMA_VERSION);
             auto table_id = task.table_id;
             if (table_id != -1)
@@ -458,7 +462,14 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t co
         if (AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
         {
             /// aggregation function is handled in Aggregation, so just treated as a column
-            auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) { return field.first == id->getColumnName(); });
+            auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) {
+                auto column_name = splitQualifiedName(id->getColumnName());
+                auto field_name = splitQualifiedName(field.first);
+                if (column_name.first.empty())
+                    return field_name.second == column_name.second;
+                else
+                    return field_name.first == column_name.first && field_name.second == column_name.second;
+            });
             if (ft == input.end())
                 throw Exception("No such column " + id->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
             expr->set_tp(tipb::ColumnRef);
@@ -1379,7 +1390,14 @@ TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast)
     if (ASTIdentifier * id = typeid_cast<ASTIdentifier *>(ast.get()))
     {
         /// check column
-        auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) { return field.first == id->getColumnName(); });
+        auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) {
+            auto column_name = splitQualifiedName(id->getColumnName());
+            auto field_name = splitQualifiedName(field.first);
+            if (column_name.first.empty())
+                return field_name.second == column_name.second;
+            else
+                return field_name.first == column_name.first && field_name.second == column_name.second;
+        });
         if (ft == input.end())
             throw Exception("No such column " + id->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
         ci = ft->second;
@@ -1545,6 +1563,8 @@ ExecutorPtr compileTableScan(size_t & executor_index, TableInfo & table_info, St
         ci.elems = column_info.elems;
         ci.default_value = column_info.default_value;
         ci.origin_default_value = column_info.origin_default_value;
+        /// use qualified name as the column name to handle multiple table queries, not very
+        /// efficient but functionally enough for mock test
         ts_output.emplace_back(std::make_pair(table_alias + "." + column_info.name, std::move(ci)));
     }
     if (append_pk_column)
@@ -1673,6 +1693,8 @@ ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr se
             const auto & last_output = input->output_schema;
             for (const auto & field : last_output)
             {
+                // todo need to use the subquery alias to reconstruct the field
+                //  name if subquery is supported
                 output_schema.emplace_back(field.first, field.second);
             }
         }
@@ -1686,11 +1708,15 @@ ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr se
                     [&](const auto & field) { return field.first == func->getColumnName(); });
                 if (ft == input->output_schema.end())
                     throw Exception("No such agg " + func->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
+                // todo need to use the subquery alias to reconstruct the field
+                //  name if subquery is supported
                 output_schema.emplace_back(ft->first, ft->second);
             }
             else
             {
                 auto ci = compileExpr(input->output_schema, expr);
+                // todo need to use the subquery alias to reconstruct the field
+                //  name if subquery is supported
                 output_schema.emplace_back(std::make_pair(expr->getColumnName(), ci));
             }
         }
