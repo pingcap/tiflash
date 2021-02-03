@@ -712,7 +712,7 @@ struct MPPCtx
     std::vector<Int64> sender_target_task_ids;
     std::vector<Int64> current_task_ids;
     std::vector<Int64> partition_keys;
-    tipb::ExchangeType type;
+    //tipb::ExchangeType type;
     MPPCtx(Timestamp start_ts_, size_t partition_num_) : start_ts(start_ts_), partition_num(partition_num_), next_task_id(1) {}
 };
 
@@ -1328,17 +1328,30 @@ struct Join : Executor
         join->set_inner_idx(1);
         for (auto & key : join_params.using_expression_list->children)
         {
-            fillJoinKeyAndFieldType(key, children[0]->output_schema, join->add_left_join_keys(), join->add_build_types(), collator_id);
-            fillJoinKeyAndFieldType(key, children[1]->output_schema, join->add_right_join_keys(), join->add_probe_types(), collator_id);
+            fillJoinKeyAndFieldType(key, children[0]->output_schema, join->add_left_join_keys(), join->add_probe_types(), collator_id);
+            fillJoinKeyAndFieldType(key, children[1]->output_schema, join->add_right_join_keys(), join->add_build_types(), collator_id);
         }
         auto * left_child_executor = join->add_children();
         children[0]->toTiPBExecutor(left_child_executor, collator_id, mpp_info);
         auto * right_child_executor = join->add_children();
         return children[1]->toTiPBExecutor(right_child_executor, collator_id, mpp_info);
     }
-    void toMPPSubPlan(size_t & executor_index, const DAGProperties &,
+    void toMPPSubPlan(size_t & executor_index, const DAGProperties & properties,
         std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiver>, std::shared_ptr<ExchangeSender>>> & exchange_map) override
     {
+        if (properties.use_broadcast_join)
+        {
+            /// for broadcast join, always use right side as the broadcast side
+            std::shared_ptr<ExchangeSender> right_exchange_sender
+                = std::make_shared<ExchangeSender>(executor_index, children[1]->output_schema, tipb::Broadcast);
+            right_exchange_sender->children.push_back(children[1]);
+
+            std::shared_ptr<ExchangeReceiver> right_exchange_receiver
+                = std::make_shared<ExchangeReceiver>(executor_index, children[1]->output_schema);
+            children[1] = right_exchange_receiver;
+            exchange_map[right_exchange_receiver->name] = std::make_pair(right_exchange_receiver, right_exchange_sender);
+            return;
+        }
         std::vector<size_t> left_partition_keys;
         std::vector<size_t> right_partition_keys;
         for (auto & key : join_params.using_expression_list->children)
@@ -1362,7 +1375,6 @@ struct Join : Executor
                 }
             }
         }
-        // todo support broadcast join
         std::shared_ptr<ExchangeSender> left_exchange_sender
             = std::make_shared<ExchangeSender>(executor_index, children[0]->output_schema, tipb::Hash, left_partition_keys);
         left_exchange_sender->children.push_back(children[0]);
@@ -1862,7 +1874,6 @@ QueryFragments mppQueryToQueryFragments(
         mpp_ctx->sender_target_task_ids = current_task_ids;
         mpp_ctx->current_task_ids = task_ids;
         receiver_source_task_ids_map[exchange.first] = task_ids;
-        mpp_ctx->type = tipb::Hash;
         auto sub_fragments = mppQueryToQueryFragments(exchange.second.second, executor_index, properties, false, mpp_ctx);
         fragments.insert(fragments.end(), sub_fragments.begin(), sub_fragments.end());
     }
@@ -1883,7 +1894,6 @@ QueryFragments queryPlanToQueryFragments(const DAGProperties & properties, Execu
         mpp_ctx->sender_target_task_ids.emplace_back(-1);
         for (size_t i = 0; i < (size_t)properties.mpp_partition_num; i++)
             mpp_ctx->current_task_ids.push_back(mpp_ctx->next_task_id++);
-        mpp_ctx->type = tipb::ExchangeType::PassThrough;
         return mppQueryToQueryFragments(root_executor, executor_index, properties, true, mpp_ctx);
     }
     else

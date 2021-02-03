@@ -21,7 +21,10 @@
 => DBGInvoke __put_region(8, 100, 200, default, test2)
 => DBGInvoke __put_region(9, 200, 300, default, test2)
 
+# shuffle join with empty table
 => DBGInvoke tidb_query('select * from default.test1 all inner join default.test2 using col_2', 4,'mpp_query:true,mpp_partition_num:3')
+# broadcast join with empty table
+=> DBGInvoke tidb_query('select * from default.test1 all inner join default.test2 using col_2', 4,'mpp_query:true,mpp_partition_num:3,use_broadcast_join:true')
 
 => DBGInvoke __raft_insert_row(default, test1, 4, 52, 'test3', 777)
 => DBGInvoke __raft_insert_row(default, test1, 4, 53, 'test4', 888)
@@ -36,8 +39,31 @@
 => DBGInvoke __raft_insert_row(default, test2, 9, 252, 'test13', 777)
 => DBGInvoke __raft_insert_row(default, test2, 9, 253, 'test14', 888)
 
-# DAG read by not specifying region id, group by.
+# shuffle join
 => DBGInvoke tidb_query('select * from default.test1 all inner join default.test2 using col_2', 4,'mpp_query:true,mpp_partition_num:3')
+┌─exchange_receiver_0─┬─exchange_receiver_1─┬─exchange_receiver_2─┬─exchange_receiver_3─┐
+│ test4               │                 888 │ test14              │                 888 │
+│ test4               │                 888 │ test14              │                 888 │
+│ test4               │                 888 │ test14              │                 888 │
+│ test4               │                 888 │ test14              │                 888 │
+│ test4               │                 888 │ test14              │                 888 │
+│ test4               │                 888 │ test14              │                 888 │
+│ test4               │                 888 │ test14              │                 888 │
+│ test4               │                 888 │ test14              │                 888 │
+│ test4               │                 888 │ test14              │                 888 │
+│ test3               │                 777 │ test13              │                 777 │
+│ test3               │                 777 │ test13              │                 777 │
+│ test3               │                 777 │ test13              │                 777 │
+│ test3               │                 777 │ test13              │                 777 │
+│ test3               │                 777 │ test13              │                 777 │
+│ test3               │                 777 │ test13              │                 777 │
+│ test3               │                 777 │ test13              │                 777 │
+│ test3               │                 777 │ test13              │                 777 │
+│ test3               │                 777 │ test13              │                 777 │
+└─────────────────────┴─────────────────────┴─────────────────────┴─────────────────────┘
+
+# broadcast join
+=> DBGInvoke tidb_query('select * from default.test1 all inner join default.test2 using col_2', 4,'mpp_query:true,mpp_partition_num:3,use_broadcast_join:true')
 ┌─exchange_receiver_0─┬─exchange_receiver_1─┬─exchange_receiver_2─┬─exchange_receiver_3─┐
 │ test4               │                 888 │ test14              │                 888 │
 │ test4               │                 888 │ test14              │                 888 │
