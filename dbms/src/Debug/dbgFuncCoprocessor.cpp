@@ -297,7 +297,7 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
                     throw Exception("Not supported: table region num less than mpp partition num");
                 for (size_t i = 0; i < regions.size(); i++)
                 {
-                    if (i % properties.mpp_partition_num != task.partition_id)
+                    if (i % properties.mpp_partition_num != (size_t)task.partition_id)
                         continue;
                     auto * region = req->add_regions();
                     region->set_region_id(regions[i].first);
