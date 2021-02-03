@@ -11,7 +11,7 @@ namespace DB
 class DataKeyManager : public KeyManager
 {
 public:
-    DataKeyManager(TiFlashServer * tiflash_instance_wrap_);
+    DataKeyManager(EngineStoreServerWrap * tiflash_instance_wrap_);
 
     ~DataKeyManager() = default;
 
@@ -24,6 +24,6 @@ public:
     void linkFile(const String & src_fname, const String & dst_fname) override;
 
 private:
-    TiFlashServer * tiflash_instance_wrap;
+    EngineStoreServerWrap * tiflash_instance_wrap;
 };
 } // namespace DB
