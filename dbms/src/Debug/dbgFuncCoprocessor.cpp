@@ -293,7 +293,7 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
             {
                 /// contains a table scan
                 auto regions = context.getTMTContext().getRegionTable().getRegionsByTable(table_id);
-                if (regions.size() < properties.mpp_partition_num)
+                if (regions.size() < (size_t)properties.mpp_partition_num)
                     throw Exception("Not supported: table region num less than mpp partition num");
                 for (size_t i = 0; i < regions.size(); i++)
                 {
@@ -1362,6 +1362,7 @@ struct Join : Executor
                 }
             }
         }
+        // todo support broadcast join
         std::shared_ptr<ExchangeSender> left_exchange_sender
             = std::make_shared<ExchangeSender>(executor_index, children[0]->output_schema, tipb::Hash, left_partition_keys);
         left_exchange_sender->children.push_back(children[0]);
@@ -1856,7 +1857,7 @@ QueryFragments mppQueryToQueryFragments(
     for (auto & exchange : exchange_map)
     {
         std::vector<Int64> task_ids;
-        for (size_t i = 0; i < mpp_ctx->partition_num; i++)
+        for (size_t i = 0; i < (size_t)mpp_ctx->partition_num; i++)
             task_ids.push_back(mpp_ctx->next_task_id++);
         mpp_ctx->sender_target_task_ids = current_task_ids;
         mpp_ctx->current_task_ids = task_ids;
@@ -1880,7 +1881,7 @@ QueryFragments queryPlanToQueryFragments(const DAGProperties & properties, Execu
         root_executor = root_exchange_sender;
         MPPCtxPtr mpp_ctx = std::make_shared<MPPCtx>(properties.start_ts, properties.mpp_partition_num);
         mpp_ctx->sender_target_task_ids.emplace_back(-1);
-        for (size_t i = 0; i < properties.mpp_partition_num; i++)
+        for (size_t i = 0; i < (size_t)properties.mpp_partition_num; i++)
             mpp_ctx->current_task_ids.push_back(mpp_ctx->next_task_id++);
         mpp_ctx->type = tipb::ExchangeType::PassThrough;
         return mppQueryToQueryFragments(root_executor, executor_index, properties, true, mpp_ctx);
