@@ -10,6 +10,8 @@
 #include <Storages/PartPathSelector.h>
 #include <common/MultiVersion.h>
 #include <grpc++/grpc++.h>
+#include <common/MultiVersion.h>
+#include <grpc++/grpc++.h>
 
 #include <chrono>
 #include <condition_variable>

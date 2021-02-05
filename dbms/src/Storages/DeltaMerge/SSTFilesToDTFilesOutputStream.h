@@ -1,7 +1,9 @@
 #pragma once
 
 #include <Common/Stopwatch.h>
-#include <Storages/Transaction/RaftStoreProxyFFI/ColumnFamily.h>
+#include <RaftStoreProxyFFI/ColumnFamily.h>
+#include <Storages/Page/PageDefines.h>
+#include <Storages/StorageDeltaMerge.h>
 
 #include <memory>
 #include <string_view>
@@ -37,14 +39,17 @@ public:
                                   const SSTViewVec &             snaps_,
                                   uint64_t                       index_,
                                   uint64_t                       term_,
+                                  TiDB::SnapshotApplyMethod      method_,
                                   const TiFlashRaftProxyHelper * proxy_helper_,
-                                  TMTContext &                   tmt_);
+                                  TMTContext &                   tmt_,
+                                  size_t                         expected_size_ = DEFAULT_MERGE_BLOCK_SIZE);
     ~SSTFilesToDTFilesOutputStream();
 
     void writePrefix();
     void writeSuffix();
-
     void write();
+
+    PageIds ingestIds() const { return ingest_file_ids; }
 
 private:
     void scanCF(ColumnFamilyType cf, const std::string_view until = std::string_view{});
@@ -54,23 +59,27 @@ private:
     void finishCurrDTFileStream();
 
 private:
-    RegionPtr                      region;
-    const SSTViewVec &             snaps;
-    const uint64_t                 snap_index;
-    const uint64_t                 snap_term;
-    const TiFlashRaftProxyHelper * proxy_helper{nullptr};
-    TMTContext &                   tmt;
-    Poco::Logger *                 log;
+    RegionPtr                       region;
+    const SSTViewVec &              snaps;
+    const uint64_t                  snap_index;
+    const uint64_t                  snap_term;
+    const TiDB::SnapshotApplyMethod method;
+    const TiFlashRaftProxyHelper *  proxy_helper{nullptr};
+    TMTContext &                    tmt;
+    size_t                          expected_size;
+    Poco::Logger *                  log;
 
     using SSTReaderPtr = std::unique_ptr<SSTReader>;
     SSTReaderPtr write_reader;
     SSTReaderPtr default_reader;
     SSTReaderPtr lock_reader;
 
-    String                                   snap_dir;
-    UInt64                                   curr_file_id = 0;
+    std::shared_ptr<StorageDeltaMerge>       ingest_storage;
+    DM::ColumnDefinesPtr                     cur_schema;
     DMFilePtr                                dt_file;
     std::unique_ptr<DMFileBlockOutputStream> dt_stream;
+
+    PageIds ingest_file_ids;
 
     size_t    schema_sync_trigger_count = 0;
     size_t    process_keys              = 0;

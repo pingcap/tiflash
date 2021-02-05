@@ -57,6 +57,16 @@ struct MockRaftCommand
     // Usage:
     //   ./storages-client.sh "DBGInvoke region_snapshot_apply_block(region_id)"
     static void dbgFuncRegionSnapshotApplyBlock(Context & context, const ASTs & args, DBGInvoker::Printer output);
+
+    // Simulate a region pre-handle snapshot data to DTFiles
+    // Usage:
+    //    ./storage-client.sh "DBGInvoke region_snapshot_pre_handle_file(database_name, table_name, region_id, start, end, schema_string, pk_name[, test-fields])"
+    static void dbgFuncRegionSnapshotPreHandleDTFiles(Context & context, const ASTs & args, DBGInvoker::Printer output);
+
+    // Apply snapshot for a region. (apply a pre-handle snapshot)
+    // Usage:
+    //   ./storages-client.sh "DBGInvoke region_snapshot_pre_handle_file(region_id)"
+    static void dbgFuncRegionSnapshotApplyDTFiles(Context & context, const ASTs & args, DBGInvoker::Printer output);
 };
 
 } // namespace DB

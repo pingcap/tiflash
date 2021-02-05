@@ -70,6 +70,8 @@ public:
 
     UInt64 onSyncGc(Int64) override;
 
+    void ingestFiles(const DM::RowKeyRange & range, const std::vector<UInt64> & file_ids, const Settings & settings);
+
     void rename(const String & new_path_to_db,
         const String & new_database_name,
         const String & new_table_name,

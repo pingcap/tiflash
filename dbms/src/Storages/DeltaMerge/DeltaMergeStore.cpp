@@ -386,7 +386,24 @@ inline Block getSubBlock(const Block & block, size_t offset, size_t limit)
     }
 }
 
-void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_settings, const Block & to_write)
+// Add an extra handle column if handle reused the original column data.
+Block DeltaMergeStore::addExtraColumnIfNeed(const Context & db_context, Block && block) const
+{
+    if (pkIsHandle())
+    {
+        auto handle_pos = getPosByColumnId(block, original_table_handle_define.id);
+        addColumnToBlock(block, //
+                         EXTRA_HANDLE_COLUMN_ID,
+                         EXTRA_HANDLE_COLUMN_NAME,
+                         EXTRA_HANDLE_COLUMN_INT_TYPE,
+                         EXTRA_HANDLE_COLUMN_INT_TYPE->createColumn());
+        // Fill the new column with data in column[handle_pos]
+        FunctionToInt64::create(db_context)->execute(block, {handle_pos}, block.columns() - 1);
+    }
+    return std::move(block);
+}
+
+void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_settings, Block && to_write)
 {
     LOG_TRACE(log, __FUNCTION__ << " table: " << db_name << "." << table_name << ", rows: " << to_write.rows());
 
@@ -397,19 +414,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         return;
 
     auto  dm_context = newDMContext(db_context, db_settings);
-    Block block      = to_write;
+    Block block      = addExtraColumnIfNeed(db_context, std::move(to_write));
 
-    // Add an extra handle column, if handle reused the original column data.
-    if (pkIsHandle())
-    {
-        auto handle_pos = getPosByColumnId(block, original_table_handle_define.id);
-        addColumnToBlock(block, //
-                         EXTRA_HANDLE_COLUMN_ID,
-                         EXTRA_HANDLE_COLUMN_NAME,
-                         EXTRA_HANDLE_COLUMN_INT_TYPE,
-                         EXTRA_HANDLE_COLUMN_INT_TYPE->createColumn());
-        FunctionToInt64::create(db_context)->execute(block, {handle_pos}, block.columns() - 1);
-    }
     const auto bytes = block.bytes();
 
     {
@@ -517,14 +523,43 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         checkSegmentUpdate(dm_context, segment, ThreadType::Write);
 }
 
-void DeltaMergeStore::writeRegionSnapshot(const DMContextPtr & dm_context,
-                                          const RowKeyRange &  range,
-                                          std::vector<PageId>  file_ids,
-                                          bool                 clear_data_in_range)
+std::tuple<String, PageId> DeltaMergeStore::preAllocateIngestFile()
 {
+    if (shutdown_called.load(std::memory_order_relaxed))
+        return {};
+
+    auto delegator   = path_pool.getStableDiskDelegator();
+    auto parent_path = delegator.choosePath();
+    auto new_id      = storage_pool.newDataPageId();
+    return {parent_path, new_id};
+}
+
+void DeltaMergeStore::preIngestFile(const String & parent_path, const PageId file_id, size_t file_size)
+{
+    if (shutdown_called.load(std::memory_order_relaxed))
+        return;
+
+    auto delegator = path_pool.getStableDiskDelegator();
+    delegator.addDTFile(file_id, file_size, parent_path);
+}
+
+void DeltaMergeStore::ingestFiles(const DMContextPtr & dm_context,
+                                  const RowKeyRange &  range,
+                                  std::vector<PageId>  file_ids,
+                                  bool                 clear_data_in_range)
+{
+    if (unlikely(shutdown_called.load(std::memory_order_relaxed)))
+    {
+        std::stringstream stream;
+        stream << " try to ingest files into a shutdown table: " << db_name << "." << table_name;
+        auto msg = stream.str();
+        LOG_WARNING(log, __FUNCTION__ << msg);
+        throw Exception(msg);
+    }
+
     LOG_INFO(log, __FUNCTION__ << " table: " << db_name << "." << table_name << ", region range:" << range.toDebugString());
 
-    EventRecorder write_block_recorder(ProfileEvents::DMDeleteRange, ProfileEvents::DMDeleteRangeNS);
+    EventRecorder write_block_recorder(ProfileEvents::DMWriteFile, ProfileEvents::DMWriteFileNS);
 
     auto delegate      = dm_context->path_pool.getStableDiskDelegator();
     auto file_provider = dm_context->db_context.getFileProvider();
@@ -547,8 +582,8 @@ void DeltaMergeStore::writeRegionSnapshot(const DMContextPtr & dm_context,
     }
 
     LOG_DEBUG(log,
-              "[Write Region Snapshot] table: " << db_name << "." << table_name << ", rows: " << rows << ", bytes: " << bytes
-                                                << ", bytes on disk" << bytes_on_disk);
+              __FUNCTION__ << " table: " << db_name << "." << table_name << ", rows: " << rows << ", bytes: " << bytes << ", bytes on disk"
+                           << bytes_on_disk);
 
     Segments    updated_segments;
     RowKeyRange cur_range = range;
@@ -688,7 +723,6 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
             segment_range = segment->getRowKeyRange();
 
             // Write could fail, because other threads could already updated the instance. Like split/merge, merge delta.
-
             if (segment->write(*dm_context, delete_range.shrink(segment_range)))
             {
                 updated_segments.push_back(segment);

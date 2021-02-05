@@ -23,8 +23,11 @@ namespace FailPoints
 extern const char pause_until_apply_raft_snapshot[];
 } // namespace FailPoints
 
-KVStore::KVStore(Context & context)
-    : region_persister(context, region_manager), raft_cmd_res(std::make_unique<RaftCommandResult>()), log(&Logger::get("KVStore"))
+KVStore::KVStore(Context & context, TiDB::SnapshotApplyMethod snapshot_apply_method_)
+    : region_persister(context, region_manager),
+      raft_cmd_res(std::make_unique<RaftCommandResult>()),
+      snapshot_apply_method(snapshot_apply_method_),
+      log(&Logger::get("KVStore"))
 {}
 
 void KVStore::restore(const TiFlashRaftProxyHelper * proxy_helper)

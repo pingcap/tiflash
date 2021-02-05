@@ -155,28 +155,33 @@ size_t DPFileReader::readRowsOnce(MutableColumns &    output_cols, //
 
     size_t rows_end    = rows_offset + rows_limit;
     size_t actual_read = 0;
-    while (rows_offset < rows_end)
+    size_t read_offset = rows_offset;
+    while (read_offset < rows_end)
     {
         if (!cur_block || cur_block_offset == cur_block.rows())
         {
-            if (!read_next_block())
-                throw Exception("Not enough delta data to read", ErrorCodes::LOGICAL_ERROR);
+            if (unlikely(!read_next_block()))
+                throw Exception("Not enough delta data to read [offset=" + DB::toString(rows_offset)
+                                    + "] [read_offset=" + DB::toString(read_offset) + "] [limit=" + DB::toString(rows_limit) + "]",
+                                ErrorCodes::LOGICAL_ERROR);
         }
-        if (rows_offset < rows_before_cur_block + cur_block_offset)
-            throw Exception("rows_offset is too small", ErrorCodes::LOGICAL_ERROR);
+        if (unlikely(read_offset < rows_before_cur_block + cur_block_offset))
+            throw Exception("read_offset is too small [read_offset=" + DB::toString(read_offset)
+                                + "] [min_offset=" + DB::toString(rows_before_cur_block + cur_block_offset) + "]",
+                            ErrorCodes::LOGICAL_ERROR);
 
-        if (rows_offset >= rows_before_cur_block + cur_block.rows())
+        if (read_offset >= rows_before_cur_block + cur_block.rows())
         {
             cur_block_offset = cur_block.rows();
             continue;
         }
         auto read_end_for_cur_block = std::min(rows_end, rows_before_cur_block + cur_block.rows());
 
-        auto read_start_in_block = rows_offset - rows_before_cur_block;
-        auto read_limit_in_block = read_end_for_cur_block - rows_offset;
+        auto read_start_in_block = read_offset - rows_before_cur_block;
+        auto read_limit_in_block = read_end_for_cur_block - read_offset;
 
         actual_read += copyColumnsData(cur_block_data, cur_block_data[0], output_cols, read_start_in_block, read_limit_in_block, range);
-        rows_offset += read_limit_in_block;
+        read_offset += read_limit_in_block;
         cur_block_offset += read_limit_in_block;
     }
     return actual_read;
