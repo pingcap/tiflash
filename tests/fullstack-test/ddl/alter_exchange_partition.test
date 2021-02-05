@@ -1,4 +1,6 @@
-# this test can be enabled once https://github.com/pingcap/tidb/issues/17918 is fixed
+#TODO: alter table exchagne partition is disabled by default in https://github.com/pingcap/tidb/pull/22638
+#RETURN
+
 >> DBGInvoke __enable_schema_sync_service('true')
 mysql> drop table if exists test.e;
 mysql> drop table if exists test.e2;
