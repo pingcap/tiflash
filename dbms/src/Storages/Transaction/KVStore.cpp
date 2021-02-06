@@ -353,7 +353,7 @@ TiFlashApplyRes KVStore::handleUselessAdminRaftCmd(
     if (sync_log)
     {
         tryFlushRegionCacheInStorage(tmt, curr_region, log);
-        persistRegion(curr_region, region_task_lock, __FUNCTION__);
+        persistRegion(curr_region, region_task_lock, "useless raft cmd");
         return TiFlashApplyRes::Persist;
     }
     return TiFlashApplyRes::None;
@@ -418,7 +418,7 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
 
         const auto persist_and_sync = [&](const Region & region) {
             tryFlushRegionCacheInStorage(tmt, region, log);
-            persistRegion(region, region_task_lock, __FUNCTION__);
+            persistRegion(region, region_task_lock, "admin raft cmd");
         };
 
         const auto handle_batch_split = [&](Regions & split_regions) {
