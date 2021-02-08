@@ -2,6 +2,8 @@
 #include <Common/TiFlashException.h>
 #include <Encryption/AESCTRCipherStream.h>
 #include <Encryption/KeyManager.h>
+#include <Storages/Transaction/FileEncryption.h>
+
 #include <cstddef>
 
 namespace DB
@@ -10,6 +12,21 @@ namespace ErrorCodes
 {
 extern const int NOT_IMPLEMENTED;
 } // namespace ErrorCodes
+
+size_t KeySize(EncryptionMethod method)
+{
+    switch (method)
+    {
+        case EncryptionMethod::Aes128Ctr:
+            return 16;
+        case EncryptionMethod::Aes192Ctr:
+            return 24;
+        case EncryptionMethod::Aes256Ctr:
+            return 32;
+        default:
+            return 0;
+    }
+}
 
 void AESCTRCipherStream::cipher(uint64_t file_offset, char * data, size_t data_size, bool is_encrypt)
 {
