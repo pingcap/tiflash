@@ -155,7 +155,7 @@ void AESCTRCipherStream::cipher(uint64_t file_offset, char * data, size_t data_s
 BlockAccessCipherStreamPtr AESCTRCipherStream::createCipherStream(
     const FileEncryptionInfo & encryption_info_, const EncryptionPath & encryption_path_)
 {
-    std::string key = *(encryption_info_.key);
+    const auto & key = *(encryption_info_.key);
 
     const EVP_CIPHER * cipher = nullptr;
     switch (encryption_info_.method)

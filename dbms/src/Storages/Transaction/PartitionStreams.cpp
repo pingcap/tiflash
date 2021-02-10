@@ -346,6 +346,9 @@ RegionException::RegionReadStatus RegionTable::resolveLocksAndWriteRegion(TMTCon
     if (read_status != RegionException::RegionReadStatus::OK)
         return read_status;
 
+    if (data_list_read.empty())
+        return read_status;
+
     auto & context = tmt.getContext();
     writeRegionDataToStorage(context, region, data_list_read, log);
 
