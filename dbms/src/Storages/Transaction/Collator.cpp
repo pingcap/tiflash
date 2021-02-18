@@ -166,7 +166,7 @@ private:
     std::vector<MatchType> match_types;
 };
 
-template <bool padding = false>
+template <typename T, bool padding = false>
 class BinCollator : public ITiDBCollator
 {
 public:
@@ -200,10 +200,18 @@ private:
     const std::string name = padding ? "BinaryPadding" : "Binary";
 
 private:
-    static inline char decodeChar(const char * s, size_t & offset) { return s[offset++]; }
+    using WeightType = T;
 
-    using WeightType = char;
-    static inline WeightType weight(char c) { return c; }
+    static inline WeightType decodeChar(const char * s, size_t & offset) {
+        if constexpr (std::is_same_v<T, char>) {
+            return s[offset++];
+        }
+        else {
+            return decodeUtf8Char(s, offset)
+        }
+    }
+
+    static inline WeightType weight(WeightType c) { return c; }
 
     friend class Pattern<BinCollator>;
 };
@@ -288,12 +296,13 @@ std::unique_ptr<ITiDBCollator> ITiDBCollator::getCollator(int32_t id)
     switch (id)
     {
         case ITiDBCollator::BINARY:
-            return std::make_unique<BinCollator<false>>(id);
+            return std::make_unique<BinCollator<char, false>>(id);
         case ITiDBCollator::ASCII_BIN:
         case ITiDBCollator::LATIN1_BIN:
+            return std::make_unique<BinCollator<char, true>>(id);
         case ITiDBCollator::UTF8MB4_BIN:
         case ITiDBCollator::UTF8_BIN:
-            return std::make_unique<BinCollator<true>>(id);
+            return std::make_unique<BinCollator<CharType, true>>(id);
         case ITiDBCollator::UTF8_GENERAL_CI:
         case ITiDBCollator::UTF8MB4_GENERAL_CI:
             return std::make_unique<GeneralCICollator>(id);
