@@ -36,13 +36,14 @@
 #include <Poco/Net/NetException.h>
 #include <Poco/StringTokenizer.h>
 #include <Poco/Timestamp.h>
+#include <RaftStoreProxyFFI/VersionCheck.h>
 #include <Server/StorageConfigParser.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/System/attachSystemTables.h>
+#include <Storages/Transaction/FileEncryption.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/ProxyFFIType.h>
-#include <Storages/Transaction/RaftStoreProxyFFI/VersionCheck.h>
+#include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTContext.h>

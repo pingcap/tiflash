@@ -1,11 +1,11 @@
 #include <Common/CurrentMetrics.h>
 #include <Interpreters/Context.h>
 #include <Storages/PathCapacityMetrics.h>
+#include <Storages/Transaction/FileEncryption.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/ProxyFFIType.h>
+#include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <sys/statvfs.h>
 
 namespace CurrentMetrics
 {
@@ -47,7 +47,7 @@ const std::string & CFToName(const ColumnFamilyType type)
 
 RawCppPtr GenCppRawString(BaseBuffView view)
 {
-    return RawCppPtr{view.len ? new std::string(view.data, view.len) : nullptr, RawCppPtrType::String};
+    return RawCppPtr{view.len ? RawCppString::New(view.data, view.len) : nullptr, RawCppPtrType::String};
 }
 
 static_assert(alignof(EngineStoreServerHelper) == alignof(RawVoidPtr));
@@ -170,6 +170,16 @@ FileEncryptionInfo TiFlashRaftProxyHelper::linkFile(const std::string & src, con
 {
     return fn_handle_link_file(proxy_ptr, strIntoView(src), strIntoView(dst));
 }
+
+struct CppStrVec
+{
+    std::vector<std::string> data;
+    std::vector<BaseBuffView> view;
+    CppStrVec(std::vector<std::string> && data_) : data(std::move(data_)) { updateView(); }
+    CppStrVec(const CppStrVec &) = delete;
+    void updateView();
+    CppStrVecView intoOuterView() const { return {view.data(), view.size()}; }
+};
 
 void CppStrVec::updateView()
 {
