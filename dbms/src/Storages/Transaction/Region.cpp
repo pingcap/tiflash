@@ -6,6 +6,7 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionTable.h>
+#include <Storages/Transaction/SSTReader.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
 
@@ -577,12 +578,12 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const Timestamp 
         LOG_INFO(log, __FUNCTION__ << ": add deleted gc: " << deleted_gc_cnt);
 }
 
-TiFlashApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt)
+EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt)
 {
     if (index <= appliedIndex())
     {
         LOG_TRACE(log, toString() << " ignore outdated raft log [term: " << term << ", index: " << index << "]");
-        return TiFlashApplyRes::None;
+        return EngineStoreApplyRes::None;
     }
 
     auto & context = tmt.getContext();
@@ -689,10 +690,10 @@ TiFlashApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 in
 
     meta.notifyAll();
 
-    return TiFlashApplyRes::None;
+    return EngineStoreApplyRes::None;
 }
 
-void Region::handleIngestSST(const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt)
+void Region::handleIngestSST(const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)
 {
     if (index <= appliedIndex())
         return;
@@ -706,18 +707,24 @@ void Region::handleIngestSST(const SnapshotViewArray snaps, UInt64 index, UInt64
         for (UInt64 i = 0; i < snaps.len; ++i)
         {
             auto & snapshot = snaps.views[i];
+            auto sst_reader = SSTReader{proxy_helper, snapshot};
 
             LOG_INFO(log,
-                __FUNCTION__ << ": " << toString(false) << " begin to ingest sst of cf " << CFToName(snapshot.cf) << " at [term: " << term
-                             << ", index: " << index << "], kv count " << snapshot.len);
-            for (UInt64 n = 0; n < snapshot.len; ++n)
+                __FUNCTION__ << ": " << this->toString(false) << " begin to ingest sst of cf " << CFToName(snapshot.type)
+                             << " at [term: " << term << ", index: " << index << "]");
+
+            uint64_t kv_size = 0;
+            while (sst_reader.remained())
             {
-                auto & k = snapshot.keys[n];
-                auto & v = snapshot.vals[n];
-                doInsert(snapshot.cf, TiKVKey(k.data, k.len), TiKVValue(v.data, v.len));
+                auto key = sst_reader.key();
+                auto value = sst_reader.value();
+                doInsert(snaps.views[i].type, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
+                ++kv_size;
+                sst_reader.next();
             }
-            // Note that number of keys in different cf will be aggregated into one metrics
-            GET_METRIC(ctx.getTiFlashMetrics(), tiflash_raft_process_keys, type_ingest_sst).Increment(snapshot.len);
+
+            LOG_INFO(log, __FUNCTION__ << ": " << this->toString(false) << " finish to ingest sst of kv count " << kv_size);
+            GET_METRIC(ctx.getTiFlashMetrics(), tiflash_raft_process_keys, type_ingest_sst).Increment(kv_size);
         }
         meta.setApplied(index, term);
     }

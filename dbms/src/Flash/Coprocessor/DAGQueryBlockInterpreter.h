@@ -12,6 +12,7 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Mpp/ExchangeReceiver.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>
@@ -81,7 +82,8 @@ class DAGQueryBlockInterpreter
 public:
     DAGQueryBlockInterpreter(Context & context_, const std::vector<BlockInputStreams> & input_streams_vec_,
         const DAGQueryBlock & query_block_, bool keep_session_timezone_info_, const tipb::DAGRequest & rqst, ASTPtr dummp_query,
-        const DAGQuerySource & dag_, std::vector<SubqueriesForSets> & subqueriesForSets_);
+        const DAGQuerySource & dag_, std::vector<SubqueriesForSets> & subqueriesForSets_,
+        const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map);
 
     ~DAGQueryBlockInterpreter() = default;
 
@@ -105,7 +107,7 @@ private:
     void executeLimit(Pipeline & pipeline);
     void executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, Names & aggregation_keys,
         TiDB::TiDBCollators & collators, AggregateDescriptions & aggregate_descriptions);
-    void executeFinalProject(Pipeline & pipeline);
+    void executeProject(Pipeline & pipeline, NamesWithAliases & project_cols);
 
     void readFromLocalStorage( //
         const TableID table_id, const Names & required_columns, SelectQueryInfo & query_info, const size_t max_block_size,
@@ -143,6 +145,7 @@ private:
     std::vector<const tipb::Expr *> conditions;
     const DAGQuerySource & dag;
     std::vector<SubqueriesForSets> & subqueriesForSets;
+    const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map;
 
     Poco::Logger * log;
 };

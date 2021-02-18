@@ -25,70 +25,73 @@
 namespace DB
 {
 
+struct ExchangeReceiverResult
+{
+    std::shared_ptr<tipb::SelectResponse> resp;
+    size_t call_index;
+    String req_info;
+    bool meet_error;
+    String error_msg;
+    bool eof;
+    ExchangeReceiverResult(std::shared_ptr<tipb::SelectResponse> resp_, size_t call_index_, const String & req_info_ = "",
+        bool meet_error_ = false, const String & error_msg_ = "", bool eof_ = false)
+        : resp(resp_), call_index(call_index_), req_info(req_info_), meet_error(meet_error_), error_msg(error_msg_), eof(eof_)
+    {}
+    ExchangeReceiverResult() : ExchangeReceiverResult(nullptr, 0) {}
+};
+
 class ExchangeReceiver
 {
-    TMTContext & context;
-    std::chrono::seconds timeout;
+public:
+    static constexpr bool is_streaming_reader = true;
+
+private:
+    pingcap::kv::Cluster * cluster;
 
     tipb::ExchangeReceiver pb_exchange_receiver;
+    size_t source_num;
     ::mpp::TaskMeta task_meta;
+    size_t max_buffer_size;
     std::vector<std::thread> workers;
-    // async grpc
     DAGSchema schema;
 
     // TODO: should be a concurrency bounded queue.
     std::mutex mu;
     std::condition_variable cv;
-    std::queue<Block> block_buffer;
-    std::atomic_int live_connections;
-    bool inited;
+    std::queue<ExchangeReceiverResult> result_buffer;
+    Int32 live_connections;
     bool meet_error;
     Exception err;
     Logger * log;
-    class ExchangeCall;
 
-    void ReadLoop(const String & meta_raw);
+    void setUpConnection();
 
-    void decodePacket(const mpp::MPPDataPacket & p)
+    void ReadLoop(const String & meta_raw, size_t source_index);
+
+    void decodePacket(const mpp::MPPDataPacket & p, size_t source_index, const String & req_info)
     {
-        tipb::SelectResponse resp;
-        resp.ParseFromString(p.data());
-        int chunks_size = resp.chunks_size();
-        for (int i = 0; i < chunks_size; i++)
+        std::shared_ptr<tipb::SelectResponse> resp_ptr = std::make_shared<tipb::SelectResponse>();
+        if (!resp_ptr->ParseFromString(p.data()))
         {
-            Block block;
-            const tipb::Chunk & chunk = resp.chunks(i);
-            switch (resp.encode_type())
-            {
-                case tipb::EncodeType::TypeCHBlock:
-                    block = CHBlockChunkCodec().decode(chunk, schema);
-                    break;
-                case tipb::EncodeType::TypeChunk:
-                    block = ArrowChunkCodec().decode(chunk, schema);
-                    break;
-                case tipb::EncodeType::TypeDefault:
-                    block = DefaultChunkCodec().decode(chunk, schema);
-                    break;
-                default:
-                    throw Exception("Unsupported encode type", ErrorCodes::LOGICAL_ERROR);
-            }
-            LOG_DEBUG(log, "decode packet " << std::to_string(block.rows()));
-            if (unlikely(block.rows() == 0))
-                continue;
-            std::lock_guard<std::mutex> lock(mu);
-            block_buffer.push(std::move(block));
-            cv.notify_all();
+            resp_ptr = nullptr;
         }
+        std::unique_lock<std::mutex> lock(mu);
+        cv.wait(lock, [&] { return result_buffer.size() < max_buffer_size || meet_error; });
+        if (resp_ptr != nullptr)
+            result_buffer.emplace(resp_ptr, source_index, req_info);
+        else
+            result_buffer.emplace(resp_ptr, source_index, req_info, true, "Error while decoding MPPDataPacket");
+        cv.notify_all();
     }
 
 public:
-    ExchangeReceiver(Context & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta)
-        : context(context_.getTMTContext()),
-          timeout(context_.getSettings().mpp_task_timeout),
+    ExchangeReceiver(Context & context_, const ::tipb::ExchangeReceiver & exc, const ::mpp::TaskMeta & meta, size_t max_buffer_size_)
+        : cluster(context_.getTMTContext().getKVCluster()),
           pb_exchange_receiver(exc),
+          source_num(pb_exchange_receiver.encoded_task_meta_size()),
           task_meta(meta),
+          max_buffer_size(max_buffer_size_),
           live_connections(0),
-          inited(false),
           meet_error(false),
           log(&Logger::get("exchange_receiver"))
     {
@@ -98,6 +101,7 @@ public:
             ColumnInfo info = fieldTypeToColumnInfo(exc.field_types(i));
             schema.push_back(std::make_pair(name, info));
         }
+        setUpConnection();
     }
 
     ~ExchangeReceiver()
@@ -110,25 +114,29 @@ public:
 
     const DAGSchema & getOutputSchema() const { return schema; }
 
-    void init();
-
-    Block nextBlock()
+    ExchangeReceiverResult nextResult()
     {
-        if (!inited)
-            init();
         std::unique_lock<std::mutex> lk(mu);
-        cv.wait(lk, [&] { return block_buffer.size() > 0 || live_connections == 0 || meet_error; });
+        cv.wait(lk, [&] { return !result_buffer.empty() || live_connections == 0 || meet_error; });
+        ExchangeReceiverResult result;
         if (meet_error)
         {
-            throw err;
+            result = {nullptr, 0, "ExchangeReceiver", true, err.message(), false};
         }
-        if (block_buffer.empty())
+        else if (result_buffer.empty())
         {
-            return {};
+            result = {nullptr, 0, "ExchangeReceiver", false, "", true};
         }
-        auto block = block_buffer.front();
-        block_buffer.pop();
-        return block;
+        else
+        {
+            result = result_buffer.front();
+            result_buffer.pop();
+        }
+        cv.notify_all();
+        return result;
     }
+
+    size_t getSourceNum() { return source_num; }
+    String getName() { return "ExchangeReceiver"; }
 };
 } // namespace DB

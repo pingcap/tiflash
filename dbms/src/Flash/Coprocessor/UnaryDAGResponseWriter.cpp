@@ -14,10 +14,8 @@ extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 UnaryDAGResponseWriter::UnaryDAGResponseWriter(tipb::SelectResponse * dag_response_, Int64 records_per_chunk_,
-    tipb::EncodeType encode_type_, std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_,
-    bool collect_execute_summary_, bool return_executor_id_)
-    : DAGResponseWriter(records_per_chunk_, encode_type_, result_field_types_, dag_context_, collect_execute_summary_, return_executor_id_),
-      dag_response(dag_response_)
+    tipb::EncodeType encode_type_, std::vector<tipb::FieldType> result_field_types_, DAGContext & dag_context_)
+    : DAGResponseWriter(records_per_chunk_, encode_type_, result_field_types_, dag_context_), dag_response(dag_response_)
 {
     if (encode_type == tipb::EncodeType::TypeDefault)
     {

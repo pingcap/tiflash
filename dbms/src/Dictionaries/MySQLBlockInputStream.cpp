@@ -1,5 +1,5 @@
-#include <Common/config.h>
 #if USE_MYSQL
+#include <Common/config.h>
 
 #include <Dictionaries/MySQLBlockInputStream.h>
 #include <Columns/ColumnsNumber.h>

@@ -116,7 +116,6 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
         HandleID start = (HandleID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value);
         HandleID end = (HandleID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
 
-
         TMTContext & tmt = context.getTMTContext();
         RegionPtr region = RegionBench::createRegion(table_id, region_id, start, end);
         tmt.getKVStore()->onSnapshot(region, nullptr, 0, tmt);
@@ -278,7 +277,6 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
         throw Exception("Args not matched, should be: region-id, start-key, end-key, database-name, table-name[, partition-name]",
             ErrorCodes::BAD_ARGUMENTS);
 
-
     TMTContext & tmt = context.getTMTContext();
 
     metapb::Region region_info;
@@ -320,7 +318,7 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
     auto end_decoded_key = RecordKVFormat::decodeTiKVKey(end_key);
 
     tmt.getKVStore()->handleApplySnapshot(
-        std::move(region_info), peer_id, SnapshotViewArray(), MockTiKV::instance().getRaftIndex(region_id), RAFT_INIT_LOG_TERM, tmt);
+        std::move(region_info), peer_id, SSTViewVec{nullptr, 0}, MockTiKV::instance().getRaftIndex(region_id), RAFT_INIT_LOG_TERM, tmt);
 
     std::stringstream ss;
     ss << "put region #" << region_id << ", range[" << RecordKVFormat::DecodedTiKVKeyToDebugString<true>(start_decoded_key) << ", "
@@ -471,6 +469,94 @@ void dbgFuncRemoveRegion(Context & context, const ASTs & args, DBGInvoker::Print
     output(ss.str());
 }
 
+struct MockSSTReader
+{
+    using Key = std::pair<std::string, ColumnFamilyType>;
+    struct Data : std::vector<std::pair<std::string, std::string>>
+    {
+        Data(const Data &) = delete;
+        Data() = default;
+    };
+
+    MockSSTReader(const Data & data_) : iter(data_.begin()), end(data_.end()), remained(iter != end) {}
+
+    static SSTReaderPtr ffi_get_cf_file_reader(const Data & data_) { return SSTReaderPtr{new MockSSTReader(data_)}; }
+
+    bool ffi_remained() const { return iter != end; }
+
+    BaseBuffView ffi_key() const { return {iter->first.data(), iter->first.length()}; }
+
+    BaseBuffView ffi_val() const { return {iter->second.data(), iter->second.length()}; }
+
+    void ffi_next() { ++iter; }
+
+    static std::map<Key, MockSSTReader::Data> & getMockSSTData() { return MockSSTData; }
+
+private:
+    Data::const_iterator iter;
+    Data::const_iterator end;
+    bool remained;
+
+    static std::map<Key, MockSSTReader::Data> MockSSTData;
+};
+
+std::map<MockSSTReader::Key, MockSSTReader::Data> MockSSTReader::MockSSTData;
+
+SSTReaderPtr fn_get_sst_reader(SSTView v, RaftStoreProxyPtr)
+{
+    std::string s(v.path.data, v.path.len);
+    auto & d = MockSSTReader::getMockSSTData().find({s, v.type})->second;
+    return MockSSTReader::ffi_get_cf_file_reader(d);
+}
+uint8_t fn_remained(SSTReaderPtr ptr, ColumnFamilyType)
+{
+    auto reader = reinterpret_cast<MockSSTReader *>(ptr._inner);
+    return reader->ffi_remained();
+}
+BaseBuffView fn_key(SSTReaderPtr ptr, ColumnFamilyType)
+{
+    auto reader = reinterpret_cast<MockSSTReader *>(ptr._inner);
+    return reader->ffi_key();
+}
+BaseBuffView fn_value(SSTReaderPtr ptr, ColumnFamilyType)
+{
+    auto reader = reinterpret_cast<MockSSTReader *>(ptr._inner);
+    return reader->ffi_val();
+}
+void fn_next(SSTReaderPtr ptr, ColumnFamilyType)
+{
+    auto reader = reinterpret_cast<MockSSTReader *>(ptr._inner);
+    reader->ffi_next();
+}
+void fn_gc(SSTReaderPtr ptr, ColumnFamilyType)
+{
+    auto reader = reinterpret_cast<MockSSTReader *>(ptr._inner);
+    delete reader;
+}
+
+class RegionMockTest
+{
+public:
+    RegionMockTest(RegionPtr region_) : region(region_)
+    {
+        std::memset(&mock_proxy_helper, 0, sizeof(mock_proxy_helper));
+        mock_proxy_helper.sst_reader_interfaces = SSTReaderInterfaces{
+            .fn_get_sst_reader = fn_get_sst_reader,
+            .fn_remained = fn_remained,
+            .fn_key = fn_key,
+            .fn_value = fn_value,
+            .fn_next = fn_next,
+            .fn_gc = fn_gc,
+        };
+        region->proxy_helper = &mock_proxy_helper;
+    }
+    ~RegionMockTest() { region->proxy_helper = nullptr; }
+
+private:
+    TiFlashRaftProxyHelper mock_proxy_helper;
+    RegionPtr region;
+};
+
 void dbgFuncIngestSST(Context & context, const ASTs & args, DBGInvoker::Printer)
 {
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
@@ -480,58 +566,62 @@ void dbgFuncIngestSST(Context & context, const ASTs & args, DBGInvoker::Printer)
     RegionID end_handle = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[4]).value);
     MockTiDB::TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
 
-    std::vector<std::pair<TiKVKey, TiKVValue>> write_kv_list, default_kv_list;
-
-    for (auto handle_id = start_handle; handle_id < end_handle; ++handle_id)
+    auto region_id_str = std::to_string(region_id);
     {
-        // make it have only one column Int64 just for test
-        std::vector<Field> fields;
-        fields.emplace_back(-handle_id);
-        {
-            TiKVKey key = RecordKVFormat::genKey(table->id(), handle_id);
-            std::stringstream ss;
-            RegionBench::encodeRow(table->table_info, fields, ss);
-            TiKVValue prewrite_value(ss.str());
-            UInt64 commit_ts = handle_id;
-            UInt64 prewrite_ts = commit_ts;
-            TiKVValue commit_value = RecordKVFormat::encodeWriteCfValue(Region::PutFlag, prewrite_ts);
-            TiKVKey commit_key = RecordKVFormat::appendTs(key, commit_ts);
-            TiKVKey prewrite_key = RecordKVFormat::appendTs(key, prewrite_ts);
+        MockSSTReader::Data write_kv_list, default_kv_list;
 
-            write_kv_list.emplace_back(std::make_pair(std::move(commit_key), std::move(commit_value)));
-            default_kv_list.emplace_back(std::make_pair(std::move(prewrite_key), std::move(prewrite_value)));
+        for (auto handle_id = start_handle; handle_id < end_handle; ++handle_id)
+        {
+            // make it have only one column Int64 just for test
+            std::vector<Field> fields;
+            fields.emplace_back(-handle_id);
+            {
+                TiKVKey key = RecordKVFormat::genKey(table->id(), handle_id);
+                std::stringstream ss;
+                RegionBench::encodeRow(table->table_info, fields, ss);
+                TiKVValue prewrite_value(ss.str());
+                UInt64 commit_ts = handle_id;
+                UInt64 prewrite_ts = commit_ts;
+                TiKVValue commit_value = RecordKVFormat::encodeWriteCfValue(Region::PutFlag, prewrite_ts);
+                TiKVKey commit_key = RecordKVFormat::appendTs(key, commit_ts);
+                TiKVKey prewrite_key = RecordKVFormat::appendTs(key, prewrite_ts);
+
+                write_kv_list.emplace_back(std::make_pair(std::move(commit_key), std::move(commit_value)));
+                default_kv_list.emplace_back(std::make_pair(std::move(prewrite_key), std::move(prewrite_value)));
+            }
         }
+        MockSSTReader::getMockSSTData()[MockSSTReader::Key{region_id_str, ColumnFamilyType::Write}] = std::move(write_kv_list);
+        MockSSTReader::getMockSSTData()[MockSSTReader::Key{region_id_str, ColumnFamilyType::Default}] = std::move(default_kv_list);
+    }
+
+    auto & tmt = context.getTMTContext();
+    auto region = tmt.getKVStore()->getRegion(region_id);
+    RegionMockTest mock_test(region);
+
+    {
+        std::vector<SSTView> sst_views;
+        sst_views.push_back(SSTView{
+            ColumnFamilyType::Write,
+            BaseBuffView{region_id_str.data(), region_id_str.length()},
+        });
+        tmt.getKVStore()->handleIngestSST(region_id,
+            SSTViewVec{sst_views.data(), sst_views.size()},
+            MockTiKV::instance().getRaftIndex(region_id),
+            MockTiKV::instance().getRaftTerm(region_id),
+            tmt);
     }
 
     {
-        std::vector<BaseBuffView> keys;
-        std::vector<BaseBuffView> vals;
-        for (const auto & kv : write_kv_list)
-        {
-            keys.push_back({kv.first.data(), kv.first.dataSize()});
-            vals.push_back({kv.second.data(), kv.second.dataSize()});
-        }
-        std::vector<SnapshotView> snaps;
-        snaps.push_back(SnapshotView{keys.data(), vals.data(), ColumnFamilyType::Write, keys.size()});
-
-        auto & tmt = context.getTMTContext();
-        tmt.getKVStore()->handleIngestSST(region_id, SnapshotViewArray{snaps.data(), snaps.size()},
-            MockTiKV::instance().getRaftIndex(region_id), MockTiKV::instance().getRaftTerm(region_id), tmt);
-    }
-
-    {
-        std::vector<BaseBuffView> keys;
-        std::vector<BaseBuffView> vals;
-        for (const auto & kv : default_kv_list)
-        {
-            keys.push_back({kv.first.data(), kv.first.dataSize()});
-            vals.push_back({kv.second.data(), kv.second.dataSize()});
-        }
-        std::vector<SnapshotView> snaps;
-        snaps.push_back(SnapshotView{keys.data(), vals.data(), ColumnFamilyType::Default, keys.size()});
-        auto & tmt = context.getTMTContext();
-        tmt.getKVStore()->handleIngestSST(region_id, SnapshotViewArray{snaps.data(), snaps.size()},
-            MockTiKV::instance().getRaftIndex(region_id), MockTiKV::instance().getRaftTerm(region_id), tmt);
+        std::vector<SSTView> sst_views;
+        sst_views.push_back(SSTView{
+            ColumnFamilyType::Default,
+            BaseBuffView{region_id_str.data(), region_id_str.length()},
+        });
+        tmt.getKVStore()->handleIngestSST(region_id,
+            SSTViewVec{sst_views.data(), sst_views.size()},
+            MockTiKV::instance().getRaftIndex(region_id),
+            MockTiKV::instance().getRaftTerm(region_id),
+            tmt);
     }
 }
 

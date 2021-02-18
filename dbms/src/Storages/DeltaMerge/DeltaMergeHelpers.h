@@ -175,8 +175,8 @@ inline Block getNewBlockByHeader(const Block & header, const Block & block)
 inline ColumnDefines getColumnDefinesFromBlock(const Block & block)
 {
     ColumnDefines columns;
-    for (auto & c : block)
-        columns.push_back(ColumnDefine(c.column_id, c.name, c.type));
+    for (const auto & c : block)
+        columns.emplace_back(ColumnDefine{c.column_id, c.name, c.type, c.default_value});
     return columns;
 }
 
@@ -237,14 +237,6 @@ inline void concat(Block & base, const Block & next)
         auto * col_raw = const_cast<IColumn *>(col.get());
         col_raw->insertRangeFrom((*next.getByPosition(i).column), 0, next_rows);
     }
-}
-
-inline size_t blockBytes(const Block & block)
-{
-    size_t bytes = 0;
-    for (auto & c : block)
-        bytes += c.column->byteSize();
-    return bytes;
 }
 
 } // namespace DM

@@ -534,7 +534,12 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
 
     {tipb::ScalarFuncSig::ModReal, "modulo"}, {tipb::ScalarFuncSig::ModDecimal, "modulo"}, {tipb::ScalarFuncSig::ModInt, "modulo"},
 
-    {tipb::ScalarFuncSig::MultiplyIntUnsigned, "multiply"},
+    {tipb::ScalarFuncSig::MultiplyIntUnsigned, "multiply"}, {tipb::ScalarFuncSig::MinusIntUnsignedUnsigned, "minus"},
+    {tipb::ScalarFuncSig::MinusIntUnsignedSigned, "minus"}, {tipb::ScalarFuncSig::MinusIntSignedUnsigned, "minus"},
+    {tipb::ScalarFuncSig::MinusIntSignedSigned, "minus"}, {tipb::ScalarFuncSig::MinusIntForcedUnsignedUnsigned, "minus"},
+    {tipb::ScalarFuncSig::MinusIntForcedUnsignedSigned, "minus"}, {tipb::ScalarFuncSig::MinusIntForcedSignedUnsigned, "minus"},
+    {tipb::ScalarFuncSig::IntDivideIntUnsignedUnsigned, "intDiv"}, {tipb::ScalarFuncSig::IntDivideIntUnsignedSigned, "intDiv"},
+    {tipb::ScalarFuncSig::IntDivideIntSignedUnsigned, "intDiv"}, {tipb::ScalarFuncSig::IntDivideIntSignedSigned, "intDiv"},
 
     {tipb::ScalarFuncSig::AbsInt, "abs"}, {tipb::ScalarFuncSig::AbsUInt, "abs"}, {tipb::ScalarFuncSig::AbsReal, "abs"},
     {tipb::ScalarFuncSig::AbsDecimal, "abs"},
@@ -824,7 +829,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::StrToDateDatetime, "cast"},
     //{tipb::ScalarFuncSig::StrToDateDuration, "cast"},
     {tipb::ScalarFuncSig::FromUnixTime1Arg, "fromUnixTime"}, {tipb::ScalarFuncSig::FromUnixTime2Arg, "fromUnixTime"},
-    //{tipb::ScalarFuncSig::ExtractDatetime, "cast"},
+    {tipb::ScalarFuncSig::ExtractDatetime, "extractMyDatetime"},
     //{tipb::ScalarFuncSig::ExtractDuration, "cast"},
 
     //{tipb::ScalarFuncSig::AddDateStringString, "cast"},

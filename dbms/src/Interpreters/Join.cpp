@@ -1,22 +1,19 @@
-#include <common/logger_useful.h>
-
 #include <Columns/ColumnConst.h>
-#include <Columns/ColumnString.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnNullable.h>
-
-#include <DataTypes/DataTypeNullable.h>
-
-#include <Interpreters/Join.h>
-#include <Interpreters/NullableUtils.h>
-
+#include <Columns/ColumnString.h>
+#include <Common/typeid_cast.h>
+#include <Core/ColumnNumbers.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
-
-#include <Core/ColumnNumbers.h>
-#include <Common/typeid_cast.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
+#include <Interpreters/Join.h>
+#include <Interpreters/NullableUtils.h>
+#include <common/logger_useful.h>
+
+#include "executeQuery.h"
 
 
 namespace DB
@@ -637,9 +634,12 @@ void Join::insertFromBlockASync(const Block & block, ThreadPool & thread_pool)
         blocks.push_back(block);
         stored_block = &blocks.back();
         block_index = blocks.size();
+        original_blocks.push_back(block);
     }
-    thread_pool.schedule([&, stored_block, block_index]
+    auto memory_tracker = current_memory_tracker;
+    thread_pool.schedule([&, stored_block, block_index, memory_tracker]
     {
+        current_memory_tracker = memory_tracker;
         if (build_set_exceeded.load())
             return;
         if (!insertFromBlockInternal(stored_block, block_index))
@@ -1266,12 +1266,14 @@ void Join::checkTypesOfKeys(const Block & block_left, const Block & block_right)
 
 void Join::joinBlock(Block & block) const
 {
-//    std::cerr << "joinBlock: " << block.dumpStructure() << "\n";
+    //    std::cerr << "joinBlock: " << block.dumpStructure() << "\n";
 
     // ck will use this function to generate header, that's why here is a check.
-    std::unique_lock lk(build_table_mutex);
+    {
+        std::unique_lock lk(build_table_mutex);
 
-    build_table_cv.wait(lk, [&](){ return have_finish_build; });
+        build_table_cv.wait(lk, [&]() { return have_finish_build; });
+    }
 
     std::shared_lock lock(rwlock);
 

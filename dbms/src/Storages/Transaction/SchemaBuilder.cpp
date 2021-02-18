@@ -43,7 +43,7 @@ extern const char exception_before_step_2_rename_in_exchange_partition[];
 extern const char exception_after_step_2_in_exchange_partition[];
 extern const char exception_before_step_3_rename_in_exchange_partition[];
 extern const char exception_after_step_3_in_exchange_partition[];
-}
+} // namespace FailPoints
 
 bool isReservedDatabase(Context & context, const String & database_name)
 {
@@ -98,6 +98,28 @@ AlterCommand newRenameColCommand(const String & old_col, const String & new_col,
 using TableInfoModifier = std::function<void(TableInfo & table_info)>;
 using SchemaChange = std::pair<AlterCommands, TableInfoModifier>;
 using SchemaChanges = std::vector<SchemaChange>;
+
+bool typeDiffers(const TiDB::ColumnInfo & a, const TiDB::ColumnInfo & b)
+{
+    if (a.tp != b.tp || a.hasNotNullFlag() != b.hasNotNullFlag() || a.hasUnsignedFlag() != b.hasUnsignedFlag())
+        return true;
+    if (a.tp == TypeEnum || a.tp == TypeSet)
+    {
+        if (a.elems.size() != b.elems.size())
+            return true;
+        for (size_t i = 0; i < a.elems.size(); i++)
+        {
+            if (a.elems[i].first != b.elems[i].first)
+                return true;
+        }
+        return false;
+    }
+    else if (a.tp == TypeNewDecimal)
+    {
+        return a.flen != b.flen || a.decimal != b.decimal;
+    }
+    return false;
+}
 
 /// When schema change detected, the modification to original table info must be preserved as well.
 /// With the preserved table info modifications, table info changes along with applying alter commands.
@@ -211,8 +233,7 @@ inline SchemaChanges detectSchemaChanges(Logger * log, Context & context, const 
                       if (column_info_.id == orig_column_info.id && column_info_.name != orig_column_info.name)
                           LOG_INFO(log, "detect column " << orig_column_info.name << " rename to " << column_info_.name);
 
-                      return column_info_.id == orig_column_info.id
-                          && (column_info_.tp != orig_column_info.tp || column_info_.hasNotNullFlag() != orig_column_info.hasNotNullFlag());
+                      return column_info_.id == orig_column_info.id && typeDiffers(column_info_, orig_column_info);
                   });
 
             if (column_info != table_info.columns.end())

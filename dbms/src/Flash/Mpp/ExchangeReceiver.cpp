@@ -28,23 +28,18 @@ struct RpcTypeTraits<::mpp::EstablishMPPConnectionRequest>
 namespace DB
 {
 
-void ExchangeReceiver::init()
+void ExchangeReceiver::setUpConnection()
 {
-    std::lock_guard<std::mutex> lk(mu);
-    if (inited)
+    for (int index = 0; index < pb_exchange_receiver.encoded_task_meta_size(); index++)
     {
-        return;
-    }
-    for (auto & meta : pb_exchange_receiver.encoded_task_meta())
-    {
-        std::thread t(&ExchangeReceiver::ReadLoop, this, std::ref(meta));
+        auto & meta = pb_exchange_receiver.encoded_task_meta(index);
+        std::thread t(&ExchangeReceiver::ReadLoop, this, std::ref(meta), index);
         live_connections++;
         workers.push_back(std::move(t));
     }
-    inited = true;
 }
 
-void ExchangeReceiver::ReadLoop(const String & meta_raw)
+void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
 {
     try
     {
@@ -56,10 +51,11 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw)
         LOG_DEBUG(log, "begin start and read : " << req->DebugString());
         pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest> call(req);
         grpc::ClientContext client_context;
-        auto reader = context.getCluster()->rpc_client->sendStreamRequest(req->sender_meta().address(), &client_context, call);
+        auto reader = cluster->rpc_client->sendStreamRequest(req->sender_meta().address(), &client_context, call);
         reader->WaitForInitialMetadata();
         // Block until the next result is available in the completion queue "cq".
         mpp::MPPDataPacket packet;
+        String req_info = "tunnel" + std::to_string(sender_task->task_id()) + "+" + std::to_string(task_meta.task_id());
         for (;;)
         {
             LOG_TRACE(log, "begin next ");
@@ -70,7 +66,7 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw)
             {
                 throw Exception("exchange receiver meet error : " + packet.error().msg());
             }
-            decodePacket(packet);
+            decodePacket(packet, source_index, req_info);
         }
         LOG_DEBUG(log, "finish read : " << req->DebugString());
     }
@@ -89,6 +85,7 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw)
         meet_error = true;
         err = Exception("fatal error");
     }
+    std::lock_guard<std::mutex> lock(mu);
     live_connections--;
     cv.notify_all();
     LOG_DEBUG(log, "read thread end!!! live connections: " << std::to_string(live_connections));

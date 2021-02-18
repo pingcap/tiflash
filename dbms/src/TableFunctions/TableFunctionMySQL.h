@@ -1,4 +1,5 @@
 #pragma once
+#if USE_MYSQL
 
 #include <TableFunctions/ITableFunction.h>
 
@@ -23,3 +24,5 @@ private:
 };
 
 }
+
+#endif

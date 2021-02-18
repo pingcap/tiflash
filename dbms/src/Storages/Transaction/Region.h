@@ -28,10 +28,10 @@ class KVStoreTaskLock;
 class Context;
 class TMTContext;
 struct WriteCmdsView;
-enum class TiFlashApplyRes : uint32_t;
-struct SnapshotViewArray;
+enum class EngineStoreApplyRes : uint32_t;
+struct SSTViewVec;
 struct TiFlashRaftProxyHelper;
-
+class RegionMockTest;
 struct ReadIndexResult;
 
 /// Store all kv data of one region. Including 'write', 'data' and 'lock' column families.
@@ -170,14 +170,15 @@ public:
     void tryPreDecodeTiKVValue(TMTContext & tmt);
 
     TableID getMappedTableID() const;
-    TiFlashApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt);
-    void handleIngestSST(const SnapshotViewArray snaps, UInt64 index, UInt64 term, TMTContext & tmt);
+    EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt);
+    void handleIngestSST(const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt);
 
     UInt64 getSnapshotEventFlag() const { return snapshot_event_flag; }
 
 private:
     Region() = delete;
     friend class RegionRaftCommandDelegate;
+    friend class RegionMockTest;
 
     // Private methods no need to lock mutex, normally
 

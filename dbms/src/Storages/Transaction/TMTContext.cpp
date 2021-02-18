@@ -24,7 +24,7 @@ TMTContext::TMTContext(Context & context_, const std::vector<std::string> & addr
       ignore_databases(ignore_databases_),
       schema_syncer(addrs.size() == 0 ? std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<true>>(cluster))
                                       : std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<false>>(cluster))),
-      mpp_task_manager(std::make_shared<MPPTaskManager>()),
+      mpp_task_manager(std::make_shared<MPPTaskManager>(context.getBackgroundPool())),
       engine(engine_),
       disable_bg_flush(disable_bg_flush_)
 {}

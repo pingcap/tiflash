@@ -1,4 +1,5 @@
 #pragma once
+#if Poco_SQLODBC_FOUND || Poco_DataODBC_FOUND
 
 #include <Core/Block.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
@@ -44,3 +45,5 @@ private:
 };
 
 }
+
+#endif
