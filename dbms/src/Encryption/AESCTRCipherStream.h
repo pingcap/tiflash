@@ -2,7 +2,6 @@
 
 #include <Encryption/BlockAccessCipherStream.h>
 #include <IO/Endian.h>
-#include <Storages/Transaction/FileEncryption.h>
 #include <openssl/aes.h>
 #include <openssl/evp.h>
 #include <openssl/md5.h>
@@ -36,6 +35,8 @@ struct EncryptionPath;
 #define FreeCipherContext(ctx) EVP_CIPHER_CTX_free(ctx);
 
 #endif
+
+struct FileEncryptionInfo;
 
 class AESCTRCipherStream : public BlockAccessCipherStream
 {
