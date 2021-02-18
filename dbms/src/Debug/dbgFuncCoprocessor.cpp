@@ -84,10 +84,11 @@ std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
     {"date_format", tipb::ScalarFuncSig::DateFormatSig},
     {"if", tipb::ScalarFuncSig::IfInt},
     {"from_unixtime", tipb::ScalarFuncSig::FromUnixTime2Arg},
-    {"bit_and", tipb::ScalarFuncSig::BitAndSig},
-    {"bit_or", tipb::ScalarFuncSig::BitOrSig},
-    {"bit_xor", tipb::ScalarFuncSig::BitXorSig},
-    {"bit_not", tipb::ScalarFuncSig::BitNegSig},
+    /// bit_and/bit_or/bit_xor is aggregated function in clickhouse/mysql
+    {"bitand", tipb::ScalarFuncSig::BitAndSig},
+    {"bitor", tipb::ScalarFuncSig::BitOrSig},
+    {"bitxor", tipb::ScalarFuncSig::BitXorSig},
+    {"bitnot", tipb::ScalarFuncSig::BitNegSig},
     {"notequals", tipb::ScalarFuncSig::NEInt},
     {"like", tipb::ScalarFuncSig::LikeSig},
     {"cast_int_int", tipb::ScalarFuncSig::CastIntAsInt},
@@ -463,7 +464,7 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t co
         {
             /// aggregation function is handled in Aggregation, so just treated as a column
             auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) {
-                auto column_name = splitQualifiedName(id->getColumnName());
+                auto column_name = splitQualifiedName(func->getColumnName());
                 auto field_name = splitQualifiedName(field.first);
                 if (column_name.first.empty())
                     return field_name.second == column_name.second;
@@ -471,7 +472,7 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t co
                     return field_name.first == column_name.first && field_name.second == column_name.second;
             });
             if (ft == input.end())
-                throw Exception("No such column " + id->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
+                throw Exception("No such column " + func->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
             expr->set_tp(tipb::ColumnRef);
             *(expr->mutable_field_type()) = columnInfoToFieldType((*ft).second);
             std::stringstream ss;
