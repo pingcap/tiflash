@@ -15,7 +15,7 @@ public:
 
     FileEncryptionInfo getFile(const String & fname) override;
 
-    FileEncryptionInfo newFile(const String & fname) override { return getFile(fname); }
+    FileEncryptionInfo newFile(const String & fname) override;
 
     void deleteFile(const String & fname, bool /*throw_on_error*/) override { std::ignore = fname; }
 

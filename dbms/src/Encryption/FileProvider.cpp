@@ -5,6 +5,7 @@
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Encryption/PosixWritableFile.h>
 #include <Poco/File.h>
+#include <Storages/Transaction/FileEncryption.h>
 #include <common/likely.h>
 
 namespace DB

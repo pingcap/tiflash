@@ -7,7 +7,7 @@
 #include <Storages/Transaction/CHTableHandle.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/PDTiKVClient.h>
-#include <Storages/Transaction/ProxyFFIType.h>
+#include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionDataMover.h>
 #include <Storages/Transaction/SSTReader.h>

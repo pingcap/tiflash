@@ -2,7 +2,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/ProxyFFIType.h>
+#include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionTable.h>

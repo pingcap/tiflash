@@ -1,11 +1,10 @@
 #pragma once
 
+#include <RaftStoreProxyFFI/EncryptionFFI.h>
+#include <RaftStoreProxyFFI/ProxyFFI.h>
 #include <Storages/Transaction/ColumnFamily.h>
-#include <Storages/Transaction/RaftStoreProxyFFI/EncryptionFFI.h>
-#include <Storages/Transaction/RaftStoreProxyFFI/ProxyFFI.h>
 
 #include <atomic>
-#include <cstring>
 #include <memory>
 #include <vector>
 
@@ -20,17 +19,6 @@ namespace DB
 
 class TMTContext;
 struct EngineStoreServerWrap;
-
-struct CppStrVec
-{
-    std::vector<std::string> data;
-    std::vector<BaseBuffView> view;
-    CppStrVec(std::vector<std::string> && data_) : data(std::move(data_)) { updateView(); }
-    CppStrVec(const CppStrVec &) = delete;
-    void updateView();
-    CppStrVecView intoOuterView() const { return {view.data(), view.size()}; }
-};
-
 struct TiFlashRaftProxyHelper;
 
 struct EngineStoreServerWrap
