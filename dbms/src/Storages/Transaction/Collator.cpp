@@ -192,7 +192,7 @@ public:
         }
     }
 
-    std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<BinCollator<padding>>>(); }
+    std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<BinCollator<T, padding>>>(); }
 
     const std::string & getLocale() const override { return name; }
 
@@ -207,7 +207,7 @@ private:
             return s[offset++];
         }
         else {
-            return decodeUtf8Char(s, offset)
+            return decodeUtf8Char(s, offset);
         }
     }
 
