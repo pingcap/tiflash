@@ -1,24 +1,16 @@
 #pragma once
 
-#include <Storages/Transaction/RaftStoreProxyFFI/EncryptionFFI.h>
-
-#include <cstring>
+#include <RaftStoreProxyFFI/EncryptionFFI.h>
+#include <Storages/Transaction/ProxyFFICommon.h>
 
 namespace DB
 {
-using RawCppStringPtr = std::string *;
+
 const char * IntoEncryptionMethodName(EncryptionMethod);
 struct EngineStoreServerWrap;
 
-struct FileEncryptionInfo
+struct FileEncryptionInfo : FileEncryptionInfoRaw
 {
-    FileEncryptionRes res;
-    EncryptionMethod method;
-    RawCppStringPtr key;
-    RawCppStringPtr iv;
-    RawCppStringPtr erro_msg;
-
-public:
     ~FileEncryptionInfo()
     {
         if (key)
@@ -31,23 +23,20 @@ public:
             delete iv;
             iv = nullptr;
         }
-        if (erro_msg)
+        if (error_msg)
         {
-            delete erro_msg;
-            erro_msg = nullptr;
+            delete error_msg;
+            error_msg = nullptr;
         }
     }
 
-    FileEncryptionInfo(const FileEncryptionInfoRaw & src)
-        : FileEncryptionInfo(src.res, src.method, static_cast<RawCppStringPtr>(src.key), static_cast<RawCppStringPtr>(src.iv),
-            static_cast<RawCppStringPtr>(src.erro_msg))
-    {}
+    FileEncryptionInfo(const FileEncryptionInfoRaw & src) : FileEncryptionInfoRaw(src) {}
     FileEncryptionInfo(const FileEncryptionRes & res_,
         const EncryptionMethod & method_,
         RawCppStringPtr key_,
         RawCppStringPtr iv_,
-        RawCppStringPtr erro_msg_)
-        : res(res_), method(method_), key(key_), iv(iv_), erro_msg(erro_msg_)
+        RawCppStringPtr error_msg_)
+        : FileEncryptionInfoRaw{res_, method_, key_, iv_, error_msg_}
     {}
     FileEncryptionInfo(const FileEncryptionInfo &) = delete;
     FileEncryptionInfo(FileEncryptionInfo && src)

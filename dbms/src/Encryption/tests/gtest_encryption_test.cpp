@@ -1,7 +1,9 @@
 #include <Encryption/AESCTRCipherStream.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
+#include <Storages/Transaction/FileEncryption.h>
 #include <gtest/gtest.h>
+
 #include <random>
 
 namespace DB
