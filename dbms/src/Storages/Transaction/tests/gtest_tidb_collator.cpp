@@ -16,7 +16,7 @@ struct CollatorCases
         Utf8BinPadding = 3,
     };
     template <typename T>
-    using Answer = std::tuple<T, T, T>;
+    using Answer = std::tuple<T, T, T, T>;
     using CompareCase = std::tuple<std::string, std::string, Answer<int>>;
     static const CompareCase cmp_cases[];
 
