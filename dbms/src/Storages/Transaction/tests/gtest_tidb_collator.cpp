@@ -70,7 +70,7 @@ const typename CollatorCases::PatternCase CollatorCases::pattern_cases[] = {
     {"%", {{"À", {true, true, true, true}}, {"ÀÀÀ", {true, true, true, true}}, {"AÀ", {true, true, true, true}}, {"", {true, true, true, true}}}},
     {"a_%À", {{"ÀÀ", {false, false, false, false}}, {"aÀÀ", {true, true, true, true}}, {"ÀÀÀÀ", {false, false, true, false}}, {"ÀÀÀa", {false, false, true, false}}}},
     {"À%_a", {{"ÀÀ", {false, false, false, false}}, {"aÀÀ", {false, false, true, false}}, {"ÀÀÀa", {true, true, true, true}}, {"aÀÀÀ", {false, false, true, false}}}},
-    {"___a", {{"中a", {false, false, true, true}}, {"中文字a", {false, false, true, true}}}},
+    {"___a", {{"中a", {true, true, false, false}}, {"中文字a", {false, false, true, true}}}},
 };
 
 template <typename Collator>
