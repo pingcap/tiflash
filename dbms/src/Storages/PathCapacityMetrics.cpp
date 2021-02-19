@@ -4,7 +4,7 @@
 #include <Core/Types.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/PathCapacityMetrics.h>
-#include <Storages/Transaction/ProxyFFIType.h>
+#include <Storages/Transaction/ProxyFFI.h>
 #include <common/logger_useful.h>
 #include <sys/statvfs.h>
 

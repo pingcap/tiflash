@@ -8,6 +8,7 @@
 
 namespace DB
 {
+struct EngineStoreServerWrap;
 class DataKeyManager : public KeyManager
 {
 public:
