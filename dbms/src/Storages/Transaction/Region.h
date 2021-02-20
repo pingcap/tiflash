@@ -51,7 +51,7 @@ public:
         CommittedScanner(const RegionPtr & store_, bool use_lock = true) : store(store_)
         {
             if (use_lock)
-                lock = std::shared_lock<std::shared_mutex>(store_->mutex);
+                lock = std::unique_lock<std::shared_mutex>(store_->mutex);
 
             const auto & data = store->data.writeCF().getData();
 
@@ -70,7 +70,7 @@ public:
 
     private:
         RegionPtr store;
-        std::shared_lock<std::shared_mutex> lock;
+        std::unique_lock<std::shared_mutex> lock;
 
         size_t write_map_size = 0;
         RegionData::ConstWriteCFIter write_map_it;
