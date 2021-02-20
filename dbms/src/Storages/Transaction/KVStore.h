@@ -7,6 +7,10 @@
 
 namespace DB
 {
+namespace RegionBench
+{
+extern void concurrentBatchInsert(const TiDB::TableInfo &, Int64, Int64, Int64, UInt64, UInt64, Context &);
+}
 
 // TODO move to Settings.h
 static const Seconds REGION_CACHE_GC_PERIOD(60 * 5);
@@ -25,6 +29,7 @@ using RegionPtr = std::shared_ptr<Region>;
 struct RaftCommandResult;
 class KVStoreTaskLock;
 
+struct MockRaftCommand;
 struct MockTiDBTable;
 struct TiKVRangeKey;
 
@@ -85,7 +90,12 @@ public:
 private:
     friend class MockTiDB;
     friend struct MockTiDBTable;
-    friend void dbgFuncRemoveRegion(Context &, const ASTs &, /*DBGInvoker::Printer*/ std::function<void(const std::string &)>);
+    friend struct MockRaftCommand;
+    friend void RegionBench::concurrentBatchInsert(const TiDB::TableInfo &, Int64, Int64, Int64, UInt64, UInt64, Context &);
+    using DBGInvokerPrinter = std::function<void(const std::string &)>;
+    friend void dbgFuncRemoveRegion(Context &, const ASTs &, DBGInvokerPrinter);
+    friend void dbgFuncRegionSnapshotWithData(Context &, const ASTs &, DBGInvokerPrinter);
+    friend void dbgFuncPutRegion(Context &, const ASTs &, DBGInvokerPrinter);
 
     void checkAndApplySnapshot(const RegionPtrWrap &, TMTContext & tmt);
     void onSnapshot(const RegionPtrWrap &, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt);

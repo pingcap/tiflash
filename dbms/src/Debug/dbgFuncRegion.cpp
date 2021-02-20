@@ -7,10 +7,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Storages/StorageMergeTree.h>
-#define private public
-// access to KVStore::onSnapshot
 #include <Storages/Transaction/KVStore.h>
-#undef private
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>

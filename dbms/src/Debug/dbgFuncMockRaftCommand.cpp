@@ -6,10 +6,7 @@
 #include <Interpreters/Context.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
-#define private public
-// access to KVStore::checkAndApplySnapshot
 #include <Storages/Transaction/KVStore.h>
-#undef private
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>

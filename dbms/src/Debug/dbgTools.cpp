@@ -5,10 +5,7 @@
 #include <Parsers/ASTLiteral.h>
 #include <Storages/Transaction/ColumnFamily.h>
 #include <Storages/Transaction/DatumCodec.h>
-#define private public
-// access to KVStore::onSnapshot
 #include <Storages/Transaction/KVStore.h>
-#undef private
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RowCodec.h>
 #include <Storages/Transaction/TMTContext.h>
