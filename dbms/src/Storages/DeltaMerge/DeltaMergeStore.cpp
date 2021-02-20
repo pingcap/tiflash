@@ -115,7 +115,7 @@ DeltaMergeStore::BackgroundTask DeltaMergeStore::MergeDeltaTaskPool::nextTask(bo
 //   DeltaMergeStore
 // ================================================
 
-namespace
+namespace details
 {
 // Actually we will always store a column of `_tidb_rowid`, no matter it
 // exist in `table_columns` or not.
@@ -134,7 +134,7 @@ ColumnDefinesPtr getStoreColumns(const ColumnDefines & table_columns, bool is_co
     }
     return columns;
 }
-} // namespace
+} // namespace details
 
 DeltaMergeStore::Settings DeltaMergeStore::EMPTY_SETTINGS = DeltaMergeStore::Settings{.not_compress_columns = NotCompress{}};
 
@@ -177,7 +177,7 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
     }
 
     original_table_header = std::make_shared<Block>(toEmptyBlock(original_table_columns));
-    store_columns         = getStoreColumns(original_table_columns, is_common_handle);
+    store_columns         = details::getStoreColumns(original_table_columns, is_common_handle);
 
     auto dm_context = newDMContext(db_context, db_context.getSettingsRef());
 
@@ -1884,7 +1884,7 @@ void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
         }
     }
 
-    auto new_store_columns = getStoreColumns(new_original_table_columns, is_common_handle);
+    auto new_store_columns = details::getStoreColumns(new_original_table_columns, is_common_handle);
 
     original_table_columns.swap(new_original_table_columns);
     store_columns.swap(new_store_columns);

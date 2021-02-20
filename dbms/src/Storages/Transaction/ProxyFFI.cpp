@@ -233,7 +233,7 @@ RawCppPtr PreHandleSnapshot(
         auto & tmt = *server->tmt;
         auto & kvstore = tmt.getKVStore();
         auto new_region = kvstore->genRegionPtr(std::move(region), peer_id, index, term);
-        auto new_region_block_cache = kvstore->preHandleSnapshot(new_region, snaps, tmt);
+        auto new_region_block_cache = kvstore->preHandleSnapshot(new_region, snaps, index, term, tmt);
         auto res = new PreHandledSnapshot{new_region, std::move(new_region_block_cache)};
         return GenRawCppPtr(res, RawCppPtrTypeImpl::PreHandledSnapshot);
     }

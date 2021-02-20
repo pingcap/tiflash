@@ -2,6 +2,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Core/TMTPKType.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/SSTFilesToDTFilesOutputStream.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/StorageMergeTree.h>
@@ -223,7 +224,11 @@ void KVStore::onSnapshot(const RegionPtrWithBlock & new_region_wrap, RegionPtr o
 
 extern RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr &, Context &);
 
-RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshot(RegionPtr new_region, const SSTViewVec snaps, TMTContext & tmt)
+/// `preHandleSnapshot` read data from SSTFiles.
+/// Generate DTFile(s) for commited data and return the path of DTFile(s), the uncommited data will be
+/// inserted to `new_region`
+RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshot(
+    RegionPtr new_region, const SSTViewVec snaps, uint64_t index, uint64_t term, TMTContext & tmt)
 {
     RegionPreDecodeBlockDataPtr cache{nullptr};
     {
@@ -279,6 +284,12 @@ RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshot(RegionPtr new_region, con
         LOG_INFO(log, "Pre-handle snapshot " << new_region->toString(false) << " cost " << watch.elapsedMilliseconds() << "ms");
     }
 
+    DM::SSTFilesToDTFilesOutputStream stream(new_region, snaps, index, term, proxy_helper, tmt);
+
+    stream.writePrefix();
+    stream.write();
+    stream.writeSuffix();
+
     return cache;
 }
 
@@ -333,7 +344,7 @@ void KVStore::handleApplySnapshot(
     metapb::Region && region, UInt64 peer_id, const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)
 {
     auto new_region = genRegionPtr(std::move(region), peer_id, index, term);
-    handlePreApplySnapshot(RegionPtrWithBlock{new_region, preHandleSnapshot(new_region, snaps, tmt)}, tmt);
+    handlePreApplySnapshot(RegionPtrWithBlock{new_region, preHandleSnapshot(new_region, snaps, index, term, tmt)}, tmt);
 }
 
 EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)

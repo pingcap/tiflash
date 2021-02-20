@@ -3,6 +3,9 @@
 #include <Core/Block.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTInsertQuery.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/IManageableStorage.h>
 #include <Storages/MergeTree/TxnMergeTreeBlockOutputStream.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageMergeTree.h>
@@ -461,6 +464,69 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
     RemoveRegionCommitCache(region, *data_list_read);
 
     return std::make_unique<RegionPreDecodeBlockData>(std::move(res_block), schema_version, std::move(*data_list_read));
+}
+
+// TODO Totally replace `GenRegionPreDecodeBlockData`
+std::tuple<Block, bool, DM::ColumnDefinesPtr> GenRegionPreDecodeBlockDataNew(const RegionPtr & region, TMTContext & tmt)
+{
+    auto data_list_read = ReadRegionCommitCache(region);
+
+    Block res_block;
+    bool schema_sync_triggered = false;
+    DM::ColumnDefinesPtr schema_snap;
+    // No committed data, just return
+    if (!data_list_read)
+        return std::make_tuple(std::move(res_block), schema_sync_triggered, std::move(schema_snap));
+
+    auto context = tmt.getContext();
+    auto metrics = context.getTiFlashMetrics();
+    TableID table_id = region->getMappedTableID();
+
+    const auto atomicDecode = [&](bool force_decode) -> bool {
+        Stopwatch watch;
+        auto storage = tmt.getStorages().get(table_id);
+        if (storage == nullptr || storage->isTombstone())
+        {
+            if (!force_decode)
+                return false;
+            return true;
+        }
+        auto lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+        auto [block, ok] = readRegionBlock(storage, *data_list_read, force_decode);
+        if (!ok)
+            return false;
+        res_block = std::move(block);
+
+        // Get schema snapshot
+        if (unlikely(storage->engineType() != ::TiDB::StorageEngine::DT))
+        {
+            throw Exception("Try to convert SSTFiles into DTFiles with unknown storage engine [engine_type=" + DB::toString(table_id) + "]",
+                ErrorCodes::LOGICAL_ERROR);
+        }
+        if (auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage); dm_storage != nullptr)
+        {
+            schema_snap = dm_storage->getStore()->getStoreColumns();
+        }
+
+        GET_METRIC(metrics, tiflash_raft_write_data_to_storage_duration_seconds, type_decode).Observe(watch.elapsedSeconds());
+        return true;
+    };
+
+    if (!atomicDecode(false))
+    {
+        GET_METRIC(metrics, tiflash_schema_trigger_count, type_raft_decode).Increment();
+        tmt.getSchemaSyncer()->syncSchemas(context);
+        schema_sync_triggered = true;
+
+        if (!atomicDecode(true))
+            throw Exception("Pre-decode " + region->toString() + " cache to table " + DB::toString(table_id) + " block failed",
+                ErrorCodes::LOGICAL_ERROR);
+    }
+
+    // Remove committed data
+    RemoveRegionCommitCache(region, *data_list_read);
+
+    return std::make_tuple(std::move(res_block), schema_sync_triggered, std::move(schema_snap));
 }
 
 } // namespace DB

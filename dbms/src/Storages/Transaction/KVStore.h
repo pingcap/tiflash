@@ -78,7 +78,7 @@ public:
     EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
 
     void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, const SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
-    RegionPreDecodeBlockDataPtr preHandleSnapshot(RegionPtr new_region, const SSTViewVec, TMTContext & tmt);
+    RegionPreDecodeBlockDataPtr preHandleSnapshot(RegionPtr new_region, const SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
     void handlePreApplySnapshot(const RegionPtrWithBlock &, TMTContext & tmt);
 
     void handleDestroy(UInt64 region_id, TMTContext & tmt);

@@ -143,7 +143,6 @@ private:
     void updateTableColumnInfo();
     DM::ColumnDefines getStoreColumnDefines() const;
 private:
-    using ColumnIdMap = std::unordered_map<String, size_t>;
     struct TableColumnInfo 
     {
         TableColumnInfo(const String& db, const String& table, const ASTPtr& pk)
