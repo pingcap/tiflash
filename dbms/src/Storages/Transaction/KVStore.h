@@ -7,6 +7,10 @@
 
 namespace DB
 {
+namespace RegionBench
+{
+extern void concurrentBatchInsert(const TiDB::TableInfo &, Int64, Int64, Int64, UInt64, UInt64, Context &);
+}
 
 // TODO move to Settings.h
 static const Seconds REGION_CACHE_GC_PERIOD(60 * 5);
@@ -25,6 +29,7 @@ using RegionPtr = std::shared_ptr<Region>;
 struct RaftCommandResult;
 class KVStoreTaskLock;
 
+struct MockRaftCommand;
 struct MockTiDBTable;
 struct TiKVRangeKey;
 
@@ -55,8 +60,6 @@ public:
 
     void traverseRegions(std::function<void(RegionID, const RegionPtr &)> && callback) const;
 
-    void onSnapshot(const RegionPtrWrap &, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt);
-
     void gcRegionCache(Seconds gc_persist_period = REGION_CACHE_GC_PERIOD);
 
     void tryPersist(const RegionID region_id);
@@ -72,21 +75,39 @@ public:
         TMTContext & tmt);
     TiFlashApplyRes handleWriteRaftCmd(
         raft_cmdpb::RaftCmdRequest && request, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
+<<<<<<< HEAD
     TiFlashApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
+=======
+    EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
+
+>>>>>>> 3675330bf... Refactor some methods for applying snapshots (#1444)
     void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, const SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
-    void handleApplySnapshot(const RegionPtrWrap &, TMTContext & tmt);
-    void tryApplySnapshot(const RegionPtrWrap &, Context & context);
+    RegionPreDecodeBlockDataPtr preHandleSnapshot(RegionPtr new_region, const SSTViewVec, TMTContext & tmt);
+    void handlePreApplySnapshot(const RegionPtrWrap &, TMTContext & tmt);
+
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
     void setRegionCompactLogPeriod(Seconds period);
+<<<<<<< HEAD
     TiFlashApplyRes handleIngestSST(UInt64 region_id, const SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
     RegionPreDecodeBlockDataPtr preHandleSnapshot(RegionPtr new_region, const SSTViewVec, TMTContext & tmt);
+=======
+    EngineStoreApplyRes handleIngestSST(UInt64 region_id, const SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
+>>>>>>> 3675330bf... Refactor some methods for applying snapshots (#1444)
     RegionPtr genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
     const TiFlashRaftProxyHelper * getProxyHelper() const { return proxy_helper; }
 
 private:
     friend class MockTiDB;
     friend struct MockTiDBTable;
-    friend void dbgFuncRemoveRegion(Context &, const ASTs &, /*DBGInvoker::Printer*/ std::function<void(const std::string &)>);
+    friend struct MockRaftCommand;
+    friend void RegionBench::concurrentBatchInsert(const TiDB::TableInfo &, Int64, Int64, Int64, UInt64, UInt64, Context &);
+    using DBGInvokerPrinter = std::function<void(const std::string &)>;
+    friend void dbgFuncRemoveRegion(Context &, const ASTs &, DBGInvokerPrinter);
+    friend void dbgFuncRegionSnapshotWithData(Context &, const ASTs &, DBGInvokerPrinter);
+    friend void dbgFuncPutRegion(Context &, const ASTs &, DBGInvokerPrinter);
+
+    void checkAndApplySnapshot(const RegionPtrWrap &, TMTContext & tmt);
+    void onSnapshot(const RegionPtrWrap &, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt);
 
     // Remove region from this TiFlash node.
     // If region is destroy or moved to another node(change peer),

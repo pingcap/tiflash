@@ -70,7 +70,7 @@ public:
 
     private:
         RegionPtr store;
-        std::shared_lock<std::shared_mutex> lock;
+        std::shared_lock<std::shared_mutex> lock; // A shared_lock so that we can concurrently read committed data.
 
         size_t write_map_size = 0;
         RegionData::ConstWriteCFIter write_map_it;
@@ -95,7 +95,7 @@ public:
 
     private:
         RegionPtr store;
-        std::unique_lock<std::shared_mutex> lock;
+        std::unique_lock<std::shared_mutex> lock; // A unique_lock so that we can safely remove committed data.
     };
 
 public:
