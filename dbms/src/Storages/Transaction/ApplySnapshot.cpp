@@ -77,32 +77,18 @@ void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TMTContext
     }
 
     {
-<<<<<<< HEAD
-        Timestamp safe_point = PDClientHelper::getGCSafePointWithRetry(tmt.getPDClient(), /* ignore_cache= */ true);
-
-        HandleMap handle_map;
-
-        // Traverse all table in ch and update handle_maps.
-=======
->>>>>>> 3675330bf... Refactor some methods for applying snapshots (#1444)
         auto table_id = new_region->getMappedTableID();
         if (auto storage = tmt.getStorages().get(table_id); storage)
         {
-            const auto handle_range = new_region->getHandleRangeByTable(table_id);
             switch (storage->engineType())
             {
                 case TiDB::StorageEngine::TMT:
                 {
-<<<<<<< HEAD
-=======
                     auto & context = tmt.getContext();
                     // Traverse all table in storage and update `new_region`.
-                    if (storage->getTableInfo().is_common_handle)
-                        throw Exception("TMT table does not support clustered index", ErrorCodes::NOT_IMPLEMENTED);
                     HandleMap handle_map;
-                    const auto handle_range = getHandleRangeByTable(new_region->getRange()->rawKeys(), table_id);
+                    const auto handle_range = new_region->getHandleRangeByTable(table_id);
 
->>>>>>> 3675330bf... Refactor some methods for applying snapshots (#1444)
                     auto table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
 
                     auto tmt_storage = std::dynamic_pointer_cast<StorageMergeTree>(storage);
@@ -117,25 +103,13 @@ void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TMTContext
                     }
                     else
                         getHandleMapByRange<Int64>(context, *tmt_storage, handle_range, handle_map);
-<<<<<<< HEAD
-=======
 
                     Timestamp safe_point = PDClientHelper::getGCSafePointWithRetry(tmt.getPDClient(), /* ignore_cache= */ true);
                     new_region->compareAndCompleteSnapshot(handle_map, safe_point);
->>>>>>> 3675330bf... Refactor some methods for applying snapshots (#1444)
                     break;
                 }
                 case TiDB::StorageEngine::DT:
                 {
-<<<<<<< HEAD
-                    // acquire lock so that no other threads can change storage's structure
-                    auto table_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
-                    // In StorageDeltaMerge, we use deleteRange to remove old data
-                    auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-                    DM::HandleRange dm_handle_range = toDMHandleRange(handle_range);
-                    dm_storage->deleteRange(dm_handle_range, context.getSettingsRef());
-=======
->>>>>>> 3675330bf... Refactor some methods for applying snapshots (#1444)
                     break;
                 }
                 default:
@@ -143,8 +117,6 @@ void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TMTContext
                         "Unknown StorageEngine: " + toString(static_cast<Int32>(storage->engineType())), ErrorCodes::LOGICAL_ERROR);
             }
         }
-
-        new_region->compareAndCompleteSnapshot(handle_map, safe_point);
     }
 
     onSnapshot(new_region, old_region, old_applied_index, tmt);
@@ -158,11 +130,6 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
         auto table_id = new_region_wrap->getMappedTableID();
         if (auto storage = tmt.getStorages().get(table_id); storage)
         {
-<<<<<<< HEAD
-            if (!peer.is_learner())
-                throw Exception(std::string(__PRETTY_FUNCTION__) + ": peer is not learner, should not happen", ErrorCodes::LOGICAL_ERROR);
-            return peer;
-=======
             switch (storage->engineType())
             {
                 case TiDB::StorageEngine::DT:
@@ -171,16 +138,15 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
                     // acquire lock so that no other threads can change storage's structure
                     auto table_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
                     auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-                    auto key_range = DM::RowKeyRange::fromRegionRange(
-                        new_region_wrap->getRange(), table_id, storage->isCommonHandle(), storage->getRowKeyColumnSize());
+                    const auto handle_range = new_region_wrap->getHandleRangeByTable(table_id);
+                    const auto dm_handle_range = toDMHandleRange(handle_range);
                     // Call `deleteRange` to delete data for range
-                    dm_storage->deleteRange(key_range, context.getSettingsRef());
+                    dm_storage->deleteRange(dm_handle_range, context.getSettingsRef());
                     break;
                 }
                 default:
                     break;
             }
->>>>>>> 3675330bf... Refactor some methods for applying snapshots (#1444)
         }
     }
 
@@ -189,7 +155,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
         auto & region_table = tmt.getRegionTable();
         // extend region to make sure data won't be removed.
         region_table.extendRegionRange(region_id, *range);
-        // try to flush data into ch first.
+        // try to flush data into storage first.
         try
         {
             auto tmp = region_table.tryFlushRegion(new_region_wrap, false);
@@ -323,6 +289,8 @@ static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 peer_
     {
         if (peer.id() == peer_id)
         {
+            if (!peer.is_learner())
+                throw Exception(std::string(__PRETTY_FUNCTION__) + ": peer is not learner, should not happen", ErrorCodes::LOGICAL_ERROR);
             return peer;
         }
     }

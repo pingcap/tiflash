@@ -75,24 +75,15 @@ public:
         TMTContext & tmt);
     TiFlashApplyRes handleWriteRaftCmd(
         raft_cmdpb::RaftCmdRequest && request, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
-<<<<<<< HEAD
     TiFlashApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
-=======
-    EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
 
->>>>>>> 3675330bf... Refactor some methods for applying snapshots (#1444)
     void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, const SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
     RegionPreDecodeBlockDataPtr preHandleSnapshot(RegionPtr new_region, const SSTViewVec, TMTContext & tmt);
     void handlePreApplySnapshot(const RegionPtrWrap &, TMTContext & tmt);
 
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
     void setRegionCompactLogPeriod(Seconds period);
-<<<<<<< HEAD
     TiFlashApplyRes handleIngestSST(UInt64 region_id, const SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
-    RegionPreDecodeBlockDataPtr preHandleSnapshot(RegionPtr new_region, const SSTViewVec, TMTContext & tmt);
-=======
-    EngineStoreApplyRes handleIngestSST(UInt64 region_id, const SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
->>>>>>> 3675330bf... Refactor some methods for applying snapshots (#1444)
     RegionPtr genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
     const TiFlashRaftProxyHelper * getProxyHelper() const { return proxy_helper; }
 
