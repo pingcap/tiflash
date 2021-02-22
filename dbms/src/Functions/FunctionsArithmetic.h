@@ -2144,11 +2144,11 @@ public:
 
                 auto col_left_raw = block.getByPosition(arguments[0]).column.get();
                 auto col_right_raw = block.getByPosition(arguments[1]).column.get();
-                const ColumnUInt8 * col_left_nullmap = nullptr;
-                const ColumnUInt8 * col_right_nullmap = nullptr;
-                bool is_left_null_constant = false;
-                bool is_right_null_constant = false;
-                DataTypePtr nullable_result_type = nullptr;
+                const ColumnUInt8 * col_left_nullmap [[maybe_unused]] = nullptr ;
+                const ColumnUInt8 * col_right_nullmap [[maybe_unused]] = nullptr;
+                bool is_left_null_constant [[maybe_unused]] = false;
+                bool is_right_null_constant [[maybe_unused]] = false;
+                DataTypePtr nullable_result_type [[maybe_unused]] = nullptr;
                 if constexpr (result_is_decimal)
                 {
                     nullable_result_type = makeNullable(std::make_shared<ResultDataType>(result_type.getPrec(), result_type.getScale()));
