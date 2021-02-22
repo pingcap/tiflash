@@ -505,10 +505,10 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                                    [&](RegionException::RegionReadStatus & status) {
                                        assert(status != RegionException::RegionReadStatus::OK);
                                        LOG_WARNING(log,
-                                                   "Check memory cache, region " << region_query_info.region_id << ", version " << region_query_info.version
-                                                   << ", handle range "
-                                                   << TiKVKeyRangeToDebugString(region_query_info.range_in_table) << " , status "
-                                                   << RegionException::RegionReadStatusString(status));
+                                           "Check memory cache, region "
+                                               << region_query_info.region_id << ", version " << region_query_info.version
+                                               << ", handle range " << TiKVKeyRangeToDebugString(region_query_info.range_in_table)
+                                               << " , status " << RegionException::RegionReadStatusString(status));
                                        region_status = status;
                                    },
                                },

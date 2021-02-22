@@ -63,8 +63,8 @@ grpc::Status CoprocessorHandler::execute()
                 dag_request.ParseFromString(cop_request->data());
                 LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
                 if (dag_request.has_is_rpn_expr() && dag_request.is_rpn_expr())
-                    throw TiFlashException("DAG request with rpn expression is not supported in TiFlash",
-                        Errors::Coprocessor::Unimplemented);
+                    throw TiFlashException(
+                        "DAG request with rpn expression is not supported in TiFlash", Errors::Coprocessor::Unimplemented);
                 tipb::SelectResponse dag_response;
                 std::unordered_map<RegionID, RegionInfo> regions;
                 const std::unordered_set<UInt64> bypass_lock_ts(

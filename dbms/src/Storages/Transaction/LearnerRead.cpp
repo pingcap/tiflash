@@ -231,9 +231,10 @@ LearnerReadSnapshot doLearnerRead(const TiDB::TableID table_id, //
                                    if (status != RegionException::RegionReadStatus::OK)
                                    {
                                        LOG_WARNING(log,
-                                                   "Check memory cache, region " << region_to_query.region_id << ", version " << region_to_query.version
-                                                   << ", handle range " << TiKVKeyRangeToDebugString(region_to_query.range_in_table)
-                                                   << ", status " << RegionException::RegionReadStatusString(status));
+                                           "Check memory cache, region "
+                                               << region_to_query.region_id << ", version " << region_to_query.version << ", handle range "
+                                               << TiKVKeyRangeToDebugString(region_to_query.range_in_table) << ", status "
+                                               << RegionException::RegionReadStatusString(status));
                                        unavailable_regions.add(region->id(), status);
                                    }
                                },
