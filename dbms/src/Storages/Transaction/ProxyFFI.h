@@ -33,6 +33,15 @@ static_assert(std::is_same_v<BatchReadIndexRes::pointer, BatchReadIndexRes::elem
 
 struct FileEncryptionInfo;
 
+enum class RawCppPtrTypeImpl : RawCppPtrType
+{
+    None = 0,
+    String,
+    PreHandledSnapshot,
+};
+
+RawCppPtr GenRawCppPtr(RawVoidPtr ptr_ = nullptr, RawCppPtrTypeImpl type_ = RawCppPtrTypeImpl::None);
+
 struct TiFlashRaftProxyHelper : RaftStoreProxyFFIHelper
 {
     RaftProxyStatus getProxyStatus() const;
