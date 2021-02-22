@@ -64,6 +64,7 @@ struct numeric_limits<__uint128_t>
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/Utils.h>
 #include <Storages/VirtualColumnUtils.h>
 
 #include <Storages/MergeTree/MergeTreeDataSelectExecutorCommon.hpp>
@@ -332,10 +333,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
     const size_t handle_column_index = 0, version_column_index = 1, delmark_column_index = 2;
 
     const auto func_throw_retry_region = [&](RegionException::RegionReadStatus status) {
-        std::vector<RegionID> region_ids;
-        region_ids.reserve(regions_executor_data.size());
-        for (const auto & query_info : regions_executor_data)
-            region_ids.push_back(query_info.info.region_id);
+        RegionException::UnavailableRegions region_ids(regions_executor_data.size());
+        std::for_each(regions_executor_data.begin(), regions_executor_data.end(), [&](auto & x) { region_ids.emplace(x.info.region_id); });
         throw RegionException(std::move(region_ids), status);
     };
 
@@ -493,22 +492,27 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                             .Observe(wait_index_watch.elapsedSeconds());
                     }
 
-                    auto [block, status] = RegionTable::readBlockByRegion(*data.table_info, data.getColumns(), tmt_column_names_to_read,
+                    auto block_status = RegionTable::readBlockByRegion(*data.table_info, data.getColumns(), tmt_column_names_to_read,
                         kvstore_region[region_query_info.region_id], region_query_info.version, region_query_info.conf_version,
                         mvcc_query_info.resolve_locks, mvcc_query_info.read_tso, region_query_info.bypass_lock_ts,
                         region_query_info.range_in_table, regions_executor_data[region_index].range_scan_filter);
 
-                    if (status != RegionException::RegionReadStatus::OK)
-                    {
-                        LOG_WARNING(log,
-                            "Check memory cache, region " << region_query_info.region_id << ", version " << region_query_info.version
-                                                          << ", handle range "
-                                                          << TiKVKeyRangeToDebugString(region_query_info.range_in_table) << " , status "
-                                                          << RegionException::RegionReadStatusString(status));
-                        region_status = status;
-                    }
-                    else if (block.rows())
-                        regions_executor_data[region_index].block = std::move(block);
+                    std::visit(variant_op::overloaded{
+                                   [&](Block & block) {
+                                       if (block.rows())
+                                           regions_executor_data[region_index].block = std::move(block);
+                                   },
+                                   [&](RegionException::RegionReadStatus & status) {
+                                       assert(status != RegionException::RegionReadStatus::OK);
+                                       LOG_WARNING(log,
+                                                   "Check memory cache, region " << region_query_info.region_id << ", version " << region_query_info.version
+                                                   << ", handle range "
+                                                   << TiKVKeyRangeToDebugString(region_query_info.range_in_table) << " , status "
+                                                   << RegionException::RegionReadStatusString(status));
+                                       region_status = status;
+                                   },
+                               },
+                        block_status);
                 }
             };
 
