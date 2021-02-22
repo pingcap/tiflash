@@ -71,18 +71,6 @@ struct BinaryOperationImplBase
                 c[i] = Op::template apply<ResultType>(a[i], b[i]);
     }
 
-    static void vector_vector_nullable_for_one(const ArrayA & a, const ArrayB & b, PaddedPODArray<ResultType> & c, typename ColumnUInt8::Container & res_null, size_t i)
-    {
-        if constexpr (IsDecimal<A> && IsDecimal<B>)
-            c[i] = Op::template apply<ResultType>(DecimalField<A>(a[i], a.getScale()), DecimalField<B>(b[i], b.getScale()), res_null[i]);
-        else if constexpr (IsDecimal<A>)
-            c[i] = Op::template apply<ResultType>(DecimalField<A>(a[i], a.getScale()), b[i], res_null[i]);
-        else if constexpr (IsDecimal<B>)
-            c[i] = Op::template apply<ResultType>(a[i], DecimalField<B>(b[i], b.getScale()), res_null[i]);
-        else
-            c[i] = Op::template apply<ResultType>(a[i], b[i], res_null[i]);
-    }
-
     static void NO_INLINE vector_vector_nullable(const ArrayA & a, const ColumnUInt8 * a_nullmap, const ArrayB & b, const ColumnUInt8 * b_nullmap,
         PaddedPODArray<ResultType> & c, typename ColumnUInt8::Container & res_null)
     {
@@ -100,7 +88,14 @@ struct BinaryOperationImplBase
                 }
                 else
                 {
-                    vector_vector_nullable_for_one(a, b, c, res_null, i);
+                    if constexpr (IsDecimal<A> && IsDecimal<B>)
+                        c[i] = Op::template apply<ResultType>(DecimalField<A>(a[i], a.getScale()), DecimalField<B>(b[i], b.getScale()), res_null[i]);
+                    else if constexpr (IsDecimal<A>)
+                        c[i] = Op::template apply<ResultType>(DecimalField<A>(a[i], a.getScale()), b[i], res_null[i]);
+                    else if constexpr (IsDecimal<B>)
+                        c[i] = Op::template apply<ResultType>(a[i], DecimalField<B>(b[i], b.getScale()), res_null[i]);
+                    else
+                        c[i] = Op::template apply<ResultType>(a[i], b[i], res_null[i]);
                 }
             }
         }
@@ -116,7 +111,14 @@ struct BinaryOperationImplBase
                 }
                 else
                 {
-                    vector_vector_nullable_for_one(a, b, c, res_null, i);
+                    if constexpr (IsDecimal<A> && IsDecimal<B>)
+                        c[i] = Op::template apply<ResultType>(DecimalField<A>(a[i], a.getScale()), DecimalField<B>(b[i], b.getScale()), res_null[i]);
+                    else if constexpr (IsDecimal<A>)
+                        c[i] = Op::template apply<ResultType>(DecimalField<A>(a[i], a.getScale()), b[i], res_null[i]);
+                    else if constexpr (IsDecimal<B>)
+                        c[i] = Op::template apply<ResultType>(a[i], DecimalField<B>(b[i], b.getScale()), res_null[i]);
+                    else
+                        c[i] = Op::template apply<ResultType>(a[i], b[i], res_null[i]);
                 }
             }
         }
@@ -124,7 +126,14 @@ struct BinaryOperationImplBase
         {
             for (size_t i = 0; i < size; ++i)
             {
-                vector_vector_nullable_for_one(a, b, c, res_null, i);
+                if constexpr (IsDecimal<A> && IsDecimal<B>)
+                    c[i] = Op::template apply<ResultType>(DecimalField<A>(a[i], a.getScale()), DecimalField<B>(b[i], b.getScale()), res_null[i]);
+                else if constexpr (IsDecimal<A>)
+                    c[i] = Op::template apply<ResultType>(DecimalField<A>(a[i], a.getScale()), b[i], res_null[i]);
+                else if constexpr (IsDecimal<B>)
+                    c[i] = Op::template apply<ResultType>(a[i], DecimalField<B>(b[i], b.getScale()), res_null[i]);
+                else
+                    c[i] = Op::template apply<ResultType>(a[i], b[i], res_null[i]);
             }
         }
     }
