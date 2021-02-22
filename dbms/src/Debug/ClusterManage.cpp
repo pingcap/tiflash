@@ -51,7 +51,7 @@ HttpRequestRes HandleHttpRequest(EngineStoreServerWrap * server, BaseBuffView pa
             status = HttpRequestStatus::ErrorParam;
         }
         if (status != HttpRequestStatus::Ok)
-            return HttpRequestRes{.status = status, .res = CppStrWithView{.inner = RawCppPtr{}, .view = BaseBuffView{}}};
+            return HttpRequestRes{.status = status, .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}}};
     }
 
     std::stringstream ss;
@@ -76,8 +76,8 @@ HttpRequestRes HandleHttpRequest(EngineStoreServerWrap * server, BaseBuffView pa
     ss << std::endl;
 
     auto s = RawCppString::New(ss.str());
-    return HttpRequestRes{
-        .status = status, .res = CppStrWithView{.inner = RawCppPtr{s, RawCppPtrType::String}, .view = BaseBuffView(s->data(), s->size())}};
+    return HttpRequestRes{.status = status,
+        .res = CppStrWithView{.inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String), .view = BaseBuffView(s->data(), s->size())}};
 }
 
 inline std::string ToPdKey(const char * key, const size_t len)
