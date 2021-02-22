@@ -8,7 +8,7 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
-#include <Storages/Transaction/ProxyFFIType.h>
+#include <Storages/Transaction/ProxyFFI.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
 

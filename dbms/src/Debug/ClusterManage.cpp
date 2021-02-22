@@ -4,7 +4,8 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/ProxyFFIType.h>
+#include <Storages/Transaction/ProxyFFI.h>
+#include <Storages/Transaction/ProxyFFICommon.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
 #include <Storages/Transaction/RegionTable.h>
@@ -50,7 +51,7 @@ HttpRequestRes HandleHttpRequest(EngineStoreServerWrap * server, BaseBuffView pa
             status = HttpRequestStatus::ErrorParam;
         }
         if (status != HttpRequestStatus::Ok)
-            return HttpRequestRes{.status = status, .res = CppStrWithView{.inner = RawCppPtr{}, .view = BaseBuffView{}}};
+            return HttpRequestRes{.status = status, .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{}}};
     }
 
     std::stringstream ss;
@@ -74,9 +75,9 @@ HttpRequestRes HandleHttpRequest(EngineStoreServerWrap * server, BaseBuffView pa
         ss << region_id << ' ';
     ss << std::endl;
 
-    auto s = new std::string(ss.str());
-    return HttpRequestRes{
-        .status = status, .res = CppStrWithView{.inner = RawCppPtr{s, RawCppPtrType::String}, .view = BaseBuffView(s->data(), s->size())}};
+    auto s = RawCppString::New(ss.str());
+    return HttpRequestRes{.status = status,
+        .res = CppStrWithView{.inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String), .view = BaseBuffView(s->data(), s->size())}};
 }
 
 inline std::string ToPdKey(const char * key, const size_t len)

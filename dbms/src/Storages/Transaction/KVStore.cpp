@@ -3,7 +3,7 @@
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/ProxyFFIType.h>
+#include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionTable.h>
@@ -102,63 +102,6 @@ void KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
             return;
         }
         storage->flushCache(tmt.getContext(), region);
-    }
-}
-
-void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt)
-{
-    RegionID region_id = new_region_wrap->id();
-
-    {
-        const auto range = new_region_wrap->getRange();
-        auto & region_table = tmt.getRegionTable();
-        // extend region to make sure data won't be removed.
-        region_table.extendRegionRange(region_id, *range);
-        // try to flush data into ch first.
-        try
-        {
-            auto tmp = region_table.tryFlushRegion(new_region_wrap, false);
-            {
-                std::lock_guard<std::mutex> lock(bg_gc_region_data_mutex);
-                bg_gc_region_data.push_back(std::move(tmp));
-            }
-            tryFlushRegionCacheInStorage(tmt, *new_region_wrap, log);
-        }
-        catch (...)
-        {
-            tryLogCurrentException(__PRETTY_FUNCTION__);
-        }
-    }
-
-    RegionPtr new_region = new_region_wrap.base;
-    {
-        auto task_lock = genTaskLock();
-        auto region_lock = region_manager.genRegionTaskLock(region_id);
-
-        if (getRegion(region_id) != old_region || (old_region && old_region_index != old_region->appliedIndex()))
-        {
-            throw Exception(
-                std::string(__PRETTY_FUNCTION__) + ": region " + std::to_string(region_id) + " instance changed, should not happen",
-                ErrorCodes::LOGICAL_ERROR);
-        }
-
-        if (old_region != nullptr)
-        {
-            LOG_DEBUG(log, __FUNCTION__ << ": previous " << old_region->toString(true) << " ; new " << new_region->toString(true));
-            region_range_index.remove(old_region->makeRaftCommandDelegate(task_lock).getRange().comparableKeys(), region_id);
-            old_region->assignRegion(std::move(*new_region));
-            new_region = old_region;
-        }
-        else
-        {
-            auto manage_lock = genRegionManageLock();
-            regionsMut().emplace(region_id, new_region);
-        }
-
-        persistRegion(*new_region, region_lock, "save current region after apply");
-        region_range_index.add(new_region);
-
-        tmt.getRegionTable().shrinkRegionRange(*new_region);
     }
 }
 
@@ -352,7 +295,7 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
     if (sync_log)
     {
         tryFlushRegionCacheInStorage(tmt, curr_region, log);
-        persistRegion(curr_region, region_task_lock, __FUNCTION__);
+        persistRegion(curr_region, region_task_lock, "useless raft cmd");
         return EngineStoreApplyRes::Persist;
     }
     return EngineStoreApplyRes::None;
@@ -417,7 +360,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
 
         const auto persist_and_sync = [&](const Region & region) {
             tryFlushRegionCacheInStorage(tmt, region, log);
-            persistRegion(region, region_task_lock, __FUNCTION__);
+            persistRegion(region, region_task_lock, "admin raft cmd");
         };
 
         const auto handle_batch_split = [&](Regions & split_regions) {
