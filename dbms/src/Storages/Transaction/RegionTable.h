@@ -5,6 +5,7 @@
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/RegionException.h>
+#include <Storages/Transaction/RegionLockInfo.h>
 #include <Storages/Transaction/TiKVHandle.h>
 #include <common/logger_useful.h>
 
@@ -12,6 +13,7 @@
 #include <functional>
 #include <mutex>
 #include <optional>
+#include <variant>
 #include <vector>
 
 namespace TiDB
@@ -135,7 +137,8 @@ public:
     /// Read the data of the given region into block, take good care of learner read and locks.
     /// Assuming that the schema has been properly synced by outer, i.e. being new enough to decode data before start_ts,
     /// we directly ask readRegionBlock to perform a read with the given start_ts and force_decode being true.
-    static std::tuple<Block, RegionException::RegionReadStatus> readBlockByRegion(const TiDB::TableInfo & table_info,
+    using ReadBlockByRegionRes = std::variant<Block, RegionException::RegionReadStatus>;
+    static ReadBlockByRegionRes readBlockByRegion(const TiDB::TableInfo & table_info,
         const ColumnsDescription & columns,
         const Names & column_names_to_read,
         const RegionPtr & region,
@@ -149,7 +152,8 @@ public:
 
     /// Check transaction locks in region, and write committed data in it into storage engine if check passed. Otherwise throw an LockException.
     /// The write logic is the same as #writeBlockByRegion, with some extra checks about region version and conf_version.
-    static RegionException::RegionReadStatus resolveLocksAndWriteRegion(TMTContext & tmt,
+    using ResolveLocksAndWriteRegionRes = std::variant<LockInfoPtr, RegionException::RegionReadStatus>;
+    static ResolveLocksAndWriteRegionRes resolveLocksAndWriteRegion(TMTContext & tmt,
         const TiDB::TableID table_id,
         const RegionPtr & region,
         const Timestamp start_ts,
