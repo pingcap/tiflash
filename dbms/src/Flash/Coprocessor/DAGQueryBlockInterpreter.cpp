@@ -157,8 +157,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
                     throw TiFlashException("TiFlash server is terminating", Errors::Coprocessor::Internal);
                 // By now, RegionException will contain all region id of MvccQueryInfo, which is needed by CHSpark.
                 // When meeting RegionException, we can let MakeRegionQueryInfos to check in next loop.
-                if (e.unavailable_region != InvalidRegionID)
-                    force_retry.emplace(e.unavailable_region);
+                force_retry.insert(e.unavailable_region.begin(), e.unavailable_region.end());
             }
             catch (DB::Exception & e)
             {
@@ -367,25 +366,25 @@ void DAGQueryBlockInterpreter::readFromLocalStorage( //
             // Inject failpoint to throw RegionException
             fiu_do_on(FailPoints::region_exception_after_read_from_storage_some_error, {
                 const auto & regions_info = query_info.mvcc_query_info->regions_query_info;
-                std::vector<RegionID> region_ids;
+                RegionException::UnavailableRegions region_ids;
                 for (const auto & info : regions_info)
                 {
                     if (rand() % 100 > 50)
-                        region_ids.push_back(info.region_id);
+                        region_ids.insert(info.region_id);
                 }
                 throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
             });
             fiu_do_on(FailPoints::region_exception_after_read_from_storage_all_error, {
                 const auto & regions_info = query_info.mvcc_query_info->regions_query_info;
-                std::vector<RegionID> region_ids;
+                RegionException::UnavailableRegions region_ids;
                 for (const auto & info : regions_info)
-                    region_ids.push_back(info.region_id);
+                    region_ids.insert(info.region_id);
                 throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
             });
             validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
             break;
         }
-        catch (DB::RegionException & e)
+        catch (RegionException & e)
         {
             /// Recover from region exception when super batch is enable
             if (dag.isBatchCop())
@@ -400,17 +399,13 @@ void DAGQueryBlockInterpreter::readFromLocalStorage( //
                 if (likely(num_allow_retry > 0))
                 {
                     --num_allow_retry;
-                    // sort e.region_ids so that we can use lower_bound to find the region happens to error or not
-                    std::sort(e.region_ids.begin(), e.region_ids.end());
                     auto & regions_query_info = query_info.mvcc_query_info->regions_query_info;
                     for (auto iter = regions_query_info.begin(); iter != regions_query_info.end(); /**/)
                     {
-                        auto error_id_iter = std::lower_bound(e.region_ids.begin(), e.region_ids.end(), iter->region_id);
-                        if (error_id_iter != e.region_ids.end() && *error_id_iter == iter->region_id)
+                        if (e.unavailable_region.find(iter->region_id) != e.unavailable_region.end())
                         {
                             // move the error regions info from `query_info.mvcc_query_info->regions_query_info` to `region_retry`
-                            auto region_iter = dag_regions.find(iter->region_id);
-                            if (likely(region_iter != dag_regions.end()))
+                            if (auto region_iter = dag_regions.find(iter->region_id); likely(region_iter != dag_regions.end()))
                             {
                                 region_retry.emplace(region_iter->first, region_iter->second);
                                 ss << region_iter->first << ",";
