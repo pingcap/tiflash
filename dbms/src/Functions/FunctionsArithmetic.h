@@ -79,62 +79,25 @@ struct BinaryOperationImplBase
         {
             auto & a_nullmap_data = a_nullmap->getData();
             auto & b_nullmap_data = b_nullmap->getData();
-            for (size_t i = 0; i < size; ++i)
-            {
-                if (a_nullmap_data[i] != 0 || b_nullmap_data[i] != 0)
-                {
-                    c[i] = static_cast<ResultType>(0);
-                    res_null[i] = 1;
-                }
-                else
-                {
-                    if constexpr (IsDecimal<A> && IsDecimal<B>)
-                        c[i] = Op::template apply<ResultType>(DecimalField<A>(a[i], a.getScale()), DecimalField<B>(b[i], b.getScale()), res_null[i]);
-                    else if constexpr (IsDecimal<A>)
-                        c[i] = Op::template apply<ResultType>(DecimalField<A>(a[i], a.getScale()), b[i], res_null[i]);
-                    else if constexpr (IsDecimal<B>)
-                        c[i] = Op::template apply<ResultType>(a[i], DecimalField<B>(b[i], b.getScale()), res_null[i]);
-                    else
-                        c[i] = Op::template apply<ResultType>(a[i], b[i], res_null[i]);
-                }
-            }
+            for (size_t i = 0; i < size; i++)
+                res_null[i] = a_nullmap_data[i] || b_nullmap_data[i];
         }
         else if (a_nullmap != nullptr || b_nullmap != nullptr)
         {
             auto & nullmap_data = a_nullmap != nullptr ? a_nullmap->getData() : b_nullmap->getData();
-            for (size_t i = 0; i < size; ++i)
-            {
-                if (nullmap_data[i] != 0)
-                {
-                    c[i] = static_cast<ResultType>(0);
-                    res_null[i] = 1;
-                }
-                else
-                {
-                    if constexpr (IsDecimal<A> && IsDecimal<B>)
-                        c[i] = Op::template apply<ResultType>(DecimalField<A>(a[i], a.getScale()), DecimalField<B>(b[i], b.getScale()), res_null[i]);
-                    else if constexpr (IsDecimal<A>)
-                        c[i] = Op::template apply<ResultType>(DecimalField<A>(a[i], a.getScale()), b[i], res_null[i]);
-                    else if constexpr (IsDecimal<B>)
-                        c[i] = Op::template apply<ResultType>(a[i], DecimalField<B>(b[i], b.getScale()), res_null[i]);
-                    else
-                        c[i] = Op::template apply<ResultType>(a[i], b[i], res_null[i]);
-                }
-            }
+            for (size_t i = 0; i < size; i++)
+                res_null[i] = nullmap_data[i];
         }
-        else
+        for (size_t i = 0; i < size; ++i)
         {
-            for (size_t i = 0; i < size; ++i)
-            {
-                if constexpr (IsDecimal<A> && IsDecimal<B>)
-                    c[i] = Op::template apply<ResultType>(DecimalField<A>(a[i], a.getScale()), DecimalField<B>(b[i], b.getScale()), res_null[i]);
-                else if constexpr (IsDecimal<A>)
-                    c[i] = Op::template apply<ResultType>(DecimalField<A>(a[i], a.getScale()), b[i], res_null[i]);
-                else if constexpr (IsDecimal<B>)
-                    c[i] = Op::template apply<ResultType>(a[i], DecimalField<B>(b[i], b.getScale()), res_null[i]);
-                else
-                    c[i] = Op::template apply<ResultType>(a[i], b[i], res_null[i]);
-            }
+            if constexpr (IsDecimal<A> && IsDecimal<B>)
+                c[i] = Op::template apply<ResultType>(DecimalField<A>(a[i], a.getScale()), DecimalField<B>(b[i], b.getScale()), res_null[i]);
+            else if constexpr (IsDecimal<A>)
+                c[i] = Op::template apply<ResultType>(DecimalField<A>(a[i], a.getScale()), b[i], res_null[i]);
+            else if constexpr (IsDecimal<B>)
+                c[i] = Op::template apply<ResultType>(a[i], DecimalField<B>(b[i], b.getScale()), res_null[i]);
+            else
+                c[i] = Op::template apply<ResultType>(a[i], b[i], res_null[i]);
         }
     }
 
@@ -151,35 +114,18 @@ struct BinaryOperationImplBase
     static void NO_INLINE vector_constant_nullable(const ArrayA & a, const ColumnUInt8 * a_nullmap, typename NearestFieldType<B>::Type b,
         PaddedPODArray<ResultType> & c, typename ColumnUInt8::Container & res_null)
     {
-        if (a_nullmap == nullptr)
+        size_t size = a.size();
+        if (a_nullmap != nullptr)
         {
-            size_t size = a.size();
-            for (size_t i = 0; i < size; ++i)
-                if constexpr(IsDecimal<A>)
-                    c[i] = Op::template apply<ResultType>(DecimalField<A>(a[i], a.getScale()), b, res_null[i]);
-                else
-                    c[i] = Op::template apply<ResultType>(a[i], b, res_null[i]);
-        }
-        else
-        {
-            size_t size = a.size();
             auto & nullmap_data = a_nullmap->getData();
             for (size_t i = 0; i < size; ++i)
-            {
-                if (nullmap_data[i] != 0)
-                {
-                    c[i] = static_cast<ResultType>(0);
-                    res_null[i] = 1;
-                }
-                else
-                {
-                    if constexpr(IsDecimal<A>)
-                        c[i] = Op::template apply<ResultType>(DecimalField<A>(a[i], a.getScale()), b, res_null[i]);
-                    else
-                        c[i] = Op::template apply<ResultType>(a[i], b, res_null[i]);
-                }
-            }
+                res_null[i] = nullmap_data[i];
         }
+        for (size_t i = 0; i < size; ++i)
+            if constexpr(IsDecimal<A>)
+                c[i] = Op::template apply<ResultType>(DecimalField<A>(a[i], a.getScale()), b, res_null[i]);
+            else
+                c[i] = Op::template apply<ResultType>(a[i], b, res_null[i]);
     }
 
     static void NO_INLINE constant_vector(typename NearestFieldType<A>::Type a, const ArrayB & b, PaddedPODArray<ResultType> & c)
@@ -196,34 +142,18 @@ struct BinaryOperationImplBase
     static void NO_INLINE constant_vector_nullable(typename NearestFieldType<A>::Type a, const ArrayB & b, const ColumnUInt8 * b_nullmap,
         PaddedPODArray<ResultType> & c, typename ColumnUInt8::Container & res_null)
     {
-        if (b_nullmap == nullptr)
+        size_t size = b.size();
+        if (b_nullmap != nullptr)
         {
-            size_t size = b.size();
-            for (size_t i = 0; i < size; ++i) {
-                if constexpr(IsDecimal<B>)
-                    c[i] = Op::template apply<ResultType>(a, DecimalField<B>(b[i], b.getScale()), res_null[i]);
-                else
-                    c[i] = Op::template apply<ResultType>(a, b[i], res_null[i]);
-            }
-        }
-        else
-        {
-            size_t size = b.size();
             auto & nullmap_data = b_nullmap->getData();
-            for (size_t i = 0; i < size; ++i) {
-                if (nullmap_data[i] != 0)
-                {
-                    c[i] = static_cast<ResultType>(0);
-                    res_null[i] = 1;
-                }
-                else
-                {
-                    if constexpr(IsDecimal<B>)
-                        c[i] = Op::template apply<ResultType>(a, DecimalField<B>(b[i], b.getScale()), res_null[i]);
-                    else
-                        c[i] = Op::template apply<ResultType>(a, b[i], res_null[i]);
-                }
-            }
+            for (size_t i = 0; i < size; i++)
+                res_null[i] = nullmap_data[i];
+        }
+        for (size_t i = 0; i < size; ++i) {
+            if constexpr(IsDecimal<B>)
+                c[i] = Op::template apply<ResultType>(a, DecimalField<B>(b[i], b.getScale()), res_null[i]);
+            else
+                c[i] = Op::template apply<ResultType>(a, b[i], res_null[i]);
         }
     }
 
@@ -423,10 +353,11 @@ struct TiDBDivideFloatingImpl<A,B,false>
     template <typename Result = ResultType>
     static inline Result apply(A a, B b, UInt8 & res_null)
     {
-        if (unlikely(b == 0))
+        if (b == 0)
         {
-            /// when sql mode is ERROR_FOR_DIVISION_BY_ZERO, inserts and updates involving expressions that perform division by zero
-            /// should be treated as errors, now only read-only statement will send to TiFlash, so just return NULL here
+            /// we can check res_null to see if it is DIVISION_BY_ZERO or DIVISION_BY_NULL, when sql mode is ERROR_FOR_DIVISION_BY_ZERO,
+            /// inserts and updates involving expressions that perform division by zero should be treated as errors, now only read-only
+            /// statement will send to TiFlash, so just return NULL here
             res_null = 1;
             return static_cast<Result>(0);
         }
@@ -449,10 +380,11 @@ struct TiDBDivideFloatingImpl<A,B,true>
     template <typename Result = ResultType>
     static inline Result apply(A a, B b, UInt8 & res_null)
     {
-        if (unlikely(static_cast<Result>(b) == static_cast<Result>(0)))
+        if (static_cast<Result>(b) == static_cast<Result>(0))
         {
-            /// when sql mode is ERROR_FOR_DIVISION_BY_ZERO, inserts and updates involving expressions that perform division by zero
-            /// should be treated as errors, now only read-only statement will send to TiFlash, so just return NULL here
+            /// we can check res_null to see if it is DIVISION_BY_ZERO or DIVISION_BY_NULL, when sql mode is ERROR_FOR_DIVISION_BY_ZERO,
+            /// inserts and updates involving expressions that perform division by zero should be treated as errors, now only read-only
+            /// statement will send to TiFlash, so just return NULL here
             res_null = 1;
             return static_cast<Result>(0);
         }
@@ -1410,15 +1342,7 @@ struct DecimalBinaryOperation
                 auto & b_nullmap_data = b_nullmap->getData();
                 for (size_t i = 0; i < size; ++i)
                 {
-                    if (a_nullmap_data[i] != 0 || b_nullmap_data[i] != 0)
-                    {
-                        c[i] = static_cast<ResultType>(0);
-                        res_null[i] = 1;
-                    }
-                    else
-                    {
-                        c[i] = applyScaled<true>(a[i], b[i], scale_a, res_null[i]);
-                    }
+                    res_null[i] = a_nullmap_data[i] || b_nullmap_data[i];
                 }
             }
             else if (a_nullmap != nullptr || b_nullmap != nullptr)
@@ -1426,22 +1350,12 @@ struct DecimalBinaryOperation
                 auto & nullmap_data = a_nullmap != nullptr ? a_nullmap->getData() : b_nullmap->getData();
                 for (size_t i = 0; i < size; ++i)
                 {
-                    if (nullmap_data[i] != 0)
-                    {
-                        c[i] = static_cast<ResultType>(0);
-                        res_null[i] = 1;
-                    }
-                    else
-                    {
-                        c[i] = applyScaled<true>(a[i], b[i], scale_a, res_null[i]);
-                    }
+                    res_null[i] = nullmap_data[i];
                 }
             }
-            else
-            {
-                for (size_t i = 0; i < size; ++i)
-                    c[i] = applyScaled<true>(a[i], b[i], scale_a, res_null[i]);
-            }
+
+            for (size_t i = 0; i < size; ++i)
+                c[i] = applyScaled<true>(a[i], b[i], scale_a, res_null[i]);
             return;
         }
         throw Exception("Should not reach here");
@@ -1490,27 +1404,16 @@ struct DecimalBinaryOperation
         size_t size = a.size();
         if constexpr (is_division)
         {
-            if (a_nullmap == nullptr)
-            {
-                for (size_t i = 0; i < size; ++i)
-                    c[i] = applyScaled<true>(a[i], b, scale_a, res_null[i]);
-            }
-            else
+            if (a_nullmap != nullptr)
             {
                 auto & nullmap_data = a_nullmap->getData();
                 for (size_t i = 0; i < size; ++i)
                 {
-                    if (nullmap_data[i] != 0)
-                    {
-                        c[i] = static_cast<ResultType>(0);
-                        res_null[i] = 1;
-                    }
-                    else
-                    {
-                        c[i] = applyScaled<true>(a[i], b, scale_a, res_null[i]);
-                    }
+                    res_null[i] = nullmap_data[i];
                 }
             }
+            for (size_t i = 0; i < size; ++i)
+                c[i] = applyScaled<true>(a[i], b, scale_a, res_null[i]);
             return;
         }
         throw Exception("Should not reach here");
@@ -1558,27 +1461,17 @@ struct DecimalBinaryOperation
         size_t size = b.size();
         if constexpr (is_division)
         {
-            if (b_nullmap == nullptr)
-            {
-                for (size_t i = 0; i < size; ++i)
-                    c[i] = applyScaled<true>(a, b[i], scale_a, res_null[i]);
-            }
-            else
+            if (b_nullmap != nullptr)
             {
                 auto & nullmap_data = b_nullmap->getData();
                 for (size_t i = 0; i < size; ++i)
                 {
-                    if (nullmap_data[i] != 0)
-                    {
-                        c[i] = static_cast<ResultType>(0);
-                        res_null[i] = 1;
-                    }
-                    else
-                    {
-                        c[i] = applyScaled<true>(a, b[i], scale_a, res_null[i]);
-                    }
+                    res_null[i] = nullmap_data[i];
                 }
             }
+
+            for (size_t i = 0; i < size; ++i)
+                c[i] = applyScaled<true>(a, b[i], scale_a, res_null[i]);
             return;
         }
         throw Exception("Should not reach here");
