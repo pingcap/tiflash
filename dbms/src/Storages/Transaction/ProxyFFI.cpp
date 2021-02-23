@@ -1,11 +1,11 @@
 #include <Common/CurrentMetrics.h>
 #include <Interpreters/Context.h>
 #include <Storages/PathCapacityMetrics.h>
+#include <Storages/Transaction/FileEncryption.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/ProxyFFIType.h>
+#include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <sys/statvfs.h>
 
 namespace CurrentMetrics
 {
@@ -47,7 +47,7 @@ const std::string & CFToName(const ColumnFamilyType type)
 
 RawCppPtr GenCppRawString(BaseBuffView view)
 {
-    return RawCppPtr{view.len ? new std::string(view.data, view.len) : nullptr, RawCppPtrType::String};
+    return GenRawCppPtr(view.len ? RawCppString::New(view.data, view.len) : nullptr, RawCppPtrTypeImpl::String);
 }
 
 static_assert(alignof(EngineStoreServerHelper) == alignof(RawVoidPtr));
@@ -171,6 +171,16 @@ FileEncryptionInfo TiFlashRaftProxyHelper::linkFile(const std::string & src, con
     return fn_handle_link_file(proxy_ptr, strIntoView(src), strIntoView(dst));
 }
 
+struct CppStrVec
+{
+    std::vector<std::string> data;
+    std::vector<BaseBuffView> view;
+    CppStrVec(std::vector<std::string> && data_) : data(std::move(data_)) { updateView(); }
+    CppStrVec(const CppStrVec &) = delete;
+    void updateView();
+    CppStrVecView intoOuterView() const { return {view.data(), view.size()}; }
+};
+
 void CppStrVec::updateView()
 {
     view.clear();
@@ -225,7 +235,7 @@ RawCppPtr PreHandleSnapshot(
         auto new_region = kvstore->genRegionPtr(std::move(region), peer_id, index, term);
         auto new_region_block_cache = kvstore->preHandleSnapshot(new_region, snaps, tmt);
         auto res = new PreHandledSnapshot{new_region, std::move(new_region_block_cache)};
-        return RawCppPtr{res, RawCppPtrType::PreHandledSnapshot};
+        return GenRawCppPtr(res, RawCppPtrTypeImpl::PreHandledSnapshot);
     }
     catch (...)
     {
@@ -239,7 +249,7 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, PreHandledSnapshot 
     try
     {
         auto & kvstore = server->tmt->getKVStore();
-        kvstore->handleApplySnapshot(RegionPtrWrap{snap->region, std::move(snap->cache)}, *server->tmt);
+        kvstore->handlePreApplySnapshot(RegionPtrWrap{snap->region, std::move(snap->cache)}, *server->tmt);
     }
     catch (...)
     {
@@ -250,9 +260,9 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, PreHandledSnapshot 
 
 void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, RawCppPtrType type)
 {
-    switch (type)
+    switch (static_cast<RawCppPtrTypeImpl>(type))
     {
-        case RawCppPtrType::PreHandledSnapshot:
+        case RawCppPtrTypeImpl::PreHandledSnapshot:
         {
             PreHandledSnapshot * snap = reinterpret_cast<PreHandledSnapshot *>(res);
             ApplyPreHandledSnapshot(server, snap);
@@ -268,12 +278,12 @@ void GcRawCppPtr(EngineStoreServerWrap *, RawVoidPtr ptr, RawCppPtrType type)
 {
     if (ptr)
     {
-        switch (type)
+        switch (static_cast<RawCppPtrTypeImpl>(type))
         {
-            case RawCppPtrType::String:
+            case RawCppPtrTypeImpl::String:
                 delete reinterpret_cast<RawCppStringPtr>(ptr);
                 break;
-            case RawCppPtrType::PreHandledSnapshot:
+            case RawCppPtrTypeImpl::PreHandledSnapshot:
                 delete reinterpret_cast<PreHandledSnapshot *>(ptr);
                 break;
             default:
@@ -308,4 +318,7 @@ void InsertBatchReadIndexResp(RawVoidPtr resp, BaseBuffView view, uint64_t regio
     res.ParseFromArray(view.data, view.len);
     reinterpret_cast<BatchReadIndexRes::pointer>(resp)->emplace_back(std::move(res), region_id);
 }
+
+RawCppPtr GenRawCppPtr(RawVoidPtr ptr_, RawCppPtrTypeImpl type_) { return RawCppPtr{ptr_, static_cast<RawCppPtrType>(type_)}; }
+
 } // namespace DB

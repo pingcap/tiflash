@@ -16,7 +16,6 @@
 #include <Interpreters/IInterpreter.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/Transaction/Collator.h>
-#include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/TMTStorages.h>
 
 namespace DB
@@ -40,7 +39,6 @@ public:
 private:
     BlockInputStreams executeQueryBlock(DAGQueryBlock & query_block, std::vector<SubqueriesForSets> & subqueriesForSets);
     void initMPPExchangeReceiver(const DAGQueryBlock & dag_query_block);
-    RegionException::RegionReadStatus getRegionReadStatus(const RegionPtr & current_region);
 
 private:
     Context & context;

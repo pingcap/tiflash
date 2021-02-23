@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Encryption/EncryptionPath.h>
-#include <Storages/Transaction/FileEncryption.h>
 
 #include <cstddef>
 #include <memory>
@@ -9,20 +8,11 @@
 
 namespace DB
 {
-inline size_t KeySize(EncryptionMethod method)
-{
-    switch (method)
-    {
-        case EncryptionMethod::Aes128Ctr:
-            return 16;
-        case EncryptionMethod::Aes192Ctr:
-            return 24;
-        case EncryptionMethod::Aes256Ctr:
-            return 32;
-        default:
-            return 0;
-    }
-}
+
+enum class EncryptionMethod : uint8_t;
+struct FileEncryptionInfo;
+
+size_t KeySize(EncryptionMethod method);
 
 class KeyManager
 {

@@ -18,7 +18,6 @@
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/IInterpreter.h>
 #include <Storages/RegionQueryInfo.h>
-#include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/TMTStorages.h>
 #include <pingcap/coprocessor/Client.h>
 
