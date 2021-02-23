@@ -1,11 +1,12 @@
 #pragma once
 
-#include <Common/typeid_cast.h>
-#include <DataTypes/IDataType.h>
-#include <Columns/IColumn.h>
 #include <Columns/ColumnConst.h>
+#include <Columns/ColumnNullable.h>
+#include <Columns/IColumn.h>
+#include <Common/typeid_cast.h>
 #include <Core/Block.h>
 #include <Core/ColumnNumbers.h>
+#include <DataTypes/IDataType.h>
 
 
 namespace DB
@@ -40,14 +41,17 @@ bool checkColumn(const IColumn * column)
 
 
 template <typename Type>
-const ColumnConst * checkAndGetColumnConst(const IColumn * column)
+const ColumnConst * checkAndGetColumnConst(const IColumn * column, bool maybe_nullable_column = false)
 {
     if (!column || !column->isColumnConst())
         return {};
 
     const ColumnConst * res = static_cast<const ColumnConst *>(column);
 
-    if (!checkColumn<Type>(&res->getDataColumn()))
+    auto * data_column = &res->getDataColumn();
+    if (maybe_nullable_column && data_column->isColumnNullable())
+        data_column = &typeid_cast<const ColumnNullable *>(data_column)->getNestedColumn();
+    if (!checkColumn<Type>(data_column))
         return {};
 
     return res;
