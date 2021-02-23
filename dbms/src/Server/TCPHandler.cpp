@@ -231,7 +231,7 @@ void TCPHandler::runImpl()
         }
         catch (RegionException & e)
         {
-            sendRegionException(e.region_ids);
+            sendRegionException({e.unavailable_region.begin(), e.unavailable_region.end()});
         }
         catch (const Exception & e)
         {

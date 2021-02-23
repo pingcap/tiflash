@@ -67,6 +67,8 @@ const TiDB::TableInfo getTableInfo(Context & context, const String & database_na
     return managed_storage->getTableInfo();
 }
 
+// Inject a region and optionally map it to a table.
+// put_region(region_id, start, end, database_name, table_name)
 void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
@@ -154,6 +156,7 @@ void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Pri
     output(ss.str());
 }
 
+// DBGInvoke region_snapshot_data(database_name, table_name, region_id, start, end, handle_id1, tso1, del1, r1_c1, r1_c2, ..., handle_id2, tso2, del2, r2_c1, r2_c2, ... )
 RegionPtr GenDbgRegionSnapshotWithData(Context & context, const ASTs & args)
 {
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
@@ -174,6 +177,7 @@ RegionPtr GenDbgRegionSnapshotWithData(Context & context, const ASTs & args)
     }
     else
     {
+        // Get start key and end key form multiple column if it is clustered_index.
         std::vector<Field> start_keys;
         std::vector<Field> end_keys;
         for (size_t i = 0; i < handle_column_size; i++)
@@ -198,6 +202,7 @@ RegionPtr GenDbgRegionSnapshotWithData(Context & context, const ASTs & args)
     if ((args_end - args_begin) % len)
         throw Exception("Number of insert values and columns do not match.", ErrorCodes::LOGICAL_ERROR);
 
+    // Parse row values
     for (auto it = args_begin; it != args_end; it += len)
     {
         HandleID handle_id = is_common_handle ? 0 : (HandleID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*it[0]).value);
@@ -215,7 +220,7 @@ RegionPtr GenDbgRegionSnapshotWithData(Context & context, const ASTs & args)
             TiKVKey key;
             if (is_common_handle)
             {
-                std::vector<Field> keys;
+                std::vector<Field> keys; // handle key
                 for (size_t i = 0; i < table_info.getPrimaryIndexInfo().idx_cols.size(); i++)
                 {
                     auto & idx_col = table_info.getPrimaryIndexInfo().idx_cols[i];
@@ -244,6 +249,8 @@ RegionPtr GenDbgRegionSnapshotWithData(Context & context, const ASTs & args)
     return region;
 }
 
+// Mock to apply snapshot for region with some rows
+// DBGInvoke region_snapshot_data(database_name, table_name, region_id, start, end, handle_id1, tso1, del1, r1_c1, r1_c2, ..., handle_id2, tso2, del2, r2_c1, r2_c2, ... )
 void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     auto region = GenDbgRegionSnapshotWithData(context, args);
@@ -251,12 +258,17 @@ void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvo
     auto region_id = region->id();
     auto table_id = region->getMappedTableID();
     auto cnt = region->writeCFCount();
-    context.getTMTContext().getKVStore()->tryApplySnapshot(region, context);
+
+    // Mock to apply a snapshot with data in `region`
+    auto & tmt = context.getTMTContext();
+    context.getTMTContext().getKVStore()->checkAndApplySnapshot(region, tmt);
     std::stringstream ss;
     ss << "put region #" << region_id << ", range" << range_string << " to table #" << table_id << " with " << cnt << " records";
     output(ss.str());
 }
 
+// Mock to apply an empty snapshot for region
+// DBGInvoke region_snapshot(region-id, start-key, end-key, database-name, table-name[, partition-name])
 void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
@@ -286,6 +298,7 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
     region_info.set_id(region_id);
     if (table_info.is_common_handle)
     {
+        // Get start key and end key form multiple column if it is clustered_index.
         std::vector<Field> start_keys;
         std::vector<Field> end_keys;
         for (size_t i = 0; i < handle_column_size; i++)
@@ -317,6 +330,7 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
     auto start_decoded_key = RecordKVFormat::decodeTiKVKey(start_key);
     auto end_decoded_key = RecordKVFormat::decodeTiKVKey(end_key);
 
+    // Mock to apply an empty snapshot for region[region-id]
     tmt.getKVStore()->handleApplySnapshot(
         std::move(region_info), peer_id, SSTViewVec{nullptr, 0}, MockTiKV::instance().getRaftIndex(region_id), RAFT_INIT_LOG_TERM, tmt);
 
@@ -325,60 +339,6 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
        << RecordKVFormat::DecodedTiKVKeyToDebugString<false>(end_decoded_key) << ")"
        << " to table #" << table_id << " with raft commands";
     output(ss.str());
-}
-
-std::string getRegionKeyString(const TiKVRange::Handle s, const TiKVKey & k)
-{
-    try
-    {
-        if (s.type != TiKVHandle::HandleIDType::NORMAL)
-        {
-            auto raw_key = k.empty() ? DecodedTiKVKey() : RecordKVFormat::decodeTiKVKey(k);
-            bool is_record = RecordKVFormat::isRecord(raw_key);
-            std::stringstream ss;
-            if (is_record)
-            {
-                ss << "h:" << RecordKVFormat::getHandle(raw_key);
-                ss << "#" << RecordKVFormat::getTableId(raw_key);
-            }
-            else
-            {
-                ss << "v:[" << raw_key << "]";
-            }
-            return ss.str();
-        }
-        return toString(s.handle_id);
-    }
-    catch (...)
-    {
-        return "e:" + k.toDebugString();
-    }
-}
-
-std::string getStartKeyString(TableID table_id, const TiKVKey & start_key)
-{
-    try
-    {
-        auto start_handle = TiKVRange::getRangeHandle<true>(start_key, table_id);
-        return getRegionKeyString(start_handle, start_key);
-    }
-    catch (...)
-    {
-        return "e: " + start_key.toDebugString();
-    }
-}
-
-std::string getEndKeyString(TableID table_id, const TiKVKey & end_key)
-{
-    try
-    {
-        auto end_handle = TiKVRange::getRangeHandle<false>(end_key, table_id);
-        return getRegionKeyString(end_handle, end_key);
-    }
-    catch (...)
-    {
-        return "e: " + end_key.toDebugString();
-    }
 }
 
 void dbgFuncDumpAllRegion(Context & context, TableID table_id, bool ignore_none, bool dump_status, DBGInvoker::Printer & output)
@@ -469,6 +429,8 @@ void dbgFuncRemoveRegion(Context & context, const ASTs & args, DBGInvoker::Print
     output(ss.str());
 }
 
+/// Some helper structure / functions for IngestSST
+
 struct MockSSTReader
 {
     using Key = std::pair<std::string, ColumnFamilyType>;
@@ -557,6 +519,8 @@ private:
     RegionPtr region;
 };
 
+// Simulate a region IngestSST raft command
+// DBGInvoke region_mock_ingest_sst(database_name, table_name, region_id, start, end)
 void dbgFuncIngestSST(Context & context, const ASTs & args, DBGInvoker::Printer)
 {
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
@@ -566,6 +530,12 @@ void dbgFuncIngestSST(Context & context, const ASTs & args, DBGInvoker::Printer)
     RegionID end_handle = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[4]).value);
     MockTiDB::TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
 
+    const auto & table_info = getTableInfo(context, database_name, table_name);
+    if (table_info.is_common_handle)
+        throw Exception("Mocking ingestSST to a common handle table is not supported", ErrorCodes::LOGICAL_ERROR);
+
+
+    // Mock SST data for handle [star, key)
     auto region_id_str = std::to_string(region_id);
     {
         MockSSTReader::Data write_kv_list, default_kv_list;
@@ -599,6 +569,7 @@ void dbgFuncIngestSST(Context & context, const ASTs & args, DBGInvoker::Printer)
     RegionMockTest mock_test(region);
 
     {
+        // Mocking ingest a SST for column family "Write"
         std::vector<SSTView> sst_views;
         sst_views.push_back(SSTView{
             ColumnFamilyType::Write,
@@ -612,6 +583,7 @@ void dbgFuncIngestSST(Context & context, const ASTs & args, DBGInvoker::Printer)
     }
 
     {
+        // Mocking ingest a SST for column family "Default"
         std::vector<SSTView> sst_views;
         sst_views.push_back(SSTView{
             ColumnFamilyType::Default,

@@ -47,7 +47,7 @@ const std::string & CFToName(const ColumnFamilyType type)
 
 RawCppPtr GenCppRawString(BaseBuffView view)
 {
-    return RawCppPtr{view.len ? RawCppString::New(view.data, view.len) : nullptr, RawCppPtrType::String};
+    return GenRawCppPtr(view.len ? RawCppString::New(view.data, view.len) : nullptr, RawCppPtrTypeImpl::String);
 }
 
 static_assert(alignof(EngineStoreServerHelper) == alignof(RawVoidPtr));
@@ -235,7 +235,7 @@ RawCppPtr PreHandleSnapshot(
         auto new_region = kvstore->genRegionPtr(std::move(region), peer_id, index, term);
         auto new_region_block_cache = kvstore->preHandleSnapshot(new_region, snaps, tmt);
         auto res = new PreHandledSnapshot{new_region, std::move(new_region_block_cache)};
-        return RawCppPtr{res, RawCppPtrType::PreHandledSnapshot};
+        return GenRawCppPtr(res, RawCppPtrTypeImpl::PreHandledSnapshot);
     }
     catch (...)
     {
@@ -249,7 +249,7 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, PreHandledSnapshot 
     try
     {
         auto & kvstore = server->tmt->getKVStore();
-        kvstore->handleApplySnapshot(RegionPtrWrap{snap->region, std::move(snap->cache)}, *server->tmt);
+        kvstore->handlePreApplySnapshot(RegionPtrWrap{snap->region, std::move(snap->cache)}, *server->tmt);
     }
     catch (...)
     {
@@ -260,9 +260,9 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, PreHandledSnapshot 
 
 void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, RawCppPtrType type)
 {
-    switch (type)
+    switch (static_cast<RawCppPtrTypeImpl>(type))
     {
-        case RawCppPtrType::PreHandledSnapshot:
+        case RawCppPtrTypeImpl::PreHandledSnapshot:
         {
             PreHandledSnapshot * snap = reinterpret_cast<PreHandledSnapshot *>(res);
             ApplyPreHandledSnapshot(server, snap);
@@ -278,12 +278,12 @@ void GcRawCppPtr(EngineStoreServerWrap *, RawVoidPtr ptr, RawCppPtrType type)
 {
     if (ptr)
     {
-        switch (type)
+        switch (static_cast<RawCppPtrTypeImpl>(type))
         {
-            case RawCppPtrType::String:
+            case RawCppPtrTypeImpl::String:
                 delete reinterpret_cast<RawCppStringPtr>(ptr);
                 break;
-            case RawCppPtrType::PreHandledSnapshot:
+            case RawCppPtrTypeImpl::PreHandledSnapshot:
                 delete reinterpret_cast<PreHandledSnapshot *>(ptr);
                 break;
             default:
@@ -318,4 +318,7 @@ void InsertBatchReadIndexResp(RawVoidPtr resp, BaseBuffView view, uint64_t regio
     res.ParseFromArray(view.data, view.len);
     reinterpret_cast<BatchReadIndexRes::pointer>(resp)->emplace_back(std::move(res), region_id);
 }
+
+RawCppPtr GenRawCppPtr(RawVoidPtr ptr_, RawCppPtrTypeImpl type_) { return RawCppPtr{ptr_, static_cast<RawCppPtrType>(type_)}; }
+
 } // namespace DB
