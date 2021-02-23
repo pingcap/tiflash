@@ -2170,8 +2170,7 @@ public:
                 typename ColumnUInt8::Container & vec_res_nulmap = res_nullmap->getData();
                 if constexpr (!default_impl_for_nulls)
                 {
-                    /// resize the null map if needed
-                    vec_res_nulmap.resize(block.rows(), 0);
+                    vec_res_nulmap.assign(block.rows(), (UInt8)0);
                 }
 
                 if (auto col_left_const = checkAndGetColumnConst<ColVecT0>(col_left_raw, is_left_nullable))
