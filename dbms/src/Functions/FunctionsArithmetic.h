@@ -2025,7 +2025,8 @@ public:
             using T1 = typename RightDataType::FieldType;
             using ResultType = typename ResultDataType::FieldType;
             using ExpectedResultType = typename Op<T0, T1>::ResultType;
-            if constexpr ((!IsDecimal<ResultType> || !IsDecimal<ExpectedResultType>) && !std::is_same_v<ResultType, ExpectedResultType>) {
+            if constexpr ((!IsDecimal<ResultType> || !IsDecimal<ExpectedResultType>) && !std::is_same_v<ResultType, ExpectedResultType>)
+            {
                 return false;
             }
             else if constexpr (!std::is_same_v<ResultDataType, InvalidType>)
@@ -2073,11 +2074,11 @@ public:
                         {
                             if (col_const->isNullAt(0))
                                 is_left_null_constant = true;
-                            else
-                                return false;
                         }
                         else
+                        {
                             return false;
+                        }
                     }
                     if (is_right_nullable)
                     {
@@ -2090,22 +2091,23 @@ public:
                         {
                             if (col_const->isNullAt(0))
                                 is_right_null_constant = true;
-                            else
-                                return false;
                         }
                         else
+                        {
                             return false;
+                        }
                     }
                     if (is_left_null_constant || is_right_null_constant)
                     {
+                        /// if one of the input is null constant, just return null constant
                         block.getByPosition(result).column = nullable_result_type->createColumnConst(col_left_raw->size(), Null());
                         return true;
                     }
                 }
 
-                if (auto col_left = checkAndGetColumnConst<ColVecT0>(col_left_raw))
+                if (auto col_left = checkAndGetColumnConst<ColVecT0>(col_left_raw, is_left_nullable))
                 {
-                    if (auto col_right = checkAndGetColumnConst<ColVecT1>(col_right_raw))
+                    if (auto col_right = checkAndGetColumnConst<ColVecT1>(col_right_raw, is_right_nullable))
                     {
                         /// the only case with a non-vector result
                         if constexpr (result_is_decimal)
@@ -2172,7 +2174,7 @@ public:
                     vec_res_nulmap.resize(block.rows(), 0);
                 }
 
-                if (auto col_left_const = checkAndGetColumnConst<ColVecT0>(col_left_raw))
+                if (auto col_left_const = checkAndGetColumnConst<ColVecT0>(col_left_raw, is_left_nullable))
                 {
                     if (auto col_right = checkAndGetColumn<ColVecT1>(col_right_raw))
                     {
@@ -2208,7 +2210,7 @@ public:
                 }
                 else if (auto col_left = checkAndGetColumn<ColVecT0>(col_left_raw))
                 {
-                    if (auto col_right_const = checkAndGetColumnConst<ColVecT1>(col_right_raw))
+                    if (auto col_right_const = checkAndGetColumnConst<ColVecT1>(col_right_raw, is_right_nullable))
                     {
                         if constexpr (result_is_decimal)
                         {
