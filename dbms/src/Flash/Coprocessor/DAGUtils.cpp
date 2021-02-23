@@ -28,13 +28,14 @@ const Int8 VAR_SIZE = 0;
 
 bool isFunctionExpr(const tipb::Expr & expr) { return expr.tp() == tipb::ExprType::ScalarFunc || isAggFunctionExpr(expr); }
 
-const String & getAggFunctionName(const tipb::Expr & expr)
+String getAggFunctionName(const tipb::Expr & expr)
 {
     if (agg_func_map.find(expr.tp()) == agg_func_map.end())
     {
         throw TiFlashException(tipb::ExprType_Name(expr.tp()) + " is not supported.", Errors::Coprocessor::Unimplemented);
     }
-    return agg_func_map[expr.tp()];
+
+    return expr.has_distinct() ? agg_func_map[expr.tp()] + "Distinct" : agg_func_map[expr.tp()];
 }
 
 const String & getFunctionName(const tipb::Expr & expr)
