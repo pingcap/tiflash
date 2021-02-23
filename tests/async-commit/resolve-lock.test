@@ -30,7 +30,18 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t order b
 
 mysql> set @@global.tidb_allow_batch_cop=2;
 
-# TODO: test client-c about resolve lock
+mysql> set @@tidb_isolation_read_engines='tikv'; update test.t set c2=c2-100;
+
+=> DBGInvoke __sleep(5000)
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t order by c1;
++----+------+
+| c1 | c2   |
++----+------+
+| 1  |    1 |
+| 2  |    2 |
+| 3  |    3 |
++----+------+
 
 mysql> drop table if exists test.t;
 
