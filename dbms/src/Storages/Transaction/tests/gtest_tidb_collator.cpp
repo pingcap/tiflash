@@ -59,10 +59,10 @@ const typename CollatorCases::SortKeyCase CollatorCases::sk_cases[] = {
 };
 const typename CollatorCases::PatternCase CollatorCases::pattern_cases[] = {
     {"A", {{"a", {false, false, true, false}}, {"A", {true, true, true, true}}, {"À", {false, false, true, false}}, {"", {false, false, false, false}}}},
-    {"_A", {{"aA", {true, true, true, true}}, {"ÀA", {false, false, true, false}}, {"ÀÀ", {false, false, true, false}}, {"", {false, false, false, false}}}},
+    {"_A", {{"aA", {true, true, true, true}}, {"ÀA", {false, false, true, true}}, {"ÀÀ", {false, false, true, false}}, {"", {false, false, false, false}}}},
     {"%A", {{"a", {false, false, true, false}}, {"ÀA", {true, true, true, true}}, {"À", {false, false, true, false}}, {"", {false, false, false, false}}}},
     {"À", {{"a", {false, false, true, false}}, {"A", {false, false, true, false}}, {"À", {true, true, true, true}}, {"", {false, false, false, false}}}},
-    {"_À", {{" À", {true, true, true, true}}, {"ÀA", {false, false, true, false}}, {"ÀÀ", {false, false, true, false}}, {"", {false, false, false, false}}}},
+    {"_À", {{" À", {true, true, true, true}}, {"ÀA", {false, false, true, false}}, {"ÀÀ", {false, false, true, true}}, {"", {false, false, false, false}}}},
     {"%À", {{"À", {true, true, true, true}}, {"ÀÀÀ", {true, true, true, true}}, {"ÀA", {false, false, true, false}}, {"", {false, false, false, false}}}},
     {"À_", {{"À ", {true, true, true, true}}, {"ÀAA", {false, false, false, false}}, {"À", {false, false, false, false}}, {"", {false, false, false, false}}}},
     {"À%", {{"À", {true, true, true, true}}, {"ÀÀÀ", {true, true, true, true}}, {"AÀ", {false, false, true, false}}, {"", {false, false, false, false}}}},
