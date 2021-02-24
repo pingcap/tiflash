@@ -15,7 +15,7 @@ extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 }
 
 extern const String UniqRawResName;
-extern const std::unordered_set<String> check_names;
+extern const std::unordered_set<String> hacking_return_non_null_agg_func_names;
 
 class AggregateFunctionCombinatorNull final : public IAggregateFunctionCombinator
 {
@@ -67,7 +67,7 @@ public:
             }
         }
 
-        bool can_output_be_null = nested_function && !check_names.count(nested_function->getName());
+        bool can_output_be_null = nested_function && !hacking_return_non_null_agg_func_names.count(nested_function->getName());
 
         if (has_null_types && can_output_be_null)
             return std::make_shared<AggregateFunctionNothing>();

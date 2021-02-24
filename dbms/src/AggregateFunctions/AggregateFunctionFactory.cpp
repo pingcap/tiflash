@@ -45,7 +45,7 @@ void AggregateFunctionFactory::registerFunction(const String & name, Creator cre
 /// A little hack - if we have NULL arguments, don't even create nested function.
 /// Combinator will check if nested_function was created.
 /// TODO Consider replace with function property. See also https://github.com/ClickHouse/ClickHouse/pull/11661
-extern const std::unordered_set<String> check_names = {"count", "uniq", "uniqHLL12", "uniqExact", "uniqCombined", UniqRawResName};
+extern const std::unordered_set<String> hacking_return_non_null_agg_func_names = {"count", "uniq", "uniqHLL12", "uniqExact", "uniqCombined", UniqRawResName};
 
 AggregateFunctionPtr AggregateFunctionFactory::get(
     const String & name,
@@ -69,7 +69,7 @@ AggregateFunctionPtr AggregateFunctionFactory::get(
 
         AggregateFunctionPtr nested_function;
 
-        if (check_names.count(name)|| std::none_of(argument_types.begin(), argument_types.end(), [](const auto & type) { return type->onlyNull(); }))
+        if (hacking_return_non_null_agg_func_names.count(name)|| std::none_of(argument_types.begin(), argument_types.end(), [](const auto & type) { return type->onlyNull(); }))
             nested_function = getImpl(name, nested_types, parameters, recursion_level);
 
         return combinator->transformAggregateFunction(nested_function, argument_types, parameters);
