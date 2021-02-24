@@ -252,7 +252,13 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
 
     for (const tipb::Expr & expr : agg.agg_func())
     {
-        const String & agg_func_name = getAggFunctionName(expr);
+        String agg_func_name = getAggFunctionName(expr);
+        const String agg_func_name_lowercase = Poco::toLower(agg_func_name);
+        if (endsWith(agg_func_name, "Distinct") && agg_func_name_lowercase == "countdistinct")
+        {
+            agg_func_name = settings.count_distinct_implementation;
+        }
+
         AggregateDescription aggregate;
         DataTypes types(expr.children_size());
         aggregate.argument_names.resize(expr.children_size());
