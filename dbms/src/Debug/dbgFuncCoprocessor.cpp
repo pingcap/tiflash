@@ -713,7 +713,6 @@ struct MPPCtx
     std::vector<Int64> sender_target_task_ids;
     std::vector<Int64> current_task_ids;
     std::vector<Int64> partition_keys;
-    //tipb::ExchangeType type;
     MPPCtx(Timestamp start_ts_, size_t partition_num_) : start_ts(start_ts_), partition_num(partition_num_), next_task_id(1) {}
 };
 
@@ -1279,9 +1278,8 @@ struct Join : Executor
     void fillJoinKeyAndFieldType(
         ASTPtr key, const DAGSchema & schema, tipb::Expr * tipb_key, tipb::FieldType * tipb_field_type, uint32_t collator_id)
     {
-        size_t index = 0;
         auto * identifier = typeid_cast<ASTIdentifier *>(key.get());
-        for (; index < schema.size(); index++)
+        for (size_t index = 0; index < schema.size(); index++)
         {
             auto & field = schema[index];
             if (splitQualifiedName(field.first).second == identifier->getColumnName())
@@ -1741,14 +1739,32 @@ ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr se
     return project;
 }
 
-ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, ASTPtr join_params)
+DAGColumnInfo toNullableDAGColumnInfo(DAGColumnInfo & input)
+{
+    DAGColumnInfo output = input;
+    output.second.clearNotNullFlag();
+    return output;
+}
+
+ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, ASTPtr params)
 {
     DAGSchema output_schema;
+    auto & join_params = (static_cast<const ASTTableJoin &>(*params));
     for (auto & field : left->output_schema)
-        output_schema.push_back(field);
+    {
+        if (join_params.kind == ASTTableJoin::Kind::Right && field.second.hasNotNullFlag())
+            output_schema.push_back(toNullableDAGColumnInfo(field));
+        else
+            output_schema.push_back(field);
+    }
     for (auto & field : right->output_schema)
-        output_schema.push_back(field);
-    auto join = std::make_shared<mock::Join>(executor_index, output_schema, join_params);
+    {
+        if (join_params.kind == ASTTableJoin::Kind::Left && field.second.hasNotNullFlag())
+            output_schema.push_back(toNullableDAGColumnInfo(field));
+        else
+            output_schema.push_back(field);
+    }
+    auto join = std::make_shared<mock::Join>(executor_index, output_schema, params);
     join->children.push_back(left);
     join->children.push_back(right);
     return join;
@@ -1945,7 +1961,9 @@ std::pair<ExecutorPtr, bool> compileQueryBlock(
     Context & context, size_t & executor_index, SchemaFetcher schema_fetcher, const DAGProperties & properties, ASTSelectQuery & ast_query)
 {
     auto joined_table = getJoin(ast_query);
-    /// Get table metadata.
+    /// uniq_raw is used to test `ApproxCountDistinct`, when testing `ApproxCountDistinct` in mock coprocessor
+    /// the return value of `ApproxCountDistinct` is just the raw result, we need to convert it to a readable
+    /// value when decoding the result(using `UniqRawResReformatBlockOutputStream`)
     bool has_uniq_raw_res = false;
     ExecutorPtr root_executor = nullptr;
 
@@ -2176,15 +2194,6 @@ void chunksToBlocks(const DAGSchema & schema, const tipb::SelectResponse & dag_r
     for (const auto & chunk : dag_response.chunks())
         blocks.emplace_back(codec->decode(chunk, schema));
 }
-
-//BlockInputStreamPtr ExchangeReceiverResponse(Context &, const DAGSchema & schema, DB::ExchangeReceiver & exchange_receiver)
-//{
-//    BlocksList blocks;
-//    while (true)
-//    {
-//        exchange_receiver.
-//    }
-//}
 
 BlockInputStreamPtr outputDAGResponse(Context &, const DAGSchema & schema, const tipb::SelectResponse & dag_response)
 {

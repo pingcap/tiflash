@@ -32,6 +32,7 @@
 => DBGInvoke __raft_insert_row(default, test1, 5, 153, 'test4', 888)
 => DBGInvoke __raft_insert_row(default, test1, 6, 252, 'test3', 777)
 => DBGInvoke __raft_insert_row(default, test1, 6, 253, 'test4', 888)
+=> DBGInvoke __raft_insert_row(default, test1, 6, 254, 'test4', 999)
 => DBGInvoke __raft_insert_row(default, test2, 7, 52, 'test13', 777)
 => DBGInvoke __raft_insert_row(default, test2, 7, 53, 'test14', 888)
 => DBGInvoke __raft_insert_row(default, test2, 8, 152, 'test13', 777)
@@ -74,6 +75,30 @@
 │ test4               │                 888 │ test14              │                 888 │
 │ test4               │                 888 │ test14              │                 888 │
 │ test4               │                 888 │ test14              │                 888 │
+│ test3               │                 777 │ test13              │                 777 │
+│ test3               │                 777 │ test13              │                 777 │
+│ test3               │                 777 │ test13              │                 777 │
+│ test3               │                 777 │ test13              │                 777 │
+│ test3               │                 777 │ test13              │                 777 │
+│ test3               │                 777 │ test13              │                 777 │
+│ test3               │                 777 │ test13              │                 777 │
+│ test3               │                 777 │ test13              │                 777 │
+│ test3               │                 777 │ test13              │                 777 │
+└─────────────────────┴─────────────────────┴─────────────────────┴─────────────────────┘
+
+# leftout join
+=> DBGInvoke tidb_query('select * from default.test1 all left join default.test2 using col_2', 4,'mpp_query:true,mpp_partition_num:3')
+┌─exchange_receiver_0─┬─exchange_receiver_1─┬─exchange_receiver_2─┬─exchange_receiver_3─┐
+│ test4               │                 888 │ test14              │                 888 │
+│ test4               │                 888 │ test14              │                 888 │
+│ test4               │                 888 │ test14              │                 888 │
+│ test4               │                 888 │ test14              │                 888 │
+│ test4               │                 888 │ test14              │                 888 │
+│ test4               │                 888 │ test14              │                 888 │
+│ test4               │                 888 │ test14              │                 888 │
+│ test4               │                 888 │ test14              │                 888 │
+│ test4               │                 888 │ test14              │                 888 │
+│ test4               │                 999 │ \N                  │                 \N  │
 │ test3               │                 777 │ test13              │                 777 │
 │ test3               │                 777 │ test13              │                 777 │
 │ test3               │                 777 │ test13              │                 777 │
