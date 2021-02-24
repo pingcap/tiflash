@@ -323,7 +323,7 @@ struct TiDBConvertToInteger
         for (; ret.size < value.size; ret.size++)
         {
             char current = value.data[ret.size];
-            if ((current >= '0' && current <= '9') || current == '+' || current == '-')
+            if ((current >= '0' && current <= '9') || (ret.size == 0 && (current == '+' || current == '-')))
                 continue;
             break;
         }
