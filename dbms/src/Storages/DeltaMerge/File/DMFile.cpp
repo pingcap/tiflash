@@ -434,8 +434,10 @@ std::set<UInt64> DMFile::listAllInPath(const FileProviderPtr & file_provider, co
 
         if (can_gc)
         {
-            Poco::File file(parent_path + "/" + name);
-            String     ngc_path = parent_path + "/" + name + (file.isFile() ? "." : "/") + NGC_FILE_NAME;
+            // Only return the ID if the file is able to be GC-ed.
+            const auto file_path = parent_path + "/" + name;
+            Poco::File file(file_path);
+            String     ngc_path = details::getNGCPath(file_path, file.isFile());
             Poco::File ngc_file(ngc_path);
             if (!ngc_file.exists())
                 file_ids.insert(file_id);

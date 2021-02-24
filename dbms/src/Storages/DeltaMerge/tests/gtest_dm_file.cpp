@@ -214,6 +214,61 @@ try
 }
 CATCH
 
+TEST_P(DMFile_Test, GcFlag)
+try
+{
+    // clean
+    auto file_provider = dbContext().getFileProvider();
+    auto id            = dm_file->fileId();
+    dm_file->remove(file_provider);
+    dm_file.reset();
+
+    auto mode             = GetParam();
+    bool single_file_mode = mode == DMFile::Mode::SINGLE_FILE;
+
+    dm_file = DMFile::create(id, parent_path, single_file_mode);
+    // Right after created, the fil is not abled to GC and it is ignored by `listAllInPath`
+    EXPECT_FALSE(dm_file->canGC());
+    auto scanIds = DMFile::listAllInPath(file_provider, parent_path, /*can_gc=*/true);
+    ASSERT_TRUE(scanIds.empty());
+
+    {
+        // Write some data and finialize the file
+        auto  cols           = DMTestEnv::getDefaultColumns();
+        auto  num_rows_write = 128UL;
+        Block block1         = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write / 2, false);
+        Block block2         = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write, false);
+        auto  stream         = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
+        stream->writePrefix();
+        stream->write(block1, 0);
+        stream->write(block2, 0);
+        stream->writeSuffix();
+    }
+
+    // The file remains not able to GC
+    ASSERT_FALSE(dm_file->canGC());
+    // Now the file can be scaned
+    scanIds = DMFile::listAllInPath(file_provider, parent_path, /*can_gc=*/false);
+    ASSERT_EQ(scanIds.size(), 1UL);
+    EXPECT_EQ(*scanIds.begin(), id);
+    scanIds = DMFile::listAllInPath(file_provider, parent_path, /*can_gc=*/true);
+    EXPECT_TRUE(scanIds.empty());
+
+    // After enable GC, the file can be scaned with `can_gc=true`
+    dm_file->enableGC();
+    ASSERT_TRUE(dm_file->canGC());
+    scanIds = DMFile::listAllInPath(file_provider, parent_path, /*can_gc=*/false);
+    ASSERT_EQ(scanIds.size(), 1UL);
+    EXPECT_EQ(*scanIds.begin(), id);
+    scanIds = DMFile::listAllInPath(file_provider, parent_path, /*can_gc=*/true);
+    ASSERT_EQ(scanIds.size(), 1UL);
+    EXPECT_EQ(*scanIds.begin(), id);
+}
+CATCH
+
+/// DMFile_Test.InterruptedDrop_0 and InterruptedDrop_1 test that if deleting file
+/// is interrupted by accident, we can safely ignore those broken files.
+
 TEST_P(DMFile_Test, InterruptedDrop_0)
 try
 {
@@ -277,6 +332,7 @@ try
             throw;
     }
 
+    // The broken file is ignored
     auto res = DMFile::listAllInPath(file_provider, parent_path, true);
     EXPECT_TRUE(res.empty());
 }
@@ -345,11 +401,13 @@ try
             throw;
     }
 
+    // The broken file is ignored
     auto res = DMFile::listAllInPath(file_provider, parent_path, true);
     EXPECT_TRUE(res.empty());
 }
 CATCH
 
+/// Test reading rows with some filters
 
 TEST_P(DMFile_Test, ReadFilteredByHandle)
 try
@@ -695,6 +753,8 @@ try
     }
 }
 CATCH
+
+/// Test reading different column types
 
 TEST_P(DMFile_Test, NumberTypes)
 try
