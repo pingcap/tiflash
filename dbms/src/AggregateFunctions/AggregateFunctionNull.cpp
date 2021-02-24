@@ -4,6 +4,7 @@
 #include <AggregateFunctions/AggregateFunctionNull.h>
 #include <DataTypes/DataTypeNullable.h>
 
+#include <unordered_set>
 
 namespace DB
 {
@@ -14,6 +15,7 @@ extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 }
 
 extern const String UniqRawResName;
+extern const std::unordered_set<String> check_names;
 
 class AggregateFunctionCombinatorNull final : public IAggregateFunctionCombinator
 {
@@ -65,11 +67,7 @@ public:
             }
         }
 
-        bool can_output_be_null = true;
-        if (nested_function && nested_function->getName() == UniqRawResName)
-        {
-            can_output_be_null = false;
-        }
+        bool can_output_be_null = nested_function && !check_names.count(nested_function->getName());
 
         if (has_null_types && can_output_be_null)
             return std::make_shared<AggregateFunctionNothing>();
