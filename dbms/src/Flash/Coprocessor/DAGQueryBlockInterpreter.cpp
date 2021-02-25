@@ -576,6 +576,15 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     }
 
     std::vector<NameAndTypePair> join_output_columns;
+    /// columns_for_other_join_filter is a vector of columns used
+    /// as the input columns when compiling other join filter.
+    /// Note the order in the column vector is very important:
+    /// first the columns in input_streams_vec[0], then followed
+    /// by the columns in input_streams_vec[1], if there are other
+    /// columns generated before compile other join filter, then
+    /// append the extra columns afterwards. In order to figure out
+    /// whether a given column is already in the column vector or
+    /// not quickly, we use another set to store the column names
     std::vector<NameAndTypePair> columns_for_other_join_filter;
     std::unordered_set<String> column_set_for_other_join_filter;
     bool make_nullable = join.join_type() == tipb::JoinType::TypeRightOuterJoin;
@@ -677,6 +686,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     for (auto & stream : pipeline.streams)
         stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions());
 
+    /// add a project to remove all the useless column
     NamesWithAliases project_cols;
     for (auto & c : join_output_columns)
     {
