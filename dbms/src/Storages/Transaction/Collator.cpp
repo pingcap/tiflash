@@ -69,7 +69,7 @@ class Pattern : public ITiDBCollator::IPattern
 public:
     void compile(const std::string & pattern, char escape) override
     {
-        weights.clear();
+        chars.clear();
         match_types.clear();
 
         chars.reserve(pattern.length() * sizeof(typename Collator::CharType));
@@ -105,7 +105,7 @@ public:
             {
                 tp = MatchType::Match;
             }
-            weights.push_back(c);
+            chars.push_back(c);
             match_types.push_back(tp);
         }
     }
@@ -114,9 +114,9 @@ public:
     {
         size_t s_offset = 0, next_s_offset = 0, tmp_s_offset = 0;
         size_t p_idx = 0, next_p_idx = 0;
-        while (p_idx < weights.size() || s_offset < length)
+        while (p_idx < chars.size() || s_offset < length)
         {
-            if (p_idx < weights.size())
+            if (p_idx < chars.size())
             {
                 switch (match_types[p_idx])
                 {
@@ -280,7 +280,7 @@ private:
 
 private:
     using WeightType = GeneralCI::WeightType;
-    using CharType = Rune
+    using CharType = Rune;
 
     static inline CharType decodeChar(const char * s, size_t & offset)
     {
