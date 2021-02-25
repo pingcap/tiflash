@@ -29,36 +29,36 @@ int signum(T val)
     return (0 < val) - (val < 0);
 }
 
-using CharType = int32_t;
-using StringType = std::vector<CharType>;
+using Rune = int32_t;
+using StringType = std::vector<Rune>;
 constexpr uint8_t b2_mask = 0x1F;
 constexpr uint8_t b3_mask = 0x0F;
 constexpr uint8_t b4_mask = 0x07;
 constexpr uint8_t mb_mask = 0x3F;
-inline CharType decodeUtf8Char(const char * s, size_t & offset)
+inline Rune decodeUtf8Char(const char * s, size_t & offset)
 {
     uint8_t b0 = s[offset];
     if (b0 < 0x80)
     {
-        auto c = static_cast<CharType>(b0);
+        auto c = static_cast<Rune>(b0);
         offset += 1;
         return c;
     }
     if (b0 < 0xE0)
     {
-        auto c = static_cast<CharType>(b0 & b2_mask) << 6 | static_cast<CharType>(s[1 + offset] & mb_mask);
+        auto c = static_cast<Rune>(b0 & b2_mask) << 6 | static_cast<Rune>(s[1 + offset] & mb_mask);
         offset += 2;
         return c;
     }
     if (b0 < 0xF0)
     {
-        auto c = static_cast<CharType>(b0 & b3_mask) << 12 | static_cast<CharType>(s[1 + offset] & mb_mask) << 6
-                 | static_cast<CharType>(s[2 + offset] & mb_mask);
+        auto c = static_cast<Rune>(b0 & b3_mask) << 12 | static_cast<Rune>(s[1 + offset] & mb_mask) << 6
+                 | static_cast<Rune>(s[2 + offset] & mb_mask);
         offset += 3;
         return c;
     }
-    auto c = static_cast<CharType>(b0 & b4_mask) << 18 | static_cast<CharType>(s[1 + offset] & mb_mask) << 12
-             | static_cast<CharType>(s[2 + offset] & mb_mask) << 6 | static_cast<CharType>(s[3 + offset] & mb_mask);
+    auto c = static_cast<Rune>(b0 & b4_mask) << 18 | static_cast<Rune>(s[1 + offset] & mb_mask) << 12
+             | static_cast<Rune>(s[2 + offset] & mb_mask) << 6 | static_cast<Rune>(s[3 + offset] & mb_mask);
     offset += 4;
     return c;
 }
@@ -274,13 +274,13 @@ private:
     const std::string name = "GeneralCI";
 
 private:
-    static inline CharType decodeChar(const char * s, size_t & offset)
+    static inline Rune decodeChar(const char * s, size_t & offset)
     {
         return decodeUtf8Char(s, offset);
     }
 
     using WeightType = GeneralCI::WeightType;
-    static inline WeightType weight(CharType c)
+    static inline WeightType weight(Rune c)
     {
         if (c > 0xFFFF)
             return 0xFFFD;
@@ -302,7 +302,7 @@ std::unique_ptr<ITiDBCollator> ITiDBCollator::getCollator(int32_t id)
             return std::make_unique<BinCollator<char, true>>(id);
         case ITiDBCollator::UTF8MB4_BIN:
         case ITiDBCollator::UTF8_BIN:
-            return std::make_unique<BinCollator<CharType, true>>(id);
+            return std::make_unique<BinCollator<Rune, true>>(id);
         case ITiDBCollator::UTF8_GENERAL_CI:
         case ITiDBCollator::UTF8MB4_GENERAL_CI:
             return std::make_unique<GeneralCICollator>(id);
