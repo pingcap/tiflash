@@ -100,9 +100,21 @@ struct MPPTunnel
     // finish the writing.
     void writeDone()
     {
-        std::lock_guard<std::mutex> lk(mu);
+        std::unique_lock<std::mutex> lk(mu);
         if (finished)
             throw Exception("has finished");
+        /// make sure to finish the tunnel after it is connected
+        if (timeout.count() > 0)
+        {
+            if (!cv_for_connected.wait_for(lk, timeout, [&]() { return connected; }))
+            {
+                throw Exception(tunnel_id + " is timeout");
+            }
+        }
+        else
+        {
+            cv_for_connected.wait(lk, [&]() { return connected; });
+        }
         finished = true;
         cv_for_finished.notify_all();
     }
