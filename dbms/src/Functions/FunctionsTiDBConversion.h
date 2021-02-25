@@ -323,7 +323,7 @@ struct TiDBConvertToInteger
         for (; ret.size < value.size; ret.size++)
         {
             char current = value.data[ret.size];
-            if ((current >= '0' && current <= '9') || current == '+' || current == '-')
+            if ((current >= '0' && current <= '9') || (ret.size == 0 && (current == '+' || current == '-')))
                 continue;
             break;
         }
@@ -363,7 +363,7 @@ struct TiDBConvertToInteger
         {
             is_negative = true;
             StringRef uint_string(value.data + 1, value.size - 1);
-            std::tie(uint_value, err) = toUInt<std::make_unsigned_t<T>>(value);
+            std::tie(uint_value, err) = toUInt<std::make_unsigned_t<T>>(uint_string);
         }
         else
         {
