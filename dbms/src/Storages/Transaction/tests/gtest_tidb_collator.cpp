@@ -13,9 +13,10 @@ struct CollatorCases
         Bin = 0,
         BinPadding = 1,
         GeneralCI = 2,
+        Utf8BinPadding = 3,
     };
     template <typename T>
-    using Answer = std::tuple<T, T, T>;
+    using Answer = std::tuple<T, T, T, T>;
     using CompareCase = std::tuple<std::string, std::string, Answer<int>>;
     static const CompareCase cmp_cases[];
 
@@ -26,47 +27,50 @@ struct CollatorCases
     static const PatternCase pattern_cases[];
 };
 const typename CollatorCases::CompareCase CollatorCases::cmp_cases[] = {
-    {"a", "b", {-1, -1, -1}},
-    {"a", "A", {1, 1, 0}},
-    {"À", "A", {1, 1, 0}},
-    {"abc", "abc", {0, 0, 0}},
-    {"abc", "ab", {1, 1, 1}},
-    {"😜", "😃", {1, 1, 0}},
-    {"a", "a ", {-1, 0, 0}},
-    {"a ", "a  ", {-1, 0, 0}},
-    {"a\t", "a", {1, 1, 1}},
-    {"", "a", {-1, -1, -1}},
-    {"a", "", {1, 1, 1}},
+    {"a", "b", {-1, -1, -1, -1}},
+    {"a", "A", {1, 1, 0, 1}},
+    {"À", "A", {1, 1, 0, 1}},
+    {"abc", "abc", {0, 0, 0, 0}},
+    {"abc", "ab", {1, 1, 1, 1}},
+    {"😜", "😃", {1, 1, 0, 1}},
+    {"a", "a ", {-1, 0, 0, 0}},
+    {"a ", "a  ", {-1, 0, 0, 0}},
+    {"a\t", "a", {1, 1, 1, 1}},
+    {"", "a", {-1, -1, -1, -1}},
+    {"a", "", {1, 1, 1, 1}},
 };
 #define PREVENT_TRUNC(s) \
     {                    \
         s, sizeof(s) - 1 \
     } // Prevent truncation by middle '\0' when constructing std::string using string literal, call std::string(const char *, size_t) instead.
 const typename CollatorCases::SortKeyCase CollatorCases::sk_cases[] = {
-    {"a", {PREVENT_TRUNC("\x61"), PREVENT_TRUNC("\x61"), PREVENT_TRUNC("\x00\x41")}},
-    {"A", {PREVENT_TRUNC("\x41"), PREVENT_TRUNC("\x41"), PREVENT_TRUNC("\x00\x41")}},
-    {"😃", {PREVENT_TRUNC("\xf0\x9f\x98\x83"), PREVENT_TRUNC("\xf0\x9f\x98\x83"), PREVENT_TRUNC("\xff\xfd")}},
+    {"a", {PREVENT_TRUNC("\x61"), PREVENT_TRUNC("\x61"), PREVENT_TRUNC("\x00\x41"), PREVENT_TRUNC("\x61")}},
+    {"A", {PREVENT_TRUNC("\x41"), PREVENT_TRUNC("\x41"), PREVENT_TRUNC("\x00\x41"), PREVENT_TRUNC("\x41")}},
+    {"😃", {PREVENT_TRUNC("\xf0\x9f\x98\x83"), PREVENT_TRUNC("\xf0\x9f\x98\x83"), PREVENT_TRUNC("\xff\xfd"), PREVENT_TRUNC("\xf0\x9f\x98\x83")}},
     {"Foo © bar 𝌆 baz ☃ qux",
         {PREVENT_TRUNC("\x46\x6f\x6f\x20\xc2\xa9\x20\x62\x61\x72\x20\xf0\x9d\x8c\x86\x20\x62\x61\x7a\x20\xe2\x98\x83\x20\x71\x75\x78"),
             PREVENT_TRUNC("\x46\x6f\x6f\x20\xc2\xa9\x20\x62\x61\x72\x20\xf0\x9d\x8c\x86\x20\x62\x61\x7a\x20\xe2\x98\x83\x20\x71\x75\x78"),
             PREVENT_TRUNC("\x00\x46\x00\x4f\x00\x4f\x00\x20\x00\xa9\x00\x20\x00\x42\x00\x41\x00\x52\x00\x20\xff\xfd\x00\x20\x00\x42\x00\x41"
-                          "\x00\x5a\x00\x20\x26\x03\x00\x20\x00\x51\x00\x55\x00\x58")}},
-    {"a ", {PREVENT_TRUNC("\x61\x20"), PREVENT_TRUNC("\x61"), PREVENT_TRUNC("\x00\x41")}},
-    {"", {PREVENT_TRUNC(""), PREVENT_TRUNC(""), PREVENT_TRUNC("")}},
+                          "\x00\x5a\x00\x20\x26\x03\x00\x20\x00\x51\x00\x55\x00\x58"),
+            PREVENT_TRUNC("\x46\x6f\x6f\x20\xc2\xa9\x20\x62\x61\x72\x20\xf0\x9d\x8c\x86\x20\x62\x61\x7a\x20\xe2\x98\x83\x20\x71\x75\x78")
+        }},
+    {"a ", {PREVENT_TRUNC("\x61\x20"), PREVENT_TRUNC("\x61"), PREVENT_TRUNC("\x00\x41"), PREVENT_TRUNC("\x61")}},
+    {"", {PREVENT_TRUNC(""), PREVENT_TRUNC(""), PREVENT_TRUNC(""), PREVENT_TRUNC("")}},
 };
 const typename CollatorCases::PatternCase CollatorCases::pattern_cases[] = {
-    {"A", {{"a", {false, false, true}}, {"A", {true, true, true}}, {"À", {false, false, true}}, {"", {false, false, false}}}},
-    {"_A", {{"aA", {true, true, true}}, {"ÀA", {false, false, true}}, {"ÀÀ", {false, false, true}}, {"", {false, false, false}}}},
-    {"%A", {{"a", {false, false, true}}, {"ÀA", {true, true, true}}, {"À", {false, false, true}}, {"", {false, false, false}}}},
-    {"À", {{"a", {false, false, true}}, {"A", {false, false, true}}, {"À", {true, true, true}}, {"", {false, false, false}}}},
-    {"_À", {{" À", {true, true, true}}, {"ÀA", {false, false, true}}, {"ÀÀ", {false, false, true}}, {"", {false, false, false}}}},
-    {"%À", {{"À", {true, true, true}}, {"ÀÀÀ", {true, true, true}}, {"ÀA", {false, false, true}}, {"", {false, false, false}}}},
-    {"À_", {{"À ", {true, true, true}}, {"ÀAA", {false, false, false}}, {"À", {false, false, false}}, {"", {false, false, false}}}},
-    {"À%", {{"À", {true, true, true}}, {"ÀÀÀ", {true, true, true}}, {"AÀ", {false, false, true}}, {"", {false, false, false}}}},
-    {"", {{"À", {false, false, false}}, {"ÀÀÀ", {false, false, false}}, {"AÀ", {false, false, false}}, {"", {true, true, true}}}},
-    {"%", {{"À", {true, true, true}}, {"ÀÀÀ", {true, true, true}}, {"AÀ", {true, true, true}}, {"", {true, true, true}}}},
-    {"a_%À", {{"ÀÀ", {false, false, false}}, {"aÀÀ", {true, true, true}}, {"ÀÀÀÀ", {false, false, true}}, {"ÀÀÀa", {false, false, true}}}},
-    {"À%_a", {{"ÀÀ", {false, false, false}}, {"aÀÀ", {false, false, true}}, {"ÀÀÀa", {true, true, true}}, {"aÀÀÀ", {false, false, true}}}},
+    {"A", {{"a", {false, false, true, false}}, {"A", {true, true, true, true}}, {"À", {false, false, true, false}}, {"", {false, false, false, false}}}},
+    {"_A", {{"aA", {true, true, true, true}}, {"ÀA", {false, false, true, true}}, {"ÀÀ", {false, false, true, false}}, {"", {false, false, false, false}}}},
+    {"%A", {{"a", {false, false, true, false}}, {"ÀA", {true, true, true, true}}, {"À", {false, false, true, false}}, {"", {false, false, false, false}}}},
+    {"À", {{"a", {false, false, true, false}}, {"A", {false, false, true, false}}, {"À", {true, true, true, true}}, {"", {false, false, false, false}}}},
+    {"_À", {{" À", {true, true, true, true}}, {"ÀA", {false, false, true, false}}, {"ÀÀ", {false, false, true, true}}, {"", {false, false, false, false}}}},
+    {"%À", {{"À", {true, true, true, true}}, {"ÀÀÀ", {true, true, true, true}}, {"ÀA", {false, false, true, false}}, {"", {false, false, false, false}}}},
+    {"À_", {{"À ", {true, true, true, true}}, {"ÀAA", {false, false, false, false}}, {"À", {false, false, false, false}}, {"", {false, false, false, false}}}},
+    {"À%", {{"À", {true, true, true, true}}, {"ÀÀÀ", {true, true, true, true}}, {"AÀ", {false, false, true, false}}, {"", {false, false, false, false}}}},
+    {"", {{"À", {false, false, false, false}}, {"ÀÀÀ", {false, false, false, false}}, {"AÀ", {false, false, false, false}}, {"", {true, true, true, true}}}},
+    {"%", {{"À", {true, true, true, true}}, {"ÀÀÀ", {true, true, true, true}}, {"AÀ", {true, true, true, true}}, {"", {true, true, true, true}}}},
+    {"a_%À", {{"ÀÀ", {false, false, false, false}}, {"aÀÀ", {true, true, true, true}}, {"ÀÀÀÀ", {false, false, true, false}}, {"ÀÀÀa", {false, false, true, false}}}},
+    {"À%_a", {{"ÀÀ", {false, false, false, false}}, {"aÀÀ", {false, false, true, false}}, {"ÀÀÀa", {true, true, true, true}}, {"aÀÀÀ", {false, false, true, false}}}},
+    {"___a", {{"中a", {true, true, false, false}}, {"中文字a", {false, false, true, true}}}},
 };
 
 template <typename Collator>
@@ -117,6 +121,12 @@ struct BinPaddingCollator
     static constexpr auto collation_case = CollatorCases::BinPadding;
 };
 
+struct Utf8BinPaddingCollator
+{
+    static constexpr int collation = ITiDBCollator::UTF8MB4_BIN;
+    static constexpr auto collation_case = CollatorCases::Utf8BinPadding;
+};
+
 struct GeneralCICollator
 {
     static constexpr int collation = ITiDBCollator::UTF8MB4_GENERAL_CI;
@@ -126,6 +136,8 @@ struct GeneralCICollator
 TEST(CollatorSuite, BinCollator) { testCollator<BinCollator>(); }
 
 TEST(CollatorSuite, BinPaddingCollator) { testCollator<BinPaddingCollator>(); }
+
+TEST(CollatorSuite, Utf8BinPaddingCollator) { testCollator<Utf8BinPaddingCollator>(); }
 
 TEST(CollatorSuite, GeneralCICollator) { testCollator<GeneralCICollator>(); }
 
