@@ -25,6 +25,9 @@ export tidb_server="127.0.0.1"
 # TiDB port
 export tidb_port="4000"
 
+# TiDB status port
+export tidb_status_port="10080"
+
 # TiDB default database
 export tidb_db="test"
 
