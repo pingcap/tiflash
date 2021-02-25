@@ -72,8 +72,8 @@ public:
         weights.clear();
         match_types.clear();
 
-        weights.reserve(pattern.length() * sizeof(typename Collator::WeightType));
-        match_types.reserve(pattern.length() * sizeof(typename Collator::WeightType));
+        chars.reserve(pattern.length() * sizeof(typename Collator::CharType));
+        match_types.reserve(pattern.length() * sizeof(typename Pattern::MatchType));
 
         size_t offset = 0;
         while (offset < pattern.length())
@@ -105,7 +105,7 @@ public:
             {
                 tp = MatchType::Match;
             }
-            weights.push_back(Collator::weight(c));
+            weights.push_back(c);
             match_types.push_back(tp);
         }
     }
@@ -121,7 +121,7 @@ public:
                 switch (match_types[p_idx])
                 {
                     case Match:
-                        if (s_offset < length && Collator::weight(Collator::decodeChar(s, tmp_s_offset = s_offset)) == weights[p_idx])
+                        if (s_offset < length && Collator::RegexEq(Collator::decodeChar(s, tmp_s_offset = s_offset), chars[p_idx]))
                         {
                             p_idx++;
                             s_offset = tmp_s_offset;
@@ -155,7 +155,7 @@ public:
     }
 
 private:
-    std::vector<typename Collator::WeightType> weights;
+    std::vector<typename Collator::WeightType> chars;
 
     enum MatchType
     {
@@ -201,8 +201,9 @@ private:
 
 private:
     using WeightType = T;
+    using CharType = T;
 
-    static inline WeightType decodeChar(const char * s, size_t & offset) {
+    static inline CharType decodeChar(const char * s, size_t & offset) {
         if constexpr (std::is_same_v<T, char>) {
             return s[offset++];
         }
@@ -211,7 +212,11 @@ private:
         }
     }
 
-    static inline WeightType weight(WeightType c) { return c; }
+    static inline WeightType weight(CharType c) { return c; }
+
+    static inline bool RegexEq(CharType a, CharType b) {
+        return weight(a) == weight(b);
+    }
 
     friend class Pattern<BinCollator>;
 };
@@ -274,18 +279,24 @@ private:
     const std::string name = "GeneralCI";
 
 private:
-    static inline Rune decodeChar(const char * s, size_t & offset)
+    using WeightType = GeneralCI::WeightType;
+    using CharType = Rune
+
+    static inline CharType decodeChar(const char * s, size_t & offset)
     {
         return decodeUtf8Char(s, offset);
     }
 
-    using WeightType = GeneralCI::WeightType;
-    static inline WeightType weight(Rune c)
+    static inline WeightType weight(CharType c)
     {
         if (c > 0xFFFF)
             return 0xFFFD;
         return GeneralCI::weight_lut[c & 0xFFFF];
         //return !!(c >> 16) * 0xFFFD + (1 - !!(c >> 16)) * GeneralCI::weight_lut[c & 0xFFFF];
+    }
+
+    static inline bool RegexEq(CharType a, CharType b) {
+        return weight(a) == weight(b);
     }
 
     friend class Pattern<GeneralCICollator>;
