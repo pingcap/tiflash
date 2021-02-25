@@ -41,7 +41,7 @@ services:
   tidb0:
     image: hub.pingcap.net/qa/tidb:master-failpoint
     environment:
-      GO_FAILPOINTS: "github.com/pingcap/tidb/server/enableTestAPI=return;github.com/pingcap/tidb/store/tikv/asyncCommitDoNothing=100%return;github.com/pingcap/tidb/store/tikv/prewritePrimaryFail=0%return;github.com/pingcap/tidb/store/tikv/prewriteSecondaryFail=0%return;github.com/pingcap/tidb/store/tikv/commitFailedSkipCleanup=return"
+      GO_FAILPOINTS: "github.com/pingcap/tidb/server/enableTestAPI=return"
     ports:
       - "4000:4000"
       - "10080:10080"
