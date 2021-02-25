@@ -31,7 +31,7 @@ public:
                size_t         max_read_buffer_size,
                Logger *       log);
 
-        bool                             single_file_mode;
+        const bool                       single_file_mode;
         double                           avg_size_hint;
         MarksInCompressedFilePtr         marks;
         MarkWithSizesInCompressedFilePtr mark_with_sizes;
@@ -118,7 +118,7 @@ private:
 
     FileProviderPtr file_provider;
 
-    bool single_file_mode;
+    const bool single_file_mode;
 
     Logger * log;
 };

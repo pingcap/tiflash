@@ -159,7 +159,6 @@ private:
     {
     }
 
-    bool isSingleFileMode() const { return mode == Mode::SINGLE_FILE; }
     bool isFolderMode() const { return mode == Mode::FOLDER; }
 
     // Do not gc me.
