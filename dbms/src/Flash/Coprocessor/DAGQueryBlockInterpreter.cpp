@@ -184,7 +184,6 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
 
     Names required_columns;
     std::vector<NameAndTypePair> source_columns;
-    std::vector<bool> is_ts_column;
     String handle_column_name = MutableSupport::tidb_pk_column_name;
     if (auto pk_handle_col = storage->getTableInfo().getPKHandleColumn())
         handle_column_name = pk_handle_col->get().name;
@@ -200,7 +199,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
             required_columns.push_back(handle_column_name);
             auto pair = storage->getColumns().getPhysical(handle_column_name);
             source_columns.push_back(pair);
-            is_ts_column.push_back(false);
+            timestamp_column_flag_for_tablescan.push_back(false);
             continue;
         }
 
@@ -208,7 +207,7 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
         required_columns.push_back(name);
         auto pair = storage->getColumns().getPhysical(name);
         source_columns.emplace_back(std::move(pair));
-        is_ts_column.push_back(ci.tp() == TiDB::TypeTimestamp);
+        timestamp_column_flag_for_tablescan.push_back(ci.tp() == TiDB::TypeTimestamp);
     }
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
@@ -338,8 +337,6 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
             }
         });
     }
-
-    addTimeZoneCastAfterTS(is_ts_column, pipeline);
 }
 
 void DAGQueryBlockInterpreter::readFromLocalStorage( //
@@ -580,11 +577,13 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
 
     std::vector<NameAndTypePair> join_output_columns;
     std::vector<NameAndTypePair> columns_for_other_join_filter;
+    std::unordered_set<String> column_set_for_other_join_filter;
     bool make_nullable = join.join_type() == tipb::JoinType::TypeRightOuterJoin;
     for (auto const & p : input_streams_vec[0][0]->getHeader().getNamesAndTypesList())
     {
         join_output_columns.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
         columns_for_other_join_filter.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
+        column_set_for_other_join_filter.emplace(p.name);
     }
     make_nullable = join.join_type() == tipb::JoinType::TypeLeftOuterJoin;
     for (auto const & p : input_streams_vec[1][0]->getHeader().getNamesAndTypesList())
@@ -594,6 +593,7 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
             join_output_columns.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
         /// however, when compiling join's other condition, we still need the columns from right table
         columns_for_other_join_filter.emplace_back(p.name, make_nullable ? makeNullable(p.type) : p.type);
+        column_set_for_other_join_filter.emplace(p.name);
     }
     /// all the columns from right table should be added after join, even for the join key
     NamesAndTypesList columns_added_by_join;
@@ -637,6 +637,17 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     left_streams = left_pipeline.streams;
     right_streams = right_pipeline.streams;
     String other_filter_column_name = "";
+    for (auto const & p : left_streams[0]->getHeader().getNamesAndTypesList())
+    {
+        if (column_set_for_other_join_filter.find(p.name) == column_set_for_other_join_filter.end())
+            columns_for_other_join_filter.emplace_back(p.name, p.type);
+    }
+    for (auto const & p : right_streams[0]->getHeader().getNamesAndTypesList())
+    {
+        if (column_set_for_other_join_filter.find(p.name) == column_set_for_other_join_filter.end())
+            columns_for_other_join_filter.emplace_back(p.name, p.type);
+    }
+
     ExpressionActionsPtr other_condition_expr
         = genJoinOtherConditionAction(join.other_conditions(), columns_for_other_join_filter, other_filter_column_name);
 
@@ -666,12 +677,17 @@ void DAGQueryBlockInterpreter::executeJoin(const tipb::Join & join, Pipeline & p
     for (auto & stream : pipeline.streams)
         stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions());
 
-    // todo should add a project here???
+    NamesWithAliases project_cols;
+    for (auto & c : join_output_columns)
+    {
+        project_cols.emplace_back(c.name, c.name);
+    }
+    executeProject(pipeline, project_cols);
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(join_output_columns), context);
 }
 
 // add timezone cast for timestamp type, this is used to support session level timezone
-bool DAGQueryBlockInterpreter::addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, Pipeline & pipeline)
+bool DAGQueryBlockInterpreter::addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, ExpressionActionsChain & chain)
 {
     bool hasTSColumn = false;
     for (auto b : is_ts_column)
@@ -679,20 +695,22 @@ bool DAGQueryBlockInterpreter::addTimeZoneCastAfterTS(std::vector<bool> & is_ts_
     if (!hasTSColumn)
         return false;
 
-    ExpressionActionsChain chain;
-    if (analyzer->appendTimeZoneCastsAfterTS(chain, is_ts_column))
-    {
-        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions()); });
-        return true;
-    }
-    else
-        return false;
+    return analyzer->appendTimeZoneCastsAfterTS(chain, is_ts_column);
 }
 
 AnalysisResult DAGQueryBlockInterpreter::analyzeExpressions()
 {
     AnalysisResult res;
     ExpressionActionsChain chain;
+    if (query_block.source->tp() == tipb::ExecType::TypeTableScan)
+    {
+        if (addTimeZoneCastAfterTS(timestamp_column_flag_for_tablescan, chain))
+        {
+            res.need_timezone_cast_after_tablescan = true;
+            res.timezone_cast = chain.getLastActions();
+            chain.addStep();
+        }
+    }
     if (!conditions.empty())
     {
         analyzer->appendWhere(chain, conditions, res.filter_column_name);
@@ -1133,13 +1151,16 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
     {
         /// if the encode type is default, the timestamp column in dag response is UTC based
         /// so need to cast the timezone
-        if (addTimeZoneCastAfterTS(is_ts_column, pipeline))
+        ExpressionActionsChain chain;
+        if (addTimeZoneCastAfterTS(is_ts_column, chain))
         {
             for (size_t i = 0; i < final_project.size(); i++)
             {
                 if (is_ts_column[i])
                     final_project[i].first = analyzer->getCurrentInputColumns()[i].name;
             }
+            pipeline.transform(
+                [&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions()); });
             need_append_final_project = true;
         }
     }
@@ -1256,6 +1277,11 @@ void DAGQueryBlockInterpreter::executeImpl(Pipeline & pipeline)
     }
 
     auto res = analyzeExpressions();
+    if (res.need_timezone_cast_after_tablescan)
+    {
+        /// execute timezone cast
+        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, res.timezone_cast); });
+    }
     // execute selection
     if (res.has_where)
     {
@@ -1313,7 +1339,6 @@ void DAGQueryBlockInterpreter::executeProject(Pipeline & pipeline, NamesWithAlia
     }
     ExpressionActionsPtr project = std::make_shared<ExpressionActions>(input_column, context.getSettingsRef());
     project->add(ExpressionAction::project(project_cols));
-    // add final project
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, project); });
 }
 
