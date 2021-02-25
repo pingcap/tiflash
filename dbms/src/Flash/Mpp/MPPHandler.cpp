@@ -89,12 +89,21 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 
     context.setSetting("read_tso", start_ts);
     context.setSetting("schema_version", schema_ver);
-    context.setSetting("mpp_task_timeout", task_request.timeout());
-    if (task_request.timeout() > 0)
+    if (unlikely(task_request.timeout() < 0))
     {
-        /// in the implementation, mpp_task_timeout is actually the task writing tunnel timeout
-        /// so make the mpp_task_running_timeout a little bigger than mpp_task_timeout
-        context.setSetting("mpp_task_running_timeout", task_request.timeout() + 30);
+        /// this is only for test
+        context.setSetting("mpp_task_timeout", (Int64)5);
+        context.setSetting("mpp_task_running_timeout", (Int64)10);
+    }
+    else
+    {
+        context.setSetting("mpp_task_timeout", task_request.timeout());
+        if (task_request.timeout() > 0)
+        {
+            /// in the implementation, mpp_task_timeout is actually the task writing tunnel timeout
+            /// so make the mpp_task_running_timeout a little bigger than mpp_task_timeout
+            context.setSetting("mpp_task_running_timeout", task_request.timeout() + 30);
+        }
     }
     context.getTimezoneInfo().resetByDAGRequest(*dag_req);
     context.setProgressCallback([this](const Progress & progress) { this->updateProgress(progress); });
@@ -283,24 +292,21 @@ grpc::Status MPPHandler::execute(Context & context, mpp::DispatchTaskResponse * 
     }
     catch (Exception & e)
     {
-        mpp::Error error;
         LOG_ERROR(log, "dispatch task meet error : " << e.displayText());
-        error.set_msg(e.displayText());
-        response->set_allocated_error(&error);
+        auto * err = response->mutable_error();
+        err->set_msg(e.displayText());
     }
     catch (std::exception & e)
     {
-        mpp::Error error;
         LOG_ERROR(log, "dispatch task meet error : " << e.what());
-        error.set_msg(e.what());
-        response->set_allocated_error(&error);
+        auto * err = response->mutable_error();
+        err->set_msg(e.what());
     }
     catch (...)
     {
-        mpp::Error error;
         LOG_ERROR(log, "dispatch task meet fatal error");
-        error.set_msg("fatal error");
-        response->set_allocated_error(&error);
+        auto * err = response->mutable_error();
+        err->set_msg("fatal error");
     }
     return grpc::Status::OK;
 }
