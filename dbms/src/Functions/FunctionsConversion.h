@@ -1429,8 +1429,7 @@ public:
         else if (auto const_decimal_col = checkAndGetColumn<ColumnConst>(input_col.get()))
         {
             const auto decimal_value = const_decimal_col->getValue<T>();
-
-            for (size_t i = 0; i < decimal_col->size(); i++)
+            for (size_t i = 0; i < datetime_res.size(); i++)
             {
                 handle_func(decimal_value, i);
             }
