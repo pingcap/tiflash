@@ -13,24 +13,24 @@
 => DBGInvoke __raft_insert_row(default, test, 4, 50, 1, 2)
 => DBGInvoke __raft_insert_row(default, test, 4, 51, 2, 6)
 
-=> DBGInvoke dag('select * from default.test where bit_and(b,4) = 4', 4)
+=> DBGInvoke dag('select * from default.test where bitAnd(b,4) = 4', 4)
 ┌─a─┬─b─┐
 │ 2 │ 6 │
 └───┴───┘
-=> DBGInvoke dag('select * from default.test where bit_or(b, 4) = 6', 4)
+=> DBGInvoke dag('select * from default.test where bitOr(b, 4) = 6', 4)
 ┌─a─┬─b─┐
 │ 1 │ 2 │
 │ 2 │ 6 │
 └───┴───┘
-=> DBGInvoke dag('select * from default.test where bit_xor(b, 2) = 4', 4)
+=> DBGInvoke dag('select * from default.test where bitXor(b, 2) = 4', 4)
 ┌─a─┬─b─┐
 │ 2 │ 6 │
 └───┴───┘
-=> DBGInvoke dag('select * from default.test where bit_not(b) = 18446744073709551609', 4)
+=> DBGInvoke dag('select * from default.test where bitNot(b) = 18446744073709551609', 4)
 ┌─a─┬─b─┐
 │ 2 │ 6 │
 └───┴───┘
-=> DBGInvoke dag('select * from default.test where bit_not(b) = 18446744073709551613', 4)
+=> DBGInvoke dag('select * from default.test where bitNot(b) = 18446744073709551613', 4)
 ┌─a─┬─b─┐
 │ 1 │ 2 │
 └───┴───┘
