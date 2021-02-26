@@ -6,6 +6,7 @@ generate_function_register(Arithmetic
   FunctionMinus
   FunctionMultiply
   FunctionDivideFloating
+  FunctionTiDBDivideFloating
   FunctionDivideIntegral
   FunctionDivideIntegralOrZero
   FunctionModulo
