@@ -249,7 +249,7 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, PreHandledSnapshot 
     try
     {
         auto & kvstore = server->tmt->getKVStore();
-        kvstore->handleApplySnapshot(RegionPtrWrap{snap->region, std::move(snap->cache)}, *server->tmt);
+        kvstore->handlePreApplySnapshot(RegionPtrWrap{snap->region, std::move(snap->cache)}, *server->tmt);
     }
     catch (...)
     {
