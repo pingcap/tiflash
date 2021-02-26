@@ -2,7 +2,7 @@ mysql> drop table if exists test.t;
 mysql> drop table if exists test.t1;
 
 mysql> create table test.t(id int, value int, ts timestamp);
-mysql> insert into test.t values(1, 10, '2000-01-01 10:00:00');
+mysql> set time_zone = 'UTC'; insert into test.t values(1, 10, '2000-01-01 02:00:00');
 mysql> alter table test.t set tiflash replica 1;
 mysql> create table test.t1(id int, value int);
 mysql> insert into test.t1 values(1, 15);
