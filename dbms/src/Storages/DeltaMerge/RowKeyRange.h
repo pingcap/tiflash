@@ -341,9 +341,9 @@ struct RowKeyRange
     };
 
     static std::unordered_map<size_t, CommonHandleRangeMinMax> min_max_data;
-    static std::mutex                                          mutex;
+    static std::shared_mutex                                   mutex;
     static std::unordered_map<TableID, TableRangeMinMax>       table_min_max_data;
-    static std::mutex                                          table_mutex;
+    static std::shared_mutex                                   table_mutex;
     static const CommonHandleRangeMinMax &                     getMinMaxData(size_t rowkey_column_size);
     static const TableRangeMinMax & getTableMinMaxData(TableID table_id, bool is_common_handle, size_t rowkey_column_size);
 
