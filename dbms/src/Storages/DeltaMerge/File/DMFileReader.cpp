@@ -211,10 +211,11 @@ bool DMFileReader::shouldSeek(size_t pack_id)
 
 bool DMFileReader::getSkippedRows(size_t & skip_rows)
 {
-    skip_rows = 0;
+    skip_rows               = 0;
+    const auto & pack_stats = dmfile->getPackStats();
     for (; next_pack_id < use_packs.size() && !use_packs[next_pack_id]; ++next_pack_id)
     {
-        skip_rows += dmfile->getPackStat(next_pack_id).rows;
+        skip_rows += pack_stats[next_pack_id].rows;
     }
     return next_pack_id < use_packs.size();
 }

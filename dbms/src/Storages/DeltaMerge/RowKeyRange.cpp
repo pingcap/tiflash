@@ -52,24 +52,30 @@ std::unordered_map<size_t, RowKeyRange::CommonHandleRangeMinMax> RowKeyRange::mi
     {9, RowKeyRange::CommonHandleRangeMinMax(9)},
     {10, RowKeyRange::CommonHandleRangeMinMax(10)},
 };
-std::mutex RowKeyRange::mutex;
+std::shared_mutex RowKeyRange::mutex;
 
 const RowKeyRange::CommonHandleRangeMinMax & RowKeyRange::getMinMaxData(size_t rowkey_column_size)
 {
-    if (auto it = min_max_data.find(rowkey_column_size); it != min_max_data.end())
-        return it->second;
-    std::lock_guard<std::mutex> lock(mutex);
+    {
+        std::shared_lock lock(mutex);
+        if (auto it = min_max_data.find(rowkey_column_size); it != min_max_data.end())
+            return it->second;
+    }
+    std::unique_lock lock(mutex);
     return min_max_data.try_emplace(rowkey_column_size, rowkey_column_size).first->second;
 }
 
 std::unordered_map<TableID, RowKeyRange::TableRangeMinMax> RowKeyRange::table_min_max_data;
-std::mutex                                                 RowKeyRange::table_mutex;
+std::shared_mutex                                          RowKeyRange::table_mutex;
 
 const RowKeyRange::TableRangeMinMax & RowKeyRange::getTableMinMaxData(TableID table_id, bool is_common_handle, size_t rowkey_column_size)
 {
-    if (auto it = table_min_max_data.find(table_id); it != table_min_max_data.end())
-        return it->second;
-    std::lock_guard<std::mutex> lock(table_mutex);
+    {
+        std::shared_lock lock(table_mutex);
+        if (auto it = table_min_max_data.find(table_id); it != table_min_max_data.end())
+            return it->second;
+    }
+    std::unique_lock lock(table_mutex);
     return table_min_max_data.try_emplace(table_id, table_id, is_common_handle, rowkey_column_size).first->second;
 }
 
