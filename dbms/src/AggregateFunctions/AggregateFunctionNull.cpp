@@ -67,7 +67,9 @@ public:
             }
         }
 
-        bool can_output_be_null = nested_function && !hacking_return_non_null_agg_func_names.count(nested_function->getName());
+        bool can_output_be_null = true;
+        if (nested_function && hacking_return_non_null_agg_func_names.count(nested_function->getName()))
+            can_output_be_null = false;
 
         if (has_null_types && can_output_be_null)
             return std::make_shared<AggregateFunctionNothing>();
