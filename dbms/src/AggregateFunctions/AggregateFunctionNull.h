@@ -13,6 +13,7 @@ namespace DB
 
 namespace ErrorCodes
 {
+    extern const int ILLEGAL_COLUMN;
     extern const int LOGICAL_ERROR;
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
@@ -201,12 +202,19 @@ public:
     {
         if constexpr (input_is_nullable)
         {
-            const ColumnNullable * column = static_cast<const ColumnNullable *>(columns[0]);
-            if (!column->isNullAt(row_num))
+            const IColumn * column = columns[0];
+            if (const auto * column_nullable = dynamic_cast<const ColumnNullable *>(column))
             {
-                this->setFlag(place);
-                const IColumn * nested_column = &column->getNestedColumn();
-                this->nested_function->add(this->nestedPlace(place), &nested_column, row_num, arena);
+                if (!column_nullable->isNullAt(row_num))
+                {
+                    this->setFlag(place);
+                    const IColumn * nested_column = &column_nullable->getNestedColumn();
+                    this->nested_function->add(this->nestedPlace(place), &nested_column, row_num, arena);
+                }
+            }
+            else
+            {
+                throw Exception("Illegal column " + column->getName() + " is passed to AggregateFunctionNullUnary", ErrorCodes::ILLEGAL_COLUMN);
             }
         }
         else

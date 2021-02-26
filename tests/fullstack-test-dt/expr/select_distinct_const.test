@@ -1,0 +1,14 @@
+mysql> drop table if exists test.t;
+mysql> create table test.t (id int, value decimal(6,3));
+mysql> alter table test.t set tiflash replica 1;
+mysql> insert into test.t values(1,2.3),(3,4.5),(5,6.7);
+mysql> insert into test.t values(null,null),(1,null),(null,3.3);
+
+func> wait_table test t
+
+mysql> set @@tidb_allow_mpp=1; SELECT DISTINCT 87 FROM test.t WHERE NOT NULL IS NOT NULL;
++----+
+| 87 |
++----+
+| 87 |
++----+
