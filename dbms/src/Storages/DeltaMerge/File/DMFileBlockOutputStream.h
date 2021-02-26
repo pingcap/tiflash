@@ -22,8 +22,7 @@ public:
                  // context.chooseCompressionSettings(0, 0), TODO: should enable this, and make unit testes work.
                  CompressionSettings(CompressionMethod::LZ4),
                  context.getFileProvider(),
-                 need_rate_limit ? context.getRateLimiter() : nullptr,
-                 context.getSettingsRef().dt_enable_single_file_mode_dmfile)
+                 need_rate_limit ? context.getRateLimiter() : nullptr)
     {
     }
 
