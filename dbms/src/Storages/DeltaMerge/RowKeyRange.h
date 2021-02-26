@@ -601,11 +601,11 @@ struct RowKeyRange
     {
         if (likely(table_id_in_raw_key == table_id))
         {
-            auto &      start_key             = *raw_keys.first;
-            auto &      end_key               = *raw_keys.second;
-            auto        table_range_min_max   = getTableMinMaxData(table_id, is_common_handle, rowkey_column_size);
-            auto        common_handle_min_max = getMinMaxData(rowkey_column_size);
-            RowKeyValue start_value, end_value;
+            auto &       start_key             = *raw_keys.first;
+            auto &       end_key               = *raw_keys.second;
+            const auto & table_range_min_max   = getTableMinMaxData(table_id, is_common_handle, rowkey_column_size);
+            const auto & common_handle_min_max = getMinMaxData(rowkey_column_size);
+            RowKeyValue  start_value, end_value;
             if (start_key.compare(*table_range_min_max.min) <= 0)
             {
                 if (is_common_handle)
