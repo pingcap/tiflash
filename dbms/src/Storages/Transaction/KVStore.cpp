@@ -3,7 +3,7 @@
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/ProxyFFIType.h>
+#include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionTable.h>
@@ -226,7 +226,7 @@ RegionMap & KVStore::regionsMut() { return region_manager.regions; }
 const RegionMap & KVStore::regions() const { return region_manager.regions; }
 KVStore::RegionManageLock KVStore::genRegionManageLock() const { return RegionManageLock(region_manager.mutex); }
 
-TiFlashApplyRes KVStore::handleWriteRaftCmd(
+EngineStoreApplyRes KVStore::handleWriteRaftCmd(
     raft_cmdpb::RaftCmdRequest && request, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt)
 {
     std::vector<BaseBuffView> keys;
@@ -265,7 +265,7 @@ TiFlashApplyRes KVStore::handleWriteRaftCmd(
         region_id, index, term, tmt);
 }
 
-TiFlashApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt)
+EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt)
 {
     auto region_persist_lock = region_manager.genRegionTaskLock(region_id);
 
@@ -273,7 +273,7 @@ TiFlashApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 r
     if (region == nullptr)
     {
         LOG_WARNING(log, __PRETTY_FUNCTION__ << ": [region " << region_id << "] is not found, might be removed already");
-        return TiFlashApplyRes::NotFound;
+        return EngineStoreApplyRes::NotFound;
     }
 
     const auto ori_size = region->dataSize();
@@ -313,7 +313,7 @@ void KVStore::persistRegion(const Region & region, const RegionTaskLock & region
     LOG_DEBUG(log, "Persist " << region.toString(false) << " done");
 }
 
-TiFlashApplyRes KVStore::handleUselessAdminRaftCmd(
+EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
     raft_cmdpb::AdminCmdType cmd_type, UInt64 curr_region_id, UInt64 index, UInt64 term, TMTContext & tmt)
 {
     auto region_task_lock = region_manager.genRegionTaskLock(curr_region_id);
@@ -322,7 +322,7 @@ TiFlashApplyRes KVStore::handleUselessAdminRaftCmd(
     if (curr_region_ptr == nullptr)
     {
         LOG_WARNING(log, __PRETTY_FUNCTION__ << ": [region " << curr_region_id << "] is not found, might be removed already");
-        return TiFlashApplyRes::NotFound;
+        return EngineStoreApplyRes::NotFound;
     }
 
     auto & curr_region = *curr_region_ptr;
@@ -354,12 +354,12 @@ TiFlashApplyRes KVStore::handleUselessAdminRaftCmd(
     {
         tryFlushRegionCacheInStorage(tmt, curr_region, log);
         persistRegion(curr_region, region_task_lock, "useless raft cmd");
-        return TiFlashApplyRes::Persist;
+        return EngineStoreApplyRes::Persist;
     }
-    return TiFlashApplyRes::None;
+    return EngineStoreApplyRes::None;
 }
 
-TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
+EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
     raft_cmdpb::AdminResponse && response,
     UInt64 curr_region_id,
     UInt64 index,
@@ -388,7 +388,7 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
         if (curr_region_ptr == nullptr)
         {
             LOG_WARNING(log, __PRETTY_FUNCTION__ << ": [region " << curr_region_id << "] is not found, might be removed already");
-            return TiFlashApplyRes::NotFound;
+            return EngineStoreApplyRes::NotFound;
         }
 
         auto & curr_region = *curr_region_ptr;
@@ -531,7 +531,7 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
                 throw Exception("Unsupported RaftCommandResult", ErrorCodes::LOGICAL_ERROR);
         }
 
-        return TiFlashApplyRes::Persist;
+        return EngineStoreApplyRes::Persist;
     }
 }
 } // namespace DB

@@ -8,7 +8,7 @@
 #include <Parsers/ASTLiteral.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/ProxyFFIType.h>
+#include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
@@ -370,27 +370,27 @@ SSTReaderPtr fn_get_sst_reader(SSTView v, RaftStoreProxyPtr)
 }
 uint8_t fn_remained(SSTReaderPtr ptr, ColumnFamilyType)
 {
-    auto reader = reinterpret_cast<MockSSTReader *>(ptr._inner);
+    auto reader = reinterpret_cast<MockSSTReader *>(ptr.inner);
     return reader->ffi_remained();
 }
 BaseBuffView fn_key(SSTReaderPtr ptr, ColumnFamilyType)
 {
-    auto reader = reinterpret_cast<MockSSTReader *>(ptr._inner);
+    auto reader = reinterpret_cast<MockSSTReader *>(ptr.inner);
     return reader->ffi_key();
 }
 BaseBuffView fn_value(SSTReaderPtr ptr, ColumnFamilyType)
 {
-    auto reader = reinterpret_cast<MockSSTReader *>(ptr._inner);
+    auto reader = reinterpret_cast<MockSSTReader *>(ptr.inner);
     return reader->ffi_val();
 }
 void fn_next(SSTReaderPtr ptr, ColumnFamilyType)
 {
-    auto reader = reinterpret_cast<MockSSTReader *>(ptr._inner);
+    auto reader = reinterpret_cast<MockSSTReader *>(ptr.inner);
     reader->ffi_next();
 }
 void fn_gc(SSTReaderPtr ptr, ColumnFamilyType)
 {
-    auto reader = reinterpret_cast<MockSSTReader *>(ptr._inner);
+    auto reader = reinterpret_cast<MockSSTReader *>(ptr.inner);
     delete reader;
 }
 

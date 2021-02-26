@@ -13,6 +13,7 @@
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
+#include <Storages/Transaction/Utils.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -153,7 +154,8 @@ static void writeRegionDataToStorage(Context & context, const RegionPtrWrap & re
     }
 }
 
-std::pair<RegionDataReadInfoList, RegionException::RegionReadStatus> resolveLocksAndReadRegionData(const TiDB::TableID table_id,
+std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfoPtr> resolveLocksAndReadRegionData(
+    const TiDB::TableID table_id,
     const RegionPtr & region,
     const Timestamp start_ts,
     const std::unordered_set<UInt64> * bypass_lock_ts,
@@ -175,11 +177,11 @@ std::pair<RegionDataReadInfoList, RegionException::RegionReadStatus> resolveLock
              * Only when region is Normal can continue read process.
              */
             if (region->peerState() != raft_serverpb::PeerState::Normal)
-                return {{}, RegionException::RegionReadStatus::NOT_FOUND};
+                return RegionException::RegionReadStatus::NOT_FOUND;
 
             const auto & meta_snap = region->dumpRegionMetaSnapshot();
             if (meta_snap.ver != region_version || meta_snap.conf_ver != conf_version)
-                return {{}, RegionException::RegionReadStatus::EPOCH_NOT_MATCH};
+                return RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
 
             handle_range = meta_snap.range->getHandleRangeByTable(table_id);
         }
@@ -191,9 +193,7 @@ std::pair<RegionDataReadInfoList, RegionException::RegionReadStatus> resolveLock
             if (LockInfoPtr lock_info = scanner.getLockInfo(RegionLockReadQuery{.read_tso = start_ts, .bypass_lock_ts = bypass_lock_ts});
                 lock_info)
             {
-                LockInfos lock_infos;
-                lock_infos.emplace_back(std::move(lock_info));
-                throw LockException(region->id(), std::move(lock_infos));
+                return std::move(lock_info);
             }
         }
 
@@ -201,7 +201,7 @@ std::pair<RegionDataReadInfoList, RegionException::RegionReadStatus> resolveLock
         {
             // Shortcut for empty region.
             if (!scanner.hasNext())
-                return {{}, RegionException::RegionReadStatus::OK};
+                return std::move(data_list_read);
 
             data_list_read.reserve(scanner.writeMapSize());
 
@@ -212,7 +212,8 @@ std::pair<RegionDataReadInfoList, RegionException::RegionReadStatus> resolveLock
             } while (scanner.hasNext());
         }
     }
-    return {std::move(data_list_read), RegionException::RegionReadStatus::OK};
+
+    return std::move(data_list_read);
 }
 
 std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & region, bool lock_region = true)
@@ -280,7 +281,7 @@ void RegionTable::writeBlockByRegion(
     data_list_to_remove = std::move(*data_list_read);
 }
 
-std::tuple<Block, RegionException::RegionReadStatus> RegionTable::readBlockByRegion(const TiDB::TableInfo & table_info,
+RegionTable::ReadBlockByRegionRes RegionTable::readBlockByRegion(const TiDB::TableInfo & table_info,
     const ColumnsDescription & columns,
     const Names & column_names_to_read,
     const RegionPtr & region,
@@ -289,7 +290,7 @@ std::tuple<Block, RegionException::RegionReadStatus> RegionTable::readBlockByReg
     bool resolve_locks,
     Timestamp start_ts,
     const std::unordered_set<UInt64> * bypass_lock_ts,
-    DB::HandleRange<HandleID> & handle_range,
+    DB::HandleRange<HandleID> & range,
     RegionScanFilterPtr scan_filter)
 {
     if (!region)
@@ -297,26 +298,35 @@ std::tuple<Block, RegionException::RegionReadStatus> RegionTable::readBlockByReg
 
     // Tiny optimization for queries that need only handle, tso, delmark.
     bool need_value = column_names_to_read.size() != 3;
-    auto [data_list_read, read_status] = resolveLocksAndReadRegionData(
-        table_info.id, region, start_ts, bypass_lock_ts, region_version, conf_version, handle_range, resolve_locks, need_value);
-    if (read_status != RegionException::RegionReadStatus::OK)
-        return {Block(), read_status};
+    auto region_data_lock = resolveLocksAndReadRegionData(
+        table_info.id, region, start_ts, bypass_lock_ts, region_version, conf_version, range, resolve_locks, need_value);
 
-    /// Read region data as block.
-    Block block;
-    {
-        bool ok = false;
-        std::tie(block, ok) = readRegionBlock(table_info, columns, column_names_to_read, data_list_read, start_ts, true, scan_filter);
-        if (!ok)
-            // TODO: Enrich exception message.
-            throw Exception("Read region " + std::to_string(region->id()) + " of table " + std::to_string(table_info.id) + " failed",
-                ErrorCodes::LOGICAL_ERROR);
-    }
-
-    return {std::move(block), RegionException::RegionReadStatus::OK};
+    return std::visit(variant_op::overloaded{
+                          [&](RegionDataReadInfoList & data_list_read) -> ReadBlockByRegionRes {
+                              /// Read region data as block.
+                              Block block;
+                              {
+                                  bool ok = false;
+                                  std::tie(block, ok) = readRegionBlock(
+                                      table_info, columns, column_names_to_read, data_list_read, start_ts, true, scan_filter);
+                                  if (!ok)
+                                      // TODO: Enrich exception message.
+                                      throw Exception("Read region " + std::to_string(region->id()) + " of table "
+                                              + std::to_string(table_info.id) + " failed",
+                                          ErrorCodes::LOGICAL_ERROR);
+                              }
+                              return block;
+                          },
+                          [&](LockInfoPtr & lock_value) -> ReadBlockByRegionRes {
+                              assert(lock_value);
+                              throw LockException(region->id(), std::move(lock_value));
+                          },
+                          [](RegionException::RegionReadStatus & s) -> ReadBlockByRegionRes { return s; },
+                      },
+        region_data_lock);
 }
 
-RegionException::RegionReadStatus RegionTable::resolveLocksAndWriteRegion(TMTContext & tmt,
+RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegion(TMTContext & tmt,
     const TiDB::TableID table_id,
     const RegionPtr & region,
     const Timestamp start_ts,
@@ -326,7 +336,7 @@ RegionException::RegionReadStatus RegionTable::resolveLocksAndWriteRegion(TMTCon
     DB::HandleRange<HandleID> & handle_range,
     Logger * log)
 {
-    auto [data_list_read, read_status] = resolveLocksAndReadRegionData(table_id,
+    auto region_data_lock = resolveLocksAndReadRegionData(table_id,
         region,
         start_ts,
         bypass_lock_ts,
@@ -335,18 +345,19 @@ RegionException::RegionReadStatus RegionTable::resolveLocksAndWriteRegion(TMTCon
         handle_range,
         /* resolve_locks */ true,
         /* need_data_value */ true);
-    if (read_status != RegionException::RegionReadStatus::OK)
-        return read_status;
 
-    if (data_list_read.empty())
-        return read_status;
-
-    auto & context = tmt.getContext();
-    writeRegionDataToStorage(context, region, data_list_read, log);
-
-    RemoveRegionCommitCache(region, data_list_read);
-
-    return RegionException::RegionReadStatus::OK;
+    return std::visit(variant_op::overloaded{
+                          [&](RegionDataReadInfoList & data_list_read) -> ResolveLocksAndWriteRegionRes {
+                              if (data_list_read.empty())
+                                  return RegionException::RegionReadStatus::OK;
+                              auto & context = tmt.getContext();
+                              writeRegionDataToStorage(context, region, data_list_read, log);
+                              RemoveRegionCommitCache(region, data_list_read);
+                              return RegionException::RegionReadStatus::OK;
+                          },
+                          [](auto & r) -> ResolveLocksAndWriteRegionRes { return std::move(r); },
+                      },
+        region_data_lock);
 }
 
 /// pre-decode region data into block cache and remove
