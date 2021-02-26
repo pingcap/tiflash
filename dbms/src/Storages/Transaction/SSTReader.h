@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Storages/Transaction/ProxyFFIType.h>
+#include <Storages/Transaction/ProxyFFI.h>
 
 namespace DB
 {

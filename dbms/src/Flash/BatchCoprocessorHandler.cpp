@@ -5,7 +5,6 @@
 #include <Storages/IStorage.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/LockException.h>
-#include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 
@@ -47,7 +46,7 @@ grpc::Status BatchCoprocessorHandler::execute()
                 const auto dag_request = ({
                     tipb::DAGRequest dag_req;
                     dag_req.ParseFromString(cop_request->data());
-                    dag_req;
+                    std::move(dag_req);
                 });
                 std::unordered_map<RegionID, RegionInfo> regions;
                 for (auto & r : cop_request->regions())
