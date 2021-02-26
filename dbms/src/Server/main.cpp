@@ -1,14 +1,15 @@
-#include <common/config_common.h>
-#include <Common/config.h>
 #include <Common/ClickHouseRevision.h>
 #include <Common/ErrorExporter.h>
 #include <Common/TiFlashBuildInfo.h>
+#include <Common/config.h>
 #include <IO/WriteBufferFromFile.h>
+#include <common/config_common.h>
 #include <config_tools.h>
+
 #include <iostream>
-#include <vector>
 #include <string>
-#include <utility>  /// pair
+#include <utility> /// pair
+#include <vector>
 
 #if USE_TCMALLOC
 #include <gperftools/malloc_extension.h>
@@ -48,19 +49,19 @@ int mainEntryClickHouseClusterCopier(int argc, char ** argv);
 #endif
 
 #if USE_EMBEDDED_COMPILER
-    int mainEntryClickHouseClang(int argc, char ** argv);
-    int mainEntryClickHouseLLD(int argc, char ** argv);
+int mainEntryClickHouseClang(int argc, char ** argv);
+int mainEntryClickHouseLLD(int argc, char ** argv);
 #endif
 
-extern "C" void print_tiflash_proxy_version();
+extern "C" void print_raftstore_proxy_version();
 
-int mainEntryVersion(int , char **)
+int mainEntryVersion(int, char **)
 {
     TiFlashBuildInfo::outputDetail(std::cout);
     std::cout << std::endl;
 
     std::cout << "Raft Proxy" << std::endl;
-    print_tiflash_proxy_version();
+    print_raftstore_proxy_version();
     return 0;
 }
 
@@ -91,12 +92,11 @@ int mainExportError(int argc, char ** argv)
 namespace
 {
 
-using MainFunc = int (*)(int, char**);
+using MainFunc = int (*)(int, char **);
 
 
 /// Add an item here to register new application
-std::pair<const char *, MainFunc> clickhouse_applications[] =
-{
+std::pair<const char *, MainFunc> clickhouse_applications[] = {
 #if ENABLE_CLICKHOUSE_LOCAL
     {"local", mainEntryClickHouseLocal},
 #endif
@@ -113,21 +113,16 @@ std::pair<const char *, MainFunc> clickhouse_applications[] =
     {"performance-test", mainEntryClickHousePerformanceTest},
 #endif
 #if ENABLE_CLICKHOUSE_TOOLS
-    {"extract-from-config", mainEntryClickHouseExtractFromConfig},
-    {"compressor", mainEntryClickHouseCompressor},
+    {"extract-from-config", mainEntryClickHouseExtractFromConfig}, {"compressor", mainEntryClickHouseCompressor},
     {"format", mainEntryClickHouseFormat},
 #endif
 #if ENABLE_CLICKHOUSE_COPIER
     {"copier", mainEntryClickHouseClusterCopier},
 #endif
 #if USE_EMBEDDED_COMPILER
-    {"clang", mainEntryClickHouseClang},
-    {"clang++", mainEntryClickHouseClang},
-    {"lld", mainEntryClickHouseLLD},
+    {"clang", mainEntryClickHouseClang}, {"clang++", mainEntryClickHouseClang}, {"lld", mainEntryClickHouseLLD},
 #endif
-    {"version", mainEntryVersion},
-    {"errgen", mainExportError}
-};
+    {"version", mainEntryVersion}, {"errgen", mainExportError}};
 
 
 int printHelp(int, char **)
@@ -159,7 +154,7 @@ bool isClickhouseApp(const std::string & app_suffix, std::vector<char *> & argv)
     return !argv.empty() && (app_name == argv[0] || endsWith(argv[0], "/" + app_name));
 }
 
-}
+} // namespace
 
 
 int main(int argc_, char ** argv_)

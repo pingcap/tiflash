@@ -1,4 +1,5 @@
 #include <Encryption/MockKeyManager.h>
+#include <Storages/Transaction/FileEncryption.h>
 
 namespace DB
 {
@@ -16,13 +17,15 @@ MockKeyManager::MockKeyManager(EncryptionMethod method_, const String & key_, co
     : method{method_}, key{key_}, iv{iv}, encryption_enabled{encryption_enabled_}
 {}
 
+FileEncryptionInfo MockKeyManager::newFile(const String & fname) { return getFile(fname); }
+
 FileEncryptionInfo MockKeyManager::getFile(const String & fname)
 {
     std::ignore = fname;
     if (encryption_enabled)
     {
-        auto * file_key = new String(key);
-        auto * file_iv = new String(iv);
+        auto * file_key = RawCppString::New(key);
+        auto * file_iv = RawCppString::New(iv);
         FileEncryptionInfo file_info{
             FileEncryptionRes::Ok,
             method,

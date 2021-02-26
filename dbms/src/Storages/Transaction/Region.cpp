@@ -2,7 +2,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/ProxyFFIType.h>
+#include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/RegionTable.h>
@@ -594,12 +594,12 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const Timestamp 
         LOG_INFO(log, __FUNCTION__ << ": add deleted gc: " << deleted_gc_cnt);
 }
 
-TiFlashApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt)
+EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt)
 {
     if (index <= appliedIndex())
     {
         LOG_TRACE(log, toString() << " ignore outdated raft log [term: " << term << ", index: " << index << "]");
-        return TiFlashApplyRes::None;
+        return EngineStoreApplyRes::None;
     }
 
     auto & context = tmt.getContext();
@@ -706,7 +706,7 @@ TiFlashApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 in
 
     meta.notifyAll();
 
-    return TiFlashApplyRes::None;
+    return EngineStoreApplyRes::None;
 }
 
 void Region::handleIngestSST(const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)

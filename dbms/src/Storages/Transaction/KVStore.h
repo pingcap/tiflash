@@ -38,7 +38,7 @@ class TMTContext;
 struct SSTViewVec;
 struct WriteCmdsView;
 
-enum class TiFlashApplyRes : uint32_t;
+enum class EngineStoreApplyRes : uint32_t;
 
 struct TiFlashRaftProxyHelper;
 struct RegionPtrWrap;
@@ -67,15 +67,15 @@ public:
     static void tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, Poco::Logger * log);
 
     size_t regionSize() const;
-    TiFlashApplyRes handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
+    EngineStoreApplyRes handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
         raft_cmdpb::AdminResponse && response,
         UInt64 region_id,
         UInt64 index,
         UInt64 term,
         TMTContext & tmt);
-    TiFlashApplyRes handleWriteRaftCmd(
+    EngineStoreApplyRes handleWriteRaftCmd(
         raft_cmdpb::RaftCmdRequest && request, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
-    TiFlashApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
+    EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
 
     void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, const SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
     RegionPreDecodeBlockDataPtr preHandleSnapshot(RegionPtr new_region, const SSTViewVec, TMTContext & tmt);
@@ -83,7 +83,7 @@ public:
 
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
     void setRegionCompactLogPeriod(Seconds period);
-    TiFlashApplyRes handleIngestSST(UInt64 region_id, const SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
+    EngineStoreApplyRes handleIngestSST(UInt64 region_id, const SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
     RegionPtr genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
     const TiFlashRaftProxyHelper * getProxyHelper() const { return proxy_helper; }
 
@@ -116,7 +116,7 @@ private:
 
     RegionMap & regionsMut();
     const RegionMap & regions() const;
-    TiFlashApplyRes handleUselessAdminRaftCmd(
+    EngineStoreApplyRes handleUselessAdminRaftCmd(
         raft_cmdpb::AdminCmdType cmd_type, UInt64 curr_region_id, UInt64 index, UInt64 term, TMTContext & tmt);
 
     void persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller);
