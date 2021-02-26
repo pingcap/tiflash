@@ -14,30 +14,29 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
                            size_t                      max_compress_block_size_,
                            const CompressionSettings & compression_settings_,
                            const FileProviderPtr &     file_provider_,
-                           const RateLimiterPtr &      rate_limiter_,
-                           bool                        single_file_mode_)
+                           const RateLimiterPtr &      rate_limiter_)
     : dmfile(dmfile_),
       write_columns(write_columns_),
       min_compress_block_size(min_compress_block_size_),
       max_compress_block_size(max_compress_block_size_),
       compression_settings(compression_settings_),
+      single_file_mode(dmfile->isSingleFileMode()),
       // assume pack_stat_file is the first file created inside DMFile
       // it will create encryption info for the whole DMFile
-      pack_stat_file(single_file_mode_ ? nullptr
-                                       : createWriteBufferFromFileBaseByFileProvider(file_provider_,
-                                                                                     dmfile->packStatPath(),
-                                                                                     dmfile->encryptionPackStatPath(),
-                                                                                     true,
-                                                                                     rate_limiter_,
-                                                                                     0,
-                                                                                     0,
-                                                                                     max_compress_block_size)),
-      single_file_stream(!single_file_mode_ ? nullptr
-                                            : new SingleFileStream(
-                                                dmfile_, compression_settings_, max_compress_block_size_, file_provider_, rate_limiter_)),
+      pack_stat_file(single_file_mode ? nullptr
+                                      : createWriteBufferFromFileBaseByFileProvider(file_provider_,
+                                                                                    dmfile->packStatPath(),
+                                                                                    dmfile->encryptionPackStatPath(),
+                                                                                    true,
+                                                                                    rate_limiter_,
+                                                                                    0,
+                                                                                    0,
+                                                                                    max_compress_block_size)),
+      single_file_stream(!single_file_mode ? nullptr
+                                           : new SingleFileStream(
+                                               dmfile_, compression_settings_, max_compress_block_size_, file_provider_, rate_limiter_)),
       file_provider(file_provider_),
-      rate_limiter(rate_limiter_),
-      single_file_mode(single_file_mode_)
+      rate_limiter(rate_limiter_)
 {
     dmfile->setStatus(DMFile::Status::WRITING);
     for (auto & cd : write_columns)
