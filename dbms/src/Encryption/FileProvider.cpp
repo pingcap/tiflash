@@ -26,10 +26,17 @@ RandomAccessFilePtr FileProvider::newRandomAccessFile(const String & file_path_,
     return file;
 }
 
+<<<<<<< HEAD
 WritableFilePtr FileProvider::newWritableFile(const String & file_path_, const EncryptionPath & encryption_path_, bool create_new_file_,
     bool create_new_encryption_info_, int flags, mode_t mode) const
 {
     WritableFilePtr file = std::make_shared<PosixWritableFile>(file_path_, create_new_file_, flags, mode);
+=======
+WritableFilePtr FileProvider::newWritableFile(const String & file_path_, const EncryptionPath & encryption_path_, bool truncate_if_exists_,
+    bool create_new_encryption_info_, const RateLimiterPtr & rate_limiter_, int flags, mode_t mode) const
+{
+    WritableFilePtr file = std::make_shared<PosixWritableFile>(file_path_, truncate_if_exists_, flags, mode, rate_limiter_);
+>>>>>>> e09da6a6d... Fix the bug that opened file count shown in Grafana is high (#1496)
     if (encryption_enabled && create_new_encryption_info_)
     {
         auto encryption_info = key_manager->newFile(encryption_path_.full_path);

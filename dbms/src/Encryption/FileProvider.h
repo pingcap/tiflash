@@ -21,8 +21,13 @@ public:
 
     RandomAccessFilePtr newRandomAccessFile(const String & file_path_, const EncryptionPath & encryption_path_, int flags = -1) const;
 
+<<<<<<< HEAD
     WritableFilePtr newWritableFile(const String & file_path_, const EncryptionPath & encryption_path_, bool create_new_file_ = true,
         bool create_new_encryption_info_ = true, int flags = -1, mode_t mode = 0666) const;
+=======
+    WritableFilePtr newWritableFile(const String & file_path_, const EncryptionPath & encryption_path_, bool truncate_if_exists_ = true,
+        bool create_new_encryption_info_ = true, const RateLimiterPtr & rate_limiter_ = nullptr, int flags = -1, mode_t mode = 0666) const;
+>>>>>>> e09da6a6d... Fix the bug that opened file count shown in Grafana is high (#1496)
 
     // If dir_path_as_encryption_path is true, use dir_path_ as EncryptionPath
     // If false, use every file's path inside dir_path_ as EncryptionPath
