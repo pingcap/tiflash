@@ -1,9 +1,8 @@
-#include <fcntl.h>
-#include <unistd.h>
-
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Encryption/PosixWritableFile.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 namespace ProfileEvents
 {
@@ -42,13 +41,16 @@ void PosixWritableFile::open()
 {
     if (fd != -1)
         return;
-    doOpenFile(false, -1, 0666);
+    // The mode is only valid when creating the file, the `0666` is ignored.
+    doOpenFile(/*truncate_when_exists=*/false, -1, 0666);
 }
 
 void PosixWritableFile::close()
 {
     if (0 != ::close(fd))
         throw Exception("Cannot close file", ErrorCodes::CANNOT_CLOSE_FILE);
+
+    metric_increment.changeTo(0); // Subtract metrics for `CurrentMetrics::OpenFileForWrite`
 
     fd = -1;
 }
@@ -91,6 +93,8 @@ void PosixWritableFile::doOpenFile(bool truncate_when_exists_, int flags, mode_t
         ProfileEvents::increment(ProfileEvents::FileOpenFailed);
         throwFromErrno("Cannot open file " + file_name, errno == ENOENT ? ErrorCodes::FILE_DOESNT_EXIST : ErrorCodes::CANNOT_OPEN_FILE);
     }
+
+    metric_increment.changeTo(1); // Add metrics for `CurrentMetrics::OpenFileForWrite`
 
 #ifdef __APPLE__
     if (o_direct)
