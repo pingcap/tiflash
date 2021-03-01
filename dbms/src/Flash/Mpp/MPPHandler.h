@@ -60,8 +60,15 @@ struct MPPTunnel
 
     ~MPPTunnel()
     {
-        if (!finished)
-            writeDone();
+        try
+        {
+            if (!finished)
+                writeDone();
+        }
+        catch (...)
+        {
+            LOG_WARNING(log, "Error in destructor function of MPPTunnel");
+        }
     }
 
     // write a single packet to the tunnel, it will block if tunnel is not ready.
