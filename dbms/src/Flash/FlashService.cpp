@@ -205,6 +205,35 @@ grpc::Status FlashService::Coprocessor(
     return grpc::Status::OK;
 }
 
+::grpc::Status FlashService::CancelMPPTask(::grpc::ServerContext* grpc_context, const ::mpp::CancelTaskRequest* request, ::mpp::CancelTaskResponse* response) {
+    // CancelMPPTask cancels the query of the task.
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": cancel mpp task request: " << request->DebugString());
+
+    if (!security_config.checkGrpcContext(grpc_context))
+    {
+        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
+    }
+    GET_METRIC(metrics, tiflash_coprocessor_request_count, type_cancel_mpp_task).Increment();
+    GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_cancel_mpp_task).Increment();
+    Stopwatch watch;
+    SCOPE_EXIT({
+                   GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_cancel_mpp_task).Decrement();
+                   GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_cancel_mpp_task).Observe(watch.elapsedSeconds());
+                   // TODO: update the value of metric tiflash_coprocessor_response_bytes.
+               });
+
+    auto [context, status] = createDBContext(grpc_context);
+    if (!status.ok())
+    {
+        return status;
+    }
+
+    auto & tmt_context = context.getTMTContext();
+    auto task_manager = tmt_context.getMPPTaskManager();
+    task_manager->cancelMPPQuery(request->meta().start_ts());
+    return grpc::Status::OK;
+}
+
 // This function is deprecated.
 grpc::Status FlashService::BatchCommands(
     grpc::ServerContext * grpc_context, grpc::ServerReaderWriter<::tikvpb::BatchCommandsResponse, tikvpb::BatchCommandsRequest> * stream)
