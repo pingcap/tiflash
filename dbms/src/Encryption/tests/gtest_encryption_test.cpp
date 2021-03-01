@@ -168,7 +168,7 @@ TEST(PosixWritableFile_test, test)
 try
 {
     String p = tests::TiFlashTestEnv::getTemporaryPath() + "posix_file";
-    PosixWritableFile f(p, true, -1, 0600, nullptr);
+    PosixWritableFile f(p, true, -1, 0600);
     f.close();
     f.open();
     f.close();
