@@ -94,11 +94,13 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
         }
         case tipb::ExprType::MysqlTime:
         {
-            if (!expr.has_field_type() || (expr.field_type().tp() != TiDB::TypeDate && expr.field_type().tp() != TiDB::TypeDatetime))
-                throw TiFlashException("Invalid MySQL Time literal " + expr.DebugString(), Errors::Coprocessor::BadRequest);
+            if (!expr.has_field_type())
+                throw TiFlashException("MySQL Time literal without field_type" + expr.DebugString(), Errors::Coprocessor::BadRequest);
             auto t = decodeDAGUInt64(expr.val());
-            // TODO: Use timezone in DAG request.
-            return std::to_string(TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field().get<Int64>());
+            auto ret = std::to_string(TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field().get<UInt64>());
+            if (expr.field_type().tp() == TiDB::TypeTimestamp)
+                ret = ret + "_ts";
+            return ret;
         }
         case tipb::ExprType::ColumnRef:
             return getColumnNameForColumnExpr(expr, input_col);
@@ -242,10 +244,9 @@ Field decodeLiteral(const tipb::Expr & expr)
             return decodeDAGDecimal(expr.val());
         case tipb::ExprType::MysqlTime:
         {
-            if (!expr.has_field_type() || (expr.field_type().tp() != TiDB::TypeDate && expr.field_type().tp() != TiDB::TypeDatetime))
-                throw TiFlashException("Invalid MySQL Time literal " + expr.DebugString(), Errors::Coprocessor::BadRequest);
+            if (!expr.has_field_type())
+                throw TiFlashException("MySQL Time literal without field_type" + expr.DebugString(), Errors::Coprocessor::BadRequest);
             auto t = decodeDAGUInt64(expr.val());
-            // TODO: Use timezone in DAG request.
             return TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field();
         }
         case tipb::ExprType::MysqlBit:
