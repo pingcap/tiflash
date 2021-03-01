@@ -887,6 +887,16 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
             column.type = target_type;
             actions->add(ExpressionAction::addColumn(column));
         }
+        if (expr.field_type().tp() == TiDB::TypeTimestamp && !context.getTimezoneInfo().is_utc_timezone)
+        {
+            /// append timezone cast for timestamp literal
+            tipb::Expr tz_expr;
+            constructTZExpr(tz_expr, context.getTimezoneInfo(), true);
+            String func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneFromUTC" : "ConvertTimeZoneByOffset";
+            String tz_col = getActions(tz_expr, actions);
+            String casted_name = appendTimeZoneCast(tz_col, ret, func_name, actions);
+            ret = casted_name;
+        }
     }
     else if (isColumnExpr(expr))
     {
