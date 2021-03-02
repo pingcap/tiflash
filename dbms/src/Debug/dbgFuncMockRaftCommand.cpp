@@ -250,10 +250,16 @@ void MockRaftCommand::dbgFuncStorePreHandleSnapshot(Context & context, const AST
 
 void MockRaftCommand::dbgFuncApplyPreHandleSnapshot(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
+    if (args.size() != 1)
+    {
+        throw Exception("Args not matched, should be: region-id", ErrorCodes::BAD_ARGUMENTS);
+    }
+
     std::stringstream ss;
     RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args.front()).value);
     auto [region, block_cache] = GLOBAL_REGION_MAP.popRegionCache("__snap_" + std::to_string(region_id));
-    context.getTMTContext().getKVStore()->tryApplySnapshot({region, std::move(block_cache)}, context);
+    auto & tmt = context.getTMTContext();
+    context.getTMTContext().getKVStore()->checkAndApplySnapshot({region, std::move(block_cache)}, tmt);
     ss << "success apply " << region->id() << " with block cache";
     output(ss.str());
 }

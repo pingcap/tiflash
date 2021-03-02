@@ -16,7 +16,6 @@ struct LockInfo
 };
 
 using LockInfoPtr = std::unique_ptr<LockInfo>;
-using LockInfos = std::vector<LockInfoPtr>;
 
 // To get lock info from region: read_tso is from cop request, any lock with ts in bypass_lock_ts should be filtered.
 struct RegionLockReadQuery
