@@ -219,15 +219,17 @@ grpc::Status FlashService::Coprocessor(
     SCOPE_EXIT({
                    GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_cancel_mpp_task).Decrement();
                    GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_cancel_mpp_task).Observe(watch.elapsedSeconds());
-                   // TODO: update the value of metric tiflash_coprocessor_response_bytes.
+                   GET_METRIC(metrics, tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
                });
 
     auto [context, status] = createDBContext(grpc_context);
+    auto err = new mpp::Error();
     if (!status.ok())
     {
+        err->set_msg("error status");
+        response->set_allocated_error(err);
         return status;
     }
-
     auto & tmt_context = context.getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
     task_manager->cancelMPPQuery(request->meta().start_ts());

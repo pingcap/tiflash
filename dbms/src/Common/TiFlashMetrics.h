@@ -52,7 +52,7 @@ namespace DB
         F(type_batch, {{"type", "batch"}}, ExpBuckets{0.0005, 2, 20}), F(type_cop, {{"type", "cop"}}, ExpBuckets{0.0005, 2, 20}),         \
         F(type_super_batch, {{"type", "super_batch"}}, ExpBuckets{0.0005, 2, 20}),                                                        \
         F(type_dispatch_mpp_task, {{"type", "dispatch_mpp_task"}}, ExpBuckets{0.0005, 2, 20}),                                            \
-        F(type_mpp_establish_conn, {{"type", "mpp_establish_conn"}}, ExpBuckets{0.0005, 2, 30})                                           \
+        F(type_mpp_establish_conn, {{"type", "mpp_establish_conn"}}, ExpBuckets{0.0005, 2, 30}),                                          \
         F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}, ExpBuckets{0.0005, 2, 30}))                                                \
     M(tiflash_coprocessor_response_bytes, "Total bytes of response body", Counter)                                                        \
     M(tiflash_schema_version, "Current version of tiflash cached schema", Gauge)                                                          \
