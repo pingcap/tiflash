@@ -2,6 +2,7 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Encryption/WritableFile.h>
+
 #include <string>
 
 namespace CurrentMetrics
@@ -18,7 +19,8 @@ namespace DB
 class PosixWritableFile : public WritableFile
 {
 protected:
-    CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForWrite};
+    // Only add metrics when file is actually added in `doOpenFile`.
+    CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForWrite, 0};
 
 public:
     PosixWritableFile(const std::string & file_name_, bool truncate_when_exists_, int flags, mode_t mode);

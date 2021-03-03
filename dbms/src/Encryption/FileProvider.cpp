@@ -5,6 +5,7 @@
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Encryption/PosixWritableFile.h>
 #include <Poco/File.h>
+#include <Storages/Transaction/FileEncryption.h>
 #include <common/likely.h>
 
 namespace DB
@@ -25,10 +26,10 @@ RandomAccessFilePtr FileProvider::newRandomAccessFile(const String & file_path_,
     return file;
 }
 
-WritableFilePtr FileProvider::newWritableFile(const String & file_path_, const EncryptionPath & encryption_path_, bool create_new_file_,
+WritableFilePtr FileProvider::newWritableFile(const String & file_path_, const EncryptionPath & encryption_path_, bool truncate_if_exists_,
     bool create_new_encryption_info_, int flags, mode_t mode) const
 {
-    WritableFilePtr file = std::make_shared<PosixWritableFile>(file_path_, create_new_file_, flags, mode);
+    WritableFilePtr file = std::make_shared<PosixWritableFile>(file_path_, truncate_if_exists_, flags, mode);
     if (encryption_enabled && create_new_encryption_info_)
     {
         auto encryption_info = key_manager->newFile(encryption_path_.full_path);
