@@ -1,6 +1,5 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
-#include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 
 namespace DB
