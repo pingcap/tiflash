@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Storages/Transaction/RaftStoreProxyFFI/ColumnFamily.h>
+#include <RaftStoreProxyFFI/ColumnFamily.h>
 
 #include <string>
 

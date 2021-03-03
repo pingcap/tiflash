@@ -28,7 +28,7 @@ class KVStoreTaskLock;
 class Context;
 class TMTContext;
 struct WriteCmdsView;
-enum class TiFlashApplyRes : uint32_t;
+enum class EngineStoreApplyRes : uint32_t;
 struct SSTViewVec;
 struct TiFlashRaftProxyHelper;
 class RegionMockTest;
@@ -70,7 +70,7 @@ public:
 
     private:
         RegionPtr store;
-        std::shared_lock<std::shared_mutex> lock;
+        std::shared_lock<std::shared_mutex> lock; // A shared_lock so that we can concurrently read committed data.
 
         size_t write_map_size = 0;
         RegionData::ConstWriteCFIter write_map_it;
@@ -95,7 +95,7 @@ public:
 
     private:
         RegionPtr store;
-        std::unique_lock<std::shared_mutex> lock;
+        std::unique_lock<std::shared_mutex> lock; // A unique_lock so that we can safely remove committed data.
     };
 
 public:
@@ -172,7 +172,7 @@ public:
     void tryPreDecodeTiKVValue(TMTContext & tmt);
 
     TableID getMappedTableID() const;
-    TiFlashApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt);
+    EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt);
     void handleIngestSST(const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt);
 
     UInt64 getSnapshotEventFlag() const { return snapshot_event_flag; }

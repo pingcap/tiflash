@@ -63,8 +63,8 @@ grpc::Status CoprocessorHandler::execute()
                 dag_request.ParseFromString(cop_request->data());
                 LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
                 if (dag_request.has_is_rpn_expr() && dag_request.is_rpn_expr())
-                    throw TiFlashException("DAG request with rpn expression is not supported in TiFlash",
-                        Errors::Coprocessor::Unimplemented);
+                    throw TiFlashException(
+                        "DAG request with rpn expression is not supported in TiFlash", Errors::Coprocessor::Unimplemented);
                 tipb::SelectResponse dag_response;
                 std::unordered_map<RegionID, RegionInfo> regions;
                 const std::unordered_set<UInt64> bypass_lock_ts(
@@ -94,17 +94,17 @@ grpc::Status CoprocessorHandler::execute()
         GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_error, reason_internal_error).Increment();
         return recordError(grpc::StatusCode::INTERNAL, e.standardText());
     }
-    catch (const LockException & e)
+    catch (LockException & e)
     {
         LOG_WARNING(
             log, __PRETTY_FUNCTION__ << ": LockException: region " << cop_request->context().region_id() << ", message: " << e.message());
         cop_response->Clear();
         GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_error, reason_meet_lock).Increment();
         kvrpcpb::LockInfo * lock_info = cop_response->mutable_locked();
-        lock_info->set_key(e.lock_infos[0]->key);
-        lock_info->set_primary_lock(e.lock_infos[0]->primary_lock);
-        lock_info->set_lock_ttl(e.lock_infos[0]->lock_ttl);
-        lock_info->set_lock_version(e.lock_infos[0]->lock_version);
+        lock_info->set_key(std::move(e.lock_info->key));
+        lock_info->set_primary_lock(std::move(e.lock_info->primary_lock));
+        lock_info->set_lock_ttl(std::move(e.lock_info->lock_ttl));
+        lock_info->set_lock_version(std::move(e.lock_info->lock_version));
         // return ok so TiDB has the chance to see the LockException
         return grpc::Status::OK;
     }
