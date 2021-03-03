@@ -2,9 +2,8 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <IO/ReadBufferFromString.h>
-
-#include "DAGUtils.h"
 
 namespace DB
 {
