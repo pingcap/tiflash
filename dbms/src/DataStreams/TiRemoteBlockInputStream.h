@@ -131,7 +131,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
             LOG_DEBUG(log, "decode packet " << std::to_string(block.rows()) + " for " + result.req_info);
             if (unlikely(block.rows() == 0))
                 continue;
-            assertBlocksHaveEqualStructure(block, sample_block, "TiRemoteBlockInputStream", true);
+            assertBlocksHaveEqualStructure(block, sample_block, getName(), true);
             block_queue.push(std::move(block));
         }
         if (block_queue.empty())
