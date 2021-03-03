@@ -1,5 +1,6 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 
 namespace DB
@@ -130,15 +131,6 @@ DAGResponseWriter::DAGResponseWriter(
         throw TiFlashException(
             "Only Default/Arrow/CHBlock encode type is supported in DAGBlockOutputStream.", Errors::Coprocessor::Unimplemented);
     }
-    ColumnsWithTypeAndName columns;
-    for (size_t i = 0; i < result_field_types.size(); i++)
-    {
-        String name = "col_" + std::to_string(i);
-        auto tp = getDataTypeByFieldType(result_field_types[i]);
-        ColumnWithTypeAndName col(tp, name);
-        columns.emplace_back(col);
-    }
-    expected_block_structure = Block(columns);
 }
 
 } // namespace DB

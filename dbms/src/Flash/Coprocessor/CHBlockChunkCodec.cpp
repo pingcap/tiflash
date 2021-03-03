@@ -4,6 +4,8 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <IO/ReadBufferFromString.h>
 
+#include "DAGUtils.h"
+
 namespace DB
 {
 
@@ -13,6 +15,28 @@ public:
     explicit CHBlockChunkCodecStream(const std::vector<tipb::FieldType> & field_types) : ChunkCodecStream(field_types)
     {
         output = std::make_unique<WriteBufferFromOwnString>();
+        for (size_t i = 0; i < field_types.size(); i++)
+        {
+            if (field_types[i].tp() == TiDB::TypeEnum)
+            {
+                ColumnInfo ci;
+                auto & field_type = field_types[i];
+                ci.tp = static_cast<TiDB::TP>(field_type.tp());
+                ci.flag = field_type.flag();
+                ci.flen = field_type.flen();
+                ci.decimal = field_type.decimal();
+                /// this is a workaround, since tidb does not push down
+                /// the element of Enum type, should remove if
+                /// https://github.com/pingcap/tics/issues/1489 is fixed
+                ci.elems.emplace_back("a", 1);
+                ci.elems.emplace_back("b", 2);
+                expected_types.emplace_back(getDataTypeByColumnInfo(ci));
+            }
+            else
+            {
+                expected_types.emplace_back(getDataTypeByFieldType(field_types[i]));
+            }
+        }
     }
 
     String getString() override
@@ -23,6 +47,7 @@ public:
     void clear() override { output = std::make_unique<WriteBufferFromOwnString>(); }
     void encode(const Block & block, size_t start, size_t end) override;
     std::unique_ptr<WriteBufferFromOwnString> output;
+    DataTypes expected_types;
 };
 
 void writeData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit)
@@ -43,10 +68,13 @@ void writeData(const IDataType & type, const ColumnPtr & column, WriteBuffer & o
 
 void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t end)
 {
+    /// only check block schema in CHBlock codec because for both
+    /// Default codec and Arrow codec, it add implicit convert to
+    /// convert the input to the target output types.
+    assertBlockSchema(expected_types, block, "CHBlockChunkCodecStream");
     // Encode data in chunk by chblock encode
     if (start != 0 || end != block.rows())
-        throw TiFlashException(
-            "CHBlock encode only support encode whole block", Errors::Coprocessor::Internal);
+        throw TiFlashException("CHBlock encode only support encode whole block", Errors::Coprocessor::Internal);
     block.checkNumberOfRows();
     size_t columns = block.columns();
     size_t rows = block.rows();

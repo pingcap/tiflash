@@ -206,7 +206,8 @@ ThreadPool::Job StreamingDAGResponseWriter<StreamWriterPtr>::getEncodePartitionT
 template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
 {
-    assertBlocksHaveEqualStructure(block, expected_block_structure, "StreamingDAGResponseWriter", true);
+    if (block.columns() != result_field_types.size())
+        throw TiFlashException("Output column size mismatch with field type size", Errors::Coprocessor::Internal);
     rows_in_blocks += block.rows();
     blocks.push_back(block);
     if ((Int64)rows_in_blocks > records_per_chunk)
