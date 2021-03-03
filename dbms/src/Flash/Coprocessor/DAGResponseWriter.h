@@ -49,6 +49,7 @@ protected:
     DAGContext & dag_context;
     std::unordered_map<String, ExecutionSummary> previous_execution_stats;
     std::unordered_set<String> local_executors;
+    Block expected_block_structure;
 };
 
 } // namespace DB

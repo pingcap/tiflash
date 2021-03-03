@@ -52,8 +52,7 @@ void UnaryDAGResponseWriter::finishWrite()
 
 void UnaryDAGResponseWriter::write(const Block & block)
 {
-    if (block.columns() != result_field_types.size())
-        throw TiFlashException("Output column size mismatch with field type size", Errors::Coprocessor::Internal);
+    assertBlocksHaveEqualStructure(block, expected_block_structure, "UnaryDAGResponseWriter", true);
     if (records_per_chunk == -1)
     {
         current_records_num = 0;

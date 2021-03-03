@@ -387,7 +387,7 @@ Names Block::getNames() const
 
 
 template <typename ReturnType>
-static ReturnType checkBlockStructure(const Block & lhs, const Block & rhs, const std::string & context_description)
+static ReturnType checkBlockStructure(const Block & lhs, const Block & rhs, const std::string & context_description, bool ignore_column_name = false)
 {
     auto on_error = [](const std::string & message [[maybe_unused]], int code [[maybe_unused]])
     {
@@ -407,7 +407,7 @@ static ReturnType checkBlockStructure(const Block & lhs, const Block & rhs, cons
         const auto & expected = rhs.getByPosition(i);
         const auto & actual = lhs.getByPosition(i);
 
-        if (actual.name != expected.name)
+        if (!ignore_column_name && actual.name != expected.name)
             return on_error("Block structure mismatch in " + context_description + " stream: different names of columns:\n"
                 + lhs.dumpStructure() + "\n" + rhs.dumpStructure(), ErrorCodes::BLOCKS_HAVE_DIFFERENT_STRUCTURE);
 
@@ -453,9 +453,9 @@ bool blocksHaveEqualStructure(const Block & lhs, const Block & rhs)
 }
 
 
-void assertBlocksHaveEqualStructure(const Block & lhs, const Block & rhs, const std::string & context_description)
+void assertBlocksHaveEqualStructure(const Block & lhs, const Block & rhs, const std::string & context_description, bool ignore_column_name)
 {
-    checkBlockStructure<void>(lhs, rhs, context_description);
+    checkBlockStructure<void>(lhs, rhs, context_description, ignore_column_name);
 }
 
 

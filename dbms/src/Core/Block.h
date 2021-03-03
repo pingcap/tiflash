@@ -144,7 +144,7 @@ using BlocksList = std::list<Block>;
 bool blocksHaveEqualStructure(const Block & lhs, const Block & rhs);
 
 /// Throw exception when blocks are different.
-void assertBlocksHaveEqualStructure(const Block & lhs, const Block & rhs, const std::string & context_description);
+void assertBlocksHaveEqualStructure(const Block & lhs, const Block & rhs, const std::string & context_description, bool ignore_column_name = false);
 
 /// Calculate difference in structure of blocks and write description into output strings. NOTE It doesn't compare values of constant columns.
 void getBlocksDifference(const Block & lhs, const Block & rhs, std::string & out_lhs_diff, std::string & out_rhs_diff);
