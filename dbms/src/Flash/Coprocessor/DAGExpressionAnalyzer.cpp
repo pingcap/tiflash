@@ -846,7 +846,22 @@ void DAGExpressionAnalyzer::makeExplicitSet(
     DataTypes set_element_types;
     // todo support tuple in, i.e. (a,b) in ((1,2), (3,4)), currently TiDB convert tuple in into a series of or/and/eq exprs
     //  which means tuple in is never be pushed to coprocessor, but it is quite in-efficient
-    set_element_types.push_back(sample_block.getByName(left_arg_name).type);
+
+
+    // TiDB guarantees that arguments of IN function have same data type family but doesn't guarantees that their data types
+    // are completely the same. For example, in an expression like `col_decimal_10_0 IN (1.1, 2.34)`, `1.1` and `2.34` are
+    // both decimal type but `1.1`'s flen and decimal are 2 and 1 while that of `2.34` are 3 and 2.
+    // We should convert them to a least super data type.
+    DataTypes types_in_same_family;
+    types_in_same_family.push_back(sample_block.getByName(left_arg_name).type);
+    for (size_t i = 1; i < expr.children_size(); ++i)
+    {
+        auto & child = expr.child(i);
+        DataTypePtr type = getDataTypeByFieldType(child.field_type());
+        types_in_same_family.push_back(type);
+    }
+
+    set_element_types.push_back(getLeastSupertype(types_in_same_family));
 
     // todo if this is a single value in, then convert it to equal expr
     SetPtr set = std::make_shared<Set>(SizeLimits(settings.max_rows_in_set, settings.max_bytes_in_set, settings.set_overflow_mode));
