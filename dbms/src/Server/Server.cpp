@@ -63,7 +63,6 @@
 
 #include "ClusterManagerService.h"
 #include "HTTPHandlerFactory.h"
-#include "ImmutableConfigReloader.h"
 #include "MetricsPrometheus.h"
 #include "MetricsTransmitter.h"
 #include "StatusFile.h"
