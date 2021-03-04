@@ -33,6 +33,7 @@ class FlashConfig:
             int(flash_cluster.get('refresh_interval', 20)), self.cluster_master_ttl)
         self.update_rule_interval = int(flash_cluster.get('update_rule_interval', 10))
         self.log_path = flash_cluster.get('log', '{}/flash_cluster_manager.log'.format(tmp_path))
+        self.max_time_out = self.cluster_master_ttl
 
         self.enable_tls = False
         if 'security' in self.conf_toml:
