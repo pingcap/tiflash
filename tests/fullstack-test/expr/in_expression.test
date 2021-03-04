@@ -9,13 +9,8 @@ mysql> set session tidb_isolation_read_engines='tiflash'
 
 # issue https://github.com/pingcap/tics/issues/1483
 mysql> select a from test.t where a in (1.0, 2);
-+-----+
-| a   |
-+-----+
-|   1 |
-+-----+
+a
+1.00
+
 mysql> select b from test.t where b in (-302764853, 12498864);
-+-----+
-| b   |
-+-----+
-+-----+
+# Expected to be Empty
