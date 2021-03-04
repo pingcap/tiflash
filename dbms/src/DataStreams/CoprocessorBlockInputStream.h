@@ -87,6 +87,12 @@ private:
 
         resp = std::make_shared<tipb::SelectResponse>();
         resp->ParseFromString(data);
+
+        if (resp->has_error())
+        {
+            LOG_WARNING(log, "coprocessor client meets error: " << resp->error().DebugString());
+            throw Exception(resp->error().DebugString());
+        }
         int chunks_size = resp->chunks_size();
 
         if (chunks_size == 0)
