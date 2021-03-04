@@ -1,5 +1,8 @@
 #include "check_region_cnt.h"
+
 #include <pybind11/pybind11.h>
+
+#include <numeric>
 
 void CheckRegionCnt::Add(std::string_view s) {
   char region_id[20];
@@ -10,7 +13,7 @@ void CheckRegionCnt::Add(std::string_view s) {
   for (size_t i = p1 + 1; i < p2; ++i) {
     if (s[i] == ' ') {
       region_id[id_len] = 0;
-      data_.emplace(std::atoll(region_id));
+      data_[std::atoll(region_id)] += 1;
       id_len = 0;
     } else {
       region_id[id_len++] = s[i];
@@ -18,4 +21,10 @@ void CheckRegionCnt::Add(std::string_view s) {
   }
 }
 
-int CheckRegionCnt::Compute() { return data_.size(); }
+Int64 CheckRegionCnt::Compute(UInt64 expect_cnt) {
+  if (expect_cnt == 1) return data_.size();
+
+  return std::accumulate(
+      data_.begin(), data_.end(), Int64(0),
+      [&](auto sum, const auto & e) { return sum + (e.second >= expect_cnt); });
+}
