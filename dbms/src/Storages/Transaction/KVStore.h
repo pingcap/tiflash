@@ -82,7 +82,7 @@ public:
     void handlePreApplySnapshot(const RegionPtrWrap &, TMTContext & tmt);
 
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
-    void setRegionCompactLogPeriod(Seconds period);
+    void setRegionCompactLogPeriod(UInt64);
     EngineStoreApplyRes handleIngestSST(UInt64 region_id, const SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
     RegionPtr genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
     const TiFlashRaftProxyHelper * getProxyHelper() const { return proxy_helper; }
@@ -138,7 +138,7 @@ private:
 
     Logger * log;
 
-    std::atomic<Seconds> REGION_COMPACT_LOG_PERIOD;
+    std::atomic<UInt64> REGION_COMPACT_LOG_PERIOD;
 
     mutable std::mutex bg_gc_region_data_mutex;
     std::list<RegionDataReadInfoList> bg_gc_region_data;
