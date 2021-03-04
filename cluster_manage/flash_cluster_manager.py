@@ -181,14 +181,9 @@ class TiFlashClusterManager:
 
     def compute_sync_data_process(self, table_id, start_key, end_key, replica_count):
         stats_region: dict = self.pd_client.get_stats_region_by_range_json(start_key, end_key)
-<<<<<<< HEAD
-        region_count = stats_region.get('count', 0)
-        flash_region_count, err = flash_http_client.get_region_count_by_table(self.stores.values(), table_id)
-=======
         region_count = max(stats_region.get('count', 1), 1)
         flash_region_count, err = flash_http_client.get_region_count_by_table(self.stores.values(), table_id,
                                                                               replica_count)
->>>>>>> 2e8dd5486... Check exact tiflash replica count & Enable optimization about compact raft log (#1499)
         if err:
             self.logger.error('fail to get table replica sync status {}'.format(err))
         return region_count, flash_region_count
