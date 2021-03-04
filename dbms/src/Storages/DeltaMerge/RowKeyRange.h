@@ -13,7 +13,6 @@
 
 namespace DB::DM
 {
-using RowKeyColumns  = ColumnDefines;
 using HandleValuePtr = std::shared_ptr<String>;
 
 struct RowKeyRange;
@@ -416,10 +415,50 @@ struct RowKeyRange
         readIntBinary(rowkey_column_size, buf);
         readStringBinary(start, buf);
         readStringBinary(end, buf);
-        return RowKeyRange(RowKeyValue(is_common_handle, std::make_shared<String>(start)),
-                           RowKeyValue(is_common_handle, std::make_shared<String>(end)),
-                           is_common_handle,
-                           rowkey_column_size);
+        HandleValuePtr start_ptr = std::make_shared<String>(start);
+        HandleValuePtr end_ptr   = std::make_shared<String>(end);
+        if unlikely (isLegacyCommonMin(rowkey_column_size, start_ptr))
+        {
+            start_ptr = RowKeyValue::COMMON_HANDLE_MIN_KEY.value;
+        }
+        if unlikely (isLegacyCommonMax(rowkey_column_size, end_ptr))
+        {
+            end_ptr = RowKeyValue::COMMON_HANDLE_MAX_KEY.value;
+        }
+        return RowKeyRange(
+            RowKeyValue(is_common_handle, start_ptr), RowKeyValue(is_common_handle, end_ptr), is_common_handle, rowkey_column_size);
+    }
+
+    static bool isLegacyCommonMin(size_t column_size, HandleValuePtr value)
+    {
+        if (column_size > 0)
+        {
+            if (value->size() != column_size)
+                return false;
+            for (size_t i = 0; i < column_size && i < value->size(); i++)
+            {
+                if (!(static_cast<unsigned char>((*value)[i]) == TiDB::CodecFlagBytes
+                      || static_cast<unsigned char>((*value)[i]) == TiDB::CodecFlag::CodecFlagNil))
+                    return false;
+            }
+            return true;
+        }
+        return false;
+    }
+    static bool isLegacyCommonMax(size_t column_size, HandleValuePtr value)
+    {
+        if (column_size > 0)
+        {
+            if (value->size() != column_size)
+                return false;
+            for (size_t i = 0; i < column_size && i < value->size(); i++)
+            {
+                if (static_cast<unsigned char>((*value)[i]) != TiDB::CodecFlagMax)
+                    return false;
+            }
+            return true;
+        }
+        return false;
     }
 
     inline bool all() const { return isStartInfinite() && isEndInfinite(); }
@@ -428,19 +467,7 @@ struct RowKeyRange
     {
         if (is_common_handle)
         {
-            if (end.value->size() == 1 && static_cast<unsigned char>((*end.value)[0]) == TiDB::CodecFlagMax)
-                return true;
-            if (end.value->size() == rowkey_column_size)
-            {
-                /// for forward compatibility, maybe can remove it later
-                for (size_t i = 0; i < rowkey_column_size && i < end.value->size(); i++)
-                {
-                    if (static_cast<unsigned char>((*end.value)[i]) != TiDB::CodecFlagMax)
-                        return false;
-                }
-                return true;
-            }
-            return false;
+            return (end.value->size() == 1 && static_cast<unsigned char>((*end.value)[0]) == TiDB::CodecFlagMax);
         }
         else
         {
@@ -453,22 +480,9 @@ struct RowKeyRange
     {
         if (is_common_handle)
         {
-            if (start.value->size() == 1
-                && ((static_cast<unsigned char>((*start.value)[0]) == TiDB::CodecFlagBytes)
-                    || (static_cast<unsigned char>((*start.value)[0]) == TiDB::CodecFlagNil)))
-                return true;
-            if (start.value->size() == rowkey_column_size)
-            {
-                /// for forward compatibility, maybe can remove it later
-                for (size_t i = 0; i < rowkey_column_size && i < start.value->size(); i++)
-                {
-                    if (!(static_cast<unsigned char>((*start.value)[i]) == TiDB::CodecFlagBytes
-                          || static_cast<unsigned char>((*start.value)[i]) == TiDB::CodecFlag::CodecFlagNil))
-                        return false;
-                }
-                return true;
-            }
-            return false;
+            return (start.value->size() == 1
+                    && ((static_cast<unsigned char>((*start.value)[0]) == TiDB::CodecFlagBytes)
+                        || (static_cast<unsigned char>((*start.value)[0]) == TiDB::CodecFlagNil)));
         }
         else
         {
