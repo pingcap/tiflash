@@ -570,6 +570,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(ExpressionActionsChain &
     bool ret = false;
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsPtr actions = chain.getLastActions();
+    std::unordered_map<String, Int32> key_names_map;
 
     for (int i = 0; i < keys.size(); i++)
     {
@@ -597,11 +598,40 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(ExpressionActionsChain &
             /// So in order to make the join compatible with TiDB, if the join key is a columnRef, for inner/left
             /// join, add a new key as right join key, for right join, add a new key as left join key
             String updated_key_name = (left ? "_l_k_" : "_r_k_") + key_name;
+            auto it = key_names_map.find(updated_key_name);
+            while (it != key_names_map.end())
+            {
+                /// duplicated key names, in Clickhouse join, it is assumed that here is no duplicated
+                /// key names, so just copy a key with new name
+                updated_key_name.append("_").append(std::to_string(it->second));
+                it->second++;
+                it = key_names_map.find(updated_key_name);
+            }
             actions->add(ExpressionAction::copyColumn(key_name, updated_key_name));
             key_name = updated_key_name;
             has_actions = true;
         }
+        else
+        {
+            String updated_key_name = key_name;
+            auto it = key_names_map.find(updated_key_name);
+            while (it != key_names_map.end())
+            {
+                /// duplicated key names, in Clickhouse join, it is assumed that here is no duplicated
+                /// key names, so just copy a key with new name
+                updated_key_name.append("_").append(std::to_string(it->second));
+                it->second++;
+                it = key_names_map.find(updated_key_name);
+            }
+            if (key_name != updated_key_name)
+            {
+                actions->add(ExpressionAction::copyColumn(key_name, updated_key_name));
+                key_name = updated_key_name;
+                has_actions = true;
+            }
+        }
         key_names.push_back(key_name);
+        key_names_map.try_emplace(key_name, 1);
         ret |= has_actions;
     }
 
