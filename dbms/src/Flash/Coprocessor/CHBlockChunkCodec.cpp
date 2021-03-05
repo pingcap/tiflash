@@ -68,8 +68,8 @@ void writeData(const IDataType & type, const ColumnPtr & column, WriteBuffer & o
 void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t end)
 {
     /// only check block schema in CHBlock codec because for both
-    /// Default codec and Arrow codec, it add implicit convert to
-    /// convert the input to the target output types.
+    /// Default codec and Arrow codec, it implicitly convert the
+    /// input to the target output types.
     assertBlockSchema(expected_types, block, "CHBlockChunkCodecStream");
     // Encode data in chunk by chblock encode
     if (start != 0 || end != block.rows())
