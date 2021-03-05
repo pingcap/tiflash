@@ -826,34 +826,35 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(
     return expr_name;
 }
 
-void DAGExpressionAnalyzer::makeExplicitSetForIndex(const tipb::Expr & expr, const ManageableStoragePtr & storage)
-{
-    for (auto & child : expr.children())
-    {
-        makeExplicitSetForIndex(child, storage);
-    }
-    if (expr.tp() != tipb::ExprType::ScalarFunc)
-    {
-        return;
-    }
-    const String & func_name = getFunctionName(expr);
-    // only support col_name in (value_list)
-    if (functionIsInOrGlobalInOperator(func_name) && expr.children(0).tp() == tipb::ExprType::ColumnRef && !prepared_sets.count(&expr))
-    {
-        NamesAndTypesList column_list;
-        for (const auto & col : getCurrentInputColumns())
-        {
-            column_list.emplace_back(col.name, col.type);
-        }
-        ExpressionActionsPtr temp_actions = std::make_shared<ExpressionActions>(column_list, settings);
-        String name = getActions(expr.children(0), temp_actions);
-        ASTPtr name_ast = std::make_shared<ASTIdentifier>(name);
-        if (storage->mayBenefitFromIndexForIn(name_ast))
-        {
-            makeExplicitSet(expr, temp_actions->getSampleBlock(), true, name);
-        }
-    }
-}
+/// DEPRECATION: this function is deprecated
+// void DAGExpressionAnalyzer::makeExplicitSetForIndex(const tipb::Expr & expr, const ManageableStoragePtr & storage)
+// {
+//     for (auto & child : expr.children())
+//     {
+//         makeExplicitSetForIndex(child, storage);
+//     }
+//     if (expr.tp() != tipb::ExprType::ScalarFunc)
+//     {
+//         return;
+//     }
+//     const String & func_name = getFunctionName(expr);
+//     // only support col_name in (value_list)
+//     if (functionIsInOrGlobalInOperator(func_name) && expr.children(0).tp() == tipb::ExprType::ColumnRef && !prepared_sets.count(&expr))
+//     {
+//         NamesAndTypesList column_list;
+//         for (const auto & col : getCurrentInputColumns())
+//         {
+//             column_list.emplace_back(col.name, col.type);
+//         }
+//         ExpressionActionsPtr temp_actions = std::make_shared<ExpressionActions>(column_list, settings);
+//         String name = getActions(expr.children(0), temp_actions);
+//         ASTPtr name_ast = std::make_shared<ASTIdentifier>(name);
+//         if (storage->mayBenefitFromIndexForIn(name_ast))
+//         {
+//             makeExplicitSet(expr, temp_actions->getSampleBlock(), true, name);
+//         }
+//     }
+// }
 
 void DAGExpressionAnalyzer::makeExplicitSet(
     const tipb::Expr & expr, const Block & sample_block, bool create_ordered_set, const String & left_arg_name)
