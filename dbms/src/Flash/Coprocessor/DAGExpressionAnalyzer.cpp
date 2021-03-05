@@ -85,7 +85,26 @@ static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr
     const String & func_name = getFunctionName(expr);
     Names argument_names;
     String key_name = analyzer->getActions(expr.children(0), actions);
-    analyzer->makeExplicitSet(expr, actions, false, key_name);
+    // TiDB guarantees that arguments of IN function have same data type family but doesn't guarantees that their data types
+    // are completely the same. For example, in an expression like `col_decimal_10_0 IN (1.1, 2.34)`, `1.1` and `2.34` are
+    // both decimal type but `1.1`'s flen and decimal are 2 and 1 while that of `2.34` are 3 and 2.
+    // We should convert them to a least super data type.
+    DataTypes types_in_same_family;
+    const Block & sample_block = actions->getSampleBlock();
+    types_in_same_family.push_back(sample_block.getByName(key_name).type);
+    for (int i = 1; i < expr.children_size(); ++i)
+    {
+        auto & child = expr.children(i);
+        DataTypePtr type = getDataTypeByFieldType(child.field_type());
+        types_in_same_family.push_back(type);
+    }
+    DataTypePtr resolved_type = getLeastSupertype(types_in_same_family);
+    if (!removeNullable(resolved_type)->equals(*removeNullable(types_in_same_family[0])))
+    {
+        // Need cast left argument
+        key_name = analyzer->appendCast(resolved_type, actions, key_name);
+    }
+    analyzer->makeExplicitSet(expr, sample_block, false, key_name);
     argument_names.push_back(key_name);
     const DAGSetPtr & set = analyzer->getPreparedSets()[&expr];
 
@@ -831,13 +850,13 @@ void DAGExpressionAnalyzer::makeExplicitSetForIndex(const tipb::Expr & expr, con
         ASTPtr name_ast = std::make_shared<ASTIdentifier>(name);
         if (storage->mayBenefitFromIndexForIn(name_ast))
         {
-            makeExplicitSet(expr, temp_actions, true, name);
+            makeExplicitSet(expr, temp_actions->getSampleBlock(), true, name);
         }
     }
 }
 
 void DAGExpressionAnalyzer::makeExplicitSet(
-    const tipb::Expr & expr, ExpressionActionsPtr & actions, bool create_ordered_set, String & left_arg_name)
+    const tipb::Expr & expr, const Block & sample_block, bool create_ordered_set, const String & left_arg_name)
 {
     if (prepared_sets.count(&expr))
     {
@@ -846,28 +865,7 @@ void DAGExpressionAnalyzer::makeExplicitSet(
     DataTypes set_element_types;
     // todo support tuple in, i.e. (a,b) in ((1,2), (3,4)), currently TiDB convert tuple in into a series of or/and/eq exprs
     //  which means tuple in is never be pushed to coprocessor, but it is quite in-efficient
-
-
-    // TiDB guarantees that arguments of IN function have same data type family but doesn't guarantees that their data types
-    // are completely the same. For example, in an expression like `col_decimal_10_0 IN (1.1, 2.34)`, `1.1` and `2.34` are
-    // both decimal type but `1.1`'s flen and decimal are 2 and 1 while that of `2.34` are 3 and 2.
-    // We should convert them to a least super data type.
-    DataTypes types_in_same_family;
-    const Block & sample_block = actions->getSampleBlock();
-    types_in_same_family.push_back(sample_block.getByName(left_arg_name).type);
-    for (int i = 1; i < expr.children_size(); ++i)
-    {
-        auto & child = expr.children(i);
-        DataTypePtr type = getDataTypeByFieldType(child.field_type());
-        types_in_same_family.push_back(type);
-    }
-    DataTypePtr resolved_type = getLeastSupertype(types_in_same_family);
-    if (!removeNullable(resolved_type)->equals(*removeNullable(types_in_same_family[0])))
-    {
-        // Need cast left argument
-        left_arg_name = appendCast(resolved_type, actions, left_arg_name);
-    }
-    set_element_types.push_back(resolved_type);
+    set_element_types.push_back(sample_block.getByName(left_arg_name).type);
 
     // todo if this is a single value in, then convert it to equal expr
     SetPtr set = std::make_shared<Set>(SizeLimits(settings.max_rows_in_set, settings.max_bytes_in_set, settings.set_overflow_mode));
