@@ -89,12 +89,16 @@ static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr
     // are completely the same. For example, in an expression like `col_decimal_10_0 IN (1.1, 2.34)`, `1.1` and `2.34` are
     // both decimal type but `1.1`'s flen and decimal are 2 and 1 while that of `2.34` are 3 and 2.
     // We should convert them to a least super data type.
-    DataTypes types_in_same_family;
+    DataTypes argument_types;
     const Block & sample_block = actions->getSampleBlock();
-    types_in_same_family.push_back(sample_block.getByName(key_name).type);
+    argument_types.push_back(sample_block.getByName(key_name).type);
     for (int i = 1; i < expr.children_size(); ++i)
     {
         auto & child = expr.children(i);
+        if (!isLiteralExpr(child))
+        {
+            continue;
+        }
         DataTypePtr type = getDataTypeByFieldType(child.field_type());
         if (type->isDecimal())
         {
@@ -102,10 +106,10 @@ static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr
             Field value = decodeLiteral(child);
             type = applyVisitor(FieldToDataType(), value);
         }
-        types_in_same_family.push_back(type);
+        argument_types.push_back(type);
     }
-    DataTypePtr resolved_type = getLeastSupertype(types_in_same_family);
-    if (!removeNullable(resolved_type)->equals(*removeNullable(types_in_same_family[0])))
+    DataTypePtr resolved_type = getLeastSupertype(argument_types);
+    if (!removeNullable(resolved_type)->equals(*removeNullable(argument_types[0])))
     {
         // Need cast left argument
         key_name = analyzer->appendCast(resolved_type, actions, key_name);
