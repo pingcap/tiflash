@@ -96,6 +96,12 @@ static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr
     {
         auto & child = expr.children(i);
         DataTypePtr type = getDataTypeByFieldType(child.field_type());
+        if (type->isDecimal())
+        {
+            // See https://github.com/pingcap/tics/issues/1425
+            Field value = decodeLiteral(child);
+            type = applyVisitor(FieldToDataType(), value);
+        }
         types_in_same_family.push_back(type);
     }
     DataTypePtr resolved_type = getLeastSupertype(types_in_same_family);
