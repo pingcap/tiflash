@@ -1,10 +1,10 @@
 #pragma once
 
-#include "exception_util.h"
-#include "type.h"
-
 #include <cstring>
 #include <sstream>
+
+#include "exception_util.h"
+#include "type.h"
 
 static const size_t kEncGroupSize = 8;
 static const uint8_t kEncMarker = static_cast<uint8_t>(0xff);
@@ -12,7 +12,6 @@ static const char kEncAscPadding[kEncGroupSize] = {0};
 
 static const char kTablePrefix = 't';
 static const char * kRecordPrefixSep = "_r";
-static const char * kRecordPrefixEnd = "_s";
 
 static const UInt64 kSignMark = (UInt64)1 << 63u;
 

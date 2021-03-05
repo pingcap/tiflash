@@ -246,7 +246,7 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt)
     removeRegion(region_id, /* remove_data */ true, tmt.getRegionTable(), task_lock, region_manager.genRegionTaskLock(region_id));
 }
 
-void KVStore::setRegionCompactLogPeriod(Seconds period) { REGION_COMPACT_LOG_PERIOD = period; }
+void KVStore::setRegionCompactLogPeriod(UInt64 sec) { REGION_COMPACT_LOG_PERIOD = sec; }
 
 void KVStore::persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller)
 {
@@ -281,7 +281,9 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
     }
     else
     {
-        if (curr_region.lastCompactLogTime() + REGION_COMPACT_LOG_PERIOD.load(std::memory_order_relaxed) > Clock::now())
+        // use random period so that lots of regions will not be persisted at same time.
+        auto compact_log_period = std::rand() % REGION_COMPACT_LOG_PERIOD.load(std::memory_order_relaxed);
+        if (curr_region.lastCompactLogTime() + Seconds{compact_log_period} > Clock::now())
         {
             sync_log = false;
             LOG_DEBUG(log, curr_region.toString(false) << " ignore compact log cmd");
