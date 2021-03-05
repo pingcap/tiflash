@@ -223,15 +223,6 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
 
     size_t max_block_size = settings.max_block_size;
 
-    /// DEPRECATION: Storage engines of TiFlash doesn't support Set Index
-    // if (query_block.selection)
-    // {
-    //     for (auto & condition : query_block.selection->selection().conditions())
-    //     {
-    //         analyzer->makeExplicitSetForIndex(condition, storage);
-    //     }
-    // }
-
     SelectQueryInfo query_info;
     /// to avoid null point exception
     query_info.query = dummy_query;
