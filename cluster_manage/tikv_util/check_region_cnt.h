@@ -1,7 +1,8 @@
 #pragma once
 
 #include <string_view>
-#include <unordered_set>
+#include <unordered_map>
+
 #include "type.h"
 
 namespace pybind11 {
@@ -13,8 +14,10 @@ namespace py = pybind11;
 class CheckRegionCnt {
  public:
   void Add(std::string_view);
-  int Compute();
+  // Count how many regions that the number of TiFlash peers is greater or equal
+  // to replica_count
+  Int64 Compute(UInt64);
 
  private:
-  std::unordered_set<UInt64> data_;
+  std::unordered_map<UInt64, UInt64> data_;
 };
