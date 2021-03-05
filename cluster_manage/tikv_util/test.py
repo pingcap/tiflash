@@ -50,8 +50,9 @@ class TestTikvKey(unittest.TestCase):
         c = common.CheckRegionCnt()
         c.add(s1)
         c.add(s2)
-        r = c.compute()
-        self.assertEqual(4, r)
+        self.assertEqual(4, c.compute(1))
+        self.assertEqual(2, c.compute(2))
+        self.assertEqual(0, c.compute(3))
 
     def test_exception(self):
         o = b'12345'

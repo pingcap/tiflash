@@ -203,7 +203,6 @@ private:
 
     RegionMeta meta;
 
-    mutable std::atomic<Timepoint> last_persist_time = Timepoint::min();
     mutable std::atomic<Timepoint> last_compact_log_time = Timepoint::min();
 
     // dirty_flag is used to present whether this region need to be persisted.
