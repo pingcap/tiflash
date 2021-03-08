@@ -16,17 +16,18 @@ public:
     static size_t test_loop;
 };
 
-size_t TestConcurrentHashMap::test_loop = 1;
+size_t TestConcurrentHashMap::test_loop = 1000;
+
+struct MapType
+{
+    std::atomic_int value;
+    MapType() { value.store(0); }
+};
 
 TEST(TestConcurrentHashMap, ConcurrentInsert)
 {
     for (size_t time = 0; time < TestConcurrentHashMap::test_loop; time++)
     {
-        struct MapType
-        {
-            std::atomic_int value;
-            MapType() { value.store(0); }
-        };
         size_t test_concurrency = 8;
         using ConcurrentMap = ConcurrentHashMap<UInt64, MapType, HashCRC32<UInt64>>;
         ConcurrentMap map(test_concurrency);
@@ -57,11 +58,6 @@ TEST(TestConcurrentHashMap, ConcurrentInsertWithExplicitLock)
 {
     for (size_t time = 0; time < TestConcurrentHashMap::test_loop; time++)
     {
-        struct MapType
-        {
-            std::atomic_int value;
-            MapType() { value.store(0); }
-        };
         size_t test_concurrency = 8;
         using ConcurrentMap = ConcurrentHashMap<UInt64, MapType, HashCRC32<UInt64>>;
         ConcurrentMap map(test_concurrency);
@@ -106,11 +102,6 @@ TEST(TestConcurrentHashMap, ConcurrentRandomInsert)
 {
     for (size_t time = 0; time < TestConcurrentHashMap::test_loop; time++)
     {
-        struct MapType
-        {
-            std::atomic_int value;
-            MapType() { value.store(0); }
-        };
         size_t test_concurrency = 8;
         using ConcurrentMap = ConcurrentHashMap<UInt64, MapType, HashCRC32<UInt64>>;
         using Map = std::unordered_map<UInt64, Int64>;
@@ -174,11 +165,6 @@ TEST(TestConcurrentHashMap, ConcurrentRandomInsertWithExplicitLock)
 {
     for (size_t time = 0; time < TestConcurrentHashMap::test_loop; time++)
     {
-        struct MapType
-        {
-            std::atomic_int value;
-            MapType() { value.store(0); }
-        };
         size_t test_concurrency = 8;
         using ConcurrentMap = ConcurrentHashMap<UInt64, MapType, HashCRC32<UInt64>>;
         using Map = std::unordered_map<UInt64, Int64>;
