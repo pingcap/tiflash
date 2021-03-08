@@ -1,8 +1,10 @@
 #include <Encryption/AESCTRCipherStream.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
+#include <Encryption/PosixWritableFile.h>
 #include <Storages/Transaction/FileEncryption.h>
 #include <gtest/gtest.h>
+#include <test_utils/TiflashTestBasic.h>
 
 #include <random>
 
@@ -161,5 +163,16 @@ INSTANTIATE_TEST_CASE_P(EncryptionTestInstance, EncryptionTest,
     testing::Combine(
         testing::Bool(), testing::Values(EncryptionMethod::Aes128Ctr, EncryptionMethod::Aes192Ctr, EncryptionMethod::Aes256Ctr)));
 
+
+TEST(PosixWritableFile_test, test)
+try
+{
+    String p = tests::TiFlashTestEnv::getTemporaryPath() + "posix_file";
+    PosixWritableFile f(p, true, -1, 0600, nullptr);
+    f.close();
+    f.open();
+    f.close();
+}
+CATCH
 
 } // namespace DB
