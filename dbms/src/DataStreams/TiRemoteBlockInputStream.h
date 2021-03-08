@@ -26,6 +26,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     std::shared_ptr<RemoteReader> remote_reader;
 
     Block sample_block;
+    DataTypes expected_types;
 
     std::queue<Block> block_queue;
 
@@ -136,6 +137,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
             LOG_DEBUG(log, "decode packet " << std::to_string(block.rows()) + " for " + result.req_info);
             if (unlikely(block.rows() == 0))
                 continue;
+            assertBlockSchema(expected_types, block, getName());
             block_queue.push(std::move(block));
         }
         if (block_queue.empty())
@@ -156,6 +158,7 @@ public:
         {
             auto tp = getDataTypeByColumnInfo(dag_col.second);
             ColumnWithTypeAndName col(tp, dag_col.first);
+            expected_types.push_back(col.type);
             columns.emplace_back(col);
         }
         sample_block = Block(columns);
