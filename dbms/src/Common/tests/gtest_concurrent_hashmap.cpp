@@ -12,11 +12,15 @@ namespace tests
 
 class TestConcurrentHashMap : public ext::singleton<TestConcurrentHashMap>
 {
+public:
+    static size_t test_loop;
 };
+
+size_t TestConcurrentHashMap::test_loop = 1;
 
 TEST(TestConcurrentHashMap, ConcurrentInsert)
 {
-    for (size_t time = 0; time < 10000; time++)
+    for (size_t time = 0; time < TestConcurrentHashMap::test_loop; time++)
     {
         struct MapType
         {
@@ -51,7 +55,7 @@ TEST(TestConcurrentHashMap, ConcurrentInsert)
 
 TEST(TestConcurrentHashMap, ConcurrentInsertWithExplicitLock)
 {
-    for (size_t time = 0; time < 1000; time++)
+    for (size_t time = 0; time < TestConcurrentHashMap::test_loop; time++)
     {
         struct MapType
         {
@@ -100,7 +104,7 @@ TEST(TestConcurrentHashMap, ConcurrentInsertWithExplicitLock)
 
 TEST(TestConcurrentHashMap, ConcurrentRandomInsert)
 {
-    for (size_t time = 0; time < 1000; time++)
+    for (size_t time = 0; time < TestConcurrentHashMap::test_loop; time++)
     {
         struct MapType
         {
@@ -168,7 +172,7 @@ TEST(TestConcurrentHashMap, ConcurrentRandomInsert)
 
 TEST(TestConcurrentHashMap, ConcurrentRandomInsertWithExplicitLock)
 {
-    for (size_t time = 0; time < 1000; time++)
+    for (size_t time = 0; time < TestConcurrentHashMap::test_loop; time++)
     {
         struct MapType
         {
