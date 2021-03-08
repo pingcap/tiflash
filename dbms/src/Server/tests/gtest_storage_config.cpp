@@ -341,6 +341,13 @@ result_rows = 0
         // case for omit all default user settings
         R"(
 )",
+        // case for set some settings
+        R"(
+[profiles]
+[profiles.default]
+max_memory_usage = 123456
+dt_enable_rough_set_filter = false
+)",
     };
 
     // Ensure that connection is not blocked by any address
@@ -376,6 +383,11 @@ result_rows = 0
             ASSERT_NO_THROW(ctx.setUser("default", "", addr, ""));
             const auto & settings = ctx.getSettingsRef();
             EXPECT_EQ(settings.use_uncompressed_cache, 1U);
+            if (i == 2)
+            {
+                EXPECT_EQ(settings.max_memory_usage, 123456UL);
+                EXPECT_FALSE(settings.dt_enable_rough_set_filter);
+            }
             QuotaForIntervals * quota_raw_ptr = nullptr;
             ASSERT_NO_THROW(quota_raw_ptr = &ctx.getQuota(););
             ASSERT_NE(quota_raw_ptr, nullptr);
