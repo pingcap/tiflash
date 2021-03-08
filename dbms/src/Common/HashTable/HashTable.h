@@ -1,31 +1,26 @@
 #pragma once
 
-#include <string.h>
-
-#include <math.h>
-
-#include <utility>
-
-#include <boost/noncopyable.hpp>
-
-#include <common/likely.h>
-
+#include <Common/Exception.h>
+#include <Common/HashTable/HashTableAllocator.h>
 #include <Core/Defines.h>
 #include <Core/Types.h>
-#include <Common/Exception.h>
-
-#include <IO/WriteBuffer.h>
-#include <IO/WriteHelpers.h>
 #include <IO/ReadBuffer.h>
 #include <IO/ReadHelpers.h>
 #include <IO/VarInt.h>
+#include <IO/WriteBuffer.h>
+#include <IO/WriteHelpers.h>
+#include <common/likely.h>
+#include <math.h>
+#include <string.h>
 
-#include <Common/HashTable/HashTableAllocator.h>
-    #include <iostream>
+#include <boost/noncopyable.hpp>
+#include <iostream>
+#include <utility>
 
 #ifdef DBMS_HASH_MAP_DEBUG_RESIZES
-    #include <iomanip>
-    #include <Common/Stopwatch.h>
+#include <Common/Stopwatch.h>
+
+#include <iomanip>
 #endif
 
 /** NOTE HashTable could only be used for memmoveable (position independent) types.
@@ -38,10 +33,10 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
-    extern const int NO_AVAILABLE_DATA;
-}
-}
+extern const int LOGICAL_ERROR;
+extern const int NO_AVAILABLE_DATA;
+} // namespace ErrorCodes
+} // namespace DB
 
 
 /** The state of the hash table that affects the properties of its cells.
@@ -55,12 +50,12 @@ namespace ErrorCodes
 struct HashTableNoState
 {
     /// Serialization, in binary and text form.
-    void write(DB::WriteBuffer &) const         {}
-    void writeText(DB::WriteBuffer &) const     {}
+    void write(DB::WriteBuffer &) const {}
+    void writeText(DB::WriteBuffer &) const {}
 
     /// Deserialization, in binary and text form.
-    void read(DB::ReadBuffer &)                 {}
-    void readText(DB::ReadBuffer &)             {}
+    void read(DB::ReadBuffer &) {}
+    void readText(DB::ReadBuffer &) {}
 };
 
 
@@ -69,17 +64,24 @@ namespace ZeroTraits
 {
 
 template <typename T>
-inline bool check(const T & x) { return x == 0; }
+inline bool check(const T & x)
+{
+    return x == 0;
+}
 
 template <>
-inline bool check(const DB::Int256 & x) {
+inline bool check(const DB::Int256 & x)
+{
     return x == 0 || x.backend().size() == 0;
 }
 
 template <typename T>
-void set(T & x) { x = 0; }
+void set(T & x)
+{
+    x = 0;
+}
 
-};
+}; // namespace ZeroTraits
 
 
 /** Compile-time interface for cell of the hash table.
@@ -100,14 +102,14 @@ struct HashTableCell
 
     /// Create a cell with the given key / key and value.
     HashTableCell(const Key & key_, const State &) : key(key_) {}
-/// HashTableCell(const value_type & value_, const State & state) : key(value_) {}
+    /// HashTableCell(const value_type & value_, const State & state) : key(value_) {}
 
     /// Get what the value_type of the container will be.
-    value_type & getValue()             { return key; }
+    value_type & getValue() { return key; }
     const value_type & getValue() const { return key; }
 
     /// Get the key.
-    static Key & getKey(value_type & value)             { return value; }
+    static Key & getKey(value_type & value) { return value; }
     static const Key & getKey(const value_type & value) { return value; }
 
     /// Are the keys at the cells equal?
@@ -141,12 +143,12 @@ struct HashTableCell
     void setMapped(const value_type & /*value*/) {}
 
     /// Serialization, in binary and text form.
-    void write(DB::WriteBuffer & wb) const         { DB::writeBinary(key, wb); }
-    void writeText(DB::WriteBuffer & wb) const     { DB::writeDoubleQuoted(key, wb); }
+    void write(DB::WriteBuffer & wb) const { DB::writeBinary(key, wb); }
+    void writeText(DB::WriteBuffer & wb) const { DB::writeDoubleQuoted(key, wb); }
 
     /// Deserialization, in binary and text form.
-    void read(DB::ReadBuffer & rb)        { DB::readBinary(key, rb); }
-    void readText(DB::ReadBuffer & rb)    { DB::writeDoubleQuoted(key, rb); }
+    void read(DB::ReadBuffer & rb) { DB::readBinary(key, rb); }
+    void readText(DB::ReadBuffer & rb) { DB::writeDoubleQuoted(key, rb); }
 };
 
 
@@ -160,40 +162,37 @@ struct HashTableGrower
     UInt8 size_degree = initial_size_degree;
 
     /// The size of the hash table in the cells.
-    size_t bufSize() const               { return 1ULL << size_degree; }
+    size_t bufSize() const { return 1ULL << size_degree; }
 
-    size_t maxFill() const               { return 1ULL << (size_degree - 1); }
-    size_t mask() const                  { return bufSize() - 1; }
+    size_t maxFill() const { return 1ULL << (size_degree - 1); }
+    size_t mask() const { return bufSize() - 1; }
 
     /// From the hash value, get the cell number in the hash table.
-    size_t place(size_t x) const         { return x & mask(); }
+    size_t place(size_t x) const { return x & mask(); }
 
     /// The next cell in the collision resolution chain.
-    size_t next(size_t pos) const        { ++pos; return pos & mask(); }
+    size_t next(size_t pos) const
+    {
+        ++pos;
+        return pos & mask();
+    }
 
     /// Whether the hash table is sufficiently full. You need to increase the size of the hash table, or remove something unnecessary from it.
-    bool overflow(size_t elems) const    { return elems > maxFill(); }
+    bool overflow(size_t elems) const { return elems > maxFill(); }
 
     /// Increase the size of the hash table.
-    void increaseSize()
-    {
-        size_degree += size_degree >= 23 ? 1 : 2;
-    }
+    void increaseSize() { size_degree += size_degree >= 23 ? 1 : 2; }
 
     /// Set the buffer size by the number of elements in the hash table. Used when deserializing a hash table.
     void set(size_t num_elems)
     {
         size_degree = num_elems <= 1
-             ? initial_size_degree
-             : ((initial_size_degree > static_cast<size_t>(log2(num_elems - 1)) + 2)
-                 ? initial_size_degree
-                 : (static_cast<size_t>(log2(num_elems - 1)) + 2));
+            ? initial_size_degree
+            : ((initial_size_degree > static_cast<size_t>(log2(num_elems - 1)) + 2) ? initial_size_degree
+                                                                                    : (static_cast<size_t>(log2(num_elems - 1)) + 2));
     }
 
-    void setBufSize(size_t buf_size_)
-    {
-        size_degree = static_cast<size_t>(log2(buf_size_ - 1) + 1);
-    }
+    void setBufSize(size_t buf_size_) { size_degree = static_cast<size_t>(log2(buf_size_ - 1) + 1); }
 };
 
 
@@ -205,10 +204,10 @@ struct HashTableGrower
 template <size_t key_bits>
 struct HashTableFixedGrower
 {
-    size_t bufSize() const               { return 1ULL << key_bits; }
-    size_t place(size_t x) const         { return x; }
+    size_t bufSize() const { return 1ULL << key_bits; }
+    size_t place(size_t x) const { return x; }
     /// You could write __builtin_unreachable(), but the compiler does not optimize everything, and it turns out less efficiently.
-    size_t next(size_t pos) const        { return pos + 1; }
+    size_t next(size_t pos) const { return pos + 1; }
     bool overflow(size_t /*elems*/) const { return false; }
 
     void increaseSize() { __builtin_unreachable(); }
@@ -233,8 +232,8 @@ public:
     void setHasZero() { has_zero = true; }
     void clearHasZero() { has_zero = false; }
 
-    Cell * zeroValue()              { return reinterpret_cast<Cell*>(&zero_value_storage); }
-    const Cell * zeroValue() const  { return reinterpret_cast<const Cell*>(&zero_value_storage); }
+    Cell * zeroValue() { return reinterpret_cast<Cell *>(&zero_value_storage); }
+    const Cell * zeroValue() const { return reinterpret_cast<const Cell *>(&zero_value_storage); }
 };
 
 template <typename Cell>
@@ -244,25 +243,17 @@ struct ZeroValueStorage<false, Cell>
     void setHasZero() { throw DB::Exception("HashTable: logical error", DB::ErrorCodes::LOGICAL_ERROR); }
     void clearHasZero() {}
 
-    Cell * zeroValue()              { return nullptr; }
-    const Cell * zeroValue() const  { return nullptr; }
+    Cell * zeroValue() { return nullptr; }
+    const Cell * zeroValue() const { return nullptr; }
 };
 
 
-template
-<
-    typename KeyType,
-    typename CellType,
-    typename HashType,
-    typename GrowerType,
-    typename AllocatorType
->
-class HashTable :
-    private boost::noncopyable,
-    protected HashType,
-    protected AllocatorType,
-    protected CellType::State,
-    protected ZeroValueStorage<CellType::need_zero_value_storage, CellType>     /// empty base optimization
+template <typename KeyType, typename CellType, typename HashType, typename GrowerType, typename AllocatorType>
+class HashTable : private boost::noncopyable,
+                  protected HashType,
+                  protected AllocatorType,
+                  protected CellType::State,
+                  protected ZeroValueStorage<CellType::need_zero_value_storage, CellType> /// empty base optimization
 {
 public:
     using Key = KeyType;
@@ -270,6 +261,7 @@ public:
     using Hash = HashType;
     using Grower = GrowerType;
     using Allocator = AllocatorType;
+
 protected:
     friend class const_iterator;
     friend class iterator;
@@ -282,8 +274,8 @@ protected:
     using Self = HashTable<Key, Cell, Hash, Grower, Allocator>;
     using cell_type = Cell;
 
-    size_t m_size = 0;        /// Amount of elements
-    Cell * buf;               /// A piece of memory for all elements except the element with zero key.
+    size_t m_size = 0; /// Amount of elements
+    Cell * buf;        /// A piece of memory for all elements except the element with zero key.
     Grower grower;
 
 #ifdef DBMS_HASH_MAP_COUNT_COLLISIONS
@@ -392,9 +384,8 @@ protected:
 
 #ifdef DBMS_HASH_MAP_DEBUG_RESIZES
         watch.stop();
-        std::cerr << std::fixed << std::setprecision(3)
-            << "Resize from " << old_size << " to " << grower.bufSize() << " took " << watch.elapsedSeconds() << " sec."
-            << std::endl;
+        std::cerr << std::fixed << std::setprecision(3) << "Resize from " << old_size << " to " << grower.bufSize() << " took "
+                  << watch.elapsedSeconds() << " sec." << std::endl;
 #endif
     }
 
@@ -449,8 +440,8 @@ protected:
         iterator_base() {}
         iterator_base(Container * container_, cell_type * ptr_) : container(container_), ptr(ptr_) {}
 
-        bool operator== (const iterator_base & rhs) const { return ptr == rhs.ptr; }
-        bool operator!= (const iterator_base & rhs) const { return ptr != rhs.ptr; }
+        bool operator==(const iterator_base & rhs) const { return ptr == rhs.ptr; }
+        bool operator!=(const iterator_base & rhs) const { return ptr != rhs.ptr; }
 
         Derived & operator++()
         {
@@ -465,7 +456,7 @@ protected:
             return static_cast<Derived &>(*this);
         }
 
-        auto & operator* () const { return ptr->getValue(); }
+        auto & operator*() const { return ptr->getValue(); }
         auto * operator->() const { return &ptr->getValue(); }
 
         auto getPtr() const { return ptr; }
@@ -491,7 +482,7 @@ public:
         {
             key_type key;
             ZeroTraits::set(key);
-            new(this->zeroValue()) Cell(key, *this);
+            new (this->zeroValue()) Cell(key, *this);
         }
         alloc(grower);
     }
@@ -502,7 +493,7 @@ public:
         {
             key_type key;
             ZeroTraits::set(key);
-            new(this->zeroValue()) Cell(key, *this);
+            new (this->zeroValue()) Cell(key, *this);
         }
         grower.set(reserve_for_num_elements);
         alloc(grower);
@@ -517,10 +508,7 @@ public:
     class Reader final : private Cell::State
     {
     public:
-        Reader(DB::ReadBuffer & in_)
-        : in(in_)
-        {
-        }
+        Reader(DB::ReadBuffer & in_) : in(in_) {}
 
         Reader(const Reader &) = delete;
         Reader & operator=(const Reader &) = delete;
@@ -607,15 +595,15 @@ public:
         return iterator(this, ptr);
     }
 
-    const_iterator end() const         { return const_iterator(this, buf + grower.bufSize()); }
-    iterator end()                     { return iterator(this, buf + grower.bufSize()); }
+    const_iterator end() const { return const_iterator(this, buf + grower.bufSize()); }
+    iterator end() { return iterator(this, buf + grower.bufSize()); }
 
 
 protected:
     const_iterator iteratorTo(const Cell * ptr) const { return const_iterator(this, ptr); }
-    iterator iteratorTo(Cell * ptr)                   { return iterator(this, ptr); }
-    const_iterator iteratorToZero() const             { return iteratorTo(this->zeroValue()); }
-    iterator iteratorToZero()                         { return iteratorTo(this->zeroValue()); }
+    iterator iteratorTo(Cell * ptr) { return iterator(this, ptr); }
+    const_iterator iteratorToZero() const { return iteratorTo(this->zeroValue()); }
+    iterator iteratorToZero() { return iteratorTo(this->zeroValue()); }
 
 
     /// If the key is zero, insert it into a special place and return true.
@@ -658,7 +646,7 @@ protected:
             return;
         }
 
-        new(&buf[place_value]) Cell(x, *this);
+        new (&buf[place_value]) Cell(x, *this);
         buf[place_value].setHash(hash_value);
         inserted = true;
         ++m_size;
@@ -703,10 +691,7 @@ public:
 
 
     /// Reinsert node pointed to by iterator
-    void ALWAYS_INLINE reinsert(iterator & it, size_t hash_value)
-    {
-        reinsert(*it.getPtr(), hash_value);
-    }
+    void ALWAYS_INLINE reinsert(iterator & it, size_t hash_value) { reinsert(*it.getPtr(), hash_value); }
 
 
     /** Insert the key,
@@ -900,15 +885,9 @@ public:
     }
 
 
-    size_t size() const
-    {
-        return m_size;
-    }
+    size_t size() const { return m_size; }
 
-    bool empty() const
-    {
-        return 0 == m_size;
-    }
+    bool empty() const { return 0 == m_size; }
 
     void clear()
     {
@@ -929,63 +908,60 @@ public:
         free();
     }
 
-    size_t getBufferSizeInBytes() const
-    {
-        return grower.bufSize() * sizeof(Cell);
-    }
+    size_t getBufferSizeInBytes() const { return grower.bufSize() * sizeof(Cell); }
 
-    size_t getBufferSizeInCells() const
-    {
-        return grower.bufSize();
-    }
+    size_t getBufferSizeInCells() const { return grower.bufSize(); }
 
 #ifdef DBMS_HASH_MAP_COUNT_COLLISIONS
-    size_t getCollisions() const
-    {
-        return collisions;
-    }
+    size_t getCollisions() const { return collisions; }
 #endif
 };
 
 template <typename HashTableType>
-class HashTableWithLock {
+class HashTableWithLock
+{
 public:
     using HashTable = HashTableType;
+    using IteratorWithLock = std::pair<typename HashTableType::iterator, std::unique_ptr<std::lock_guard<std::mutex>>>;
+    using ConstIteratorWithLock = std::pair<typename HashTableType::const_iterator, std::unique_ptr<std::lock_guard<std::mutex>>>;
     HashTableWithLock() {}
     HashTableWithLock(size_t reserve_for_num_elements) : hash_table(reserve_for_num_elements) {}
     std::mutex & getMutex() { return mutex; }
     HashTableType & getHashTable() { return hash_table; }
-    typename HashTableType::iterator ALWAYS_INLINE find(const typename HashTableType::Key & x) {
-        std::lock_guard<std::mutex> lk(mutex);
-        return hash_table.find(x);
+    IteratorWithLock ALWAYS_INLINE find(const typename HashTableType::Key & x)
+    {
+        std::unique_ptr<std::lock_guard<std::mutex>> lock_ptr = std::make_unique<std::lock_guard<std::mutex>>(mutex);
+        return std::make_pair(hash_table.find(x), std::move(lock_ptr));
     }
-    typename HashTableType::const_iterator ALWAYS_INLINE find(const typename HashTableType::Key & x) const {
-        std::lock_guard<std::mutex> lk(mutex);
-        return hash_table.find(x);
+    ConstIteratorWithLock ALWAYS_INLINE find(const typename HashTableType::Key & x) const
+    {
+        std::unique_ptr<std::lock_guard<std::mutex>> lock_ptr = std::make_unique<std::lock_guard<std::mutex>>(mutex);
+        return std::make_pair(hash_table.find(x), std::move(lock_ptr));
     }
-    typename HashTableType::iterator ALWAYS_INLINE find(const typename HashTableType::Key & x, size_t hash_value) {
-        std::lock_guard<std::mutex> lk(mutex);
-        return hash_table.find(x, hash_value);
+    IteratorWithLock ALWAYS_INLINE find(const typename HashTableType::Key & x, size_t hash_value)
+    {
+        std::unique_ptr<std::lock_guard<std::mutex>> lock_ptr = std::make_unique<std::lock_guard<std::mutex>>(mutex);
+        return std::make_pair(hash_table.find(x, hash_value), std::move(lock_ptr));
     }
-    typename HashTableType::const_iterator ALWAYS_INLINE find(const typename HashTableType::Key & x, size_t hash_value) const {
-        std::lock_guard<std::mutex> lk(mutex);
-        return hash_table.find(x, hash_value);
+    ConstIteratorWithLock ALWAYS_INLINE find(const typename HashTableType::Key & x, size_t hash_value) const
+    {
+        std::unique_ptr<std::lock_guard<std::mutex>> lock_ptr = std::make_unique<std::lock_guard<std::mutex>>(mutex);
+        return std::make_pair(hash_table.find(x, hash_value), std::move(lock_ptr));
     }
     /// Insert a value. In the case of any more complex values, it is better to use the `emplace` function.
-    std::pair<typename HashTableType::iterator, bool> ALWAYS_INLINE insert(const typename HashTableType::value_type & x)
+    std::pair<IteratorWithLock, bool> ALWAYS_INLINE insert(const typename HashTableType::value_type & x)
     {
-        std::lock_guard<std::mutex> lk(mutex);
-        return hash_table.insert(x);
+        return std::make_pair(hash_table.insert(x), std::make_unique<std::lock_guard<std::mutex>>(mutex));
     }
-    void ALWAYS_INLINE emplace(const typename HashTableType::Key & x, typename HashTableType::iterator & it, bool & inserted)
+    void ALWAYS_INLINE emplace(const typename HashTableType::Key & x, IteratorWithLock & it, bool & inserted)
     {
-        std::lock_guard<std::mutex> lk(mutex);
-        return hash_table.emplace(x, it, inserted);
+        it.second = std::make_unique<std::lock_guard<std::mutex>>(mutex);
+        return hash_table.emplace(x, it.first, inserted);
     }
-    void ALWAYS_INLINE emplace(const typename HashTableType::Key & x, typename HashTableType::iterator & it, bool & inserted, size_t hash_value)
+    void ALWAYS_INLINE emplace(const typename HashTableType::Key & x, IteratorWithLock & it, bool & inserted, size_t hash_value)
     {
-        std::lock_guard<std::mutex> lk(mutex);
-        return hash_table.emplace(x, it, inserted, hash_value);
+        it.second = std::make_unique<std::lock_guard<std::mutex>>(mutex);
+        return hash_table.emplace(x, it.first, inserted, hash_value);
     }
     bool ALWAYS_INLINE has(const typename HashTableType::Key & x) const
     {
@@ -997,26 +973,20 @@ public:
         std::lock_guard<std::mutex> lk(mutex);
         return hash_table.has(x, hash_value);
     }
-    size_t getBufferSizeInBytes() const
-    {
-        return hash_table.getBufferSizeInBytes();
-    }
-    size_t size() const
-    {
-        return hash_table.size();
-    }
+    size_t getBufferSizeInBytes() const { return hash_table.getBufferSizeInBytes(); }
+    size_t size() const { return hash_table.size(); }
+
 private:
     HashTableType hash_table;
     mutable std::mutex mutex;
 };
 
 template <typename HashTableType>
-class ConcurrentHashTable :
-        private boost::noncopyable,
-        protected HashTableType::Hash,
-        protected HashTableType::Allocator,
-        protected HashTableType::Cell::State,
-        protected ZeroValueStorage<HashTableType::Cell::need_zero_value_storage, typename HashTableType::Cell>
+class ConcurrentHashTable : private boost::noncopyable,
+                            protected HashTableType::Hash,
+                            protected HashTableType::Allocator,
+                            protected HashTableType::Cell::State,
+                            protected ZeroValueStorage<HashTableType::Cell::need_zero_value_storage, typename HashTableType::Cell>
 {
 public:
     using SegmentType = HashTableWithLock<HashTableType>;
@@ -1024,44 +994,34 @@ public:
     using Cell = typename HashTableType::Cell;
     using Hash = typename HashTableType::Hash;
 
-    ConcurrentHashTable(size_t segment_size_) : segment_size(segment_size_) {
+    ConcurrentHashTable(size_t segment_size_) : segment_size(segment_size_)
+    {
         for (size_t i = 0; i < segment_size; i++)
         {
             segments.emplace_back(std::move(std::make_unique<HashTableWithLock<HashTableType>>()));
         }
     }
-    ConcurrentHashTable(size_t segment_size_, size_t reserve_for_num_elements) : segment_size(segment_size_) {
+    ConcurrentHashTable(size_t segment_size_, size_t reserve_for_num_elements) : segment_size(segment_size_)
+    {
         for (size_t i = 0; i < segment_size; i++)
         {
             segments.emplace_back(std::make_unique<HashTableWithLock<HashTableType>>(reserve_for_num_elements));
         }
     }
 
-    const typename SegmentType::HashTable  & getSegmentTable(size_t segment_index) const
-    {
-        return segments[segment_index]->getHashTable();
-    }
+    const typename SegmentType::HashTable & getSegmentTable(size_t segment_index) const { return segments[segment_index]->getHashTable(); }
 
-    typename SegmentType::HashTable & getSegmentTable(size_t segment_index)
-    {
-        return segments[segment_index]->getHashTable();
-    }
+    typename SegmentType::HashTable & getSegmentTable(size_t segment_index) { return segments[segment_index]->getHashTable(); }
 
-    std::mutex & getSegmentMutex(size_t segment_index)
-    {
-        return segments[segment_index]->getMutex();
-    }
+    std::mutex & getSegmentMutex(size_t segment_index) { return segments[segment_index]->getMutex(); }
 
     size_t getSegmentSize() const { return segment_size; }
 
-    size_t hash(const Key & x) const {
-        return Hash::operator()(x);
-    }
-    bool isZero(const Key & x) const {
-        return Cell::isZero(x, *this);
-    }
+    size_t hash(const Key & x) const { return Hash::operator()(x); }
+    bool isZero(const Key & x) const { return Cell::isZero(x, *this); }
 
-    typename SegmentType::HashTable::iterator ALWAYS_INLINE find(const Key & x) {
+    typename SegmentType::IteratorWithLock ALWAYS_INLINE find(const Key & x)
+    {
         size_t segment_index = 0;
         size_t hash_value = 0;
         if (!isZero(x))
@@ -1073,7 +1033,8 @@ public:
         return segments[segment_index]->find(x, hash_value);
     }
 
-    typename SegmentType::HashTable::const_iterator ALWAYS_INLINE find(const Key & x) const {
+    typename SegmentType::ConstIteratorWithLock ALWAYS_INLINE find(const Key & x) const
+    {
         size_t segment_index = 0;
         size_t hash_value = 0;
         if (!isZero(x))
@@ -1085,7 +1046,8 @@ public:
         return segments[segment_index].find(x, hash_value);
     }
 
-    typename SegmentType::HashTable::iterator ALWAYS_INLINE find(const Key & x, size_t hash_value) {
+    typename SegmentType::IteratorWithLock ALWAYS_INLINE find(const Key & x, size_t hash_value)
+    {
         size_t segment_index = 0;
         if (!isZero(x))
             segment_index = hash_value % segment_size;
@@ -1093,7 +1055,8 @@ public:
         return segments[segment_index]->find(x, hash_value);
     }
 
-    typename SegmentType::HashTable::const_iterator ALWAYS_INLINE find(const Key & x, size_t hash_value) const {
+    typename SegmentType::ConstIteratorWithLock ALWAYS_INLINE find(const Key & x, size_t hash_value) const
+    {
         size_t segment_index = 0;
         if (!isZero(x))
             segment_index = hash_value % segment_size;
@@ -1102,7 +1065,7 @@ public:
     }
 
     /// Insert a value. In the case of any more complex values, it is better to use the `emplace` function.
-    std::pair<typename SegmentType::HashTable::iterator, bool> ALWAYS_INLINE insert(const typename SegmentType::HashTable::value_type & x)
+    std::pair<typename SegmentType::IteratorWithLock, bool> ALWAYS_INLINE insert(const typename SegmentType::HashTable::value_type & x)
     {
         size_t segment_index = 0;
         if (!isZero(Cell::getKey(x)))
@@ -1114,7 +1077,7 @@ public:
         return segments[segment_index]->insert(x);
     }
 
-    void ALWAYS_INLINE emplace(const Key & x, typename SegmentType::HashTable::iterator & it, bool & inserted)
+    void ALWAYS_INLINE emplace(const Key & x, typename SegmentType::IteratorWithLock & it, bool & inserted)
     {
         size_t segment_index = 0;
         if (!isZero(x))
@@ -1125,7 +1088,7 @@ public:
         return segments[segment_index]->emplace(x, it, inserted);
     }
 
-    void ALWAYS_INLINE emplace(const Key & x, typename SegmentType::HashTable::iterator & it, bool & inserted, size_t hash_value)
+    void ALWAYS_INLINE emplace(const Key & x, typename SegmentType::ConstIteratorWithLock & it, bool & inserted, size_t hash_value)
     {
         size_t segment_index = 0;
         if (!isZero(x))
