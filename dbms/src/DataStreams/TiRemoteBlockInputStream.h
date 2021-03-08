@@ -96,6 +96,11 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
         }
         if (result.eof)
             return false;
+        if (result.resp->has_error())
+        {
+            LOG_WARNING(log, "remote reader meets error: " << result.resp->error().DebugString());
+            throw Exception(result.resp->error().DebugString());
+        }
 
         if constexpr (is_streaming_reader)
         {
