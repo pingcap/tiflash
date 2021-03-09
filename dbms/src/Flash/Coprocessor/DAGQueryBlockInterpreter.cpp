@@ -1128,6 +1128,8 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
 
     ::tipb::DAGRequest dag_req;
 
+    /// still need to choose encode_type although it read data from TiFlash node because
+    /// in TiFlash it has no way to tell whether the cop request is from TiFlash or TIDB
     tipb::EncodeType encode_type;
     if (!isUnsupportedEncodeType(query_block.output_field_types, tipb::EncodeType::TypeCHBlock))
         encode_type = tipb::EncodeType::TypeCHBlock;
