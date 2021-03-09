@@ -1,10 +1,10 @@
 mysql> drop table if exists test.t;
-mysql> create table test.t (a decimal(4, 2), b tinyint);
+mysql> create table test.t (a decimal(4, 2), b tinyint, c int);
 mysql> alter table test.t set tiflash replica 1;
 
 func> wait_table test t
 
-mysql> insert into test.t values(1, -80);
+mysql> insert into test.t values(1, -80, -1);
 mysql> set session tidb_isolation_read_engines='tiflash'
 
 # issue https://github.com/pingcap/tics/issues/1483
@@ -14,3 +14,9 @@ a
 
 mysql> select b from test.t where b in (-302764853, 12498864);
 # Expected to be Empty
+
+# issue https://github.com/pingcap/tidb/issues/23198
+mysql> select c from test.t where c in (1, 18446744073709551616);
+# Expected to be Empty
+
+mysql> drop table if exists test.t;

@@ -493,35 +493,8 @@ void getJoinKeyTypes(const tipb::Join & join, DataTypes & key_types)
         DataTypes types;
         types.emplace_back(getDataTypeByFieldType(join.left_join_keys(i).field_type()));
         types.emplace_back(getDataTypeByFieldType(join.right_join_keys(i).field_type()));
-        try
-        {
-            DataTypePtr common_type = getLeastSupertype(types);
-            key_types.emplace_back(common_type);
-        }
-        catch (Exception & e)
-        {
-            if (e.code() == ErrorCodes::NO_COMMON_TYPE)
-            {
-                DataTypePtr left_type = removeNullable(types[0]);
-                DataTypePtr right_type = removeNullable(types[1]);
-                if ((left_type->getTypeId() == TypeIndex::UInt64 && right_type->isInteger() && !right_type->isUnsignedInteger())
-                    || (right_type->getTypeId() == TypeIndex::UInt64 && left_type->isInteger() && !left_type->isUnsignedInteger()))
-                {
-                    /// special case for uint64 and int
-                    /// inorder to not throw exception, use Decimal(20, 0) as the common type
-                    DataTypePtr common_type = std::make_shared<DataTypeDecimal<Decimal128>>(20, 0);
-                    if (types[0]->isNullable() || types[1]->isNullable())
-                        common_type = makeNullable(common_type);
-                    key_types.emplace_back(common_type);
-                }
-                else
-                    throw;
-            }
-            else
-            {
-                throw;
-            }
-        }
+        DataTypePtr common_type = getLeastSupertype(types);
+        key_types.emplace_back(common_type);
     }
 }
 
