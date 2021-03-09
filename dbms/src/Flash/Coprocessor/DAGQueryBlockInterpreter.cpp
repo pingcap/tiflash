@@ -1128,9 +1128,20 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
 
     ::tipb::DAGRequest dag_req;
 
-    copyExecutorTreeWithLocalTableScan(dag_req, query_block.root, tipb::EncodeType::TypeCHBlock, rqst);
+    /// still need to choose encode_type although it read data from TiFlash node because
+    /// in TiFlash it has no way to tell whether the cop request is from TiFlash or TIDB
+    tipb::EncodeType encode_type;
+    if (!isUnsupportedEncodeType(query_block.output_field_types, tipb::EncodeType::TypeCHBlock))
+        encode_type = tipb::EncodeType::TypeCHBlock;
+    else if (!isUnsupportedEncodeType(query_block.output_field_types, tipb::EncodeType::TypeChunk))
+        encode_type = tipb::EncodeType::TypeChunk;
+    else
+        encode_type = tipb::EncodeType::TypeDefault;
+
+    copyExecutorTreeWithLocalTableScan(dag_req, query_block.root, encode_type, rqst);
     DAGSchema schema;
     ColumnsWithTypeAndName columns;
+    std::vector<bool> is_ts_column;
     std::vector<NameAndTypePair> source_columns;
     for (int i = 0; i < (int)query_block.output_field_types.size(); i++)
     {
@@ -1138,6 +1149,7 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
         ColumnInfo info = fieldTypeToColumnInfo(query_block.output_field_types[i]);
         String col_name = query_block.qb_column_prefix + "col_" + std::to_string(i);
         schema.push_back(std::make_pair(col_name, info));
+        is_ts_column.push_back(query_block.output_field_types[i].tp() == TiDB::TypeTimestamp);
         source_columns.emplace_back(col_name, getDataTypeByFieldType(query_block.output_field_types[i]));
         final_project.emplace_back(col_name, "");
     }
@@ -1146,6 +1158,27 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
     executeRemoteQueryImpl(pipeline, cop_key_ranges, dag_req, schema);
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
+    bool need_append_final_project = false;
+    if (encode_type == tipb::EncodeType::TypeDefault)
+    {
+        /// if the encode type is default, the timestamp column in dag response is UTC based
+        /// so need to cast the timezone
+        ExpressionActionsChain chain;
+        if (addTimeZoneCastAfterTS(is_ts_column, chain))
+        {
+            for (size_t i = 0; i < final_project.size(); i++)
+            {
+                if (is_ts_column[i])
+                    final_project[i].first = analyzer->getCurrentInputColumns()[i].name;
+            }
+            pipeline.transform(
+                [&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions()); });
+            need_append_final_project = true;
+        }
+    }
+
+    if (need_append_final_project)
+        executeProject(pipeline, final_project);
 }
 
 void DAGQueryBlockInterpreter::executeRemoteQueryImpl(Pipeline & pipeline,
