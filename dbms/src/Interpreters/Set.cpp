@@ -295,7 +295,7 @@ std::vector<const tipb::Expr *> Set::createFromDAGExpr(const DataTypes & types, 
             continue;
         }
         Field value = decodeLiteral(child);
-        DataTypePtr type = child.has_field_type() ? getDataTypeByFieldType(child.field_type()) : types[0];
+        DataTypePtr type = types[0];
         value = convertFieldToType(value, *type);
 
         if (!value.isNull())
