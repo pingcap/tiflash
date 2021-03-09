@@ -1067,10 +1067,12 @@ public:
 
     size_t getSegmentSize() const { return segment_size; }
 
-    size_t hash(const Key & x) const {
+    size_t hash(const Key & x) const
+    {
         return Hash::operator()(x);
     }
-    bool isZero(const Key & x) const {
+    bool isZero(const Key & x) const
+    {
         return Cell::isZero(x, *this);
     }
 

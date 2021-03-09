@@ -16,7 +16,7 @@ public:
     static size_t test_loop;
 };
 
-size_t TestConcurrentHashMap::test_loop = 1000;
+size_t TestConcurrentHashMap::test_loop = 1;
 
 struct MapType
 {
