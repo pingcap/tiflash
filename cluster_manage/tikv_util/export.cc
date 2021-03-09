@@ -1,7 +1,7 @@
+#include <pybind11/pybind11.h>
+
 #include "check_region_cnt.h"
 #include "tikv_key.h"
-
-#include <pybind11/pybind11.h>
 namespace py = pybind11;
 
 PYBIND11_MODULE(common, m) {

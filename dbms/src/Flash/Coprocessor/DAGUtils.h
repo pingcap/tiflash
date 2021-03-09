@@ -7,6 +7,7 @@
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 
+#include <Core/Block.h>
 #include <Core/Field.h>
 #include <Core/NamesAndTypes.h>
 #include <Storages/Transaction/Collator.h>
@@ -44,5 +45,6 @@ std::shared_ptr<TiDB::ITiDBCollator> getCollatorFromExpr(const tipb::Expr & expr
 std::shared_ptr<TiDB::ITiDBCollator> getCollatorFromFieldType(const tipb::FieldType & field_type);
 bool hasUnsignedFlag(const tipb::FieldType & tp);
 grpc::StatusCode tiflashErrorCodeToGrpcStatusCode(int error_code);
+void assertBlockSchema(const DataTypes & expected_types, const Block & block, const std::string & context_description);
 
 } // namespace DB

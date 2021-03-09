@@ -1,5 +1,6 @@
 #include <Common/TiFlashException.h>
 #include <Core/Types.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionHelpers.h>
@@ -95,11 +96,13 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
         }
         case tipb::ExprType::MysqlTime:
         {
-            if (!expr.has_field_type() || (expr.field_type().tp() != TiDB::TypeDate && expr.field_type().tp() != TiDB::TypeDatetime))
-                throw TiFlashException("Invalid MySQL Time literal " + expr.DebugString(), Errors::Coprocessor::BadRequest);
+            if (!expr.has_field_type())
+                throw TiFlashException("MySQL Time literal without field_type" + expr.DebugString(), Errors::Coprocessor::BadRequest);
             auto t = decodeDAGUInt64(expr.val());
-            // TODO: Use timezone in DAG request.
-            return std::to_string(TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field().get<Int64>());
+            auto ret = std::to_string(TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field().get<UInt64>());
+            if (expr.field_type().tp() == TiDB::TypeTimestamp)
+                ret = ret + "_ts";
+            return ret;
         }
         case tipb::ExprType::ColumnRef:
             return getColumnNameForColumnExpr(expr, input_col);
@@ -243,10 +246,9 @@ Field decodeLiteral(const tipb::Expr & expr)
             return decodeDAGDecimal(expr.val());
         case tipb::ExprType::MysqlTime:
         {
-            if (!expr.has_field_type() || (expr.field_type().tp() != TiDB::TypeDate && expr.field_type().tp() != TiDB::TypeDatetime))
-                throw TiFlashException("Invalid MySQL Time literal " + expr.DebugString(), Errors::Coprocessor::BadRequest);
+            if (!expr.has_field_type())
+                throw TiFlashException("MySQL Time literal without field_type" + expr.DebugString(), Errors::Coprocessor::BadRequest);
             auto t = decodeDAGUInt64(expr.val());
-            // TODO: Use timezone in DAG request.
             return TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field();
         }
         case tipb::ExprType::MysqlBit:
@@ -400,6 +402,33 @@ grpc::StatusCode tiflashErrorCodeToGrpcStatusCode(int error_code)
         || error_code == ErrorCodes::IP_ADDRESS_NOT_ALLOWED)
         return grpc::StatusCode::UNAUTHENTICATED;
     return grpc::StatusCode::INTERNAL;
+}
+
+void assertBlockSchema(const DataTypes & expected_types, const Block & block, const std::string & context_description)
+{
+    size_t columns = expected_types.size();
+    if (block.columns() != columns)
+        throw Exception("Block schema mismatch in " + context_description + ": different number of columns: expected "
+            + std::to_string(columns) + " columns, got " + std::to_string(block.columns()) + " columns");
+
+    for (size_t i = 0; i < columns; ++i)
+    {
+        const auto & actual = block.getByPosition(i).type;
+        const auto & expected = expected_types[i];
+
+        if (!expected->equals(*actual))
+        {
+            /// This is a workaround for Enum type: because TiDB does not push down enough
+            /// information about enum type, we only check the nullability if both type is
+            /// Enum, should be removed if https://github.com/pingcap/tics/issues/1489 is fixed
+            if (expected->isEnum() && actual->isEnum())
+                continue;
+            if (expected->isNullable() && removeNullable(expected)->isEnum() && actual->isNullable() && removeNullable(actual)->isEnum())
+                continue;
+            throw Exception("Block schema mismatch in " + context_description + ": different types: expected " + expected->getName()
+                + ", got " + actual->getName());
+        }
+    }
 }
 
 extern const String UniqRawResName;
