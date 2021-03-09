@@ -102,21 +102,16 @@ static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr
             continue;
         }
         DataTypePtr type{};
-        if (!exprHasValidFieldType(child))
+        if (!exprHasValidFieldType(child) || child.tp() == tipb::ExprType::MysqlDecimal)
         {
-            // We should deduce type from `expr.val()` if it doesn't have a valid field_type
+            // We should deduce type from `expr.val()` if it doesn't have a valid field_type or it's a decimal literal
+            // See https://github.com/pingcap/tics/issues/1425
             Field value = decodeLiteral(child);
             type = applyVisitor(FieldToDataType(), value);
         }
         else
         {
             type = getDataTypeByFieldType(child.field_type());
-        }
-        if (type->isDecimal())
-        {
-            // See https://github.com/pingcap/tics/issues/1425
-            Field value = decodeLiteral(child);
-            type = applyVisitor(FieldToDataType(), value);
         }
         argument_types.push_back(type);
     }
