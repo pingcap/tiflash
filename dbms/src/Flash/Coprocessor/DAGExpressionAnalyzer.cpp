@@ -97,18 +97,26 @@ static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr
         auto & child = expr.children(i);
         if (!isLiteralExpr(child))
         {
+            // Non-literal expression will be rewritten with `OR`, for example:
+            // `a IN (1, 2, b)` will be rewritten to `a IN (1, 2) OR a = b`
             continue;
         }
         DataTypePtr type{};
-        if (type->isDecimal() || !exprHasValidFieldType(child))
+        if (!exprHasValidFieldType(child))
         {
-            // See https://github.com/pingcap/tics/issues/1425
+            // We should deduce type from `expr.val()` if it doesn't have a valid field_type
             Field value = decodeLiteral(child);
             type = applyVisitor(FieldToDataType(), value);
         }
         else
         {
             type = getDataTypeByFieldType(child.field_type());
+        }
+        if (type->isDecimal())
+        {
+            // See https://github.com/pingcap/tics/issues/1425
+            Field value = decodeLiteral(child);
+            type = applyVisitor(FieldToDataType(), value);
         }
         argument_types.push_back(type);
     }
