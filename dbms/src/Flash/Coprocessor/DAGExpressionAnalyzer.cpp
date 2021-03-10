@@ -85,8 +85,39 @@ static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr
     const String & func_name = getFunctionName(expr);
     Names argument_names;
     String key_name = analyzer->getActions(expr.children(0), actions);
+    // TiDB guarantees that arguments of IN function have same data type family but doesn't guarantees that their data types
+    // are completely the same. For example, in an expression like `col_decimal_10_0 IN (1.1, 2.34)`, `1.1` and `2.34` are
+    // both decimal type but `1.1`'s flen and decimal are 2 and 1 while that of `2.34` are 3 and 2.
+    // We should convert them to a least super data type.
+    DataTypes argument_types;
+    const Block & sample_block = actions->getSampleBlock();
+    argument_types.push_back(sample_block.getByName(key_name).type);
+    for (int i = 1; i < expr.children_size(); ++i)
+    {
+        auto & child = expr.children(i);
+        if (!isLiteralExpr(child))
+        {
+            // Non-literal expression will be rewritten with `OR`, for example:
+            // `a IN (1, 2, b)` will be rewritten to `a IN (1, 2) OR a = b`
+            continue;
+        }
+        DataTypePtr type = getDataTypeByFieldType(child.field_type());
+        if (type->isDecimal())
+        {
+            // See https://github.com/pingcap/tics/issues/1425
+            Field value = decodeLiteral(child);
+            type = applyVisitor(FieldToDataType(), value);
+        }
+        argument_types.push_back(type);
+    }
+    DataTypePtr resolved_type = getLeastSupertype(argument_types);
+    if (!removeNullable(resolved_type)->equals(*removeNullable(argument_types[0])))
+    {
+        // Need cast left argument
+        key_name = analyzer->appendCast(resolved_type, actions, key_name);
+    }
+    analyzer->makeExplicitSet(expr, sample_block, false, key_name);
     argument_names.push_back(key_name);
-    analyzer->makeExplicitSet(expr, actions->getSampleBlock(), false, key_name);
     const DAGSetPtr & set = analyzer->getPreparedSets()[&expr];
 
     ColumnWithTypeAndName column;
@@ -835,35 +866,6 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(
         }
     }
     return expr_name;
-}
-
-void DAGExpressionAnalyzer::makeExplicitSetForIndex(const tipb::Expr & expr, const ManageableStoragePtr & storage)
-{
-    for (auto & child : expr.children())
-    {
-        makeExplicitSetForIndex(child, storage);
-    }
-    if (expr.tp() != tipb::ExprType::ScalarFunc)
-    {
-        return;
-    }
-    const String & func_name = getFunctionName(expr);
-    // only support col_name in (value_list)
-    if (functionIsInOrGlobalInOperator(func_name) && expr.children(0).tp() == tipb::ExprType::ColumnRef && !prepared_sets.count(&expr))
-    {
-        NamesAndTypesList column_list;
-        for (const auto & col : getCurrentInputColumns())
-        {
-            column_list.emplace_back(col.name, col.type);
-        }
-        ExpressionActionsPtr temp_actions = std::make_shared<ExpressionActions>(column_list, settings);
-        String name = getActions(expr.children(0), temp_actions);
-        ASTPtr name_ast = std::make_shared<ASTIdentifier>(name);
-        if (storage->mayBenefitFromIndexForIn(name_ast))
-        {
-            makeExplicitSet(expr, temp_actions->getSampleBlock(), true, name);
-        }
-    }
 }
 
 void DAGExpressionAnalyzer::makeExplicitSet(
