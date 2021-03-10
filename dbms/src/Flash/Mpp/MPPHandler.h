@@ -256,7 +256,7 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
     // which targeted task we should send data by which tunnel.
     std::map<MPPTaskId, MPPTunnelPtr> tunnel_map;
 
-    MPPTaskManager * manager;
+    MPPTaskManager * manager = nullptr;
 
     Logger * log;
 
@@ -516,6 +516,7 @@ class MPPHandler
 public:
     MPPHandler(const mpp::DispatchTaskRequest & task_request_) : task_request(task_request_), log(&Logger::get("MPPHandler")) {}
     grpc::Status execute(Context & context, mpp::DispatchTaskResponse * response);
+    void handleError(MPPTaskPtr task, String error);
 };
 
 } // namespace DB

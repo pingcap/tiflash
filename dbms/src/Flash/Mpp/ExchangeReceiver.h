@@ -70,6 +70,7 @@ private:
 
     void decodePacket(const mpp::MPPDataPacket & p, size_t source_index, const String & req_info)
     {
+        if (p.has_error()) {}
         std::shared_ptr<tipb::SelectResponse> resp_ptr = std::make_shared<tipb::SelectResponse>();
         if (!resp_ptr->ParseFromString(p.data()))
         {

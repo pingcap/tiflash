@@ -225,6 +225,46 @@ private:
     BlockInputStreamPtr in;
 };
 
+class MPPResBlockOutputStream : public IProfilingBlockInputStream
+{
+public:
+    MPPResBlockOutputStream(const BlockInputStreamPtr & in_) : in(in_) {}
+
+    String getName() const override { return "MPPResBlockOutputStream"; }
+
+    Block getHeader() const override { return in->getHeader(); }
+
+protected:
+    Block readImpl() override
+    {
+        if (!inited)
+        {
+            while (Block block = in->read())
+            {
+                if (!block)
+                    break;
+                blocks.push_back(block);
+            }
+            inited = true;
+            current_index = 0;
+        }
+        if (current_index < blocks.size())
+        {
+            return blocks[current_index++];
+        }
+        else
+        {
+            return {};
+        }
+    }
+
+private:
+    BlockInputStreamPtr in;
+    Blocks blocks;
+    bool inited = false;
+    size_t current_index = 0;
+};
+
 tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version,
     UInt64 region_conf_version, Timestamp start_ts, std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & key_ranges);
 BlockInputStreamPtr outputDAGResponse(Context & context, const DAGSchema & schema, const tipb::SelectResponse & dag_response);
@@ -343,7 +383,7 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
         std::shared_ptr<ExchangeReceiver> exchange_receiver
             = std::make_shared<ExchangeReceiver>(context, tipb_exchange_receiver, root_tm, 10);
         BlockInputStreamPtr ret = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver);
-        return ret;
+        return func_wrap_output_stream(ret);
     }
     else
     {
@@ -2184,6 +2224,8 @@ std::tuple<QueryTasks, MakeResOutputStream> compileQuery(
     auto [root_executor, has_uniq_raw_res] = compileQueryBlock(context, executor_index, schema_fetcher, properties, ast_query);
     if (has_uniq_raw_res)
         func_wrap_output_stream = [](BlockInputStreamPtr in) { return std::make_shared<UniqRawResReformatBlockOutputStream>(in); };
+    if (properties.is_mpp_query)
+        func_wrap_output_stream = [](BlockInputStreamPtr in) { return std::make_shared<MPPResBlockOutputStream>(in); };
 
     /// finalize
     std::unordered_set<String> used_columns;
