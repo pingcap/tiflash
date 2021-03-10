@@ -31,18 +31,23 @@ bool isFunctionExpr(const tipb::Expr & expr) { return expr.tp() == tipb::ExprTyp
 
 const String & getAggFunctionName(const tipb::Expr & expr)
 {
-    if (agg_func_map.find(expr.tp()) != agg_func_map.end())
+    if (expr.has_distinct())
     {
-        return agg_func_map[expr.tp()];
+        if (distinct_agg_func_map.find(expr.tp()) != distinct_agg_func_map.end())
+        {
+            return distinct_agg_func_map[expr.tp()];
+        }
     }
-
-    if (distinct_agg_func_map.find(expr.tp()) != distinct_agg_func_map.end())
+    else
     {
-        return distinct_agg_func_map[expr.tp()];
+        if (agg_func_map.find(expr.tp()) != agg_func_map.end())
+        {
+            return agg_func_map[expr.tp()];
+        }
     }
 
     const auto errmsg = tipb::ExprType_Name(expr.tp())
-        + "(has_distinct=" + (expr.has_distinct() ? "true" : "false") + ")"
+        + "(distinct=" + (expr.has_distinct() ? "true" : "false") + ")"
         + " is not supported.";
     throw TiFlashException(errmsg, Errors::Coprocessor::Unimplemented);
 }
