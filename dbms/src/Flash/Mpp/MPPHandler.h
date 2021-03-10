@@ -126,6 +126,18 @@ struct MPPTunnel
         cv_for_finished.notify_all();
     }
 
+    /// finish the tunnel without checking the connect status, this function
+    /// should only be used when handling error if DispatchMPPTask fails for
+    /// root task. Because for root task, if DispatchMPPTask fails, TiDB does
+    /// not sending establish MPP connection request at all, it is meaningless
+    /// to check the connect status in this case, just finish the tunnel.
+    void finish()
+    {
+        std::unique_lock<std::mutex> lk(mu);
+        finished = true;
+        cv_for_finished.notify_all();
+    }
+
     // a MPPConn request has arrived. it will build connection by this tunnel;
     void connect(::grpc::ServerWriter<::mpp::MPPDataPacket> * writer_)
     {
@@ -279,6 +291,20 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
 
     void cancel();
 
+    void finishAllTunnel()
+    {
+        try
+        {
+            for (auto & it : tunnel_map)
+            {
+                it.second->finish();
+            }
+        }
+        catch (...)
+        {
+            LOG_WARNING(log, "Failed to finish all tunnels");
+        }
+    }
     void writeErrToAllTunnel(const String & e)
     {
         try
