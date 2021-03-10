@@ -86,7 +86,17 @@ private:
         const std::string & data = result.data();
 
         resp = std::make_shared<tipb::SelectResponse>();
-        resp->ParseFromString(data);
+        if (!resp->ParseFromString(data))
+        {
+            LOG_WARNING(log, "coprocessor client failed to parse response data.");
+            throw Exception("coprocessor client failed to parse response data.");
+        }
+
+        if (resp->has_error())
+        {
+            LOG_WARNING(log, "coprocessor client meets error: " << resp->error().DebugString());
+            throw Exception(resp->error().DebugString());
+        }
         int chunks_size = resp->chunks_size();
 
         if (chunks_size == 0)
