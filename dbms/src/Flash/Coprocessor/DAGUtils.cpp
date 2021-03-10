@@ -776,14 +776,15 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::Minute, "cast"},
     //{tipb::ScalarFuncSig::Second, "cast"},
     //{tipb::ScalarFuncSig::MicroSecond, "cast"},
+    {tipb::ScalarFuncSig::Year, "toYear"},
     {tipb::ScalarFuncSig::Month, "toMonth"},
+    {tipb::ScalarFuncSig::DayOfMonth, "toDayOfMonth"},
     //{tipb::ScalarFuncSig::MonthName, "cast"},
 
     //{tipb::ScalarFuncSig::NowWithArg, "cast"},
     //{tipb::ScalarFuncSig::NowWithoutArg, "cast"},
 
     //{tipb::ScalarFuncSig::DayName, "cast"},
-    //{tipb::ScalarFuncSig::DayOfMonth, "cast"},
     //{tipb::ScalarFuncSig::DayOfWeek, "cast"},
     //{tipb::ScalarFuncSig::DayOfYear, "cast"},
 
@@ -792,7 +793,6 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::WeekDay, "cast"},
     //{tipb::ScalarFuncSig::WeekOfYear, "cast"},
 
-    //{tipb::ScalarFuncSig::Year, "cast"},
     //{tipb::ScalarFuncSig::YearWeekWithMode, "cast"},
     //{tipb::ScalarFuncSig::YearWeekWithoutMode, "cast"},
 
