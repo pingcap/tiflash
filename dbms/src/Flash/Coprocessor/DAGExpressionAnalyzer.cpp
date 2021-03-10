@@ -9,7 +9,6 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionFactory.h>
-#include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsConditional.h>
 #include <Functions/FunctionsTiDBConversion.h>
 #include <Interpreters/Context.h>
@@ -285,7 +284,7 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
     {
         String agg_func_name = getAggFunctionName(expr);
         const String agg_func_name_lowercase = Poco::toLower(agg_func_name);
-        if (endsWith(agg_func_name, "Distinct") && agg_func_name_lowercase == "countdistinct")
+        if (expr.has_distinct() && agg_func_name_lowercase == "countdistinct")
         {
             agg_func_name = settings.count_distinct_implementation;
         }

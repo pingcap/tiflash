@@ -23,7 +23,7 @@ Field decodeLiteral(const tipb::Expr & expr);
 bool isFunctionExpr(const tipb::Expr & expr);
 bool isAggFunctionExpr(const tipb::Expr & expr);
 const String & getFunctionName(const tipb::Expr & expr);
-String getAggFunctionName(const tipb::Expr & expr);
+const String & getAggFunctionName(const tipb::Expr & expr);
 bool isColumnExpr(const tipb::Expr & expr);
 String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col);
 const String & getTypeName(const tipb::Expr & expr);
@@ -34,6 +34,7 @@ void constructInt64LiteralTiExpr(tipb::Expr & expr, Int64 value);
 void constructDateTimeLiteralTiExpr(tipb::Expr & expr, UInt64 packed_value);
 void constructNULLLiteralTiExpr(tipb::Expr & expr);
 extern std::unordered_map<tipb::ExprType, String> agg_func_map;
+extern std::unordered_map<tipb::ExprType, String> distinct_agg_func_map;
 extern std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map;
 extern const Int8 VAR_SIZE;
 

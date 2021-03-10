@@ -29,14 +29,22 @@ const Int8 VAR_SIZE = 0;
 
 bool isFunctionExpr(const tipb::Expr & expr) { return expr.tp() == tipb::ExprType::ScalarFunc || isAggFunctionExpr(expr); }
 
-String getAggFunctionName(const tipb::Expr & expr)
+const String & getAggFunctionName(const tipb::Expr & expr)
 {
-    if (agg_func_map.find(expr.tp()) == agg_func_map.end())
+    if (agg_func_map.find(expr.tp()) != agg_func_map.end())
     {
-        throw TiFlashException(tipb::ExprType_Name(expr.tp()) + " is not supported.", Errors::Coprocessor::Unimplemented);
+        return agg_func_map[expr.tp()];
     }
 
-    return expr.has_distinct() ? agg_func_map[expr.tp()] + "Distinct" : agg_func_map[expr.tp()];
+    if (distinct_agg_func_map.find(expr.tp()) != distinct_agg_func_map.end())
+    {
+        return distinct_agg_func_map[expr.tp()];
+    }
+
+    const auto errmsg = tipb::ExprType_Name(expr.tp())
+        + "(has_distinct=" + (expr.has_distinct() ? "true" : "false") + ")"
+        + " is not supported.";
+    throw TiFlashException(errmsg, Errors::Coprocessor::Unimplemented);
 }
 
 const String & getFunctionName(const tipb::Expr & expr)
@@ -450,6 +458,10 @@ std::unordered_map<tipb::ExprType, String> agg_func_map({
     //{tipb::ExprType::Variance, ""},
     //{tipb::ExprType::JsonArrayAgg, ""},
     //{tipb::ExprType::JsonObjectAgg, ""},
+});
+
+std::unordered_map<tipb::ExprType, String> distinct_agg_func_map({
+    {tipb::ExprType::Count, "countDistinct"},
 });
 
 std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
