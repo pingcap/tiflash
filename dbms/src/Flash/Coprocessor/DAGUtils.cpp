@@ -743,7 +743,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
 
     {tipb::ScalarFuncSig::DateFormatSig, "dateFormat"},
     //{tipb::ScalarFuncSig::DateLiteral, "cast"},
-    //{tipb::ScalarFuncSig::DateDiff, "cast"},
+    {tipb::ScalarFuncSig::DateDiff, "tidbDateDiff"},
     //{tipb::ScalarFuncSig::NullTimeDiff, "cast"},
     //{tipb::ScalarFuncSig::TimeStringTimeDiff, "cast"},
     //{tipb::ScalarFuncSig::DurationDurationTimeDiff, "cast"},
