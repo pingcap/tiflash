@@ -51,11 +51,7 @@ const String & getFunctionName(const tipb::Expr & expr)
 {
     if (isAggFunctionExpr(expr))
     {
-        if (agg_func_map.find(expr.tp()) == agg_func_map.end())
-        {
-            throw TiFlashException(tipb::ExprType_Name(expr.tp()) + " is not supported.", Errors::Coprocessor::Unimplemented);
-        }
-        return agg_func_map[expr.tp()];
+        return getAggFunctionName(expr);
     }
     else
     {
@@ -121,11 +117,7 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
         case tipb::ExprType::Max:
         case tipb::ExprType::First:
         case tipb::ExprType::ApproxCountDistinct:
-            if (agg_func_map.find(expr.tp()) == agg_func_map.end())
-            {
-                throw TiFlashException(tipb::ExprType_Name(expr.tp()) + " not supported", Errors::Coprocessor::Unimplemented);
-            }
-            func_name = agg_func_map.find(expr.tp())->second;
+            func_name = getAggFunctionName(expr);
             break;
         case tipb::ExprType::ScalarFunc:
             if (scalar_func_map.find(expr.sig()) == scalar_func_map.end())
