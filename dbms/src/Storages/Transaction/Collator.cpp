@@ -291,6 +291,120 @@ private:
     friend class Pattern<GeneralCICollator>;
 };
 
+namespace UnicodeCI
+{
+extern const std::array<uint64_t, 256 * 256 + 1> weight_lut;
+extern const std::array<Long_rune, 22> weight_lut_long;
+const uint64_t long_weight_rune = 0xFFFD;
+} // namespace UnicodeCI
+
+class UnicodeCICollator : public ITiDBCollator
+{
+public:
+    UnicodeCICollator(int32_t id) : ITiDBCollator(id) {}
+
+    int compare(const char * s1, size_t length1, const char * s2, size_t length2) const override
+    {
+        auto v1 = rtrim(s1, length1);
+        auto v2 = rtrim(s2, length2);
+
+        size_t offset1 = 0, offset2 = 0;
+        while (offset1 < v1.length() && offset2 < v2.length())
+        {
+            auto c1 = decodeChar(s1, offset1);
+            auto c2 = decodeChar(s2, offset2);
+            auto sk1 = weight(c1);
+            auto sk2 = weight(c2);
+            auto cmp = sk1 - sk2;
+            if (cmp != 0)
+                return signum(cmp);
+        }
+    }
+
+    StringRef sortKey(const char * s, size_t length, std::string & container) const override
+    {
+        auto v = rtrim(s, length);
+        if (length * sizeof(WeightType) > container.size())
+            container.resize(length * sizeof(WeightType));
+        size_t offset = 0;
+        size_t total_size = 0;
+
+        uint64_t f = 0, s = 0;
+
+        while (offset < v.length())
+        {
+            auto c = decodeChar(s, offset);
+            f = weight_lut[c];
+            if (f == long_weight_rune) {
+                auto w = weight_lut_long(c);
+                f = w.first;
+                s = w.second;
+            }
+
+            while(f != 0) {
+                container[total_size++] = char((f >> 8)&0xFF);
+                f = f >> 8;
+            }
+
+            while(s != 0) {
+                container[total_size++] = char((s >> 8)&0xFF);
+                s = s >> 8;
+            }
+        }
+
+        return StringRef(container.data(), total_size);
+    }
+
+    std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<UnicodeCICollator>>(); }
+
+    const std::string & getLocale() const override { return name; }
+
+private:
+    const std::string name = "UnicodeCI";
+
+private:
+    static inline CharType decodeChar(const char * s, size_t & offset)
+    {
+        return decodeUtf8Char(s, offset);
+    }
+
+    static inline bool RegexEq(CharType a, CharType b) {
+        
+        return weight(a) == weight(b);
+    }
+
+    static inline long_weight weight_lut_long(Rune r) {
+        switch (r) {
+            case 0x321D: return weight_lut_long[0];
+            case 0x321E: return weight_lut_long[1];
+            case 0x327C: return weight_lut_long[2];
+            case 0x3307: return weight_lut_long[3];
+            case 0x3315: return weight_lut_long[4];
+            case 0x3316: return weight_lut_long[5];
+            case 0x3317: return weight_lut_long[6];
+            case 0x3319: return weight_lut_long[7];
+            case 0x331A: return weight_lut_long[8];
+            case 0x3320: return weight_lut_long[9];
+            case 0x332B: return weight_lut_long[10];
+            case 0x332E: return weight_lut_long[11];
+            case 0x3332: return weight_lut_long[12];
+            case 0x3334: return weight_lut_long[13];
+            case 0x3336: return weight_lut_long[14];
+            case 0x3347: return weight_lut_long[15];
+            case 0x334A: return weight_lut_long[16];
+            case 0x3356: return weight_lut_long[17];
+            case 0x337F: return weight_lut_long[18];
+            case 0x33AE: return weight_lut_long[19];
+            case 0x33AF: return weight_lut_long[20];
+            case 0xFDFB: return weight_lut_long[21];
+            default:
+                return weight_lut_long[22];
+        }
+    }
+
+    friend class Pattern<UnicodeCICollator>;
+};
+
 std::unique_ptr<ITiDBCollator> ITiDBCollator::getCollator(int32_t id)
 {
     switch (id)
