@@ -320,47 +320,73 @@ public:
         auto v2 = rtrim(s2, length2);
 
         size_t offset1 = 0, offset2 = 0;
+        size_t v1_length = v1.length(), v2_length = v2.length();
+
+        // since the longest weight of character in unicode ci has 128bit, we divide it to 2 uint64.
+        // The xx_first stand for the first 64bit, and the xx_second stand for the second 64bit.
+        // If xx_first == 0, there is always has s1_second == 0
+        uint64_t s1_first = 0, s1_second = 0;
+        uint64_t s2_first = 0, s2_second = 0;
+
+        while (true) {
+            weight(s1_first, s1_second, offset1, v1_length, s1);
+            weight(s2_first, s2_second, offset2, v2_length, s2);
+
+            if (s1_first == 0 || s2_first == 0) {
+                return signum(s1_first-s2_first);
+            }
+
+            if (s1_first == s2_first) {
+                s1_first = 0;
+                s2_first = 0;
+                continue;
+            }
+
+            while (s1_first != 0 && s2_first != 0) {
+                if ((s1_first^s2_first)&0xFFFF == 0) {
+                    s1_first >>= 16;
+                    s2_first >>= 16;
+                }
+                else
+                {
+                    return signum(s1_first&0xFFFF-s2_first&0xFFFF);
+                }
+            }
+        }
+
         while (offset1 < v1.length() && offset2 < v2.length())
         {
             auto c1 = decodeChar(s1, offset1);
             auto c2 = decodeChar(s2, offset2);
+
+
             auto sk1 = weight(c1);
             auto sk2 = weight(c2);
             auto cmp = sk1 - sk2;
             if (cmp != 0)
                 return signum(cmp);
         }
+
+        return (offset1 < v1.length()) - (offset2 < v2.length());
     }
 
     StringRef sortKey(const char * s, size_t length, std::string & container) const override
     {
         auto v = rtrim(s, length);
-        if (length * sizeof(WeightType) > container.size())
+        // every char have 8 uint16 at most.
+        if (8 * length * sizeof(uint16_t) > container.size())
             container.resize(length * sizeof(WeightType));
         size_t offset = 0;
         size_t total_size = 0;
+        size_t v_length = v.length();
 
         uint64_t f = 0, s = 0;
 
-        while (offset < v.length())
+        while (offset < v_length)
         {
-            auto c = decodeChar(s, offset);
-            f = weight_lut[c];
-            if (f == long_weight_rune) {
-                auto w = weight_lut_long(c);
-                f = w.first;
-                s = w.second;
-            }
-
-            while(f != 0) {
-                container[total_size++] = char((f >> 8)&0xFF);
-                f = f >> 8;
-            }
-
-            while(s != 0) {
-                container[total_size++] = char((s >> 8)&0xFF);
-                s = s >> 8;
-            }
+            weight(f, s, offset, v_length, s);
+            write_result(f, container, total_size);
+            write_result(s, container, total_size);
         }
 
         return StringRef(container.data(), total_size);
@@ -374,14 +400,38 @@ private:
     const std::string name = "UnicodeCI";
 
 private:
+    using CharType = Rune;
+
     static inline CharType decodeChar(const char * s, size_t & offset)
     {
         return decodeUtf8Char(s, offset);
     }
 
+    static inline void write_result(uint64_t & w, std::string & container, size_t & total_size) {
+        while(w != 0) {
+            container[total_size++] = char(w >> 8);
+            container[total_size++] = char(w);
+            w >>= 16;
+        }
+    }
+
     static inline bool RegexEq(CharType a, CharType b) {
-        
-        return weight(a) == weight(b);
+        if (a > 0xFFFF || b > 0xFFFF) {
+            return a == b;
+        }
+
+        auto a_weight = weight_lut[a];
+        auto b_weight = weight_lut[b];
+
+        if (a_weight != b_weight) {
+            return false;
+        }
+
+        if (a_weight == long_weight_rune) {
+            return a == b;
+        }
+
+        return true;
     }
 
     static inline long_weight weight_lut_long(Rune r) {
@@ -413,6 +463,36 @@ private:
         }
     }
 
+    static inline void weight(uint64_t & first, uint64_t & second, size_t & offset, size_t length, const char * s) {
+        if (first == 0) {
+            if (second == 0) {
+                while (offset < length) {
+                    auto r = decodeChar(s, offset);
+                    auto w = weight_lut[r];
+                    // skip 0 weight char
+                    if (w == 0) {
+                        continue;
+                    }
+                    if (w == long_weight_rune) {
+                        auto long_weight = weight_lut_long(r);
+                        first = long_weight.first;
+                        second = long_weight.second;
+                    }
+                    else
+                    {
+                        first = w;
+                    }
+                    break;
+                }
+            }
+            else
+            {
+                first = second;
+                second = 0;
+            }
+        }
+    }
+
     friend class Pattern<UnicodeCICollator>;
 };
 
@@ -431,6 +511,9 @@ std::unique_ptr<ITiDBCollator> ITiDBCollator::getCollator(int32_t id)
         case ITiDBCollator::UTF8_GENERAL_CI:
         case ITiDBCollator::UTF8MB4_GENERAL_CI:
             return std::make_unique<GeneralCICollator>(id);
+        case ITiDBCollator::UTF8_UNICODE_CI:
+        case ITiDBCollator::UTF8MB4_UNICODE_CI:
+            return std::make_unique<UnicodeCICollator>(id);
         default:
             throw DB::Exception(
                 std::string(__PRETTY_FUNCTION__) + ": invalid collation ID: " + std::to_string(id), DB::ErrorCodes::LOGICAL_ERROR);
@@ -447,6 +530,8 @@ std::unique_ptr<ITiDBCollator> ITiDBCollator::getCollator(const std::string & na
         {"utf8_bin", ITiDBCollator::UTF8_BIN},
         {"utf8_general_ci", ITiDBCollator::UTF8_GENERAL_CI},
         {"utf8mb4_general_ci", ITiDBCollator::UTF8MB4_GENERAL_CI},
+        {"utf8_unicode_ci", ITiDBCollator::UTF8_UNICODE_CI},
+        {"utf8mb4_unicode_ci", ITiDBCollator::UTF8MB4_UNICODE_CI},
     });
     auto it = collator_name_map.find(Poco::toLower(name));
     if (it == collator_name_map.end())
