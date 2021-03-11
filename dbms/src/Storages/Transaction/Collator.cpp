@@ -29,36 +29,36 @@ int signum(T val)
     return (0 < val) - (val < 0);
 }
 
-using CharType = int32_t;
-using StringType = std::vector<CharType>;
+using Rune = int32_t;
+using StringType = std::vector<Rune>;
 constexpr uint8_t b2_mask = 0x1F;
 constexpr uint8_t b3_mask = 0x0F;
 constexpr uint8_t b4_mask = 0x07;
 constexpr uint8_t mb_mask = 0x3F;
-inline CharType decodeUtf8Char(const char * s, size_t & offset)
+inline Rune decodeUtf8Char(const char * s, size_t & offset)
 {
     uint8_t b0 = s[offset];
     if (b0 < 0x80)
     {
-        auto c = static_cast<CharType>(b0);
+        auto c = static_cast<Rune>(b0);
         offset += 1;
         return c;
     }
     if (b0 < 0xE0)
     {
-        auto c = static_cast<CharType>(b0 & b2_mask) << 6 | static_cast<CharType>(s[1 + offset] & mb_mask);
+        auto c = static_cast<Rune>(b0 & b2_mask) << 6 | static_cast<Rune>(s[1 + offset] & mb_mask);
         offset += 2;
         return c;
     }
     if (b0 < 0xF0)
     {
-        auto c = static_cast<CharType>(b0 & b3_mask) << 12 | static_cast<CharType>(s[1 + offset] & mb_mask) << 6
-                 | static_cast<CharType>(s[2 + offset] & mb_mask);
+        auto c = static_cast<Rune>(b0 & b3_mask) << 12 | static_cast<Rune>(s[1 + offset] & mb_mask) << 6
+                 | static_cast<Rune>(s[2 + offset] & mb_mask);
         offset += 3;
         return c;
     }
-    auto c = static_cast<CharType>(b0 & b4_mask) << 18 | static_cast<CharType>(s[1 + offset] & mb_mask) << 12
-             | static_cast<CharType>(s[2 + offset] & mb_mask) << 6 | static_cast<CharType>(s[3 + offset] & mb_mask);
+    auto c = static_cast<Rune>(b0 & b4_mask) << 18 | static_cast<Rune>(s[1 + offset] & mb_mask) << 12
+             | static_cast<Rune>(s[2 + offset] & mb_mask) << 6 | static_cast<Rune>(s[3 + offset] & mb_mask);
     offset += 4;
     return c;
 }
@@ -69,11 +69,11 @@ class Pattern : public ITiDBCollator::IPattern
 public:
     void compile(const std::string & pattern, char escape) override
     {
-        weights.clear();
+        chars.clear();
         match_types.clear();
 
-        weights.reserve(pattern.length() * sizeof(typename Collator::WeightType));
-        match_types.reserve(pattern.length() * sizeof(typename Collator::WeightType));
+        chars.reserve(pattern.length() * sizeof(typename Collator::CharType));
+        match_types.reserve(pattern.length() * sizeof(typename Pattern::MatchType));
 
         size_t offset = 0;
         while (offset < pattern.length())
@@ -105,7 +105,7 @@ public:
             {
                 tp = MatchType::Match;
             }
-            weights.push_back(Collator::weight(c));
+            chars.push_back(c);
             match_types.push_back(tp);
         }
     }
@@ -114,14 +114,14 @@ public:
     {
         size_t s_offset = 0, next_s_offset = 0, tmp_s_offset = 0;
         size_t p_idx = 0, next_p_idx = 0;
-        while (p_idx < weights.size() || s_offset < length)
+        while (p_idx < chars.size() || s_offset < length)
         {
-            if (p_idx < weights.size())
+            if (p_idx < chars.size())
             {
                 switch (match_types[p_idx])
                 {
                     case Match:
-                        if (s_offset < length && Collator::weight(Collator::decodeChar(s, tmp_s_offset = s_offset)) == weights[p_idx])
+                        if (s_offset < length && Collator::RegexEq(Collator::decodeChar(s, tmp_s_offset = s_offset), chars[p_idx]))
                         {
                             p_idx++;
                             s_offset = tmp_s_offset;
@@ -155,7 +155,7 @@ public:
     }
 
 private:
-    std::vector<typename Collator::WeightType> weights;
+    std::vector<typename Collator::WeightType> chars;
 
     enum MatchType
     {
@@ -201,8 +201,9 @@ private:
 
 private:
     using WeightType = T;
+    using CharType = T;
 
-    static inline WeightType decodeChar(const char * s, size_t & offset) {
+    static inline CharType decodeChar(const char * s, size_t & offset) {
         if constexpr (std::is_same_v<T, char>) {
             return s[offset++];
         }
@@ -211,7 +212,11 @@ private:
         }
     }
 
-    static inline WeightType weight(WeightType c) { return c; }
+    static inline WeightType weight(CharType c) { return c; }
+
+    static inline bool RegexEq(CharType a, CharType b) {
+        return weight(a) == weight(b);
+    }
 
     friend class Pattern<BinCollator>;
 };
@@ -274,18 +279,24 @@ private:
     const std::string name = "GeneralCI";
 
 private:
+    using WeightType = GeneralCI::WeightType;
+    using CharType = Rune;
+
     static inline CharType decodeChar(const char * s, size_t & offset)
     {
         return decodeUtf8Char(s, offset);
     }
 
-    using WeightType = GeneralCI::WeightType;
     static inline WeightType weight(CharType c)
     {
         if (c > 0xFFFF)
             return 0xFFFD;
         return GeneralCI::weight_lut[c & 0xFFFF];
         //return !!(c >> 16) * 0xFFFD + (1 - !!(c >> 16)) * GeneralCI::weight_lut[c & 0xFFFF];
+    }
+
+    static inline bool RegexEq(CharType a, CharType b) {
+        return weight(a) == weight(b);
     }
 
     friend class Pattern<GeneralCICollator>;
@@ -416,7 +427,7 @@ std::unique_ptr<ITiDBCollator> ITiDBCollator::getCollator(int32_t id)
             return std::make_unique<BinCollator<char, true>>(id);
         case ITiDBCollator::UTF8MB4_BIN:
         case ITiDBCollator::UTF8_BIN:
-            return std::make_unique<BinCollator<CharType, true>>(id);
+            return std::make_unique<BinCollator<Rune, true>>(id);
         case ITiDBCollator::UTF8_GENERAL_CI:
         case ITiDBCollator::UTF8MB4_GENERAL_CI:
             return std::make_unique<GeneralCICollator>(id);

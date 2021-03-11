@@ -56,10 +56,12 @@ struct Pipeline
 
 struct AnalysisResult
 {
+    bool need_timezone_cast_after_tablescan = false;
     bool has_where = false;
     bool need_aggregate = false;
     bool has_order_by = false;
 
+    ExpressionActionsPtr timezone_cast;
     ExpressionActionsPtr before_where;
     ExpressionActionsPtr before_aggregation;
     ExpressionActionsPtr before_order_and_select;
@@ -116,7 +118,7 @@ private:
     SortDescription getSortDescription(std::vector<NameAndTypePair> & order_columns);
     AnalysisResult analyzeExpressions();
     void recordProfileStreams(Pipeline & pipeline, const String & key);
-    bool addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, Pipeline & pipeline);
+    bool addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, ExpressionActionsChain & chain);
 
 private:
     void executeRemoteQueryImpl(Pipeline & pipeline, const std::vector<pingcap::coprocessor::KeyRange> & cop_key_ranges,
@@ -145,6 +147,7 @@ private:
     const DAGQuerySource & dag;
     std::vector<SubqueriesForSets> & subqueriesForSets;
     const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & exchange_receiver_map;
+    std::vector<bool> timestamp_column_flag_for_tablescan;
 
     Poco::Logger * log;
 };

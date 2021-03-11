@@ -52,12 +52,12 @@ class EtcdClient:
 
     def __init__(self, host, port):
         self.logger = logging.getLogger('etcd.client')
+        kwargs = {"timeout": conf.flash_conf.max_time_out}
         if conf.flash_conf.enable_tls:
-            self.client = etcd3.client(host=host, port=port, timeout=conf.flash_conf.update_rule_interval,
-                                       ca_cert=conf.flash_conf.ca_path, cert_key=conf.flash_conf.key_path,
-                                       cert_cert=conf.flash_conf.cert_path)
-        else:
-            self.client = etcd3.client(host=host, port=port, timeout=conf.flash_conf.update_rule_interval)
+            kwargs["ca_cert"] = conf.flash_conf.ca_path
+            kwargs["cert_key"] = conf.flash_conf.key_path
+            kwargs["cert_cert"] = conf.flash_conf.cert_path
+        self.client = etcd3.client(host=host, port=port, **kwargs)
 
 
 class PDClient:

@@ -9,7 +9,6 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionFactory.h>
-#include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsConditional.h>
 #include <Functions/FunctionsTiDBConversion.h>
 #include <Interpreters/Context.h>
@@ -85,8 +84,39 @@ static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr
     const String & func_name = getFunctionName(expr);
     Names argument_names;
     String key_name = analyzer->getActions(expr.children(0), actions);
+    // TiDB guarantees that arguments of IN function have same data type family but doesn't guarantees that their data types
+    // are completely the same. For example, in an expression like `col_decimal_10_0 IN (1.1, 2.34)`, `1.1` and `2.34` are
+    // both decimal type but `1.1`'s flen and decimal are 2 and 1 while that of `2.34` are 3 and 2.
+    // We should convert them to a least super data type.
+    DataTypes argument_types;
+    const Block & sample_block = actions->getSampleBlock();
+    argument_types.push_back(sample_block.getByName(key_name).type);
+    for (int i = 1; i < expr.children_size(); ++i)
+    {
+        auto & child = expr.children(i);
+        if (!isLiteralExpr(child))
+        {
+            // Non-literal expression will be rewritten with `OR`, for example:
+            // `a IN (1, 2, b)` will be rewritten to `a IN (1, 2) OR a = b`
+            continue;
+        }
+        DataTypePtr type = getDataTypeByFieldType(child.field_type());
+        if (type->isDecimal())
+        {
+            // See https://github.com/pingcap/tics/issues/1425
+            Field value = decodeLiteral(child);
+            type = applyVisitor(FieldToDataType(), value);
+        }
+        argument_types.push_back(type);
+    }
+    DataTypePtr resolved_type = getLeastSupertype(argument_types);
+    if (!removeNullable(resolved_type)->equals(*removeNullable(argument_types[0])))
+    {
+        // Need cast left argument
+        key_name = analyzer->appendCast(resolved_type, actions, key_name);
+    }
+    analyzer->makeExplicitSet(expr, sample_block, false, key_name);
     argument_names.push_back(key_name);
-    analyzer->makeExplicitSet(expr, actions->getSampleBlock(), false, key_name);
     const DAGSetPtr & set = analyzer->getPreparedSets()[&expr];
 
     ColumnWithTypeAndName column;
@@ -252,7 +282,13 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
 
     for (const tipb::Expr & expr : agg.agg_func())
     {
-        const String & agg_func_name = getAggFunctionName(expr);
+        String agg_func_name = getAggFunctionName(expr);
+        const String agg_func_name_lowercase = Poco::toLower(agg_func_name);
+        if (expr.has_distinct() && agg_func_name_lowercase == "countdistinct")
+        {
+            agg_func_name = settings.count_distinct_implementation;
+        }
+
         AggregateDescription aggregate;
         DataTypes types(expr.children_size());
         aggregate.argument_names.resize(expr.children_size());
@@ -551,6 +587,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(ExpressionActionsChain &
     bool ret = false;
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsPtr actions = chain.getLastActions();
+    std::unordered_map<String, Int32> key_names_map;
 
     for (int i = 0; i < keys.size(); i++)
     {
@@ -578,11 +615,40 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(ExpressionActionsChain &
             /// So in order to make the join compatible with TiDB, if the join key is a columnRef, for inner/left
             /// join, add a new key as right join key, for right join, add a new key as left join key
             String updated_key_name = (left ? "_l_k_" : "_r_k_") + key_name;
+            auto it = key_names_map.find(updated_key_name);
+            while (it != key_names_map.end())
+            {
+                /// duplicated key names, in Clickhouse join, it is assumed that here is no duplicated
+                /// key names, so just copy a key with new name
+                updated_key_name.append("_").append(std::to_string(it->second));
+                it->second++;
+                it = key_names_map.find(updated_key_name);
+            }
             actions->add(ExpressionAction::copyColumn(key_name, updated_key_name));
             key_name = updated_key_name;
             has_actions = true;
         }
+        else
+        {
+            String updated_key_name = key_name;
+            auto it = key_names_map.find(updated_key_name);
+            while (it != key_names_map.end())
+            {
+                /// duplicated key names, in Clickhouse join, it is assumed that here is no duplicated
+                /// key names, so just copy a key with new name
+                updated_key_name.append("_").append(std::to_string(it->second));
+                it->second++;
+                it = key_names_map.find(updated_key_name);
+            }
+            if (key_name != updated_key_name)
+            {
+                actions->add(ExpressionAction::copyColumn(key_name, updated_key_name));
+                key_name = updated_key_name;
+                has_actions = true;
+            }
+        }
         key_names.push_back(key_name);
+        key_names_map.try_emplace(key_name, 1);
         ret |= has_actions;
     }
 
@@ -807,35 +873,6 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(
     return expr_name;
 }
 
-void DAGExpressionAnalyzer::makeExplicitSetForIndex(const tipb::Expr & expr, const ManageableStoragePtr & storage)
-{
-    for (auto & child : expr.children())
-    {
-        makeExplicitSetForIndex(child, storage);
-    }
-    if (expr.tp() != tipb::ExprType::ScalarFunc)
-    {
-        return;
-    }
-    const String & func_name = getFunctionName(expr);
-    // only support col_name in (value_list)
-    if (functionIsInOrGlobalInOperator(func_name) && expr.children(0).tp() == tipb::ExprType::ColumnRef && !prepared_sets.count(&expr))
-    {
-        NamesAndTypesList column_list;
-        for (const auto & col : getCurrentInputColumns())
-        {
-            column_list.emplace_back(col.name, col.type);
-        }
-        ExpressionActionsPtr temp_actions = std::make_shared<ExpressionActions>(column_list, settings);
-        String name = getActions(expr.children(0), temp_actions);
-        ASTPtr name_ast = std::make_shared<ASTIdentifier>(name);
-        if (storage->mayBenefitFromIndexForIn(name_ast))
-        {
-            makeExplicitSet(expr, temp_actions->getSampleBlock(), true, name);
-        }
-    }
-}
-
 void DAGExpressionAnalyzer::makeExplicitSet(
     const tipb::Expr & expr, const Block & sample_block, bool create_ordered_set, const String & left_arg_name)
 {
@@ -886,6 +923,16 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
             column.name = ret;
             column.type = target_type;
             actions->add(ExpressionAction::addColumn(column));
+        }
+        if (expr.field_type().tp() == TiDB::TypeTimestamp && !context.getTimezoneInfo().is_utc_timezone)
+        {
+            /// append timezone cast for timestamp literal
+            tipb::Expr tz_expr;
+            constructTZExpr(tz_expr, context.getTimezoneInfo(), true);
+            String func_name = context.getTimezoneInfo().is_name_based ? "ConvertTimeZoneFromUTC" : "ConvertTimeZoneByOffset";
+            String tz_col = getActions(tz_expr, actions);
+            String casted_name = appendTimeZoneCast(tz_col, ret, func_name, actions);
+            ret = casted_name;
         }
     }
     else if (isColumnExpr(expr))
