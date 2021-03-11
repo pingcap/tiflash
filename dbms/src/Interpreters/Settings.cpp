@@ -101,9 +101,12 @@ bool Settings::tryGet(const String & name, String & value) const
 void Settings::setProfile(const String & profile_name, Poco::Util::AbstractConfiguration & config)
 {
     String elem = "profiles." + profile_name;
-
     if (!config.has(elem))
-        throw Exception("There is no profile '" + profile_name + "' in configuration file.", ErrorCodes::THERE_IS_NO_PROFILE);
+    {
+        // Allow no "profiles.*" configurations for TiFlash
+        // throw Exception("There is no profile '" + profile_name + "' in configuration file.", ErrorCodes::THERE_IS_NO_PROFILE);
+        return;
+    }
 
     Poco::Util::AbstractConfiguration::Keys config_keys;
     config.keys(elem, config_keys);
