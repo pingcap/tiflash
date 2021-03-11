@@ -324,12 +324,16 @@ void Quotas::loadFromConfig(Poco::Util::AbstractConfiguration & config)
             cont.erase(it++);
     }
 
+    // Load quotas from current config
     for (Poco::Util::AbstractConfiguration::Keys::const_iterator it = config_keys.begin(); it != config_keys.end(); ++it)
     {
         if (!cont.count(*it))
             cont.try_emplace(*it);
         cont[*it].loadFromConfig("quotas." + *it, *it, config, rng);
     }
+    // Create a "default" if not exists
+    if (!cont.count(QuotaForInterval::DEFAULT_QUOTA_NAME))
+        cont.try_emplace(QuotaForInterval::DEFAULT_QUOTA_NAME);
 }
 
 QuotaForIntervalsPtr Quotas::get(const String & name, const String & quota_key, const String & user_name, const Poco::Net::IPAddress & ip)

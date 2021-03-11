@@ -627,33 +627,68 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t co
         switch (lit->value.getType())
         {
             case Field::Types::Which::Null:
+            {
                 expr->set_tp(tipb::Null);
+                auto * ft = expr->mutable_field_type();
+                ft->set_tp(TiDB::TypeNull);
+                ft->set_collate(collator_id);
                 // Null literal expr doesn't need value.
                 break;
+            }
             case Field::Types::Which::UInt64:
+            {
                 expr->set_tp(tipb::Uint64);
+                auto * ft = expr->mutable_field_type();
+                ft->set_tp(TiDB::TypeLongLong);
+                ft->set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);
+                ft->set_collate(collator_id);
                 encodeDAGUInt64(lit->value.get<UInt64>(), ss);
                 break;
+            }
             case Field::Types::Which::Int64:
+            {
                 expr->set_tp(tipb::Int64);
+                auto * ft = expr->mutable_field_type();
+                ft->set_tp(TiDB::TypeLongLong);
+                ft->set_flag(TiDB::ColumnFlagNotNull);
+                ft->set_collate(collator_id);
                 encodeDAGInt64(lit->value.get<Int64>(), ss);
                 break;
+            }
             case Field::Types::Which::Float64:
+            {
                 expr->set_tp(tipb::Float64);
+                auto * ft = expr->mutable_field_type();
+                ft->set_tp(TiDB::TypeFloat);
+                ft->set_flag(TiDB::ColumnFlagNotNull);
+                ft->set_collate(collator_id);
                 encodeDAGFloat64(lit->value.get<Float64>(), ss);
                 break;
+            }
             case Field::Types::Which::Decimal32:
             case Field::Types::Which::Decimal64:
             case Field::Types::Which::Decimal128:
             case Field::Types::Which::Decimal256:
+            {
                 expr->set_tp(tipb::MysqlDecimal);
+                auto * ft = expr->mutable_field_type();
+                ft->set_tp(TiDB::TypeNewDecimal);
+                ft->set_flag(TiDB::ColumnFlagNotNull);
+                ft->set_collate(collator_id);
                 encodeDAGDecimal(lit->value, ss);
                 break;
+            }
             case Field::Types::Which::String:
+            {
                 expr->set_tp(tipb::String);
+                auto * ft = expr->mutable_field_type();
+                ft->set_tp(TiDB::TypeString);
+                ft->set_flag(TiDB::ColumnFlagNotNull);
+                ft->set_collate(collator_id);
                 // TODO: Align with TiDB.
                 encodeDAGBytes(lit->value.get<String>(), ss);
                 break;
+            }
             default:
                 throw Exception(String("Unsupported literal type: ") + lit->value.getTypeName(), ErrorCodes::LOGICAL_ERROR);
         }
