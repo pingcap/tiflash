@@ -32,7 +32,8 @@ protected:
     }
 };
 
-TEST_F(TestDateTimeExtract, ExtractFromString)
+// Disabled for now, since we haven't supported ExtractFromString yet
+TEST_F(TestDateTimeExtract, DISABLED_ExtractFromString)
 try
 {
     Context context = *ctx;
