@@ -2,6 +2,7 @@
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/ClickHouseRevision.h>
+#include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Macros.h>
 #include <Common/RedactHelpers.h>
@@ -37,6 +38,7 @@
 #include <Poco/Timestamp.h>
 #include <RaftStoreProxyFFI/VersionCheck.h>
 #include <Server/StorageConfigParser.h>
+#include <Server/UserConfigParser.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/System/attachSystemTables.h>
@@ -61,7 +63,6 @@
 
 #include "ClusterManagerService.h"
 #include "HTTPHandlerFactory.h"
-#include "ImmutableConfigReloader.h"
 #include "MetricsPrometheus.h"
 #include "MetricsTransmitter.h"
 #include "StatusFile.h"
@@ -687,53 +688,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         /* already_loaded = */ true);
 
     /// Initialize users config reloader.
-    std::string users_config_path = config().getString("users_config", String(1, '\0'));
-    bool use_default_users_config = true;
-    // if `users_config` is set empty, use default immutable users config.
-    if (users_config_path.empty())
-        use_default_users_config = true;
-    else
-    {
-        if (0 == users_config_path[0])
-        {
-            // if `profiles` exits in config file, use it as user config file.
-            if (config().has("profiles"))
-            {
-                use_default_users_config = false;
-                users_config_path = config_path;
-            }
-            else
-                use_default_users_config = true;
-        }
-        else
-        {
-            use_default_users_config = false;
-        }
-    }
-    if (!use_default_users_config)
-        LOG_INFO(log, "Set users config file to: " << users_config_path);
-    else
-        LOG_INFO(log, "Use default users config");
-
-    /// If path to users' config isn't absolute, try guess its root (current) dir.
-    /// At first, try to find it in dir of main config, after will use current dir.
-    if (!use_default_users_config)
-    {
-        if (users_config_path[0] != '/')
-        {
-            std::string config_dir = Poco::Path(config_path).parent().toString();
-            if (Poco::File(config_dir + users_config_path).exists())
-                users_config_path = config_dir + users_config_path;
-        }
-    }
-    auto users_config_reloader = !use_default_users_config
-        ? std::make_unique<ConfigReloader>(
-            users_config_path,
-            [&](ConfigurationPtr config) { global_context->setUsersConfig(config); },
-            /* already_loaded = */ false,
-            "UserCfgReloader")
-        : std::make_unique<ImmutableConfigReloader>(
-            [&](ConfigurationPtr config) { global_context->setUsersConfig(config); }, "UserCfgReloader");
+    auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
 
     /// Reload config in SYSTEM RELOAD CONFIG query.
     global_context->setConfigReloadCallback([&]() {
