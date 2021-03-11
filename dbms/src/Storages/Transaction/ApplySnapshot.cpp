@@ -333,7 +333,9 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
     const RegionPtr region = getRegion(region_id);
     if (region == nullptr)
     {
-        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": [region " << region_id << "] is not found, might be removed already");
+        LOG_WARNING(log,
+            __PRETTY_FUNCTION__ << ": [region " << region_id << "] is not found at [term " << term << ", index " << index
+                                << "], might be removed already");
         return EngineStoreApplyRes::NotFound;
     }
 
