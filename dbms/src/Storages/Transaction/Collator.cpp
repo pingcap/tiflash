@@ -155,7 +155,7 @@ public:
     }
 
 private:
-    std::vector<typename Collator::WeightType> chars;
+    std::vector<typename Collator::CharType> chars;
 
     enum MatchType
     {
@@ -305,7 +305,7 @@ private:
 namespace UnicodeCI
 {
 extern const std::array<uint64_t, 256 * 256 + 1> weight_lut;
-extern const std::array<Long_rune, 22> weight_lut_long;
+extern const std::array<Long_rune, 23> weight_lut_long;
 const uint64_t long_weight_rune = 0xFFFD;
 } // namespace UnicodeCI
 
@@ -420,46 +420,46 @@ private:
             return a == b;
         }
 
-        auto a_weight = weight_lut[a];
-        auto b_weight = weight_lut[b];
+        auto a_weight = UnicodeCI::weight_lut[a];
+        auto b_weight = UnicodeCI::weight_lut[b];
 
         if (a_weight != b_weight) {
             return false;
         }
 
-        if (a_weight == long_weight_rune) {
+        if (a_weight == UnicodeCI::long_weight_rune) {
             return a == b;
         }
 
         return true;
     }
 
-    static inline long_weight weight_lut_long(Rune r) {
+    static inline UnicodeCI::long_weight weight_lut_long(Rune r) {
         switch (r) {
-            case 0x321D: return weight_lut_long[0];
-            case 0x321E: return weight_lut_long[1];
-            case 0x327C: return weight_lut_long[2];
-            case 0x3307: return weight_lut_long[3];
-            case 0x3315: return weight_lut_long[4];
-            case 0x3316: return weight_lut_long[5];
-            case 0x3317: return weight_lut_long[6];
-            case 0x3319: return weight_lut_long[7];
-            case 0x331A: return weight_lut_long[8];
-            case 0x3320: return weight_lut_long[9];
-            case 0x332B: return weight_lut_long[10];
-            case 0x332E: return weight_lut_long[11];
-            case 0x3332: return weight_lut_long[12];
-            case 0x3334: return weight_lut_long[13];
-            case 0x3336: return weight_lut_long[14];
-            case 0x3347: return weight_lut_long[15];
-            case 0x334A: return weight_lut_long[16];
-            case 0x3356: return weight_lut_long[17];
-            case 0x337F: return weight_lut_long[18];
-            case 0x33AE: return weight_lut_long[19];
-            case 0x33AF: return weight_lut_long[20];
-            case 0xFDFB: return weight_lut_long[21];
+            case 0x321D: return UnicodeCI::weight_lut_long[0];
+            case 0x321E: return UnicodeCI::weight_lut_long[1];
+            case 0x327C: return UnicodeCI::weight_lut_long[2];
+            case 0x3307: return UnicodeCI::weight_lut_long[3];
+            case 0x3315: return UnicodeCI::weight_lut_long[4];
+            case 0x3316: return UnicodeCI::weight_lut_long[5];
+            case 0x3317: return UnicodeCI::weight_lut_long[6];
+            case 0x3319: return UnicodeCI::weight_lut_long[7];
+            case 0x331A: return UnicodeCI::weight_lut_long[8];
+            case 0x3320: return UnicodeCI::weight_lut_long[9];
+            case 0x332B: return UnicodeCI::weight_lut_long[10];
+            case 0x332E: return UnicodeCI::weight_lut_long[11];
+            case 0x3332: return UnicodeCI::weight_lut_long[12];
+            case 0x3334: return UnicodeCI::weight_lut_long[13];
+            case 0x3336: return UnicodeCI::weight_lut_long[14];
+            case 0x3347: return UnicodeCI::weight_lut_long[15];
+            case 0x334A: return UnicodeCI::weight_lut_long[16];
+            case 0x3356: return UnicodeCI::weight_lut_long[17];
+            case 0x337F: return UnicodeCI::weight_lut_long[18];
+            case 0x33AE: return UnicodeCI::weight_lut_long[19];
+            case 0x33AF: return UnicodeCI::weight_lut_long[20];
+            case 0xFDFB: return UnicodeCI::weight_lut_long[21];
             default:
-                return weight_lut_long[22];
+                return UnicodeCI::weight_lut_long[22];
         }
     }
 
@@ -468,13 +468,13 @@ private:
             if (second == 0) {
                 while (offset < length) {
                     auto r = decodeChar(s, offset);
-                    auto w = weight_lut[r];
+                    auto w = UnicodeCI::weight_lut[r];
                     // skip 0 weight char
                     if (w == 0) {
                         continue;
                     }
                     if (w == long_weight_rune) {
-                        auto long_weight = weight_lut_long(r);
+                        auto long_weight = UnicodeCI::weight_lut_long(r);
                         first = long_weight.first;
                         second = long_weight.second;
                     }
