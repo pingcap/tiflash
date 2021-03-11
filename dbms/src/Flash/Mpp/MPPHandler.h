@@ -67,7 +67,7 @@ struct MPPTunnel
         }
         catch (...)
         {
-            LOG_WARNING(log, "Error in destructor function of MPPTunnel");
+            tryLogCurrentException(log, "Error in destructor function of MPPTunnel");
         }
     }
 
@@ -302,7 +302,7 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
         }
         catch (...)
         {
-            LOG_WARNING(log, "Failed to finish all tunnels");
+            tryLogCurrentException(log, "Failed to finish all tunnels");
         }
     }
     void writeErrToAllTunnel(const String & e)
@@ -320,7 +320,7 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
         }
         catch (...)
         {
-            LOG_WARNING(log, "Failed to write error " + e + " to all tunnel");
+            tryLogCurrentException(log, "Failed to write error " + e + " to all tunnels");
         }
     }
 

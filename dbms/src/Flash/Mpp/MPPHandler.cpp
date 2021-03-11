@@ -334,7 +334,7 @@ void MPPHandler::handleError(MPPTaskPtr task, String error)
     }
     catch (...)
     {
-        LOG_ERROR(log, "Fail to handle error in while trying to handle error and clean task");
+        tryLogCurrentException(log, "Fail to handle error and clean task");
     }
 }
 // execute is responsible for making plan , register tasks and tunnels and start the running thread.
