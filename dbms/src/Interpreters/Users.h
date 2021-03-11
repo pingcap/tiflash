@@ -2,23 +2,23 @@
 
 #include <Core/Types.h>
 
-#include <vector>
-#include <unordered_set>
 #include <memory>
+#include <unordered_set>
+#include <vector>
 
 
 namespace Poco
 {
-    namespace Net
-    {
-        class IPAddress;
-    }
-
-    namespace Util
-    {
-        class AbstractConfiguration;
-    }
+namespace Net
+{
+class IPAddress;
 }
+
+namespace Util
+{
+class AbstractConfiguration;
+}
+} // namespace Poco
 
 
 namespace DB
@@ -65,8 +65,12 @@ struct User
     using DatabaseSet = std::unordered_set<std::string>;
     DatabaseSet databases;
 
+    User(const String & name_);
     User(const String & name_, const String & config_elem, Poco::Util::AbstractConfiguration & config);
+
+    constexpr static const char * DEFAULT_USER_NAME = "default";
+    static const User & getDefaultUser();
 };
 
 
-}
+} // namespace DB

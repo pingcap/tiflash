@@ -584,7 +584,9 @@ void Context::setUsersConfig(const ConfigurationPtr & config)
 {
     auto lock = getLock();
     shared->users_config = config;
+    // parse "users.*"
     shared->security_manager->loadFromConfig(*shared->users_config);
+    // parse "quotas.*"
     shared->quotas.loadFromConfig(*shared->users_config);
 }
 
@@ -598,20 +600,20 @@ void Context::calculateUserSettings()
 {
     auto lock = getLock();
 
-    String profile = shared->security_manager->getUser(client_info.current_user)->profile;
+    String profile_name = shared->security_manager->getUser(client_info.current_user)->profile;
 
     /// 1) Set default settings (hardcoded values)
     /// NOTE: we ignore global_context settings (from which it is usually copied)
     /// NOTE: global_context settings are immutable and not auto updated
     settings = Settings();
 
-    /// 2) Apply settings from default profile
+    /// 2) Apply settings from default profile ("profiles.*" in `users_config`)
     auto default_profile_name = getDefaultProfileName();
-    if (profile != default_profile_name)
+    if (profile_name != default_profile_name)
         settings.setProfile(default_profile_name, *shared->users_config);
 
     /// 3) Apply settings from current user
-    settings.setProfile(profile, *shared->users_config);
+    settings.setProfile(profile_name, *shared->users_config);
 }
 
 
