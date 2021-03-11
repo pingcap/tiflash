@@ -329,8 +329,10 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
         }
         for (auto & field : root_task_schema)
         {
+            auto tipb_type = TiDB::columnInfoToFieldType(field.second);
+            tipb_type.set_collate(properties.collator);
             auto * field_type = tipb_exchange_receiver.add_field_types();
-            *field_type = TiDB::columnInfoToFieldType(field.second);
+            *field_type = tipb_type;
         }
         mpp::TaskMeta root_tm;
         root_tm.set_start_ts(properties.start_ts);
