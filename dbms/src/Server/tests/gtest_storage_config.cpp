@@ -1,5 +1,6 @@
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/Config/TOMLConfiguration.h>
+#include <Interpreters/Quota.h>
 #include <Poco/Logger.h>
 #include <Poco/Util/LayeredConfiguration.h>
 #include <Server/StorageConfigParser.h>
@@ -285,6 +286,120 @@ capacity=[ 1024 ]
     }
 }
 CATCH
+
+class UsersConfigParser_test : public ::testing::Test
+{
+public:
+    UsersConfigParser_test() : log(&Poco::Logger::get("UsersConfigParser_test")) {}
+
+    static void SetUpTestCase() { TiFlashTestEnv::setupLogger(); }
+
+protected:
+    Poco::Logger * log;
+};
+
+
+TEST_F(UsersConfigParser_test, ParseConfigs)
+try
+{
+    Strings tests = {
+        // case for original user settings
+        R"(
+[users]
+[users.default]
+password = ""
+profile = "default"
+quota = "default"
+[users.default.networks]
+ip = "::/0"
+
+[users.readonly]
+password = ""
+profile = "readonly"
+quota = "default"
+[users.readonly.networks]
+ip = "::/0"
+
+[profiles]
+[profiles.default]
+load_balancing = "random"
+max_memory_usage = 0 
+use_uncompressed_cache = 1
+[profiles.readonly]
+readonly = 1
+
+[quotas]
+[quotas.default]
+[quotas.default.interval]
+duration = 3600
+errors = 0
+execution_time = 0
+queries = 0
+read_rows = 0
+result_rows = 0
+)",
+        // case for omit all default user settings
+        R"(
+)",
+        // case for set some settings
+        R"(
+[profiles]
+[profiles.default]
+max_memory_usage = 123456
+dt_enable_rough_set_filter = false
+)",
+    };
+
+    // Ensure that connection is not blocked by any address
+    const std::vector<std::string> test_addrs = {
+        "127.0.0.1:443",
+        "8.8.8.8:1080",
+    };
+
+    for (size_t i = 0; i < tests.size(); ++i)
+    {
+        const auto & test_case = tests[i];
+        std::istringstream ss(test_case);
+        cpptoml::parser p(ss);
+        auto table = p.parse();
+        std::shared_ptr<Poco::Util::AbstractConfiguration> configuration(new DB::TOMLConfiguration(table));
+        Poco::AutoPtr<Poco::Util::LayeredConfiguration> config = new Poco::Util::LayeredConfiguration();
+        config->add(configuration.get());
+
+        LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
+
+        // Reload users config with test case
+        auto & global_ctx = TiFlashTestEnv::getContext().getGlobalContext();
+        global_ctx.setUsersConfig(config);
+
+        // Create a copy of global_ctx
+        auto ctx = global_ctx;
+        for (const auto & addr_ : test_addrs)
+        {
+            // Ensure "default" user can build connection
+            Poco::Net::SocketAddress addr(addr_);
+
+            // `setUser` will check user, password, address, update settings and quota for current user
+            ASSERT_NO_THROW(ctx.setUser("default", "", addr, ""));
+            const auto & settings = ctx.getSettingsRef();
+            EXPECT_EQ(settings.use_uncompressed_cache, 1U);
+            if (i == 2)
+            {
+                EXPECT_EQ(settings.max_memory_usage, 123456UL);
+                EXPECT_FALSE(settings.dt_enable_rough_set_filter);
+            }
+            QuotaForIntervals * quota_raw_ptr = nullptr;
+            ASSERT_NO_THROW(quota_raw_ptr = &ctx.getQuota(););
+            ASSERT_NE(quota_raw_ptr, nullptr);
+
+            // Won't block by database access right check
+            ASSERT_NO_THROW(ctx.checkDatabaseAccessRights("system"));
+            ASSERT_NO_THROW(ctx.checkDatabaseAccessRights("test"));
+        }
+    }
+}
+CATCH
+
 
 } // namespace tests
 } // namespace DB
