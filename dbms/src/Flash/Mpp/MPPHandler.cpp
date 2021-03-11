@@ -328,7 +328,7 @@ void MPPHandler::handleError(MPPTaskPtr task, String error)
             if (!task->dag_context->isRootMPPTask())
                 task->writeErrToAllTunnel(error);
             else
-                task->finishAllTunnel();
+                task->closeAllTunnel();
             task->unregisterTask();
         }
     }
