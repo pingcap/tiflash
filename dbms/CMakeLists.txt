@@ -292,6 +292,7 @@ if (ENABLE_TESTS)
     add_executable(gtests_dbms EXCLUDE_FROM_ALL
         ${dbms_gtest_sources}
         ${ClickHouse_SOURCE_DIR}/dbms/src/Server/StorageConfigParser.cpp
+        ${ClickHouse_SOURCE_DIR}/dbms/src/Server/UserConfigParser.cpp
     )
     target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
     target_link_libraries(gtests_dbms gtest_main dbms clickhouse_functions)
