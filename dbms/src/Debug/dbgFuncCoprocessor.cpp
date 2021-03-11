@@ -330,10 +330,7 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
         for (auto & field : root_task_schema)
         {
             auto * field_type = tipb_exchange_receiver.add_field_types();
-            field_type->set_tp(field.second.tp);
-            field_type->set_flag(field.second.flag);
-            field_type->set_flen(field.second.flen);
-            field_type->set_decimal(field.second.decimal);
+            *field_type = TiDB::columnInfoToFieldType(field.second);
         }
         mpp::TaskMeta root_tm;
         root_tm.set_start_ts(properties.start_ts);
@@ -854,12 +851,11 @@ struct ExchangeReceiver : Executor
         tipb::ExchangeReceiver * exchange_receiver = tipb_executor->mutable_exchange_receiver();
         for (auto & field : output_schema)
         {
+            auto tipb_type = TiDB::columnInfoToFieldType(field.second);
+            tipb_type.set_collate(collator_id);
+
             auto * field_type = exchange_receiver->add_field_types();
-            field_type->set_tp(field.second.tp);
-            field_type->set_flag(field.second.flag);
-            field_type->set_flen(field.second.flen);
-            field_type->set_decimal(field.second.decimal);
-            field_type->set_collate(collator_id);
+            *field_type = tipb_type;
         }
         auto it = mpp_info.receiver_source_task_ids_map.find(name);
         if (it == mpp_info.receiver_source_task_ids_map.end())
@@ -1319,22 +1315,16 @@ struct Join : Executor
             auto & field = schema[index];
             if (splitQualifiedName(field.first).second == identifier->getColumnName())
             {
+                auto tipb_type = TiDB::columnInfoToFieldType(field.second);
+                tipb_type.set_collate(collator_id);
+
                 tipb_key->set_tp(tipb::ColumnRef);
                 std::stringstream ss;
                 encodeDAGInt64(index, ss);
                 tipb_key->set_val(ss.str());
-                auto * key_type = tipb_key->mutable_field_type();
-                key_type->set_tp(field.second.tp);
-                key_type->set_flag(field.second.flag);
-                key_type->set_flen(field.second.flen);
-                key_type->set_decimal(field.second.decimal);
-                key_type->set_collate(collator_id);
+                *tipb_key->mutable_field_type() = tipb_type;
 
-                tipb_field_type->set_tp(field.second.tp);
-                tipb_field_type->set_flag(field.second.flag);
-                tipb_field_type->set_flen(field.second.flen);
-                tipb_field_type->set_decimal(field.second.decimal);
-                tipb_field_type->set_collate(collator_id);
+                *tipb_field_type = tipb_type;
                 break;
             }
         }

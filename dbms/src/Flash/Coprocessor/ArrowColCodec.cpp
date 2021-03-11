@@ -143,8 +143,8 @@ void flashDoubleColToArrowCol(TiDBColumn & dag_column, const IColumn * flash_col
         }
         return;
     }
-    throw TiFlashException("Error while trying to convert flash col to DAG col, column name " + flash_col_untyped->getName(),
-        Errors::Coprocessor::Internal);
+    throw TiFlashException(
+        "Error while trying to convert flash col to DAG col, column name " + flash_col_untyped->getName(), Errors::Coprocessor::Internal);
 }
 
 template <bool is_nullable>
@@ -258,12 +258,11 @@ void flashColToArrowCol(TiDBColumn & dag_column, const ColumnWithTypeAndName & f
 {
     const IColumn * col = flash_col.column.get();
     const IDataType * type = flash_col.type.get();
-    const TiDB::ColumnInfo tidb_column_info = fieldTypeToColumnInfo(field_type);
+    const TiDB::ColumnInfo tidb_column_info = TiDB::fieldTypeToColumnInfo(field_type);
 
     if (type->isNullable() && tidb_column_info.hasNotNullFlag())
     {
-        throw TiFlashException(
-            "Flash column and TiDB column has different not null flag", Errors::Coprocessor::Internal);
+        throw TiFlashException("Flash column and TiDB column has different not null flag", Errors::Coprocessor::Internal);
     }
     if (type->isNullable())
         type = dynamic_cast<const DataTypeNullable *>(type)->getNestedType().get();
@@ -282,8 +281,7 @@ void flashColToArrowCol(TiDBColumn & dag_column, const ColumnWithTypeAndName & f
                     "Type un-matched during arrow encode, target col type is integer and source column type is " + type->getName(),
                     Errors::Coprocessor::Internal);
             if (type->isUnsignedInteger() != tidb_column_info.hasUnsignedFlag())
-                throw TiFlashException(
-                    "Flash column and TiDB column has different unsigned flag", Errors::Coprocessor::Internal);
+                throw TiFlashException("Flash column and TiDB column has different unsigned flag", Errors::Coprocessor::Internal);
             if (tidb_column_info.hasNotNullFlag())
                 flashIntegerColToArrowCol<false>(dag_column, col, start_index, end_index);
             else
@@ -632,8 +630,7 @@ const char * arrowColToFlashCol(const char * pos, UInt8 field_length, UInt32 nul
         case TiDB::TypeEnum:
             return arrowEnumColToFlashCol(pos, field_length, null_count, null_bitmap, offsets, flash_col, col_info, length);
         default:
-            throw TiFlashException(
-                "Not supported yet: field tp = " + std::to_string(col_info.tp), Errors::Coprocessor::Unimplemented);
+            throw TiFlashException("Not supported yet: field tp = " + std::to_string(col_info.tp), Errors::Coprocessor::Unimplemented);
     }
 }
 

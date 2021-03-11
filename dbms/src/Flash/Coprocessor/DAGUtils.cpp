@@ -46,9 +46,8 @@ const String & getAggFunctionName(const tipb::Expr & expr)
         }
     }
 
-    const auto errmsg = tipb::ExprType_Name(expr.tp())
-        + "(distinct=" + (expr.has_distinct() ? "true" : "false") + ")"
-        + " is not supported.";
+    const auto errmsg
+        = tipb::ExprType_Name(expr.tp()) + "(distinct=" + (expr.has_distinct() ? "true" : "false") + ")" + " is not supported.";
     throw TiFlashException(errmsg, Errors::Coprocessor::Unimplemented);
 }
 
@@ -961,25 +960,5 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::Upper, "upper"},
     //{tipb::ScalarFuncSig::CharLength, "upper"},
 });
-
-tipb::FieldType columnInfoToFieldType(const TiDB::ColumnInfo & ci)
-{
-    tipb::FieldType ret;
-    ret.set_tp(ci.tp);
-    ret.set_flag(ci.flag);
-    ret.set_flen(ci.flen);
-    ret.set_decimal(ci.decimal);
-    return ret;
-}
-
-TiDB::ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type)
-{
-    TiDB::ColumnInfo ret;
-    ret.tp = static_cast<TiDB::TP>(field_type.tp());
-    ret.flag = field_type.flag();
-    ret.flen = field_type.flen();
-    ret.decimal = field_type.decimal();
-    return ret;
-}
 
 } // namespace DB
