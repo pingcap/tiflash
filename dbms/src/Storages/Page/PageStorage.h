@@ -140,7 +140,8 @@ public:
 
     void drop();
 
-    bool gc();
+    // We may skip the GC to reduce useless reading by default.
+    bool gc(bool not_skip = false);
 
     PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot = {});
 

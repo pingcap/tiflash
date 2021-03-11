@@ -1,5 +1,6 @@
 #include <Encryption/MockKeyManager.h>
 #include <Storages/Page/PageStorage.h>
+#include <Storages/PathPool.h>
 
 #define private public
 #include <Storages/Page/gc/DataCompactor.h>
@@ -19,14 +20,50 @@ DB::WriteBatch::SequenceID debugging_recover_stop_sequence = 0;
 void Usage(const char * prog)
 {
     fprintf(stderr,
-            "Usage: %s <path> <mode>\n"
-            "\tmode==1 -> dump all page entries\n"
-            "\t      2 -> dump valid page entries\n"
-            "\t      3 -> check all page entries and page data checksum\n"
-            "\t      4 -> list capacity of all page files\n"
-            "\t      5 -> list all page files\n",
+            R"HELP(
+Usage: %s <path> <mode>
+    mode == 1 -> dump all page entries
+            2 -> dump valid page entries
+              param: %s <path> 2 [max-recover-sequence]
+            3 -> check all page entries and page data checksum
+            4 -> list capacity of all page files
+            5 -> list all page files
+            1000 -> gc files
+              param: %s <path> 1000 [run-gc-times=1] [min-gc-file-num=10] [min-gc-bytes=134217728] [max-gc-valid-rate=0.35]
+)HELP",
+            prog,
+            prog,
             prog);
 }
+
+// TODO: support multi-disk
+class MockDiskDelegator : public DB::PSDiskDelegator
+{
+public:
+    MockDiskDelegator(DB::String path_) : path(std::move(path_)) {}
+
+    size_t      numPaths() const { return 1; }
+    DB::String  defaultPath() const { return path; }
+    DB::String  getPageFilePath(const DB::PageFileIdAndLevel & /*id_lvl*/) const { return path; }
+    void        removePageFile(const DB::PageFileIdAndLevel & /*id_lvl*/, size_t /*file_size*/) {}
+    DB::Strings listPaths() const
+    {
+        DB::Strings paths;
+        paths.emplace_back(path);
+        return paths;
+    }
+    DB::String choosePath(const DB::PageFileIdAndLevel & /*id_lvl*/) { return path; }
+    size_t     addPageFileUsedSize(const DB::PageFileIdAndLevel & /*id_lvl*/,
+                                   size_t /*size_to_add*/,
+                                   const DB::String & /*pf_parent_path*/,
+                                   bool /*need_insert_location*/)
+    {
+        return 0;
+    }
+
+private:
+    std::string path;
+};
 
 void printPageEntry(const DB::PageId pid, const DB::PageEntry & entry)
 {
@@ -41,7 +78,7 @@ void printPageEntry(const DB::PageId pid, const DB::PageEntry & entry)
            entry.checksum);
 }
 
-enum Mode
+enum DebugMode
 {
     DUMP_ALL_ENTRIES    = 1,
     DUMP_VALID_ENTRIES  = 2,
@@ -49,11 +86,46 @@ enum Mode
     LIST_ALL_CAPACITY   = 4,
     LIST_ALL_PAGE_FILE  = 5,
 
-    TOTAL_NUM_MODES,
+    RUN_GC = 1000,
 };
 
-void dump_all_entries(DB::PageFileSet & page_files, int32_t mode = Mode::DUMP_ALL_ENTRIES);
+void dump_all_entries(DB::PageFileSet & page_files, int32_t mode = DebugMode::DUMP_ALL_ENTRIES);
 void list_all_capacity(const DB::PageFileSet & page_files, DB::PageStorage & storage);
+
+DB::PageStorage::Config parse_storage_config(int argc, char ** argv, Poco::Logger * logger)
+{
+    DB::PageStorage::Config config;
+    config.merge_hint_low_used_file_num        = 10;
+    config.merge_hint_low_used_file_total_size = DB::PAGE_FILE_ROLL_SIZE;
+    config.merge_hint_low_used_rate            = 0.35;
+
+    if (argc > 4)
+    {
+        size_t num                          = strtoull(argv[4], nullptr, 10);
+        num                                 = std::max(1UL, num);
+        config.merge_hint_low_used_file_num = num;
+    }
+    if (argc > 5)
+    {
+        size_t num                                 = strtoull(argv[5], nullptr, 10);
+        num                                        = std::max(1UL, num);
+        config.merge_hint_low_used_file_total_size = num;
+    }
+    if (argc > 6)
+    {
+        // range from [0.01, 1.0]
+        DB::Float64 n                   = std::stod(argv[6]);
+        n                               = std::min(1.0, std::max(0.01, n));
+        config.merge_hint_low_used_rate = n;
+    }
+
+    LOG_INFO(logger,
+             "[merge_hint_low_used_file_num=" << config.merge_hint_low_used_file_num
+                                              << "] [merge_hint_low_used_file_total_size=" << config.merge_hint_low_used_file_total_size
+                                              << "] [merge_hint_low_used_rate=" << DB::toString(config.merge_hint_low_used_rate, 3) << "]");
+
+    return config;
+}
 
 int main(int argc, char ** argv)
 try
@@ -77,26 +149,39 @@ try
     DB::String path     = argv[1];
     DB::String mode_str = argv[2];
     int32_t    mode     = strtol(mode_str.c_str(), nullptr, 10);
-    if (mode >= TOTAL_NUM_MODES)
+
+    Poco::Logger * logger = &Poco::Logger::get("root");
+
+    switch (mode)
     {
+    case DUMP_ALL_ENTRIES:
+    case DUMP_VALID_ENTRIES:
+    case CHECK_DATA_CHECKSUM:
+    case LIST_ALL_CAPACITY:
+    case LIST_ALL_PAGE_FILE:
+    case RUN_GC:
+        LOG_INFO(logger, "Running with [mode=" << mode << "]");
+        break;
+    default:
         Usage(argv[0]);
         return 1;
     }
+
     if (mode == DUMP_VALID_ENTRIES && argc > 3)
     {
         debugging_recover_stop_sequence = strtoull(argv[3], nullptr, 10);
-        LOG_TRACE(&Poco::Logger::get("root"), "debug early stop sequence set to: " << debugging_recover_stop_sequence);
+        LOG_TRACE(logger, "debug early stop sequence set to: " << debugging_recover_stop_sequence);
     }
-    DB::KeyManagerPtr key_manager = std::make_shared<DB::MockKeyManager>(false);
-    DB::FileProviderPtr file_provider = std::make_shared<DB::FileProvider>(key_manager, false);
+    DB::KeyManagerPtr      key_manager   = std::make_shared<DB::MockKeyManager>(false);
+    DB::FileProviderPtr    file_provider = std::make_shared<DB::FileProvider>(key_manager, false);
+    DB::PSDiskDelegatorPtr delegator     = std::make_shared<MockDiskDelegator>(path);
 
     // Do not remove any files.
     DB::PageStorage::ListPageFilesOption options;
     options.remove_tmp_files  = false;
     options.ignore_legacy     = false;
     options.ignore_checkpoint = false;
-    auto page_files           = DB::PageStorage::listAllPageFiles(path, file_provider, &Poco::Logger::get("root"), options);
-
+    auto page_files           = DB::PageStorage::listAllPageFiles(file_provider, delegator, logger, options);
     switch (mode)
     {
     case DUMP_ALL_ENTRIES:
@@ -111,7 +196,8 @@ try
         return 0;
     }
 
-    DB::PageStorage storage("DebugUtils", path, {}, file_provider);
+    DB::PageStorage::Config config = parse_storage_config(argc, argv, logger);
+    DB::PageStorage         storage("PageCtl", delegator, config, file_provider);
     storage.restore();
     switch (mode)
     {
@@ -128,6 +214,22 @@ try
     case LIST_ALL_CAPACITY:
         list_all_capacity(page_files, storage);
         break;
+    case RUN_GC: {
+        Int64 num_gc = 1;
+        if (argc > 3)
+        {
+            num_gc = strtoll(argv[3], nullptr, 10);
+            if (num_gc != -1)
+                num_gc = std::min(std::max(1, num_gc), 30);
+        }
+        for (Int64 idx = 0; num_gc == -1 || idx < num_gc; ++idx)
+        {
+            LOG_INFO(logger, "Running GC, [round=" << (idx + 1) << "] [num_gc=" << num_gc << "]");
+            storage.gc(/*not_skip=*/true);
+            LOG_INFO(logger, "Run GC done, [round=" << (idx + 1) << "] [num_gc=" << num_gc << "]");
+        }
+        break;
+    }
     }
 
     return 0;

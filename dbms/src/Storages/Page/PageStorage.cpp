@@ -779,7 +779,7 @@ enum class GCType
     LowWrite,
 };
 
-bool PageStorage::gc()
+bool PageStorage::gc(bool not_skip)
 {
     // If another thread is running gc, just return;
     bool v = false;
@@ -872,6 +872,7 @@ bool PageStorage::gc()
 
     GCType gc_type = GCType::Normal;
     // Ignore page files that maybe writing to.
+    do
     {
         PageFileSet removed_page_files;
         for (const auto & pf : page_files)
@@ -882,6 +883,11 @@ bool PageStorage::gc()
         }
         page_files.swap(removed_page_files);
 
+        if (not_skip) // For page_storage_ctl, don't skip the GC
+        {
+            gc_type = GCType::Normal;
+            break;
+        }
         /// Strategies to reduce useless GC actions.
         if (page_files.size() < 3)
         {
@@ -906,7 +912,7 @@ bool PageStorage::gc()
             LOG_TRACE(log, storage_name << " GC exit with no files to gc.");
             return false;
         }
-    }
+    } while (0);
 
     Stopwatch watch;
     if (metrics)

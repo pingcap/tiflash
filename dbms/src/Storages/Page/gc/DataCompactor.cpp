@@ -110,7 +110,11 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
         // Don't gc writing page file.
         bool is_candidate = (writing_file_ids.count(page_file.fileIdLevel()) == 0)
             && (valid_rate < config.merge_hint_low_used_rate || file_size < config.file_small_size);
-        // LOG_TRACE(log, storage_name << " " << page_file.toString() << " valid rate: " << valid_rate);
+#ifdef PAGE_STORAGE_UTIL_DEBUGGGING
+        LOG_TRACE(log,
+                  storage_name << " " << page_file.toString() << " [valid rate=" << DB::toString(valid_rate, 2)
+                               << "] [file size=" << file_size << "]");
+#endif
         if (!is_candidate)
         {
             continue;

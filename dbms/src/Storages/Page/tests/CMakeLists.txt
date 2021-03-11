@@ -1,13 +1,3 @@
-add_headers_and_sources(page_storage ../)
-add_headers_and_sources(page_storage ../mvcc)
-add_headers_and_sources(page_storage ../VersionSet)
-add_headers_and_sources(page_storage ../gc)
-add_library(page_storage
-        ${page_storage_headers} ${page_storage_sources}
-        ${ClickHouse_SOURCE_DIR}/dbms/src/Storages/PathCapacityMetrics.h
-        ${ClickHouse_SOURCE_DIR}/dbms/src/Storages/PathCapacityMetrics.cpp
-        )
-target_link_libraries(page_storage clickhouse_common_io kv_client tipb)
 
 add_headers_and_sources(encryption ${ClickHouse_SOURCE_DIR}/dbms/src/Encryption)
 add_library(encryption
@@ -33,10 +23,6 @@ add_check(gtests_page_storage)
 add_executable(page_stress_page_storage stress_page_stroage.cpp)
 target_link_libraries(page_stress_page_storage page_storage)
 target_compile_options(page_stress_page_storage PRIVATE -Wno-format) # turn off printf format check
-
-add_executable(page_utils_get_valid_pages utils_get_valid_pages.cpp)
-target_link_libraries(page_utils_get_valid_pages page_storage encryption)
-target_compile_options(page_utils_get_valid_pages PRIVATE -Wno-format)
 
 add_executable(test_page_storage_write_disk_full test_page_storage_write_disk_full.cpp)
 target_link_libraries(test_page_storage_write_disk_full dbms)
