@@ -10,6 +10,7 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
 #include <Storages/MutableSupport.h>
+#include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TMTStorages.h>
 #include <Storages/registerStorages.h>
@@ -30,6 +31,8 @@ namespace FailPoints
 extern const char exception_before_rename_table_old_meta_removed[];
 }
 
+extern String createDatabaseStmt(Context & context, const TiDB::DBInfo & db_info, const SchemaNameMapper & name_mapper);
+
 namespace tests
 {
 
@@ -40,6 +43,7 @@ public:
 
     static void SetUpTestCase()
     {
+        TiFlashTestEnv::setupLogger();
         registerStorages();
         fiu_init(0); // init failpoint
     }
@@ -100,8 +104,6 @@ ASTPtr parseCreateStatement(const String & statement)
 TEST_F(DatabaseTiFlash_test, CreateDBAndTable)
 try
 {
-    TiFlashTestEnv::setupLogger();
-
     const String db_name = "db_1";
     auto ctx = TiFlashTestEnv::getContext();
 
@@ -186,8 +188,6 @@ CATCH
 TEST_F(DatabaseTiFlash_test, RenameTable)
 try
 {
-    TiFlashTestEnv::setupLogger();
-
     const String db_name = "db_1";
     auto ctx = TiFlashTestEnv::getContext();
 
@@ -289,8 +289,6 @@ CATCH
 TEST_F(DatabaseTiFlash_test, RenameTableBetweenDatabase)
 try
 {
-    TiFlashTestEnv::setupLogger();
-
     const String db_name = "db_1";
     const String db2_name = "db_2";
     auto ctx = TiFlashTestEnv::getContext();
@@ -423,8 +421,6 @@ CATCH
 TEST_F(DatabaseTiFlash_test, AtomicRenameTableBetweenDatabase)
 try
 {
-    TiFlashTestEnv::setupLogger();
-
     const String db_name = "db_1";
     const String db2_name = "db_2";
     auto ctx = TiFlashTestEnv::getContext();
@@ -523,8 +519,6 @@ CATCH
 TEST_F(DatabaseTiFlash_test, RenameTableOnlyUpdateDisplayName)
 try
 {
-    TiFlashTestEnv::setupLogger();
-
     const String db_name = "db_1";
     auto ctx = TiFlashTestEnv::getContext();
 
@@ -633,7 +627,6 @@ try
     // > create table test.t(a int primary key);
     // > alter table test.t change a a2 int;
 
-    TiFlashTestEnv::setupLogger();
     const String db_name = "db_1";
     auto ctx = TiFlashTestEnv::getContext();
 
@@ -671,6 +664,52 @@ try
     auto sd = managed_storage->getPrimarySortDescription();
     ASSERT_EQ(sd.size(), 1UL);
     EXPECT_EQ(sd[0].column_name, "a2");
+}
+CATCH
+
+TEST_F(DatabaseTiFlash_test, ISSUE_1093)
+try
+{
+    const auto expect_name = R"raw(x`f"n)raw";
+    const auto json_str =
+        R"r({
+  "id": 49,
+  "db_name": {
+   "O": "x`f\"n",
+   "L": "x`f\"n"
+  },
+  "charset": "utf8mb4",
+  "collate": "utf8mb4_bin",
+  "state": 5
+})r";
+    TiDB::DBInfoPtr db_info = std::make_shared<TiDB::DBInfo>(json_str);
+    ASSERT_NE(db_info, nullptr);
+    ASSERT_EQ(db_info->name, expect_name);
+
+    const auto seri = db_info->serialize();
+
+    {
+        auto deseri = std::make_shared<TiDB::DBInfo>(seri);
+        ASSERT_NE(deseri, nullptr);
+        ASSERT_EQ(deseri->name, expect_name);
+    }
+
+    auto ctx = TiFlashTestEnv::getContext();
+    auto name_mapper = SchemaNameMapper();
+    const String statement = createDatabaseStmt(ctx, *db_info, name_mapper);
+    ASTPtr ast = parseCreateStatement(statement);
+
+    InterpreterCreateQuery interpreter(ast, ctx);
+    interpreter.setInternal(true);
+    interpreter.setForceRestoreData(false);
+    interpreter.execute();
+
+    auto db = ctx.getDatabase(name_mapper.mapDatabaseName(*db_info));
+    ASSERT_NE(db, nullptr);
+    EXPECT_EQ(db->getEngineName(), "TiFlash");
+    auto flash_db = typeid_cast<DatabaseTiFlash *>(db.get());
+    auto & db_info_get = flash_db->getDatabaseInfo();
+    ASSERT_EQ(db_info_get.name, expect_name);
 }
 CATCH
 
