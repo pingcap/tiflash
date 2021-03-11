@@ -670,9 +670,9 @@ CATCH
 TEST_F(DatabaseTiFlash_test, ISSUE_1093)
 try
 {
-    const auto expect_name = R"raw(x`f"n)raw";
-    const auto json_str =
-        R"r({
+    const std::vector<std::pair<String, String>> cases = {
+        //
+        {R"raw(x`f"n)raw", R"r({
   "id": 49,
   "db_name": {
    "O": "x`f\"n",
@@ -681,35 +681,70 @@ try
   "charset": "utf8mb4",
   "collate": "utf8mb4_bin",
   "state": 5
-})r";
-    TiDB::DBInfoPtr db_info = std::make_shared<TiDB::DBInfo>(json_str);
-    ASSERT_NE(db_info, nullptr);
-    ASSERT_EQ(db_info->name, expect_name);
+})r"},
+        {R"raw(x'x)raw", R"r({
+  "id": 72,
+  "db_name": {
+   "O": "x'x",
+   "L": "x'x"
+  },
+  "charset": "utf8mb4",
+  "collate": "utf8mb4_bin",
+  "state": 5
+})r"},
+        {R"raw(x"x)raw", R"r({
+  "id": 70,
+  "db_name": {
+   "O": "x\"x",
+   "L": "x\"x"
+  },
+  "charset": "utf8mb4",
+  "collate": "utf8mb4_bin",
+  "state": 5
+})r"},
+        {R"raw(a~!@#$%^&*()_+-=[]{}\|'",./<>?)raw", R"r({
+  "id": 76,
+  "db_name": {
+   "O": "a~!@#$%^\u0026*()_+-=[]{}\\|'\",./\u003c\u003e?",
+   "L": "a~!@#$%^\u0026*()_+-=[]{}\\|'\",./\u003c\u003e?"
+  },
+  "charset": "utf8mb4",
+  "collate": "utf8mb4_bin",
+  "state": 5
+})r"},
+    };
 
-    const auto seri = db_info->serialize();
-
+    for (const auto & [expect_name, json_str] : cases)
     {
-        auto deseri = std::make_shared<TiDB::DBInfo>(seri);
-        ASSERT_NE(deseri, nullptr);
-        ASSERT_EQ(deseri->name, expect_name);
+        TiDB::DBInfoPtr db_info = std::make_shared<TiDB::DBInfo>(json_str);
+        ASSERT_NE(db_info, nullptr);
+        ASSERT_EQ(db_info->name, expect_name);
+
+        const auto seri = db_info->serialize();
+
+        {
+            auto deseri = std::make_shared<TiDB::DBInfo>(seri);
+            ASSERT_NE(deseri, nullptr);
+            ASSERT_EQ(deseri->name, expect_name);
+        }
+
+        auto ctx = TiFlashTestEnv::getContext();
+        auto name_mapper = SchemaNameMapper();
+        const String statement = createDatabaseStmt(ctx, *db_info, name_mapper);
+        ASTPtr ast = parseCreateStatement(statement);
+
+        InterpreterCreateQuery interpreter(ast, ctx);
+        interpreter.setInternal(true);
+        interpreter.setForceRestoreData(false);
+        interpreter.execute();
+
+        auto db = ctx.getDatabase(name_mapper.mapDatabaseName(*db_info));
+        ASSERT_NE(db, nullptr);
+        EXPECT_EQ(db->getEngineName(), "TiFlash");
+        auto flash_db = typeid_cast<DatabaseTiFlash *>(db.get());
+        auto & db_info_get = flash_db->getDatabaseInfo();
+        ASSERT_EQ(db_info_get.name, expect_name);
     }
-
-    auto ctx = TiFlashTestEnv::getContext();
-    auto name_mapper = SchemaNameMapper();
-    const String statement = createDatabaseStmt(ctx, *db_info, name_mapper);
-    ASTPtr ast = parseCreateStatement(statement);
-
-    InterpreterCreateQuery interpreter(ast, ctx);
-    interpreter.setInternal(true);
-    interpreter.setForceRestoreData(false);
-    interpreter.execute();
-
-    auto db = ctx.getDatabase(name_mapper.mapDatabaseName(*db_info));
-    ASSERT_NE(db, nullptr);
-    EXPECT_EQ(db->getEngineName(), "TiFlash");
-    auto flash_db = typeid_cast<DatabaseTiFlash *>(db.get());
-    auto & db_info_get = flash_db->getDatabaseInfo();
-    ASSERT_EQ(db_info_get.name, expect_name);
 }
 CATCH
 
