@@ -1,25 +1,22 @@
-#include <string.h>
-
-#include <Poco/RegularExpression.h>
-#include <Poco/Net/IPAddress.h>
-#include <Poco/Net/SocketAddress.h>
-#include <Poco/Net/DNS.h>
-#include <Poco/Util/Application.h>
-#include <Poco/Util/AbstractConfiguration.h>
-#include <Poco/String.h>
-
 #include <Common/Exception.h>
-#include <IO/ReadHelpers.h>
-#include <IO/HexWriteBuffer.h>
-#include <IO/WriteBufferFromString.h>
-#include <IO/WriteHelpers.h>
 #include <Common/SimpleCache.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <IO/HexWriteBuffer.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteBufferFromString.h>
+#include <IO/WriteHelpers.h>
+#include <Interpreters/Quota.h>
 #include <Interpreters/Users.h>
-
-#include <openssl/sha.h>
-
+#include <Poco/Net/DNS.h>
+#include <Poco/Net/IPAddress.h>
+#include <Poco/Net/SocketAddress.h>
+#include <Poco/RegularExpression.h>
+#include <Poco/String.h>
+#include <Poco/Util/AbstractConfiguration.h>
+#include <Poco/Util/Application.h>
 #include <common/logger_useful.h>
+#include <openssl/sha.h>
+#include <string.h>
 
 #include <ext/scope_guard.h>
 
@@ -29,14 +26,14 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int DNS_ERROR;
-    extern const int UNKNOWN_ADDRESS_PATTERN_TYPE;
-    extern const int UNKNOWN_USER;
-    extern const int REQUIRED_PASSWORD;
-    extern const int WRONG_PASSWORD;
-    extern const int IP_ADDRESS_NOT_ALLOWED;
-    extern const int BAD_ARGUMENTS;
-}
+extern const int DNS_ERROR;
+extern const int UNKNOWN_ADDRESS_PATTERN_TYPE;
+extern const int UNKNOWN_USER;
+extern const int REQUIRED_PASSWORD;
+extern const int WRONG_PASSWORD;
+extern const int IP_ADDRESS_NOT_ALLOWED;
+extern const int BAD_ARGUMENTS;
+} // namespace ErrorCodes
 
 
 static Poco::Net::IPAddress toIPv6(const Poco::Net::IPAddress addr)
@@ -77,7 +74,8 @@ public:
 
     bool contains(const Poco::Net::IPAddress & addr) const override
     {
-        return prefixBitsEquals(reinterpret_cast<const char *>(toIPv6(addr).addr()), reinterpret_cast<const char *>(mask_address.addr()), prefix_bits);
+        return prefixBitsEquals(
+            reinterpret_cast<const char *>(toIPv6(addr).addr()), reinterpret_cast<const char *>(mask_address.addr()), prefix_bits);
     }
 
 private:
@@ -90,9 +88,7 @@ private:
     void construct(const Poco::Net::IPAddress & mask_address_, UInt8 prefix_bits_)
     {
         mask_address = toIPv6(mask_address_);
-        prefix_bits = mask_address_.family() == Poco::Net::IPAddress::IPv4
-            ? prefix_bits_ + 96
-            : prefix_bits_;
+        prefix_bits = mask_address_.family() == Poco::Net::IPAddress::IPv4 ? prefix_bits_ + 96 : prefix_bits_;
     }
 
     static bool prefixBitsEquals(const char * lhs, const char * rhs, UInt8 prefix_bits)
@@ -101,8 +97,7 @@ private:
         UInt8 remaining_bits = prefix_bits % 8;
 
         return 0 == memcmp(lhs, rhs, prefix_bytes)
-            && (remaining_bits % 8 == 0
-                 || (lhs[prefix_bytes] >> (8 - remaining_bits)) == (rhs[prefix_bytes] >> (8 - remaining_bits)));
+            && (remaining_bits % 8 == 0 || (lhs[prefix_bytes] >> (8 - remaining_bits)) == (rhs[prefix_bytes] >> (8 - remaining_bits)));
     }
 };
 
@@ -129,10 +124,7 @@ private:
         if (0 != ret)
             throw Exception("Cannot getaddrinfo: " + std::string(gai_strerror(ret)), ErrorCodes::DNS_ERROR);
 
-        SCOPE_EXIT(
-        {
-            freeaddrinfo(ai);
-        });
+        SCOPE_EXIT({ freeaddrinfo(ai); });
 
         for (; ai != nullptr; ai = ai->ai_next)
         {
@@ -140,17 +132,16 @@ private:
             {
                 if (ai->ai_family == AF_INET6)
                 {
-                    if (addr_v6 == Poco::Net::IPAddress(
-                        &reinterpret_cast<sockaddr_in6*>(ai->ai_addr)->sin6_addr, sizeof(in6_addr),
-                        reinterpret_cast<sockaddr_in6*>(ai->ai_addr)->sin6_scope_id))
+                    if (addr_v6
+                        == Poco::Net::IPAddress(&reinterpret_cast<sockaddr_in6 *>(ai->ai_addr)->sin6_addr, sizeof(in6_addr),
+                            reinterpret_cast<sockaddr_in6 *>(ai->ai_addr)->sin6_scope_id))
                     {
                         return true;
                     }
                 }
                 else if (ai->ai_family == AF_INET)
                 {
-                    if (addr_v6 == toIPv6(Poco::Net::IPAddress(
-                        &reinterpret_cast<sockaddr_in*>(ai->ai_addr)->sin_addr, sizeof(in_addr))))
+                    if (addr_v6 == toIPv6(Poco::Net::IPAddress(&reinterpret_cast<sockaddr_in *>(ai->ai_addr)->sin_addr, sizeof(in_addr))))
                     {
                         return true;
                     }
@@ -209,7 +200,6 @@ public:
 };
 
 
-
 bool AddressPatterns::contains(const Poco::Net::IPAddress & addr) const
 {
     for (size_t i = 0, size = patterns.size(); i < size; ++i)
@@ -260,28 +250,37 @@ void AddressPatterns::addFromConfig(const String & config_elem, Poco::Util::Abst
     }
 }
 
-
-User::User(const String & name_, const String & config_elem, Poco::Util::AbstractConfiguration & config)
-    : name(name_)
+const User & User::getDefaultUser()
 {
+    static User u(User::DEFAULT_USER_NAME);
+    return u;
+}
+
+User::User(const String & name_)
+    : name(name_), password(), password_sha256_hex(), profile(User::DEFAULT_USER_NAME), quota(QuotaForInterval::DEFAULT_QUOTA_NAME)
+{}
+
+User::User(const String & name_, const String & config_elem, Poco::Util::AbstractConfiguration & config) : name(name_)
+{
+    // Allow empty "password" for TiFlash
     bool has_password = config.has(config_elem + ".password");
     bool has_password_sha256_hex = config.has(config_elem + ".password_sha256_hex");
 
     if (has_password && has_password_sha256_hex)
-        throw Exception("Both fields 'password' and 'password_sha256_hex' are specified for user " + name + ". Must be only one of them.", ErrorCodes::BAD_ARGUMENTS);
-
-    if (!has_password && !has_password_sha256_hex)
-        throw Exception("Either 'password' or 'password_sha256_hex' must be specified for user " + name + ".", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception("Both fields 'password' and 'password_sha256_hex' are specified for user " + name + ". Must be only one of them.",
+            ErrorCodes::BAD_ARGUMENTS);
 
     if (has_password)
-        password     = config.getString(config_elem + ".password");
+        password = config.getString(config_elem + ".password");
 
     if (has_password_sha256_hex)
     {
         password_sha256_hex = Poco::toLower(config.getString(config_elem + ".password_sha256_hex"));
 
         if (password_sha256_hex.size() != 64)
-            throw Exception("password_sha256_hex for user " + name + " has length " + toString(password_sha256_hex.size()) + " but must be exactly 64 symbols.", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception("password_sha256_hex for user " + name + " has length " + toString(password_sha256_hex.size())
+                    + " but must be exactly 64 symbols.",
+                ErrorCodes::BAD_ARGUMENTS);
     }
 
     profile = config.getString(config_elem + ".profile");
@@ -306,4 +305,4 @@ User::User(const String & name_, const String & config_elem, Poco::Util::Abstrac
 }
 
 
-}
+} // namespace DB
