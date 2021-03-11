@@ -422,13 +422,6 @@ void assertBlockSchema(const DataTypes & expected_types, const Block & block, co
 
         if (!expected->equals(*actual))
         {
-            /// This is a workaround for Enum type: because TiDB does not push down enough
-            /// information about enum type, we only check the nullability if both type is
-            /// Enum, should be removed if https://github.com/pingcap/tics/issues/1489 is fixed
-            if (expected->isEnum() && actual->isEnum())
-                continue;
-            if (expected->isNullable() && removeNullable(expected)->isEnum() && actual->isNullable() && removeNullable(actual)->isEnum())
-                continue;
             throw Exception("Block schema mismatch in " + context_description + ": different types: expected " + expected->getName()
                 + ", got " + actual->getName());
         }
