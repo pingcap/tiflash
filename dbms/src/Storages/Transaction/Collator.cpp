@@ -324,7 +324,7 @@ public:
 
         // since the longest weight of character in unicode ci has 128bit, we divide it to 2 uint64.
         // The xx_first stand for the first 64bit, and the xx_second stand for the second 64bit.
-        // If xx_first == 0, there is always has s1_second == 0
+        // If xx_first == 0, there is always has xx_second == 0
         uint64_t s1_first = 0, s1_second = 0;
         uint64_t s2_first = 0, s2_second = 0;
 
