@@ -304,6 +304,10 @@ private:
 
 namespace UnicodeCI
 {
+using long_weight = struct {
+    uint64_t first;
+    uint64_t second;
+};
 extern const std::array<uint64_t, 256 * 256 + 1> weight_lut;
 extern const std::array<long_weight, 23> weight_lut_long;
 const uint64_t long_weight_rune = 0xFFFD;
