@@ -309,8 +309,35 @@ using long_weight = struct {
     uint64_t second;
 };
 extern const std::array<uint64_t, 256 * 256 + 1> weight_lut;
-extern const std::array<long_weight, 23> weight_lut_long;
 const uint64_t long_weight_rune = 0xFFFD;
+
+const std::array<long_weight, 23> weight_lut_long = {
+    long_weight {0x1D6E1DC61D6D0288, 0x000002891E031DC2},
+    long_weight {0x1D741DC61D6D0288, 0x0000000002891DCB},
+    long_weight {0x1D621E0F1DBE1D70, 0x0000000000001DC6},
+    long_weight {0x0E0B1E591E5E1E55, 0x0000000000001E65},
+    long_weight {0x1E781E591E7C1E58, 0x0000000000001E72},
+    long_weight {0x0E0B1E731E7C1E58, 0x000000001E7A1E65},
+    long_weight {0x1E631E7D1E7C1E58, 0x0000000000001E65},
+    long_weight {0x1E651E721E781E59, 0x0000000000001E81},
+    long_weight {0x1E531E5F1E7A1E59, 0x0000000000001E7C},
+    long_weight {0x0E0B1E621E811E5C, 0x0000000000001E72},
+    long_weight {0x1E811E5F0E0B1E6B, 0x0000000000001E65},
+    long_weight {0x1E651E5E1E521E6C, 0x0000000000001E7A},
+    long_weight {0x1E631E781E521E6D, 0x0000000000001E65},
+    long_weight {0x1E551E5D1E631E6D, 0x0000000000001E7A},
+    long_weight {0x0E0B1E611E591E6E, 0x0000000000001E7A},
+    long_weight {0x1E771E5D1E811E70, 0x0000000000001E81},
+    long_weight {0x0E0B1E6B1E791E71, 0x0000000000001E7A},
+    long_weight {0x1E5A1E651E811E7B, 0x0000000000001E81},
+    long_weight {0xDF0FFB40E82AFB40, 0xF93EFB40CF1AFB40},
+    long_weight {0x04370E6D0E330FC0, 0x0000000000000FEA},
+    long_weight {0x04370E6D0E330FC0, 0x000000000E2B0FEA},
+    long_weight {0x135E020913AB135E, 0x13B713AB135013AB},
+    // for default use
+    long_weight {0x0, 0x0}
+};
+
 } // namespace UnicodeCI
 
 class UnicodeCICollator : public ITiDBCollator
@@ -423,7 +450,7 @@ private:
         return true;
     }
 
-    static inline UnicodeCI::long_weight weight_lut_long_map(Rune r) {
+    static inline const UnicodeCI::long_weight & weight_lut_long_map(Rune r) {
         switch (r) {
             case 0x321D: return UnicodeCI::weight_lut_long[0];
             case 0x321E: return UnicodeCI::weight_lut_long[1];
