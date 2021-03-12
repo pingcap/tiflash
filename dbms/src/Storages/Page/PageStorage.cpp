@@ -802,15 +802,23 @@ struct GcContext
         // Each legacy is about serval hundred KiB or serval MiB
         // It means each time `gc` is called, we will read `num_legacy_file` * serval MiB
         // Do more agressive GC if there are too many Legacy files
-        if (num_legacy_files > 30)
+        if (num_legacy_files > 50)
         {
-            res.gc_max_valid_rate = 0.65;
+            if (num_legacy_files > 100)
+            {
+                // All files can be selected to migrate data to a new PageFile
+                res.gc_max_valid_rate = 1.0;
+            }
+            else
+            {
+                res.gc_max_valid_rate = 0.65;
+            }
             res.gc_min_files      = 3;
             res.gc_min_bytes      = PAGE_FILE_ROLL_SIZE / 2;
         }
-        else if (num_legacy_files > 15)
+        else if (num_legacy_files > 20)
         {
-            res.gc_max_valid_rate = 0.50;
+            res.gc_max_valid_rate = 0.40;
             res.gc_min_files      = 6;
             res.gc_min_bytes      = PAGE_FILE_ROLL_SIZE / 4 * 3;
         }

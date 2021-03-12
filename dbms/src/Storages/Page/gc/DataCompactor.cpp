@@ -108,7 +108,9 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
 
         // Don't gc writing page file.
         bool is_candidate = (writing_file_ids.count(page_file.fileIdLevel()) == 0)
-            && (valid_rate < config.gc_max_valid_rate || file_size < config.file_small_size);
+            && (valid_rate < config.gc_max_valid_rate //
+                || file_size < config.file_small_size //
+                || (std::fabs(config.gc_max_valid_rate - 1.0) < std::numeric_limits<double>::epsilon()));
 #ifdef PAGE_STORAGE_UTIL_DEBUGGGING
         LOG_TRACE(log,
                   storage_name << " " << page_file.toString() << " [valid rate=" << DB::toString(valid_rate, 2)
