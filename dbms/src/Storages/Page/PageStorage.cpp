@@ -1052,6 +1052,8 @@ void PageStorage::archivePageFiles(const PageFileSet & page_files)
         auto       dest = archive_path.toString() + "/" + path.getFileName();
         if (Poco::File file(path); file.exists())
         {
+            // To ensure the atomic of deletion, move to the `archive` dir first and then remove the PageFile dir.
+            file.moveTo(dest);
             file.remove(true);
             page_file.deleteEncryptionInfo();
         }

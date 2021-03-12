@@ -324,7 +324,8 @@ void DataCompactor<SnapshotPtr>::logMigrationDetails(const MigrateInfos & infos,
     remove_stream << "]";
     LOG_DEBUG(log,
               storage_name << " Migrate pages to PageFile_" << migrate_file_id.first << "_" << migrate_file_id.second
-                           << ", mirgrate: " << migrate_stream.str() << ", remove: " << remove_stream.str());
+                           << ", migrate: " << migrate_stream.str() << ", remove: " << remove_stream.str() << ", Config{ "
+                           << config.toDebugString() << " }");
 }
 
 
