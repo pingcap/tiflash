@@ -241,8 +241,15 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
     };
     storage_pool.data().registerExternalPagesCallbacks(dmfile_scanner, dmfile_remover);
 
+<<<<<<< HEAD
     gc_handle              = background_pool.addTask([this] { return storage_pool.gc(); });
     background_task_handle = background_pool.addTask([this] { return handleBackgroundTask(); });
+=======
+    gc_handle              = background_pool.addTask([this] { return storage_pool.gc(global_context.getSettingsRef()); });
+    background_task_handle = background_pool.addTask([this] { return handleBackgroundTask(false); });
+
+    blockable_background_pool_handle = blockable_background_pool.addTask([this] { return handleBackgroundTask(true); });
+>>>>>>> 1769158c4... Use an adaptive aggressive GC strategy on Delta (PageStorage) (#1552)
 
     // Do place delta index.
     for (auto & [end, segment] : segments)
