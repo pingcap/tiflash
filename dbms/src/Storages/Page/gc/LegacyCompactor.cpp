@@ -28,12 +28,12 @@ LegacyCompactor::tryCompact(                 //
     std::tie(page_files_to_remove, page_files_to_compact, checkpoint_sequence, old_checkpoint)
         = collectPageFilesToCompact(page_files, writing_file_ids);
 
-    if (page_files_to_compact.size() < config.gc_compact_legacy_min_num)
+    if (page_files_to_compact.size() < config.gc_min_legacy_num)
     {
         LOG_DEBUG(log,
                   storage_name << " LegacyCompactor::tryCompact exit without compaction, candidates size: "
                                << page_files_to_compact.size() //
-                               << ", compact_legacy_min_num: " << config.gc_compact_legacy_min_num);
+                               << ", compact_legacy_min_num: " << config.gc_min_legacy_num);
         // Nothing to compact, remove legacy/checkpoint page files since we
         // don't do gc on them later.
         removePageFilesIf(page_files, [](const PageFile & pf) -> bool {

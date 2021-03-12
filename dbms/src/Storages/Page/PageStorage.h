@@ -51,15 +51,15 @@ public:
 
         size_t file_meta_roll_size = PAGE_META_ROLL_SIZE;
 
-        Float64 merge_hint_low_used_rate            = 0.35;
-        size_t  merge_hint_low_used_file_total_size = PAGE_FILE_ROLL_SIZE;
-        size_t  merge_hint_low_used_file_num        = 10;
-
-        // Maximum write concurrency.
-        size_t num_write_slots = 1;
-
+        Float64 gc_max_valid_rate = 0.35;
+        size_t  gc_min_bytes      = PAGE_FILE_ROLL_SIZE;
+        size_t  gc_min_files      = 10;
         // Minimum number of legacy files to be selected for compaction
-        size_t gc_compact_legacy_min_num = 3;
+        size_t gc_min_legacy_num = 3;
+
+
+        // Maximum write concurrency. Must not be changed once the PageStorage object is created.
+        size_t num_write_slots = 1;
 
         // Maximum seconds of reader / writer idle time.
         // 0 for never reclaim idle file descriptor.
@@ -70,6 +70,10 @@ public:
         size_t prob_do_gc_when_write_is_low = 10;
 
         ::DB::MVCC::VersionSetConfig version_set_config;
+
+        void reload(const Config & rhs);
+
+        String toDebugString() const;
     };
 
     struct ListPageFilesOption
@@ -140,7 +144,10 @@ public:
 
     void drop();
 
-    bool gc();
+    void reloadSettings(const Config & new_config) { config.reload(new_config); }
+
+    // We may skip the GC to reduce useless reading by default.
+    bool gc(bool not_skip = false);
 
     PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot = {});
 

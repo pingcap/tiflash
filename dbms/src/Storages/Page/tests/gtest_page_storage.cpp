@@ -53,8 +53,8 @@ protected:
             }
         }
         // default test config
-        config.file_roll_size               = 512;
-        config.merge_hint_low_used_file_num = 1;
+        config.file_roll_size = 512;
+        config.gc_min_files   = 1;
 
         storage = reopenWithConfig(config);
     }
@@ -382,7 +382,8 @@ try
         wb.putPage(1, 0, buf, buf_sz);
         storage->write(std::move(wb));
 
-        auto f = PageFile::openPageFileForRead(1, 0, storage->delegator->defaultPath(), file_provider, PageFile::Type::Formal, storage->log);
+        auto f
+            = PageFile::openPageFileForRead(1, 0, storage->delegator->defaultPath(), file_provider, PageFile::Type::Formal, storage->log);
         f.setLegacy();
     }
 
