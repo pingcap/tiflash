@@ -90,39 +90,34 @@ enum DebugMode
 };
 
 void dump_all_entries(DB::PageFileSet & page_files, int32_t mode = DebugMode::DUMP_ALL_ENTRIES);
-void list_all_capacity(const DB::PageFileSet & page_files, DB::PageStorage & storage);
+void list_all_capacity(const DB::PageFileSet & page_files, DB::PageStorage & storage, const DB::PageStorage::Config & config);
 
 DB::PageStorage::Config parse_storage_config(int argc, char ** argv, Poco::Logger * logger)
 {
     DB::PageStorage::Config config;
-    config.merge_hint_low_used_file_num        = 10;
-    config.merge_hint_low_used_file_total_size = DB::PAGE_FILE_ROLL_SIZE;
-    config.merge_hint_low_used_rate            = 0.35;
-
     if (argc > 4)
     {
-        size_t num                          = strtoull(argv[4], nullptr, 10);
-        num                                 = std::max(1UL, num);
-        config.merge_hint_low_used_file_num = num;
+        size_t num          = strtoull(argv[4], nullptr, 10);
+        num                 = std::max(1UL, num);
+        config.gc_min_files = num;
     }
     if (argc > 5)
     {
-        size_t num                                 = strtoull(argv[5], nullptr, 10);
-        num                                        = std::max(1UL, num);
-        config.merge_hint_low_used_file_total_size = num;
+        size_t num          = strtoull(argv[5], nullptr, 10);
+        num                 = std::max(1UL, num);
+        config.gc_min_bytes = num;
     }
     if (argc > 6)
     {
         // range from [0.01, 1.0]
-        DB::Float64 n                   = std::stod(argv[6]);
-        n                               = std::min(1.0, std::max(0.01, n));
-        config.merge_hint_low_used_rate = n;
+        DB::Float64 n            = std::stod(argv[6]);
+        n                        = std::min(1.0, std::max(0.01, n));
+        config.gc_max_valid_rate = n;
     }
 
     LOG_INFO(logger,
-             "[merge_hint_low_used_file_num=" << config.merge_hint_low_used_file_num
-                                              << "] [merge_hint_low_used_file_total_size=" << config.merge_hint_low_used_file_total_size
-                                              << "] [merge_hint_low_used_rate=" << DB::toString(config.merge_hint_low_used_rate, 3) << "]");
+             "[gc_min_files=" << config.gc_min_files << "] [gc_min_bytes=" << config.gc_min_bytes
+                              << "] [gc_max_valid_rate=" << DB::toString(config.gc_max_valid_rate, 3) << "]");
 
     return config;
 }
@@ -212,7 +207,7 @@ try
         break;
     }
     case LIST_ALL_CAPACITY:
-        list_all_capacity(page_files, storage);
+        list_all_capacity(page_files, storage, config);
         break;
     case RUN_GC: {
         Int64 num_gc = 1;
@@ -310,7 +305,7 @@ void dump_all_entries(DB::PageFileSet & page_files, int32_t mode)
     }
 }
 
-void list_all_capacity(const DB::PageFileSet & page_files, DB::PageStorage & storage)
+void list_all_capacity(const DB::PageFileSet & page_files, DB::PageStorage & storage, const DB::PageStorage::Config & config)
 {
     constexpr double MB = 1.0 * 1024 * 1024;
 
@@ -318,7 +313,7 @@ void list_all_capacity(const DB::PageFileSet & page_files, DB::PageStorage & sto
 
     DB::DataCompactor<DB::PageStorage::SnapshotPtr>::ValidPages file_valid_pages;
     {
-        DB::DataCompactor<DB::PageStorage::SnapshotPtr> compactor(storage);
+        DB::DataCompactor<DB::PageStorage::SnapshotPtr> compactor(storage, config);
         file_valid_pages = compactor.collectValidPagesInPageFile(snapshot);
     }
 

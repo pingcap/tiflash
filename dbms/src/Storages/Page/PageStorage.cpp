@@ -66,11 +66,11 @@ void PageStorage::Config::reload(const PageStorage::Config & rhs)
     // Reload is not atomic, but should be good enough
 
     // Reload gc threshold
-    merge_hint_low_used_rate            = rhs.merge_hint_low_used_rate;
-    merge_hint_low_used_file_total_size = rhs.merge_hint_low_used_file_total_size;
-    merge_hint_low_used_file_num        = rhs.merge_hint_low_used_file_num;
-    gc_compact_legacy_min_num           = rhs.gc_compact_legacy_min_num;
-    prob_do_gc_when_write_is_low        = rhs.prob_do_gc_when_write_is_low;
+    gc_max_valid_rate            = rhs.gc_max_valid_rate;
+    gc_min_bytes                 = rhs.gc_min_bytes;
+    gc_min_files                 = rhs.gc_min_files;
+    gc_min_legacy_num            = rhs.gc_min_legacy_num;
+    prob_do_gc_when_write_is_low = rhs.prob_do_gc_when_write_is_low;
     // Reload fd idle time
     open_file_max_idle_time = rhs.open_file_max_idle_time;
 }
@@ -78,10 +78,9 @@ void PageStorage::Config::reload(const PageStorage::Config & rhs)
 String PageStorage::Config::toDebugString() const
 {
     std::stringstream ss;
-    ss << "PageStorage::Config {merge_hint_low_used_file_num:" << merge_hint_low_used_file_num
-       << ", merge_hint_low_used_file_total_size:" << merge_hint_low_used_file_total_size
-       << ", merge_hint_low_used_rate:" << DB::toString(merge_hint_low_used_rate, 3)
-       << ", gc_compact_legacy_min_num:" << gc_compact_legacy_min_num << ", prob_do_gc_when_write_is_low:" << prob_do_gc_when_write_is_low
+    ss << "PageStorage::Config {gc_min_files:" << gc_min_files << ", gc_min_bytes:" << gc_min_bytes
+       << ", gc_max_valid_rate:" << DB::toString(gc_max_valid_rate, 3) << ", gc_min_legacy_num:" << gc_min_legacy_num
+       << ", prob_do_gc_when_write_is_low:" << prob_do_gc_when_write_is_low
        << ", open_file_max_idle_time:" << open_file_max_idle_time.count() << "}";
     return ss.str();
 }
@@ -781,7 +780,8 @@ struct GCDebugInfo
     PageFile::Type     min_file_type;
     PageFileIdAndLevel max_file_id;
     PageFile::Type     max_file_type;
-    size_t             page_files_size;
+    size_t             num_page_files   = 0;
+    size_t             num_legacy_files = 0;
 
     size_t num_files_archive_in_compact_legacy = 0;
     size_t num_bytes_written_in_compact_legacy = 0;
@@ -795,6 +795,27 @@ struct GCDebugInfo
 
     size_t num_files_remove_data = 0;
     size_t num_bytes_remove_data = 0;
+
+    PageStorage::Config calculateGcConfig(const PageStorage::Config & config) const
+    {
+        PageStorage::Config res = config;
+        // Each legacy is about serval hundred KiB or serval MiB
+        // It means each time `gc` is called, we will read `num_legacy_file` * serval MiB
+        // Do more agressive GC if there are too many Legacy files
+        if (num_legacy_files > 30)
+        {
+            res.gc_max_valid_rate = 0.65;
+            res.gc_min_files      = 3;
+            res.gc_min_bytes      = PAGE_FILE_ROLL_SIZE / 2;
+        }
+        else if (num_legacy_files > 15)
+        {
+            res.gc_max_valid_rate = 0.50;
+            res.gc_min_files      = 6;
+            res.gc_min_bytes      = PAGE_FILE_ROLL_SIZE / 4 * 3;
+        }
+        return res;
+    }
 };
 
 enum class GCType
@@ -954,20 +975,23 @@ bool PageStorage::gc(bool not_skip)
         }
     });
 
-    debugging_info.min_file_id     = page_files.begin()->fileIdLevel();
-    debugging_info.min_file_type   = page_files.begin()->getType();
-    debugging_info.max_file_id     = page_files.rbegin()->fileIdLevel();
-    debugging_info.max_file_type   = page_files.rbegin()->getType();
-    debugging_info.page_files_size = page_files.size();
+    debugging_info.min_file_id    = page_files.begin()->fileIdLevel();
+    debugging_info.min_file_type  = page_files.begin()->getType();
+    debugging_info.max_file_id    = page_files.rbegin()->fileIdLevel();
+    debugging_info.max_file_type  = page_files.rbegin()->getType();
+    debugging_info.num_page_files = page_files.size();
 
     {
-        // Try to compact consecutive Legacy PageFiles into a snapshot
+        // Try to compact consecutive Legacy PageFiles into a snapshot.
+        // Legacy and checkpoint files will be removed from `page_files` after `tryCompact`.
         LegacyCompactor compactor(*this);
         PageFileSet     page_files_to_archive;
         std::tie(page_files, page_files_to_archive, debugging_info.num_bytes_written_in_compact_legacy)
             = compactor.tryCompact(std::move(page_files), writing_file_id_levels);
         archivePageFiles(page_files_to_archive);
         debugging_info.num_files_archive_in_compact_legacy = page_files_to_archive.size();
+        if (debugging_info.num_page_files > page_files.size())
+            debugging_info.num_legacy_files = debugging_info.num_page_files - page_files.size();
     }
 
     PageEntriesEdit gc_file_entries_edit;
@@ -976,7 +1000,8 @@ bool PageStorage::gc(bool not_skip)
         /// Acquire a snapshot version of page map, new edit on page map store in `gc_file_entries_edit`
         Stopwatch watch_migrate;
 
-        DataCompactor<PageStorage::SnapshotPtr> compactor(*this);
+        // Calculate a config by the gc context, maybe do a more aggressive GC
+        DataCompactor<PageStorage::SnapshotPtr> compactor(*this, debugging_info.calculateGcConfig(config));
         std::tie(debugging_info.compact_result, gc_file_entries_edit)
             = compactor.tryMigrate(page_files, getSnapshot(), writing_file_id_levels);
 
@@ -998,7 +1023,8 @@ bool PageStorage::gc(bool not_skip)
                           << "," << PageFile::typeToString(debugging_info.min_file_type) << "] to ["                   //
                           << debugging_info.max_file_id.first << "," << debugging_info.max_file_id.second              //
                           << "," << PageFile::typeToString(debugging_info.max_file_type)
-                          << "], size: " + DB::toString(debugging_info.page_files_size) //
+                          << "], num files: " << debugging_info.num_page_files //
+                          << ", num legacy:" << debugging_info.num_legacy_files
                           << ", compact legacy archive files: " << debugging_info.num_files_archive_in_compact_legacy
                           << ", remove data files: " << debugging_info.num_files_remove_data
                           << ", gc apply: " << debugging_info.gc_apply_stat.toString());

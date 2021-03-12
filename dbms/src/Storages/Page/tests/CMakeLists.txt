@@ -1,10 +1,4 @@
 
-add_headers_and_sources(encryption ${ClickHouse_SOURCE_DIR}/dbms/src/Encryption)
-add_library(encryption
-        ${encryption_headers} ${encryption_sources}
-        )
-target_link_libraries(encryption clickhouse_common_io)
-
 # glob all unit tests of PageStorage into gtests_page_storage
 macro(grep_gtest_sources BASE_DIR DST_VAR)
     # Cold match files that are not in tests/ directories

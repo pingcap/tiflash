@@ -16,12 +16,12 @@ enum class StorageType
 
 PageStorage::Config extractConfig(const Settings & settings, StorageType subtype)
 {
-#define SET_CONFIG(NAME)                                                                              \
-    config.num_write_slots                     = settings.dt_storage_pool_##NAME##_write_slots;       \
-    config.merge_hint_low_used_file_num        = settings.dt_storage_pool_##NAME##_gc_min_file_num;   \
-    config.merge_hint_low_used_file_total_size = settings.dt_storage_pool_##NAME##_gc_min_bytes;      \
-    config.gc_compact_legacy_min_num           = settings.dt_storage_pool_##NAME##_gc_min_legacy_num; \
-    config.merge_hint_low_used_rate            = settings.dt_storage_pool_##NAME##_gc_max_valid_rate;
+#define SET_CONFIG(NAME)                                                            \
+    config.num_write_slots   = settings.dt_storage_pool_##NAME##_write_slots;       \
+    config.gc_min_files      = settings.dt_storage_pool_##NAME##_gc_min_file_num;   \
+    config.gc_min_bytes      = settings.dt_storage_pool_##NAME##_gc_min_bytes;      \
+    config.gc_min_legacy_num = settings.dt_storage_pool_##NAME##_gc_min_legacy_num; \
+    config.gc_max_valid_rate = settings.dt_storage_pool_##NAME##_gc_max_valid_rate;
 
     PageStorage::Config config;
     config.open_file_max_idle_time = Seconds(settings.dt_open_file_max_idle_seconds);
@@ -93,7 +93,7 @@ void StoragePool::drop()
     log_storage.drop();
 }
 
-bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
+bool StoragePool::gc(const Settings & /*settings*/, const Seconds & try_gc_period)
 {
     {
         std::lock_guard<std::mutex> lock(mutex);

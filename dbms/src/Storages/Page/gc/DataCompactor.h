@@ -26,7 +26,7 @@ public:
     };
 
 public:
-    DataCompactor(const PageStorage & storage);
+    DataCompactor(const PageStorage & storage, PageStorage::Config gc_config);
 
     /**
      * Take a snapshot from PageStorage and try to migrate data if some PageFiles used rate is low.

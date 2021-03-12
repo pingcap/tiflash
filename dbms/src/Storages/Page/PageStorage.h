@@ -51,15 +51,15 @@ public:
 
         size_t file_meta_roll_size = PAGE_META_ROLL_SIZE;
 
-        Float64 merge_hint_low_used_rate            = 0.35;
-        size_t  merge_hint_low_used_file_total_size = PAGE_FILE_ROLL_SIZE;
-        size_t  merge_hint_low_used_file_num        = 10;
+        Float64 gc_max_valid_rate = 0.35;
+        size_t  gc_min_bytes      = PAGE_FILE_ROLL_SIZE;
+        size_t  gc_min_files      = 10;
+        // Minimum number of legacy files to be selected for compaction
+        size_t gc_min_legacy_num = 3;
+
 
         // Maximum write concurrency. Must not be changed once the PageStorage object is created.
         size_t num_write_slots = 1;
-
-        // Minimum number of legacy files to be selected for compaction
-        size_t gc_compact_legacy_min_num = 3;
 
         // Maximum seconds of reader / writer idle time.
         // 0 for never reclaim idle file descriptor.

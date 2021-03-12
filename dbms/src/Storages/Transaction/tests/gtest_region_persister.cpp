@@ -434,7 +434,7 @@ void RegionPersister_test::runTest(const String & path, bool sync_on_write)
         PageStorage::Config conf;
         conf.sync_on_write = sync_on_write;
         conf.file_roll_size = 1;
-        conf.merge_hint_low_used_file_total_size = 1;
+        conf.gc_min_bytes = 1;
         conf.num_write_slots = 4;
 
         testFunc(path, conf, 10, false, false);
@@ -447,7 +447,7 @@ void RegionPersister_test::runTest(const String & path, bool sync_on_write)
         PageStorage::Config conf;
         conf.sync_on_write = sync_on_write;
         conf.file_roll_size = 500;
-        conf.merge_hint_low_used_file_total_size = 1;
+        conf.gc_min_bytes = 1;
         conf.num_write_slots = 4;
 
         testFunc(path, conf, 100, false, false);
@@ -464,7 +464,7 @@ void RegionPersister_test::runTest(const String & path, bool sync_on_write)
         PageStorage::Config conf;
         conf.sync_on_write = sync_on_write;
         conf.file_roll_size = 500;
-        conf.merge_hint_low_used_file_total_size = 1;
+        conf.gc_min_bytes = 1;
         conf.num_write_slots = 4;
 
         testFunc(path, conf, 100, false, false);
