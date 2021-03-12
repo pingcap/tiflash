@@ -305,7 +305,7 @@ private:
 namespace UnicodeCI
 {
 extern const std::array<uint64_t, 256 * 256 + 1> weight_lut;
-extern const std::array<Long_rune, 23> weight_lut_long;
+extern const std::array<long_weight, 23> weight_lut_long;
 const uint64_t long_weight_rune = 0xFFFD;
 } // namespace UnicodeCI
 
@@ -343,31 +343,16 @@ public:
             }
 
             while (s1_first != 0 && s2_first != 0) {
-                if ((s1_first^s2_first)&0xFFFF == 0) {
+                if (((s1_first^s2_first)&0xFFFF) == 0) {
                     s1_first >>= 16;
                     s2_first >>= 16;
                 }
                 else
                 {
-                    return signum(s1_first&0xFFFF-s2_first&0xFFFF);
+                    return signum((s1_first&0xFFFF)-(s2_first&0xFFFF));
                 }
             }
         }
-
-        while (offset1 < v1.length() && offset2 < v2.length())
-        {
-            auto c1 = decodeChar(s1, offset1);
-            auto c2 = decodeChar(s2, offset2);
-
-
-            auto sk1 = weight(c1);
-            auto sk2 = weight(c2);
-            auto cmp = sk1 - sk2;
-            if (cmp != 0)
-                return signum(cmp);
-        }
-
-        return (offset1 < v1.length()) - (offset2 < v2.length());
     }
 
     StringRef sortKey(const char * s, size_t length, std::string & container) const override
@@ -375,18 +360,18 @@ public:
         auto v = rtrim(s, length);
         // every char have 8 uint16 at most.
         if (8 * length * sizeof(uint16_t) > container.size())
-            container.resize(length * sizeof(WeightType));
+            container.resize(8 * length * sizeof(uint16_t));
         size_t offset = 0;
         size_t total_size = 0;
         size_t v_length = v.length();
 
-        uint64_t f = 0, s = 0;
+        uint64_t first = 0, second = 0;
 
         while (offset < v_length)
         {
-            weight(f, s, offset, v_length, s);
-            write_result(f, container, total_size);
-            write_result(s, container, total_size);
+            weight(first, second, offset, v_length, s);
+            write_result(first, container, total_size);
+            write_result(second, container, total_size);
         }
 
         return StringRef(container.data(), total_size);
@@ -434,7 +419,7 @@ private:
         return true;
     }
 
-    static inline UnicodeCI::long_weight weight_lut_long(Rune r) {
+    static inline UnicodeCI::long_weight weight_lut_long_map(Rune r) {
         switch (r) {
             case 0x321D: return UnicodeCI::weight_lut_long[0];
             case 0x321E: return UnicodeCI::weight_lut_long[1];
@@ -473,8 +458,8 @@ private:
                     if (w == 0) {
                         continue;
                     }
-                    if (w == long_weight_rune) {
-                        auto long_weight = UnicodeCI::weight_lut_long(r);
+                    if (w == UnicodeCI::long_weight_rune) {
+                        auto long_weight = UnicodeCI::weight_lut_long_map(r);
                         first = long_weight.first;
                         second = long_weight.second;
                     }
