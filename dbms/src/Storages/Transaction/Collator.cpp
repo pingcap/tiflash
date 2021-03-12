@@ -364,7 +364,13 @@ public:
             weight(s2_first, s2_second, offset2, v2_length, s2);
 
             if (s1_first == 0 || s2_first == 0) {
-                return signum(s1_first-s2_first);
+                if (s1_first < s2_first) {
+                    return -1;
+                }
+                if (s1_first > s2_first) {
+                    return 1;
+                }
+                return 0;
             }
 
             if (s1_first == s2_first) {
@@ -380,7 +386,7 @@ public:
                 }
                 else
                 {
-                    return signum((s1_first&0xFFFF)-(s2_first&0xFFFF));
+                    return signum((int)(s1_first&0xFFFF)-(int)(s2_first&0xFFFF));
                 }
             }
         }

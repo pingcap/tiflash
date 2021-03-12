@@ -61,7 +61,7 @@ const typename CollatorCases::SortKeyCase CollatorCases::sk_cases[] = {
         }},
     {"a ", {PREVENT_TRUNC("\x61\x20"), PREVENT_TRUNC("\x61"), PREVENT_TRUNC("\x00\x41"), PREVENT_TRUNC("\x61"), PREVENT_TRUNC("\x03\x33")}},
     {"", {PREVENT_TRUNC(""), PREVENT_TRUNC(""), PREVENT_TRUNC(""), PREVENT_TRUNC(""), PREVENT_TRUNC("")}},
-    {"ß", {PREVENT_TRUNC("\x00\x00\xDF"), PREVENT_TRUNC("\x00\x00\xDF"), PREVENT_TRUNC(""), PREVENT_TRUNC("\x00\x53"), PREVENT_TRUNC("\x0F\xEA\x0F\xEA")}},
+    {"ß", {PREVENT_TRUNC("\xc3\x9f"), PREVENT_TRUNC("\xc3\x9f"), PREVENT_TRUNC("\x00\x53"), PREVENT_TRUNC("\xc3\x9f"), PREVENT_TRUNC("\x0F\xEA\x0F\xEA")}},
 };
 const typename CollatorCases::PatternCase CollatorCases::pattern_cases[] = {
     {"A", {{"a", {false, false, true, false, true}}, {"A", {true, true, true, true, true}}, {"À", {false, false, true, false, true}}, {"", {false, false, false, false, false}}}},
