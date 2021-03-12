@@ -16,8 +16,6 @@ public:
     {
         UTF8_GENERAL_CI = 33,
         UTF8MB4_GENERAL_CI = 45,
-        UTF8_UNICODE_CI = 192,
-        UTF8MB4_UNICODE_CI = 224,
         UTF8MB4_BIN = 46,
         LATIN1_BIN = 47,
         BINARY = 63,
