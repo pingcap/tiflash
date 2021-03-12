@@ -769,7 +769,7 @@ String createDatabaseStmt(Context & context, const DBInfo & db_info, const Schem
 
     String stmt;
     WriteBufferFromString stmt_buf(stmt);
-    writeString("CREATE DATABASE IF NOT EXISTS", stmt_buf);
+    writeString("CREATE DATABASE IF NOT EXISTS ", stmt_buf);
     writeBackQuotedString(mapped, stmt_buf);
     writeString(" ENGINE = TiFlash('", stmt_buf);
     writeEscapedString(db_info.serialize(), stmt_buf); // must escaped for json-encoded text

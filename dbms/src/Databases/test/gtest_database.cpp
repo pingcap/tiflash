@@ -670,6 +670,7 @@ CATCH
 TEST_F(DatabaseTiFlash_test, ISSUE_1093)
 try
 {
+    // The json info get by `curl http://{tidb-ip}:{tidb-status-port}/schema`
     const std::vector<std::pair<String, String>> cases = {
         //
         {R"raw(x`f"n)raw", R"r({
