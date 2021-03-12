@@ -39,8 +39,8 @@ const typename CollatorCases::CompareCase CollatorCases::cmp_cases[] = {
     {"a\t", "a", {1, 1, 1, 1, 1}},
     {"", "a", {-1, -1, -1, -1, -1}},
     {"a", "", {1, 1, 1, 1, 1}},
-    {"ß", "ss", {1, 1, 1, 1, 0}},
-    {"𐐭", "𐐨", {0, 0, 1, 0, 1}},
+    {"ß", "ss", {1, 1, -1, 1, 0}},
+    {"𐐭", "𐐨", {1, 1, 0, 1, 1}},
 };
 #define PREVENT_TRUNC(s) \
     {                    \

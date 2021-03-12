@@ -484,6 +484,10 @@ private:
             if (second == 0) {
                 while (offset < length) {
                     auto r = decodeChar(s, offset);
+                    if (r > 0xFFFF) {
+                        first = r;
+                        return;
+                    }
                     auto w = UnicodeCI::weight_lut[r];
                     // skip 0 weight char
                     if (w == 0) {
