@@ -84,7 +84,7 @@ private:
     PSDiskDelegatorPtr delegator;
     FileProviderPtr    file_provider;
 
-    const PageStorage::Config & config;
+    const PageStorage::Config config;
 
     Poco::Logger * log;
     Poco::Logger * page_file_log;
