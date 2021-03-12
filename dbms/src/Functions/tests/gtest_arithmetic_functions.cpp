@@ -4,6 +4,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
+#include <test_utils/TiflashTestBasic.h>
 
 #include <string>
 #include <vector>
@@ -20,21 +21,19 @@
 
 namespace DB
 {
-
-Context * ctx;
-
+namespace tests
+{
 
 class TestBinaryArithmeticFunctions : public ::testing::Test
 {
 protected:
     static void SetUpTestCase()
     {
-        ctx = new Context(Context::createGlobal());
         registerFunctions();
     }
     void executeFunction(Block & block, ColumnWithTypeAndName & c1, ColumnWithTypeAndName & c2, const String & func_name)
     {
-        Context context = *ctx;
+        const auto & context = TiFlashTestEnv::getContext();
         auto & factory = FunctionFactory::instance();
 
         ColumnsWithTypeAndName ctns{c1, c2};
@@ -717,4 +716,5 @@ catch (...)
     throw;
 }
 
+} // namespace tests
 } // namespace DB
