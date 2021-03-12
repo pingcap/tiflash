@@ -55,7 +55,7 @@ public:
         size_t  merge_hint_low_used_file_total_size = PAGE_FILE_ROLL_SIZE;
         size_t  merge_hint_low_used_file_num        = 10;
 
-        // Maximum write concurrency.
+        // Maximum write concurrency. Must not be changed once the PageStorage object is created.
         size_t num_write_slots = 1;
 
         // Minimum number of legacy files to be selected for compaction
@@ -70,6 +70,10 @@ public:
         size_t prob_do_gc_when_write_is_low = 10;
 
         ::DB::MVCC::VersionSetConfig version_set_config;
+
+        void reload(const Config & rhs);
+
+        String toDebugString() const;
     };
 
     struct ListPageFilesOption
@@ -139,6 +143,8 @@ public:
     void traversePageEntries(const std::function<void(PageId page_id, const PageEntry & page)> & acceptor, SnapshotPtr snapshot);
 
     void drop();
+
+    void reloadSettings(const Config & new_config) { config.reload(new_config); }
 
     // We may skip the GC to reduce useless reading by default.
     bool gc(bool not_skip = false);

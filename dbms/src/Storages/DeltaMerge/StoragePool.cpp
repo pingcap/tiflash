@@ -93,7 +93,7 @@ void StoragePool::drop()
     log_storage.drop();
 }
 
-bool StoragePool::gc(const Seconds & try_gc_period)
+bool StoragePool::gc(const Settings & settings, const Seconds & try_gc_period)
 {
     {
         std::lock_guard<std::mutex> lock(mutex);
@@ -107,8 +107,17 @@ bool StoragePool::gc(const Seconds & try_gc_period)
 
     bool ok = false;
 
+    // FIXME: The global_context.settings is mutable, we need a way to reload thses settings.
+    // auto config = extractConfig(settings, StorageType::Meta);
+    // meta_storage.reloadSettings(config);
     ok |= meta_storage.gc();
+
+    // config = extractConfig(settings, StorageType::Data);
+    // data_storage.reloadSettings(config);
     ok |= data_storage.gc();
+
+    // config = extractConfig(settings, StorageType::Log);
+    // log_storage.reloadSettings(config);
     ok |= log_storage.gc();
 
     return ok;

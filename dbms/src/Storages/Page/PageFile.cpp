@@ -294,7 +294,7 @@ void PageFile::MetaMergingReader::moveNext(PageFile::Version * v)
     }
     else
     {
-        throw Exception("PageFile binary version not match, unknown version: " + DB::toString(binary_version), ErrorCodes::LOGICAL_ERROR);
+        throw Exception("PageFile binary version not match, unknown [version=" + DB::toString(binary_version) + "] [file=" + page_file.metaPath() + "]", ErrorCodes::LOGICAL_ERROR);
     }
 
     // return the binary_version if `v` is not null

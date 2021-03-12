@@ -61,6 +61,31 @@ bool PageStorage::StatisticsInfo::equals(const StatisticsInfo & rhs)
     return puts == rhs.puts && refs == rhs.refs && deletes == rhs.deletes && upserts == rhs.upserts;
 }
 
+void PageStorage::Config::reload(const PageStorage::Config & rhs)
+{
+    // Reload is not atomic, but should be good enough
+
+    // Reload gc threshold
+    merge_hint_low_used_rate            = rhs.merge_hint_low_used_rate;
+    merge_hint_low_used_file_total_size = rhs.merge_hint_low_used_file_total_size;
+    merge_hint_low_used_file_num        = rhs.merge_hint_low_used_file_num;
+    gc_compact_legacy_min_num           = rhs.gc_compact_legacy_min_num;
+    prob_do_gc_when_write_is_low        = rhs.prob_do_gc_when_write_is_low;
+    // Reload fd idle time
+    open_file_max_idle_time = rhs.open_file_max_idle_time;
+}
+
+String PageStorage::Config::toDebugString() const
+{
+    std::stringstream ss;
+    ss << "PageStorage::Config {merge_hint_low_used_file_num:" << merge_hint_low_used_file_num
+       << ", merge_hint_low_used_file_total_size:" << merge_hint_low_used_file_total_size
+       << ", merge_hint_low_used_rate:" << DB::toString(merge_hint_low_used_rate, 3)
+       << ", gc_compact_legacy_min_num:" << gc_compact_legacy_min_num << ", prob_do_gc_when_write_is_low:" << prob_do_gc_when_write_is_low
+       << ", open_file_max_idle_time:" << open_file_max_idle_time.count() << "}";
+    return ss.str();
+}
+
 PageFile::Version PageStorage::getMaxDataVersion(const FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator)
 {
     Poco::Logger *      log = &Poco::Logger::get("PageStorage::getMaxDataVersion");
