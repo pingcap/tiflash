@@ -1052,7 +1052,7 @@ void PageStorage::archivePageFiles(const PageFileSet & page_files)
         auto       dest = archive_path.toString() + "/" + path.getFileName();
         if (Poco::File file(path); file.exists())
         {
-            file.moveTo(dest);
+            file.remove(true);
             page_file.deleteEncryptionInfo();
         }
     }
