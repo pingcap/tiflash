@@ -5,6 +5,7 @@
 #include <Functions/FunctionsDateTime.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
+#include <test_utils/TiflashTestBasic.h>
 
 #include <string>
 #include <vector>
@@ -18,25 +19,19 @@
 
 namespace DB
 {
-
-Context * ctx;
-
-
+namespace tests
+{
 class TestDateTimeExtract : public ::testing::Test
 {
 protected:
-    static void SetUpTestCase()
-    {
-        ctx = new Context(Context::createGlobal());
-        registerFunctions();
-    }
+    static void SetUpTestCase() { registerFunctions(); }
 };
 
 // Disabled for now, since we haven't supported ExtractFromString yet
 TEST_F(TestDateTimeExtract, DISABLED_ExtractFromString)
 try
 {
-    Context context = *ctx;
+    const Context & context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -111,7 +106,7 @@ catch (...)
 TEST_F(TestDateTimeExtract, ExtractFromMyDateTime)
 try
 {
-    Context context = *ctx;
+    const Context & context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -183,4 +178,5 @@ catch (...)
     throw;
 }
 
+} // namespace tests
 } // namespace DB
