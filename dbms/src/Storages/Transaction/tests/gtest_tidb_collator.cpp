@@ -59,7 +59,7 @@ const typename CollatorCases::SortKeyCase CollatorCases::sk_cases[] = {
             PREVENT_TRUNC("\x0E\xB9\x0F\x82\x0F\x82\x02\x09\x02\xC5\x02\x09\x0E\x4A\x0E\x33\x0F\xC0\x02\x09\xFF\xFD\x02\x09\x0E\x4A\x0E\x33"
                           "\x10\x6A\x02\x09\x06\xFF\x02\x09\x0F\xB4\x10\x1F\x10\x5A")
         }},
-    {"a ", {PREVENT_TRUNC("\x61\x20"), PREVENT_TRUNC("\x61"), PREVENT_TRUNC("\x00\x41"), PREVENT_TRUNC("\x61"), PREVENT_TRUNC("\x03\x33")}},
+    {"a ", {PREVENT_TRUNC("\x61\x20"), PREVENT_TRUNC("\x61"), PREVENT_TRUNC("\x00\x41"), PREVENT_TRUNC("\x61"), PREVENT_TRUNC("\x0e\x33")}},
     {"", {PREVENT_TRUNC(""), PREVENT_TRUNC(""), PREVENT_TRUNC(""), PREVENT_TRUNC(""), PREVENT_TRUNC("")}},
     {"ß", {PREVENT_TRUNC("\xc3\x9f"), PREVENT_TRUNC("\xc3\x9f"), PREVENT_TRUNC("\x00\x53"), PREVENT_TRUNC("\xc3\x9f"), PREVENT_TRUNC("\x0F\xEA\x0F\xEA")}},
 };
