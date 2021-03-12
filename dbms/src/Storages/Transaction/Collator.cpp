@@ -463,7 +463,7 @@ private:
                         continue;
                     }
                     if (w == UnicodeCI::long_weight_rune) {
-                        auto long_weight = UnicodeCI::weight_lut_long_map(r);
+                        auto long_weight = weight_lut_long_map(r);
                         first = long_weight.first;
                         second = long_weight.second;
                     }
