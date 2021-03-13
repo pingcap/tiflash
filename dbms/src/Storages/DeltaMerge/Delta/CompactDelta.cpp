@@ -1,7 +1,6 @@
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Storages/DeltaMerge/DMContext.h>
-#include <Storages/DeltaMerge/Delta/Pack.h>
-#include <Storages/DeltaMerge/DeltaValueSpace.h>
+#include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/Page/PageStorage.h>
 
@@ -15,8 +14,8 @@ struct CompackTask
 {
     CompackTask() {}
 
-    Packs   to_compact;
-    PackPtr result;
+    DeltaPacks        to_compact;
+    DeltaPackPtr result;
 };
 using CompackTasks = std::vector<CompackTask>;
 
@@ -51,45 +50,54 @@ bool DeltaValueSpace::compact(DMContext & context)
             return false;
         }
 
-        CompackTask task;
+        CompackTask cur_task;
         for (auto & pack : packs)
         {
             if (!pack->isSaved())
                 break;
-            if ((unlikely(pack->dataFlushable())))
-                throw Exception("Saved pack is data flushable", ErrorCodes::LOGICAL_ERROR);
 
-            bool small_pack = !pack->isDeleteRange() && pack->rows < context.delta_small_pack_rows;
-            bool schema_ok  = task.to_compact.empty() || pack->schema == task.to_compact.back()->schema;
-            if (!small_pack || !schema_ok)
-            {
-                if (task.to_compact.size() >= 2)
+            auto packup_cur_task = [&]() {
+                if (cur_task.to_compact.size() >= 2)
                 {
-                    tasks.push_back(std::move(task));
-                    task = {};
+                    tasks.push_back(std::move(cur_task));
                 }
                 else
                 {
                     // Maybe this pack is small, but it cannot be merged with other packs, so also remove it's cache.
-                    for (auto & p : task.to_compact)
-                        p->cache = {};
-
-                    task = {};
+                    for (auto & p : cur_task.to_compact)
+                    {
+                        p->tryToBlock()->clearCache();
+                    }
                 }
-            }
 
-            if (small_pack)
+                cur_task = {};
+            };
+
+            if (auto dp_block = pack->tryToBlock(); dp_block)
             {
-                task.to_compact.push_back(pack);
+                if (unlikely(!dp_block->getDataPageId()))
+                    throw Exception("Saved DeltaPackBlock does not have data_page_id", ErrorCodes::LOGICAL_ERROR);
+
+                bool small_pack = pack->getRows() < context.delta_small_pack_rows;
+                bool schema_ok
+                    = cur_task.to_compact.empty() || dp_block->getSchema() == cur_task.to_compact.back()->tryToBlock()->getSchema();
+
+                if (!small_pack || !schema_ok)
+                    packup_cur_task();
+
+                if (small_pack)
+                    cur_task.to_compact.push_back(pack);
+                else
+                    // Then this pack's cache should not exist.
+                    dp_block->clearCache();
             }
             else
             {
-                // Then this pack's cache should not exist.
-                pack->cache = {};
+                packup_cur_task();
             }
         }
-        if (task.to_compact.size() >= 2)
-            tasks.push_back(std::move(task));
+        if (cur_task.to_compact.size() >= 2)
+            tasks.push_back(std::move(cur_task));
 
         if (tasks.empty())
         {
@@ -109,23 +117,24 @@ bool DeltaValueSpace::compact(DMContext & context)
     PageReader   reader(context.storage_pool.log(), log_storage_snap);
     for (auto & task : tasks)
     {
-        auto & schema          = *(task.to_compact[0]->schema);
+        auto & schema          = *(task.to_compact[0]->tryToBlock()->getSchema());
         auto   compact_columns = schema.cloneEmptyColumns();
 
         for (auto & pack : task.to_compact)
         {
-            if (unlikely(pack->isDeleteRange()))
-                throw Exception("Unexpectedly selected a delete range to compact", ErrorCodes::LOGICAL_ERROR);
+            auto dp_block = pack->tryToBlock();
+            if (unlikely(!dp_block))
+                throw Exception("The compact candidate is not a DeltaPackBlock", ErrorCodes::LOGICAL_ERROR);
 
             // We ensure schema of all packs are the same
-            Block  block      = pack->isCached() ? readPackFromCache(pack) : readPackFromDisk(pack, reader);
+            Block  block      = dp_block->isCached() ? dp_block->readFromCache() : dp_block->readFromDisk(reader);
             size_t block_rows = block.rows();
             for (size_t i = 0; i < schema.columns(); ++i)
             {
                 compact_columns[i]->insertRangeFrom(*block.getByPosition(i).column, 0, block_rows);
             }
 
-            wbs.removed_log.delPage(pack->data_page);
+            wbs.removed_log.delPage(dp_block->getDataPageId());
         }
 
         Block compact_block = schema.cloneWithColumns(std::move(compact_columns));
@@ -133,9 +142,10 @@ bool DeltaValueSpace::compact(DMContext & context)
 
         // Note that after compact, caches are no longer exist.
 
-        auto compact_pack = writePack(context, compact_block, 0, compact_rows, wbs);
-        compact_pack->setSchema(task.to_compact.front()->schema);
-        compact_pack->saved = true;
+        auto compact_pack = DeltaPackBlock::writePack(context, compact_block, 0, compact_rows, wbs);
+        // Use the original schema instance, so that we can avoid serialize the new schema instance.
+        compact_pack->tryToBlock()->setSchema(task.to_compact.front()->tryToBlock()->getSchema());
+        compact_pack->tryToBlock()->setSaved();
 
         wbs.writeLogAndData();
         task.result = compact_pack;
@@ -155,12 +165,12 @@ bool DeltaValueSpace::compact(DMContext & context)
             return false;
         }
 
-        Packs new_packs;
-        auto  old_packs_offset = packs.begin();
+        DeltaPacks new_packs;
+        auto       old_packs_offset = packs.begin();
         for (auto & task : tasks)
         {
             auto old_it    = old_packs_offset;
-            auto locate_it = [&](const PackPtr & pack) {
+            auto locate_it = [&](const DeltaPackPtr & pack) {
                 for (; old_it != packs.end(); ++old_it)
                 {
                     if (*old_it == pack)
@@ -187,7 +197,7 @@ bool DeltaValueSpace::compact(DMContext & context)
         }
         new_packs.insert(new_packs.end(), old_packs_offset, packs.end());
 
-        checkNewPacks(new_packs);
+        checkPacks(new_packs);
 
         /// Save the new metadata of packs to disk.
         MemoryWriteBuffer buf(0, PACK_SERIALIZE_BUFFER_SIZE);

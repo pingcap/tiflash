@@ -163,7 +163,7 @@ public:
                                         Poco::Logger *              page_file_log,
                                         const ListPageFilesOption & option = ListPageFilesOption());
 
-    static PageFile::Version getMaxDataVersion(const FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator);
+    static PageFormat::Version getMaxDataVersion(const FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator);
 
 private:
     WriterPtr checkAndRenewWriter(PageFile &     page_file,

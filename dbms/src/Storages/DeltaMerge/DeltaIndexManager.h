@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Storages/DeltaMerge/DeltaIndex.h>
-#include <Storages/DeltaMerge/Segment.h>
 #include <common/logger_useful.h>
 
 namespace DB

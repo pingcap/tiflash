@@ -1,4 +1,5 @@
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
+#include <Storages/DeltaMerge/Segment.h>
 
 namespace CurrentMetrics
 {
