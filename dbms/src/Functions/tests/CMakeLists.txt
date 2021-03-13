@@ -1,16 +1,16 @@
 include_directories (${CMAKE_CURRENT_BINARY_DIR})
 
-add_executable (number_traits gtest_number_traits.cpp)
+add_executable (number_traits number_traits.cpp)
 target_link_libraries (number_traits dbms)
 
-add_executable (strings_trim gtest_strings_trim.cpp)
+add_executable (strings_trim strings_trim.cpp)
 target_link_libraries (strings_trim dbms gtest_main clickhouse_functions)
 
-add_executable (strings_pad gtest_strings_pad.cpp)
+add_executable (strings_pad strings_pad.cpp)
 target_link_libraries (strings_pad dbms gtest_main clickhouse_functions)
 
-add_executable (datetime_extract gtest_datetime_extract.cpp)
+add_executable (datetime_extract datetime_extract.cpp)
 target_link_libraries (datetime_extract dbms gtest_main clickhouse_functions)
 
-add_executable (arithmetic_functions gtest_arithmetic_functions.cpp)
+add_executable (arithmetic_functions arithmetic_functions.cpp)
 target_link_libraries (arithmetic_functions dbms gtest_main clickhouse_functions)
