@@ -10,7 +10,7 @@ mysql> select a from test.t where extract(year from a) = 2021 and extract(month 
 a
 2021-03-13 12:34:56.123456
 
-mysql> select a from test.t where extract(day_microsecond from a) = 13123456123456 and extract(day_second from a) = 13123456 and extract(day_minute from a) = 131234 and extract(day_hour from a) = 1312 and extract(year_month from a) = 2103;
+mysql> select a from test.t where extract(day_microsecond from a) = 13123456123456 and extract(day_second from a) = 13123456 and extract(day_minute from a) = 131234 and extract(day_hour from a) = 1312 and extract(year_month from a) = 202103;
 a
 2021-03-13 12:34:56.123456
 
