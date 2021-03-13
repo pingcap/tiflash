@@ -258,13 +258,9 @@ struct Settings
     M(SettingBool, dt_flush_after_write, false, "Flush cache or not after write in DeltaTree Engine.")\
     M(SettingBool, dt_enable_skippable_place, true, "Enable skippable place or not in DeltaTree Engine.")\
     M(SettingBool, dt_enable_stable_column_cache, true, "Enable column cache for StorageDeltaMerge.") \
-<<<<<<< HEAD
-=======
-    M(SettingBool, dt_enable_single_file_mode_dmfile, false, "Enable write DMFile in single file mode.") \
     M(SettingUInt64, dt_open_file_max_idle_seconds, 15, "Max idle time of opening files, 0 means infinite.") \
     M(SettingFloat, dt_page_gc_low_write_prob, 0.10, "Probability to run gc when write there is few writes") \
     \
->>>>>>> 1769158c4... Use an adaptive aggressive GC strategy on Delta (PageStorage) (#1552)
     M(SettingUInt64, dt_storage_pool_log_write_slots, 4, "Max write concurrency for each StoragePool.log.") \
     M(SettingUInt64, dt_storage_pool_log_gc_min_file_num, 10, "Min number of page files to compact") \
     M(SettingUInt64, dt_storage_pool_log_gc_min_legacy_num, 3, "Min number of legacy page files to compact") \
