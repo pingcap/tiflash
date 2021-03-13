@@ -52,6 +52,9 @@ using Int64 = Poco::Int64;
 using Int128 = __int128_t;
 using Int256 = boost::multiprecision::checked_int256_t;
 using Int512 = boost::multiprecision::checked_int512_t;
+template <typename DataType> constexpr bool IsBoostNumber = false;
+template <> inline constexpr bool IsBoostNumber<Int256>  = true;
+template <> inline constexpr bool IsBoostNumber<Int512>  = true;
 
 using Float32 = float;
 using Float64 = double;

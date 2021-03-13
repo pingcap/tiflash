@@ -59,7 +59,20 @@ UInt64 ColumnDecimal<T>::get64(size_t n) const
 template <typename T>
 void ColumnDecimal<T>::updateHashWithValue(size_t n, SipHash & hash, std::shared_ptr<TiDB::ITiDBCollator>, String &) const
 {
-    hash.update(data[n]);
+    //if constexpr (IsBoostNumber<typename T::NativeType>)
+    //{
+    //    auto & value = data[n];
+    //    auto backend_value = value.value.backend();
+    //    for(unsigned i = 0; i < backend_value.size(); ++i)
+    //    {
+    //        hash.update(backend_value.limbs()[i]);
+    //    }
+    //    hash.update(backend_value.sign());
+    //}
+    //else
+   // {
+        hash.update(data[n]);
+    //}
 }
 
 template <typename T>

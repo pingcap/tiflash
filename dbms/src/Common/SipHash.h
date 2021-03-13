@@ -134,9 +134,20 @@ public:
 
     /// NOTE: std::has_unique_object_representations is only available since clang 6. As of Mar 2017 we still use clang 5 sometimes.
     template <typename T>
-    std::enable_if_t<std::/*has_unique_object_representations_v*/is_standard_layout_v<T>, void> update(const T & x)
+    std::enable_if_t<!DB::IsBoostNumberBasedDecimal<T> && std::/*has_unique_object_representations_v*/is_standard_layout_v<T>, void> update(const T & x)
     {
         update(reinterpret_cast<const char *>(&x), sizeof(x));
+    }
+
+    template <typename T>
+    std::enable_if_t<DB::IsBoostNumberBasedDecimal<T>, void> update(const T & x)
+    {
+        auto backend_value = x.value.backend();
+        for(unsigned i = 0; i < backend_value.size(); ++i)
+        {
+            update(backend_value.limbs()[i]);
+        }
+        update(backend_value.sign());
     }
 
     /// Get the result in some form. This can only be done once!
@@ -183,10 +194,23 @@ inline UInt64 sipHash64(const char * data, const size_t size)
 }
 
 template <typename T>
-std::enable_if_t<std::/*has_unique_object_representations_v*/is_standard_layout_v<T>, UInt64> sipHash64(const T & x)
+std::enable_if_t<!DB::IsBoostNumberBasedDecimal<T> && std::/*has_unique_object_representations_v*/is_standard_layout_v<T>, UInt64> sipHash64(const T & x)
 {
     SipHash hash;
     hash.update(x);
+    return hash.get64();
+}
+
+template <typename T>
+std::enable_if_t<DB::IsBoostNumberBasedDecimal<T>, UInt64> sipHash64(const T & x)
+{
+    SipHash hash;
+    auto backend_value = x.value.backend();
+    for(unsigned i = 0; i < backend_value.size(); ++i)
+    {
+        hash.update(backend_value.limbs()[i]);
+    }
+    hash.update(backend_value.sign());
     return hash.get64();
 }
 
