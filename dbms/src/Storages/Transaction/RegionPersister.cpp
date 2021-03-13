@@ -140,7 +140,7 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
         auto delegator = path_pool.getPSDiskDelegatorRaft();
         // If there is no PageFile with basic version binary format, use the latest version of PageStorage.
         auto detect_binary_version = PageStorage::getMaxDataVersion(global_context.getFileProvider(), delegator);
-        bool run_in_compatible_mode = path_pool.isRaftCompatibleModeEnabled() && (detect_binary_version == PageFile::VERSION_BASE);
+        bool run_in_compatible_mode = path_pool.isRaftCompatibleModeEnabled() && (detect_binary_version == PageFormat::V1);
 
         fiu_do_on(FailPoints::force_enable_region_persister_compatible_mode, { run_in_compatible_mode = true; });
         fiu_do_on(FailPoints::force_disable_region_persister_compatible_mode, { run_in_compatible_mode = false; });

@@ -16,16 +16,17 @@ namespace DB
 namespace DM
 {
 
-// Note that the columns in stable input stream and value space must exactly the same, including name, type, and id.
-// The first column must be handle column.
-template <class DeltaValueSpace, class IndexIterator, bool skippable_place = false>
+/// Note that the columns in stable input stream and value space must exactly the same, including name, type, and id.
+/// The first column must be PK column.
+/// This class does not guarantee that the rows in the return blocks are filltered by range.
+template <class DeltaValueReader, class IndexIterator, bool skippable_place = false>
 class DeltaMergeBlockInputStream final : public SkippableBlockInputStream, Allocator<false>
 {
     static constexpr size_t UNLIMITED = std::numeric_limits<UInt64>::max();
 
 private:
-    using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
-    using SharedLock         = std::shared_lock<std::shared_mutex>;
+    using DeltaValueReaderPtr = std::shared_ptr<DeltaValueReader>;
+    using SharedLock          = std::shared_lock<std::shared_mutex>;
 
     SkippableBlockInputStreamPtr stable_input_stream;
 
@@ -41,9 +42,9 @@ private:
     size_t sk_skip_total_rows  = 0;
     Block  sk_first_block;
 
-    DeltaValueSpacePtr delta_value_space;
-    IndexIterator      delta_index_it;
-    IndexIterator      delta_index_end;
+    DeltaValueReaderPtr delta_value_reader;
+    IndexIterator       delta_index_it;
+    IndexIterator       delta_index_end;
 
     RowKeyRange rowkey_range;
     bool        is_common_handle;
@@ -77,13 +78,13 @@ private:
 
 public:
     DeltaMergeBlockInputStream(const SkippableBlockInputStreamPtr & stable_input_stream_,
-                               DeltaValueSpacePtr &                 delta_value_space_,
+                               const DeltaValueReaderPtr &          delta_value_reader_,
                                const IndexIterator &                delta_index_start_,
                                const IndexIterator &                delta_index_end_,
                                const RowKeyRange                    rowkey_range_,
                                size_t                               max_block_size_)
         : stable_input_stream(stable_input_stream_),
-          delta_value_space(delta_value_space_),
+          delta_value_reader(delta_value_reader_),
           delta_index_it(delta_index_start_),
           delta_index_end(delta_index_end_),
           rowkey_range(rowkey_range_),
@@ -476,7 +477,9 @@ private:
                 output_columns[column_id]->reserve(max_block_size);
         }
 
-        auto actual_write = delta_value_space->read(rowkey_range, output_columns, use_delta_offset, write_rows);
+        // Note that the rows between [use_delta_offset, use_delta_offset + write_rows) are guaranteed sorted,
+        // otherwise we won't read them in the same range.
+        auto actual_write = delta_value_reader->readRows(output_columns, use_delta_offset, write_rows, &rowkey_range);
 
         if constexpr (skippable_place)
         {

@@ -85,7 +85,7 @@ String PageStorage::Config::toDebugString() const
     return ss.str();
 }
 
-PageFile::Version PageStorage::getMaxDataVersion(const FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator)
+PageFormat::Version PageStorage::getMaxDataVersion(const FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator)
 {
     Poco::Logger *      log = &Poco::Logger::get("PageStorage::getMaxDataVersion");
     ListPageFilesOption option;
@@ -94,12 +94,13 @@ PageFile::Version PageStorage::getMaxDataVersion(const FileProviderPtr & file_pr
     option.remove_tmp_files  = false;
     auto page_files          = listAllPageFiles(file_provider, delegator, log, option);
     if (page_files.empty())
-        return PageFile::CURRENT_VERSION;
+        return STORAGE_FORMAT_CURRENT.page;
 
     // Simply check the last PageFile is good enough
     auto reader = const_cast<PageFile &>(*page_files.rbegin()).createMetaMergingReader();
 
-    PageFile::Version max_binary_version = PageFile::VERSION_BASE, temp_version = PageFile::CURRENT_VERSION;
+    PageFormat::Version max_binary_version = PageFormat::V1;
+    PageFormat::Version temp_version = STORAGE_FORMAT_CURRENT.page;
     reader->moveNext(&temp_version);
     max_binary_version = std::max(max_binary_version, temp_version);
     while (reader->hasNext())

@@ -164,6 +164,22 @@ inline Block toEmptyBlock(const ColumnDefines & column_defines)
     return block;
 }
 
+/// Generate a block from column_defines
+inline Block genBlock(const ColumnDefines & column_defines, const Columns & columns)
+{
+    if (unlikely(column_defines.size() != columns.size()))
+        throw Exception("column_defines and columns have different size: " + DB::toString(column_defines.size()) + ", "
+                        + DB::toString(columns.size()));
+
+    Block block;
+    for (size_t i = 0; i < column_defines.size(); ++i)
+    {
+        auto & c = column_defines[i];
+        addColumnToBlock(block, c.id, c.name, c.type, columns[i], c.default_value);
+    }
+    return block;
+}
+
 inline Block getNewBlockByHeader(const Block & header, const Block & block)
 {
     Block new_block;
@@ -236,6 +252,21 @@ inline void concat(Block & base, const Block & next)
         auto & col     = base.getByPosition(i).column;
         auto * col_raw = const_cast<IColumn *>(col.get());
         col_raw->insertRangeFrom((*next.getByPosition(i).column), 0, next_rows);
+    }
+}
+
+/// acc_seq is the accumulative sequence, offset is the pos we need to locate.
+/// Returns <item index, the offset inside item>
+inline std::pair<size_t, size_t> locatePosByAccumulation(const std::vector<size_t> & acc_seq, size_t offset)
+{
+    auto it_begin = acc_seq.begin();
+    auto it       = std::upper_bound(it_begin, acc_seq.end(), offset);
+    if (it == acc_seq.end())
+        return {acc_seq.size(), 0};
+    else
+    {
+        auto item_offset = it == it_begin ? 0 : *(it - 1);
+        return {it - it_begin, offset - item_offset};
     }
 }
 
