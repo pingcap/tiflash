@@ -98,7 +98,7 @@ public:
         for (int i = 0; i < exc.field_types_size(); i++)
         {
             String name = "exchange_receiver_" + std::to_string(i);
-            ColumnInfo info = fieldTypeToColumnInfo(exc.field_types(i));
+            ColumnInfo info = TiDB::fieldTypeToColumnInfo(exc.field_types(i));
             schema.push_back(std::make_pair(name, info));
         }
         setUpConnection();

@@ -205,16 +205,6 @@ DAGQueryBlock::DAGQueryBlock(UInt32 id_, const ::google::protobuf::RepeatedPtrFi
     fillOutputFieldTypes();
 }
 
-void DAGQueryBlock::insertOutputFiledType(int32_t tp, int32_t flag, int32_t flen, int32_t dec)
-{
-    tipb::FieldType field_type;
-    field_type.set_tp(tp);
-    field_type.set_flag(flag);
-    field_type.set_flen(flen);
-    field_type.set_decimal(dec);
-    output_field_types.push_back(field_type);
-}
-
 void DAGQueryBlock::fillOutputFieldTypes()
 {
     if (!output_field_types.empty())
@@ -258,24 +248,32 @@ void DAGQueryBlock::fillOutputFieldTypes()
     }
     else if (source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
-        for (auto & ci : source->exchange_receiver().field_types())
+        for (auto & field_type : source->exchange_receiver().field_types())
         {
-            insertOutputFiledType(ci.tp(), ci.flag(), ci.flen(), ci.decimal());
+            output_field_types.push_back(field_type);
         }
     }
     else if (source->tp() == tipb::ExecType::TypeProjection)
     {
         for (auto & expr : source->projection().exprs())
         {
-            auto & ci = expr.field_type();
-            insertOutputFiledType(ci.tp(), ci.flag(), ci.flen(), ci.decimal());
+            output_field_types.push_back(expr.field_type());
         }
     }
     else
     {
         for (auto & ci : source->tbl_scan().columns())
         {
-            insertOutputFiledType(ci.tp(), ci.flag(), ci.columnlen(), ci.decimal());
+            tipb::FieldType field_type;
+            field_type.set_tp(ci.tp());
+            field_type.set_flag(ci.flag());
+            field_type.set_flen(ci.columnlen());
+            field_type.set_decimal(ci.decimal());
+            for (const auto & elem : ci.elems())
+            {
+                field_type.add_elems(elem);
+            }
+            output_field_types.push_back(field_type);
         }
     }
 }

@@ -55,7 +55,6 @@ public:
     {
         return source->tp() == tipb::ExecType::TypeTableScan && source->tbl_scan().next_read_engine() != tipb::EngineType::Local;
     }
-    void insertOutputFiledType(int32_t tp, int32_t flag, int32_t flen, int32_t dec);
 };
 
 } // namespace DB

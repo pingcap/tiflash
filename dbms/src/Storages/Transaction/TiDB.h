@@ -15,6 +15,7 @@
 #include <Poco/JSON/Array.h>
 #include <Poco/JSON/Object.h>
 #include <Poco/JSON/Parser.h>
+#include <tipb/expression.pb.h>
 #pragma GCC diagnostic pop
 
 namespace DB::ErrorCodes
@@ -375,5 +376,8 @@ struct TableInfo
 using DBInfoPtr = std::shared_ptr<DBInfo>;
 
 String genJsonNull();
+
+tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci);
+ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type);
 
 } // namespace TiDB
