@@ -74,7 +74,7 @@ const typename CollatorCases::PatternCase CollatorCases::pattern_cases[] = {
     {"À%", {{"À", {true, true, true, true, true}}, {"ÀÀÀ", {true, true, true, true, true}}, {"AÀ", {false, false, true, false, true}}, {"", {false, false, false, false, false}}}},
     {"", {{"À", {false, false, false, false, false}}, {"ÀÀÀ", {false, false, false, false, false}}, {"AÀ", {false, false, false, false, false}}, {"", {true, true, true, true, true}}}},
     {"%", {{"À", {true, true, true, true, true}}, {"ÀÀÀ", {true, true, true, true, true}}, {"AÀ", {true, true, true, true, true}}, {"", {true, true, true, true, true}}}},
-    {"a_%À", {{"ÀÀ", {false, false, false, false, false}}, {"aÀÀ", {true, true, true, true, true}}, {"ÀÀÀÀ", {false, false, true, false, true}}, {"ÀÀÀa", {false, false, true, false, false}}}},
+    {"a_%À", {{"ÀÀ", {false, false, false, false, false}}, {"aÀÀ", {true, true, true, true, true}}, {"ÀÀÀÀ", {false, false, true, false, true}}, {"ÀÀÀa", {false, false, true, false, true}}}},
     {"À%_a", {{"ÀÀ", {false, false, false, false, false}}, {"aÀÀ", {false, false, true, false, true}}, {"ÀÀÀa", {true, true, true, true, true}}, {"aÀÀÀ", {false, false, true, false, true}}}},
     {"___a", {{"中a", {true, true, false, false, false}}, {"中文字a", {false, false, true, true, true}}}},
     {"𐐭", {{"𐐨", {false, false, true, false, false}}}},
