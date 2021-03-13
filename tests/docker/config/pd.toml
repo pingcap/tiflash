@@ -1,3 +1,7 @@
+[pd-server]
+## Disable dashboard
+dashboard-address = "none"
+
 [schedule]
 max-store-down-time = "3000h"
 merge-schedule-limit = 0
