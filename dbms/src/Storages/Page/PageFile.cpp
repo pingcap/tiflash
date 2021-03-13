@@ -294,7 +294,7 @@ void PageFile::MetaMergingReader::moveNext(PageFile::Version * v)
     }
     else
     {
-        throw Exception("PageFile binary version not match, unknown version: " + DB::toString(binary_version), ErrorCodes::LOGICAL_ERROR);
+        throw Exception("PageFile binary version not match, unknown [version=" + DB::toString(binary_version) + "] [file=" + page_file.metaPath() + "]", ErrorCodes::LOGICAL_ERROR);
     }
 
     // return the binary_version if `v` is not null
@@ -887,7 +887,7 @@ size_t PageFile::setCheckpoint()
     file_provider->linkEncryptionInfo(old_meta_encryption_path, metaEncryptionPath());
     file.renameTo(folderPath());
     file_provider->deleteEncryptionInfo(old_meta_encryption_path);
-    // Remove the data part, should be a emtpy file.
+    // Remove the data part, should be an emtpy file.
     return removeDataIfExists();
 }
 

@@ -7,28 +7,46 @@ namespace DB
 {
 namespace DM
 {
-static constexpr UInt64 STORAGE_LOG  = 1;
-static constexpr UInt64 STORAGE_DATA = 2;
-static constexpr UInt64 STORAGE_META = 3;
-
-PageStorage::Config extractConfig(const Settings & settings, UInt64 subtype)
+enum class StorageType
 {
+    Log  = 1,
+    Data = 2,
+    Meta = 3,
+};
+
+PageStorage::Config extractConfig(const Settings & settings, StorageType subtype)
+{
+#define SET_CONFIG(NAME)                                                            \
+    config.num_write_slots   = settings.dt_storage_pool_##NAME##_write_slots;       \
+    config.gc_min_files      = settings.dt_storage_pool_##NAME##_gc_min_file_num;   \
+    config.gc_min_bytes      = settings.dt_storage_pool_##NAME##_gc_min_bytes;      \
+    config.gc_min_legacy_num = settings.dt_storage_pool_##NAME##_gc_min_legacy_num; \
+    config.gc_max_valid_rate = settings.dt_storage_pool_##NAME##_gc_max_valid_rate;
+
     PageStorage::Config config;
     config.open_file_max_idle_time = Seconds(settings.dt_open_file_max_idle_seconds);
+    {
+        // The probability is [0~1000] out of 1000
+        Int64 prob                          = settings.dt_page_gc_low_write_prob * 1000;
+        prob                                = std::max(0, std::min(1000, prob));
+        config.prob_do_gc_when_write_is_low = prob;
+    }
     switch (subtype)
     {
-    case STORAGE_LOG:
-        config.num_write_slots = settings.dt_storage_pool_log_write_slots;
+    case StorageType::Log:
+        SET_CONFIG(log);
         break;
-    case STORAGE_DATA:
-        config.num_write_slots = settings.dt_storage_pool_data_write_slots;
+    case StorageType::Data:
+        SET_CONFIG(data);
         break;
-    case STORAGE_META:
-        config.num_write_slots = settings.dt_storage_pool_meta_write_slots;
+    case StorageType::Meta:
+        SET_CONFIG(meta);
         break;
     default:
-        throw Exception("Unknown subtype in extractConfig: " + DB::toString(subtype));
+        throw Exception("Unknown subtype in extractConfig: " + DB::toString(static_cast<Int32>(subtype)));
     }
+#undef SET_CONFIG
+
     return config;
 }
 
@@ -36,19 +54,19 @@ StoragePool::StoragePool(const String & name, StoragePathPool & path_pool, const
     : // The iops and bandwidth in log_storage are relatively high, use multi-disks if possible
       log_storage(name + ".log",
                   path_pool.getPSDiskDelegatorMulti("log"),
-                  extractConfig(settings, STORAGE_LOG),
+                  extractConfig(settings, StorageType::Log),
                   global_ctx.getFileProvider(),
                   global_ctx.getTiFlashMetrics()),
       // The iops in data_storage is low, only use the first disk for storing data
       data_storage(name + ".data",
                    path_pool.getPSDiskDelegatorSingle("data"),
-                   extractConfig(settings, STORAGE_DATA),
+                   extractConfig(settings, StorageType::Data),
                    global_ctx.getFileProvider(),
                    global_ctx.getTiFlashMetrics()),
       // The iops in meta_storage is relatively high, use multi-disks if possible
       meta_storage(name + ".meta",
                    path_pool.getPSDiskDelegatorMulti("meta"),
-                   extractConfig(settings, STORAGE_META),
+                   extractConfig(settings, StorageType::Meta),
                    global_ctx.getFileProvider(),
                    global_ctx.getTiFlashMetrics()),
       max_log_page_id(0),
@@ -75,7 +93,7 @@ void StoragePool::drop()
     log_storage.drop();
 }
 
-bool StoragePool::gc(const Seconds & try_gc_period)
+bool StoragePool::gc(const Settings & /*settings*/, const Seconds & try_gc_period)
 {
     {
         std::lock_guard<std::mutex> lock(mutex);
@@ -89,8 +107,17 @@ bool StoragePool::gc(const Seconds & try_gc_period)
 
     bool ok = false;
 
+    // FIXME: The global_context.settings is mutable, we need a way to reload thses settings.
+    // auto config = extractConfig(settings, StorageType::Meta);
+    // meta_storage.reloadSettings(config);
     ok |= meta_storage.gc();
+
+    // config = extractConfig(settings, StorageType::Data);
+    // data_storage.reloadSettings(config);
     ok |= data_storage.gc();
+
+    // config = extractConfig(settings, StorageType::Log);
+    // log_storage.reloadSettings(config);
     ok |= log_storage.gc();
 
     return ok;
