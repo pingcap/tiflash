@@ -38,8 +38,6 @@ extern std::unordered_map<tipb::ExprType, String> distinct_agg_func_map;
 extern std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map;
 extern const Int8 VAR_SIZE;
 
-tipb::FieldType columnInfoToFieldType(const TiDB::ColumnInfo & ci);
-TiDB::ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type);
 UInt8 getFieldLengthForArrowEncode(Int32 tp);
 bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::EncodeType encode_type);
 std::shared_ptr<TiDB::ITiDBCollator> getCollatorFromExpr(const tipb::Expr & expr);

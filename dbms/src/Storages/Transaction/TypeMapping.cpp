@@ -1,5 +1,3 @@
-#include <type_traits>
-
 #include <Common/FieldVisitors.h>
 #include <Common/typeid_cast.h>
 #include <Core/NamesAndTypes.h>
@@ -20,6 +18,8 @@
 #include <Poco/StringTokenizer.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
+
+#include <type_traits>
 
 namespace DB
 {
@@ -195,22 +195,13 @@ DataTypePtr getDataTypeByColumnInfo(const ColumnInfo & column_info)
 
 DataTypePtr getDataTypeByFieldType(const tipb::FieldType & field_type)
 {
-    ColumnInfo ci;
-    ci.tp = static_cast<TiDB::TP>(field_type.tp());
-    ci.flag = field_type.flag();
-    ci.flen = field_type.flen();
-    ci.decimal = field_type.decimal();
-    // TODO: Enum's elems?
+    ColumnInfo ci = TiDB::fieldTypeToColumnInfo(field_type);
     return getDataTypeByColumnInfo(ci);
 }
 
 TiDB::CodecFlag getCodecFlagByFieldType(const tipb::FieldType & field_type)
 {
-    ColumnInfo ci;
-    ci.tp = static_cast<TiDB::TP>(field_type.tp());
-    ci.flag = field_type.flag();
-    ci.flen = field_type.flen();
-    ci.decimal = field_type.decimal();
+    ColumnInfo ci = TiDB::fieldTypeToColumnInfo(field_type);
     return ci.getCodecFlag();
 }
 
