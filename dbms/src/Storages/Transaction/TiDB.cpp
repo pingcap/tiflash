@@ -935,4 +935,32 @@ String genJsonNull()
     return null;
 }
 
+tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci)
+{
+    tipb::FieldType ret;
+    ret.set_tp(ci.tp);
+    ret.set_flag(ci.flag);
+    ret.set_flen(ci.flen);
+    ret.set_decimal(ci.decimal);
+    for (const auto & elem : ci.elems)
+    {
+        ret.add_elems(elem.first);
+    }
+    return ret;
+}
+
+ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type)
+{
+    TiDB::ColumnInfo ret;
+    ret.tp = static_cast<TiDB::TP>(field_type.tp());
+    ret.flag = field_type.flag();
+    ret.flen = field_type.flen();
+    ret.decimal = field_type.decimal();
+    for (int i = 0; i < field_type.elems_size(); i++)
+    {
+        ret.elems.emplace_back(field_type.elems(i), i + 1);
+    }
+    return ret;
+}
+
 } // namespace TiDB
