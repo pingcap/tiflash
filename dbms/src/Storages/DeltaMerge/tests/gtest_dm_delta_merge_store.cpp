@@ -1,10 +1,13 @@
 #include <Common/FailPoint.h>
+#include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/DataTypeString.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
 #include <Poco/File.h>
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/Segment.h>
 #include <gtest/gtest.h>
 #include <test_utils/TiflashTestBasic.h>
 
@@ -28,12 +31,37 @@ namespace DM
 namespace tests
 {
 
-class DeltaMergeStore_test : public ::testing::Test
+enum TestMode
+{
+    V1_BlockOnly,
+    V2_BlockOnly,
+    V2_FileOnly,
+    V2_Mix,
+};
+
+String testModeToString(const ::testing::TestParamInfo<TestMode> & info)
+{
+    const auto mode = info.param;
+    switch (mode)
+    {
+    case TestMode::V1_BlockOnly:
+        return "V1_BlockOnly";
+    case TestMode::V2_BlockOnly:
+        return "V2_BlockOnly";
+    case TestMode::V2_FileOnly:
+        return "V2_FileOnly";
+    case TestMode::V2_Mix:
+        return "V2_Mix";
+    default:
+        return "Unknown";
+    }
+}
+
+class DeltaMergeStore_test : public ::testing::Test, public testing::WithParamInterface<TestMode>
 {
 public:
     DeltaMergeStore_test() : name("DeltaMergeStore_test") {}
 
-protected:
     static void SetUpTestCase()
     {
         DB::tests::TiFlashTestEnv::setupLogger();
@@ -56,6 +84,20 @@ protected:
 
         cleanUp();
 
+        mode = GetParam();
+
+        switch (mode)
+        {
+        case TestMode::V1_BlockOnly:
+            setStorageFormat(1);
+            break;
+        case TestMode::V2_BlockOnly:
+        case TestMode::V2_FileOnly:
+        case TestMode::V2_Mix:
+            setStorageFormat(2);
+            break;
+        }
+
         context = std::make_unique<Context>(DMTestEnv::getContext());
         store   = reload();
     }
@@ -71,17 +113,37 @@ protected:
         return s;
     }
 
+    std::pair<RowKeyRange, std::vector<PageId>> genDMFile(DMContext & context, const Block & block)
+    {
+        auto file_id      = context.storage_pool.newDataPageId();
+        auto input_stream = std::make_shared<OneBlockInputStream>(block);
+        auto delegate     = context.path_pool.getStableDiskDelegator();
+        auto store_path   = delegate.choosePath();
+        auto dmfile       = writeIntoNewDMFile(
+            context, std::make_shared<ColumnDefines>(store->getTableColumns()), input_stream, file_id, store_path, false);
+
+        delegate.addDTFile(file_id, dmfile->getBytesOnDisk(), store_path);
+
+        auto &      pk_column = block.getByPosition(0).column;
+        auto        min_pk    = pk_column->getInt(0);
+        auto        max_pk    = pk_column->getInt(block.rows() - 1);
+        HandleRange range(min_pk, max_pk + 1);
+
+        return {RowKeyRange::fromHandleRange(range), {file_id}};
+    }
+
 private:
     // the table name
     String name;
 
 protected:
+    TestMode mode;
     // a ptr to context, we can reload context with different settings if need.
     std::unique_ptr<Context> context;
     DeltaMergeStorePtr       store;
 };
 
-TEST_F(DeltaMergeStore_test, Create)
+TEST_P(DeltaMergeStore_test, Create)
 try
 {
     // create table
@@ -103,7 +165,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, OpenWithExtraColumns)
+TEST_P(DeltaMergeStore_test, OpenWithExtraColumns)
 try
 {
     const ColumnDefine col_str_define(2, "col2", std::make_shared<DataTypeString>());
@@ -131,7 +193,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, SimpleWriteRead)
+TEST_P(DeltaMergeStore_test, SimpleWriteRead)
 try
 {
     const ColumnDefine col_str_define(2, "col2", std::make_shared<DataTypeString>());
@@ -191,7 +253,20 @@ try
             }
             block.insert(std::move(i8));
         }
-        store->write(*context, context->getSettingsRef(), block);
+
+        switch (mode)
+        {
+        case TestMode::V1_BlockOnly:
+        case TestMode::V2_BlockOnly:
+            store->write(*context, context->getSettingsRef(), block);
+            break;
+        default: {
+            auto dm_context        = store->newDMContext(*context, context->getSettingsRef());
+            auto [range, file_ids] = genDMFile(*dm_context, block);
+            store->writeRegionSnapshot(dm_context, range, file_ids, false);
+            break;
+        }
+        }
     }
 
     {
@@ -281,14 +356,27 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, DeleteRead)
+TEST_P(DeltaMergeStore_test, DeleteRead)
 try
 {
     const size_t num_rows_write = 128;
     {
         // Create a block with sequential Int64 handle in range [0, 128)
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, 128, false);
-        store->write(*context, context->getSettingsRef(), block);
+
+        switch (mode)
+        {
+        case TestMode::V1_BlockOnly:
+        case TestMode::V2_BlockOnly:
+            store->write(*context, context->getSettingsRef(), block);
+            break;
+        default: {
+            auto dm_context        = store->newDMContext(*context, context->getSettingsRef());
+            auto [range, file_ids] = genDMFile(*dm_context, block);
+            store->writeRegionSnapshot(dm_context, range, file_ids, false);
+            break;
+        }
+        }
     }
     // Test Reading first
     {
@@ -360,7 +448,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, WriteMultipleBlock)
+TEST_P(DeltaMergeStore_test, WriteMultipleBlock)
 try
 {
     const size_t num_write_rows = 32;
@@ -370,9 +458,40 @@ try
         Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, 1 * num_write_rows, false);
         Block block2 = DMTestEnv::prepareSimpleWriteBlock(1 * num_write_rows, 2 * num_write_rows, false);
         Block block3 = DMTestEnv::prepareSimpleWriteBlock(2 * num_write_rows, 3 * num_write_rows, false);
-        store->write(*context, context->getSettingsRef(), block1);
-        store->write(*context, context->getSettingsRef(), block2);
-        store->write(*context, context->getSettingsRef(), block3);
+        switch (mode)
+        {
+        case TestMode::V1_BlockOnly:
+        case TestMode::V2_BlockOnly: {
+            store->write(*context, context->getSettingsRef(), block1);
+            store->write(*context, context->getSettingsRef(), block2);
+            store->write(*context, context->getSettingsRef(), block3);
+            break;
+        }
+        case TestMode::V2_FileOnly: {
+            auto dm_context          = store->newDMContext(*context, context->getSettingsRef());
+            auto [range1, file_ids1] = genDMFile(*dm_context, block1);
+            auto [range2, file_ids2] = genDMFile(*dm_context, block2);
+            auto [range3, file_ids3] = genDMFile(*dm_context, block3);
+            auto range               = range1.merge(range2).merge(range3);
+            auto file_ids            = file_ids1;
+            file_ids.insert(file_ids.cend(), file_ids2.begin(), file_ids2.end());
+            file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
+            store->writeRegionSnapshot(dm_context, range, file_ids, false);
+            break;
+        }
+        case TestMode::V2_Mix: {
+            auto dm_context          = store->newDMContext(*context, context->getSettingsRef());
+            auto [range1, file_ids1] = genDMFile(*dm_context, block1);
+            auto [range3, file_ids3] = genDMFile(*dm_context, block3);
+            auto range               = range1.merge(range3);
+            auto file_ids            = file_ids1;
+            file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
+            store->writeRegionSnapshot(dm_context, range, file_ids, false);
+
+            store->write(*context, context->getSettingsRef(), block2);
+            break;
+        }
+        }
 
         store->flushCache(*context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
     }
@@ -416,9 +535,41 @@ try
         Block  block1 = DMTestEnv::prepareSimpleWriteBlock(0, 1 * num_write_rows, false, tso1);
         Block  block2 = DMTestEnv::prepareSimpleWriteBlock(1 * num_write_rows, 2 * num_write_rows, false, tso1);
         Block  block3 = DMTestEnv::prepareSimpleWriteBlock(num_write_rows / 2, num_write_rows / 2 + num_write_rows, false, tso2);
-        store->write(*context, context->getSettingsRef(), block1);
-        store->write(*context, context->getSettingsRef(), block2);
-        store->write(*context, context->getSettingsRef(), block3);
+
+        switch (mode)
+        {
+        case TestMode::V1_BlockOnly:
+        case TestMode::V2_BlockOnly: {
+            store->write(*context, context->getSettingsRef(), block1);
+            store->write(*context, context->getSettingsRef(), block2);
+            store->write(*context, context->getSettingsRef(), block3);
+            break;
+        }
+        case TestMode::V2_FileOnly: {
+            auto dm_context          = store->newDMContext(*context, context->getSettingsRef());
+            auto [range1, file_ids1] = genDMFile(*dm_context, block1);
+            auto [range2, file_ids2] = genDMFile(*dm_context, block2);
+            auto [range3, file_ids3] = genDMFile(*dm_context, block3);
+            auto range               = range1.merge(range2).merge(range3);
+            auto file_ids            = file_ids1;
+            file_ids.insert(file_ids.cend(), file_ids2.begin(), file_ids2.end());
+            file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
+            store->writeRegionSnapshot(dm_context, range, file_ids, false);
+            break;
+        }
+        case TestMode::V2_Mix: {
+            store->write(*context, context->getSettingsRef(), block2);
+
+            auto dm_context          = store->newDMContext(*context, context->getSettingsRef());
+            auto [range1, file_ids1] = genDMFile(*dm_context, block1);
+            auto [range3, file_ids3] = genDMFile(*dm_context, block3);
+            auto range               = range1.merge(range3);
+            auto file_ids            = file_ids1;
+            file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
+            store->writeRegionSnapshot(dm_context, range, file_ids, false);
+            break;
+        }
+        }
 
         store->flushCache(*context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
     }
@@ -491,7 +642,7 @@ CATCH
 // DEPRECATED:
 //   This test case strongly depends on implementation of `shouldSplit()` and `shouldMerge()`.
 //   The machanism of them may be changed one day. So uncomment the test if need.
-TEST_F(DeltaMergeStore_test, DISABLED_WriteLargeBlock)
+TEST_P(DeltaMergeStore_test, DISABLED_WriteLargeBlock)
 try
 {
     DB::Settings settings = context->getSettings();
@@ -586,7 +737,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, ReadWithSpecifyTso)
+TEST_P(DeltaMergeStore_test, ReadWithSpecifyTso)
 try
 {
     const UInt64 tso1          = 4;
@@ -695,7 +846,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, Split)
+TEST_P(DeltaMergeStore_test, Split)
 try
 {
     // set some params to smaller threshold so that we can trigger split faster
@@ -717,7 +868,34 @@ try
                 num_rows_write_in_total + 1 + num_rows_per_write,
                 false);
 
-            store->write(*context, settings, block);
+            auto write_as_file = [&]() {
+                auto dm_context        = store->newDMContext(*context, context->getSettingsRef());
+                auto [range, file_ids] = genDMFile(*dm_context, block);
+                store->writeRegionSnapshot(dm_context, range, file_ids, false);
+            };
+
+            switch (mode)
+            {
+            case TestMode::V1_BlockOnly:
+            case TestMode::V2_BlockOnly:
+                store->write(*context, settings, block);
+                break;
+            case TestMode::V2_FileOnly:
+                write_as_file();
+                break;
+            case TestMode::V2_Mix: {
+                if ((std::rand() % 2) == 0)
+                {
+                    store->write(*context, settings, block);
+                }
+                else
+                {
+                    write_as_file();
+                }
+                break;
+            }
+            }
+
             store->flushCache(*context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
             num_rows_write_in_total += num_rows_per_write;
         }
@@ -783,7 +961,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, DDLChangeInt8ToInt32)
+TEST_P(DeltaMergeStore_test, DDLChangeInt8ToInt32)
 try
 {
     const String      col_name_ddl        = "i8";
@@ -897,7 +1075,7 @@ try
 CATCH
 
 
-TEST_F(DeltaMergeStore_test, DDLDropColumn)
+TEST_P(DeltaMergeStore_test, DDLDropColumn)
 try
 {
     const String      col_name_to_drop = "i8";
@@ -998,7 +1176,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, DDLAddColumn)
+TEST_P(DeltaMergeStore_test, DDLAddColumn)
 try
 {
     const String      col_name_c1 = "i8";
@@ -1113,7 +1291,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, DDLAddColumnFloat32)
+TEST_P(DeltaMergeStore_test, DDLAddColumnFloat32)
 try
 {
     const String      col_name_to_add = "f32";
@@ -1188,7 +1366,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, DDLAddColumnDateTime)
+TEST_P(DeltaMergeStore_test, DDLAddColumnDateTime)
 try
 {
     const String      col_name_to_add = "dt";
@@ -1260,7 +1438,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, DDLRenameColumn)
+TEST_P(DeltaMergeStore_test, DDLRenameColumn)
 try
 {
     const String      col_name_before_ddl = "i8";
@@ -1377,7 +1555,7 @@ try
 CATCH
 
 // Test rename pk column when pk_is_handle = true.
-TEST_F(DeltaMergeStore_test, DDLRenamePKColumn)
+TEST_P(DeltaMergeStore_test, DDLRenamePKColumn)
 try
 {
     const String      col_name_before_ddl = "pk1";
@@ -1551,7 +1729,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, DDL_issue1341)
+TEST_P(DeltaMergeStore_test, DDL_issue1341)
 try
 {
     // issue 1341: Background task may use a wrong schema to compact data
@@ -1686,7 +1864,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, CreateWithCommonHandle)
+TEST_P(DeltaMergeStore_test, CreateWithCommonHandle)
 try
 {
     auto table_column_defines = DMTestEnv::getDefaultColumns(true);
@@ -1708,7 +1886,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, SimpleWriteReadCommonHandle)
+TEST_P(DeltaMergeStore_test, SimpleWriteReadCommonHandle)
 try
 {
     const ColumnDefine col_str_define(2, "col2", std::make_shared<DataTypeString>());
@@ -1867,7 +2045,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, WriteMultipleBlockWithCommonHandle)
+TEST_P(DeltaMergeStore_test, WriteMultipleBlockWithCommonHandle)
 try
 {
     const size_t num_write_rows       = 32;
@@ -2050,7 +2228,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStore_test, DeleteReadWithCommonHandle)
+TEST_P(DeltaMergeStore_test, DeleteReadWithCommonHandle)
 try
 {
     const size_t num_rows_write     = 128;
@@ -2148,6 +2326,11 @@ try
     }
 }
 CATCH
+
+INSTANTIATE_TEST_CASE_P(TestMode, //
+                        DeltaMergeStore_test,
+                        testing::Values(TestMode::V1_BlockOnly, TestMode::V2_BlockOnly, TestMode::V2_FileOnly, TestMode::V2_Mix),
+                        testModeToString);
 
 } // namespace tests
 } // namespace DM

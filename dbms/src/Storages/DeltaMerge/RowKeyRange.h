@@ -80,6 +80,14 @@ struct RowKeyValue
         int_value = rowkey_value.int_value;
     }
 
+    static RowKeyValue fromHandle(Handle value)
+    {
+        std::stringstream ss;
+        DB::EncodeInt64(value, ss);
+        String s_value = ss.str();
+        return RowKeyValue(false, std::make_shared<String>(s_value), value);
+    }
+
     // Format as a string
     String toString() const;
 
@@ -97,6 +105,11 @@ struct RowKeyValue
         ss.put('r');
         String prefix = ss.str();
         return std::make_shared<DecodedTiKVKey>(prefix + *value);
+    }
+
+    bool operator==(const RowKeyValue & v)
+    {
+        return is_common_handle == v.is_common_handle && (*value) == (*v.value) && int_value == v.int_value;
     }
 
     bool is_common_handle;
@@ -569,6 +582,7 @@ struct RowKeyRange
         std::stringstream ss;
         DB::EncodeInt64(handle_range.start, ss);
         String start = ss.str();
+
         ss.str(std::string());
         DB::EncodeInt64(handle_range.end, ss);
         String end = ss.str();

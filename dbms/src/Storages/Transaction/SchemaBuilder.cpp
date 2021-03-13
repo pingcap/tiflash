@@ -50,6 +50,7 @@ bool isReservedDatabase(Context & context, const String & database_name)
     return context.getTMTContext().getIgnoreDatabases().count(database_name) > 0;
 }
 
+
 inline void setAlterCommandColumn(Logger * log, AlterCommand & command, const ColumnInfo & column_info)
 {
     command.column_name = column_info.name;

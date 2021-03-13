@@ -22,8 +22,8 @@ using StableValueSpacePtr = std::shared_ptr<StableValueSpace>;
 class StableValueSpace : public std::enable_shared_from_this<StableValueSpace>
 {
 public:
-    StableValueSpace(PageId id_, bool is_common_handle_, size_t rowkey_column_size_)
-        : id(id_), is_common_handle(is_common_handle_), rowkey_column_size(rowkey_column_size_), log(&Logger::get("StableValueSpace"))
+    StableValueSpace(PageId id_)
+        : id(id_), log(&Logger::get("StableValueSpace"))
     {
     }
 
@@ -75,8 +75,6 @@ public:
             c->id                 = id;
             c->valid_rows         = valid_rows;
             c->valid_bytes        = valid_bytes;
-            c->is_common_handle   = is_common_handle;
-            c->rowkey_column_size = rowkey_column_size;
 
             for (size_t i = 0; i < column_caches.size(); i++)
             {
@@ -122,8 +120,6 @@ public:
     void drop(const FileProviderPtr & file_provider);
 
 private:
-    static const Int64 CURRENT_VERSION;
-
     const PageId id;
 
     // Valid rows is not always the sum of rows in file,
@@ -131,8 +127,6 @@ private:
     UInt64  valid_rows;
     UInt64  valid_bytes;
     DMFiles files;
-    bool    is_common_handle;
-    size_t  rowkey_column_size;
 
     Logger * log;
 };
