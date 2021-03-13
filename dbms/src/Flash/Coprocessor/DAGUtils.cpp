@@ -46,9 +46,8 @@ const String & getAggFunctionName(const tipb::Expr & expr)
         }
     }
 
-    const auto errmsg = tipb::ExprType_Name(expr.tp())
-        + "(distinct=" + (expr.has_distinct() ? "true" : "false") + ")"
-        + " is not supported.";
+    const auto errmsg
+        = tipb::ExprType_Name(expr.tp()) + "(distinct=" + (expr.has_distinct() ? "true" : "false") + ")" + " is not supported.";
     throw TiFlashException(errmsg, Errors::Coprocessor::Unimplemented);
 }
 
@@ -423,13 +422,6 @@ void assertBlockSchema(const DataTypes & expected_types, const Block & block, co
 
         if (!expected->equals(*actual))
         {
-            /// This is a workaround for Enum type: because TiDB does not push down enough
-            /// information about enum type, we only check the nullability if both type is
-            /// Enum, should be removed if https://github.com/pingcap/tics/issues/1489 is fixed
-            if (expected->isEnum() && actual->isEnum())
-                continue;
-            if (expected->isNullable() && removeNullable(expected)->isEnum() && actual->isNullable() && removeNullable(actual)->isEnum())
-                continue;
             throw Exception("Block schema mismatch in " + context_description + ": different types: expected " + expected->getName()
                 + ", got " + actual->getName());
         }
@@ -961,25 +953,5 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::Upper, "upper"},
     //{tipb::ScalarFuncSig::CharLength, "upper"},
 });
-
-tipb::FieldType columnInfoToFieldType(const TiDB::ColumnInfo & ci)
-{
-    tipb::FieldType ret;
-    ret.set_tp(ci.tp);
-    ret.set_flag(ci.flag);
-    ret.set_flen(ci.flen);
-    ret.set_decimal(ci.decimal);
-    return ret;
-}
-
-TiDB::ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type)
-{
-    TiDB::ColumnInfo ret;
-    ret.tp = static_cast<TiDB::TP>(field_type.tp());
-    ret.flag = field_type.flag();
-    ret.flen = field_type.flen();
-    ret.decimal = field_type.decimal();
-    return ret;
-}
 
 } // namespace DB
