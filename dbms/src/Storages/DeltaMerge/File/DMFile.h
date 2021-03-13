@@ -6,7 +6,7 @@
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/ColumnStat.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/DeltaMerge/File/DMFileDefines.h>
+#include <Storages/FormatVersion.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -113,6 +113,8 @@ public:
 
     String path() const;
 
+    const String & parentPath() const { return parent_path; }
+
     size_t getRows() const
     {
         size_t rows = 0;
@@ -152,6 +154,12 @@ public:
     }
     bool isColumnExist(ColId col_id) const { return column_stats.find(col_id) != column_stats.end(); }
     bool isSingleFileMode() const { return mode == Mode::SINGLE_FILE; }
+
+    String toString()
+    {
+        return "{DMFile, packs: " + DB::toString(getPacks()) + ", rows: " + DB::toString(getRows()) + ", bytes: " + DB::toString(getBytes())
+            + ", file size: " + DB::toString(getBytesOnDisk()) + "}";
+    }
 
 private:
     DMFile(UInt64 file_id_, UInt64 ref_id_, const String & parent_path_, Mode mode_, Status status_, Logger * log_)
@@ -206,7 +214,7 @@ private:
     void writeMeta(const FileProviderPtr & file_provider, const RateLimiterPtr & rate_limiter);
     void readMeta(const FileProviderPtr & file_provider);
 
-    void upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileVersion ver);
+    void upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileFormat::Version ver);
 
     void addPack(const PackStat & pack_stat) { pack_stats.push_back(pack_stat); }
 
