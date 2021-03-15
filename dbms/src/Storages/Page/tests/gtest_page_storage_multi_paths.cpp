@@ -59,9 +59,9 @@ protected:
             file.remove(true);
         }
         // default test config
-        config.file_roll_size           = 4 * MB;
-        config.merge_hint_low_used_rate = 0.5;
-        config.num_write_slots          = 4; // At most 4 threads for write
+        config.file_roll_size    = 4 * MB;
+        config.gc_max_valid_rate = 0.5;
+        config.num_write_slots   = 4; // At most 4 threads for write
     }
 
     static Strings getMultiTestPaths(size_t num_folders_for_test)
