@@ -54,6 +54,7 @@ BackgroundService & TMTContext::getBackgroundService() { return *background_serv
 
 const BackgroundService & TMTContext::getBackgroundService() const { return *background_service; }
 
+
 Context & TMTContext::getContext() { return context; }
 
 bool TMTContext::isInitialized() const { return initialized; }

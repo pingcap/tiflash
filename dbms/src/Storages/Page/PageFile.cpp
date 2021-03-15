@@ -38,8 +38,7 @@ static constexpr bool PAGE_CHECKSUM_ON_READ = true;
 
 namespace PageMetaFormat
 {
-using WBSize          = UInt32;
-using PageFileVersion = PageFile::Version;
+using WBSize = UInt32;
 // TODO we should align these alias with type in PageCache
 using PageTag    = UInt64;
 using IsPut      = std::underlying_type<WriteBatch::WriteType>::type;
@@ -69,7 +68,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
     WBSize meta_write_bytes = 0;
     size_t data_write_bytes = 0;
 
-    meta_write_bytes += sizeof(WBSize) + sizeof(PageFileVersion) + sizeof(WriteBatch::SequenceID);
+    meta_write_bytes += sizeof(WBSize) + sizeof(PageFormat::Version) + sizeof(WriteBatch::SequenceID);
 
     for (const auto & write : wb.getWrites())
     {
@@ -104,7 +103,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
     char * data_pos = data_buffer;
 
     PageUtil::put(meta_pos, meta_write_bytes);
-    PageUtil::put(meta_pos, PageFile::CURRENT_VERSION);
+    PageUtil::put(meta_pos, STORAGE_FORMAT_CURRENT.page);
     PageUtil::put(meta_pos, wb.getSequence());
 
     PageOffset page_data_file_off = page_file.getDataFileAppendPos();
@@ -254,7 +253,7 @@ bool PageFile::MetaMergingReader::hasNext() const
     return (status == Status::Uninitialized) || (status == Status::Opened && meta_file_offset < meta_size);
 }
 
-void PageFile::MetaMergingReader::moveNext(PageFile::Version * v)
+void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
 {
     curr_edit.clear();
     curr_write_batch_sequence = 0;
@@ -283,17 +282,16 @@ void PageFile::MetaMergingReader::moveNext(PageFile::Version * v)
     }
 
     WriteBatch::SequenceID wb_sequence    = 0;
-    const auto             binary_version = PageUtil::get<PageMetaFormat::PageFileVersion>(pos);
-    if (binary_version == 1)
+    const auto             binary_version = PageUtil::get<PageFormat::Version>(pos);
+    switch (binary_version)
     {
+    case PageFormat::V1:
         wb_sequence = 0;
-    }
-    else if (binary_version == PageFile::VERSION_FLASH_341)
-    {
+        break;
+    case PageFormat::V2:
         wb_sequence = PageUtil::get<WriteBatch::SequenceID>(pos);
-    }
-    else
-    {
+        break;
+    default:
         throw Exception("PageFile binary version not match, unknown [version=" + DB::toString(binary_version) + "] [file=" + page_file.metaPath() + "]", ErrorCodes::LOGICAL_ERROR);
     }
 
@@ -327,23 +325,30 @@ void PageFile::MetaMergingReader::moveNext(PageFile::Version * v)
 
             auto      page_id = PageUtil::get<PageId>(pos);
             PageEntry entry;
-            if (binary_version == PageFile::VERSION_BASE)
+            switch (binary_version)
             {
+            case PageFormat::V1: {
                 entry.file_id = page_file.getFileId();
                 entry.level   = page_file.getLevel();
+                break;
             }
-            else if (binary_version == PageFile::VERSION_FLASH_341)
-            {
+            case PageFormat::V2: {
                 entry.file_id = PageUtil::get<PageFileId>(pos);
                 entry.level   = PageUtil::get<PageFileLevel>(pos);
                 flags         = PageUtil::get<PageMetaFormat::PageFlags>(pos);
+                break;
             }
+            default:
+                throw Exception("PageFile binary version not match, unknown version: " + DB::toString(binary_version),
+                                ErrorCodes::LOGICAL_ERROR);
+            }
+
             entry.tag      = PageUtil::get<PageMetaFormat::PageTag>(pos);
             entry.offset   = PageUtil::get<PageMetaFormat::PageOffset>(pos);
             entry.size     = PageUtil::get<PageSize>(pos);
             entry.checksum = PageUtil::get<PageMetaFormat::Checksum>(pos);
 
-            if (binary_version == PageFile::VERSION_FLASH_341)
+            if (binary_version == PageFormat::V2)
             {
                 const UInt64 num_fields = PageUtil::get<UInt64>(pos);
                 entry.field_offsets.reserve(num_fields);

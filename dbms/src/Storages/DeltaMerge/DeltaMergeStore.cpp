@@ -8,6 +8,7 @@
 #include <Storages/DeltaMerge/DMSegmentThreadInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/SchemaUpdate.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -28,6 +29,8 @@ namespace ProfileEvents
 {
 extern const Event DMWriteBlock;
 extern const Event DMWriteBlockNS;
+extern const Event DMWriteFile;
+extern const Event DMWriteFileNS;
 extern const Event DMDeleteRange;
 extern const Event DMDeleteRangeNS;
 extern const Event DMAppendDeltaCommitDisk;
@@ -384,7 +387,7 @@ inline Block getSubBlock(const Block & block, size_t offset, size_t limit)
 
 void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_settings, const Block & to_write)
 {
-    LOG_TRACE(log, "Write into " << db_name << "." << table_name << " " << to_write.rows() << " rows.");
+    LOG_TRACE(log, __FUNCTION__ << " table: " << db_name << "." << table_name << ", rows: " << to_write.rows());
 
     EventRecorder write_block_recorder(ProfileEvents::DMWriteBlock, ProfileEvents::DMWriteBlockNS);
 
@@ -429,7 +432,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
     {
         RowKeyValueRef start_key = rowkey_column.getRowKeyValue(offset);
         WriteBatches   wbs(storage_pool);
-        PackPtr        write_pack;
+        DeltaPackPtr   write_pack;
         RowKeyRange    write_range;
 
         // Keep trying until succeeded.
@@ -449,6 +452,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             }
 
             waitForWrite(dm_context, segment);
+            if (segment->hasAbandoned())
+                continue;
 
             auto & rowkey_range = segment->getRowKeyRange();
 
@@ -473,7 +478,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
                     wbs.rollbackWrittenLogAndData();
                     wbs.clear();
 
-                    write_pack = DeltaValueSpace::writePack(*dm_context, block, offset, limit, wbs);
+                    write_pack = DeltaPackBlock::writePack(*dm_context, block, offset, limit, wbs);
                     wbs.writeLogAndData();
                     write_range = rowkey_range;
                 }
@@ -505,9 +510,138 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         checkSegmentUpdate(dm_context, segment, ThreadType::Write);
 }
 
+void DeltaMergeStore::writeRegionSnapshot(const DMContextPtr & dm_context,
+                                          const RowKeyRange &  range,
+                                          std::vector<PageId>  file_ids,
+                                          bool                 clear_data_in_range)
+{
+    LOG_INFO(log, __FUNCTION__ << " table: " << db_name << "." << table_name << ", region range:" << range.toDebugString());
+
+    EventRecorder write_block_recorder(ProfileEvents::DMDeleteRange, ProfileEvents::DMDeleteRangeNS);
+
+    auto delegate      = dm_context->path_pool.getStableDiskDelegator();
+    auto file_provider = dm_context->db_context.getFileProvider();
+
+    size_t rows          = 0;
+    size_t bytes         = 0;
+    size_t bytes_on_disk = 0;
+
+    DMFiles files;
+    for (auto file_id : file_ids)
+    {
+        auto file_parent_path = delegate.getDTFilePath(file_id);
+
+        auto file = DMFile::restore(file_provider, file_id, file_id, file_parent_path);
+        files.push_back(file);
+
+        rows += file->getRows();
+        bytes += file->getBytes();
+        bytes_on_disk += file->getBytesOnDisk();
+    }
+
+    LOG_DEBUG(log,
+              "[Write Region Snapshot] table: " << db_name << "." << table_name << ", rows: " << rows << ", bytes: " << bytes
+                                                << ", bytes on disk" << bytes_on_disk);
+
+    Segments    updated_segments;
+    RowKeyRange cur_range = range;
+
+    std::vector<UInt8> file_used(files.size(), 0);
+
+    while (!cur_range.none())
+    {
+        RowKeyRange segment_range;
+
+        // Keep trying until succeeded.
+        while (true)
+        {
+            SegmentPtr segment;
+            {
+                std::shared_lock lock(read_write_mutex);
+
+                auto segment_it = segments.upper_bound(cur_range.getStart());
+                if (segment_it == segments.end())
+                {
+                    throw Exception("Failed to locate segment begin with start in range: " + cur_range.toDebugString(),
+                                    ErrorCodes::LOGICAL_ERROR);
+                }
+                segment = segment_it->second;
+            }
+
+            waitForWrite(dm_context, segment);
+            if (segment->hasAbandoned())
+                continue;
+
+            segment_range = segment->getRowKeyRange();
+
+            // Write could fail, because other threads could already updated the instance. Like split/merge, merge delta.
+            DeltaPacks   packs;
+            WriteBatches wbs(storage_pool);
+
+            std::vector<UInt8> my_file_used = file_used;
+
+            for (size_t index = 0; index < files.size(); ++index)
+            {
+                auto & file = files[index];
+
+                auto file_id = file->fileId();
+                /// For the first segment, we use the original file_id and DMFile instance.
+                /// For the rest segments, we will generate another DMFile instance with a new ref_id pointed to the file_id.
+                if (!my_file_used[index])
+                {
+                    auto pack = std::make_shared<DeltaPackFile>(*dm_context, file, segment_range);
+                    // All rows could be filtered out by segment_range.
+                    if (pack->getRows())
+                    {
+                        packs.push_back(pack);
+                        wbs.data.putExternal(file_id, 0);
+                        my_file_used[index] = 1;
+                    }
+                }
+                else
+                {
+                    auto & file_parent_path = file->parentPath();
+                    auto   ref_id           = storage_pool.newDataPageId();
+
+                    auto ref_file = DMFile::restore(file_provider, file_id, ref_id, file_parent_path);
+                    auto pack     = std::make_shared<DeltaPackFile>(*dm_context, ref_file, segment_range);
+                    if (pack->getRows())
+                    {
+                        packs.push_back(pack);
+                        wbs.data.putRefPage(ref_id, file_id);
+                    }
+                }
+            }
+
+            // We have to commit those file_ids to PageStorage, because as soon as packs are written into segments,
+            // they are visible for readers who require file_ids to be found in PageStorage.
+            wbs.writeLogAndData();
+
+            if (segment->writeRegionSnapshot(*dm_context, range.shrink(segment_range), packs, clear_data_in_range))
+            {
+                updated_segments.push_back(segment);
+                file_used.swap(my_file_used);
+                break;
+            }
+            else
+            {
+                wbs.rollbackWrittenLogAndData();
+            }
+        }
+
+        cur_range.setStart(segment_range.end);
+        cur_range.setEnd(range.end);
+    }
+
+    flushCache(dm_context, range);
+
+    for (auto & segment : updated_segments)
+        checkSegmentUpdate(dm_context, segment, ThreadType::Write);
+}
+
 void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings & db_settings, const RowKeyRange & delete_range)
 {
-    LOG_INFO(log, "Write into " << db_name << "." << table_name << " delete range " << delete_range.toDebugString());
+    LOG_INFO(log, __FUNCTION__ << " table: " << db_name << "." << table_name << " delete range " << delete_range.toDebugString());
 
     EventRecorder write_block_recorder(ProfileEvents::DMDeleteRange, ProfileEvents::DMDeleteRangeNS);
 
@@ -541,7 +675,8 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
             }
 
             waitForDeleteRange(dm_context, segment);
-
+            if (segment->hasAbandoned())
+                continue;
 
             segment_range = segment->getRowKeyRange();
 
@@ -1096,6 +1231,11 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
                           << "] failed. Error msg: " << e.message());
         e.rethrow();
     }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        throw;
+    }
 
     if (left)
         checkSegmentUpdate(task.dm_context, left, type);
@@ -1124,7 +1264,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
         }
 
         segment_snap = segment->createSnapshot(dm_context, /* for_update */ true);
-        if (!segment_snap)
+        if (!segment_snap || !segment_snap->getRows())
         {
             LOG_DEBUG(log, "Give up segment [" << segment->segmentId() << "] split");
             return {};
