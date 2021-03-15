@@ -189,8 +189,6 @@ template <> inline constexpr bool IsDecimal<Decimal32>  = true;
 template <> inline constexpr bool IsDecimal<Decimal64>  = true;
 template <> inline constexpr bool IsDecimal<Decimal128> = true;
 template <> inline constexpr bool IsDecimal<Decimal256> = true;
-template <typename DataType> constexpr bool IsBoostNumberBasedDecimal = false;
-template <> inline constexpr bool IsBoostNumberBasedDecimal<Decimal256>  = true;
 
 class Field;
 
