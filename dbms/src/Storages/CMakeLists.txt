@@ -1,4 +1,5 @@
 add_subdirectory (System)
+add_subdirectory (Page)
 
 if (ENABLE_TESTS)
     add_subdirectory (tests EXCLUDE_FROM_ALL)
