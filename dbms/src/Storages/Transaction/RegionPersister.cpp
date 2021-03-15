@@ -122,10 +122,10 @@ DB::stable::PageStorage::Config getStablePSConfig(const PageStorage::Config & co
     c.file_max_size = config.file_max_size;
     c.file_small_size = config.file_max_size;
 
-    c.merge_hint_low_used_rate = config.merge_hint_low_used_rate;
-    c.merge_hint_low_used_file_total_size = config.merge_hint_low_used_file_total_size;
-    c.merge_hint_low_used_file_num = config.merge_hint_low_used_file_num;
-    c.gc_compact_legacy_min_num = config.gc_compact_legacy_min_num;
+    c.merge_hint_low_used_rate = config.gc_max_valid_rate;
+    c.merge_hint_low_used_file_total_size = config.gc_min_bytes;
+    c.merge_hint_low_used_file_num = config.gc_min_files;
+    c.gc_compact_legacy_min_num = config.gc_min_legacy_num;
 
     c.version_set_config.compact_hint_delta_deletions = config.version_set_config.compact_hint_delta_deletions;
     c.version_set_config.compact_hint_delta_entries = config.version_set_config.compact_hint_delta_entries;
