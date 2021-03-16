@@ -77,7 +77,7 @@ TEST_F(StringPad, string_pad_string_unit_Test)
 
     Field resField;
 
-    std::vector<String> results{"abcabcahello", "hello, world", "It's TheFlas", "abcabca     ", "abcabcabcabc"};
+    std::vector<String> results{"abcabcahello", "hello, world", "It's TiFlash", "abcabca     ", "abcabcabcabc"};
     for (size_t t = 0; t < results.size(); t++)
     {
         c0_string->get(t, resField);
@@ -93,7 +93,7 @@ TEST_F(StringPad, string_pad_string_unit_Test)
     res = testBlock.getByPosition(3).column.get();
     c0_string = checkAndGetColumn<ColumnString>(res);
 
-    results = {"helloabcabca", "hello, world", "It's TheFlas", "     abcabca", "abcabcabcabc"};
+    results = {"helloabcabca", "hello, world", "It's TiFlash", "     abcabca", "abcabcabcabc"};
     for (size_t t = 0; t < results.size(); t++)
     {
         c0_string->get(t, resField);
@@ -218,7 +218,7 @@ TEST_F(StringPad, string_pad_empty_padding_unit_Test)
 
     Field resField;
 
-    std::vector<String> results{"hello", "hello, world", "It's TheFlas", "     ", ""};
+    std::vector<String> results{"hello", "hello, world", "It's TiFlash", "     ", ""};
     for (size_t t = 0; t < results.size(); t++)
     {
         c0_string->get(t, resField);
@@ -234,7 +234,7 @@ TEST_F(StringPad, string_pad_empty_padding_unit_Test)
     res = testBlock.getByPosition(3).column.get();
     c0_string = checkAndGetColumn<ColumnString>(res);
 
-    results = {"hello", "hello, world", "It's TheFlas", "     ", ""};
+    results = {"hello", "hello, world", "It's TiFlash", "     ", ""};
     for (size_t t = 0; t < results.size(); t++)
     {
         c0_string->get(t, resField);
