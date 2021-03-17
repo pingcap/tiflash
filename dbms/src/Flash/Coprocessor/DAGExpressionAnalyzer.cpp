@@ -904,16 +904,25 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
         /// need to extract target_type from expr.field_type() because the flash_type derived from
         /// value is just a `memory type`, which does not have enough information, for example:
         /// for date literal, the flash_type is `UInt64`
-        DataTypePtr target_type = exprHasValidFieldType(expr) ? getDataTypeByFieldType(expr.field_type()) : flash_type;
-        if (flash_type->isDecimal() && target_type->isDecimal())
+        DataTypePtr target_type{};
+        if (expr.tp() == tipb::ExprType::Null)
         {
-            /// to fix https://github.com/pingcap/tics/issues/1425, when TiDB push down
-            /// a decimal literal, it contains two types: one is the type that encoded
-            /// in Decimal value itself(i.e. expr.val()), the other is the type that in
-            /// expr.field_type(). According to TiDB and Mysql behavior, the computing
-            /// layer should use the type in expr.val(), which means we should ignore
-            /// the type in expr.field_type()
-            target_type = flash_type;
+            // We should use DataTypeNothing as NULL literal's TiFlash Type
+            target_type = makeNullable(DataTypeFactory::instance().get("Nothing"));
+        }
+        else
+        {
+            target_type = exprHasValidFieldType(expr) ? getDataTypeByFieldType(expr.field_type()) : flash_type;
+            if (flash_type->isDecimal() && target_type->isDecimal())
+            {
+                /// to fix https://github.com/pingcap/tics/issues/1425, when TiDB push down
+                /// a decimal literal, it contains two types: one is the type that encoded
+                /// in Decimal value itself(i.e. expr.val()), the other is the type that in
+                /// expr.field_type(). According to TiDB and Mysql behavior, the computing
+                /// layer should use the type in expr.val(), which means we should ignore
+                /// the type in expr.field_type()
+                target_type = flash_type;
+            }
         }
         ret = exprToString(expr, getCurrentInputColumns()) + "_" + target_type->getName();
         if (!actions->getSampleBlock().has(ret))
