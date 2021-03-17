@@ -20,7 +20,7 @@ set -e
 
 function wait_env() {
   local engine="$1"
-  local timeout='60'
+  local timeout='200'
   local failed='true'
 
   echo "=> wait for env available"
