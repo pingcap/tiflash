@@ -86,7 +86,17 @@ Field ColumnInfo::defaultValueToField() const
         case TypeBlob:
         case TypeVarString:
         case TypeString:
-            return value.convert<String>();
+        {
+            auto v = value.convert<String>();
+            if (hasBinaryFlag())
+            {
+                // For binary column, we have to pad trailing zeros according to the specified type length.
+                // User may define default value `0x1234` for a `BINARY(4)` column, TiDB stores it in a string "\u12\u34" (sized 2).
+                // But it actually means `0x12340000`.
+                v.append(flen - v.length(), '\0');
+            }
+            return v;
+        }
         case TypeJSON:
             // JSON can't have a default value
             return genJsonNull();
