@@ -13,7 +13,7 @@
 
 ### Install gRPC Systemwise
 
-You should use exact gRPC 1.26.0. Refer to gRPC documentation or our test settings [example](https://github.com/pingcap/kvproto/blob/master/.github/workflows/cpp-test.yaml) for how to do it.
+You should use exact gRPC 1.26.0. Refer to gRPC [document](https://github.com/grpc/grpc/blob/master/BUILDING.md) or our test settings [example](https://github.com/pingcap/kvproto/blob/master/.github/workflows/cpp-test.yaml) for how to do it.
 
 ### Checkout Source Code
 
