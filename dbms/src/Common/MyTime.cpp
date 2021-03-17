@@ -785,12 +785,10 @@ String MyDateTime::toString(int fsp) const
 
 inline bool isZeroDate(UInt64 time) { return time == 0; }
 
-inline bool supportedByDateLUT(const MyDateTime & my_time)
-{
-    /// DateLUT only support time from year 1970
-    return my_time.year >= 1970;
-}
+inline bool supportedByDateLUT(const MyDateTime & my_time) { return my_time.year >= 1970; }
 
+/// DateLUT only support time from year 1970, in some corner cases, the input date may be
+/// 1969-12-31, need extra logical to handle it
 inline time_t getEpochSecond(const MyDateTime & my_time, const DateLUTImpl & time_zone)
 {
     if likely (supportedByDateLUT(my_time))
