@@ -39,7 +39,7 @@ services:
       - "pd0"
     restart: on-failure
   tidb0:
-    image: hub.pingcap.net/qa/tidb:master-failpoint
+    image: hub.pingcap.net/qa/tidb:release-5.0-failpoint
     environment:
       GO_FAILPOINTS: "github.com/pingcap/tidb/server/enableTestAPI=return"
     ports:
