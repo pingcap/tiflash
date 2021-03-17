@@ -26,6 +26,7 @@ fi
 
 rm -rf ${SRCPATH}/libs/libtiflash-proxy
 mkdir -p ${SRCPATH}/libs/libtiflash-proxy
+install_name_tool -id @executable_path/libtiflash_proxy.dylib ${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.dylib
 ln -s ${SRCPATH}/contrib/tiflash-proxy/target/release/libtiflash_proxy.dylib ${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.dylib
 
 build_dir="$SRCPATH/release-darwin/build-release"
@@ -44,10 +45,4 @@ cp -f "$build_dir/dbms/src/Server/tiflash" "$install_dir/tiflash"
 cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.dylib" "$install_dir/libtiflash_proxy.dylib"
 
 FILE="$install_dir/tiflash"
-otool -L "$FILE"
-cd "$install_dir"
-# remove .dylib dependency built in other directories
-otool -L ${FILE} | egrep -v "$(otool -D ${FILE})" | egrep -v "/(usr/lib|System)" | grep -o "/.*\.dylib" | while read; do
-	install_name_tool -change $REPLY @executable_path/"$(basename ${REPLY})" $FILE;
-done
 otool -L "$FILE"
