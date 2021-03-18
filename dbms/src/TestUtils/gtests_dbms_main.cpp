@@ -58,16 +58,26 @@ Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testda
     context.getSettingsRef() = settings;
     return context;
 }
+
+void TiFlashTestEnv::shutdown()
+{
+    global_context->getTMTContext().setTerminated();
+    global_context->shutdown();
+    global_context.reset();
+}
 } // namespace DB::tests
 
 int main(int argc, char ** argv)
 {
-
-    DB::tests::TiFlashTestEnv::initializeGlobalContext();
     DB::tests::TiFlashTestEnv::setupLogger();
+    DB::tests::TiFlashTestEnv::initializeGlobalContext();
 
     fiu_init(0); // init failpoint
 
     ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
+    auto ret = RUN_ALL_TESTS();
+
+    DB::tests::TiFlashTestEnv::shutdown();
+
+    return ret;
 }

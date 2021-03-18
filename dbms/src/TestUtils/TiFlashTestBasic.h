@@ -112,11 +112,11 @@ public:
         throw Exception("Can not find testdata with name[" + name + "]");
     }
 
-    static void initializeGlobalContext();
-
     static Context getContext(const DB::Settings & settings = DB::Settings(), Strings testdata_path = {});
 
+    static void initializeGlobalContext();
     static Context & getGlobalContext() { return *global_context; }
+    static void shutdown();
 
 private:
     static std::unique_ptr<Context> global_context;
