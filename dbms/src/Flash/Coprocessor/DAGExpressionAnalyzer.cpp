@@ -79,6 +79,28 @@ static String buildMultiIfFunction(DAGExpressionAnalyzer * analyzer, const tipb:
     return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
 }
 
+static String buildIfNullFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+{
+    // rewrite IFNULL function with multiIf
+    // ifNull(arg1, arg2) -> if(isNull(arg1), arg2, arg1)
+    const String & func_name = "multiIf";
+    Names argument_names;
+    if (expr.children_size() != 2)
+    {
+        throw TiFlashException("Invalid arguments of IFNULL function", Errors::Coprocessor::BadRequest);
+    }
+
+    String condition_arg_name = analyzer->getActions(expr.children(0), actions, false);
+    String else_arg_name = analyzer->getActions(expr.children(1), actions, false);
+    String is_null_result = analyzer->applyFunction("isNull", {condition_arg_name}, actions, getCollatorFromExpr(expr));
+
+    argument_names.push_back(std::move(is_null_result));
+    argument_names.push_back(std::move(else_arg_name));
+    argument_names.push_back(std::move(condition_arg_name));
+
+    return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
+}
+
 static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
 {
     const String & func_name = getFunctionName(expr);
@@ -256,6 +278,7 @@ static std::unordered_map<String, std::function<String(DAGExpressionAnalyzer *, 
         {"globalNotIn", buildInFunction},
         {"tidbIn", buildInFunction},
         {"tidbNotIn", buildInFunction},
+        {"ifNull", buildIfNullFunction},
         {"multiIf", buildMultiIfFunction},
         {"tidb_cast", buildCastFunction},
         {"date_add", buildDateAddFunction},
