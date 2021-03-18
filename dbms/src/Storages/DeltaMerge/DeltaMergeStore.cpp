@@ -659,7 +659,7 @@ void DeltaMergeStore::ingestFiles(const DMContextPtr & dm_context,
             // they are visible for readers who require file_ids to be found in PageStorage.
             wbs.writeLogAndData();
 
-            if (segment->writeRegionSnapshot(*dm_context, range.shrink(segment_range), packs, clear_data_in_range))
+            if (segment->ingestPacks(*dm_context, range.shrink(segment_range), packs, clear_data_in_range))
             {
                 updated_segments.push_back(segment);
                 file_used.swap(my_file_used);

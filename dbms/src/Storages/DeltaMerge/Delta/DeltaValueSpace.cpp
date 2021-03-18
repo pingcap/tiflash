@@ -351,11 +351,13 @@ bool DeltaValueSpace::appendRegionSnapshot(DMContext & /*context*/,
     if (abandoned.load(std::memory_order_relaxed))
         return false;
 
+    // Prepend a DeleteRange to clean data before applying packs
     if (clear_data_in_range)
     {
         auto p = std::make_shared<DeltaPackDeleteRange>(range);
         appendPackInner(p);
     }
+
     for (auto & p : packs)
     {
         appendPackInner(p);

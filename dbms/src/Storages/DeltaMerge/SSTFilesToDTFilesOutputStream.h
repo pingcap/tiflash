@@ -3,7 +3,6 @@
 #include <Common/Stopwatch.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/Page/PageDefines.h>
-#include <Storages/StorageDeltaMerge.h>
 
 #include <memory>
 #include <string_view>
@@ -23,9 +22,14 @@ using RegionPtr = std::shared_ptr<Region>;
 struct SSTViewVec;
 struct TiFlashRaftProxyHelper;
 struct SSTReader;
+class StorageDeltaMerge;
 
 namespace DM
 {
+
+struct ColumnDefine;
+using ColumnDefines    = std::vector<ColumnDefine>;
+using ColumnDefinesPtr = std::shared_ptr<ColumnDefines>;
 
 class DMFile;
 using DMFilePtr = std::shared_ptr<DMFile>;

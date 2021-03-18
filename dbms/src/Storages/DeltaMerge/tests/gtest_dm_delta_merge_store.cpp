@@ -5,7 +5,6 @@
 #include <Parsers/ASTLiteral.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/DMContext.h>
-#include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <TestUtils/TiFlashTestBasic.h>

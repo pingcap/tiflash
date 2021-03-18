@@ -312,7 +312,7 @@ bool Segment::write(DMContext & dm_context, const RowKeyRange & delete_range)
     return delta->appendDeleteRange(dm_context, delete_range);
 }
 
-bool Segment::writeRegionSnapshot(DMContext & dm_context, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range)
+bool Segment::ingestPacks(DMContext & dm_context, const RowKeyRange & range, const DeltaPacks & packs, bool clear_data_in_range)
 {
     auto new_range = range.shrink(rowkey_range);
     LOG_TRACE(log, "Segment [" << segment_id << "] write region snapshot: " << new_range.toDebugString());

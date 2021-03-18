@@ -6,6 +6,7 @@
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/SSTFilesToDTFilesOutputStream.h>
+#include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/SSTReader.h>
@@ -15,12 +16,6 @@
 namespace DB
 {
 
-namespace DM
-{
-struct ColumnDefine;
-using ColumnDefines    = std::vector<ColumnDefine>;
-using ColumnDefinesPtr = std::shared_ptr<ColumnDefines>;
-} // namespace DM
 
 std::tuple<Block, std::shared_ptr<StorageDeltaMerge>, DM::ColumnDefinesPtr> //
 GenRegionBlockDatawithSchema(const RegionPtr & region, TMTContext & tmt);
@@ -153,10 +148,12 @@ void SSTFilesToDTFilesOutputStream::scanCF(ColumnFamilyType cf, const std::strin
     }
 }
 
-bool isSameSchema(const ColumnDefinesPtr & a, const ColumnDefinesPtr & b)
+bool needUpdateSchema(const ColumnDefinesPtr & a, const ColumnDefinesPtr & b)
 {
+    // Note that we consider `a` is not `b` if both of them are `nullptr`
     if (a == nullptr || b == nullptr)
         return false;
+
     if (a->size() != b->size())
         return false;
     for (size_t i = 0; i < a->size(); ++i)
@@ -187,7 +184,7 @@ void SSTFilesToDTFilesOutputStream::saveCommitedData()
         return;
 
     ingest_storage = storage;
-    if (dt_file == nullptr || !isSameSchema(cur_schema, schema_snap))
+    if (dt_file == nullptr || !needUpdateSchema(cur_schema, schema_snap))
     {
         // Close previous DTFile and output stream before creating new DTFile for new schema
         finishCurrDTFileStream();
@@ -211,13 +208,13 @@ void SSTFilesToDTFilesOutputStream::saveCommitedData()
         if (parent_path.empty())
         {
             // Can no allocate path and id for storing DTFiles (the store may be dropped),
-            // reset all SSTReaders and
+            // reset all SSTReaders and return without writting blocks any more.
             write_reader.reset();
             default_reader.reset();
             lock_reader.reset();
             return;
         }
-        dt_file = DMFile::create(/*file_id*/ file_id, /*parent_path*/ parent_path, single_file_mode);
+        dt_file = DMFile::create(file_id, parent_path, single_file_mode);
         LOG_INFO(log, "Create file for snapshot data [file=" << dt_file->path() << "] [single_file_mode=" << single_file_mode << "]");
         cur_schema = schema_snap;
         dt_stream  = std::make_unique<DMFileBlockOutputStream>(tmt.getContext(), dt_file, *cur_schema, /*need_rate_limit=*/false);

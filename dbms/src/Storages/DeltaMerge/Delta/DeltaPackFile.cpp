@@ -43,8 +43,7 @@ void DeltaPackFile::serializeMetadata(WriteBuffer & buf, bool /*save_schema*/) c
 
 DeltaPackPtr DeltaPackFile::deserializeMetadata(DMContext &         context, //
                                                 const RowKeyRange & segment_range,
-                                                ReadBuffer &        buf,
-                                                const BlockPtr & /*last_schema*/)
+                                                ReadBuffer &        buf)
 {
     UInt64 file_ref_id;
     size_t valid_rows, valid_bytes;

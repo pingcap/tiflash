@@ -310,13 +310,15 @@ public:
         return ingestFiles(dm_context, range, file_ids, clear_data_in_range);
     }
 
+    /// Read all rows without MVCC filtering
     BlockInputStreams readRaw(const Context &       db_context,
                               const DB::Settings &  db_settings,
                               const ColumnDefines & column_defines,
                               size_t                num_streams,
                               const SegmentIdSet &  read_segments = {});
 
-    /// ranges should be sorted and merged already.
+    /// Read rows with MVCC filtering
+    /// `sorted_ranges` should be already sorted and merged
     BlockInputStreams read(const Context &       db_context,
                            const DB::Settings &  db_settings,
                            const ColumnDefines & columns_to_read,
@@ -380,9 +382,9 @@ public:
 
     RegionSplitRes getRegionSplitPoint(DMContext & dm_context, const RowKeyRange & check_range, size_t max_region_size, size_t split_size);
 
+private:
     DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings);
 
-private:
     bool pkIsHandle() const { return original_table_handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
 
     void waitForWrite(const DMContextPtr & context, const SegmentPtr & segment);

@@ -13,6 +13,13 @@ namespace DB
 {
 namespace DM
 {
+extern DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
+                                    const ColumnDefinesPtr &    schema_snap,
+                                    const BlockInputStreamPtr & input_stream,
+                                    UInt64                      file_id,
+                                    const String &              parent_path,
+                                    bool                        need_rate_limit);
+
 namespace tests
 {
 
@@ -177,7 +184,6 @@ try
         {
             // flush segment
             segment = segment->mergeDelta(dmContext(), tableColumns());
-            ;
         }
 
         {
@@ -1080,7 +1086,7 @@ try
                 wbs.data.putExternal(file_id, 0);
                 wbs.writeLogAndData();
 
-                segment->writeRegionSnapshot(dmContext(), range, {pack}, false);
+                segment->ingestPacks(dmContext(), range, {pack}, false);
                 break;
             }
             default:
@@ -1343,7 +1349,6 @@ try
     {
         segment->flushCache(dmContext());
         segment = segment->mergeDelta(dmContext(), tableColumns());
-        ;
     }
 
     {
@@ -1521,7 +1526,6 @@ try
     {
         segment->flushCache(dmContext());
         segment = segment->mergeDelta(dmContext(), tableColumns());
-        ;
     }
 
     {
