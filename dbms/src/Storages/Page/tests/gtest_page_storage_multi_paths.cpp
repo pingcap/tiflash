@@ -16,7 +16,7 @@
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
 #include <common/logger_useful.h>
-#include <test_utils/TiflashTestBasic.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 #include <atomic>
 #include <chrono>
@@ -47,7 +47,7 @@ public:
     {
     }
 
-    static void SetUpTestCase() { TiFlashTestEnv::setupLogger(); }
+    static void SetUpTestCase() {}
 
 protected:
     void SetUp() override
