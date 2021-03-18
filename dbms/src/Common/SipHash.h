@@ -209,27 +209,12 @@ inline UInt64 sipHash64(const char * data, const size_t size)
 }
 
 template <typename T>
-std::enable_if_t<!DB::IsBoostNumber<T> && std::/*has_unique_object_representations_v*/is_standard_layout_v<T>, UInt64> sipHash64(const T & x)
-{
-    if constexpr (DB::IsDecimal<T>)
-    {
-        return sipHash64(x.value);
-    }
-    else
-    {
-        SipHash hash;
-        hash.update(x);
-        return hash.get64();
-    }
-}
-
-template <typename T>
 std::enable_if_t<DB::IsBoostNumber<T>, UInt64> sipHash64(const T & x)
 {
     if constexpr (DB::IsCppIntBackend<typename T::backend_type>)
     {
         SipHash hash;
-        auto backend_value = x.value.backend();
+        auto backend_value = x.backend();
         for(unsigned i = 0; i < backend_value.size(); ++i)
         {
             hash.update(backend_value.limbs()[i]);
@@ -243,6 +228,20 @@ std::enable_if_t<DB::IsBoostNumber<T>, UInt64> sipHash64(const T & x)
     }
 }
 
+template <typename T>
+std::enable_if_t<!DB::IsBoostNumber<T> && std::/*has_unique_object_representations_v*/is_standard_layout_v<T>, UInt64> sipHash64(const T & x)
+{
+    if constexpr (DB::IsDecimal<T>)
+    {
+        return sipHash64(x.value);
+    }
+    else
+    {
+        SipHash hash;
+        hash.update(x);
+        return hash.get64();
+    }
+}
 
 #include <string>
 
