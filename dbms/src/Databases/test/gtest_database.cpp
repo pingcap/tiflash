@@ -15,7 +15,7 @@
 #include <Storages/Transaction/TMTStorages.h>
 #include <Storages/registerStorages.h>
 #include <common/ThreadPool.h>
-#include <test_utils/TiflashTestBasic.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 #include <optional>
 
@@ -43,9 +43,7 @@ public:
 
     static void SetUpTestCase()
     {
-        TiFlashTestEnv::setupLogger();
         registerStorages();
-        fiu_init(0); // init failpoint
     }
 
     DatabaseTiFlash_test() {}
@@ -55,7 +53,7 @@ public:
     void TearDown() override
     {
         // Clean all database from context.
-        auto & ctx = TiFlashTestEnv::getContext();
+        auto ctx = TiFlashTestEnv::getContext();
         for (const auto & [name, db] : ctx.getDatabases())
         {
             ctx.detachDatabase(name);
