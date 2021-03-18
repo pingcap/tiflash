@@ -779,8 +779,8 @@ public:
         return 0;
     }
 
-    bool useDefaultImplementationForConstants() const override { return true; }
     bool useDefaultImplementationForNulls() const override { return false; }
+    bool useDefaultImplementationForConstants() const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -798,7 +798,7 @@ public:
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
         }
 
-        return std::make_shared<DataTypeString>();
+        return makeNullable(std::make_shared<DataTypeString>());
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
@@ -821,10 +821,12 @@ public:
             }
             else
             {
+                result_null_map->getData()[row] = false;
+
                 bool has_not_null = false;
                 for (size_t col = 1; col < arguments.size(); ++col)
                 {
-                    if (block.getByPosition(arguments[col]).column->isNullAt(row))
+                    if (!block.getByPosition(arguments[col]).column->isNullAt(row))
                     {
                         if (has_not_null)
                             writeSlice(sources[0]->getWhole(), sink);
