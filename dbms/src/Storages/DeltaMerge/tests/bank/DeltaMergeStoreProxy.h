@@ -9,6 +9,11 @@
 #include <Storages/DeltaMerge/tests/bank/IDGenerator.h>
 #include <Storages/DeltaMerge/tests/bank/SimpleDB.h>
 #include <Storages/DeltaMerge/tests/dm_basic_include.h>
+<<<<<<< HEAD
+=======
+#include <TestUtils/TiFlashTestBasic.h>
+
+>>>>>>> 8f0b7ef1e... Refactor TiFlashRaftConfig / Define main entry point for `gtests_dbms` (#1583)
 #include <cstddef>
 #include <iostream>
 #include <memory>

@@ -1,7 +1,12 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
+<<<<<<< HEAD
 #include <test_utils/TiflashTestBasic.h>
+=======
+#include <gtest/gtest.h>
+#include <TestUtils/TiFlashTestBasic.h>
+>>>>>>> 8f0b7ef1e... Refactor TiFlashRaftConfig / Define main entry point for `gtests_dbms` (#1583)
 
 #include <ctime>
 #include <memory>
@@ -29,7 +34,7 @@ private:
     }
 
 public:
-    static void SetUpTestCase() { DB::tests::TiFlashTestEnv::setupLogger(); }
+    static void SetUpTestCase() {}
 
     void SetUp() override
     {

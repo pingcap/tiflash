@@ -2,7 +2,7 @@
 #include <DataTypes/getLeastSupertype.h>
 #include <DataTypes/getMostSubtype.h>
 #include <DataTypes/isSupportedDataTypeCast.h>
-#include <test_utils/TiflashTestBasic.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 #include <sstream>
 

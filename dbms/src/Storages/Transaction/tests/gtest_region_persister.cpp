@@ -12,7 +12,7 @@
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
-#include <test_utils/TiflashTestBasic.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 #include <ext/scope_guard.h>
 
@@ -34,11 +34,7 @@ class RegionPersister_test : public ::testing::Test
 public:
     RegionPersister_test() : dir_path(TiFlashTestEnv::getTemporaryPath() + "/region_persister_tmp") {}
 
-    static void SetUpTestCase()
-    {
-        TiFlashTestEnv::setupLogger();
-        fiu_init(0); // init failpoint
-    }
+    static void SetUpTestCase() {}
 
     void SetUp() override { dropFiles(); }
 
@@ -203,7 +199,7 @@ try
 
     std::string path = dir_path + "/broken_file";
 
-    auto & ctx = TiFlashTestEnv::getContext(DB::Settings(),
+    auto ctx = TiFlashTestEnv::getContext(DB::Settings(),
         Strings{
             path,
         });
@@ -273,7 +269,7 @@ try
     // Force to run in compatible mode for the default region persister
     FailPointHelper::enableFailPoint(FailPoints::force_enable_region_persister_compatible_mode);
     SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_enable_region_persister_compatible_mode); });
-    auto & ctx = TiFlashTestEnv::getContext(DB::Settings(),
+    auto ctx = TiFlashTestEnv::getContext(DB::Settings(),
         Strings{
             path,
         });
@@ -382,7 +378,7 @@ void RegionPersister_test::testFunc(const String & path, const PageStorage::Conf
     if (clean_up)
         dropFiles();
 
-    auto & ctx = TiFlashTestEnv::getContext(DB::Settings(),
+    auto ctx = TiFlashTestEnv::getContext(DB::Settings(),
         Strings{
             path,
         });

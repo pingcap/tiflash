@@ -5,8 +5,12 @@
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+<<<<<<< HEAD
+=======
+#include <Storages/DeltaMerge/Segment.h>
+#include <TestUtils/TiFlashTestBasic.h>
+>>>>>>> 8f0b7ef1e... Refactor TiFlashRaftConfig / Define main entry point for `gtests_dbms` (#1583)
 #include <gtest/gtest.h>
-#include <test_utils/TiflashTestBasic.h>
 
 #include <memory>
 
@@ -33,12 +37,16 @@ class DeltaMergeStore_test : public ::testing::Test
 public:
     DeltaMergeStore_test() : name("DeltaMergeStore_test") {}
 
+<<<<<<< HEAD
 protected:
     static void SetUpTestCase()
     {
         DB::tests::TiFlashTestEnv::setupLogger();
         fiu_init(0); // init failpoint
     }
+=======
+    static void SetUpTestCase() {}
+>>>>>>> 8f0b7ef1e... Refactor TiFlashRaftConfig / Define main entry point for `gtests_dbms` (#1583)
 
     void cleanUp()
     {

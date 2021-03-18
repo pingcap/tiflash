@@ -2,7 +2,6 @@
 
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/IDataType.h>
-#include <Encryption/MockKeyManager.h>
 #include <Interpreters/Context.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/File.h>
@@ -10,8 +9,11 @@
 #include <Poco/Path.h>
 #include <Poco/PatternFormatter.h>
 #include <Poco/SortedDirectoryIterator.h>
+<<<<<<< HEAD:dbms/src/test_utils/TiflashTestBasic.h
 #include <Storages/Transaction/TMTContext.h>
 #include <Common/UnifiedLogPatternFormatter.h>
+=======
+>>>>>>> 8f0b7ef1e... Refactor TiFlashRaftConfig / Define main entry point for `gtests_dbms` (#1583):dbms/src/TestUtils/TiFlashTestBasic.h
 #include <gtest/gtest.h>
 
 namespace DB
@@ -114,6 +116,7 @@ public:
         throw Exception("Can not find testdata with name[" + name + "]");
     }
 
+<<<<<<< HEAD:dbms/src/test_utils/TiflashTestBasic.h
     static Context & getContext(const DB::Settings & settings = DB::Settings(), Strings testdata_path = {})
     {
         static Context context = DB::Context::createGlobal();
@@ -155,6 +158,19 @@ public:
         context.getSettingsRef() = settings;
         return context;
     }
+=======
+    static Context getContext(const DB::Settings & settings = DB::Settings(), Strings testdata_path = {});
+
+    static void initializeGlobalContext();
+    static Context & getGlobalContext() { return *global_context; }
+    static void shutdown();
+
+private:
+    static std::unique_ptr<Context> global_context;
+
+private:
+    TiFlashTestEnv() = delete;
+>>>>>>> 8f0b7ef1e... Refactor TiFlashRaftConfig / Define main entry point for `gtests_dbms` (#1583):dbms/src/TestUtils/TiFlashTestBasic.h
 };
 
 #define CHECK_TESTS_WITH_DATA_ENABLED                                                                        \

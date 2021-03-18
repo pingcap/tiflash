@@ -7,7 +7,12 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Range.h>
+<<<<<<< HEAD
 #include <test_utils/TiflashTestBasic.h>
+=======
+#include <Storages/DeltaMerge/RowKeyRange.h>
+#include <TestUtils/TiFlashTestBasic.h>
+>>>>>>> 8f0b7ef1e... Refactor TiFlashRaftConfig / Define main entry point for `gtests_dbms` (#1583)
 
 namespace DB
 {
@@ -39,7 +44,7 @@ inline ::testing::AssertionResult HandleRangeCompare(const char *        lhs_exp
 class DMTestEnv
 {
 public:
-    static Context & getContext(const ::DB::Settings & settings = DB::Settings())
+    static Context getContext(const ::DB::Settings & settings = DB::Settings())
     {
         return ::DB::tests::TiFlashTestEnv::getContext(settings);
     }

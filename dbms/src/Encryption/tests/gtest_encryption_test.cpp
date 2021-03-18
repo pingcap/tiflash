@@ -4,7 +4,7 @@
 #include <Encryption/PosixWritableFile.h>
 #include <Storages/Transaction/FileEncryption.h>
 #include <gtest/gtest.h>
-#include <test_utils/TiflashTestBasic.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 #include <random>
 

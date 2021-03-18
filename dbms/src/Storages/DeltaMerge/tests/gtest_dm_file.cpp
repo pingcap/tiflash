@@ -32,13 +32,13 @@ public:
 
     static void SetUpTestCase()
     {
-        fiu_init(0); // init failpoint
     }
 
     void SetUp() override
     {
         dropFiles();
 
+<<<<<<< HEAD
         auto & ctx      = DMTestEnv::getContext();
         auto   settings = DB::Settings();
         path_pool       = std::make_unique<StoragePathPool>(ctx.getPathPool().withTable("test", "t1", false));
@@ -47,6 +47,19 @@ public:
         db_context      = std::make_unique<Context>(DMTestEnv::getContext(settings));
         table_columns_  = std::make_shared<ColumnDefines>();
         column_cache_   = std::make_shared<ColumnCache>();
+=======
+        auto mode             = GetParam();
+        bool single_file_mode = mode == DMFile::Mode::SINGLE_FILE;
+
+        auto ctx       = DMTestEnv::getContext();
+        auto settings  = DB::Settings();
+        path_pool      = std::make_unique<StoragePathPool>(ctx.getPathPool().withTable("test", "t1", false));
+        storage_pool   = std::make_unique<StoragePool>("test.t1", *path_pool, ctx, settings);
+        dm_file        = DMFile::create(1, parent_path, single_file_mode);
+        db_context     = std::make_unique<Context>(DMTestEnv::getContext(settings));
+        table_columns_ = std::make_shared<ColumnDefines>();
+        column_cache_  = std::make_shared<ColumnCache>();
+>>>>>>> 8f0b7ef1e... Refactor TiFlashRaftConfig / Define main entry point for `gtests_dbms` (#1583)
 
         reload();
     }
@@ -64,7 +77,7 @@ public:
     {
         *table_columns_ = *cols;
 
-        auto & ctx = DMTestEnv::getContext();
+        auto ctx   = DMTestEnv::getContext();
         *path_pool = ctx.getPathPool().withTable("test", "t1", false);
         dm_context = std::make_unique<DMContext>( //
             *db_context,
@@ -891,6 +904,164 @@ try
                         }
                     }
                 }
+<<<<<<< HEAD
+=======
+                // check pk
+                EXPECT_EQ(c->getInt(i), cur_pk++);
+            }
+            num_rows_read += in.rows();
+        }
+        ASSERT_EQ(num_rows_read, num_rows_write);
+        stream->readSuffix();
+    }
+}
+CATCH
+
+
+INSTANTIATE_TEST_CASE_P(DTFileMode, //
+                        DMFile_Test,
+                        testing::Values(DMFile::Mode::FOLDER, DMFile::Mode::SINGLE_FILE),
+                        paramToString);
+
+
+/// DMFile test for clustered index
+class DMFile_Clustered_Index_Test : public ::testing::Test, //
+                                    public testing::WithParamInterface<DMFile::Mode>
+{
+public:
+    DMFile_Clustered_Index_Test() : path(DB::tests::TiFlashTestEnv::getTemporaryPath() + "/dm_file_clustered_index_tests"), dm_file(nullptr)
+    {
+    }
+
+    void SetUp() override
+    {
+        dropFiles();
+
+        auto mode             = GetParam();
+        bool single_file_mode = mode == DMFile::Mode::SINGLE_FILE;
+
+        auto settings  = DB::Settings();
+        auto ctx       = DMTestEnv::getContext();
+        path_pool      = std::make_unique<StoragePathPool>(ctx.getPathPool().withTable("test", "t", false));
+        storage_pool   = std::make_unique<StoragePool>("test.t1", *path_pool, ctx, settings);
+        dm_file        = DMFile::create(0, path, single_file_mode);
+        db_context     = std::make_unique<Context>(DMTestEnv::getContext(settings));
+        table_columns_ = std::make_shared<ColumnDefines>();
+        column_cache_  = std::make_shared<ColumnCache>();
+
+        reload();
+    }
+
+    void dropFiles()
+    {
+        Poco::File file(path);
+        if (file.exists())
+        {
+            file.remove(true);
+        }
+    }
+
+    // Update dm_context.
+    void reload(const ColumnDefinesPtr & cols = DMTestEnv::getDefaultColumns(true))
+    {
+        *table_columns_ = *cols;
+
+        dm_context = std::make_unique<DMContext>( //
+            *db_context,
+            *path_pool,
+            *storage_pool,
+            /*hash_salt*/ 0,
+            0,
+            settings.not_compress_columns,
+            is_common_handle,
+            rowkey_column_size,
+            db_context->getSettingsRef());
+    }
+
+
+    DMContext & dmContext() { return *dm_context; }
+
+    Context & dbContext() { return *db_context; }
+
+private:
+    String                     path;
+    std::unique_ptr<Context>   db_context;
+    std::unique_ptr<DMContext> dm_context;
+    /// all these var live as ref in dm_context
+    std::unique_ptr<StoragePathPool> path_pool;
+    std::unique_ptr<StoragePool>     storage_pool;
+    ColumnDefinesPtr                 table_columns_;
+    DeltaMergeStore::Settings        settings;
+
+protected:
+    DMFilePtr      dm_file;
+    ColumnCachePtr column_cache_;
+    TableID        table_id           = 1;
+    bool           is_common_handle   = true;
+    size_t         rowkey_column_size = 2;
+};
+
+TEST_P(DMFile_Clustered_Index_Test, WriteRead)
+try
+{
+    auto cols = DMTestEnv::getDefaultColumns(is_common_handle);
+
+    const size_t num_rows_write = 128;
+
+    {
+        // Prepare for write
+        Block block1 = DMTestEnv::prepareSimpleWriteBlock(0,
+                                                          num_rows_write / 2,
+                                                          false,
+                                                          2,
+                                                          EXTRA_HANDLE_COLUMN_NAME,
+                                                          EXTRA_HANDLE_COLUMN_ID,
+                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
+                                                          is_common_handle,
+                                                          rowkey_column_size);
+        Block block2 = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2,
+                                                          num_rows_write,
+                                                          false,
+                                                          2,
+                                                          EXTRA_HANDLE_COLUMN_NAME,
+                                                          EXTRA_HANDLE_COLUMN_ID,
+                                                          EXTRA_HANDLE_COLUMN_STRING_TYPE,
+                                                          is_common_handle,
+                                                          rowkey_column_size);
+        auto  stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
+        stream->writePrefix();
+        stream->write(block1, 0);
+        stream->write(block2, 0);
+        stream->writeSuffix();
+    }
+
+
+    {
+        // Test read
+        auto stream = std::make_shared<DMFileBlockInputStream>( //
+            dbContext(),
+            std::numeric_limits<UInt64>::max(),
+            false,
+            dmContext().hash_salt,
+            dm_file,
+            *cols,
+            RowKeyRange::newAll(is_common_handle, rowkey_column_size),
+            RSOperatorPtr{},
+            column_cache_,
+            IdSetPtr{});
+
+        size_t num_rows_read = 0;
+        stream->readPrefix();
+        Int64 cur_pk = 0;
+        while (Block in = stream->read())
+        {
+            ASSERT_TRUE(in.has(DMTestEnv::pk_name));
+            auto   col = in.getByName(DMTestEnv::pk_name);
+            auto & c   = col.column;
+            for (size_t i = 0; i < c->size(); i++)
+            {
+                DMTestEnv::verifyClusteredIndexValue((*c)[i].get<String>(), cur_pk++, rowkey_column_size);
+>>>>>>> 8f0b7ef1e... Refactor TiFlashRaftConfig / Define main entry point for `gtests_dbms` (#1583)
             }
             num_rows_read += in.rows();
         }
