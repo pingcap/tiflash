@@ -53,7 +53,7 @@ $ cp contrib/tiflash-proxy/target/release/libtiflash_proxy* libs/libtiflash-prox
 $ rm -rf build
 $ mkdir -p build
 $ pushd build
-$ cmake .. -DCMAKE_BUILD_TYPE=Debug # default: RELWITHDEBINFO
+$ cmake .. -DCMAKE_BUILD_TYPE=Debug -DENABLE_TESTS=1 # default build type: RELWITHDEBINFO
 $ make tiflash
 $ popd
 ```
