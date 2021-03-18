@@ -19,27 +19,11 @@
 #include <thread>
 #include <unordered_set>
 
-<<<<<<< HEAD
-#include <common/MultiVersion.h>
-#include <Core/Types.h>
-#include <Core/NamesAndTypes.h>
-#include <grpc++/grpc++.h>
-#include <Interpreters/Settings.h>
-#include <Interpreters/ClientInfo.h>
-#include <Interpreters/TimezoneInfo.h>
-#include <IO/CompressionSettings.h>
-#include <Encryption/FileProvider.h>
-#include <pingcap/Config.h>
-#include <Storages/PartPathSelector.h>
-#include <Storages/Transaction/StorageEngineType.h>
-#include <Flash/Coprocessor/DAGContext.h>
 
-=======
 namespace pingcap
 {
 struct ClusterConfig;
 }
->>>>>>> 8f0b7ef1e... Refactor TiFlashRaftConfig / Define main entry point for `gtests_dbms` (#1583)
 
 namespace Poco
 {
@@ -108,8 +92,6 @@ using SchemaSyncServicePtr = std::shared_ptr<SchemaSyncService>;
 class PathPool;
 class PathCapacityMetrics;
 using PathCapacityMetricsPtr = std::shared_ptr<PathCapacityMetrics>;
-<<<<<<< HEAD
-=======
 class KeyManager;
 using KeyManagerPtr = std::shared_ptr<KeyManager>;
 class FileProvider;
@@ -117,17 +99,11 @@ using FileProviderPtr = std::shared_ptr<FileProvider>;
 class RateLimiter;
 using RateLimiterPtr = std::shared_ptr<RateLimiter>;
 struct TiFlashRaftConfig;
->>>>>>> 8f0b7ef1e... Refactor TiFlashRaftConfig / Define main entry point for `gtests_dbms` (#1583)
 
 namespace DM
 {
 class MinMaxIndexCache;
-<<<<<<< HEAD
-}
-=======
-class DeltaIndexManager;
 } // namespace DM
->>>>>>> 8f0b7ef1e... Refactor TiFlashRaftConfig / Define main entry point for `gtests_dbms` (#1583)
 
 class TiFlashMetrics;
 using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;

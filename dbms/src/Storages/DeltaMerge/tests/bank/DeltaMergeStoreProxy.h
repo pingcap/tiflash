@@ -1,19 +1,14 @@
 #pragma once
 
+#include <Core/Types.h>
 #include <DataTypes/DataTypeString.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <test_utils/TiflashTestBasic.h>
-
-#include <Core/Types.h>
 #include <Storages/DeltaMerge/tests/bank/IDGenerator.h>
 #include <Storages/DeltaMerge/tests/bank/SimpleDB.h>
 #include <Storages/DeltaMerge/tests/dm_basic_include.h>
-<<<<<<< HEAD
-=======
 #include <TestUtils/TiFlashTestBasic.h>
 
->>>>>>> 8f0b7ef1e... Refactor TiFlashRaftConfig / Define main entry point for `gtests_dbms` (#1583)
 #include <cstddef>
 #include <iostream>
 #include <memory>

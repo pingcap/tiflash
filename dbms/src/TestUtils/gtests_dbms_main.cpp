@@ -39,8 +39,6 @@ void TiFlashTestEnv::initializeGlobalContext()
     raft_config.disable_bg_flush = false;
     global_context->createTMTContext(raft_config, pingcap::ClusterConfig());
 
-    global_context->setDeltaIndexManager(1024 * 1024 * 100 /*100MB*/);
-
     global_context->getTMTContext().restore();
 }
 

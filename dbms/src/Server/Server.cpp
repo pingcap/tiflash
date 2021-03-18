@@ -40,11 +40,6 @@
 #include <Server/RaftConfigParser.h>
 #include <Server/StorageConfigParser.h>
 #include <Server/UserConfigParser.h>
-<<<<<<< HEAD
-#include <Storages/MutableSupport.h>
-=======
-#include <Storages/FormatVersion.h>
->>>>>>> 8f0b7ef1e... Refactor TiFlashRaftConfig / Define main entry point for `gtests_dbms` (#1583)
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/Transaction/FileEncryption.h>
@@ -445,12 +440,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     TiFlashStorageConfig storage_config;
     std::tie(global_capacity_quota, storage_config) = TiFlashStorageConfig::parseSettings(config(), log);
 
-<<<<<<< HEAD
-=======
-    if (storage_config.format_version)
-        setStorageFormat(storage_config.format_version);
-
->>>>>>> 8f0b7ef1e... Refactor TiFlashRaftConfig / Define main entry point for `gtests_dbms` (#1583)
     global_context->initializePathCapacityMetric(                           //
         global_capacity_quota,                                              //
         storage_config.main_data_paths, storage_config.main_capacity_quota, //

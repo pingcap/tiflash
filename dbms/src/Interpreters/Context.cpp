@@ -51,6 +51,7 @@
 #include <Interpreters/Context.h>
 #include <Common/DNSCache.h>
 #include <Encryption/DataKeyManager.h>
+#include <Encryption/FileProvider.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
 #include <IO/PersistedCache.h>

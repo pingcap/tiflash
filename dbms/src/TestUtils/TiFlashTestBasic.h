@@ -9,11 +9,7 @@
 #include <Poco/Path.h>
 #include <Poco/PatternFormatter.h>
 #include <Poco/SortedDirectoryIterator.h>
-<<<<<<< HEAD:dbms/src/test_utils/TiflashTestBasic.h
-#include <Storages/Transaction/TMTContext.h>
 #include <Common/UnifiedLogPatternFormatter.h>
-=======
->>>>>>> 8f0b7ef1e... Refactor TiFlashRaftConfig / Define main entry point for `gtests_dbms` (#1583):dbms/src/TestUtils/TiFlashTestBasic.h
 #include <gtest/gtest.h>
 
 namespace DB
@@ -116,49 +112,6 @@ public:
         throw Exception("Can not find testdata with name[" + name + "]");
     }
 
-<<<<<<< HEAD:dbms/src/test_utils/TiflashTestBasic.h
-    static Context & getContext(const DB::Settings & settings = DB::Settings(), Strings testdata_path = {})
-    {
-        static Context context = DB::Context::createGlobal();
-        // Load `testdata_path` as path if it is set.
-        const String root_path = testdata_path.empty() ? getTemporaryPath() : testdata_path[0];
-        context.setPath(root_path);
-        context.setGlobalContext(context);
-        try
-        {
-            context.getTMTContext();
-            auto paths = getPathPool(testdata_path);
-            context.setPathPool(paths.first, paths.second, Strings{}, true, context.getPathCapacity(), context.getFileProvider());
-        }
-        catch (Exception & e)
-        {
-            // set itself as global context
-            context.setGlobalContext(context);
-            context.setApplicationType(DB::Context::ApplicationType::SERVER);
-
-            context.initializeTiFlashMetrics();
-            KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
-            context.initializeFileProvider(key_manager, false);
-
-            // Theses global variables should be initialized by the following order
-            // 1. capacity
-            // 2. path pool
-            // 3. TMTContext
-
-            // FIXME: These paths are only set at the first time
-            if (testdata_path.empty())
-                testdata_path.emplace_back(getTemporaryPath());
-            context.initializePathCapacityMetric(0, testdata_path, {}, {}, {});
-            auto paths = getPathPool(testdata_path);
-            context.setPathPool(paths.first, paths.second, Strings{}, true, context.getPathCapacity(), context.getFileProvider());
-            context.createTMTContext({}, {"default"}, TiDB::StorageEngine::TMT, false);
-
-            context.getTMTContext().restore();
-        }
-        context.getSettingsRef() = settings;
-        return context;
-    }
-=======
     static Context getContext(const DB::Settings & settings = DB::Settings(), Strings testdata_path = {});
 
     static void initializeGlobalContext();
@@ -170,7 +123,6 @@ private:
 
 private:
     TiFlashTestEnv() = delete;
->>>>>>> 8f0b7ef1e... Refactor TiFlashRaftConfig / Define main entry point for `gtests_dbms` (#1583):dbms/src/TestUtils/TiFlashTestBasic.h
 };
 
 #define CHECK_TESTS_WITH_DATA_ENABLED                                                                        \

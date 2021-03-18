@@ -18,24 +18,14 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
       kvstore(std::make_shared<KVStore>(context)),
       region_table(context),
       background_service(nullptr),
-<<<<<<< HEAD
-      cluster(addrs.size() == 0 ? std::make_shared<pingcap::kv::Cluster>() : std::make_shared<pingcap::kv::Cluster>(addrs, cluster_config)),
-      ignore_databases(ignore_databases_),
-      schema_syncer(addrs.size() == 0 ? std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<true>>(cluster))
-                                      : std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<false>>(cluster))),
-      engine(engine_),
-      disable_bg_flush(disable_bg_flush_)
-=======
       cluster(raft_config.pd_addrs.size() == 0 ? std::make_shared<pingcap::kv::Cluster>()
                                                : std::make_shared<pingcap::kv::Cluster>(raft_config.pd_addrs, cluster_config)),
       ignore_databases(raft_config.ignore_databases),
       schema_syncer(raft_config.pd_addrs.size() == 0
               ? std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer</*mock*/ true>>(cluster))
               : std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer</*mock*/ false>>(cluster))),
-      mpp_task_manager(std::make_shared<MPPTaskManager>(context.getBackgroundPool())),
       engine(raft_config.engine),
       disable_bg_flush(raft_config.disable_bg_flush)
->>>>>>> 8f0b7ef1e... Refactor TiFlashRaftConfig / Define main entry point for `gtests_dbms` (#1583)
 {}
 
 void TMTContext::restore(const TiFlashRaftProxyHelper * proxy_helper)

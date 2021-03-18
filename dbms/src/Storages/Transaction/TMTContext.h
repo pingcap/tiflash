@@ -20,14 +20,8 @@ using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
 class BackgroundService;
 using BackGroundServicePtr = std::unique_ptr<BackgroundService>;
 
-<<<<<<< HEAD
-=======
-class MPPTaskManager;
-using MPPTaskManagerPtr = std::shared_ptr<MPPTaskManager>;
-
 struct TiFlashRaftConfig;
 
->>>>>>> 8f0b7ef1e... Refactor TiFlashRaftConfig / Define main entry point for `gtests_dbms` (#1583)
 class TMTContext : private boost::noncopyable
 {
 public:
