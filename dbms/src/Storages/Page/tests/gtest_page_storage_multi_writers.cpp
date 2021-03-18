@@ -14,7 +14,7 @@
 #include <Storages/Page/WriteBatch.h>
 #include <Storages/PathPool.h>
 #include <common/logger_useful.h>
-#include <test_utils/TiflashTestBasic.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 #include <atomic>
 #include <chrono>
@@ -46,7 +46,7 @@ public:
     }
 
 protected:
-    static void SetUpTestCase() { TiFlashTestEnv::setupLogger(); }
+    static void SetUpTestCase() {}
 
     void SetUp() override
     {
