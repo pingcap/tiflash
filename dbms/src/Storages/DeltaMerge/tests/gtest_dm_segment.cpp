@@ -2,8 +2,8 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
-#include <gtest/gtest.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <gtest/gtest.h>
 
 #include <ctime>
 #include <memory>
@@ -191,6 +191,60 @@ try
             in->readSuffix();
             ASSERT_EQ(num_rows_read, num_rows_write + num_rows_write_2);
         }
+    }
+}
+CATCH
+
+
+TEST_F(Segment_test, ReadWithMoreAdvacedDeltaIndex)
+try
+{
+    size_t offset     = 0;
+    auto   write_rows = [&](size_t rows) {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(offset, offset + rows, false);
+        offset += rows;
+        // write to segment
+        segment->write(dmContext(), block);
+    };
+
+    auto check_rows = [&](size_t expected_rows) {
+        auto   in            = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, expected_rows);
+    };
+
+    {
+        // check segment
+        segment->check(dmContext(), "test");
+    }
+
+    // Thread A
+    write_rows(100);
+    check_rows(100);
+    auto snap = segment->createSnapshot(dmContext());
+
+    // Thread B
+    write_rows(100);
+    check_rows(200);
+
+    // Thread A
+    {
+        auto in = segment->getInputStream(
+            dmContext(), *tableColumns(), snap, {RowKeyRange::newAll(false, 1)}, {}, MAX_UINT64, DEFAULT_BLOCK_SIZE);
+        int num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, 100);
     }
 }
 CATCH
