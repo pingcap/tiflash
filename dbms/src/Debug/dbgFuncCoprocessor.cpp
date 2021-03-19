@@ -329,11 +329,10 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
         }
         for (auto & field : root_task_schema)
         {
+            auto tipb_type = TiDB::columnInfoToFieldType(field.second);
+            tipb_type.set_collate(properties.collator);
             auto * field_type = tipb_exchange_receiver.add_field_types();
-            field_type->set_tp(field.second.tp);
-            field_type->set_flag(field.second.flag);
-            field_type->set_flen(field.second.flen);
-            field_type->set_decimal(field.second.decimal);
+            *field_type = tipb_type;
         }
         mpp::TaskMeta root_tm;
         root_tm.set_start_ts(properties.start_ts);
@@ -627,33 +626,68 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t co
         switch (lit->value.getType())
         {
             case Field::Types::Which::Null:
+            {
                 expr->set_tp(tipb::Null);
+                auto * ft = expr->mutable_field_type();
+                ft->set_tp(TiDB::TypeNull);
+                ft->set_collate(collator_id);
                 // Null literal expr doesn't need value.
                 break;
+            }
             case Field::Types::Which::UInt64:
+            {
                 expr->set_tp(tipb::Uint64);
+                auto * ft = expr->mutable_field_type();
+                ft->set_tp(TiDB::TypeLongLong);
+                ft->set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);
+                ft->set_collate(collator_id);
                 encodeDAGUInt64(lit->value.get<UInt64>(), ss);
                 break;
+            }
             case Field::Types::Which::Int64:
+            {
                 expr->set_tp(tipb::Int64);
+                auto * ft = expr->mutable_field_type();
+                ft->set_tp(TiDB::TypeLongLong);
+                ft->set_flag(TiDB::ColumnFlagNotNull);
+                ft->set_collate(collator_id);
                 encodeDAGInt64(lit->value.get<Int64>(), ss);
                 break;
+            }
             case Field::Types::Which::Float64:
+            {
                 expr->set_tp(tipb::Float64);
+                auto * ft = expr->mutable_field_type();
+                ft->set_tp(TiDB::TypeFloat);
+                ft->set_flag(TiDB::ColumnFlagNotNull);
+                ft->set_collate(collator_id);
                 encodeDAGFloat64(lit->value.get<Float64>(), ss);
                 break;
+            }
             case Field::Types::Which::Decimal32:
             case Field::Types::Which::Decimal64:
             case Field::Types::Which::Decimal128:
             case Field::Types::Which::Decimal256:
+            {
                 expr->set_tp(tipb::MysqlDecimal);
+                auto * ft = expr->mutable_field_type();
+                ft->set_tp(TiDB::TypeNewDecimal);
+                ft->set_flag(TiDB::ColumnFlagNotNull);
+                ft->set_collate(collator_id);
                 encodeDAGDecimal(lit->value, ss);
                 break;
+            }
             case Field::Types::Which::String:
+            {
                 expr->set_tp(tipb::String);
+                auto * ft = expr->mutable_field_type();
+                ft->set_tp(TiDB::TypeString);
+                ft->set_flag(TiDB::ColumnFlagNotNull);
+                ft->set_collate(collator_id);
                 // TODO: Align with TiDB.
                 encodeDAGBytes(lit->value.get<String>(), ss);
                 break;
+            }
             default:
                 throw Exception(String("Unsupported literal type: ") + lit->value.getTypeName(), ErrorCodes::LOGICAL_ERROR);
         }
@@ -819,12 +853,11 @@ struct ExchangeReceiver : Executor
         tipb::ExchangeReceiver * exchange_receiver = tipb_executor->mutable_exchange_receiver();
         for (auto & field : output_schema)
         {
+            auto tipb_type = TiDB::columnInfoToFieldType(field.second);
+            tipb_type.set_collate(collator_id);
+
             auto * field_type = exchange_receiver->add_field_types();
-            field_type->set_tp(field.second.tp);
-            field_type->set_flag(field.second.flag);
-            field_type->set_flen(field.second.flen);
-            field_type->set_decimal(field.second.decimal);
-            field_type->set_collate(collator_id);
+            *field_type = tipb_type;
         }
         auto it = mpp_info.receiver_source_task_ids_map.find(name);
         if (it == mpp_info.receiver_source_task_ids_map.end())
@@ -1284,22 +1317,16 @@ struct Join : Executor
             auto & field = schema[index];
             if (splitQualifiedName(field.first).second == identifier->getColumnName())
             {
+                auto tipb_type = TiDB::columnInfoToFieldType(field.second);
+                tipb_type.set_collate(collator_id);
+
                 tipb_key->set_tp(tipb::ColumnRef);
                 std::stringstream ss;
                 encodeDAGInt64(index, ss);
                 tipb_key->set_val(ss.str());
-                auto * key_type = tipb_key->mutable_field_type();
-                key_type->set_tp(field.second.tp);
-                key_type->set_flag(field.second.flag);
-                key_type->set_flen(field.second.flen);
-                key_type->set_decimal(field.second.decimal);
-                key_type->set_collate(collator_id);
+                *tipb_key->mutable_field_type() = tipb_type;
 
-                tipb_field_type->set_tp(field.second.tp);
-                tipb_field_type->set_flag(field.second.flag);
-                tipb_field_type->set_flen(field.second.flen);
-                tipb_field_type->set_decimal(field.second.decimal);
-                tipb_field_type->set_collate(collator_id);
+                *tipb_field_type = tipb_type;
                 break;
             }
         }

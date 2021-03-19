@@ -42,6 +42,12 @@ DAGQuerySource::DAGQuerySource(Context & context_, const std::unordered_map<Regi
 
 void DAGQuerySource::analyzeDAGEncodeType()
 {
+    if (getDAGContext().isMPPTask() && !getDAGContext().isRootMPPTask())
+    {
+        /// always use CHBlock encode type for data exchange between TiFlash nodes
+        encode_type = tipb::EncodeType::TypeCHBlock;
+        return;
+    }
     encode_type = dag_request.encode_type();
     if (isUnsupportedEncodeType(getResultFieldTypes(), encode_type))
         encode_type = tipb::EncodeType::TypeDefault;

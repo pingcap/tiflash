@@ -14,7 +14,7 @@
 #include <Storages/Page/WriteBatch.h>
 #include <Storages/PathPool.h>
 #include <common/logger_useful.h>
-#include <test_utils/TiflashTestBasic.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 #include "gtest/gtest.h"
 
@@ -38,13 +38,13 @@ public:
     }
 
 protected:
-    static void SetUpTestCase() { TiFlashTestEnv::setupLogger(); }
+    static void SetUpTestCase() {}
 
     void SetUp() override
     {
         // drop dir if exists
-        auto & ctx = TiFlashTestEnv::getContext();
-        path_pool  = std::make_unique<StoragePathPool>(ctx.getPathPool().withTable("test", "t1", false));
+        auto ctx  = TiFlashTestEnv::getContext();
+        path_pool = std::make_unique<StoragePathPool>(ctx.getPathPool().withTable("test", "t1", false));
         for (const auto & p : path_pool->getPSDiskDelegatorSingle("log")->listPaths())
         {
             if (Poco::File file(p); file.exists())
@@ -53,17 +53,17 @@ protected:
             }
         }
         // default test config
-        config.file_roll_size               = 512;
-        config.merge_hint_low_used_file_num = 1;
+        config.file_roll_size = 512;
+        config.gc_min_files   = 1;
 
         storage = reopenWithConfig(config);
     }
 
     std::shared_ptr<PageStorage> reopenWithConfig(const PageStorage::Config & config_)
     {
-        auto & ctx       = TiFlashTestEnv::getContext();
-        auto   delegator = path_pool->getPSDiskDelegatorSingle("log");
-        auto   storage   = std::make_shared<PageStorage>("test.t", delegator, config_, file_provider, ctx.getTiFlashMetrics());
+        auto ctx       = TiFlashTestEnv::getContext();
+        auto delegator = path_pool->getPSDiskDelegatorSingle("log");
+        auto storage   = std::make_shared<PageStorage>("test.t", delegator, config_, file_provider, ctx.getTiFlashMetrics());
         storage->restore();
         return storage;
     }
@@ -382,7 +382,8 @@ try
         wb.putPage(1, 0, buf, buf_sz);
         storage->write(std::move(wb));
 
-        auto f = PageFile::openPageFileForRead(1, 0, storage->delegator->defaultPath(), file_provider, PageFile::Type::Formal, storage->log);
+        auto f
+            = PageFile::openPageFileForRead(1, 0, storage->delegator->defaultPath(), file_provider, PageFile::Type::Formal, storage->log);
         f.setLegacy();
     }
 

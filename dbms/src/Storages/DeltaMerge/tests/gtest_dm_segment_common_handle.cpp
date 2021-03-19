@@ -1,7 +1,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
-#include <test_utils/TiflashTestBasic.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 #include <ctime>
 #include <memory>
@@ -29,7 +29,7 @@ private:
     }
 
 public:
-    static void SetUpTestCase() { DB::tests::TiFlashTestEnv::setupLogger(); }
+    static void SetUpTestCase() {}
 
     void SetUp() override
     {
@@ -45,9 +45,8 @@ protected:
     SegmentPtr reload(const ColumnDefinesPtr & pre_define_columns = {}, DB::Settings && db_settings = DB::Settings())
     {
         *db_context  = DMTestEnv::getContext(db_settings);
-        auto & ctx   = DMTestEnv::getContext();
-        path_pool    = std::make_unique<StoragePathPool>(ctx.getPathPool().withTable("test", "t", false));
-        storage_pool = std::make_unique<StoragePool>("test.t1", *path_pool, ctx, db_context->getSettingsRef());
+        path_pool    = std::make_unique<StoragePathPool>(db_context->getPathPool().withTable("test", "t", false));
+        storage_pool = std::make_unique<StoragePool>("test.t1", *path_pool, *db_context, db_context->getSettingsRef());
         storage_pool->restore();
         ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns(is_common_handle) : pre_define_columns;
         setColumns(cols);
@@ -257,7 +256,7 @@ try
     if (merge_delta_after_delete)
     {
         // flush segment for apply delete range
-        segment = segment->mergeDelta(dmContext(), tableColumns());;
+        segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
     {
@@ -317,7 +316,7 @@ try
 
     {
         // flush segment
-        segment = segment->mergeDelta(dmContext(), tableColumns());;
+        segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
     {
@@ -327,13 +326,13 @@ try
         // TODO test delete range not included by segment
 
         // flush segment
-        segment = segment->mergeDelta(dmContext(), tableColumns());;
+        segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
     if (merge_delta_after_delete)
     {
         // flush segment for apply delete range
-        segment = segment->mergeDelta(dmContext(), tableColumns());;
+        segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
     {
@@ -375,7 +374,7 @@ try
                                                          rowkey_column_size);
         segment->write(dmContext(), std::move(block));
         // flush [0, 50) to segment's stable
-        segment = segment->mergeDelta(dmContext(), tableColumns());;
+        segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
     auto [read_before_delete, merge_delta_after_delete] = GetParam();
@@ -418,7 +417,7 @@ try
     if (merge_delta_after_delete)
     {
         // flush segment for apply delete range
-        segment = segment->mergeDelta(dmContext(), tableColumns());;
+        segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
     {
@@ -466,14 +465,14 @@ try
 
     {
         // flush segment
-        segment = segment->mergeDelta(dmContext(), tableColumns());;
+        segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
     {
         // Test delete range [70, 100)
         segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(70, 100, rowkey_column_size)});
         // flush segment
-        segment = segment->mergeDelta(dmContext(), tableColumns());;
+        segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
     {
@@ -503,7 +502,7 @@ try
         // Test delete range [63, 70)
         segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(63, 70, rowkey_column_size)});
         // flush segment
-        segment = segment->mergeDelta(dmContext(), tableColumns());;
+        segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
     {
@@ -532,7 +531,7 @@ try
         // Test delete range [1, 32)
         segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(1, 32, rowkey_column_size)});
         // flush segment
-        segment = segment->mergeDelta(dmContext(), tableColumns());;
+        segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
     {
@@ -560,7 +559,7 @@ try
         // delete should be idempotent
         segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(1, 32, rowkey_column_size)});
         // flush segment
-        segment = segment->mergeDelta(dmContext(), tableColumns());;
+        segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
     {
@@ -588,7 +587,7 @@ try
         // There is an overlap range [0, 1)
         segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(0, 2, rowkey_column_size)});
         // flush segment
-        segment = segment->mergeDelta(dmContext(), tableColumns());;
+        segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
     {
@@ -782,7 +781,7 @@ try
                                                          rowkey_column_size);
         segment->write(dmContext(), std::move(block));
         // flush segment
-        segment = segment->mergeDelta(dmContext(), tableColumns());;
+        segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
     SegmentPtr new_segment = Segment::restoreSegment(dmContext(), segment->segmentId());
@@ -854,7 +853,7 @@ try
 
         {
             // flush segment
-            segment = segment->mergeDelta(dmContext(), tableColumns());;
+            segment = segment->mergeDelta(dmContext(), tableColumns());
         }
 
         for (size_t i = (num_batches_written - 1) * num_rows_per_write + 2; i < num_batches_written * num_rows_per_write; i++)

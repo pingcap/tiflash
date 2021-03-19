@@ -30,7 +30,7 @@ using DMContextPtr = std::shared_ptr<DMContext>;
 using NotCompress  = std::unordered_set<ColId>;
 using SegmentIdSet = std::unordered_set<UInt64>;
 
-static const PageId DELTA_MERGE_FIRST_SEGMENT_ID = 1;
+inline static const PageId DELTA_MERGE_FIRST_SEGMENT_ID = 1;
 
 struct SegmentStat
 {
@@ -262,7 +262,21 @@ public:
 
     void write(const Context & db_context, const DB::Settings & db_settings, const Block & block);
 
-    // Deprated
+    void writeRegionSnapshot(const DMContextPtr & dm_context, //
+                             const RowKeyRange &  range,
+                             std::vector<PageId>  file_ids,
+                             bool                 clear_data_in_range);
+
+    void writeRegionSnapshot(const Context &      db_context, //
+                             const DB::Settings & db_settings,
+                             const RowKeyRange &  range,
+                             std::vector<PageId>  file_ids,
+                             bool                 clear_data_in_range)
+    {
+        auto dm_context = newDMContext(db_context, db_settings);
+        return writeRegionSnapshot(dm_context, range, file_ids, clear_data_in_range);
+    }
+
     void deleteRange(const Context & db_context, const DB::Settings & db_settings, const RowKeyRange & delete_range);
 
     BlockInputStreams readRaw(const Context &       db_context,
@@ -328,9 +342,9 @@ public:
 
     RegionSplitRes getRegionSplitPoint(DMContext & dm_context, const RowKeyRange & check_range, size_t max_region_size, size_t split_size);
 
-private:
     DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings);
 
+private:
     bool pkIsHandle() const { return original_table_handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
 
     void waitForWrite(const DMContextPtr & context, const SegmentPtr & segment);

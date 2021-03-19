@@ -28,10 +28,5 @@ inline RSOperatorPtr toFilter(RowKeyRange & rowkey_range)
     }
 }
 
-//inline RSOperatorPtr withHandleRange(const RSOperatorPtr & filter, HandleRange handle_range)
-//{
-//    return !filter ? toFilter(handle_range) : createAnd({toFilter(handle_range), filter});
-//}
-
 } // namespace DM
 } // namespace DB

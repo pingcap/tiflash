@@ -67,7 +67,7 @@ struct MPPTunnel
         }
         catch (...)
         {
-            LOG_WARNING(log, "Error in destructor function of MPPTunnel");
+            tryLogCurrentException(log, "Error in destructor function of MPPTunnel");
         }
     }
 
@@ -122,6 +122,18 @@ struct MPPTunnel
         {
             cv_for_connected.wait(lk, [&]() { return connected; });
         }
+        finished = true;
+        cv_for_finished.notify_all();
+    }
+
+    /// close() finishes the tunnel without checking the connect status, this function
+    /// should only be used when handling error if DispatchMPPTask fails for
+    /// root task. Because for root task, if DispatchMPPTask fails, TiDB does
+    /// not sending establish MPP connection request at all, it is meaningless
+    /// to check the connect status in this case, just finish the tunnel.
+    void close()
+    {
+        std::unique_lock<std::mutex> lk(mu);
         finished = true;
         cv_for_finished.notify_all();
     }
@@ -256,7 +268,7 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
     // which targeted task we should send data by which tunnel.
     std::map<MPPTaskId, MPPTunnelPtr> tunnel_map;
 
-    MPPTaskManager * manager;
+    MPPTaskManager * manager = nullptr;
 
     Logger * log;
 
@@ -279,6 +291,20 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
 
     void cancel();
 
+    void closeAllTunnel()
+    {
+        try
+        {
+            for (auto & it : tunnel_map)
+            {
+                it.second->close();
+            }
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, "Failed to close all tunnels");
+        }
+    }
     void writeErrToAllTunnel(const String & e)
     {
         try
@@ -294,7 +320,7 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
         }
         catch (...)
         {
-            LOG_WARNING(log, "Failed to write error " + e + " to all tunnel");
+            tryLogCurrentException(log, "Failed to write error " + e + " to all tunnels");
         }
     }
 
@@ -516,6 +542,7 @@ class MPPHandler
 public:
     MPPHandler(const mpp::DispatchTaskRequest & task_request_) : task_request(task_request_), log(&Logger::get("MPPHandler")) {}
     grpc::Status execute(Context & context, mpp::DispatchTaskResponse * response);
+    void handleError(MPPTaskPtr task, String error);
 };
 
 } // namespace DB

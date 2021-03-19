@@ -86,7 +86,17 @@ Field ColumnInfo::defaultValueToField() const
         case TypeBlob:
         case TypeVarString:
         case TypeString:
-            return value.convert<String>();
+        {
+            auto v = value.convert<String>();
+            if (hasBinaryFlag())
+            {
+                // For binary column, we have to pad trailing zeros according to the specified type length.
+                // User may define default value `0x1234` for a `BINARY(4)` column, TiDB stores it in a string "\u12\u34" (sized 2).
+                // But it actually means `0x12340000`.
+                v.append(flen - v.length(), '\0');
+            }
+            return v;
+        }
         case TypeJSON:
             // JSON can't have a default value
             return genJsonNull();
@@ -933,6 +943,34 @@ String genJsonNull()
     // null
     const static String null({char(DB::TYPE_CODE_LITERAL), char(DB::LITERAL_NIL)});
     return null;
+}
+
+tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci)
+{
+    tipb::FieldType ret;
+    ret.set_tp(ci.tp);
+    ret.set_flag(ci.flag);
+    ret.set_flen(ci.flen);
+    ret.set_decimal(ci.decimal);
+    for (const auto & elem : ci.elems)
+    {
+        ret.add_elems(elem.first);
+    }
+    return ret;
+}
+
+ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type)
+{
+    TiDB::ColumnInfo ret;
+    ret.tp = static_cast<TiDB::TP>(field_type.tp());
+    ret.flag = field_type.flag();
+    ret.flen = field_type.flen();
+    ret.decimal = field_type.decimal();
+    for (int i = 0; i < field_type.elems_size(); i++)
+    {
+        ret.elems.emplace_back(field_type.elems(i), i + 1);
+    }
+    return ret;
 }
 
 } // namespace TiDB
