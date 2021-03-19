@@ -1,5 +1,5 @@
 mysql> drop table if exists test.t
-mysql> set tidb_enable_clustered_index=1;create table test.t( col_20 time default '22:04:02.00' not null , col_21 smallint default 15900 , col_22 blob(273) , col_23 text not null , col_24 text(459) not null , primary key idx_12 ( col_24(5),col_21 ) , unique key idx_13 ( col_22(3),col_21 ) );
+mysql> create table test.t( col_20 time default '22:04:02.00' not null , col_21 smallint default 15900 , col_22 blob(273) , col_23 text not null , col_24 text(459) not null , primary key idx_12 ( col_24(5),col_21 ) clustered, unique key idx_13 ( col_22(3),col_21 ) );
 mysql> insert into test.t values ( '03:24:15.00',-27200,'XcqRrDOS','EpP','' ) ;
 mysql> alter table test.t set tiflash replica 1 
 

@@ -1,18 +1,18 @@
 
 ## int handle
 mysql> drop table if exists test.t_1
-mysql> set tidb_enable_clustered_index=1;create table test.t_1(a bigint primary key, col int)
+mysql> create table test.t_1(a bigint primary key clustered, col int)
 mysql> insert into test.t_1 values(-9223372036854775808,1),(9223372036854775807,2),(0,3)
 mysql> alter table test.t_1 set tiflash replica 1 
 
 mysql> drop table if exists test.t_2
-mysql> set tidb_enable_clustered_index=1;create table test.t_2(a bigint unsigned primary key, col int)
+mysql> create table test.t_2(a bigint unsigned primary key clustered, col int)
 mysql> insert into test.t_2 values(0,1),(18446744073709551615,2),(9223372036854775808,3)
 mysql> alter table test.t_2 set tiflash replica 1 
 
 # common handle
 mysql> drop table if exists test.t_3
-mysql> set tidb_enable_clustered_index=1;create table test.t_3(a decimal(6,2), b bigint, c int, primary key(a, b))
+mysql> create table test.t_3(a decimal(6,2), b bigint, c int, primary key(a, b) clustered)
 mysql> insert into test.t_3 values(-9999.99, -9223372036854775808, 0),(9999.99, 9223372036854775807, 1),(12.21, 12, 2)
 mysql> alter table test.t_3 set tiflash replica 1 
 
