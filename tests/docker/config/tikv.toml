@@ -5,56 +5,9 @@
 #   Time(based on ms): ms, s, m, h
 #    e.g.: 78_000 = "1.3m"
 
-
-[readpool.storage]
-
-[readpool.coprocessor]
-
-[server]
-labels = {  }
-
 [storage]
 # No space is reserved at all
 reserve-space = "0"
 
-[pd]
-# This section will be overwritten by command line parameters
-
-[metric]
-#address = "172.16.30.31:9531"
-#interval = "15s"
-#job = "tikv"
-
 [raftstore]
-raftdb-path = ""
 capacity = "100GB"
-
-[coprocessor]
-region-max-keys = 144000
-region-split-keys = 96000
-region-max-size = "144MB"
-region-split-size = "96MB"
-
-[rocksdb]
-wal-dir = ""
-
-[rocksdb.defaultcf]
-block-cache-size = "10GB"
-
-[rocksdb.lockcf]
-block-cache-size = "4GB"
-
-[rocksdb.writecf]
-block-cache-size = "4GB"
-
-[raftdb]
-
-[raftdb.defaultcf]
-block-cache-size = "1GB"
-
-[security]
-ca-path = ""
-cert-path = ""
-key-path = ""
-
-[import]

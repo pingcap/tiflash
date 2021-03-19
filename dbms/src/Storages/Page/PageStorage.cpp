@@ -61,7 +61,31 @@ bool PageStorage::StatisticsInfo::equals(const StatisticsInfo & rhs)
     return puts == rhs.puts && refs == rhs.refs && deletes == rhs.deletes && upserts == rhs.upserts;
 }
 
-PageFile::Version PageStorage::getMaxDataVersion(const FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator)
+void PageStorage::Config::reload(const PageStorage::Config & rhs)
+{
+    // Reload is not atomic, but should be good enough
+
+    // Reload gc threshold
+    gc_max_valid_rate            = rhs.gc_max_valid_rate;
+    gc_min_bytes                 = rhs.gc_min_bytes;
+    gc_min_files                 = rhs.gc_min_files;
+    gc_min_legacy_num            = rhs.gc_min_legacy_num;
+    prob_do_gc_when_write_is_low = rhs.prob_do_gc_when_write_is_low;
+    // Reload fd idle time
+    open_file_max_idle_time = rhs.open_file_max_idle_time;
+}
+
+String PageStorage::Config::toDebugString() const
+{
+    std::stringstream ss;
+    ss << "PageStorage::Config {gc_min_files:" << gc_min_files << ", gc_min_bytes:" << gc_min_bytes
+       << ", gc_max_valid_rate:" << DB::toString(gc_max_valid_rate, 3) << ", gc_min_legacy_num:" << gc_min_legacy_num
+       << ", prob_do_gc_when_write_is_low:" << prob_do_gc_when_write_is_low
+       << ", open_file_max_idle_time:" << open_file_max_idle_time.count() << "}";
+    return ss.str();
+}
+
+PageFormat::Version PageStorage::getMaxDataVersion(const FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator)
 {
     Poco::Logger *      log = &Poco::Logger::get("PageStorage::getMaxDataVersion");
     ListPageFilesOption option;
@@ -70,12 +94,13 @@ PageFile::Version PageStorage::getMaxDataVersion(const FileProviderPtr & file_pr
     option.remove_tmp_files  = false;
     auto page_files          = listAllPageFiles(file_provider, delegator, log, option);
     if (page_files.empty())
-        return PageFile::CURRENT_VERSION;
+        return STORAGE_FORMAT_CURRENT.page;
 
     // Simply check the last PageFile is good enough
     auto reader = const_cast<PageFile &>(*page_files.rbegin()).createMetaMergingReader();
 
-    PageFile::Version max_binary_version = PageFile::VERSION_BASE, temp_version = PageFile::CURRENT_VERSION;
+    PageFormat::Version max_binary_version = PageFormat::V1;
+    PageFormat::Version temp_version = STORAGE_FORMAT_CURRENT.page;
     reader->moveNext(&temp_version);
     max_binary_version = std::max(max_binary_version, temp_version);
     while (reader->hasNext())
@@ -750,13 +775,14 @@ void PageStorage::drop()
     LOG_INFO(log, storage_name << " drop done.");
 }
 
-struct GCDebugInfo
+struct GcContext
 {
     PageFileIdAndLevel min_file_id;
     PageFile::Type     min_file_type;
     PageFileIdAndLevel max_file_id;
     PageFile::Type     max_file_type;
-    size_t             page_files_size;
+    size_t             num_page_files   = 0;
+    size_t             num_legacy_files = 0;
 
     size_t num_files_archive_in_compact_legacy = 0;
     size_t num_bytes_written_in_compact_legacy = 0;
@@ -770,6 +796,35 @@ struct GCDebugInfo
 
     size_t num_files_remove_data = 0;
     size_t num_bytes_remove_data = 0;
+
+    PageStorage::Config calculateGcConfig(const PageStorage::Config & config) const
+    {
+        PageStorage::Config res = config;
+        // Each legacy is about serval hundred KiB or serval MiB
+        // It means each time `gc` is called, we will read `num_legacy_file` * serval MiB
+        // Do more agressive GC if there are too many Legacy files
+        if (num_legacy_files > 50)
+        {
+            if (num_legacy_files > 100)
+            {
+                // All files can be selected to migrate data to a new PageFile
+                res.gc_max_valid_rate = 1.0;
+            }
+            else
+            {
+                res.gc_max_valid_rate = 0.65;
+            }
+            res.gc_min_files      = 3;
+            res.gc_min_bytes      = PAGE_FILE_ROLL_SIZE / 2;
+        }
+        else if (num_legacy_files > 20)
+        {
+            res.gc_max_valid_rate = 0.40;
+            res.gc_min_files      = 6;
+            res.gc_min_bytes      = PAGE_FILE_ROLL_SIZE / 4 * 3;
+        }
+        return res;
+    }
 };
 
 enum class GCType
@@ -779,7 +834,7 @@ enum class GCType
     LowWrite,
 };
 
-bool PageStorage::gc()
+bool PageStorage::gc(bool not_skip)
 {
     // If another thread is running gc, just return;
     bool v = false;
@@ -822,12 +877,12 @@ bool PageStorage::gc()
     }
     LOG_TRACE(log, storage_name << " Before gc, " << statistics_snapshot.toString());
 
-    GCDebugInfo debugging_info;
+    GcContext gc_context;
     // Helper function for apply edits and clean up before gc exit.
     auto apply_and_cleanup = [&, this](PageEntriesEdit && gc_edits) -> void {
         /// Here we have to apply edit to versioned_page_entries and generate a new version, then return all files that are in used
         auto [live_files, live_normal_pages] = versioned_page_entries.gcApply(gc_edits, external_pages_scanner != nullptr);
-        debugging_info.gc_apply_stat.mergeEdits(gc_edits);
+        gc_context.gc_apply_stat.mergeEdits(gc_edits);
 
         {
             // Remove obsolete files' reader cache that are not used by any version
@@ -860,7 +915,7 @@ bool PageStorage::gc()
         }
 
         // Delete obsolete files that are not used by any version, without lock
-        std::tie(debugging_info.num_files_remove_data, debugging_info.num_bytes_remove_data)
+        std::tie(gc_context.num_files_remove_data, gc_context.num_bytes_remove_data)
             = gcRemoveObsoleteData(page_files, min_writing_file_id_level, live_files);
 
         // Invoke callback with valid normal page id after gc.
@@ -872,6 +927,7 @@ bool PageStorage::gc()
 
     GCType gc_type = GCType::Normal;
     // Ignore page files that maybe writing to.
+    do
     {
         PageFileSet removed_page_files;
         for (const auto & pf : page_files)
@@ -882,6 +938,11 @@ bool PageStorage::gc()
         }
         page_files.swap(removed_page_files);
 
+        if (not_skip) // For page_storage_ctl, don't skip the GC
+        {
+            gc_type = GCType::Normal;
+            break;
+        }
         /// Strategies to reduce useless GC actions.
         if (page_files.size() < 3)
         {
@@ -906,7 +967,7 @@ bool PageStorage::gc()
             LOG_TRACE(log, storage_name << " GC exit with no files to gc.");
             return false;
         }
-    }
+    } while (0);
 
     Stopwatch watch;
     if (metrics)
@@ -923,20 +984,23 @@ bool PageStorage::gc()
         }
     });
 
-    debugging_info.min_file_id     = page_files.begin()->fileIdLevel();
-    debugging_info.min_file_type   = page_files.begin()->getType();
-    debugging_info.max_file_id     = page_files.rbegin()->fileIdLevel();
-    debugging_info.max_file_type   = page_files.rbegin()->getType();
-    debugging_info.page_files_size = page_files.size();
+    gc_context.min_file_id    = page_files.begin()->fileIdLevel();
+    gc_context.min_file_type  = page_files.begin()->getType();
+    gc_context.max_file_id    = page_files.rbegin()->fileIdLevel();
+    gc_context.max_file_type  = page_files.rbegin()->getType();
+    gc_context.num_page_files = page_files.size();
 
     {
-        // Try to compact consecutive Legacy PageFiles into a snapshot
+        // Try to compact consecutive Legacy PageFiles into a snapshot.
+        // Legacy and checkpoint files will be removed from `page_files` after `tryCompact`.
         LegacyCompactor compactor(*this);
         PageFileSet     page_files_to_archive;
-        std::tie(page_files, page_files_to_archive, debugging_info.num_bytes_written_in_compact_legacy)
+        std::tie(page_files, page_files_to_archive, gc_context.num_bytes_written_in_compact_legacy)
             = compactor.tryCompact(std::move(page_files), writing_file_id_levels);
         archivePageFiles(page_files_to_archive);
-        debugging_info.num_files_archive_in_compact_legacy = page_files_to_archive.size();
+        gc_context.num_files_archive_in_compact_legacy = page_files_to_archive.size();
+        if (gc_context.num_page_files > page_files.size())
+            gc_context.num_legacy_files = gc_context.num_page_files - page_files.size();
     }
 
     PageEntriesEdit gc_file_entries_edit;
@@ -945,12 +1009,12 @@ bool PageStorage::gc()
         /// Acquire a snapshot version of page map, new edit on page map store in `gc_file_entries_edit`
         Stopwatch watch_migrate;
 
-        DataCompactor<PageStorage::SnapshotPtr> compactor(*this);
-        std::tie(debugging_info.compact_result, gc_file_entries_edit)
-            = compactor.tryMigrate(page_files, getSnapshot(), writing_file_id_levels);
+        // Calculate a config by the gc context, maybe do a more aggressive GC
+        DataCompactor<PageStorage::SnapshotPtr> compactor(*this, gc_context.calculateGcConfig(config));
+        std::tie(gc_context.compact_result, gc_file_entries_edit) = compactor.tryMigrate(page_files, getSnapshot(), writing_file_id_levels);
 
         // We only care about those time cost in actually doing compaction on page data.
-        if (debugging_info.compact_result.do_compaction && metrics)
+        if (gc_context.compact_result.do_compaction && metrics)
         {
             GET_METRIC(metrics, tiflash_storage_page_gc_duration_seconds, type_migrate).Observe(watch_migrate.elapsedSeconds());
         }
@@ -962,16 +1026,15 @@ bool PageStorage::gc()
     last_gc_statistics = statistics_snapshot;
 
     LOG_INFO(log,
-             storage_name << " GC exit within " << DB::toString(watch.elapsedSeconds(), 2) << " sec. PageFiles from [" //
-                          << debugging_info.min_file_id.first << "," << debugging_info.min_file_id.second              //
-                          << "," << PageFile::typeToString(debugging_info.min_file_type) << "] to ["                   //
-                          << debugging_info.max_file_id.first << "," << debugging_info.max_file_id.second              //
-                          << "," << PageFile::typeToString(debugging_info.max_file_type)
-                          << "], size: " + DB::toString(debugging_info.page_files_size) //
-                          << ", compact legacy archive files: " << debugging_info.num_files_archive_in_compact_legacy
-                          << ", remove data files: " << debugging_info.num_files_remove_data
-                          << ", gc apply: " << debugging_info.gc_apply_stat.toString());
-    return debugging_info.compact_result.do_compaction;
+             storage_name << " GC exit within " << DB::toString(watch.elapsedSeconds(), 2) << " sec. PageFiles from ["                //
+                          << gc_context.min_file_id.first << "," << gc_context.min_file_id.second                                     //
+                          << "," << PageFile::typeToString(gc_context.min_file_type) << "] to ["                                      //
+                          << gc_context.max_file_id.first << "," << gc_context.max_file_id.second                                     //
+                          << "," << PageFile::typeToString(gc_context.max_file_type) << "], num files: " << gc_context.num_page_files //
+                          << ", num legacy:" << gc_context.num_legacy_files << ", compact legacy archive files: "
+                          << gc_context.num_files_archive_in_compact_legacy << ", remove data files: " << gc_context.num_files_remove_data
+                          << ", gc apply: " << gc_context.gc_apply_stat.toString());
+    return gc_context.compact_result.do_compaction;
 }
 
 void PageStorage::archivePageFiles(const PageFileSet & page_files)
@@ -990,7 +1053,9 @@ void PageStorage::archivePageFiles(const PageFileSet & page_files)
         auto       dest = archive_path.toString() + "/" + path.getFileName();
         if (Poco::File file(path); file.exists())
         {
+            // To ensure the atomic of deletion, move to the `archive` dir first and then remove the PageFile dir.
             file.moveTo(dest);
+            file.remove(true);
             page_file.deleteEncryptionInfo();
         }
     }

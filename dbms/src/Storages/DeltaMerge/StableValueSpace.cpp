@@ -11,8 +11,6 @@ namespace DB
 namespace DM
 {
 
-const Int64 StableValueSpace::CURRENT_VERSION = 1;
-
 void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & range, DMContext * dm_context)
 {
     UInt64 rows  = 0;
@@ -28,7 +26,7 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
     }
     else
     {
-        auto index_cache = dm_context->db_context.getGlobalContext().getMinMaxIndexCache().get();
+        auto index_cache = dm_context->db_context.getGlobalContext().getMinMaxIndexCache();
         auto hash_salt   = dm_context->hash_salt;
         for (auto & file : files_)
         {
@@ -47,7 +45,7 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
 void StableValueSpace::saveMeta(WriteBatch & meta_wb)
 {
     MemoryWriteBuffer buf(0, 8192);
-    writeIntBinary(CURRENT_VERSION, buf);
+    writeIntBinary(STORAGE_FORMAT_CURRENT.stable, buf);
     writeIntBinary(valid_rows, buf);
     writeIntBinary(valid_bytes, buf);
     writeIntBinary((UInt64)files.size(), buf);
@@ -60,13 +58,13 @@ void StableValueSpace::saveMeta(WriteBatch & meta_wb)
 
 StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
 {
-    auto stable = std::make_shared<StableValueSpace>(id, context.is_common_handle, context.rowkey_column_size);
+    auto stable = std::make_shared<StableValueSpace>(id);
 
     Page                 page = context.storage_pool.meta().read(id);
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
     UInt64               version, valid_rows, valid_bytes, size;
     readIntBinary(version, buf);
-    if (version != CURRENT_VERSION)
+    if (version != StableFormat::V1)
         throw Exception("Unexpected version: " + DB::toString(version));
 
     readIntBinary(valid_rows, buf);
@@ -154,13 +152,11 @@ using SnapshotPtr = std::shared_ptr<Snapshot>;
 
 SnapshotPtr StableValueSpace::createSnapshot()
 {
-    auto snap                = std::make_shared<Snapshot>();
-    snap->id                 = id;
-    snap->valid_rows         = valid_rows;
-    snap->valid_bytes        = valid_bytes;
-    snap->stable             = this->shared_from_this();
-    snap->is_common_handle   = is_common_handle;
-    snap->rowkey_column_size = rowkey_column_size;
+    auto snap         = std::make_shared<Snapshot>();
+    snap->id          = id;
+    snap->valid_rows  = valid_rows;
+    snap->valid_bytes = valid_bytes;
+    snap->stable      = this->shared_from_this();
 
     for (size_t i = 0; i < files.size(); i++)
     {
@@ -218,7 +214,7 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
     for (auto & f : stable->files)
     {
         DMFilePackFilter filter(f,
-                                context.db_context.getGlobalContext().getMinMaxIndexCache().get(),
+                                context.db_context.getGlobalContext().getMinMaxIndexCache(),
                                 context.hash_salt,
                                 range,
                                 RSOperatorPtr{},

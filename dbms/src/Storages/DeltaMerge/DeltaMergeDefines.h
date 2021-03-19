@@ -9,6 +9,7 @@
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Types.h>
+#include <Storages/FormatVersion.h>
 
 #include <limits>
 #include <memory>
@@ -88,7 +89,7 @@ using ColumnMap        = std::unordered_map<ColId, ColumnPtr>;
 using MutableColumnMap = std::unordered_map<ColId, MutableColumnPtr>;
 using LockGuard        = std::lock_guard<std::mutex>;
 
-static const UInt64 INITIAL_EPOCH = 0;
+inline static const UInt64 INITIAL_EPOCH = 0;
 
 // TODO maybe we should use those variables instead of macros?
 #define EXTRA_HANDLE_COLUMN_NAME ::DB::MutableSupport::tidb_pk_column_name

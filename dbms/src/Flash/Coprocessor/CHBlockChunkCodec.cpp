@@ -16,25 +16,7 @@ public:
         output = std::make_unique<WriteBufferFromOwnString>();
         for (size_t i = 0; i < field_types.size(); i++)
         {
-            if (field_types[i].tp() == TiDB::TypeEnum)
-            {
-                ColumnInfo ci;
-                auto & field_type = field_types[i];
-                ci.tp = static_cast<TiDB::TP>(field_type.tp());
-                ci.flag = field_type.flag();
-                ci.flen = field_type.flen();
-                ci.decimal = field_type.decimal();
-                /// this is a workaround, since tidb does not push down
-                /// the element of Enum type, should remove if
-                /// https://github.com/pingcap/tics/issues/1489 is fixed
-                ci.elems.emplace_back("a", 1);
-                ci.elems.emplace_back("b", 2);
-                expected_types.emplace_back(getDataTypeByColumnInfo(ci));
-            }
-            else
-            {
-                expected_types.emplace_back(getDataTypeByFieldType(field_types[i]));
-            }
+            expected_types.emplace_back(getDataTypeByFieldType(field_types[i]));
         }
     }
 

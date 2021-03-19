@@ -223,14 +223,6 @@ void DAGQueryBlockInterpreter::executeTS(const tipb::TableScan & ts, Pipeline & 
 
     size_t max_block_size = settings.max_block_size;
 
-    if (query_block.selection)
-    {
-        for (auto & condition : query_block.selection->selection().conditions())
-        {
-            analyzer->makeExplicitSetForIndex(condition, storage);
-        }
-    }
-
     SelectQueryInfo query_info;
     /// to avoid null point exception
     query_info.query = dummy_query;
@@ -501,35 +493,8 @@ void getJoinKeyTypes(const tipb::Join & join, DataTypes & key_types)
         DataTypes types;
         types.emplace_back(getDataTypeByFieldType(join.left_join_keys(i).field_type()));
         types.emplace_back(getDataTypeByFieldType(join.right_join_keys(i).field_type()));
-        try
-        {
-            DataTypePtr common_type = getLeastSupertype(types);
-            key_types.emplace_back(common_type);
-        }
-        catch (Exception & e)
-        {
-            if (e.code() == ErrorCodes::NO_COMMON_TYPE)
-            {
-                DataTypePtr left_type = removeNullable(types[0]);
-                DataTypePtr right_type = removeNullable(types[1]);
-                if ((left_type->getTypeId() == TypeIndex::UInt64 && right_type->isInteger() && !right_type->isUnsignedInteger())
-                    || (right_type->getTypeId() == TypeIndex::UInt64 && left_type->isInteger() && !left_type->isUnsignedInteger()))
-                {
-                    /// special case for uint64 and int
-                    /// inorder to not throw exception, use Decimal(20, 0) as the common type
-                    DataTypePtr common_type = std::make_shared<DataTypeDecimal<Decimal128>>(20, 0);
-                    if (types[0]->isNullable() || types[1]->isNullable())
-                        common_type = makeNullable(common_type);
-                    key_types.emplace_back(common_type);
-                }
-                else
-                    throw;
-            }
-            else
-            {
-                throw;
-            }
-        }
+        DataTypePtr common_type = getLeastSupertype(types);
+        key_types.emplace_back(common_type);
     }
 }
 
@@ -1128,6 +1093,8 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
 
     ::tipb::DAGRequest dag_req;
 
+    /// still need to choose encode_type although it read data from TiFlash node because
+    /// in TiFlash it has no way to tell whether the cop request is from TiFlash or TIDB
     tipb::EncodeType encode_type;
     if (!isUnsupportedEncodeType(query_block.output_field_types, tipb::EncodeType::TypeCHBlock))
         encode_type = tipb::EncodeType::TypeCHBlock;
@@ -1144,7 +1111,7 @@ void DAGQueryBlockInterpreter::executeRemoteQuery(Pipeline & pipeline)
     for (int i = 0; i < (int)query_block.output_field_types.size(); i++)
     {
         dag_req.add_output_offsets(i);
-        ColumnInfo info = fieldTypeToColumnInfo(query_block.output_field_types[i]);
+        ColumnInfo info = TiDB::fieldTypeToColumnInfo(query_block.output_field_types[i]);
         String col_name = query_block.qb_column_prefix + "col_" + std::to_string(i);
         schema.push_back(std::make_pair(col_name, info));
         is_ts_column.push_back(query_block.output_field_types[i].tp() == TiDB::TypeTimestamp);
