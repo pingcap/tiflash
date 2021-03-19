@@ -38,6 +38,8 @@ StringRef ColumnDecimal<T>::serializeValueIntoArena(size_t n, Arena & arena, cha
 {
     if constexpr (is_Decimal256)
     {
+        /// serialize Decimal256 in `Non-trivial, Binary` way, the serialization logical is
+        /// copied from https://github.com/pingcap/boost-extra/blob/master/boost/multiprecision/cpp_int/serialize.hpp#L149
         size_t mem_size = 0;
         const typename T::NativeType::backend_type & val = data[n].value.backend();
         bool s = val.sign();
@@ -70,13 +72,15 @@ const char * ColumnDecimal<T>::deserializeAndInsertFromArena(const char * pos, s
 {
     if constexpr (is_Decimal256)
     {
+        /// deserialize Decimal256 in `Non-trivial, Binary` way, the deserialization logical is
+        /// copied from https://github.com/pingcap/boost-extra/blob/master/boost/multiprecision/cpp_int/serialize.hpp#L133
         T value;
         auto & val = value.value.backend();
 
         size_t offset = 0;
         bool s = unalignedLoad<bool>(pos + offset);
         offset += sizeof(bool);
-        size_t limb_count = unalignedLoad<std::size_t>(pos + offset);
+        size_t limb_count = unalignedLoad<size_t>(pos + offset);
         offset += sizeof(size_t);
 
         val.resize(limb_count,limb_count);

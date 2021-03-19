@@ -213,6 +213,8 @@ std::enable_if_t<DB::IsBoostNumber<T>, UInt64> sipHash64(const T & x)
 {
     if constexpr (DB::IsCppIntBackend<typename T::backend_type>)
     {
+        /// the steps of calculating hash is copied from
+        /// https://github.com/pingcap/boost-extra/blob/master/boost/multiprecision/cpp_int/misc.hpp#L639
         SipHash hash;
         auto backend_value = x.backend();
         for(unsigned i = 0; i < backend_value.size(); ++i)
