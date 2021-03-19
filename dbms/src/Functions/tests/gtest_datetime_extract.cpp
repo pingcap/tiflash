@@ -5,7 +5,7 @@
 #include <Functions/FunctionsDateTime.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
-#include <test_utils/TiflashTestBasic.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 #include <string>
 #include <vector>
@@ -24,7 +24,17 @@ namespace tests
 class TestDateTimeExtract : public ::testing::Test
 {
 protected:
-    static void SetUpTestCase() { registerFunctions(); }
+    static void SetUpTestCase()
+    {
+        try
+        {
+            registerFunctions();
+        }
+        catch (DB::Exception &)
+        {
+            // Maybe another test has already registed, ignore exception here.
+        }
+    }
 };
 
 // Disabled for now, since we haven't supported ExtractFromString yet
@@ -88,20 +98,7 @@ try
         EXPECT_EQ(results[i], s);
     }
 }
-catch (const Exception & e)
-{
-    std::cerr << e.displayText() << std::endl;
-    GTEST_FAIL();
-}
-catch (const std::exception & e)
-{
-    std::cerr << e.what() << std::endl;
-    GTEST_FAIL();
-}
-catch (...)
-{
-    throw;
-}
+CATCH
 
 TEST_F(TestDateTimeExtract, ExtractFromMyDateTime)
 try
@@ -163,20 +160,7 @@ try
         EXPECT_EQ(results[i], s);
     }
 }
-catch (const Exception & e)
-{
-    std::cerr << e.displayText() << std::endl;
-    GTEST_FAIL();
-}
-catch (const std::exception & e)
-{
-    std::cerr << e.what() << std::endl;
-    GTEST_FAIL();
-}
-catch (...)
-{
-    throw;
-}
+CATCH
 
 } // namespace tests
 } // namespace DB

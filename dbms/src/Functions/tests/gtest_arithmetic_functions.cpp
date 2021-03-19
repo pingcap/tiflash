@@ -4,7 +4,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
-#include <test_utils/TiflashTestBasic.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 #include <string>
 #include <vector>
@@ -29,8 +29,16 @@ class TestBinaryArithmeticFunctions : public ::testing::Test
 protected:
     static void SetUpTestCase()
     {
-        registerFunctions();
+        try
+        {
+            registerFunctions();
+        }
+        catch (DB::Exception &)
+        {
+            // Maybe another test has already registed, ignore exception here.
+        }
     }
+
     void executeFunction(Block & block, ColumnWithTypeAndName & c1, ColumnWithTypeAndName & c2, const String & func_name)
     {
         const auto & context = TiFlashTestEnv::getContext();
@@ -375,20 +383,7 @@ try
         }
     }
 }
-catch (const Exception & e)
-{
-    std::cerr << e.displayText() << std::endl;
-    GTEST_FAIL();
-}
-catch (const std::exception & e)
-{
-    std::cerr << e.what() << std::endl;
-    GTEST_FAIL();
-}
-catch (...)
-{
-    throw;
-}
+CATCH
 
 TEST_F(TestBinaryArithmeticFunctions, TiDBDivideDouble)
 try
@@ -701,20 +696,7 @@ try
         }
     }
 }
-catch (const Exception & e)
-{
-    std::cerr << e.displayText() << std::endl;
-    GTEST_FAIL();
-}
-catch (const std::exception & e)
-{
-    std::cerr << e.what() << std::endl;
-    GTEST_FAIL();
-}
-catch (...)
-{
-    throw;
-}
+CATCH
 
 } // namespace tests
 } // namespace DB

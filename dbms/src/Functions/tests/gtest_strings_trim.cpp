@@ -3,7 +3,7 @@
 #include <Functions/FunctionsString.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
-#include <test_utils/TiflashTestBasic.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 #include <string>
 #include <vector>
@@ -24,7 +24,17 @@ namespace tests
 class StringTrim : public ::testing::Test
 {
 protected:
-    static void SetUpTestCase() { registerFunctions(); }
+    static void SetUpTestCase()
+    {
+        try
+        {
+            registerFunctions();
+        }
+        catch (DB::Exception &)
+        {
+            // Maybe another test has already registed, ignore exception here.
+        }
+    }
 };
 
 
