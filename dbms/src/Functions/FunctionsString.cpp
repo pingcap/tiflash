@@ -908,7 +908,7 @@ public:
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
         }
 
-        return makeNullable(std::make_shared<DataTypeString>());
+        return std::make_shared<DataTypeString>();
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
