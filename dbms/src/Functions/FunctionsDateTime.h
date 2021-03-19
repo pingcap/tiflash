@@ -1303,13 +1303,11 @@ public:
             throw Exception("First argument for function " + getName() + " (unit) must be String",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if(!checkDataType<DataTypeMyDateTime>(removeNullable(arguments[1]).get()) &&
-                !checkDataType<DataTypeMyDate>(removeNullable(arguments[1]).get()))
+        if(!removeNullable(arguments[1])->isDateOrDateTime())
             throw Exception("Second argument for function " + getName() + " must be MyDate or MyDateTime",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if(!checkDataType<DataTypeMyDateTime>(removeNullable(arguments[2]).get()) &&
-           !checkDataType<DataTypeMyDate>(removeNullable(arguments[2]).get()))
+        if(!removeNullable(arguments[2])->isDateOrDateTime())
             throw Exception("Third argument for function " + getName() + " must be MyDate or MyDateTime",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
@@ -1673,13 +1671,11 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if(!checkDataType<DataTypeMyDateTime>(removeNullable(arguments[0]).get()) &&
-           !checkDataType<DataTypeMyDate>(removeNullable(arguments[0]).get()))
+        if(!removeNullable(arguments[0]).get()->isDateOrDateTime())
             throw Exception("First argument for function " + getName() + " must be MyDate or MyDateTime",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if(!checkDataType<DataTypeMyDateTime>(removeNullable(arguments[1]).get()) &&
-           !checkDataType<DataTypeMyDate>(removeNullable(arguments[1]).get()))
+        if(!removeNullable(arguments[1]).get()->isDateOrDateTime())
             throw Exception("Second argument for function " + getName() + " must be MyDate or MyDateTime",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
