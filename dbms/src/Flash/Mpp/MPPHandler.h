@@ -131,9 +131,17 @@ struct MPPTunnel
     /// root task. Because for root task, if DispatchMPPTask fails, TiDB does
     /// not sending establish MPP connection request at all, it is meaningless
     /// to check the connect status in this case, just finish the tunnel.
-    void close()
+    void close(const String & reason)
     {
         std::unique_lock<std::mutex> lk(mu);
+        if (connected)
+        {
+            mpp::MPPDataPacket data;
+            auto err = new mpp::Error();
+            err->set_msg(reason);
+            data.set_allocated_error(err);
+            writer->Write(data);
+        }
         finished = true;
         cv_for_finished.notify_all();
     }
@@ -291,13 +299,13 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
 
     void cancel();
 
-    void closeAllTunnel()
+    void closeAllTunnel(const String & reason)
     {
         try
         {
             for (auto & it : tunnel_map)
             {
-                it.second->close();
+                it.second->close(reason);
             }
         }
         catch (...)

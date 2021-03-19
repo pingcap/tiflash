@@ -311,7 +311,7 @@ void MPPTask::cancel()
         }
     }
     /// step 2. write Error msg to tunnels
-    writeErrToAllTunnel("MPP Task canceled because it seems hangs");
+    closeAllTunnel("MPP Task canceled because it seems hangs");
     LOG_WARNING(log, "Finish cancel task: " + id.toString());
 }
 
@@ -328,7 +328,7 @@ void MPPHandler::handleError(MPPTaskPtr task, String error)
             if (!task->dag_context->isRootMPPTask())
                 task->writeErrToAllTunnel(error);
             else
-                task->closeAllTunnel();
+                task->closeAllTunnel(error);
             task->unregisterTask();
         }
     }
