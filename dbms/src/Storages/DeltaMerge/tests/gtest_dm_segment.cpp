@@ -2,8 +2,12 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
+<<<<<<< HEAD
 #include <gtest/gtest.h>
 #include <test_utils/TiflashTestBasic.h>
+=======
+#include <TestUtils/TiFlashTestBasic.h>
+>>>>>>> b28181053... Fix DeltaValueReader::readRows throw Illegal offset and limit exceptions (#1594)
 
 #include <ctime>
 #include <memory>
@@ -191,6 +195,66 @@ try
             in->readSuffix();
             ASSERT_EQ(num_rows_read, num_rows_write + num_rows_write_2);
         }
+    }
+}
+CATCH
+
+
+TEST_F(Segment_test, ReadWithMoreAdvacedDeltaIndex)
+try
+{
+    // Test the case that reading rows with an advance DeltaIndex
+    //  1. Thread A creates a delta snapshot with 100 rows.
+    //  2. Thread B inserts 100 rows into the delta
+    //  3. Thread B reads and place 200 rows to a new DeltaTree, and update the `shared_delta_index` to 200
+    //  4. Thread A read with an DeltaTree that only placed 100 rows but `placed_rows` in `shared_delta_index` with 200
+    //  5. Thread A use the DeltaIndex with placed_rows = 200 to do the merge in DeltaMergeBlockInputStream
+    size_t offset     = 0;
+    auto   write_rows = [&](size_t rows) {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(offset, offset + rows, false);
+        offset += rows;
+        // write to segment
+        segment->write(dmContext(), block);
+    };
+
+    auto check_rows = [&](size_t expected_rows) {
+        auto   in            = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, expected_rows);
+    };
+
+    {
+        // check segment
+        segment->check(dmContext(), "test");
+    }
+
+    // Thread A
+    write_rows(100);
+    check_rows(100);
+    auto snap = segment->createSnapshot(dmContext());
+
+    // Thread B
+    write_rows(100);
+    check_rows(200);
+
+    // Thread A
+    {
+        auto in = segment->getInputStream(
+            dmContext(), *tableColumns(), snap, {RowKeyRange::newAll(false, 1)}, {}, MAX_UINT64, DEFAULT_BLOCK_SIZE);
+        int num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, 100);
     }
 }
 CATCH
