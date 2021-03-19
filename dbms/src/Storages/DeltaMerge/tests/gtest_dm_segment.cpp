@@ -2,12 +2,8 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
-<<<<<<< HEAD
 #include <gtest/gtest.h>
 #include <test_utils/TiflashTestBasic.h>
-=======
-#include <TestUtils/TiFlashTestBasic.h>
->>>>>>> b28181053... Fix DeltaValueReader::readRows throw Illegal offset and limit exceptions (#1594)
 
 #include <ctime>
 #include <memory>
