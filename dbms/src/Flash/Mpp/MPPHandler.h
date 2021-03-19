@@ -126,14 +126,19 @@ struct MPPTunnel
         cv_for_finished.notify_all();
     }
 
-    /// close() finishes the tunnel without checking the connect status, this function
-    /// should only be used when handling error if DispatchMPPTask fails for
-    /// root task. Because for root task, if DispatchMPPTask fails, TiDB does
-    /// not sending establish MPP connection request at all, it is meaningless
-    /// to check the connect status in this case, just finish the tunnel.
-    void close()
+    /// close() finishes the tunnel, if the tunnel is connected already, it will
+    /// write the error message to the tunnel, otherwise it just close the tunnel
+    void close(const String & reason)
     {
         std::unique_lock<std::mutex> lk(mu);
+        if (connected)
+        {
+            mpp::MPPDataPacket data;
+            auto err = new mpp::Error();
+            err->set_msg(reason);
+            data.set_allocated_error(err);
+            writer->Write(data);
+        }
         finished = true;
         cv_for_finished.notify_all();
     }
@@ -291,13 +296,15 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
 
     void cancel();
 
-    void closeAllTunnel()
+    /// Similar to `writeErrToAllTunnel`, but it just try to write the error message to tunnel
+    /// without waiting the tunnel to be connected
+    void closeAllTunnel(const String & reason)
     {
         try
         {
             for (auto & it : tunnel_map)
             {
-                it.second->close();
+                it.second->close(reason);
             }
         }
         catch (...)
