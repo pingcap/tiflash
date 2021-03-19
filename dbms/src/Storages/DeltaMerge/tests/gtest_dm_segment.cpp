@@ -3,7 +3,6 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <gtest/gtest.h>
 
 #include <ctime>
 #include <memory>
@@ -199,6 +198,12 @@ CATCH
 TEST_F(Segment_test, ReadWithMoreAdvacedDeltaIndex)
 try
 {
+    // Test the case that reading rows with an advance DeltaIndex
+    //  1. Thread A creates a delta snapshot with 100 rows.
+    //  2. Thread B inserts 100 rows into the delta
+    //  3. Thread B reads and place 200 rows to a new DeltaTree, and update the `shared_delta_index` to 200
+    //  4. Thread A read with an DeltaTree that only placed 100 rows but `placed_rows` in `shared_delta_index` with 200
+    //  5. Thread A use the DeltaIndex with placed_rows = 200 to do the merge in DeltaMergeBlockInputStream
     size_t offset     = 0;
     auto   write_rows = [&](size_t rows) {
         Block block = DMTestEnv::prepareSimpleWriteBlock(offset, offset + rows, false);
