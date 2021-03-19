@@ -97,7 +97,7 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
         res.enable_compatible_mode = config.getBool("raft.enable_compatible_mode");
     }
 
-    return std::move(res);
+    return res;
 }
 
 } // namespace DB
