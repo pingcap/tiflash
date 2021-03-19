@@ -310,7 +310,10 @@ void MPPTask::cancel()
             }
         }
     }
-    /// step 2. write Error msg to tunnels
+    /// step 2. write Error msg and close the tunnel.
+    /// Here we use `closeAllTunnel` because currently, `cancel` is a query level cancel, which
+    /// means if this mpp task is cancelled, all the mpp tasks belonging to the same query are
+    /// cancelled at the same time, so there is no guarantee that the tunnel can be connected.
     closeAllTunnel("MPP Task canceled because it seems hangs");
     LOG_WARNING(log, "Finish cancel task: " + id.toString());
 }
