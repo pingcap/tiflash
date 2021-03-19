@@ -43,7 +43,7 @@ protected:
 
 TEST_F(StringPad, string_pad_string_unit_Test)
 {
-    const Context & context = TiFlashTestEnv::getContext();
+    const Context context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -115,7 +115,7 @@ TEST_F(StringPad, string_pad_string_unit_Test)
 
 TEST_F(StringPad, string_pad_const_string_unit_Test)
 {
-    const Context & context = TiFlashTestEnv::getContext();
+    const Context context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -184,7 +184,7 @@ TEST_F(StringPad, string_pad_const_string_unit_Test)
 
 TEST_F(StringPad, string_pad_empty_padding_unit_Test)
 {
-    const Context & context = TiFlashTestEnv::getContext();
+    const Context context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -256,7 +256,7 @@ TEST_F(StringPad, string_pad_empty_padding_unit_Test)
 
 TEST_F(StringPad, string_pad_utf8_padding_unit_Test)
 {
-    const Context & context = TiFlashTestEnv::getContext();
+    const Context context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -330,7 +330,7 @@ TEST_F(StringPad, string_pad_utf8_padding_unit_Test)
 
 TEST_F(StringPad, string_pad_fixed_utf8_padding_unit_Test)
 {
-    const Context & context = TiFlashTestEnv::getContext();
+    const Context context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -404,7 +404,7 @@ TEST_F(StringPad, string_pad_fixed_utf8_padding_unit_Test)
 
 TEST_F(StringPad, string_pad_const_utf8_padding_unit_Test)
 {
-    const Context & context = TiFlashTestEnv::getContext();
+    const Context context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -477,7 +477,7 @@ TEST_F(StringPad, string_pad_const_utf8_padding_unit_Test)
 
 TEST_F(StringPad, string_pad_const_fixed_utf8_padding_unit_Test)
 {
-    const Context & context = TiFlashTestEnv::getContext();
+    const Context context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -550,7 +550,7 @@ TEST_F(StringPad, string_pad_const_fixed_utf8_padding_unit_Test)
 
 TEST_F(StringPad, string_pad_empty_utf8_padding_unit_Test)
 {
-    const Context & context = TiFlashTestEnv::getContext();
+    const Context context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 

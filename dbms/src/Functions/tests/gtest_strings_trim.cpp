@@ -40,7 +40,7 @@ protected:
 
 TEST_F(StringTrim, string_trim_string_unit_Test)
 {
-    const Context & context = TiFlashTestEnv::getContext();
+    const Context context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -119,7 +119,7 @@ TEST_F(StringTrim, string_trim_string_unit_Test)
 
 TEST_F(StringTrim, string_trim_const_unit_Test)
 {
-    const Context & context = TiFlashTestEnv::getContext();
+    const Context context = TiFlashTestEnv::getContext();
     auto & factory = FunctionFactory::instance();
     MutableColumnPtr cp = ColumnString::create();
     cp->insert(Field("  hello   ", 10));
@@ -202,7 +202,7 @@ TEST_F(StringTrim, string_trim_const_unit_Test)
 
 TEST_F(StringTrim, string_trimws_const_unit_Test)
 {
-    const Context & context = TiFlashTestEnv::getContext();
+    const Context context = TiFlashTestEnv::getContext();
     auto & factory = FunctionFactory::instance();
     MutableColumnPtr cp = ColumnString::create();
     cp->insert(Field("  hello   ", 10));
@@ -289,7 +289,7 @@ TEST_F(StringTrim, string_trimws_const_unit_Test)
 
 TEST_F(StringTrim, string_trimws_utf8_unit_Test)
 {
-    const Context & context = TiFlashTestEnv::getContext();
+    const Context context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -370,7 +370,7 @@ TEST_F(StringTrim, string_trimws_utf8_unit_Test)
 
 TEST_F(StringTrim, string_trimws_const_utf8_unit_Test)
 {
-    const Context & context = TiFlashTestEnv::getContext();
+    const Context context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -449,7 +449,7 @@ TEST_F(StringTrim, string_trimws_const_utf8_unit_Test)
 
 TEST_F(StringTrim, string_trim_utf8_unit_Test)
 {
-    const Context & context = TiFlashTestEnv::getContext();
+    const Context context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -524,7 +524,7 @@ TEST_F(StringTrim, string_trim_utf8_unit_Test)
 
 TEST_F(StringTrim, string_trim_const_utf8_unit_Test)
 {
-    const Context & context = TiFlashTestEnv::getContext();
+    const Context context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 

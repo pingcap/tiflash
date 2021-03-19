@@ -41,7 +41,7 @@ protected:
 
     void executeFunction(Block & block, ColumnWithTypeAndName & c1, ColumnWithTypeAndName & c2, const String & func_name)
     {
-        const auto & context = TiFlashTestEnv::getContext();
+        const auto context = TiFlashTestEnv::getContext();
         auto & factory = FunctionFactory::instance();
 
         ColumnsWithTypeAndName ctns{c1, c2};

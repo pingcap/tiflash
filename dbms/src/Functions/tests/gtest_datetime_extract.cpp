@@ -41,7 +41,7 @@ protected:
 TEST_F(TestDateTimeExtract, DISABLED_ExtractFromString)
 try
 {
-    const Context & context = TiFlashTestEnv::getContext();
+    const Context context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -103,7 +103,7 @@ CATCH
 TEST_F(TestDateTimeExtract, ExtractFromMyDateTime)
 try
 {
-    const Context & context = TiFlashTestEnv::getContext();
+    const Context context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
