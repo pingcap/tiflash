@@ -310,8 +310,11 @@ void MPPTask::cancel()
             }
         }
     }
-    /// step 2. write Error msg to tunnels
-    writeErrToAllTunnel("MPP Task canceled because it seems hangs");
+    /// step 2. write Error msg and close the tunnel.
+    /// Here we use `closeAllTunnel` because currently, `cancel` is a query level cancel, which
+    /// means if this mpp task is cancelled, all the mpp tasks belonging to the same query are
+    /// cancelled at the same time, so there is no guarantee that the tunnel can be connected.
+    closeAllTunnel("MPP Task canceled because it seems hangs");
     LOG_WARNING(log, "Finish cancel task: " + id.toString());
 }
 
@@ -321,14 +324,7 @@ void MPPHandler::handleError(MPPTaskPtr task, String error)
     {
         if (task != nullptr)
         {
-            /// for root task, the tunnel is only connected after DispatchMPPTask
-            /// finishes without error, for non-root task, tunnel can be connected
-            /// even if the DispatchMPPTask fails, so for non-root task, we write
-            /// error to all tunnels, while for root task, we just close the tunnel.
-            if (!task->dag_context->isRootMPPTask())
-                task->writeErrToAllTunnel(error);
-            else
-                task->closeAllTunnel();
+            task->closeAllTunnel(error);
             task->unregisterTask();
         }
     }
