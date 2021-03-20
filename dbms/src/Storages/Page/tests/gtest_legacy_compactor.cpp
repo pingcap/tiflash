@@ -13,7 +13,7 @@
 #include <Storages/Page/WriteBatch.h>
 #include <Storages/PathPool.h>
 #include <common/logger_useful.h>
-#include <test_utils/TiflashTestBasic.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 #define private public
 #include <Storages/Page/gc/LegacyCompactor.h>
@@ -163,9 +163,7 @@ CATCH
 TEST(LegacyCompactor_test, DISABLED_CompactAndRestore)
 try
 {
-    TiFlashTestEnv::setupLogger();
-
-    auto &                ctx           = TiFlashTestEnv::getContext();
+    auto                  ctx           = TiFlashTestEnv::getContext();
     const FileProviderPtr file_provider = ctx.getFileProvider();
     StoragePathPool       spool         = ctx.getPathPool().withTable("test", "t", false);
     auto                  delegator     = spool.getPSDiskDelegatorSingle("meta");

@@ -10,7 +10,7 @@
 #include <Poco/AutoPtr.h>
 #include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
 #include <Storages/Page/VersionSet/PageEntriesVersionSetWithDelta.h>
-#include <test_utils/TiflashTestBasic.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB
 {
@@ -23,7 +23,7 @@ class PageMapVersionSet_test : public ::testing::Test
 public:
     PageMapVersionSet_test() : log(&Poco::Logger::get("PageMapVersionSet_test")) {}
 
-    static void SetUpTestCase() { TiFlashTestEnv::setupLogger(); }
+    static void SetUpTestCase() {}
 
     void SetUp() override
     {
