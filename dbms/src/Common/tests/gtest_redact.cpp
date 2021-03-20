@@ -1,4 +1,4 @@
-#include <test_utils/TiflashTestBasic.h>
+#include <TestUtils/TiFlashTestBasic.h>
 #include <Common/RedactHelpers.h>
 
 namespace DB
