@@ -101,12 +101,16 @@ static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr
             // `a IN (1, 2, b)` will be rewritten to `a IN (1, 2) OR a = b`
             continue;
         }
-        DataTypePtr type = getDataTypeByFieldType(child.field_type());
-        if (type->isDecimal())
+        DataTypePtr type;
+        if (child.field_type().tp() == TiDB::TypeNewDecimal)
         {
             // See https://github.com/pingcap/tics/issues/1425
             Field value = decodeLiteral(child);
             type = applyVisitor(FieldToDataType(), value);
+        }
+        else
+        {
+            type = getDataTypeByFieldType(child.field_type());
         }
         argument_types.push_back(type);
     }
