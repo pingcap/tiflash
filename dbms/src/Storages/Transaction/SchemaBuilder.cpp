@@ -646,17 +646,37 @@ static ASTPtr parseCreateStatement(const String & statement)
     return ast;
 }
 
+String createDatabaseStmt(Context & context, const DBInfo & db_info, const SchemaNameMapper & name_mapper)
+{
+    auto mapped = name_mapper.mapDatabaseName(db_info);
+    if (isReservedDatabase(context, mapped))
+        throw TiFlashException("Database " + name_mapper.debugDatabaseName(db_info) + " is reserved", Errors::DDL::Internal);
+
+    // R"raw(
+    // CREATE DATABASE IF NOT EXISTS `db_xx`
+    // ENGINE = TiFlash('<json-db-info>', <format-version>)
+    // )raw";
+
+    String stmt;
+    WriteBufferFromString stmt_buf(stmt);
+    writeString("CREATE DATABASE IF NOT EXISTS ", stmt_buf);
+    writeBackQuotedString(mapped, stmt_buf);
+    writeString(" ENGINE = TiFlash('", stmt_buf);
+    writeEscapedString(db_info.serialize(), stmt_buf); // must escaped for json-encoded text
+    writeString("', ", stmt_buf);
+    writeIntText(DatabaseTiFlash::CURRENT_VERSION, stmt_buf);
+    writeString(")", stmt_buf);
+    return stmt;
+}
+
 template <typename Getter, typename NameMapper>
 void SchemaBuilder<Getter, NameMapper>::applyCreateSchema(TiDB::DBInfoPtr db_info)
 {
     GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_create_db).Increment();
     LOG_INFO(log, "Creating database " << name_mapper.debugDatabaseName(*db_info));
-    auto mapped = name_mapper.mapDatabaseName(*db_info);
-    if (isReservedDatabase(context, mapped))
-        throw TiFlashException("Database " + name_mapper.debugDatabaseName(*db_info) + " is reserved", Errors::DDL::Internal);
 
-    const String statement = "CREATE DATABASE IF NOT EXISTS " + backQuoteIfNeed(mapped) + " ENGINE = TiFlash('" + db_info->serialize()
-        + "', " + DB::toString(DatabaseTiFlash::CURRENT_VERSION) + ")";
+    auto statement = createDatabaseStmt(context, *db_info, name_mapper);
+
     ASTPtr ast = parseCreateStatement(statement);
 
     InterpreterCreateQuery interpreter(ast, context);
