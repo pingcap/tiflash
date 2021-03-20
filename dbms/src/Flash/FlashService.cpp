@@ -110,6 +110,136 @@ grpc::Status FlashService::Coprocessor(
     return ret;
 }
 
+<<<<<<< HEAD
+=======
+::grpc::Status FlashService::DispatchMPPTask(
+    ::grpc::ServerContext * grpc_context, const ::mpp::DispatchTaskRequest * request, ::mpp::DispatchTaskResponse * response)
+{
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling mpp dispatch request: " << request->DebugString());
+
+    if (!security_config.checkGrpcContext(grpc_context))
+    {
+        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
+    }
+    GET_METRIC(metrics, tiflash_coprocessor_request_count, type_dispatch_mpp_task).Increment();
+    GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_dispatch_mpp_task).Increment();
+    Stopwatch watch;
+    SCOPE_EXIT({
+        GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_dispatch_mpp_task).Decrement();
+        GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_dispatch_mpp_task).Observe(watch.elapsedSeconds());
+        GET_METRIC(metrics, tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
+    });
+
+    auto [context, status] = createDBContext(grpc_context);
+    if (!status.ok())
+    {
+        return status;
+    }
+
+    MPPHandler mpp_handler(*request);
+    return mpp_handler.execute(context, response);
+}
+
+::grpc::Status FlashService::EstablishMPPConnection(::grpc::ServerContext * grpc_context,
+    const ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer)
+{
+    // Establish a pipe for data transferring. The pipes has registered by the task in advance.
+    // We need to find it out and bind the grpc stream with it.
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling establish mpp connection request: " << request->DebugString());
+
+    if (!security_config.checkGrpcContext(grpc_context))
+    {
+        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
+    }
+    GET_METRIC(metrics, tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
+    GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
+    Stopwatch watch;
+    SCOPE_EXIT({
+        GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
+        GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_mpp_establish_conn).Observe(watch.elapsedSeconds());
+        // TODO: update the value of metric tiflash_coprocessor_response_bytes.
+    });
+
+    auto [context, status] = createDBContext(grpc_context);
+    if (!status.ok())
+    {
+        return status;
+    }
+
+    auto & tmt_context = context.getTMTContext();
+    auto task_manager = tmt_context.getMPPTaskManager();
+    std::chrono::seconds timeout(10);
+    MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout);
+    if (sender_task == nullptr)
+    {
+        auto errMsg = "can't find task [" + toString(request->sender_meta().start_ts()) + "," + toString(request->sender_meta().task_id())
+            + "] within " + toString(timeout.count()) + " s";
+        LOG_ERROR(log, errMsg);
+        mpp::MPPDataPacket packet;
+        auto err = new mpp::Error();
+        err->set_msg(errMsg);
+        packet.set_allocated_error(err);
+        writer->Write(packet);
+        return grpc::Status::OK;
+    }
+    MPPTunnelPtr tunnel = sender_task->getTunnelWithTimeout(request->receiver_meta(), timeout);
+    if (tunnel == nullptr)
+    {
+        auto errMsg = "can't find tunnel ( " + toString(request->receiver_meta().task_id()) + " + "
+            + toString(request->sender_meta().task_id()) + " ) within " + toString(timeout.count()) + " s";
+        LOG_ERROR(log, errMsg);
+        mpp::MPPDataPacket packet;
+        auto err = new mpp::Error();
+        err->set_msg(errMsg);
+        packet.set_allocated_error(err);
+        writer->Write(packet);
+        return grpc::Status::OK;
+    }
+    Stopwatch stopwatch;
+    tunnel->connect(writer);
+    LOG_DEBUG(log, "connect tunnel successfully and begin to wait");
+    tunnel->waitForFinish();
+    LOG_INFO(log, "connection for " << tunnel->tunnel_id << " cost " << std::to_string(stopwatch.elapsedMilliseconds()) << " ms.");
+    // TODO: Check if there are errors in task.
+
+    return grpc::Status::OK;
+}
+
+::grpc::Status FlashService::CancelMPPTask(
+    ::grpc::ServerContext * grpc_context, const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response)
+{
+    // CancelMPPTask cancels the query of the task.
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": cancel mpp task request: " << request->DebugString());
+
+    if (!security_config.checkGrpcContext(grpc_context))
+    {
+        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
+    }
+    GET_METRIC(metrics, tiflash_coprocessor_request_count, type_cancel_mpp_task).Increment();
+    GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_cancel_mpp_task).Increment();
+    Stopwatch watch;
+    SCOPE_EXIT({
+        GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_cancel_mpp_task).Decrement();
+        GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_cancel_mpp_task).Observe(watch.elapsedSeconds());
+        GET_METRIC(metrics, tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
+    });
+
+    auto [context, status] = createDBContext(grpc_context);
+    auto err = new mpp::Error();
+    if (!status.ok())
+    {
+        err->set_msg("error status");
+        response->set_allocated_error(err);
+        return status;
+    }
+    auto & tmt_context = context.getTMTContext();
+    auto task_manager = tmt_context.getMPPTaskManager();
+    task_manager->cancelMPPQuery(request->meta().start_ts(), "Receive cancel request from TiDB");
+    return grpc::Status::OK;
+}
+
+// This function is deprecated.
+>>>>>>> be6ccc9bf... Fix wrong return value of timestamp column if the timestamp value is `1970-01-01` and the timezone offset is negative (#1577)
 grpc::Status FlashService::BatchCommands(
     grpc::ServerContext * grpc_context, grpc::ServerReaderWriter<::tikvpb::BatchCommandsResponse, tikvpb::BatchCommandsRequest> * stream)
 {
