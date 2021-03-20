@@ -38,6 +38,8 @@ public:
 
     static constexpr bool is_parametric = true;
 
+    static constexpr bool is_Decimal256 = std::is_same_v<T, Decimal256>;
+
     static constexpr size_t maxPrecision() { return maxDecimalPrecision<T>(); }
 
     // If scale is omitted, the default is 0. If precision is omitted, the default is 10.
@@ -142,7 +144,7 @@ public:
     bool isComparable() const override { return true; };
     bool isValueRepresentedByNumber() const override { return true; }
     bool isValueRepresentedByInteger() const override { return scale == 0; }
-    bool isValueUnambiguouslyRepresentedInContiguousMemoryRegion() const override { return true; }
+    bool isValueUnambiguouslyRepresentedInContiguousMemoryRegion() const override { return !is_Decimal256; }
     bool haveMaximumSizeOfValue() const override { return true; }
     size_t getSizeOfValueInMemory() const override { return sizeof(T); }
     bool isCategorial() const override { return true; }

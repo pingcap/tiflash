@@ -53,6 +53,14 @@ using Int128 = __int128_t;
 using Int256 = boost::multiprecision::checked_int256_t;
 using Int512 = boost::multiprecision::checked_int512_t;
 
+template <typename DataType> constexpr bool IsBoostNumber = false;
+template <class Backend, boost::multiprecision::expression_template_option ExpressionTemplates>
+inline constexpr bool IsBoostNumber<boost::multiprecision::number<Backend, ExpressionTemplates>>  = true;
+
+template <typename DataType> constexpr bool IsCppIntBackend = false;
+template <unsigned MinBits, unsigned MaxBits, boost::multiprecision::cpp_integer_type signed_magnitude, boost::multiprecision::cpp_int_check_type Checked, class Allocator>
+inline constexpr bool IsCppIntBackend<boost::multiprecision::cpp_int_backend<MinBits, MaxBits, signed_magnitude, Checked, Allocator>>  = true;
+
 using Float32 = float;
 using Float64 = double;
 
