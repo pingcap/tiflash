@@ -152,14 +152,22 @@ DeltaValueReaderPtr DeltaValueReader::createNewReader(const ColumnDefinesPtr & n
 
 size_t DeltaValueReader::readRows(MutableColumns & output_cols, size_t offset, size_t limit, const RowKeyRange * range)
 {
-    if (unlikely(offset + limit > delta_snap->getRows()))
-        throw Exception("Illegal offset " + DB::toString(offset) + " and limit " + DB::toString(limit) + ", delta total rows "
-                            + DB::toString(delta_snap->getRows()),
-                        ErrorCodes::LOGICAL_ERROR);
+    // Note that DeltaMergeBlockInputStream could ask for rows with larger index than total_delta_rows,
+    // because DeltaIndex::placed_rows could be larger than total_delta_rows.
+    // Here is the example:
+    //  1. Thread A create a delta snapshot with 10 rows. Now DeltaValueSnapshot::shared_delta_index->placed_rows == 10.
+    //  2. Thread B insert 5 rows into the delta
+    //  3. Thread B call Segment::ensurePlace to generate a new DeltaTree, placed_rows = 15, and update DeltaValueSnapshot::shared_delta_index = 15
+    //  4. Thread A call Segment::ensurePlace, and DeltaValueReader::shouldPlace will return false. Because placed_rows(15) >= 10
+    //  5. Thread A use the DeltaIndex with placed_rows = 15 to do the merge in DeltaMergeBlockInputStream
+    //
+    // So here, we should filter out those out-of-range rows.
 
-    auto start = offset;
-    auto end   = offset + limit;
-    if (unlikely(end == start))
+    auto total_delta_rows = delta_snap->getRows();
+
+    auto start = std::min(offset, total_delta_rows);
+    auto end   = std::min(offset + limit, total_delta_rows);
+    if (end == start)
         return 0;
 
     auto [start_pack_index, rows_start_in_start_pack] = locatePosByAccumulation(pack_rows_end, start);
@@ -301,7 +309,7 @@ bool DeltaValueReader::shouldPlace(const DMContext &   context,
         auto   pk_column      = dpb_reader.getPKColumn();
         auto   version_column = dpb_reader.getVersionColumn();
 
-        auto rkcc = RowKeyColumnContainer(pk_column, context.is_common_handle);
+        auto   rkcc             = RowKeyColumnContainer(pk_column, context.is_common_handle);
         auto & version_col_data = toColumnVectorData<UInt64>(version_column);
 
         for (auto i = rows_start_in_pack; i < rows_end_in_pack; ++i)

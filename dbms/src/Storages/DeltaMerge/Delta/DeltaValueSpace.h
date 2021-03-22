@@ -345,6 +345,8 @@ public:
 
     const auto & getDeltaSnap() { return delta_snap; }
 
+    // Use for DeltaMergeBlockInputStream to read delta rows, and merge with stable rows.
+    // This method will check whether offset and limit are valid. It only return those valid rows.
     size_t readRows(MutableColumns & output_columns, size_t offset, size_t limit, const RowKeyRange * range);
 
     // Get blocks or delete_ranges of `ExtraHandleColumn` and `VersionColumn`.

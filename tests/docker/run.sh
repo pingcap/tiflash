@@ -122,10 +122,3 @@ wait_env dt
 docker-compose -f cluster_new_collation.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh new_collation_fullstack'
 docker-compose -f cluster_new_collation.yaml -f tiflash-dt.yaml down
 rm -rf ./data ./log
-
-# run clustered index tests
-docker-compose -f cluster_clustered_index.yaml -f tiflash-dt.yaml up -d
-wait_env dt
-docker-compose -f cluster_clustered_index.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh clustered_index_fullstack'
-docker-compose -f cluster_clustered_index.yaml -f tiflash-dt.yaml down
-rm -rf ./data ./log

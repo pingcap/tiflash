@@ -2,7 +2,7 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TiKVHelper.h>
 #include <Storages/Transaction/TiKVRange.h>
-#include <test_utils/TiflashTestBasic.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 #include "region_helper.h"
 

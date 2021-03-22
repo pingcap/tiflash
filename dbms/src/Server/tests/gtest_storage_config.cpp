@@ -4,7 +4,7 @@
 #include <Poco/Logger.h>
 #include <Poco/Util/LayeredConfiguration.h>
 #include <Server/StorageConfigParser.h>
-#include <test_utils/TiflashTestBasic.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 #define private public // hack for test
 #include <Storages/PathCapacityMetrics.h>
@@ -20,7 +20,7 @@ class StorageConfig_test : public ::testing::Test
 public:
     StorageConfig_test() : log(&Poco::Logger::get("StorageConfig_test")) {}
 
-    static void SetUpTestCase() { TiFlashTestEnv::setupLogger(); }
+    static void SetUpTestCase() {}
 
 protected:
     Poco::Logger * log;
@@ -292,7 +292,7 @@ class UsersConfigParser_test : public ::testing::Test
 public:
     UsersConfigParser_test() : log(&Poco::Logger::get("UsersConfigParser_test")) {}
 
-    static void SetUpTestCase() { TiFlashTestEnv::setupLogger(); }
+    static void SetUpTestCase() {}
 
 protected:
     Poco::Logger * log;
@@ -369,7 +369,7 @@ dt_enable_rough_set_filter = false
         LOG_INFO(log, "parsing [index=" << i << "] [content=" << test_case << "]");
 
         // Reload users config with test case
-        auto & global_ctx = TiFlashTestEnv::getContext().getGlobalContext();
+        auto & global_ctx = TiFlashTestEnv::getGlobalContext();
         global_ctx.setUsersConfig(config);
 
         // Create a copy of global_ctx
