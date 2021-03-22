@@ -205,7 +205,9 @@ grpc::Status FlashService::Coprocessor(
     return grpc::Status::OK;
 }
 
-::grpc::Status FlashService::CancelMPPTask(::grpc::ServerContext* grpc_context, const ::mpp::CancelTaskRequest* request, ::mpp::CancelTaskResponse* response) {
+::grpc::Status FlashService::CancelMPPTask(
+    ::grpc::ServerContext * grpc_context, const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response)
+{
     // CancelMPPTask cancels the query of the task.
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": cancel mpp task request: " << request->DebugString());
 
@@ -217,10 +219,10 @@ grpc::Status FlashService::Coprocessor(
     GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_cancel_mpp_task).Increment();
     Stopwatch watch;
     SCOPE_EXIT({
-                   GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_cancel_mpp_task).Decrement();
-                   GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_cancel_mpp_task).Observe(watch.elapsedSeconds());
-                   GET_METRIC(metrics, tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
-               });
+        GET_METRIC(metrics, tiflash_coprocessor_handling_request_count, type_cancel_mpp_task).Decrement();
+        GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_cancel_mpp_task).Observe(watch.elapsedSeconds());
+        GET_METRIC(metrics, tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
+    });
 
     auto [context, status] = createDBContext(grpc_context);
     auto err = new mpp::Error();
@@ -232,7 +234,7 @@ grpc::Status FlashService::Coprocessor(
     }
     auto & tmt_context = context.getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
-    task_manager->cancelMPPQuery(request->meta().start_ts());
+    task_manager->cancelMPPQuery(request->meta().start_ts(), "Receive cancel request from TiDB");
     return grpc::Status::OK;
 }
 
