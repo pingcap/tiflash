@@ -7,7 +7,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Range.h>
-#include <test_utils/TiflashTestBasic.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB
 {
@@ -39,7 +39,7 @@ inline ::testing::AssertionResult HandleRangeCompare(const char *        lhs_exp
 class DMTestEnv
 {
 public:
-    static Context & getContext(const ::DB::Settings & settings = DB::Settings())
+    static Context getContext(const ::DB::Settings & settings = DB::Settings())
     {
         return ::DB::tests::TiFlashTestEnv::getContext(settings);
     }

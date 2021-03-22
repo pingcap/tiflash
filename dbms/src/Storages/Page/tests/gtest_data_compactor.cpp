@@ -10,7 +10,7 @@
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/mock/MockUtils.h>
 #include <Storages/PathPool.h>
-#include <test_utils/TiflashTestBasic.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB
 {
@@ -22,8 +22,6 @@ namespace tests
 TEST(DataCompactor_test, MigratePages)
 try
 {
-    TiFlashTestEnv::setupLogger();
-
     CHECK_TESTS_WITH_DATA_ENABLED;
 
     PageStorage::Config config;
@@ -35,7 +33,7 @@ try
     const Strings test_paths{test_path};
 #endif
 
-    auto &                ctx           = TiFlashTestEnv::getContext(DB::Settings(), test_paths);
+    auto                 ctx           = TiFlashTestEnv::getContext(DB::Settings(), test_paths);
     const FileProviderPtr file_provider = ctx.getFileProvider();
     auto                  pool          = ctx.getPathPool().withTable("test", "t", false);
     auto                  delegate      = pool.getPSDiskDelegatorMulti("log");

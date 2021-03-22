@@ -8,7 +8,7 @@
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/registerStorages.h>
 #include <gtest/gtest.h>
-#include <test_utils/TiflashTestBasic.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 
 using TableInfo = TiDB::TableInfo;

@@ -1,5 +1,6 @@
 #include <Common/DNSCache.h>
 #include <Interpreters/Context.h>
+#include <Server/RaftConfigParser.h>
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/RegionExecutionResult.h>
@@ -12,19 +13,19 @@
 namespace DB
 {
 
-TMTContext::TMTContext(Context & context_, const std::vector<std::string> & addrs,
-    const std::unordered_set<std::string> & ignore_databases_, ::TiDB::StorageEngine engine_, bool disable_bg_flush_,
-    const pingcap::ClusterConfig & cluster_config)
+TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
     : context(context_),
       kvstore(std::make_shared<KVStore>(context)),
       region_table(context),
       background_service(nullptr),
-      cluster(addrs.size() == 0 ? std::make_shared<pingcap::kv::Cluster>() : std::make_shared<pingcap::kv::Cluster>(addrs, cluster_config)),
-      ignore_databases(ignore_databases_),
-      schema_syncer(addrs.size() == 0 ? std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<true>>(cluster))
-                                      : std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<false>>(cluster))),
-      engine(engine_),
-      disable_bg_flush(disable_bg_flush_)
+      cluster(raft_config.pd_addrs.size() == 0 ? std::make_shared<pingcap::kv::Cluster>()
+                                               : std::make_shared<pingcap::kv::Cluster>(raft_config.pd_addrs, cluster_config)),
+      ignore_databases(raft_config.ignore_databases),
+      schema_syncer(raft_config.pd_addrs.size() == 0
+              ? std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer</*mock*/ true>>(cluster))
+              : std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer</*mock*/ false>>(cluster))),
+      engine(raft_config.engine),
+      disable_bg_flush(raft_config.disable_bg_flush)
 {}
 
 void TMTContext::restore(const TiFlashRaftProxyHelper * proxy_helper)
@@ -74,9 +75,10 @@ const std::unordered_set<std::string> & TMTContext::getIgnoreDatabases() const {
 
 void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
 {
-    static const std::string & TABLE_OVERLAP_THRESHOLD = "flash.overlap_threshold";
-    static const std::string & COMPACT_LOG_MIN_PERIOD = "flash.compact_log_min_period";
-    static const std::string & REPLICA_READ_MAX_THREAD = "flash.replica_read_max_thread";
+    static constexpr const char * TABLE_OVERLAP_THRESHOLD = "flash.overlap_threshold";
+    static constexpr const char * COMPACT_LOG_MIN_PERIOD = "flash.compact_log_min_period";
+    static constexpr const char * REPLICA_READ_MAX_THREAD = "flash.replica_read_max_thread";
+
 
     getRegionTable().setTableCheckerThreshold(config.getDouble(TABLE_OVERLAP_THRESHOLD, 0.6));
     getKVStore()->setRegionCompactLogPeriod(std::max(config.getUInt64(COMPACT_LOG_MIN_PERIOD, 120), 1));

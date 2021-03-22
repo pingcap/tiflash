@@ -51,6 +51,7 @@
 #include <Interpreters/Context.h>
 #include <Common/DNSCache.h>
 #include <Encryption/DataKeyManager.h>
+#include <Encryption/FileProvider.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
 #include <IO/PersistedCache.h>
@@ -1453,16 +1454,12 @@ DDLWorker & Context::getDDLWorker() const
     return *shared->ddl_worker;
 }
 
-void Context::createTMTContext(const std::vector<std::string> & pd_addrs,
-                               const std::unordered_set<std::string> & ignore_databases,
-                               ::TiDB::StorageEngine engine,
-                               bool disable_bg_flush,
-                               pingcap::ClusterConfig cluster_config)
+void Context::createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config)
 {
     auto lock = getLock();
     if (shared->tmt_context)
         throw Exception("TMTContext has already existed", ErrorCodes::LOGICAL_ERROR);
-    shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, ignore_databases, engine, disable_bg_flush, cluster_config);
+    shared->tmt_context = std::make_shared<TMTContext>(*this, raft_config, cluster_config);
 }
 
 void Context::initializePathCapacityMetric(                                           //
