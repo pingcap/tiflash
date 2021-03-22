@@ -288,7 +288,7 @@ bool MPPTask::isTaskHanging()
     return false;
 }
 
-void MPPTask::cancel()
+void MPPTask::cancel(const String & reason)
 {
     auto current_status = status.load();
     if (current_status == FINISHED || current_status == CANCELLED)
@@ -314,7 +314,7 @@ void MPPTask::cancel()
     /// Here we use `closeAllTunnel` because currently, `cancel` is a query level cancel, which
     /// means if this mpp task is cancelled, all the mpp tasks belonging to the same query are
     /// cancelled at the same time, so there is no guarantee that the tunnel can be connected.
-    closeAllTunnel("MPP Task canceled because it seems hangs");
+    closeAllTunnel(reason);
     LOG_WARNING(log, "Finish cancel task: " + id.toString());
 }
 
@@ -404,7 +404,7 @@ MPPTaskManager::MPPTaskManager(BackgroundProcessingPool & background_pool_)
                     if (has_hanging_task)
                     {
                         has_hanging_query = true;
-                        this->cancelMPPQuery(query_id);
+                        this->cancelMPPQuery(query_id, "MPP Task canceled because it seems hangs");
                     }
                 }
             }
