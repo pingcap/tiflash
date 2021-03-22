@@ -50,7 +50,6 @@ public:
 
     static void SetUpTestCase()
     {
-        fiu_init(0); // init failpoint
     }
 
     void SetUp() override
@@ -60,14 +59,14 @@ public:
         auto mode             = GetParam();
         bool single_file_mode = mode == DMFile::Mode::SINGLE_FILE;
 
-        auto & ctx      = DMTestEnv::getContext();
-        auto   settings = DB::Settings();
-        path_pool       = std::make_unique<StoragePathPool>(ctx.getPathPool().withTable("test", "t1", false));
-        storage_pool    = std::make_unique<StoragePool>("test.t1", *path_pool, ctx, settings);
-        dm_file         = DMFile::create(1, parent_path, single_file_mode);
-        db_context      = std::make_unique<Context>(DMTestEnv::getContext(settings));
-        table_columns_  = std::make_shared<ColumnDefines>();
-        column_cache_   = std::make_shared<ColumnCache>();
+        auto ctx       = DMTestEnv::getContext();
+        auto settings  = DB::Settings();
+        path_pool      = std::make_unique<StoragePathPool>(ctx.getPathPool().withTable("test", "t1", false));
+        storage_pool   = std::make_unique<StoragePool>("test.t1", *path_pool, ctx, settings);
+        dm_file        = DMFile::create(1, parent_path, single_file_mode);
+        db_context     = std::make_unique<Context>(DMTestEnv::getContext(settings));
+        table_columns_ = std::make_shared<ColumnDefines>();
+        column_cache_  = std::make_shared<ColumnCache>();
 
         reload();
     }
@@ -85,7 +84,7 @@ public:
     {
         *table_columns_ = *cols;
 
-        auto & ctx = DMTestEnv::getContext();
+        auto ctx   = DMTestEnv::getContext();
         *path_pool = ctx.getPathPool().withTable("test", "t1", false);
         dm_context = std::make_unique<DMContext>( //
             *db_context,
@@ -1007,14 +1006,14 @@ public:
         auto mode             = GetParam();
         bool single_file_mode = mode == DMFile::Mode::SINGLE_FILE;
 
-        auto   settings = DB::Settings();
-        auto & ctx      = DMTestEnv::getContext();
-        path_pool       = std::make_unique<StoragePathPool>(ctx.getPathPool().withTable("test", "t", false));
-        storage_pool    = std::make_unique<StoragePool>("test.t1", *path_pool, ctx, settings);
-        dm_file         = DMFile::create(0, path, single_file_mode);
-        db_context      = std::make_unique<Context>(DMTestEnv::getContext(settings));
-        table_columns_  = std::make_shared<ColumnDefines>();
-        column_cache_   = std::make_shared<ColumnCache>();
+        auto settings  = DB::Settings();
+        auto ctx       = DMTestEnv::getContext();
+        path_pool      = std::make_unique<StoragePathPool>(ctx.getPathPool().withTable("test", "t", false));
+        storage_pool   = std::make_unique<StoragePool>("test.t1", *path_pool, ctx, settings);
+        dm_file        = DMFile::create(0, path, single_file_mode);
+        db_context     = std::make_unique<Context>(DMTestEnv::getContext(settings));
+        table_columns_ = std::make_shared<ColumnDefines>();
+        column_cache_  = std::make_shared<ColumnCache>();
 
         reload();
     }

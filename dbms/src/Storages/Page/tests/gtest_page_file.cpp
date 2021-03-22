@@ -1,7 +1,7 @@
 #include <Poco/Logger.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageFile.h>
-#include <test_utils/TiflashTestBasic.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 #include "gtest/gtest.h"
 
