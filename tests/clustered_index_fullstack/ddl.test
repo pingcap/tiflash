@@ -1,13 +1,13 @@
 
 ## int handle
 mysql> drop table if exists test.t_1
-mysql> set tidb_enable_clustered_index=1;create table test.t_1(a int primary key, col int)
+mysql> create table test.t_1(a int primary key clustered, col int)
 mysql> insert into test.t_1 values(1,2),(2,3)
 mysql> alter table test.t_1 set tiflash replica 1 
 
 # common handle
 mysql> drop table if exists test.t_2
-mysql> set tidb_enable_clustered_index=1;create table test.t_2(a varchar(10), b int, c int, primary key(a, b))
+mysql> create table test.t_2(a varchar(10), b int, c int, primary key(a, b) clustered)
 mysql> insert into test.t_2 values('1',2,3),('2',3,4)
 mysql> alter table test.t_2 set tiflash replica 1 
 
