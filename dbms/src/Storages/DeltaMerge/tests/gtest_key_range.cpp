@@ -1,5 +1,5 @@
 #include <Storages/DeltaMerge/Range.h>
-#include <test_utils/TiflashTestBasic.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB
 {

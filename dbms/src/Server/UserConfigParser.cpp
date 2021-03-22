@@ -30,7 +30,7 @@ static std::string tryGetAbsolutePath(const std::string & config_path, std::stri
             users_config_path.clear();
         }
     }
-    return users_config_path;
+    return std::move(users_config_path);
 }
 
 ConfigReloaderPtr parseSettings(Poco::Util::LayeredConfiguration & config, const std::string & config_path,
