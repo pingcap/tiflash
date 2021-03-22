@@ -7,6 +7,7 @@ if [ `uname` == "Darwin" ]; then
 else
     export build_dir="../../build"
 fi
+# export build_dir="../cmake-build-debug"
 
 export storage_bin="$build_dir/dbms/src/Server/tiflash"
 
@@ -39,5 +40,5 @@ export verbose="false"
 # export verbose="true"
 
 # Setup running env vars
-source ../../_vars.sh
-setup_dylib_path
+#source ../../_vars.sh
+#setup_dylib_path

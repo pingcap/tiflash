@@ -126,14 +126,21 @@ struct MPPTunnel
         cv_for_finished.notify_all();
     }
 
-    /// close() finishes the tunnel without checking the connect status, this function
-    /// should only be used when handling error if DispatchMPPTask fails for
-    /// root task. Because for root task, if DispatchMPPTask fails, TiDB does
-    /// not sending establish MPP connection request at all, it is meaningless
-    /// to check the connect status in this case, just finish the tunnel.
-    void close()
+    /// close() finishes the tunnel, if the tunnel is connected already, it will
+    /// write the error message to the tunnel, otherwise it just close the tunnel
+    void close(const String & reason)
     {
         std::unique_lock<std::mutex> lk(mu);
+        if (finished)
+            return;
+        if (connected)
+        {
+            mpp::MPPDataPacket data;
+            auto err = new mpp::Error();
+            err->set_msg(reason);
+            data.set_allocated_error(err);
+            writer->Write(data);
+        }
         finished = true;
         cv_for_finished.notify_all();
     }
@@ -289,15 +296,17 @@ struct MPPTask : std::enable_shared_from_this<MPPTask>, private boost::noncopyab
 
     bool isTaskHanging();
 
-    void cancel();
+    void cancel(const String & reason);
 
-    void closeAllTunnel()
+    /// Similar to `writeErrToAllTunnel`, but it just try to write the error message to tunnel
+    /// without waiting the tunnel to be connected
+    void closeAllTunnel(const String & reason)
     {
         try
         {
             for (auto & it : tunnel_map)
             {
-                it.second->close();
+                it.second->close(reason);
             }
         }
         catch (...)
@@ -494,7 +503,7 @@ public:
         return ret ? it->second : nullptr;
     }
 
-    void cancelMPPQuery(UInt64 query_id)
+    void cancelMPPQuery(UInt64 query_id, const String & reason)
     {
         MPPQueryMap::iterator it;
         {
@@ -509,13 +518,19 @@ public:
             LOG_WARNING(log, "Begin cancel query: " + std::to_string(query_id));
         }
         for (auto & task_id : it->second.task_map)
-            task_id.second->cancel();
+            task_id.second->cancel(reason);
+        MPPQueryTaskSet canceled_task_set;
         {
             std::lock_guard<std::mutex> lock(mu);
             /// just to double check the query still exists
             it = mpp_query_map.find(query_id);
             if (it != mpp_query_map.end())
+            {
+                /// hold the canceled task set, so the mpp task will not be deconstruct when holding the
+                /// `mu` of MPPTaskManager, otherwise it might cause deadlock
+                canceled_task_set = it->second;
                 mpp_query_map.erase(it);
+            }
         }
         LOG_WARNING(log, "Finish cancel query: " + std::to_string(query_id));
     }

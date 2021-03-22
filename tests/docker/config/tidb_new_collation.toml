@@ -1,5 +1,4 @@
 # TiDB Configuration.
 
 host = "0.0.0.0"
-alter-primary-key = true
 new_collations_enabled_on_first_bootstrap = true
