@@ -4,7 +4,7 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/tests/dm_basic_include.h>
-#include <test_utils/TiflashTestBasic.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 #include <ctime>
 #include <ext/scope_guard.h>
@@ -26,7 +26,7 @@ public:
     DMMinMaxIndex_test() {}
 
 protected:
-    static void SetUpTestCase() { DB::tests::TiFlashTestEnv::setupLogger(); }
+    static void SetUpTestCase() {}
 
     void SetUp() override { context = std::make_unique<Context>(DMTestEnv::getContext()); }
 
