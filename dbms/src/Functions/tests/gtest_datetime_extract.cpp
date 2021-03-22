@@ -5,6 +5,7 @@
 #include <Functions/FunctionsDateTime.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 #include <string>
 #include <vector>
@@ -18,24 +19,29 @@
 
 namespace DB
 {
-
-Context * ctx;
-
-
+namespace tests
+{
 class TestDateTimeExtract : public ::testing::Test
 {
 protected:
     static void SetUpTestCase()
     {
-        ctx = new Context(Context::createGlobal());
-        registerFunctions();
+        try
+        {
+            registerFunctions();
+        }
+        catch (DB::Exception &)
+        {
+            // Maybe another test has already registed, ignore exception here.
+        }
     }
 };
 
-TEST_F(TestDateTimeExtract, ExtractFromString)
+// Disabled for now, since we haven't supported ExtractFromString yet
+TEST_F(TestDateTimeExtract, DISABLED_ExtractFromString)
 try
 {
-    Context context = *ctx;
+    const Context context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -92,25 +98,12 @@ try
         EXPECT_EQ(results[i], s);
     }
 }
-catch (const Exception & e)
-{
-    std::cerr << e.displayText() << std::endl;
-    GTEST_FAIL();
-}
-catch (const std::exception & e)
-{
-    std::cerr << e.what() << std::endl;
-    GTEST_FAIL();
-}
-catch (...)
-{
-    throw;
-}
+CATCH
 
 TEST_F(TestDateTimeExtract, ExtractFromMyDateTime)
 try
 {
-    Context context = *ctx;
+    const Context context = TiFlashTestEnv::getContext();
 
     auto & factory = FunctionFactory::instance();
 
@@ -167,19 +160,7 @@ try
         EXPECT_EQ(results[i], s);
     }
 }
-catch (const Exception & e)
-{
-    std::cerr << e.displayText() << std::endl;
-    GTEST_FAIL();
-}
-catch (const std::exception & e)
-{
-    std::cerr << e.what() << std::endl;
-    GTEST_FAIL();
-}
-catch (...)
-{
-    throw;
-}
+CATCH
 
+} // namespace tests
 } // namespace DB
