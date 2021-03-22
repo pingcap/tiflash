@@ -386,11 +386,7 @@ void encodeRowV1(const TiDB::TableInfo & table_info, const std::vector<Field> & 
     {
         const TiDB::ColumnInfo & column_info = table_info.columns[i];
         EncodeDatum(Field(column_info.id), TiDB::CodecFlagInt, ss);
-<<<<<<< HEAD
-        EncodeDatum(fields[i], column_info.getCodecFlag(), ss);
-=======
-        EncodeDatumForRow(fields[index++], column_info.getCodecFlag(), ss, column_info);
->>>>>>> ae4a40c44... fix bug that Decimal256's hash value is not stable (#1574)
+        EncodeDatumForRow(fields[i], column_info.getCodecFlag(), ss, column_info);
     }
 }
 
