@@ -23,6 +23,8 @@ using BackGroundServicePtr = std::unique_ptr<BackgroundService>;
 class MPPTaskManager;
 using MPPTaskManagerPtr = std::shared_ptr<MPPTaskManager>;
 
+struct TiFlashRaftConfig;
+
 class TMTContext : private boost::noncopyable
 {
 public:
@@ -43,10 +45,7 @@ public:
 
     bool isBgFlushDisabled() const { return disable_bg_flush; }
 
-    // TODO: get flusher args from config file
-    explicit TMTContext(Context & context, const std::vector<std::string> & addrs,
-        const std::unordered_set<std::string> & ignore_databases_, TiDB::StorageEngine engine_, bool disable_bg_flush_,
-        const pingcap::ClusterConfig & cluster_config);
+    explicit TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config_);
 
     SchemaSyncerPtr getSchemaSyncer() const;
     void setSchemaSyncer(SchemaSyncerPtr);

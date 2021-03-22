@@ -4,7 +4,7 @@
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <common/logger_useful.h>
-#include <test_utils/TiflashTestBasic.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB
 {
@@ -16,7 +16,7 @@ class PathPool_test : public ::testing::Test
 public:
     PathPool_test() : log(&Poco::Logger::get("PathPool_test")) {}
 
-    static void SetUpTestCase() { DB::tests::TiFlashTestEnv::setupLogger(); }
+    static void SetUpTestCase() {}
 
     static constexpr const char * DIR_PREFIX_OF_TABLE = "/data/t/";
     static constexpr size_t TEST_NUMBER_FOR_FOLDER = 6;
@@ -37,7 +37,7 @@ TEST_F(PathPool_test, AlignPaths)
 try
 {
     Strings paths = getMultiTestPaths();
-    auto & ctx = TiFlashTestEnv::getContext();
+    auto ctx = TiFlashTestEnv::getContext();
 
     PathPool pool(paths, paths, Strings{}, ctx.getPathCapacity(), ctx.getFileProvider());
     auto spool = pool.withTable("test", "t", false);
@@ -182,7 +182,7 @@ try
 {
     Strings paths = getMultiTestPaths();
     Strings latest_paths(paths.begin(), paths.begin() + 1);
-    auto & ctx = TiFlashTestEnv::getContext();
+    auto ctx = TiFlashTestEnv::getContext();
 
     PathPool pool(paths, latest_paths, Strings{}, ctx.getPathCapacity(), ctx.getFileProvider());
     auto spool = pool.withTable("test", "t", false);
