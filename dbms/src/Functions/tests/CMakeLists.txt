@@ -10,8 +10,5 @@ target_link_libraries (strings_trim dbms gtest_main clickhouse_functions)
 add_executable (strings_pad gtest_strings_pad.cpp)
 target_link_libraries (strings_pad dbms gtest_main clickhouse_functions)
 
-add_executable (datetime_extract gtest_datetime_extract.cpp)
-target_link_libraries (datetime_extract dbms gtest_main clickhouse_functions)
-
 add_executable (arithmetic_functions gtest_arithmetic_functions.cpp)
 target_link_libraries (arithmetic_functions dbms gtest_main clickhouse_functions)
