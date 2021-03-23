@@ -4,6 +4,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 #include <string>
 #include <vector>
@@ -20,21 +21,27 @@
 
 namespace DB
 {
-
-Context * ctx;
-
+namespace tests
+{
 
 class TestBinaryArithmeticFunctions : public ::testing::Test
 {
 protected:
     static void SetUpTestCase()
     {
-        ctx = new Context(Context::createGlobal());
-        registerFunctions();
+        try
+        {
+            registerFunctions();
+        }
+        catch (DB::Exception &)
+        {
+            // Maybe another test has already registed, ignore exception here.
+        }
     }
+
     void executeFunction(Block & block, ColumnWithTypeAndName & c1, ColumnWithTypeAndName & c2, const String & func_name)
     {
-        Context context = *ctx;
+        const auto context = TiFlashTestEnv::getContext();
         auto & factory = FunctionFactory::instance();
 
         ColumnsWithTypeAndName ctns{c1, c2};
@@ -376,20 +383,7 @@ try
         }
     }
 }
-catch (const Exception & e)
-{
-    std::cerr << e.displayText() << std::endl;
-    GTEST_FAIL();
-}
-catch (const std::exception & e)
-{
-    std::cerr << e.what() << std::endl;
-    GTEST_FAIL();
-}
-catch (...)
-{
-    throw;
-}
+CATCH
 
 TEST_F(TestBinaryArithmeticFunctions, TiDBDivideDouble)
 try
@@ -702,19 +696,7 @@ try
         }
     }
 }
-catch (const Exception & e)
-{
-    std::cerr << e.displayText() << std::endl;
-    GTEST_FAIL();
-}
-catch (const std::exception & e)
-{
-    std::cerr << e.what() << std::endl;
-    GTEST_FAIL();
-}
-catch (...)
-{
-    throw;
-}
+CATCH
 
+} // namespace tests
 } // namespace DB

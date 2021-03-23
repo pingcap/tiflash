@@ -783,7 +783,27 @@ String MyDateTime::toString(int fsp) const
     return result;
 }
 
-bool isZeroDate(UInt64 time) { return time == 0; }
+inline bool isZeroDate(UInt64 time) { return time == 0; }
+
+inline bool supportedByDateLUT(const MyDateTime & my_time) { return my_time.year >= 1970; }
+
+/// DateLUT only support time from year 1970, in some corner cases, the input date may be
+/// 1969-12-31, need extra logical to handle it
+inline time_t getEpochSecond(const MyDateTime & my_time, const DateLUTImpl & time_zone)
+{
+    if likely (supportedByDateLUT(my_time))
+        return time_zone.makeDateTime(my_time.year, my_time.month, my_time.day, my_time.hour, my_time.minute, my_time.second);
+    if likely (my_time.year == 1969 && my_time.month == 12 && my_time.day == 31)
+    {
+        /// - 3600 * 24 + my_time.hour * 3600 + my_time.minute * 60 + my_time.second is UTC based, need to adjust
+        /// the epoch according to the input time_zone
+        return -3600 * 24 + my_time.hour * 3600 + my_time.minute * 60 + my_time.second - time_zone.getOffsetAtStartEpoch();
+    }
+    else
+    {
+        throw Exception("Unsupported timestamp value , TiFlash only support timestamp after 1970-01-01 00:00:00 UTC)");
+    }
+}
 
 void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to)
 {
@@ -793,8 +813,7 @@ void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & tim
         return;
     }
     MyDateTime from_my_time(from_time);
-    time_t epoch = time_zone_from.makeDateTime(
-        from_my_time.year, from_my_time.month, from_my_time.day, from_my_time.hour, from_my_time.minute, from_my_time.second);
+    time_t epoch = getEpochSecond(from_my_time, time_zone_from);
     if (unlikely(epoch + time_zone_to.getOffsetAtStartEpoch() + SECONDS_PER_DAY < 0))
         throw Exception("Unsupported timestamp value , TiFlash only support timestamp after 1970-01-01 00:00:00 UTC)");
     MyDateTime to_my_time(time_zone_to.toYear(epoch), time_zone_to.toMonth(epoch), time_zone_to.toDayOfMonth(epoch),
@@ -810,8 +829,7 @@ void convertTimeZoneByOffset(UInt64 from_time, UInt64 & to_time, Int64 offset, c
         return;
     }
     MyDateTime from_my_time(from_time);
-    time_t epoch = time_zone.makeDateTime(
-        from_my_time.year, from_my_time.month, from_my_time.day, from_my_time.hour, from_my_time.minute, from_my_time.second);
+    time_t epoch = getEpochSecond(from_my_time, time_zone);
     epoch += offset;
     if (unlikely(epoch + SECONDS_PER_DAY < 0))
         throw Exception("Unsupported timestamp value , TiFlash only support timestamp after 1970-01-01 00:00:00 UTC)");
