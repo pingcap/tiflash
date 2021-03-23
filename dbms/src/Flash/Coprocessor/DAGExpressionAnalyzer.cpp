@@ -481,7 +481,8 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
     // 1. if the column is numeric, compare it with 0
     // 2. if the column is string, convert it to numeric column, and compare with 0
     // 3. if the column is date/datetime, compare it with zeroDate
-    // 4. if the column is other type, throw exception
+    // 4. if the column is nothing, convert it to 0 directly
+    // 5. if the column is other type, throw exception
     const auto & org_type = removeNullable(actions->getSampleBlock().getByName(column_name).type);
     if (org_type->isNumber() || org_type->isDecimal())
     {
@@ -512,6 +513,16 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
         constructDateTimeLiteralTiExpr(const_expr, 0);
         auto const_expr_name = getActions(const_expr, actions);
         return applyFunction("notEquals", {column_name, const_expr_name}, actions, nullptr);
+    }
+    if (org_type->getTypeId() == TypeIndex::Nothing)
+    {
+        ColumnWithTypeAndName column;
+        Field value = toField(0);
+        column.name = getUniqueName(actions->getSampleBlock(), "UInt8_");
+        column.type = DataTypeFactory::instance().get("UInt8");
+        column.column = column.type->createColumnConst(1, value);
+        actions->add(ExpressionAction::addColumn(column));
+        return column.name;
     }
     throw TiFlashException("Filter on " + org_type->getName() + " is not supported.", Errors::Coprocessor::Unimplemented);
 }
@@ -935,7 +946,7 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
         if (expr.tp() == tipb::ExprType::Null)
         {
             // We should use DataTypeNothing as NULL literal's TiFlash Type
-            target_type = makeNullable(DataTypeFactory::instance().get("Nothing"));
+            target_type = makeNullable(flash_type);
         }
         else
         {
