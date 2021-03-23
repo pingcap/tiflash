@@ -50,6 +50,8 @@ mysql> select * from test.t where cast(case col_datetime when null then null end
 
 # Datetime
 mysql> select * from test.t where date_format(col_datetime, null)
+mysql> select * from test.t where from_unixtime(col_int, null) or from_unixtime(null)
+mysql> select * from test.t where timestampdiff(day, col_datetime, null) or timestampdiff(day, null, col_datetime)
 
 # String
 mysql> select * from test.t where substring(col_string, null)
