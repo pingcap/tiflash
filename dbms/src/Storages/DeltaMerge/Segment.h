@@ -56,11 +56,25 @@ public:
 
     struct ReadInfo
     {
-        DeltaIndexIterator  index_begin;
-        DeltaIndexIterator  index_end;
+    private:
         DeltaValueReaderPtr delta_reader;
 
-        ColumnDefines read_columns;
+    public:
+        DeltaIndexIterator index_begin;
+        DeltaIndexIterator index_end;
+
+        ColumnDefinesPtr read_columns;
+
+        ReadInfo(DeltaValueReaderPtr delta_reader_,
+                 DeltaIndexIterator  index_begin_,
+                 DeltaIndexIterator  index_end_,
+                 ColumnDefinesPtr    read_columns_)
+            : delta_reader(delta_reader_), index_begin(index_begin_), index_end(index_end_), read_columns(read_columns_)
+        {
+        }
+
+        DeltaValueReaderPtr getDeltaReader() const { return delta_reader->createNewReader(read_columns); }
+        DeltaValueReaderPtr getDeltaReader(ColumnDefinesPtr columns) const { return delta_reader->createNewReader(columns); }
     };
 
     struct SplitInfo
