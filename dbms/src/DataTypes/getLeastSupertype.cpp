@@ -347,7 +347,7 @@ DataTypePtr getLeastSupertype(const DataTypes & types)
 
             /// If there are signed and unsigned types of same bit-width and the width is 64, we will convert them to Decimal(20,0).
             /// Example, common of (Int64, UInt64) = Decimal(20,0)
-            if (max_bits_of_signed_integer == max_bits_of_unsigned_integer && max_bits_of_signed_integer == 64)
+            if (max_bits_of_signed_integer > 0 && max_bits_of_unsigned_integer == 64)
             {
                 return std::make_shared<DataTypeDecimal<Decimal128>>(20, 0);
             }
