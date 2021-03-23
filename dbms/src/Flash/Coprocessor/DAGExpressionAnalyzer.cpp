@@ -955,6 +955,8 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
                 /// the type in expr.field_type()
                 target_type = flash_type;
             }
+            // We should remove nullable for constant value since TiDB may not set NOT_NULL flag for literal expression.
+            target_type = removeNullable(target_type);
         }
         ret = exprToString(expr, getCurrentInputColumns()) + "_" + target_type->getName();
         if (!actions->getSampleBlock().has(ret))
