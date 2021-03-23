@@ -179,6 +179,18 @@ static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr
     return analyzer->applyFunction(is_not_in ? "and" : "or", argument_names, actions, nullptr);
 }
 
+static String buildLogicalFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+{
+    const String & func_name = getFunctionName(expr);
+    Names argument_names;
+    for (auto & child : expr.children())
+    {
+        String name = analyzer->getActions(child, actions, true);
+        argument_names.push_back(name);
+    }
+    return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
+}
+
 static const String tidb_cast_name = "tidb_cast";
 
 static String buildCastFunctionInternal(DAGExpressionAnalyzer * analyzer, const Names & argument_names, bool in_union,
@@ -282,6 +294,10 @@ static std::unordered_map<String, std::function<String(DAGExpressionAnalyzer *, 
         {"multiIf", buildMultiIfFunction},
         {"tidb_cast", buildCastFunction},
         {"date_add", buildDateAddFunction},
+        {"and", buildLogicalFunction},
+        {"or", buildLogicalFunction},
+        {"xor", buildLogicalFunction},
+        {"not", buildLogicalFunction},
     });
 
 DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> && source_columns_, const Context & context_)
