@@ -345,7 +345,7 @@ DataTypePtr getLeastSupertype(const DataTypes & types)
 
             size_t min_bit_width_of_integer = std::max(max_bits_of_signed_integer, max_bits_of_unsigned_integer);
 
-            /// If there are signed and unsigned types of same bit-width and the width is 64, we will convert them to Decimal(20,0).
+            /// If there are both signed and unsigned types and the max unsigned width is 64, we will convert them to Decimal(20,0).
             /// Example, common of (Int64, UInt64) = Decimal(20,0)
             if (max_bits_of_signed_integer > 0 && max_bits_of_unsigned_integer == 64)
             {
