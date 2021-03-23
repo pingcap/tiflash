@@ -122,17 +122,7 @@ static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr
             // `a IN (1, 2, b)` will be rewritten to `a IN (1, 2) OR a = b`
             continue;
         }
-        DataTypePtr type;
-        if (child.field_type().tp() == TiDB::TypeNewDecimal || child.tp() == tipb::ExprType::Null)
-        {
-            // See https://github.com/pingcap/tics/issues/1425
-            Field value = decodeLiteral(child);
-            type = applyVisitor(FieldToDataType(), value);
-        }
-        else
-        {
-            type = getDataTypeByFieldType(child.field_type());
-        }
+        DataTypePtr type = inferDataType4Literal(child);
         argument_types.push_back(type);
     }
     DataTypePtr resolved_type = getLeastSupertype(argument_types);
@@ -478,11 +468,15 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
     // Some of the TiFlash operators(e.g. FilterBlockInputStream) only support uint8 as its input, so need to convert the
     // column type to UInt8
     // the basic rule is:
-    // 1. if the column is numeric, compare it with 0
-    // 2. if the column is string, convert it to numeric column, and compare with 0
-    // 3. if the column is date/datetime, compare it with zeroDate
-    // 4. if the column is nothing, just return it is fine
+    // 1. if the column is only null, just return it is fine
+    // 2. if the column is numeric, compare it with 0
+    // 3. if the column is string, convert it to numeric column, and compare with 0
+    // 4. if the column is date/datetime, compare it with zeroDate
     // 5. if the column is other type, throw exception
+    if (actions->getSampleBlock().getByName(column_name).column->onlyNull())
+    {
+        return column_name;
+    }
     const auto & org_type = removeNullable(actions->getSampleBlock().getByName(column_name).type);
     if (org_type->isNumber() || org_type->isDecimal())
     {
@@ -513,10 +507,6 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
         constructDateTimeLiteralTiExpr(const_expr, 0);
         auto const_expr_name = getActions(const_expr, actions);
         return applyFunction("notEquals", {column_name, const_expr_name}, actions, nullptr);
-    }
-    if (org_type->getTypeId() == TypeIndex::Nothing)
-    {
-        return column_name;
     }
     throw TiFlashException("Filter on " + org_type->getName() + " is not supported.", Errors::Coprocessor::Unimplemented);
 }
@@ -933,31 +923,7 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
     {
         Field value = decodeLiteral(expr);
         DataTypePtr flash_type = applyVisitor(FieldToDataType(), value);
-        /// need to extract target_type from expr.field_type() because the flash_type derived from
-        /// value is just a `memory type`, which does not have enough information, for example:
-        /// for date literal, the flash_type is `UInt64`
-        DataTypePtr target_type{};
-        if (expr.tp() == tipb::ExprType::Null)
-        {
-            // We should use DataTypeNothing as NULL literal's TiFlash Type
-            target_type = flash_type;
-        }
-        else
-        {
-            target_type = exprHasValidFieldType(expr) ? getDataTypeByFieldType(expr.field_type()) : flash_type;
-            if (flash_type->isDecimal() && target_type->isDecimal())
-            {
-                /// to fix https://github.com/pingcap/tics/issues/1425, when TiDB push down
-                /// a decimal literal, it contains two types: one is the type that encoded
-                /// in Decimal value itself(i.e. expr.val()), the other is the type that in
-                /// expr.field_type(). According to TiDB and Mysql behavior, the computing
-                /// layer should use the type in expr.val(), which means we should ignore
-                /// the type in expr.field_type()
-                target_type = flash_type;
-            }
-            // We should remove nullable for constant value since TiDB may not set NOT_NULL flag for literal expression.
-            target_type = removeNullable(target_type);
-        }
+        DataTypePtr target_type = inferDataType4Literal(expr);
         ret = exprToString(expr, getCurrentInputColumns()) + "_" + target_type->getName();
         if (!actions->getSampleBlock().has(ret))
         {
