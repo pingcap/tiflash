@@ -516,13 +516,7 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
     }
     if (org_type->getTypeId() == TypeIndex::Nothing)
     {
-        ColumnWithTypeAndName column;
-        Field value = toField(0);
-        column.name = getUniqueName(actions->getSampleBlock(), "UInt8_");
-        column.type = DataTypeFactory::instance().get("UInt8");
-        column.column = column.type->createColumnConst(1, value);
-        actions->add(ExpressionAction::addColumn(column));
-        return column.name;
+        return column_name;
     }
     throw TiFlashException("Filter on " + org_type->getName() + " is not supported.", Errors::Coprocessor::Unimplemented);
 }
@@ -946,7 +940,7 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
         if (expr.tp() == tipb::ExprType::Null)
         {
             // We should use DataTypeNothing as NULL literal's TiFlash Type
-            target_type = makeNullable(flash_type);
+            target_type = flash_type;
         }
         else
         {
