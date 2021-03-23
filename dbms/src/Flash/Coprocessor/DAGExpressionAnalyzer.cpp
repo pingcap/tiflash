@@ -123,7 +123,7 @@ static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr
             continue;
         }
         DataTypePtr type;
-        if (child.field_type().tp() == TiDB::TypeNewDecimal || child.field_type().tp() == TiDB::TypeNull)
+        if (child.field_type().tp() == TiDB::TypeNewDecimal || child.tp() == tipb::ExprType::Null)
         {
             // See https://github.com/pingcap/tics/issues/1425
             Field value = decodeLiteral(child);
