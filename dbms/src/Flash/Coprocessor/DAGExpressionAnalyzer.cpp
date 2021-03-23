@@ -473,7 +473,7 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
     // 3. if the column is string, convert it to numeric column, and compare with 0
     // 4. if the column is date/datetime, compare it with zeroDate
     // 5. if the column is other type, throw exception
-    if (actions->getSampleBlock().getByName(column_name).column->onlyNull())
+    if (actions->getSampleBlock().getByName(column_name).type->onlyNull())
     {
         return column_name;
     }
