@@ -590,7 +590,9 @@ void Context::setUsersConfig(const ConfigurationPtr & config)
 {
     auto lock = getLock();
     shared->users_config = config;
+    // parse "users.*"
     shared->security_manager->loadFromConfig(*shared->users_config);
+    // parse "quotas.*"
     shared->quotas.loadFromConfig(*shared->users_config);
 }
 
@@ -604,20 +606,20 @@ void Context::calculateUserSettings()
 {
     auto lock = getLock();
 
-    String profile = shared->security_manager->getUser(client_info.current_user)->profile;
+    String profile_name = shared->security_manager->getUser(client_info.current_user)->profile;
 
     /// 1) Set default settings (hardcoded values)
     /// NOTE: we ignore global_context settings (from which it is usually copied)
     /// NOTE: global_context settings are immutable and not auto updated
     settings = Settings();
 
-    /// 2) Apply settings from default profile
+    /// 2) Apply settings from default profile ("profiles.*" in `users_config`)
     auto default_profile_name = getDefaultProfileName();
-    if (profile != default_profile_name)
+    if (profile_name != default_profile_name)
         settings.setProfile(default_profile_name, *shared->users_config);
 
     /// 3) Apply settings from current user
-    settings.setProfile(profile, *shared->users_config);
+    settings.setProfile(profile_name, *shared->users_config);
 }
 
 
@@ -1489,16 +1491,12 @@ DDLWorker & Context::getDDLWorker() const
     return *shared->ddl_worker;
 }
 
-void Context::createTMTContext(const std::vector<std::string> & pd_addrs,
-                               const std::unordered_set<std::string> & ignore_databases,
-                               ::TiDB::StorageEngine engine,
-                               bool disable_bg_flush,
-                               pingcap::ClusterConfig cluster_config)
+void Context::createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config)
 {
     auto lock = getLock();
     if (shared->tmt_context)
         throw Exception("TMTContext has already existed", ErrorCodes::LOGICAL_ERROR);
-    shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, ignore_databases, engine, disable_bg_flush, cluster_config);
+    shared->tmt_context = std::make_shared<TMTContext>(*this, raft_config, cluster_config);
 }
 
 void Context::initializePathCapacityMetric(                                           //

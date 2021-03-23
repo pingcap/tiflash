@@ -25,6 +25,7 @@ public:
     Strings kvstore_data_path;
 
     UInt64 bg_task_io_rate_limit = 0;
+    UInt64 format_version = 0;
 
 public:
     TiFlashStorageConfig() {}

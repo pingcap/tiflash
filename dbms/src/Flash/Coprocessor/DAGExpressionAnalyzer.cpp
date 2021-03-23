@@ -9,7 +9,6 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionFactory.h>
-#include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsConditional.h>
 #include <Functions/FunctionsTiDBConversion.h>
 #include <Interpreters/Context.h>
@@ -80,13 +79,70 @@ static String buildMultiIfFunction(DAGExpressionAnalyzer * analyzer, const tipb:
     return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
 }
 
+static String buildIfNullFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+{
+    // rewrite IFNULL function with multiIf
+    // ifNull(arg1, arg2) -> if(isNull(arg1), arg2, arg1)
+    const String & func_name = "multiIf";
+    Names argument_names;
+    if (expr.children_size() != 2)
+    {
+        throw TiFlashException("Invalid arguments of IFNULL function", Errors::Coprocessor::BadRequest);
+    }
+
+    String condition_arg_name = analyzer->getActions(expr.children(0), actions, false);
+    String else_arg_name = analyzer->getActions(expr.children(1), actions, false);
+    String is_null_result = analyzer->applyFunction("isNull", {condition_arg_name}, actions, getCollatorFromExpr(expr));
+
+    argument_names.push_back(std::move(is_null_result));
+    argument_names.push_back(std::move(else_arg_name));
+    argument_names.push_back(std::move(condition_arg_name));
+
+    return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
+}
+
 static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
 {
     const String & func_name = getFunctionName(expr);
     Names argument_names;
     String key_name = analyzer->getActions(expr.children(0), actions);
+    // TiDB guarantees that arguments of IN function have same data type family but doesn't guarantees that their data types
+    // are completely the same. For example, in an expression like `col_decimal_10_0 IN (1.1, 2.34)`, `1.1` and `2.34` are
+    // both decimal type but `1.1`'s flen and decimal are 2 and 1 while that of `2.34` are 3 and 2.
+    // We should convert them to a least super data type.
+    DataTypes argument_types;
+    const Block & sample_block = actions->getSampleBlock();
+    argument_types.push_back(sample_block.getByName(key_name).type);
+    for (int i = 1; i < expr.children_size(); ++i)
+    {
+        auto & child = expr.children(i);
+        if (!isLiteralExpr(child))
+        {
+            // Non-literal expression will be rewritten with `OR`, for example:
+            // `a IN (1, 2, b)` will be rewritten to `a IN (1, 2) OR a = b`
+            continue;
+        }
+        DataTypePtr type;
+        if (child.field_type().tp() == TiDB::TypeNewDecimal)
+        {
+            // See https://github.com/pingcap/tics/issues/1425
+            Field value = decodeLiteral(child);
+            type = applyVisitor(FieldToDataType(), value);
+        }
+        else
+        {
+            type = getDataTypeByFieldType(child.field_type());
+        }
+        argument_types.push_back(type);
+    }
+    DataTypePtr resolved_type = getLeastSupertype(argument_types);
+    if (!removeNullable(resolved_type)->equals(*removeNullable(argument_types[0])))
+    {
+        // Need cast left argument
+        key_name = analyzer->appendCast(resolved_type, actions, key_name);
+    }
+    analyzer->makeExplicitSet(expr, sample_block, false, key_name);
     argument_names.push_back(key_name);
-    analyzer->makeExplicitSet(expr, actions->getSampleBlock(), false, key_name);
     const DAGSetPtr & set = analyzer->getPreparedSets()[&expr];
 
     ColumnWithTypeAndName column;
@@ -222,6 +278,7 @@ static std::unordered_map<String, std::function<String(DAGExpressionAnalyzer *, 
         {"globalNotIn", buildInFunction},
         {"tidbIn", buildInFunction},
         {"tidbNotIn", buildInFunction},
+        {"ifNull", buildIfNullFunction},
         {"multiIf", buildMultiIfFunction},
         {"tidb_cast", buildCastFunction},
         {"date_add", buildDateAddFunction},
@@ -252,7 +309,13 @@ void DAGExpressionAnalyzer::appendAggregation(ExpressionActionsChain & chain, co
 
     for (const tipb::Expr & expr : agg.agg_func())
     {
-        const String & agg_func_name = getAggFunctionName(expr);
+        String agg_func_name = getAggFunctionName(expr);
+        const String agg_func_name_lowercase = Poco::toLower(agg_func_name);
+        if (expr.has_distinct() && agg_func_name_lowercase == "countdistinct")
+        {
+            agg_func_name = settings.count_distinct_implementation;
+        }
+
         AggregateDescription aggregate;
         DataTypes types(expr.children_size());
         aggregate.argument_names.resize(expr.children_size());
@@ -835,35 +898,6 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(
         }
     }
     return expr_name;
-}
-
-void DAGExpressionAnalyzer::makeExplicitSetForIndex(const tipb::Expr & expr, const ManageableStoragePtr & storage)
-{
-    for (auto & child : expr.children())
-    {
-        makeExplicitSetForIndex(child, storage);
-    }
-    if (expr.tp() != tipb::ExprType::ScalarFunc)
-    {
-        return;
-    }
-    const String & func_name = getFunctionName(expr);
-    // only support col_name in (value_list)
-    if (functionIsInOrGlobalInOperator(func_name) && expr.children(0).tp() == tipb::ExprType::ColumnRef && !prepared_sets.count(&expr))
-    {
-        NamesAndTypesList column_list;
-        for (const auto & col : getCurrentInputColumns())
-        {
-            column_list.emplace_back(col.name, col.type);
-        }
-        ExpressionActionsPtr temp_actions = std::make_shared<ExpressionActions>(column_list, settings);
-        String name = getActions(expr.children(0), temp_actions);
-        ASTPtr name_ast = std::make_shared<ASTIdentifier>(name);
-        if (storage->mayBenefitFromIndexForIn(name_ast))
-        {
-            makeExplicitSet(expr, temp_actions->getSampleBlock(), true, name);
-        }
-    }
 }
 
 void DAGExpressionAnalyzer::makeExplicitSet(

@@ -43,7 +43,7 @@ public:
     // Caller must cancel gc tasks before drop
     void drop();
 
-    bool gc(const Seconds & try_gc_period = DELTA_MERGE_GC_PERIOD);
+    bool gc(const Settings & settings, const Seconds & try_gc_period = DELTA_MERGE_GC_PERIOD);
 
 private:
     PageStorage log_storage;

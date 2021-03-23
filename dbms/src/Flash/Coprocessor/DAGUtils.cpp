@@ -1,5 +1,6 @@
 #include <Common/TiFlashException.h>
 #include <Core/Types.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionHelpers.h>
@@ -30,22 +31,31 @@ bool isFunctionExpr(const tipb::Expr & expr) { return expr.tp() == tipb::ExprTyp
 
 const String & getAggFunctionName(const tipb::Expr & expr)
 {
-    if (agg_func_map.find(expr.tp()) == agg_func_map.end())
+    if (expr.has_distinct())
     {
-        throw TiFlashException(tipb::ExprType_Name(expr.tp()) + " is not supported.", Errors::Coprocessor::Unimplemented);
+        if (distinct_agg_func_map.find(expr.tp()) != distinct_agg_func_map.end())
+        {
+            return distinct_agg_func_map[expr.tp()];
+        }
     }
-    return agg_func_map[expr.tp()];
+    else
+    {
+        if (agg_func_map.find(expr.tp()) != agg_func_map.end())
+        {
+            return agg_func_map[expr.tp()];
+        }
+    }
+
+    const auto errmsg
+        = tipb::ExprType_Name(expr.tp()) + "(distinct=" + (expr.has_distinct() ? "true" : "false") + ")" + " is not supported.";
+    throw TiFlashException(errmsg, Errors::Coprocessor::Unimplemented);
 }
 
 const String & getFunctionName(const tipb::Expr & expr)
 {
     if (isAggFunctionExpr(expr))
     {
-        if (agg_func_map.find(expr.tp()) == agg_func_map.end())
-        {
-            throw TiFlashException(tipb::ExprType_Name(expr.tp()) + " is not supported.", Errors::Coprocessor::Unimplemented);
-        }
-        return agg_func_map[expr.tp()];
+        return getAggFunctionName(expr);
     }
     else
     {
@@ -111,11 +121,7 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
         case tipb::ExprType::Max:
         case tipb::ExprType::First:
         case tipb::ExprType::ApproxCountDistinct:
-            if (agg_func_map.find(expr.tp()) == agg_func_map.end())
-            {
-                throw TiFlashException(tipb::ExprType_Name(expr.tp()) + " not supported", Errors::Coprocessor::Unimplemented);
-            }
-            func_name = agg_func_map.find(expr.tp())->second;
+            func_name = getAggFunctionName(expr);
             break;
         case tipb::ExprType::ScalarFunc:
             if (scalar_func_map.find(expr.sig()) == scalar_func_map.end())
@@ -402,6 +408,26 @@ grpc::StatusCode tiflashErrorCodeToGrpcStatusCode(int error_code)
     return grpc::StatusCode::INTERNAL;
 }
 
+void assertBlockSchema(const DataTypes & expected_types, const Block & block, const std::string & context_description)
+{
+    size_t columns = expected_types.size();
+    if (block.columns() != columns)
+        throw Exception("Block schema mismatch in " + context_description + ": different number of columns: expected "
+            + std::to_string(columns) + " columns, got " + std::to_string(block.columns()) + " columns");
+
+    for (size_t i = 0; i < columns; ++i)
+    {
+        const auto & actual = block.getByPosition(i).type;
+        const auto & expected = expected_types[i];
+
+        if (!expected->equals(*actual))
+        {
+            throw Exception("Block schema mismatch in " + context_description + ": different types: expected " + expected->getName()
+                + ", got " + actual->getName());
+        }
+    }
+}
+
 extern const String UniqRawResName;
 
 std::unordered_map<tipb::ExprType, String> agg_func_map({
@@ -421,6 +447,10 @@ std::unordered_map<tipb::ExprType, String> agg_func_map({
     //{tipb::ExprType::Variance, ""},
     //{tipb::ExprType::JsonArrayAgg, ""},
     //{tipb::ExprType::JsonObjectAgg, ""},
+});
+
+std::unordered_map<tipb::ExprType, String> distinct_agg_func_map({
+    {tipb::ExprType::Count, "countDistinct"},
 });
 
 std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
@@ -831,7 +861,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::StrToDateDatetime, "cast"},
     //{tipb::ScalarFuncSig::StrToDateDuration, "cast"},
     {tipb::ScalarFuncSig::FromUnixTime1Arg, "fromUnixTime"}, {tipb::ScalarFuncSig::FromUnixTime2Arg, "fromUnixTime"},
-    {tipb::ScalarFuncSig::ExtractDatetime, "extractMyDatetime"},
+    {tipb::ScalarFuncSig::ExtractDatetime, "extractMyDateTime"},
     //{tipb::ScalarFuncSig::ExtractDuration, "cast"},
 
     //{tipb::ScalarFuncSig::AddDateStringString, "cast"},
@@ -923,25 +953,5 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::Upper, "upper"},
     //{tipb::ScalarFuncSig::CharLength, "upper"},
 });
-
-tipb::FieldType columnInfoToFieldType(const TiDB::ColumnInfo & ci)
-{
-    tipb::FieldType ret;
-    ret.set_tp(ci.tp);
-    ret.set_flag(ci.flag);
-    ret.set_flen(ci.flen);
-    ret.set_decimal(ci.decimal);
-    return ret;
-}
-
-TiDB::ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type)
-{
-    TiDB::ColumnInfo ret;
-    ret.tp = static_cast<TiDB::TP>(field_type.tp());
-    ret.flag = field_type.flag();
-    ret.flen = field_type.flen();
-    ret.decimal = field_type.decimal();
-    return ret;
-}
 
 } // namespace DB

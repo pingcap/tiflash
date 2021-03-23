@@ -24,10 +24,10 @@ namespace DM
 
 namespace details
 {
-constexpr static const char * NGC_FILE_NAME          = "NGC";
-constexpr static const char * FOLDER_PREFIX_WRITABLE = ".tmp.dmf_";
-constexpr static const char * FOLDER_PREFIX_READABLE = "dmf_";
-constexpr static const char * FOLDER_PREFIX_DROPPED  = ".del.dmf_";
+inline constexpr static const char * NGC_FILE_NAME          = "NGC";
+inline constexpr static const char * FOLDER_PREFIX_WRITABLE = ".tmp.dmf_";
+inline constexpr static const char * FOLDER_PREFIX_READABLE = "dmf_";
+inline constexpr static const char * FOLDER_PREFIX_DROPPED  = ".del.dmf_";
 
 inline String getNGCPath(const String & prefix, bool is_single_mode)
 {
@@ -195,9 +195,9 @@ std::tuple<size_t, size_t> DMFile::writeMeta(WriteBuffer & buffer)
 {
     size_t meta_offset = buffer.count();
     writeString("DTFile format: ", buffer);
-    writeIntText(static_cast<std::underlying_type_t<DMFileVersion>>(DMFileVersion::CURRENT_VERSION), buffer);
+    writeIntText(STORAGE_FORMAT_CURRENT.dm_file, buffer);
     writeString("\n", buffer);
-    writeText(column_stats, CURRENT_VERSION, buffer);
+    writeText(column_stats, STORAGE_FORMAT_CURRENT.dm_file, buffer);
     size_t meta_size = buffer.count() - meta_offset;
     return std::make_tuple(meta_offset, meta_size);
 }
@@ -226,13 +226,13 @@ void DMFile::writeMeta(const FileProviderPtr & file_provider, const RateLimiterP
     Poco::File(tmp_meta_path).renameTo(meta_path);
 }
 
-void DMFile::upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileVersion ver)
+void DMFile::upgradeMetaIfNeed(const FileProviderPtr & file_provider, DMFileFormat::Version ver)
 {
     if (unlikely(mode != Mode::FOLDER))
     {
         throw DB::TiFlashException("upgradeMetaIfNeed is only expected to be called when mode is FOLDER.", Errors::DeltaTree::Internal);
     }
-    if (unlikely(ver == DMFileVersion::VERSION_BASE))
+    if (unlikely(ver == DMFileFormat::V0))
     {
         // Update ColumnStat.serialized_bytes
         for (auto && c : column_stats)
@@ -282,13 +282,9 @@ void DMFile::readMeta(const FileProviderPtr & file_provider)
         auto buf = openForRead(file_provider, metaPath(), encryptionMetaPath(), meta_pack_info.meta_size);
         buf.seek(meta_pack_info.meta_offset);
 
-        DMFileVersion ver; // Binary version
+        DMFileFormat::Version ver; // Binary version
         assertString("DTFile format: ", buf);
-        {
-            std::underlying_type_t<DMFileVersion> ver_int;
-            DB::readText(ver_int, buf);
-            ver = static_cast<DMFileVersion>(ver_int);
-        }
+        DB::readText(ver, buf);
         assertString("\n", buf);
         readText(column_stats, ver, buf);
         // No need to upgrade meta when mode is Mode::SINGLE_FILE

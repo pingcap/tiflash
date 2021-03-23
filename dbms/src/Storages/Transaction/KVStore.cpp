@@ -20,7 +20,9 @@ extern const int LOGICAL_ERROR;
 }
 
 KVStore::KVStore(Context & context)
-    : region_persister(context, region_manager), raft_cmd_res(std::make_unique<RaftCommandResult>()), log(&Logger::get("KVStore"))
+    : region_persister(context, region_manager),
+      raft_cmd_res(std::make_unique<RaftCommandResult>()),
+      log(&Logger::get("KVStore"))
 {}
 
 void KVStore::restore(const TiFlashRaftProxyHelper * proxy_helper)
@@ -214,7 +216,6 @@ EngineStoreApplyRes KVStore::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt
     const RegionPtr region = getRegion(region_id);
     if (region == nullptr)
     {
-        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": [region " << region_id << "] is not found, might be removed already");
         return EngineStoreApplyRes::NotFound;
     }
 
@@ -263,7 +264,9 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
     const RegionPtr curr_region_ptr = getRegion(curr_region_id);
     if (curr_region_ptr == nullptr)
     {
-        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": [region " << curr_region_id << "] is not found, might be removed already");
+        LOG_WARNING(log,
+            __PRETTY_FUNCTION__ << ": [region " << curr_region_id << "] is not found at [term " << term << ", index " << index
+                                << "], might be removed already");
         return EngineStoreApplyRes::NotFound;
     }
 
@@ -331,7 +334,9 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
         const RegionPtr curr_region_ptr = getRegion(curr_region_id);
         if (curr_region_ptr == nullptr)
         {
-            LOG_WARNING(log, __PRETTY_FUNCTION__ << ": [region " << curr_region_id << "] is not found, might be removed already");
+            LOG_WARNING(log,
+                __PRETTY_FUNCTION__ << ": [region " << curr_region_id << "] is not found at [term " << term << ", index " << index
+                                    << ", cmd " << raft_cmdpb::AdminCmdType_Name(type) << "], might be removed already");
             return EngineStoreApplyRes::NotFound;
         }
 
