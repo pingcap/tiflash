@@ -1,0 +1,24 @@
+# Preparation.
+mysql> drop table if exists test.t1
+mysql> drop table if exists test.t2
+mysql> create table test.t1(a binary(20),b date);
+mysql> create table test.t2(a binary(20));
+mysql> insert into test.t1 values(0x78,null),(null,'2000-01-01');
+mysql> insert into test.t2 values(null),(0x02);
+mysql> alter table test.t1 set tiflash replica 1;
+mysql> alter table test.t2 set tiflash replica 1;
+
+func> wait_table test t1
+func> wait_table test t2
+
+mysql> set session tidb_allow_mpp=on; select hex(t1.a), t1.b, hex(t2.a) from test.t1 left outer join test.t2 on t1.a=t2.a and t1.b between "0" and "1";
++------------------------------------------+------------+-----------+
+| hex(t1.a)                                | b          | hex(t2.a) |
++------------------------------------------+------------+-----------+
+| 7800000000000000000000000000000000000000 | NULL       | NULL      |
+| NULL                                     | 2000-01-01 | NULL      |
++------------------------------------------+------------+-----------+
+
+# Clean up.
+mysql> drop table if exists test.t1
+mysql> drop table if exists test.t2
