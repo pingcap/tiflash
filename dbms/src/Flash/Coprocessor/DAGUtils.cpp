@@ -1,12 +1,14 @@
 #include <Common/TiFlashException.h>
 #include <Core/Types.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/FieldToDataType.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/TiDB.h>
+#include <Storages/Transaction/TypeMapping.h>
 
 #include <unordered_map>
 
@@ -303,6 +305,41 @@ bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::E
             return true;
     }
     return false;
+}
+
+DataTypePtr inferDataType4Literal(const tipb::Expr & expr)
+{
+    Field value = decodeLiteral(expr);
+    DataTypePtr flash_type = applyVisitor(FieldToDataType(), value);
+    /// need to extract target_type from expr.field_type() because the flash_type derived from
+    /// value is just a `memory type`, which does not have enough information, for example:
+    /// for date literal, the flash_type is `UInt64`
+    DataTypePtr target_type{};
+    if (expr.tp() == tipb::ExprType::Null)
+    {
+        // We should use DataTypeNothing as NULL literal's TiFlash Type
+        target_type = flash_type;
+    }
+    else
+    {
+        if (expr.tp() == tipb::ExprType::MysqlDecimal)
+        {
+            /// to fix https://github.com/pingcap/tics/issues/1425, when TiDB push down
+            /// a decimal literal, it contains two types: one is the type that encoded
+            /// in Decimal value itself(i.e. expr.val()), the other is the type that in
+            /// expr.field_type(). According to TiDB and Mysql behavior, the computing
+            /// layer should use the type in expr.val(), which means we should ignore
+            /// the type in expr.field_type()
+            target_type = flash_type;
+        }
+        else
+        {
+            target_type = exprHasValidFieldType(expr) ? getDataTypeByFieldType(expr.field_type()) : flash_type;
+        }
+        // We should remove nullable for constant value since TiDB may not set NOT_NULL flag for literal expression.
+        target_type = removeNullable(target_type);
+    }
+    return target_type;
 }
 
 UInt8 getFieldLengthForArrowEncode(Int32 tp)
