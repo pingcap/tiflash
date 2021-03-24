@@ -322,8 +322,7 @@ DataTypePtr inferDataType4Literal(const tipb::Expr & expr)
     }
     else
     {
-        target_type = exprHasValidFieldType(expr) ? getDataTypeByFieldType(expr.field_type()) : flash_type;
-        if (flash_type->isDecimal() && target_type->isDecimal())
+        if (expr.tp() == tipb::ExprType::MysqlDecimal)
         {
             /// to fix https://github.com/pingcap/tics/issues/1425, when TiDB push down
             /// a decimal literal, it contains two types: one is the type that encoded
@@ -332,6 +331,10 @@ DataTypePtr inferDataType4Literal(const tipb::Expr & expr)
             /// layer should use the type in expr.val(), which means we should ignore
             /// the type in expr.field_type()
             target_type = flash_type;
+        }
+        else
+        {
+            target_type = exprHasValidFieldType(expr) ? getDataTypeByFieldType(expr.field_type()) : flash_type;
         }
         // We should remove nullable for constant value since TiDB may not set NOT_NULL flag for literal expression.
         target_type = removeNullable(target_type);
