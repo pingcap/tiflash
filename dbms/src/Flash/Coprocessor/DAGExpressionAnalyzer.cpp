@@ -900,8 +900,13 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(
     {
         DataTypePtr expected_type = getDataTypeByFieldType(expr.field_type());
         DataTypePtr actual_type = actions->getSampleBlock().getByName(expr_name).type;
-        //todo maybe use a more decent compare method
-        // todo ignore nullable info??
+        if (actual_type->onlyNull())
+        {
+            /// onlyNull type is an optimization in TiFlash, it can fit all the TiDB nullable types.
+            if (!expected_type->isNullable())
+                throw TiFlashException("Function return null, but field type is not nullable", Errors::Coprocessor::BadRequest);
+            return expr_name;
+        }
         if (expected_type->getName() != actual_type->getName())
         {
 
