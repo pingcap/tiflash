@@ -453,9 +453,12 @@ public:
                 const auto & data = uint8_column->getData();
                 if constexpr (special_impl_for_nulls)
                 {
-                    size_t n = uint8_column->size();
-                    for (size_t i = 0; i < n; i++)
-                        vec_res_not_null[i] |= Impl::resNotNull(data[i], is_const_column ? const_val_input_has_null : false);
+                    if (!is_const_column)
+                    {
+                        size_t n = uint8_column->size();
+                        for (size_t i = 0; i < n; i++)
+                            vec_res_not_null[i] |= Impl::resNotNull(data[i], false);
+                    }
                 }
             }
             else
