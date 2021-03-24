@@ -436,6 +436,51 @@ namespace
     }
 }
 
+<<<<<<< HEAD
+=======
+void recordFilteredRows(const Block & block, const String & filter_column, ColumnPtr & null_map_holder, ConstNullMapPtr & null_map)
+{
+    if (filter_column.empty())
+        return;
+    auto column = block.getByName(filter_column).column;
+    if (column->isColumnConst())
+        column = column->convertToFullColumnIfConst();
+    if (column->isColumnNullable())
+    {
+        const ColumnNullable & column_nullable = static_cast<const ColumnNullable &>(*column);
+        if (!null_map_holder)
+        {
+            null_map_holder = column_nullable.getNullMapColumnPtr();
+        }
+        else
+        {
+            MutableColumnPtr mutable_null_map_holder = (*std::move(null_map_holder)).mutate();
+
+            PaddedPODArray<UInt8> & mutable_null_map = static_cast<ColumnUInt8 &>(*mutable_null_map_holder).getData();
+            const PaddedPODArray<UInt8> & other_null_map = column_nullable.getNullMapData();
+            for (size_t i = 0, size = mutable_null_map.size(); i < size; ++i)
+                mutable_null_map[i] |= other_null_map[i];
+
+            null_map_holder = std::move(mutable_null_map_holder);
+        }
+    }
+
+    if (!null_map_holder)
+    {
+        null_map_holder = ColumnVector<UInt8>::create(column->size(), 0);
+    }
+    MutableColumnPtr mutable_null_map_holder = (*std::move(null_map_holder)).mutate();
+    PaddedPODArray<UInt8> & mutable_null_map = static_cast<ColumnUInt8 &>(*mutable_null_map_holder).getData();
+
+    auto & nested_column = column->isColumnNullable() ? static_cast<const ColumnNullable &>(*column).getNestedColumnPtr() : column;
+    for (size_t i = 0, size = nested_column->size(); i < size; ++i)
+        mutable_null_map[i] |= (!nested_column->getInt(i));
+
+    null_map_holder = std::move(mutable_null_map_holder);
+
+    null_map = &static_cast<const ColumnUInt8 &>(*null_map_holder).getData();
+}
+>>>>>>> 5712f1ab2... fix bug that join filter on const column will throw Exception (#1628)
 
 bool Join::insertFromBlock(const Block & block)
 {
@@ -679,6 +724,134 @@ namespace
     }
 }
 
+<<<<<<< HEAD
+=======
+/**
+ * handle other join conditions
+ * Join Kind/Strictness               ALL               ANY
+ *     INNER                    TiDB inner join    TiDB semi join
+ *     LEFT                     TiDB left join     should not happen
+ *     RIGHT                    should not happen  should not happen
+ *     ANTI                     should not happen  TiDB anti semi join
+ * @param block
+ * @param offsets_to_replicate
+ * @param left_table_columns
+ * @param right_table_columns
+ */
+void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter> & anti_filter, std::unique_ptr<IColumn::Offsets> & offsets_to_replicate, const std::vector<size_t> & right_table_columns) const
+{
+    other_condition_ptr->execute(block);
+    const ColumnVector<UInt8> * filter_column = nullptr;
+    ColumnVector<UInt8> * mutable_nested_column = nullptr;
+    auto orig_filter_column = block.getByName(other_filter_column).column;
+    if (orig_filter_column->isColumnConst())
+        orig_filter_column = orig_filter_column->convertToFullColumnIfConst();
+    if (orig_filter_column->isColumnNullable())
+    {
+        auto * nullable_column = checkAndGetColumn<ColumnNullable>(orig_filter_column.get());
+        mutable_nested_column = static_cast<ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr()->assumeMutable().get());
+        auto & mutable_nested_column_data = mutable_nested_column->getData();
+        for (size_t i = 0; i < nullable_column->size(); i++)
+        {
+            if (nullable_column->isNullAt(i))
+                mutable_nested_column_data[i] = 0;
+        }
+        filter_column = mutable_nested_column;
+    }
+    else
+    {
+        filter_column = checkAndGetColumn<ColumnVector<UInt8>>(orig_filter_column.get());
+    }
+    auto & filter = filter_column->getData();
+
+    if (kind == ASTTableJoin::Kind::Inner && original_strictness == ASTTableJoin::Strictness::All)
+    {
+        /// inner join, just use other_filter_column to filter result
+        for (size_t i = 0; i < block.columns(); i++)
+        {
+            block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(filter, -1);
+        }
+        return;
+    }
+
+    ColumnUInt8::Container row_filter;
+    row_filter.resize(filter.size());
+    size_t prev_offset = 0;
+    for (size_t i = 0; i < offsets_to_replicate->size(); i++)
+    {
+        size_t start = prev_offset;
+        size_t end = (*offsets_to_replicate)[i];
+        bool has_row_kept = false;
+        for (size_t x = start; x < end; x++)
+        {
+            if (original_strictness == ASTTableJoin::Strictness::Any)
+            {
+                /// for semi/anti join, at most one row is kept
+                row_filter[x] = !has_row_kept && filter[x];
+            }
+            else
+            {
+                /// kind = Anti && strictness = ALL should not happens
+                row_filter[x] = filter[x];
+            }
+            if (row_filter[x])
+                has_row_kept = true;
+        }
+        /// for outer join, at least one row must be kept
+        if (kind == ASTTableJoin::Kind::Left && !has_row_kept)
+            row_filter[start] = 1;
+        if (kind == ASTTableJoin::Kind::Anti)
+        {
+            if ((*anti_filter)[i])
+                /// for anti join, if the equal join condition is not matched, it always need to be selected
+                row_filter[start] = 1;
+            else
+            {
+                if (has_row_kept)
+                {
+                    /// has_row_kept = true means at least one row is joined, in
+                    /// case of anti join, this row should not be returned
+                    for (size_t index = start; index < end; index++)
+                        row_filter[index] = 0;
+                }
+                else
+                {
+                    row_filter[start] = 1;
+                }
+            }
+        }
+        prev_offset = end;
+    }
+    if (kind == ASTTableJoin::Kind::Left)
+    {
+        /// for left join, convert right column to null if not joined
+        for (size_t i = 0; i < right_table_columns.size(); i++)
+        {
+            auto & column = block.getByPosition(right_table_columns[i]);
+            auto full_column = column.column->isColumnConst() ? column.column->convertToFullColumnIfConst() : column.column;
+            if (!full_column->isColumnNullable())
+            {
+                throw Exception("Should not reach here, the right table column for left join must be nullable");
+            }
+            auto current_column = full_column;
+            auto result_column = (*std::move(current_column)).mutate();
+            static_cast<ColumnNullable &>(*result_column).applyNegatedNullMap(*filter_column);
+            column.column = std::move(result_column);
+        }
+        for (size_t i = 0; i < block.columns(); i++)
+            block.getByPosition(i).column = block.getByPosition(i).column->filter(row_filter, -1);
+        return;
+    }
+    if (kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Anti)
+    {
+        /// for semi/anti join, filter out not matched rows
+        for (size_t i = 0; i < block.columns(); i++)
+            block.getByPosition(i).column = block.getByPosition(i).column->filter(row_filter, -1);
+        return;
+    }
+    throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
+}
+>>>>>>> 5712f1ab2... fix bug that join filter on const column will throw Exception (#1628)
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
 void Join::joinBlockImpl(Block & block, const Maps & maps) const
