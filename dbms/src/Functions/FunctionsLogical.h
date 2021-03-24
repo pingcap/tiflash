@@ -417,10 +417,12 @@ public:
         auto col_res_not_null = ColumnUInt8::create();
         UInt8Container & vec_res_not_null = col_res_not_null->getData();
 
+        Int32 const_column_index = -1;
         if (has_consts)
         {
             vec_res.assign(rows, const_val);
             in.push_back(col_res.get());
+            const_column_index = in.size() - 1;
             if constexpr (special_impl_for_nulls)
             {
                 vec_input_has_null.assign(rows, const_val_input_has_null);
@@ -441,8 +443,10 @@ public:
         UInt8ColumnPtrs uint8_in;
         Columns converted_columns;
 
-        for (const IColumn * column : in)
+        for (size_t index = 0; index < in.size(); index++)
         {
+            const IColumn * column = in[index];
+            bool is_const_column = (Int32)index == const_column_index;
             if (auto uint8_column = checkAndGetColumn<ColumnUInt8>(column))
             {
                 uint8_in.push_back(uint8_column);
@@ -451,7 +455,7 @@ public:
                 {
                     size_t n = uint8_column->size();
                     for (size_t i = 0; i < n; i++)
-                        vec_res_not_null[i] |= Impl::resNotNull(data[i], false);
+                        vec_res_not_null[i] |= Impl::resNotNull(data[i], is_const_column ? const_val_input_has_null : false);
                 }
             }
             else
