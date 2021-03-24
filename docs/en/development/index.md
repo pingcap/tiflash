@@ -1,2 +1,0 @@
-# ClickHouse Development
-
