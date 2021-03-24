@@ -317,8 +317,13 @@ DataTypePtr inferDataType4Literal(const tipb::Expr & expr)
     DataTypePtr target_type{};
     if (expr.tp() == tipb::ExprType::Null)
     {
-        // We should use DataTypeNothing as NULL literal's TiFlash Type
-        target_type = flash_type;
+        // todo We should use DataTypeNothing as NULL literal's TiFlash Type, because TiFlash has a lot of
+        //  optimization for DataTypeNothing, but there are still some bugs when using DataTypeNothing: when
+        //  TiFlash try to return data to TiDB or exchange data between TiFlash node, since codec only recognize
+        //  TiDB type, use DataTypeNothing will meet error in the codec, so do not use DataTypeNothing until
+        //  we fix the codec issue.
+        target_type = exprHasValidFieldType(expr) ? getDataTypeByFieldType(expr.field_type()) : flash_type;
+        target_type = makeNullable(target_type);
     }
     else
     {
