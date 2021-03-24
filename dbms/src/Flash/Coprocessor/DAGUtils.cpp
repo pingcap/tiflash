@@ -283,10 +283,13 @@ String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<Nam
 // for some historical or unknown reasons, TiDB might set a invalid
 // field type. This function checks if the expr has a valid field type
 // so far the known invalid field types are:
-// 1. decimal type with scale -1
+// 1. decimal type with scale == -1
+// 2. decimal type with precision == 0
 bool exprHasValidFieldType(const tipb::Expr & expr)
 {
-    return expr.has_field_type() && !(expr.field_type().tp() == TiDB::TP::TypeNewDecimal && expr.field_type().decimal() == -1);
+    return expr.has_field_type()
+        && !((expr.field_type().tp() == TiDB::TP::TypeNewDecimal && expr.field_type().decimal() == -1)
+            || (expr.field_type().tp() == TiDB::TP::TypeNewDecimal && expr.field_type().flen() == 0));
 }
 
 bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::EncodeType encode_type)
@@ -322,7 +325,17 @@ DataTypePtr inferDataType4Literal(const tipb::Expr & expr)
         //  TiFlash try to return data to TiDB or exchange data between TiFlash node, since codec only recognize
         //  TiDB type, use DataTypeNothing will meet error in the codec, so do not use DataTypeNothing until
         //  we fix the codec issue.
-        target_type = exprHasValidFieldType(expr) ? getDataTypeByFieldType(expr.field_type()) : flash_type;
+        if (exprHasValidFieldType(expr))
+        {
+            target_type = getDataTypeByFieldType(expr.field_type());
+        }
+        else
+        {
+            if (expr.has_field_type() && expr.field_type().tp() == TiDB::TP::TypeNewDecimal)
+                target_type = createDecimal(1, 0);
+            else
+                target_type = flash_type;
+        }
         target_type = makeNullable(target_type);
     }
     else
