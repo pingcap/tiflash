@@ -72,6 +72,7 @@ TEST(DataType_test, getLeastSuperType)
                         ->equals(*typeFromString("Tuple(Nullable(UInt8))")));
         ASSERT_TRUE(getLeastSupertype(typesFromString("Int64 UInt64"))->equals(*typeFromString("Decimal(20,0)")));
         ASSERT_TRUE(getLeastSupertype(typesFromString("Tuple(Int64) Tuple(UInt64)"))->equals(*typeFromString("Tuple(Decimal(20,0))")));
+        ASSERT_TRUE(getLeastSupertype(typesFromString("Int32 UInt64"))->equals(*typeFromString("Decimal(20,0)")));
 
         EXPECT_ANY_THROW(getLeastSupertype(typesFromString("Int8 String")));
         EXPECT_ANY_THROW(getLeastSupertype(typesFromString("Float32 UInt64")));
