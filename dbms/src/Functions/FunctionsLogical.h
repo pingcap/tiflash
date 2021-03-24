@@ -446,7 +446,7 @@ public:
         for (size_t index = 0; index < in.size(); index++)
         {
             const IColumn * column = in[index];
-            bool is_const_column = (Int32)index == const_column_index;
+            bool is_const_column [[maybe_unused]] = (Int32)index == const_column_index;
             if (auto uint8_column = checkAndGetColumn<ColumnUInt8>(column))
             {
                 uint8_in.push_back(uint8_column);
