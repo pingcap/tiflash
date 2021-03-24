@@ -328,7 +328,6 @@ if (ENABLE_TESTS)
 endif ()
 
 add_subdirectory (libs)
-add_subdirectory (utils)
 add_subdirectory (dbms)
 
 include (cmake/print_include_directories.cmake)
