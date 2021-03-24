@@ -1,10 +1,7 @@
 #include <Common/TiFlashException.h>
 #include <Core/Types.h>
-<<<<<<< HEAD
-=======
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/FieldToDataType.h>
->>>>>>> 039b3a22f... Handle NULL literal manually to prevent invalid field type provided by TiDB (#1575)
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionHelpers.h>

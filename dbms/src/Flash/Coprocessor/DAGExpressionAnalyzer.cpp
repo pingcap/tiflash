@@ -101,17 +101,7 @@ static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr
             // `a IN (1, 2, b)` will be rewritten to `a IN (1, 2) OR a = b`
             continue;
         }
-<<<<<<< HEAD
-        DataTypePtr type = getDataTypeByFieldType(child.field_type());
-        if (type->isDecimal())
-        {
-            // See https://github.com/pingcap/tics/issues/1425
-            Field value = decodeLiteral(child);
-            type = applyVisitor(FieldToDataType(), value);
-        }
-=======
         DataTypePtr type = inferDataType4Literal(child);
->>>>>>> 039b3a22f... Handle NULL literal manually to prevent invalid field type provided by TiDB (#1575)
         argument_types.push_back(type);
     }
     DataTypePtr resolved_type = getLeastSupertype(argument_types);
