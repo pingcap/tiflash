@@ -575,7 +575,9 @@ void recordFilteredRows(const Block & block, const String & filter_column, Colum
 {
     if (filter_column.empty())
         return;
-    auto & column = block.getByName(filter_column).column;
+    auto column = block.getByName(filter_column).column;
+    if (column->isColumnConst())
+        column = column->convertToFullColumnIfConst();
     if (column->isColumnNullable())
     {
         const ColumnNullable & column_nullable = static_cast<const ColumnNullable &>(*column);
@@ -944,9 +946,12 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
     other_condition_ptr->execute(block);
     const ColumnVector<UInt8> * filter_column = nullptr;
     ColumnVector<UInt8> * mutable_nested_column = nullptr;
-    if (block.getByName(other_filter_column).column->isColumnNullable())
+    auto orig_filter_column = block.getByName(other_filter_column).column;
+    if (orig_filter_column->isColumnConst())
+        orig_filter_column = orig_filter_column->convertToFullColumnIfConst();
+    if (orig_filter_column->isColumnNullable())
     {
-        auto * nullable_column = checkAndGetColumn<ColumnNullable>(block.getByName(other_filter_column).column.get());
+        auto * nullable_column = checkAndGetColumn<ColumnNullable>(orig_filter_column.get());
         mutable_nested_column = static_cast<ColumnVector<UInt8> *>(nullable_column->getNestedColumnPtr()->assumeMutable().get());
         auto & mutable_nested_column_data = mutable_nested_column->getData();
         for (size_t i = 0; i < nullable_column->size(); i++)
@@ -958,7 +963,7 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
     }
     else
     {
-        filter_column = checkAndGetColumn<ColumnVector<UInt8>>(block.getByName(other_filter_column).column.get());
+        filter_column = checkAndGetColumn<ColumnVector<UInt8>>(orig_filter_column.get());
     }
     auto & filter = filter_column->getData();
 
@@ -1026,11 +1031,12 @@ void Join::handleOtherConditions(Block & block, std::unique_ptr<IColumn::Filter>
         for (size_t i = 0; i < right_table_columns.size(); i++)
         {
             auto & column = block.getByPosition(right_table_columns[i]);
-            if (!column.column->isColumnNullable())
+            auto full_column = column.column->isColumnConst() ? column.column->convertToFullColumnIfConst() : column.column;
+            if (!full_column->isColumnNullable())
             {
                 throw Exception("Should not reach here, the right table column for left join must be nullable");
             }
-            auto current_column = column.column;
+            auto current_column = full_column;
             auto result_column = (*std::move(current_column)).mutate();
             static_cast<ColumnNullable &>(*result_column).applyNegatedNullMap(*filter_column);
             column.column = std::move(result_column);
