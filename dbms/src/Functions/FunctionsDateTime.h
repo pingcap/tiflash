@@ -2384,12 +2384,12 @@ public:
 
         // TODO: Support Extract from string, see https://github.com/pingcap/tidb/issues/22700
         // if (!(arguments[1]->isString() || arguments[1]->isDateOrDateTime()))
-        if (!arguments[1]->isDateOrDateTime())
+        if (!arguments[1]->isMyDateOrMyDateTime())
             throw TiFlashException(
                 "Illegal type " + arguments[1]->getName() + " of second argument of function " + getName() + ". Must be DateOrDateTime.",
                 Errors::Coprocessor::BadRequest);
 
-        return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeInt64>());
+        return std::make_shared<DataTypeInt64>();
     }
 
     bool useDefaultImplementationForConstants() const override { return true; }
@@ -2405,13 +2405,6 @@ public:
         String unit = Poco::toLower(unit_column->getValue<String>());
 
         auto from_column = block.getByPosition(arguments[1]).column;
-
-
-        if (from_column->onlyNull())
-        {
-            block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
-            return;
-        }
 
         size_t rows = block.rows();
         auto col_to = ColumnInt64::create(rows);
