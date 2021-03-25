@@ -273,7 +273,6 @@ void MockRaftCommand::dbgFuncStorePreHandleSnapshot(Context & context, const AST
     const auto region_name = "__snap_" + std::to_string(region->id());
     ss << "pre-handle " << region->toString(false) << " snapshot with data " << region->dataInfo();
     auto & tmt = context.getTMTContext();
-    region->tryPreDecodeTiKVValue<true>(tmt);
     auto block_cache = GenRegionPreDecodeBlockData(region, tmt.getContext());
     ss << ", pre-decode block cache";
     {
