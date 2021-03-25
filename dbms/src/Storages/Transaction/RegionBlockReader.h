@@ -71,11 +71,12 @@ class RegionBlockReader : private boost::noncopyable
     RegionScanFilterPtr scan_filter;
     Timestamp start_ts = std::numeric_limits<Timestamp>::max();
 
+    // Whether to reorder the rows when pk is uint64.
     // For Delta-Tree, we don't need to reorder rows to be sorted by uint64 pk
     bool do_reorder_for_uint64_pk = true;
 
 public:
-    // Decode and read all columns from `storage`
+    // Decode and read columns from `storage`
     RegionBlockReader(const ManageableStoragePtr & storage);
 
     RegionBlockReader(const TiDB::TableInfo & table_info_, const ColumnsDescription & columns_);
@@ -117,7 +118,7 @@ public:
     /// each of which will use carefully adjusted 'start_ts' and 'force_decode' with appropriate error handling/retry to get what they want.
     std::tuple<Block, bool> read(const Names & column_names_to_read, RegionDataReadInfoList & data_list, bool force_decode);
 
-    // Read all columns
+    ///  Read all columns from `data_list` as a block.
     inline std::tuple<Block, bool> read(RegionDataReadInfoList & data_list, bool force_decode)
     {
         return read(columns.getNamesOfPhysical(), data_list, force_decode);
