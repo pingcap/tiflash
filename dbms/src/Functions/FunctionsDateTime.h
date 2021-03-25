@@ -2384,12 +2384,12 @@ public:
 
         // TODO: Support Extract from string, see https://github.com/pingcap/tidb/issues/22700
         // if (!(arguments[1]->isString() || arguments[1]->isDateOrDateTime()))
-        if (!arguments[1]->isDateOrDateTime())
+        if (!arguments[1]->isMyDateOrMyDateTime())
             throw TiFlashException(
                 "Illegal type " + arguments[1]->getName() + " of second argument of function " + getName() + ". Must be DateOrDateTime.",
                 Errors::Coprocessor::BadRequest);
 
-        return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeInt64>());
+        return std::make_shared<DataTypeInt64>();
     }
 
     bool useDefaultImplementationForConstants() const override { return true; }

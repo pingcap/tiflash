@@ -345,6 +345,10 @@ public:
       */
     virtual bool isDateOrDateTime() const { return false; };
 
+    /** MyDate, MyDateTime. Not Nullable.
+      */
+    virtual bool isMyDateOrMyDateTime() const { return false; };
+
     /** Decimal. Not Nullable.
       */
     virtual bool isDecimal() const { return false; };

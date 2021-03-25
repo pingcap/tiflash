@@ -24,7 +24,6 @@ public:
     void deserializeTextCSV(IColumn & column, ReadBuffer & istr, const char delimiter) const override;
 
     bool canBeUsedAsVersion() const override { return true; }
-    bool isDateOrDateTime() const override { return true; }
     bool canBeInsideNullable() const override { return true; }
 
     bool equals(const IDataType & rhs) const override;
