@@ -249,6 +249,8 @@ std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
     {"equals", tipb::ScalarFuncSig::EQInt},
     {"and", tipb::ScalarFuncSig::LogicalAnd},
     {"or", tipb::ScalarFuncSig::LogicalOr},
+    {"xor", tipb::ScalarFuncSig::LogicalXor},
+    {"not", tipb::ScalarFuncSig::UnaryNotInt},
     {"greater", tipb::ScalarFuncSig::GTInt},
     {"greaterorequals", tipb::ScalarFuncSig::GEInt},
     {"less", tipb::ScalarFuncSig::LTInt},
