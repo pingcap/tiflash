@@ -24,16 +24,6 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-std::tuple<Block, bool> readRegionBlock(const ManageableStoragePtr & storage, RegionDataReadInfoList & data_list, bool force_decode)
-{
-    return readRegionBlock(storage->getTableInfo(),
-        storage->getColumns(),
-        storage->getColumns().getNamesOfPhysical(),
-        data_list,
-        std::numeric_limits<Timestamp>::max(),
-        force_decode,
-        nullptr);
-}
 
 static void writeRegionDataToStorage(Context & context, const RegionPtrWrap & region, RegionDataReadInfoList & data_list_read, Logger * log)
 {
@@ -87,7 +77,8 @@ static void writeRegionDataToStorage(Context & context, const RegionPtrWrap & re
 
         if (need_decode)
         {
-            std::tie(block, ok) = readRegionBlock(storage, data_list_read, force_decode);
+            auto reader = RegionBlockReader(storage);
+            std::tie(block, ok) = reader.read(data_list_read, force_decode);
             if (!ok)
                 return false;
             region_decode_cost = watch.elapsedMilliseconds();
@@ -316,8 +307,9 @@ RegionTable::ReadBlockByRegionRes RegionTable::readBlockByRegion(const TiDB::Tab
                               Block block;
                               {
                                   bool ok = false;
-                                  std::tie(block, ok) = readRegionBlock(
-                                      table_info, columns, column_names_to_read, data_list_read, start_ts, true, scan_filter);
+                                  auto reader = RegionBlockReader(table_info, columns, column_names_to_read);
+                                  std::tie(block, ok)
+                                      = reader.setStartTs(start_ts).setFilter(scan_filter).read(data_list_read, /*force_decode*/ true);
                                   if (!ok)
                                       // TODO: Enrich exception message.
                                       throw Exception("Read region " + std::to_string(region->id()) + " of table "
@@ -393,7 +385,8 @@ RegionPtrWrap::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & region, Co
             return true;
         }
         auto lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
-        auto [block, ok] = readRegionBlock(storage, *data_list_read, force_decode);
+        auto reader = RegionBlockReader(storage);
+        auto [block, ok] = reader.read(*data_list_read, force_decode);
         if (!ok)
             return false;
         schema_version = storage->getTableInfo().schema_version;

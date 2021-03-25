@@ -62,7 +62,6 @@ struct numeric_limits<__uint128_t>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/RegionExecutionResult.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/Utils.h>
