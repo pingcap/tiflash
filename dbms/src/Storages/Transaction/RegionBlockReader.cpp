@@ -362,20 +362,17 @@ bool setColumnValues(ColumnUInt8 & delmark_col,
 }
 
 RegionBlockReader::RegionBlockReader(const ManageableStoragePtr & storage)
-    : table_info(storage->getTableInfo()),
-      columns(storage->getColumns()),
-      column_names_to_read(storage->getColumns().getNamesOfPhysical()),
-      scan_filter(nullptr),
-      // For delta-tree, we don't need to reorder for uint64_pk
-      do_reorder_for_uint64_pk(storage->engineType() != TiDB::StorageEngine::DT)
+    : RegionBlockReader(storage->getTableInfo(), storage->getColumns())
+{
+    // For delta-tree, we don't need to reorder for uint64_pk
+    do_reorder_for_uint64_pk = (storage->engineType() != TiDB::StorageEngine::DT);
+}
+
+RegionBlockReader::RegionBlockReader(const TiDB::TableInfo & table_info_, const ColumnsDescription & columns_)
+    : table_info(table_info_), columns(columns_), scan_filter(nullptr)
 {}
 
-RegionBlockReader::RegionBlockReader(
-    const TiDB::TableInfo & table_info_, const ColumnsDescription & columns_, const Names & column_names_to_read_)
-    : table_info(table_info_), columns(columns_), column_names_to_read(column_names_to_read_), scan_filter(nullptr)
-{}
-
-std::tuple<Block, bool> RegionBlockReader::read(RegionDataReadInfoList & data_list, bool force_decode)
+std::tuple<Block, bool> RegionBlockReader::read(const Names & column_names_to_read, RegionDataReadInfoList & data_list, bool force_decode)
 {
     auto delmark_col = ColumnUInt8::create();
     auto version_col = ColumnUInt64::create();

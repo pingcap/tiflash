@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Core/Names.h>
+#include <Storages/ColumnsDescription.h>
 #include <Storages/Transaction/RegionDataRead.h>
 
 namespace TiDB
@@ -63,10 +64,9 @@ using RegionScanFilterPtr = std::shared_ptr<RegionScanFilter>;
 /// The Reader to read the region data in `data_list` and decode based on the given table_info and columns, as a block.
 class RegionBlockReader : private boost::noncopyable
 {
-    // The schema to decode rows
+    /// The schema to decode rows
     const TiDB::TableInfo & table_info;
     const ColumnsDescription & columns;
-    const Names column_names_to_read;
 
     RegionScanFilterPtr scan_filter;
     Timestamp start_ts = std::numeric_limits<Timestamp>::max();
@@ -75,9 +75,10 @@ class RegionBlockReader : private boost::noncopyable
     bool do_reorder_for_uint64_pk = true;
 
 public:
+    // Decode and read all columns from `storage`
     RegionBlockReader(const ManageableStoragePtr & storage);
 
-    RegionBlockReader(const TiDB::TableInfo & table_info_, const ColumnsDescription & columns_, const Names & column_names_to_read_);
+    RegionBlockReader(const TiDB::TableInfo & table_info_, const ColumnsDescription & columns_);
 
     inline RegionBlockReader & setFilter(RegionScanFilterPtr filter)
     {
@@ -114,7 +115,13 @@ public:
     ///
     /// `RegionBlockReader::read` is the common routine used by both 'flush' and 'read' processes of TXN engine (Delta-Tree, TXN-MergeTree),
     /// each of which will use carefully adjusted 'start_ts' and 'force_decode' with appropriate error handling/retry to get what they want.
-    std::tuple<Block, bool> read(RegionDataReadInfoList & data_list, bool force_decode);
+    std::tuple<Block, bool> read(const Names & column_names_to_read, RegionDataReadInfoList & data_list, bool force_decode);
+
+    // Read all columns
+    inline std::tuple<Block, bool> read(RegionDataReadInfoList & data_list, bool force_decode)
+    {
+        return read(columns.getNamesOfPhysical(), data_list, force_decode);
+    }
 };
 
 } // namespace DB
