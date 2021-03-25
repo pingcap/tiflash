@@ -813,8 +813,8 @@ struct GcContext
             {
                 res.gc_max_valid_rate = 0.65;
             }
-            res.gc_min_files      = 3;
-            res.gc_min_bytes      = PAGE_FILE_ROLL_SIZE / 2;
+            res.gc_min_files = 3;
+            res.gc_min_bytes = PAGE_FILE_ROLL_SIZE / 2;
         }
         else if (num_legacy_files > 20)
         {
@@ -1038,27 +1038,31 @@ bool PageStorage::gc(bool not_skip)
 
 void PageStorage::archivePageFiles(const PageFileSet & page_files)
 {
-    if (page_files.empty())
-        return;
-
     const Poco::Path archive_path(delegator->defaultPath(), PageStorage::ARCHIVE_SUBDIR);
     Poco::File       archive_dir(archive_path);
-    if (!archive_dir.exists())
-        archive_dir.createDirectory();
-
-    for (auto & page_file : page_files)
+    do
     {
-        Poco::Path path(page_file.folderPath());
-        auto       dest = archive_path.toString() + "/" + path.getFileName();
-        if (Poco::File file(path); file.exists())
+        // Clean archive file no matter `page_files` is empty or not.
+        if (page_files.empty())
+            break;
+
+        if (!archive_dir.exists())
+            archive_dir.createDirectory();
+
+        for (auto & page_file : page_files)
         {
-            // To ensure the atomic of deletion, move to the `archive` dir first and then remove the PageFile dir.
-            file.moveTo(dest);
-            file.remove(true);
-            page_file.deleteEncryptionInfo();
+            Poco::Path path(page_file.folderPath());
+            auto       dest = archive_path.toString() + "/" + path.getFileName();
+            if (Poco::File file(path); file.exists())
+            {
+                // To ensure the atomic of deletion, move to the `archive` dir first and then remove the PageFile dir.
+                file.moveTo(dest);
+                file.remove(true);
+                page_file.deleteEncryptionInfo();
+            }
         }
-    }
-    LOG_INFO(log, storage_name << " archive " + DB::toString(page_files.size()) + " files to " + archive_path.toString());
+        LOG_INFO(log, storage_name << " archive " + DB::toString(page_files.size()) + " files to " + archive_path.toString());
+    } while (0);
 
     do
     {
@@ -1067,6 +1071,9 @@ void PageStorage::archivePageFiles(const PageFileSet & page_files)
         // In order not to block the GC thread for a long time and make the IO smooth, only remove
         // `MAX_NUM_OF_FILE_TO_REMOVED` files at maximum.
         Strings archive_page_files;
+        if (!archive_dir.exists())
+            break;
+
         archive_dir.list(archive_page_files);
         if (archive_page_files.empty())
             break;
@@ -1075,7 +1082,7 @@ void PageStorage::archivePageFiles(const PageFileSet & page_files)
         size_t       num_removed                = 0;
         for (const auto & pf_dir : archive_page_files)
         {
-            if (Poco::File file(pf_dir); file.exists())
+            if (Poco::File file(Poco::Path(archive_path, pf_dir)); file.exists())
             {
                 file.remove(true);
                 ++num_removed;
