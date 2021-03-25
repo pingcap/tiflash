@@ -2406,13 +2406,6 @@ public:
 
         auto from_column = block.getByPosition(arguments[1]).column;
 
-
-        if (from_column->onlyNull())
-        {
-            block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
-            return;
-        }
-
         size_t rows = block.rows();
         auto col_to = ColumnInt64::create(rows);
         auto & vec_to = col_to->getData();
