@@ -898,12 +898,6 @@ String createTableStmt(const DBInfo & db_info, const TableInfo & table_info, con
         writeEscapedString(table_info.serialize(), stmt_buf);
         writeString("')", stmt_buf);
     }
-    else if (table_info.engine_type == TiDB::StorageEngine::DEBUGGING_MEMORY)
-    {
-        writeString(") Engine = Debugging('", stmt_buf);
-        writeEscapedString(table_info.serialize(), stmt_buf);
-        writeString("')", stmt_buf);
-    }
     else
     {
         throw TiFlashException("Unknown engine type : " + toString(static_cast<int32_t>(table_info.engine_type)), Errors::DDL::Internal);

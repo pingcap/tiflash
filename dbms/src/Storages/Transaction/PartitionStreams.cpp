@@ -3,7 +3,6 @@
 #include <Interpreters/Context.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Storages/MergeTree/TxnMergeTreeBlockOutputStream.h>
-#include <Storages/StorageDebugging.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/LockException.h>
@@ -115,16 +114,6 @@ static void writeRegionDataToStorage(
             {
                 auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
                 dm_storage->write(std::move(block), context.getSettingsRef());
-                break;
-            }
-            case ::TiDB::StorageEngine::DEBUGGING_MEMORY:
-            {
-                auto debugging_storage = std::dynamic_pointer_cast<StorageDebugging>(storage);
-                ASTPtr query(new ASTInsertQuery(debugging_storage->getDatabaseName(), debugging_storage->getTableName(), true));
-                BlockOutputStreamPtr output = debugging_storage->write(query, context.getSettingsRef());
-                output->writePrefix();
-                output->write(block);
-                output->writeSuffix();
                 break;
             }
             default:

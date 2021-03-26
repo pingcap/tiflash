@@ -218,8 +218,6 @@ TiDB::TableInfoPtr MockTiDB::parseColumns(
         table_info.engine_type = TiDB::StorageEngine::TMT;
     else if (engine_type == "dt")
         table_info.engine_type = TiDB::StorageEngine::DT;
-    else if (engine_type == "buggy")
-        table_info.engine_type = TiDB::StorageEngine::DEBUGGING_MEMORY;
     else
         throw Exception("Unknown engine type : " + engine_type + ", must be 'tmt' or 'dt'", ErrorCodes::BAD_ARGUMENTS);
 
