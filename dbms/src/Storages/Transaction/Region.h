@@ -166,9 +166,6 @@ public:
     metapb::Region getMetaRegion() const;
     raft_serverpb::MergeState getMergeState() const;
 
-    template <bool skip = false>
-    void tryPreDecodeTiKVValue(TMTContext & tmt);
-
     TableID getMappedTableID() const;
     EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt);
     void handleIngestSST(const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt);
@@ -197,14 +194,10 @@ private:
 private:
     RegionData data;
     mutable std::shared_mutex mutex;
-    mutable std::mutex predecode_mutex;
 
     RegionMeta meta;
 
     mutable std::atomic<Timepoint> last_compact_log_time = Timepoint::min();
-
-    // dirty_flag is used to present whether this region need to be persisted.
-    mutable std::atomic<size_t> dirty_flag = 1;
 
     Logger * log;
 

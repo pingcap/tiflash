@@ -3,6 +3,15 @@
 namespace DB
 {
 
+DecodedFields::const_iterator findByColumnID(Int64 col_id, const DecodedFields & row)
+{
+    const static auto cmp = [](const DecodedField & e, const Int64 cid) -> bool { return e.col_id < cid; };
+    auto it = std::lower_bound(row.cbegin(), row.cend(), col_id, cmp);
+    if (it != row.cend() && it->col_id == col_id)
+        return it;
+    return row.cend();
+}
+
 template <typename T>
 static T decodeUInt(size_t & cursor, const TiKVValue::Base & raw_value)
 {
