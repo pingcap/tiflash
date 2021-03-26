@@ -1,3 +1,4 @@
+#include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Core/TMTPKType.h>
 #include <Interpreters/Context.h>
@@ -17,6 +18,11 @@
 
 namespace DB
 {
+
+namespace FailPoints
+{
+extern const char pause_until_apply_raft_snapshot[];
+} // namespace FailPoints
 
 namespace ErrorCodes
 {
@@ -288,6 +294,8 @@ void KVStore::handlePreApplySnapshot(const RegionPtrWithBlock & new_region, TMTC
     });
 
     checkAndApplySnapshot(new_region, tmt);
+
+    FAIL_POINT_PAUSE(FailPoints::pause_until_apply_raft_snapshot);
 
     LOG_INFO(log, new_region->toString(false) << " apply snapshot success");
 }

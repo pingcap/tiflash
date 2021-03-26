@@ -1,3 +1,4 @@
+#include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Core/Block.h>
 #include <Interpreters/Context.h>
@@ -17,6 +18,11 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char pause_before_apply_raft_cmd[];
+extern const char pause_before_apply_raft_snapshot[];
+} // namespace FailPoints
 
 namespace ErrorCodes
 {
@@ -127,6 +133,11 @@ static void writeRegionDataToStorage(
                           << ", write part " << write_part_cost << "] ms");
         return true;
     };
+
+    /// In TiFlash, the actions between applying raft log and schema changes are not strictly synchronized.
+    /// There could be a chance that some raft logs come after a table gets tombstoned. Take care of it when
+    /// decoding data. Check the test case for more details.
+    FAIL_POINT_PAUSE(FailPoints::pause_before_apply_raft_cmd);
 
     /// Try read then write once.
     {
@@ -425,6 +436,11 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
         GET_METRIC(metrics, tiflash_raft_write_data_to_storage_duration_seconds, type_decode).Observe(watch.elapsedSeconds());
         return true;
     };
+
+    /// In TiFlash, the actions between applying raft log and schema changes are not strictly synchronized.
+    /// There could be a chance that some raft logs come after a table gets tombstoned. Take care of it when
+    /// decoding data. Check the test case for more details.
+    FAIL_POINT_PAUSE(FailPoints::pause_before_apply_raft_snapshot);
 
     if (!atomicDecode(false))
     {

@@ -43,7 +43,10 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(pause_after_learner_read)               \
     M(hang_in_execution)                      \
     M(pause_before_dt_background_delta_merge) \
-    M(pause_until_dt_background_delta_merge)
+    M(pause_until_dt_background_delta_merge)  \
+    M(pause_before_apply_raft_cmd)            \
+    M(pause_before_apply_raft_snapshot)       \
+    M(pause_until_apply_raft_snapshot)
 
 namespace FailPoints
 {
