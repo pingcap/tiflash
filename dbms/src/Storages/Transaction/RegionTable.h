@@ -2,7 +2,6 @@
 
 #include <Core/Names.h>
 #include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/RegionLockInfo.h>
@@ -37,6 +36,8 @@ struct MockTiDBTable;
 class RegionRangeKeys;
 class RegionTaskLock;
 struct RegionPtrWrap;
+class RegionScanFilter;
+using RegionScanFilterPtr = std::shared_ptr<RegionScanFilter>;
 
 class RegionTable : private boost::noncopyable
 {
@@ -126,7 +127,7 @@ public:
 
     /// Write the data of the given region into the table with the given table ID, fill the data list for outer to remove.
     /// Will trigger schema sync on read error for only once,
-    /// assuming that newer schema can always apply to older data by setting force_decode to true in readRegionBlock.
+    /// assuming that newer schema can always apply to older data by setting force_decode to true in RegionBlockReader::read.
     /// Note that table schema must be keep unchanged throughout the process of read then write, we take good care of the lock.
     static void writeBlockByRegion(Context & context,
         const RegionPtrWrap & region,
@@ -136,7 +137,7 @@ public:
 
     /// Read the data of the given region into block, take good care of learner read and locks.
     /// Assuming that the schema has been properly synced by outer, i.e. being new enough to decode data before start_ts,
-    /// we directly ask readRegionBlock to perform a read with the given start_ts and force_decode being true.
+    /// we directly ask RegionBlockReader::read to perform a read with the given start_ts and force_decode being true.
     using ReadBlockByRegionRes = std::variant<Block, RegionException::RegionReadStatus>;
     static ReadBlockByRegionRes readBlockByRegion(const TiDB::TableInfo & table_info,
         const ColumnsDescription & columns,
