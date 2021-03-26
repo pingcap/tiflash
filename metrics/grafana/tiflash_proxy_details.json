@@ -5038,6 +5038,13 @@
               "metric": "tiflash_proxy_thread_cpu_seconds_total",
               "refId": "A",
               "step": 4
+            },
+            {
+              "expr": "sum(rate(tiflash_proxy_thread_cpu_seconds_total{tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", name=~\"region_worker.*\"}[1m])) by (instance)",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "{{instance}}-region-worker",
+              "refId": "B"
             }
           ],
           "thresholds": [],

@@ -42,21 +42,6 @@ BackgroundService::BackgroundService(TMTContext & tmt_)
 
         region_handle = background_pool.addTask([this] {
             bool ok = false;
-            {
-                RegionPtr region = nullptr;
-                {
-                    std::lock_guard<std::mutex> lock(region_mutex);
-                    if (!regions_to_decode.empty())
-                    {
-                        auto it = regions_to_decode.begin();
-                        region = it->second;
-                        regions_to_decode.erase(it);
-                        ok = true;
-                    }
-                }
-                if (region)
-                    region->tryPreDecodeTiKVValue(tmt);
-            }
 
             {
                 RegionPtr region = nullptr;
@@ -82,27 +67,12 @@ BackgroundService::BackgroundService(TMTContext & tmt_)
                 if (region->dataSize())
                     regions.emplace_back(region);
             });
-
-            for (const auto & region : regions)
-                addRegionToDecode(region);
         }
     }
     else
     {
         LOG_INFO(log, "Configuration raft.disable_bg_flush is set to true, background flush tasks are disabled.");
     }
-}
-
-void BackgroundService::addRegionToDecode(const RegionPtr & region)
-{
-    if (tmt.isBgFlushDisabled())
-        throw Exception("Try to addRegionToDecode while background flush is disabled.", ErrorCodes::LOGICAL_ERROR);
-
-    {
-        std::lock_guard<std::mutex> lock(region_mutex);
-        regions_to_decode.emplace(region->id(), region);
-    }
-    region_handle->wake();
 }
 
 void BackgroundService::addRegionToFlush(const DB::RegionPtr & region)
