@@ -20,6 +20,10 @@
 => DBGInvoke __truncate_tidb_table(default, test)
 => DBGInvoke __try_flush_region(4)
 => select * from default.test
+┌─col_1─┬─_tidb_rowid─┐
+│ test1 │          50 │
+│ test1 │          51 │
+└───────┴─────────────┘
 
 => DBGInvoke __drop_tidb_table(default, test)
 => DBGInvoke __refresh_schemas()
