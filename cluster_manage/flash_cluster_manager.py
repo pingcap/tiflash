@@ -312,8 +312,27 @@ class TiFlashClusterManager:
                 'all replicas are available at global schema version {}'.format(int(self.ddl_global_schema_version)))
 
 
+def get_tz_offset():
+    import datetime
+    now_stamp = time.time()
+    local_time = datetime.datetime.fromtimestamp(now_stamp)
+    utc_time = datetime.datetime.utcfromtimestamp(now_stamp)
+    offset = local_time - utc_time
+    total_seconds = offset.total_seconds()
+    flag = '+'
+    if total_seconds < 0:
+        flag = '-'
+        total_seconds = -total_seconds
+    mm, ss = divmod(total_seconds, 60)
+    hh, mm = divmod(mm, 60)
+    tz_offset = "%s%02d:%02d" % (flag, hh, mm)
+    return tz_offset
+
+
 def main():
     flash_conf = conf.flash_conf
+
+    tz_offset = get_tz_offset()
 
     if conf.args.check_online_update or conf.args.clean_pd_rules:
         root = logging.getLogger()
@@ -330,7 +349,10 @@ def main():
         # keep at most 10G log files
         logging.basicConfig(
             handlers=[RotatingFileHandler(flash_conf.log_path, maxBytes=1024 * 1024 * 500, backupCount=5)],
-            level=conf.log_level, format='%(asctime)s <%(levelname)s> %(name)s: %(message)s')
+            level=conf.log_level,
+            format='[%(asctime)s.%(msecs)03d {}] [%(levelname)s] [%(name)s] [%(message)s]'.format(tz_offset),
+            datefmt='%Y/%m/%d %H:%M:%S',
+        )
         logging.getLogger("requests").setLevel(logging.WARNING)
         logging.getLogger("urllib3").setLevel(logging.WARNING)
         logging.debug('\nCluster Manager Version Info\n{}'.format(conf.version_info))

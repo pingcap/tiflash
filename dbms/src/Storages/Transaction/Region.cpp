@@ -670,19 +670,17 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
             }
         }
 
-        std::lock_guard<std::mutex> predecode_lock(predecode_mutex);
-
         handle_write_cmd_func();
 
-        if (tmt.isBgFlushDisabled())
+        // If transfer-leader happened during ingest-sst, there might be illegal data.
+        if (0 != cmds.len)
         {
-            /// Flush data right after they are committed.
-            RegionDataReadInfoList data_list_to_remove;
-            RegionTable::writeBlockByRegion(context, shared_from_this(), data_list_to_remove, log, false);
-
-            /// Do not need to run predecode.
-            data.writeCF().getCFDataPreDecode().popAll();
-            data.defaultCF().getCFDataPreDecode().popAll();
+            if (tmt.isBgFlushDisabled())
+            {
+                /// Flush data right after they are committed.
+                RegionDataReadInfoList data_list_to_remove;
+                RegionTable::writeBlockByRegion(context, shared_from_this(), data_list_to_remove, log, false);
+            }
         }
 
         meta.setApplied(index, term);
@@ -702,7 +700,6 @@ void Region::handleIngestSST(const SSTViewVec snaps, UInt64 index, UInt64 term, 
         auto & ctx = tmt.getContext();
 
         std::unique_lock<std::shared_mutex> lock(mutex);
-        std::lock_guard<std::mutex> predecode_lock(predecode_mutex);
 
         for (UInt64 i = 0; i < snaps.len; ++i)
         {

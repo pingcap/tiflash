@@ -51,10 +51,8 @@ void RegionCFDataBase<Trait>::finishInsert(typename Map::iterator)
 {}
 
 template <>
-void RegionCFDataBase<RegionDefaultCFDataTrait>::finishInsert(typename Map::iterator it)
-{
-    pre_decode.add(getTiKVValuePtr(it->second));
-}
+void RegionCFDataBase<RegionDefaultCFDataTrait>::finishInsert(typename Map::iterator)
+{}
 
 template <>
 void RegionCFDataBase<RegionWriteCFDataTrait>::finishInsert(typename Map::iterator write_it)
@@ -69,11 +67,7 @@ void RegionCFDataBase<RegionWriteCFDataTrait>::finishInsert(typename Map::iterat
 
     if (write_type == CFModifyFlag::PutFlag)
     {
-        if (short_value)
-        {
-            pre_decode.add(short_value);
-        }
-        else
+        if (!short_value)
         {
             auto & default_cf_map = RegionData::getDefaultCFMap(this);
 
@@ -287,12 +281,6 @@ template <typename Trait>
 typename RegionCFDataBase<Trait>::Data & RegionCFDataBase<Trait>::getDataMut()
 {
     return data;
-}
-
-template <typename Trait>
-CFDataPreDecode<Trait> & RegionCFDataBase<Trait>::getCFDataPreDecode()
-{
-    return pre_decode;
 }
 
 template struct RegionCFDataBase<RegionWriteCFDataTrait>;
