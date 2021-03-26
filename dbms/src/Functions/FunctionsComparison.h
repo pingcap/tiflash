@@ -451,7 +451,9 @@ struct StringComparisonImpl
                 res = memcmp(&a_data[a_offsets[i - 1]], &b_data[b_offsets[i - 1]], std::min(a_size, b_size));
             }
 
-            c[i] = Op::apply(res, 0) || (res == 0 && Op::apply(a_size, b_size));
+            /// if partial compare result is 0, it means the common part of the two strings are exactly the same, then need to
+            /// further compare the string length, otherwise we can get the compare result from partial compare result.
+            c[i] = res == 0 ? Op::apply(a_size, b_size) : Op::apply(res, 0);
         }
     }
 
@@ -466,13 +468,13 @@ struct StringComparisonImpl
             if (i == 0)
             {
                 int res = memcmp(&a_data[0], &b_data[0], std::min(a_offsets[0] - 1, b_n));
-                c[i] = Op::apply(res, 0) || (res == 0 && Op::apply(a_offsets[0], b_n + 1));
+                c[i] = res == 0 ? Op::apply(a_offsets[0], b_n + 1) : Op::apply(res, 0);
             }
             else
             {
                 int res = memcmp(&a_data[a_offsets[i - 1]], &b_data[i * b_n],
                     std::min(a_offsets[i] - a_offsets[i - 1] - 1, b_n));
-                c[i] = Op::apply(res, 0) || (res == 0 && Op::apply(a_offsets[i] - a_offsets[i - 1], b_n + 1));
+                c[i] = res == 0 ? Op::apply(a_offsets[i] - a_offsets[i - 1], b_n + 1) : Op::apply(res, 0);
             }
         }
     }
@@ -491,12 +493,12 @@ struct StringComparisonImpl
             if (i == 0)
             {
                 int res = memcmp(&a_data[0], b_data, std::min(a_offsets[0], b_size));
-                c[i] = Op::apply(res, 0) || (res == 0 && Op::apply(a_offsets[0], b_size));
+                c[i] = res == 0 ? Op::apply(a_offsets[0], b_size) : Op::apply(res, 0);
             }
             else
             {
                 int res = memcmp(&a_data[a_offsets[i - 1]], b_data, std::min(a_offsets[i] - a_offsets[i - 1], b_size));
-                c[i] = Op::apply(res, 0) || (res == 0 && Op::apply(a_offsets[i] - a_offsets[i - 1], b_size));
+                c[i] = res == 0 ? Op::apply(a_offsets[i] - a_offsets[i - 1], b_size) : Op::apply(res, 0);
             }
         }
     }
@@ -551,7 +553,7 @@ struct StringComparisonImpl
             for (size_t i = 0, j = 0; i < size; i += a_n, ++j)
             {
                 int res = memcmp(&a_data[i], &b_data[i], std::min(a_n, b_n));
-                c[j] = Op::apply(res, 0) || (res == 0 && Op::apply(a_n, b_n));
+                c[j] = res == 0 ? Op::apply(a_n, b_n) : Op::apply(res, 0);
             }
         }
     }
@@ -573,7 +575,7 @@ struct StringComparisonImpl
             for (size_t i = 0, j = 0; i < size; i += a_n, ++j)
             {
                 int res = memcmp(&a_data[i], b_data, std::min(a_n, b_n));
-                c[j] = Op::apply(res, 0) || (res == 0 && Op::apply(a_n, b_n));
+                c[j] = res == 0 ? Op::apply(a_n, b_n) : Op::apply(res, 0);
             }
         }
     }
@@ -603,7 +605,7 @@ struct StringComparisonImpl
         size_t b_n = b.size();
 
         int res = memcmp(a.data(), b.data(), std::min(a_n, b_n));
-        c = Op::apply(res, 0) || (res == 0 && Op::apply(a_n, b_n));
+        c = res == 0 ? Op::apply(a_n, b_n) : Op::apply(res, 0);
     }
 };
 
