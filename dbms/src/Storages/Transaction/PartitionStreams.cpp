@@ -383,9 +383,10 @@ RegionPtrWrap::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & region, Co
         auto storage = tmt.getStorages().get(table_id);
         if (storage == nullptr || storage->isTombstone())
         {
-            if (!force_decode)
+            if (!force_decode) // Need to update.
                 return false;
-            return true;
+            if (storage == nullptr) // Table must have just been GC-ed.
+                return true;
         }
         auto lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
         auto reader = RegionBlockReader(storage);
