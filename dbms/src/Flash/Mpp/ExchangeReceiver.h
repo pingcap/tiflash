@@ -68,20 +68,30 @@ private:
 
     void ReadLoop(const String & meta_raw, size_t source_index);
 
-    void decodePacket(const mpp::MPPDataPacket & p, size_t source_index, const String & req_info)
+    bool decodePacket(const mpp::MPPDataPacket & p, size_t source_index, const String & req_info)
     {
+        bool ret = true;
         std::shared_ptr<tipb::SelectResponse> resp_ptr = std::make_shared<tipb::SelectResponse>();
         if (!resp_ptr->ParseFromString(p.data()))
         {
             resp_ptr = nullptr;
+            ret = false;
         }
         std::unique_lock<std::mutex> lock(mu);
         cv.wait(lock, [&] { return result_buffer.size() < max_buffer_size || meet_error; });
-        if (resp_ptr != nullptr)
-            result_buffer.emplace(resp_ptr, source_index, req_info);
+        if (!meet_error)
+        {
+            if (resp_ptr != nullptr)
+                result_buffer.emplace(resp_ptr, source_index, req_info);
+            else
+                result_buffer.emplace(resp_ptr, source_index, req_info, true, "Error while decoding MPPDataPacket");
+        }
         else
-            result_buffer.emplace(resp_ptr, source_index, req_info, true, "Error while decoding MPPDataPacket");
+        {
+            ret = false;
+        }
         cv.notify_all();
+        return ret;
     }
 
 public:
@@ -110,6 +120,13 @@ public:
         {
             worker.join();
         }
+    }
+
+    void cancel()
+    {
+        std::unique_lock<std::mutex> lk(mu);
+        meet_error = true;
+        cv.notify_all();
     }
 
     const DAGSchema & getOutputSchema() const { return schema; }

@@ -66,7 +66,11 @@ void ExchangeReceiver::ReadLoop(const String & meta_raw, size_t source_index)
             {
                 throw Exception("exchange receiver meet error : " + packet.error().msg());
             }
-            decodePacket(packet, source_index, req_info);
+            if (!decodePacket(packet, source_index, req_info))
+            {
+                LOG_WARNING(log, "Decode packet meet error, exit from ReadLoop");
+                break;
+            }
         }
         LOG_DEBUG(log, "finish read : " << req->DebugString());
     }
