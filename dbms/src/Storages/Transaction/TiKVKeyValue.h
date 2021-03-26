@@ -49,15 +49,10 @@ public:
 
     static StringObject deserialize(ReadBuffer & buf) { return StringObject(readBinary2<Base>(buf)); }
 
-    AtomicDecodedRow<is_key> & getDecodedRow() const { return decoded_row; }
-
 private:
     StringObject(const Base & str_) : Base(str_) {}
     StringObject(const StringObject & obj) = delete;
     size_t size() const = delete;
-
-private:
-    mutable AtomicDecodedRow<is_key> decoded_row;
 };
 
 using TiKVKey = StringObject<true>;
