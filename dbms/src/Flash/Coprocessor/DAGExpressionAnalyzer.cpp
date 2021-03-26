@@ -771,7 +771,7 @@ void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, cons
         }
         else
         {
-            updated_aggregated_columns.emplace_back(name, aggregated_columns[i].type);
+            updated_aggregated_columns.emplace_back(name, aggregated_columns[i + aggregation.agg_func_size()].type);
             step.required_output.push_back(name);
         }
     }
@@ -795,7 +795,27 @@ void DAGExpressionAnalyzer::generateFinalProject(ExpressionActionsChain & chain,
 
     auto & current_columns = getCurrentInputColumns();
     bool need_append_timezone_cast = !keep_session_timezone_info && !context.getTimezoneInfo().is_utc_timezone;
-    if (!need_append_timezone_cast)
+    bool need_append_type_cast = false;
+    std::vector<bool> need_append_type_cast_vec;
+    if (!output_offsets.empty())
+    {
+        /// !output_offsets.empty() means root block, we need to append type cast for root block if necessary
+        for (UInt32 i : output_offsets)
+        {
+            auto & actual_type = current_columns[i].type;
+            auto expected_type = getDataTypeByFieldType(schema[i]);
+            if (actual_type->getName() != expected_type->getName())
+            {
+                need_append_type_cast = true;
+                need_append_type_cast_vec.push_back(true);
+            }
+            else
+            {
+                need_append_type_cast_vec.push_back(false);
+            }
+        }
+    }
+    if (!need_append_timezone_cast && !need_append_type_cast)
     {
         if (!output_offsets.empty())
         {
@@ -822,16 +842,27 @@ void DAGExpressionAnalyzer::generateFinalProject(ExpressionActionsChain & chain,
         std::vector<Int32> casted(schema.size(), 0);
         std::unordered_map<String, String> casted_name_map;
 
-        for (UInt32 i : output_offsets)
+        for (size_t index = 0; index < output_offsets.size(); index++)
         {
-            if (schema[i].tp() == TiDB::TypeTimestamp)
+            UInt32 i = output_offsets[index];
+            if (schema[i].tp() == TiDB::TypeTimestamp || need_append_type_cast_vec[index])
             {
                 const auto & it = casted_name_map.find(current_columns[i].name);
                 if (it == casted_name_map.end())
                 {
-                    if (tz_col.length() == 0)
-                        tz_col = getActions(tz_expr, step.actions);
-                    auto updated_name = appendTimeZoneCast(tz_col, current_columns[i].name, tz_cast_func_name, step.actions);
+                    /// first add timestamp cast
+                    String updated_name = current_columns[i].name;
+                    if (schema[i].tp() == TiDB::TypeTimestamp)
+                    {
+                        if (tz_col.length() == 0)
+                            tz_col = getActions(tz_expr, step.actions);
+                        updated_name = appendTimeZoneCast(tz_col, current_columns[i].name, tz_cast_func_name, step.actions);
+                    }
+                    /// then add type cast
+                    if (need_append_type_cast_vec[index])
+                    {
+                        updated_name = appendCast(getDataTypeByFieldType(schema[i]), step.actions, updated_name);
+                    }
                     final_project.emplace_back(updated_name, column_prefix + updated_name);
                     casted_name_map[current_columns[i].name] = updated_name;
                 }
