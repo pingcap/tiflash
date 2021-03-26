@@ -251,8 +251,6 @@ RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshot(RegionPtr new_region, con
             // Note that number of keys in different cf will be aggregated into one metrics
             GET_METRIC(metrics, tiflash_raft_process_keys, type_apply_snapshot).Increment(kv_size);
         }
-        // do not really pre-decode value into Field list.
-        new_region->tryPreDecodeTiKVValue<true>(tmt);
         {
             LOG_INFO(log, "Start to pre-decode " << new_region->toString() << " into block");
             auto block_cache = GenRegionPreDecodeBlockData(new_region, ctx);
@@ -358,7 +356,6 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
     // try to flush remain data in memory.
     func_try_flush();
     region->handleIngestSST(snaps, index, term, tmt);
-    region->tryPreDecodeTiKVValue<true>(tmt);
     func_try_flush();
 
     if (region->dataSize())

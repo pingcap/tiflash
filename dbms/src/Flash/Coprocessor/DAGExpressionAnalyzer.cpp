@@ -122,17 +122,7 @@ static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr
             // `a IN (1, 2, b)` will be rewritten to `a IN (1, 2) OR a = b`
             continue;
         }
-        DataTypePtr type;
-        if (child.field_type().tp() == TiDB::TypeNewDecimal)
-        {
-            // See https://github.com/pingcap/tics/issues/1425
-            Field value = decodeLiteral(child);
-            type = applyVisitor(FieldToDataType(), value);
-        }
-        else
-        {
-            type = getDataTypeByFieldType(child.field_type());
-        }
+        DataTypePtr type = inferDataType4Literal(child);
         argument_types.push_back(type);
     }
     DataTypePtr resolved_type = getLeastSupertype(argument_types);
@@ -177,6 +167,18 @@ static String buildInFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr
     }
     // logical op does not need collator
     return analyzer->applyFunction(is_not_in ? "and" : "or", argument_names, actions, nullptr);
+}
+
+static String buildLogicalFunction(DAGExpressionAnalyzer * analyzer, const tipb::Expr & expr, ExpressionActionsPtr & actions)
+{
+    const String & func_name = getFunctionName(expr);
+    Names argument_names;
+    for (auto & child : expr.children())
+    {
+        String name = analyzer->getActions(child, actions, true);
+        argument_names.push_back(name);
+    }
+    return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
 }
 
 static const String tidb_cast_name = "tidb_cast";
@@ -282,6 +284,10 @@ static std::unordered_map<String, std::function<String(DAGExpressionAnalyzer *, 
         {"multiIf", buildMultiIfFunction},
         {"tidb_cast", buildCastFunction},
         {"date_add", buildDateAddFunction},
+        {"and", buildLogicalFunction},
+        {"or", buildLogicalFunction},
+        {"xor", buildLogicalFunction},
+        {"not", buildLogicalFunction},
     });
 
 DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> && source_columns_, const Context & context_)
@@ -478,10 +484,15 @@ String DAGExpressionAnalyzer::convertToUInt8(ExpressionActionsPtr & actions, con
     // Some of the TiFlash operators(e.g. FilterBlockInputStream) only support uint8 as its input, so need to convert the
     // column type to UInt8
     // the basic rule is:
-    // 1. if the column is numeric, compare it with 0
-    // 2. if the column is string, convert it to numeric column, and compare with 0
-    // 3. if the column is date/datetime, compare it with zeroDate
-    // 4. if the column is other type, throw exception
+    // 1. if the column is only null, just return it is fine
+    // 2. if the column is numeric, compare it with 0
+    // 3. if the column is string, convert it to numeric column, and compare with 0
+    // 4. if the column is date/datetime, compare it with zeroDate
+    // 5. if the column is other type, throw exception
+    if (actions->getSampleBlock().getByName(column_name).type->onlyNull())
+    {
+        return column_name;
+    }
     const auto & org_type = removeNullable(actions->getSampleBlock().getByName(column_name).type);
     if (org_type->isNumber() || org_type->isDecimal())
     {
@@ -884,8 +895,6 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(
     {
         DataTypePtr expected_type = getDataTypeByFieldType(expr.field_type());
         DataTypePtr actual_type = actions->getSampleBlock().getByName(expr_name).type;
-        //todo maybe use a more decent compare method
-        // todo ignore nullable info??
         if (expected_type->getName() != actual_type->getName())
         {
 
@@ -928,20 +937,7 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
     {
         Field value = decodeLiteral(expr);
         DataTypePtr flash_type = applyVisitor(FieldToDataType(), value);
-        /// need to extract target_type from expr.field_type() because the flash_type derived from
-        /// value is just a `memory type`, which does not have enough information, for example:
-        /// for date literal, the flash_type is `UInt64`
-        DataTypePtr target_type = exprHasValidFieldType(expr) ? getDataTypeByFieldType(expr.field_type()) : flash_type;
-        if (flash_type->isDecimal() && target_type->isDecimal())
-        {
-            /// to fix https://github.com/pingcap/tics/issues/1425, when TiDB push down
-            /// a decimal literal, it contains two types: one is the type that encoded
-            /// in Decimal value itself(i.e. expr.val()), the other is the type that in
-            /// expr.field_type(). According to TiDB and Mysql behavior, the computing
-            /// layer should use the type in expr.val(), which means we should ignore
-            /// the type in expr.field_type()
-            target_type = flash_type;
-        }
+        DataTypePtr target_type = inferDataType4Literal(expr);
         ret = exprToString(expr, getCurrentInputColumns()) + "_" + target_type->getName();
         if (!actions->getSampleBlock().has(ret))
         {

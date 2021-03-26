@@ -1,3 +1,0 @@
-usr/bin/clickhouse
-etc/security/limits.d/clickhouse.conf
-usr/share/clickhouse/*
