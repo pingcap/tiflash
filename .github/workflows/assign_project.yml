@@ -1,34 +1,34 @@
-name: Auto Assign Project Local
-
-on:
-  issues:
-    types: [labeled]
-env:
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-jobs:
-  assign_one_project:
-    runs-on: ubuntu-latest
-    name: Assign to One Project
-    steps:
-    - name: Run issues assignment to Bug Tracking Kanban
-      uses: srggrs/assign-one-project-github-action@1.2.0
-      if: |
-        contains(github.event.issue.labels.*.name, 'type/bug')
-      with:
-        project: 'https://github.com/pingcap/tics/projects/11'
-        column_name: 'To do'
-    - name: Run issues assignment to New Feature Kanban
-      uses: srggrs/assign-one-project-github-action@1.2.0
-      if: |
-        contains(github.event.issue.labels.*.name, 'type/new-feature')
-      with:
-        project: 'https://github.com/pingcap/tics/projects/12'
-        column_name: 'To do'
-    - name: Run issues assignment to QA Kanban
-      uses: srggrs/assign-one-project-github-action@1.2.0
-      if: |
-        contains(github.event.issue.labels.*.name, 'type/qa')
-      with:
-        project: 'https://github.com/pingcap/tics/projects/13'
-        column_name: 'To do'
+# name: Auto Assign Project Local
+# 
+# on:
+#   issues:
+#     types: [labeled]
+# env:
+#   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+# 
+# jobs:
+#   assign_one_project:
+#     runs-on: ubuntu-latest
+#     name: Assign to One Project
+#     steps:
+#     - name: Run issues assignment to Bug Tracking Kanban
+#       uses: srggrs/assign-one-project-github-action@1.2.0
+#       if: |
+#         contains(github.event.issue.labels.*.name, 'type/bug')
+#       with:
+#         project: 'https://github.com/pingcap/tics/projects/11'
+#         column_name: 'To do'
+#     - name: Run issues assignment to New Feature Kanban
+#       uses: srggrs/assign-one-project-github-action@1.2.0
+#       if: |
+#         contains(github.event.issue.labels.*.name, 'type/new-feature')
+#       with:
+#         project: 'https://github.com/pingcap/tics/projects/12'
+#         column_name: 'To do'
+#     - name: Run issues assignment to QA Kanban
+#       uses: srggrs/assign-one-project-github-action@1.2.0
+#       if: |
+#         contains(github.event.issue.labels.*.name, 'type/qa')
+#       with:
+#         project: 'https://github.com/pingcap/tics/projects/13'
+#         column_name: 'To do'
