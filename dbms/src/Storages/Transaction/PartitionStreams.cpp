@@ -36,8 +36,8 @@ void writeRegionDataToStorage(Context & context, const RegionPtr & region, Regio
         {
             if (!force_decode) // Need to update.
                 return false;
-            // Table must have just been dropped or truncated.
-            return true;
+            if (storage == nullptr) // Table must have just been GC-ed.
+                return true;
         }
 
         /// Lock throughout decode and write, during which schema must not change.
@@ -268,8 +268,40 @@ RegionException::RegionReadStatus RegionTable::resolveLocksAndWriteRegion(TMTCon
     if (read_status != RegionException::OK)
         return read_status;
 
+<<<<<<< HEAD
     auto & context = tmt.getContext();
     writeRegionDataToStorage(context, region, data_list_read, log);
+=======
+    if (!data_list_read)
+        return nullptr;
+
+    auto metrics = context.getTiFlashMetrics();
+    const auto & tmt = context.getTMTContext();
+    TableID table_id = region->getMappedTableID();
+    Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
+    Block res_block;
+
+    const auto atomicDecode = [&](bool force_decode) -> bool {
+        Stopwatch watch;
+        auto storage = tmt.getStorages().get(table_id);
+        if (storage == nullptr || storage->isTombstone())
+        {
+            if (!force_decode) // Need to update.
+                return false;
+            if (storage == nullptr) // Table must have just been GC-ed.
+                return true;
+        }
+        auto lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+        auto reader = RegionBlockReader(storage);
+        auto [block, ok] = reader.read(*data_list_read, force_decode);
+        if (!ok)
+            return false;
+        schema_version = storage->getTableInfo().schema_version;
+        res_block = std::move(block);
+        GET_METRIC(metrics, tiflash_raft_write_data_to_storage_duration_seconds, type_decode).Observe(watch.elapsedSeconds());
+        return true;
+    };
+>>>>>>> 7cfe93ddb... Fix potential data loss for tombstoned table (#1010)
 
     /// Remove committed data
     {
