@@ -4,7 +4,6 @@
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/DatumCodec.h>
-#include <Storages/Transaction/PredecodeTiKVValue.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/RowCodec.h>
@@ -279,8 +278,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
             else
             {
                 const TiKVValue & value = *value_ptr;
-                const DecodedRow * row = value.getDecodedRow().load();
-                if (!row)
+                const DecodedRow * row = nullptr;
                 {
                     // not like old logic, do not store Field cache with value in order to reduce memory cost.
                     tmp_row.reset(decodeRow(value.getStr(), table_info, column_lut));

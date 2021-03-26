@@ -180,7 +180,9 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
                 return RegionException::RegionReadStatus::NOT_FOUND;
 
             const auto & meta_snap = region->dumpRegionMetaSnapshot();
-            if (meta_snap.ver != region_version || meta_snap.conf_ver != conf_version)
+            // No need to check conf_version if its peer state is normal
+            std::ignore = conf_version;
+            if (meta_snap.ver != region_version)
                 return RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
 
             handle_range = meta_snap.range->getHandleRangeByTable(table_id);
